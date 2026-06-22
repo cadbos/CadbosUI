@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "skills": {
+    "ecosystem-guide": {
+      "source": "spences10/skills",
+      "sourceType": "github",
+      "skillPath": "ecosystem-guide/SKILL.md",
+      "computedHash": "26f31bb7e8cc5fde85d12c1afcf99b7e05be1b27174bafe8adac2af72bbc414b"
+    },
+    "svelte-components": {
+      "source": "spences10/skills",
+      "sourceType": "github",
+      "skillPath": "svelte-components/SKILL.md",
+      "computedHash": "e037d53f407da1d7a91a9994826da6aabbec19037306c884c4ae6ac663af521e"
+    },
+    "svelte-deployment": {
+      "source": "spences10/skills",
+      "sourceType": "github",
+      "skillPath": "svelte-deployment/SKILL.md",
+      "computedHash": "e1ef4364a49d21c23a1309e83f00821ae4ed14861c82f775c3e58e49b58a4f47"
+    },
+    "svelte-layerchart": {
+      "source": "spences10/skills",
+      "sourceType": "github",
+      "skillPath": "svelte-layerchart/SKILL.md",
+      "computedHash": "1ec51eebc92050461901b21d87e95010aaeb0e0222af9450eb897086d1400d19"
+    },
+    "svelte-runes": {
+      "source": "spences10/skills",
+      "sourceType": "github",
+      "skillPath": "svelte-runes/SKILL.md",
+      "computedHash": "66e2cd28d38d9db8299ff0ce136fd693e597016c5ef901afef5c795933896f36"
+    },
+    "svelte-styling": {
+      "source": "spences10/skills",
+      "sourceType": "github",
+      "skillPath": "svelte-styling/SKILL.md",
+      "computedHash": "e70c9dac2140ded81969f556e7a6f9cc30649877d04c0c0edfe63e0fb72d06df"
+    },
+    "svelte-template-directives": {
+      "source": "spences10/skills",
+      "sourceType": "github",
+      "skillPath": "svelte-template-directives/SKILL.md",
+      "computedHash": "bfadbe21aff9651f7469c01a53e3532f379a0de639fcafa3ba66d931df20025d"
+    },
+    "sveltekit-data-flow": {
+      "source": "spences10/skills",
+      "sourceType": "github",
+      "skillPath": "sveltekit-data-flow/SKILL.md",
+      "computedHash": "b9fc5fddb1acc0a51c7c3d3bb156535bd3f963a117ab6666e0b9209b7bfe0d27"
+    },
+    "sveltekit-remote-functions": {
+      "source": "spences10/skills",
+      "sourceType": "github",
+      "skillPath": "sveltekit-remote-functions/SKILL.md",
+      "computedHash": "9b6231f92a837ad8c566ed861839fe62232df77ad4ae88960b86e79c47ca0f88"
+    },
+    "sveltekit-structure": {
+      "source": "spences10/skills",
+      "sourceType": "github",
+      "skillPath": "sveltekit-structure/SKILL.md",
+      "computedHash": "0b4be89b604abd6e7b5664d203c3d0f0058b062ef50068c5b7cc7ea53add8164"
+    }
+  }
+}
