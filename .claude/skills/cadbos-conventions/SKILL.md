@@ -45,6 +45,8 @@ For *where* files live see `cadbos-structure`; for Svelte 5 syntax details use t
 
 - No comments unless explicitly requested. No placeholder comments.
 - Keep files focused; split by responsibility as they grow.
+- Full style reference (TypeScript, naming, imports, files):
+  [references/code-style.md](references/code-style.md).
 
 ## Definition of done
 

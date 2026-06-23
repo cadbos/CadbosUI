@@ -61,11 +61,11 @@ flowchart TD
 ```
 
 ### Layer 1 — Instructions (always-on)
-- **[CLAUDE.md](../../CLAUDE.md)** — the system prompt injected into every session:
-  role (Svelte expert), the Svelte MCP workflow, and knowledge-base rules. It is the
-  "table of contents" for the whole foundation.
-- **[AGENTS.md](../../AGENTS.md)** — a portable, tool-agnostic counterpart for
-  non-Claude tools (Cursor, Copilot, Goose, opencode, Gemini).
+- **[AGENTS.md](../../AGENTS.md)** — the **single source of truth** for all agents:
+  absolute rules, the Svelte MCP workflow, the context-architecture map, code style,
+  and knowledge-base rules. Tool-agnostic (Cursor, Copilot, Goose, opencode, Gemini).
+- **[CLAUDE.md](../../CLAUDE.md)** — a thin pointer that imports `AGENTS.md`
+  (`@AGENTS.md`) so Claude Code gets the same content without drift.
 
 ### Layer 2 — Knowledge base (read-only reference)
 - **[ai-context/](../../ai-context)** — git submodule `cadbos/ai-context`: domain
@@ -157,6 +157,7 @@ docs/ai-development/
   architecture.md              # this file
   foundation-report.md         # brief team report
   ecosystem-survey.md          # audit of ai-context project repos
+  skill-authoring.md           # how to write skills (200-line rule)
 ```
 
 ---
