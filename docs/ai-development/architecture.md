@@ -85,10 +85,14 @@ Auto-loaded by task description. Installed in [.claude/skills/](../../.claude/sk
 - **Prompt Engineering (1):** `prompt-architect` — 27 frameworks (see §4).
 
 ### Layer 4 — Subagents (context isolation)
-- **[svelte-file-editor](../../.claude/agents/svelte-file-editor.md)** — writes,
-  edits, and validates `.svelte` / `.svelte.ts` in a **separate context window**,
-  always running code through `svelte-autofixer`. Keeps editing-iteration noise out
-  of the main context.
+Isolated-context workers in [.claude/agents/](../../.claude/agents):
+- **svelte-file-editor** — writes/edits/validates `.svelte` / `.svelte.ts`, always
+  running code through `svelte-autofixer`.
+- **test-runner** — runs and fixes Vitest + Playwright iteratively (noisy test
+  output stays out of the main context).
+- **code-reviewer** — read-only diff review against the `cadbos-*` rules; returns
+  grouped findings.
+- **a11y-validator** — accessibility/WCAG 2.1 AA audit of the UI.
 
 ### Layer 5 — MCP (live external context and tools)
 - **Svelte MCP** (`https://mcp.svelte.dev/mcp`, configured in
@@ -137,7 +141,7 @@ four:
 | Instructions (AGENTS.md/CLAUDE.md) | [CLAUDE.md](../../CLAUDE.md) + [AGENTS.md](../../AGENTS.md) ✅ |
 | MCP Server | Svelte MCP in [.mcp.json](../../.mcp.json) ✅ |
 | Skills | 10 Svelte + 8 project skills in [.claude/skills](../../.claude/skills) ✅ |
-| Subagents | [svelte-file-editor](../../.claude/agents/svelte-file-editor.md) ✅ |
+| Subagents | svelte-file-editor, test-runner, code-reviewer, a11y-validator ✅ |
 
 ---
 
@@ -149,7 +153,8 @@ AGENTS.md                      # L1 — portable instructions (other tools)
 .mcp.json                      # L5 — remote Svelte MCP
 .gitignore                     # excludes personal settings.local.json
 .claude/
-  agents/svelte-file-editor.md # L4 — subagent
+  agents/                      # L4 — subagents: svelte-file-editor, test-runner,
+                               #      code-reviewer, a11y-validator
   settings.json                # hooks (svelte-legacy-guard)
   hooks/svelte-legacy-guard.py # Svelte 4 syntax guard
   skills/                      # L3 — 10 Svelte + 8 cadbos-* + prompt-architect

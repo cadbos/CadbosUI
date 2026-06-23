@@ -27,7 +27,7 @@ project is — it gets that automatically.
 | Skills | 10 × Svelte/SvelteKit | runes, components, styling, directives, data-flow, remote-functions, structure, deployment, layerchart, ecosystem |
 | Skills | 8 × `cadbos-*` | conventions, structure, request-model, integrations, testing, security, commits, self-review |
 | Skills | `prompt-architect` | 27 prompt-engineering frameworks |
-| Subagent | `svelte-file-editor` | Isolated writing/validation of `.svelte` |
+| Subagents | `svelte-file-editor`, `test-runner`, `code-reviewer`, `a11y-validator` | Isolated-context workers: write/validate Svelte, run/fix tests, review diffs, audit a11y |
 | MCP | Svelte MCP (`.mcp.json`) | Live docs + `svelte-autofixer` + playground |
 | Hook | `svelte-legacy-guard` | Flags Svelte 4 syntax in edited `.svelte` files |
 | Memory | agent file memory | Durable facts across sessions |

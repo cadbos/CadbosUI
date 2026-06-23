@@ -67,8 +67,9 @@ Full map: [docs/ai-development/architecture.md](docs/ai-development/architecture
   `cadbos-structure`, `cadbos-request-model`, `cadbos-integrations`,
   `cadbos-testing`, `cadbos-security`, `cadbos-commits`, `cadbos-self-review`.
   Prefer these for product work.
-- **Subagent** `svelte-file-editor` (`.claude/agents/`) — for writing, editing, or
-  validating any `.svelte` / `.svelte.ts` file in an isolated context.
+- **Subagents** (`.claude/agents/`) — isolated-context workers: `svelte-file-editor`
+  (write/edit/validate `.svelte`), `test-runner` (run & fix Vitest/Playwright),
+  `code-reviewer` (read-only diff review vs our rules), `a11y-validator` (WCAG audit).
 - **Hooks** (`.claude/settings.json`) — `svelte-legacy-guard` flags Svelte 4 syntax
   in edited `.svelte` files.
 - **Svelte MCP** (`.mcp.json`) — live docs + `svelte-autofixer` (see above).
