@@ -25,6 +25,7 @@ Scan this before declaring a change done. Each item links to the skill with deta
 - [ ] No provider secret in client bundle/traffic. External calls go through server
       endpoints (`cadbos-integrations`).
 - [ ] User input/uploads validated client + server.
+- [ ] For security-sensitive changes, walk the `cadbos-security` checklist.
 
 ## Generation correctness
 - [ ] No double (paid) submit; retries only without a confirmed response.

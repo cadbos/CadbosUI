@@ -25,7 +25,7 @@ project is — it gets that automatically.
 | Instructions | `CLAUDE.md` + `AGENTS.md` | Agent role, Svelte MCP workflow, knowledge-base rules; portable router for non-Claude tools |
 | Knowledge base | `ai-context/` (submodule) | Domain (AEC, LLM chat, RAG, image generation, Nostr), read-only |
 | Skills | 10 × Svelte/SvelteKit | runes, components, styling, directives, data-flow, remote-functions, structure, deployment, layerchart, ecosystem |
-| Skills | 6 × `cadbos-*` | conventions, structure, request-model, integrations, testing, self-review |
+| Skills | 8 × `cadbos-*` | conventions, structure, request-model, integrations, testing, security, commits, self-review |
 | Skills | `prompt-architect` | 27 prompt-engineering frameworks |
 | Subagent | `svelte-file-editor` | Isolated writing/validation of `.svelte` |
 | MCP | Svelte MCP (`.mcp.json`) | Live docs + `svelte-autofixer` + playground |
@@ -36,8 +36,8 @@ project is — it gets that automatically.
 
 - **`AGENTS.md`** (root) — portable, tool-agnostic instruction router (Cursor /
   Copilot / Goose / opencode / Gemini).
-- **6 project skills** `.claude/skills/cadbos-*`: `conventions`, `structure`,
-  `request-model`, `integrations`, `testing`, `self-review`.
+- **8 project skills** `.claude/skills/cadbos-*`: `conventions`, `structure`,
+  `request-model`, `integrations`, `testing`, `security`, `commits`, `self-review`.
 - **Hook** `svelte-legacy-guard` (`.claude/settings.json` + `.claude/hooks/`) —
   flags Svelte 4 syntax in `.svelte` edits (runes-only).
 - **`docs/ai-development/`** — this report, the architecture map, and the ecosystem

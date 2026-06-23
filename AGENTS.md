@@ -20,6 +20,10 @@ SvelteKit.
 - **No over-engineering.** No abstractions for single-use code, no "just in case"
   handling, no `Enhanced*`/`New*`/`*V2` wrappers, no re-exports for back-compat.
   Three similar lines beat a premature abstraction.
+- **Verify, don't trust memory.** For Svelte/SvelteKit syntax and any external API
+  (or model IDs), confirm against current docs — the Svelte MCP (`list-sections` →
+  `get-documentation`) or official sources — rather than relying on training memory.
+  Acknowledge uncertainty instead of guessing or fabricating APIs.
 - **Runes only.** Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`,
   `$bindable`); never Svelte 4 syntax (`on:click`, `export let`, `<slot>`, `$:`).
 - **Secrets are server-only.** Provider API keys / upload tokens never reach the
@@ -61,7 +65,8 @@ Full map: [docs/ai-development/architecture.md](docs/ai-development/architecture
   `prompt-architect` (27 prompt-engineering frameworks).
 - **Project skills** (`.claude/skills/cadbos-*`) — `cadbos-conventions`,
   `cadbos-structure`, `cadbos-request-model`, `cadbos-integrations`,
-  `cadbos-testing`, `cadbos-self-review`. Prefer these for product work.
+  `cadbos-testing`, `cadbos-security`, `cadbos-commits`, `cadbos-self-review`.
+  Prefer these for product work.
 - **Subagent** `svelte-file-editor` (`.claude/agents/`) — for writing, editing, or
   validating any `.svelte` / `.svelte.ts` file in an isolated context.
 - **Hooks** (`.claude/settings.json`) — `svelte-legacy-guard` flags Svelte 4 syntax
