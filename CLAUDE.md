@@ -34,6 +34,23 @@ After completing the code, ask the user if they want a playground link. Only cal
 6. Return the final code to the user.
 7. Ask if the user wants a playground link. If yes, call `playground-link` once with the final code including `App.svelte` as the entry point.
 
+## Context architecture (what is available to you)
+
+This repository is set up with a layered Context + Prompt Engineering
+foundation. Full map: [docs/ai-development/architecture.md](docs/ai-development/architecture.md).
+
+- **Skills** (`.claude/skills/`) — auto-loaded by task: 10 Svelte 5 / SvelteKit
+  skills (runes, components, styling, template-directives, data-flow,
+  remote-functions, structure, deployment, layerchart, ecosystem-guide) and
+  `prompt-architect` (27 prompt-engineering frameworks).
+- **Subagent** `svelte-file-editor` (`.claude/agents/`) — use it for writing,
+  editing, or validating any `.svelte` / `.svelte.ts` file in an isolated context.
+- **Svelte MCP** — live docs + `svelte-autofixer` (see tool workflow above).
+- **Product spec** — [docs/tz-cadbos-interior-ai.md](docs/tz-cadbos-interior-ai.md)
+  (SRS for the Cadbos Interior Design AI app). Consult it for product scope,
+  requirements, data model, and integrations before implementing features.
+- **Knowledge base** — `ai-context/` submodule (see below).
+
 ## Knowledge base: `ai-context/`
 
 The `ai-context/` directory is a git submodule (`cadbos/ai-context`) that serves
