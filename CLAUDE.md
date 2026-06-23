@@ -39,12 +39,18 @@ After completing the code, ask the user if they want a playground link. Only cal
 This repository is set up with a layered Context + Prompt Engineering
 foundation. Full map: [docs/ai-development/architecture.md](docs/ai-development/architecture.md).
 
-- **Skills** (`.claude/skills/`) — auto-loaded by task: 10 Svelte 5 / SvelteKit
-  skills (runes, components, styling, template-directives, data-flow,
+- **Framework skills** (`.claude/skills/`) — auto-loaded by task: 10 Svelte 5 /
+  SvelteKit skills (runes, components, styling, template-directives, data-flow,
   remote-functions, structure, deployment, layerchart, ecosystem-guide) and
   `prompt-architect` (27 prompt-engineering frameworks).
+- **Project skills** (`.claude/skills/cadbos-*`) — Cadbos-specific knowledge:
+  `cadbos-conventions`, `cadbos-structure`, `cadbos-request-model`,
+  `cadbos-integrations`, `cadbos-testing`, `cadbos-self-review`. Prefer these for
+  any product work.
 - **Subagent** `svelte-file-editor` (`.claude/agents/`) — use it for writing,
   editing, or validating any `.svelte` / `.svelte.ts` file in an isolated context.
+- **Hooks** (`.claude/settings.json`) — `svelte-legacy-guard` flags Svelte 4
+  syntax in edited `.svelte` files (runes-only enforcement, NFR-13).
 - **Svelte MCP** — live docs + `svelte-autofixer` (see tool workflow above).
 - **Product spec** — [docs/tz-cadbos-interior-ai.md](docs/tz-cadbos-interior-ai.md)
   (SRS for the Cadbos Interior Design AI app). Consult it for product scope,
