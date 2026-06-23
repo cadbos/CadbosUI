@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """PostToolUse guard: flag Svelte 4 syntax in edited .svelte files.
 
-Cadbos is runes-only (NFR-13). After an Edit/Write to a `.svelte` file this hook
-scans for legacy Svelte 4 patterns and, if found, reports them back to the agent
-(exit 2) so they get migrated to Svelte 5 runes. Fails open: any error → exit 0,
-so it never blocks normal work.
+Cadbos is runes-only. After an Edit/Write to a `.svelte` file this hook scans for
+legacy Svelte 4 patterns and, if found, reports them back to the agent (exit 2) so
+they get migrated to Svelte 5 runes. Fails open: any error → exit 0, so it never
+blocks normal work.
 """
 import json
 import re
@@ -45,7 +45,7 @@ def main() -> int:
         return 0
 
     msg = (
-        f"[cadbos] Svelte 4 syntax detected in {path} (project is runes-only, NFR-13):\n"
+        f"[cadbos] Svelte 4 syntax detected in {path} (project is runes-only):\n"
         + "\n".join(found)
         + "\nMigrate to Svelte 5 runes and re-validate with svelte-autofixer."
     )

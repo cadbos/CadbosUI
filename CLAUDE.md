@@ -50,11 +50,8 @@ foundation. Full map: [docs/ai-development/architecture.md](docs/ai-development/
 - **Subagent** `svelte-file-editor` (`.claude/agents/`) — use it for writing,
   editing, or validating any `.svelte` / `.svelte.ts` file in an isolated context.
 - **Hooks** (`.claude/settings.json`) — `svelte-legacy-guard` flags Svelte 4
-  syntax in edited `.svelte` files (runes-only enforcement, NFR-13).
+  syntax in edited `.svelte` files (runes-only enforcement).
 - **Svelte MCP** — live docs + `svelte-autofixer` (see tool workflow above).
-- **Product spec** — [docs/tz-cadbos-interior-ai.md](docs/tz-cadbos-interior-ai.md)
-  (SRS for the Cadbos Interior Design AI app). Consult it for product scope,
-  requirements, data model, and integrations before implementing features.
 - **Knowledge base** — `ai-context/` submodule (see below).
 
 ## Knowledge base: `ai-context/`

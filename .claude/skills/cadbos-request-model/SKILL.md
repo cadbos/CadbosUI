@@ -9,8 +9,7 @@ description: >
 # Cadbos request model (single source of truth)
 
 The three input UIs (chat / key-value / graph) are **three projections of one
-model**. Implements SRS §7 and FR-А1…А6. See `cadbos-structure` for placement and
-`svelte-runes` for rune mechanics.
+model**. See `cadbos-structure` for placement and `svelte-runes` for rune mechanics.
 
 ## The model
 
@@ -30,17 +29,16 @@ interface ImageInput { url: string; mime: string; size: number; dimensions?: [nu
   it and mutate it through its API; they hold only UI state (node positions, scroll).
 - **`prompt` is derived** (`$derived`) from `promptFragments[]` by concatenation in
   `order` (key-value & graph); in chat it is built from the dialog. Direct edits to
-  `prompt` are an explicit override (FR-А4). Никакой императивной синхронизации.
+  `prompt` are an explicit override. No imperative synchronization.
 - **Determinism**: identical content in any view → byte-identical final `prompt`
-  and identical `render/interior` payload (FR-А4, AC-9).
+  and identical request payload.
 - **Graph ↔ key-value mapping**: each fragment node = one key-value segment; edges
-  to the compose node define inclusion order (FR-Г3). Prevent cycles / dangling
-  nodes (FR-Г5).
+  to the compose node define inclusion order. Prevent cycles / dangling nodes.
 - **Validation** before send: non-empty prompt + uploaded image; block with a list
-  of missing fields (FR-А5). Guard against double (paid) submit (FR-Ж6).
-- **Serialization**: JSON export/import + the identity check basis (FR-А6, AC-9).
+  of missing fields. Guard against double (paid) submit.
+- **Serialization**: JSON export/import + the basis for the identity check.
 
-## Three-UI identity check (AC-9)
+## Three-UI identity check
 
 Same content entered via chat, then key-value, then graph must produce a
 byte-identical `prompt`, an identical normalized model (minus UI fields), and an
@@ -48,5 +46,4 @@ identical request body. This is the key e2e scenario — see `cadbos-testing`.
 
 ## Scope
 
-MVP: free-text prompt, single image, no LLM post-processing (Д-12/Д-13/Д-14). No
-preset key catalog (the Appendix-A keys are a post-MVP builder).
+Free-text prompt, single image, no LLM post-processing, no preset key catalog.
