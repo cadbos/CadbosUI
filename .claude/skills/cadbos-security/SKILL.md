@@ -36,8 +36,8 @@ the diff, run the automated checks, then walk the Do/Avoid lists.
   (`nsec`) never reaches the server, the bundle, or logs; the app does not accept it.
 - **Rate-limit** auth endpoints and the (paid) generation endpoint to curb
   brute-force and cost abuse.
-- **Audit dependencies**: lockfile committed, run `pnpm audit` / `npm audit`
-  regularly; enable Dependabot/Renovate/Socket.
+- **Audit dependencies**: `pnpm-lock.yaml` committed, run `pnpm audit` regularly;
+  enable Dependabot/Renovate/Socket.
 - **Log security events** (auth failures, permission denials, validation rejections)
   with enough context to investigate, without leaking PII or secrets.
 
@@ -67,7 +67,7 @@ grep -rnE "password|secret|api[_-]?key|token|private[_-]?key" \
 # secrets reachable from the client (must be empty)
 grep -rnE "PUBLIC_.*(KEY|TOKEN|SECRET)" src 2>/dev/null
 # dependency vulnerabilities
-pnpm audit || npm audit
+pnpm audit
 ```
 
 ## Cadbos specifics

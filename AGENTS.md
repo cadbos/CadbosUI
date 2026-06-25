@@ -108,6 +108,9 @@ When adding or editing a skill, follow
 
 ## Commands
 
-- `npm run dev` — start the dev server.
-- `npm run build` — production build.
-- `npm run test` — type-check, lint, unit tests.
+Package manager: **pnpm** (strict `node_modules` — no phantom dependencies).
+
+- `pnpm dev` — start the dev server.
+- `pnpm build` — production build.
+- `pnpm test` — type-check, lint, unit tests.
+- `pnpm e2e` — Playwright end-to-end tests.

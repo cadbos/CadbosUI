@@ -39,7 +39,7 @@ Scope is optional and short (e.g. `feat(chat):`, `fix(proxy):`, `chore(skills):`
 ## Workflow
 
 1. **Format first** — if the project defines a formatter (e.g. `prettier` /
-   `npm run format`), run it before staging.
+   `pnpm format`), run it before staging.
 2. **Gather context** — `git status`, `git diff` (or `--staged`), and
    `git log --oneline -10` to match existing style.
 3. **Classify** — pick one type; if several apply, split into separate commits.
