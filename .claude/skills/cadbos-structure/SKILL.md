@@ -21,7 +21,7 @@ src/
     server/           # SERVER-ONLY (secrets never reach client)
       generation.ts     # proxy to the external render service, holds the API key
       uploads.ts        # file router, holds the upload token
-      auth.ts           # login/password (hashed), session
+      auth.ts           # Nostr challenge/verify, session (no passwords)
       billing.ts        # cost/limit accounting
     i18n/             # Russian primary, English-ready
   routes/
@@ -30,7 +30,7 @@ src/
     api/
       uploads/+server.ts         # mounts the upload file router
       render/+server.ts          # Cadbos proxy → external render service
-      auth/...                    # login/register/logout endpoints
+      auth/...                    # Nostr: challenge / verify / logout / me
 ```
 
 ## Placement rules

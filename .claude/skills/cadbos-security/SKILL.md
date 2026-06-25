@@ -29,8 +29,11 @@ the diff, run the automated checks, then walk the Do/Avoid lists.
   `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`,
   `Permissions-Policy`, and a CSP with nonces/hashes (avoid `unsafe-inline`/`eval`).
 - **CORS** restrictive — allowlist known origins; no wildcard `*` with credentials.
-- **Hash passwords** with a strong salted KDF (argon2/bcrypt/scrypt). Never store
-  or log plaintext.
+- **Nostr auth, no passwords** — identity is the Nostr pubkey. Verify a single-use,
+  short-TTL challenge signed as a NIP-98 event (kind 27235): check kind, time window,
+  `u`/`method` tags, nonce one-time use, and the schnorr signature strictly against the
+  pubkey *inside the signed event* (never a "trusted" request field). The private key
+  (`nsec`) never reaches the server, the bundle, or logs; the app does not accept it.
 - **Rate-limit** auth endpoints and the (paid) generation endpoint to curb
   brute-force and cost abuse.
 - **Audit dependencies**: lockfile committed, run `pnpm audit` / `npm audit`
@@ -73,4 +76,7 @@ pnpm audit || npm audit
   and are injected by the proxy — verify they never appear in client code or network
   (DevTools check).
 - The generation endpoint charges per call — protect against double-submit and tie
-  rate-limits/quota to the authenticated account.
+  rate-limits/quota to the authenticated account (keyed by pubkey).
+- Sessions are server-side behind an `HttpOnly` cookie, established only after the
+  Nostr challenge is verified; rotate the session id on login, set a sane TTL, and
+  clear both the cookie and any NIP-46 signer session on logout.
