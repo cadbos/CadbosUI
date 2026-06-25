@@ -44,7 +44,9 @@ All provider secrets are **server-only** (see `cadbos-conventions`). Use
   balance/limit; **block** generation when the limit is reached.
 - Accounting must be consistent: charge tied to a confirmed generation, protected
   against double-charge, reconciled with provider `cost`.
-- Auth: simple login/password, password stored as a salted strong hash.
+- Auth: Nostr identity (pubkey) — no passwords, no `nsec` import. Quota/limits are
+  keyed to the authenticated account (pubkey). See `cadbos-security` for the NIP-98
+  challenge/verify + `HttpOnly` session flow.
 
 ## Out of scope
 
