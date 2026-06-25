@@ -93,6 +93,7 @@ orchestration (AnythingLLM, Dify, LangFlow) are candidates at the product level.
 1. **Vet the third-party scripts** in `prompt-architect` (`scripts/*.py`) before
    relying on them — installed from an external repo.
 2. **Set up a remote** and push the foundation so the whole team gets it via
-   `git clone --recursive` (needs access to the `cadbos/ai-context` submodule).
+   `git clone`. Note: `ai-context/` is a git-ignored local folder (no longer a
+   submodule), distributed out-of-band rather than cloned with the repo.
 3. **As the team grows** — consider a dedicated `context-engineering` skill (context
    hygiene rules: skill vs subagent vs MCP).

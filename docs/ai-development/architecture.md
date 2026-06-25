@@ -46,7 +46,7 @@ flowchart TD
     end
 
     subgraph Reference["Reference (read-only)"]
-      L2["2 · ai-context (submodule)\ndomain, ecosystem, product"]
+      L2["2 · ai-context (local folder)\ndomain, ecosystem, product"]
     end
 
     subgraph Persistent["Across sessions"]
