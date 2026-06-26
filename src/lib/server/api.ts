@@ -9,18 +9,18 @@ export function apiError(status: number, code: string, message: string): Respons
 const outputFormat = z.enum(['webp', 'jpg', 'png', 'avif']);
 
 export const renderRequestSchema = z.object({
-	image: z.string().min(1),
-	prompt: z.string().min(1),
+	image: z.string().trim().min(1),
+	prompt: z.string().trim().min(1),
 	outputFormat
 });
 
 export const editRequestSchema = z.object({
-	image: z.string().min(1),
-	prompt: z.string().min(1)
+	image: z.string().trim().min(1),
+	prompt: z.string().trim().min(1)
 });
 
 export const challengeRequestSchema = z.object({
-	pubkey: z.string().min(1)
+	pubkey: z.string().trim().min(1)
 });
 
 export async function parseBody<S extends z.ZodType>(
