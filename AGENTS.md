@@ -65,8 +65,8 @@ Full map: [docs/ai-development/architecture.md](docs/ai-development/architecture
   `prompt-architect` (27 prompt-engineering frameworks).
 - **Project skills** (`.claude/skills/cadbos-*`) — `cadbos-conventions`,
   `cadbos-structure`, `cadbos-request-model`, `cadbos-integrations`,
-  `cadbos-testing`, `cadbos-security`, `cadbos-commits`, `cadbos-self-review`.
-  Prefer these for product work.
+  `cadbos-testing`, `cadbos-security`, `cadbos-commits`, `cadbos-self-review`,
+  `cadbos-pull-requests`. Prefer these for product work.
 - **Subagents** (`.claude/agents/`) — isolated-context workers: `svelte-file-editor`
   (write/edit/validate `.svelte`), `test-runner` (run & fix Vitest/Playwright),
   `code-reviewer` (read-only diff review vs our rules), `a11y-validator` (WCAG audit).
