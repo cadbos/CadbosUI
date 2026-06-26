@@ -1,4 +1,4 @@
-import type { Dictionary } from '../index.svelte';
+import type { Dictionary } from '$lib/i18n/index.svelte';
 
 export const en: Dictionary = {
 	'app.title': 'Cadbos — Interior Design AI',

@@ -4,11 +4,14 @@
 	"version": "0.0.1",
 	"type": "module",
 	"packageManager": "pnpm@10.18.0",
+	"engines": {
+		"node": ">=22"
+	},
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
-		"prepare": "svelte-kit sync || echo ''",
+		"prepare": "svelte-kit sync",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
@@ -47,5 +50,8 @@
 			"sharp",
 			"workerd"
 		]
+	},
+	"dependencies": {
+		"zod": "^4.4.3"
 	}
 }

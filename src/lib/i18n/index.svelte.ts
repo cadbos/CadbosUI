@@ -1,6 +1,6 @@
 import { browser } from '$app/environment';
-import { ru } from './locales/ru';
-import { en } from './locales/en';
+import { ru } from '$lib/i18n/locales/ru';
+import { en } from '$lib/i18n/locales/en';
 
 export type Locale = 'ru' | 'en';
 export type TranslationKey = keyof typeof ru;

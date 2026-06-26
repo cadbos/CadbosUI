@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mockChallenge, mockMe, mockRender, mockUpload } from './fixtures';
+import { mockChallenge, mockMe, mockRender, mockUpload } from '$lib/server/mocks/fixtures';
 
 describe('mock fixtures match the API contract', () => {
 	it('challenge', () => {

@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
-	import ChatView from './ChatView.svelte';
-	import KeyValueView from './KeyValueView.svelte';
-	import GraphView from './GraphView.svelte';
+	import ChatView from '$lib/components/ChatView.svelte';
+	import KeyValueView from '$lib/components/KeyValueView.svelte';
+	import GraphView from '$lib/components/GraphView.svelte';
 
 	type ViewId = 'chat' | 'keyValue' | 'graph';
 
@@ -13,7 +13,27 @@
 		{ id: 'graph', label: 'view.graph', component: GraphView }
 	];
 
-	let active = $state<ViewId>('chat');
+	let activeIndex = $state(0);
+	let tabs = $state<HTMLElement[]>([]);
+
+	function activate(index: number): void {
+		activeIndex = index;
+		tabs[index]?.focus();
+	}
+
+	function onKeydown(event: KeyboardEvent): void {
+		const last = views.length - 1;
+		let next: number | null = null;
+		if (event.key === 'ArrowRight') next = activeIndex === last ? 0 : activeIndex + 1;
+		else if (event.key === 'ArrowLeft') next = activeIndex === 0 ? last : activeIndex - 1;
+		else if (event.key === 'Home') next = 0;
+		else if (event.key === 'End') next = last;
+
+		if (next !== null) {
+			event.preventDefault();
+			activate(next);
+		}
+	}
 </script>
 
 <section class="workspace">
@@ -23,33 +43,43 @@
 	</header>
 
 	<div class="switcher" role="tablist" aria-label={t('view.switcher.label')}>
-		{#each views as view (view.id)}
+		{#each views as view, index (view.id)}
 			<button
+				{@attach (node) => {
+					tabs[index] = node as HTMLElement;
+				}}
 				type="button"
 				role="tab"
 				id={`tab-${view.id}`}
-				aria-selected={active === view.id}
+				aria-selected={activeIndex === index}
 				aria-controls={`panel-${view.id}`}
-				class:active={active === view.id}
-				onclick={() => (active = view.id)}
+				tabindex={activeIndex === index ? 0 : -1}
+				class:active={activeIndex === index}
+				onclick={() => activate(index)}
+				onkeydown={onKeydown}
 			>
 				{t(view.label)}
 			</button>
 		{/each}
 	</div>
 
-	{#each views as view (view.id)}
-		{#if active === view.id}
-			{@const View = view.component}
-			<div class="panel" role="tabpanel" id={`panel-${view.id}`} aria-labelledby={`tab-${view.id}`}>
-				<svelte:boundary>
-					<View />
-					{#snippet failed()}
-						<p class="boundary-failed">{t('boundary.failed')}</p>
-					{/snippet}
-				</svelte:boundary>
-			</div>
-		{/if}
+	{#each views as view, index (view.id)}
+		{@const View = view.component}
+		<div
+			class="panel"
+			role="tabpanel"
+			id={`panel-${view.id}`}
+			aria-labelledby={`tab-${view.id}`}
+			tabindex="0"
+			hidden={activeIndex !== index}
+		>
+			<svelte:boundary>
+				<View />
+				{#snippet failed()}
+					<p class="boundary-failed">{t('boundary.failed')}</p>
+				{/snippet}
+			</svelte:boundary>
+		</div>
 	{/each}
 </section>
 
@@ -108,6 +138,10 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+	}
+
+	.panel[hidden] {
+		display: none;
 	}
 
 	.boundary-failed {

@@ -1,4 +1,6 @@
+import { dev } from '$app/environment';
 import type { Handle } from '@sveltejs/kit';
+import { defaultLocale } from '$lib/i18n/index.svelte';
 import { mockSessionCookie, mockUser } from '$lib/server/mocks/fixtures';
 
 const securityHeaders: Record<string, string> = {
@@ -10,10 +12,13 @@ const securityHeaders: Record<string, string> = {
 };
 
 export const handle: Handle = async ({ event, resolve }) => {
-	// Dev-only mock session: a real Nostr-backed session replaces this in phase C.
-	event.locals.user = event.cookies.get(mockSessionCookie) ? mockUser : null;
+	// Mock session, dev-only: the cookie grants a session solely under `dev`, so a
+	// production build never trusts it. Replaced by real Nostr auth in phase C.
+	event.locals.user = dev && event.cookies.get(mockSessionCookie) ? mockUser : null;
 
-	const response = await resolve(event);
+	const response = await resolve(event, {
+		transformPageChunk: ({ html }) => html.replace('%lang%', defaultLocale)
+	});
 
 	for (const [name, value] of Object.entries(securityHeaders)) {
 		response.headers.set(name, value);

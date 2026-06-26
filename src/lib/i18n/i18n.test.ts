@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { t, getLocale, defaultLocale, locales } from './index.svelte';
-import { ru } from './locales/ru';
-import { en } from './locales/en';
+import { t, getLocale, defaultLocale, locales } from '$lib/i18n/index.svelte';
+import { ru } from '$lib/i18n/locales/ru';
+import { en } from '$lib/i18n/locales/en';
 
 describe('i18n', () => {
 	it('defaults to Russian', () => {
