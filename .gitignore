@@ -1,8 +1,37 @@
+node_modules
+
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+# Playwright
+test-results
+
 # Claude Code – personal, machine-local settings (not shared)
 .claude/settings.local.json
 
-# AI context
+# AI context knowledge base (maintained out-of-band, git-ignored)
 /ai-context
 
 # Local scratch / research collection (not committed)
 temp/
+
+# Internal development spec (SRS) — kept out of commits
+docs/tz.md

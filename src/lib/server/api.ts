@@ -1,0 +1,36 @@
+import { json } from '@sveltejs/kit';
+import { z } from 'zod';
+import type { ApiError } from '$lib/api/contract';
+
+export function apiError(status: number, code: string, message: string): Response {
+	return json({ error: { code, message } } satisfies ApiError, { status });
+}
+
+const outputFormat = z.enum(['webp', 'jpg', 'png', 'avif']);
+
+export const renderRequestSchema = z.object({
+	image: z.string().trim().min(1),
+	prompt: z.string().trim().min(1),
+	outputFormat
+});
+
+export const editRequestSchema = z.object({
+	image: z.string().trim().min(1),
+	prompt: z.string().trim().min(1)
+});
+
+export const challengeRequestSchema = z.object({
+	pubkey: z.string().trim().min(1)
+});
+
+export async function parseBody<S extends z.ZodType>(
+	request: Request,
+	schema: S
+): Promise<{ ok: true; data: z.infer<S> } | { ok: false; response: Response }> {
+	const body = await request.json().catch(() => null);
+	const result = schema.safeParse(body);
+	if (!result.success) {
+		return { ok: false, response: apiError(400, 'invalid_request', 'Invalid request body') };
+	}
+	return { ok: true, data: result.data };
+}
