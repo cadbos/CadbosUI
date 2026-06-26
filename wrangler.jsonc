@@ -15,7 +15,7 @@
 		{
 			"binding": "DB",
 			"database_name": "cadbos-auth",
-			"database_id": "00000000-0000-0000-0000-000000000000",
+			"database_id": "d1f2f49c-bb39-473c-ae35-2d78eebcbc53",
 			"migrations_dir": "migrations"
 		}
 	]
