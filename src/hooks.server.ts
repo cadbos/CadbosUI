@@ -1,7 +1,8 @@
-import { dev } from '$app/environment';
 import type { Handle } from '@sveltejs/kit';
 import { defaultLocale } from '$lib/i18n/index.svelte';
-import { mockSessionCookie, mockUser } from '$lib/server/mocks/fixtures';
+import { apiError } from '$lib/server/api';
+import { SESSION_COOKIE } from '$lib/server/auth/config';
+import { findValidSession, getDb } from '$lib/server/auth/repository';
 
 const securityHeaders: Record<string, string> = {
 	'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
@@ -11,14 +12,24 @@ const securityHeaders: Record<string, string> = {
 	'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
 };
 
-export const handle: Handle = async ({ event, resolve }) => {
-	// Mock session, dev-only: the cookie grants a session solely under `dev`, so a
-	// production build never trusts it. Replaced by real Nostr auth in phase C.
-	event.locals.user = dev && event.cookies.get(mockSessionCookie) ? mockUser : null;
+// Endpoints that require an authenticated session (FR-И1, AC-11). Guarded centrally
+// so a new route under these prefixes can't accidentally ship unauthenticated.
+const guardedPaths = ['/api/render', '/api/edit', '/api/uploads'];
 
-	const response = await resolve(event, {
-		transformPageChunk: ({ html }) => html.replace('%lang%', defaultLocale)
-	});
+export const handle: Handle = async ({ event, resolve }) => {
+	const sessionId = event.cookies.get(SESSION_COOKIE);
+	event.locals.user = sessionId
+		? await findValidSession(getDb(event.platform), sessionId, Date.now())
+		: null;
+
+	const blocked =
+		!event.locals.user && guardedPaths.some((path) => event.url.pathname.startsWith(path));
+
+	const response = blocked
+		? apiError(401, 'unauthorized', 'Authentication required')
+		: await resolve(event, {
+				transformPageChunk: ({ html }) => html.replace('%lang%', defaultLocale)
+			});
 
 	for (const [name, value] of Object.entries(securityHeaders)) {
 		response.headers.set(name, value);

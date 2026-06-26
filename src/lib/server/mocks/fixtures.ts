@@ -2,32 +2,7 @@
 // built against the real wire types before the integrations land (phase C),
 // where every endpoint below is replaced by a real server-only module.
 
-import type {
-	ChallengeResponse,
-	MeResponse,
-	RenderResponse,
-	SessionUser,
-	UploadResult
-} from '$lib/api/contract';
-
-export const mockSessionCookie = 'cadbos_mock_session';
-
-export const mockUser: SessionUser = {
-	pubkey: '0000000000000000000000000000000000000000000000000000000000000000',
-	firstName: 'Demo',
-	lastName: 'Designer'
-};
-
-export function mockChallenge(): ChallengeResponse {
-	return { challenge: 'dev-challenge-0000' };
-}
-
-export function mockMe(): MeResponse {
-	return {
-		user: mockUser,
-		quota: { balanceOrLimit: 100, usage: 0, period: 'month' }
-	};
-}
+import type { RenderResponse, UploadResult } from '$lib/api/contract';
 
 export function mockUpload(): UploadResult {
 	return {
