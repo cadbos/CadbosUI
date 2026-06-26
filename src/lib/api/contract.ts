@@ -4,7 +4,46 @@
 
 export type OutputFormat = 'webp' | 'jpg' | 'png' | 'avif';
 
-// Unified error body (HTTP 4xx/5xx) — no stack, paths, or internal ids.
+// ── Request model types ──────────────────────────────────────────────────────
+
+// A single uploaded image (same shape as UploadResult; kept separate to allow divergence).
+export interface ImageInput {
+	url: string;
+	mime: string;
+	size: number;
+	dimensions?: [number, number];
+}
+
+// One segment of a free-text prompt; order defines concatenation sequence.
+export interface PromptFragment {
+	id: string;
+	label?: string;
+	text: string;
+	order: number;
+}
+
+// UX category for an edit instruction; `type` is UI-only, `instruction` goes to the API.
+export interface EditOperation {
+	type: 'replace-object' | 'change-surface-color' | 'freeform';
+	instruction: string;
+}
+
+// Result of a render or edit call stored as `currentRender` in the request model.
+// `outputUrls` is an array to accommodate a future revision history (Д-16);
+// in MVP it always holds exactly one URL.
+export interface RenderResult {
+	id: string;
+	outputUrls: string[];
+	cost: number;
+	balance: number;
+	parentId?: string; // groundwork for revision history (Д-16)
+	editOp?: EditOperation;
+	ts: number; // Unix ms
+}
+
+// ── Unified error body ───────────────────────────────────────────────────────
+
+// HTTP 4xx/5xx body — no stack, paths, or internal ids.
 export interface ApiError {
 	error: { code: string; message: string };
 }
