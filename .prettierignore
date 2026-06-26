@@ -1,0 +1,17 @@
+# Package Managers
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
+
+# Miscellaneous
+/static/
+*.svg
+
+# Non-app content not managed by Prettier (knowledge base, agent skills/docs,
+# generated skills lockfile)
+/ai-context/
+/.claude/
+/docs/
+skills-lock.json
