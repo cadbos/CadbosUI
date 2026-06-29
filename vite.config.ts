@@ -1,12 +1,15 @@
+import { heyApiPlugin } from '@hey-api/vite-plugin';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
 // Relative import: the `$lib` alias is not resolved while Vite evaluates this config.
 import { NOSTR_CONNECT_RELAYS } from './src/lib/nostr/connect';
+import { heyApiOpenApiConfig } from './openapi-ts.config';
 
 export default defineConfig({
 	plugins: [
+		heyApiPlugin({ config: heyApiOpenApiConfig }),
 		sveltekit({
 			compilerOptions: {
 				// Force runes mode for the project, except for libraries. Can be removed in svelte 6.
