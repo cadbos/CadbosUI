@@ -18,8 +18,6 @@
 
 	let menuOpen = $state(false);
 	let profileOpen = $state(false);
-	let firstName = $state('');
-	let lastName = $state('');
 	let savingProfile = $state(false);
 
 	const displayName = $derived(auth.nostrProfile?.name ?? shortNpub);
@@ -29,8 +27,6 @@
 	const relayCount = $derived(auth.nostrProfile?.relays.length ?? 0);
 
 	$effect(() => {
-		firstName = auth.user?.firstName ?? '';
-		lastName = auth.user?.lastName ?? '';
 		if (missingCadbosName) profileOpen = true;
 	});
 
@@ -61,7 +57,7 @@
 	async function saveProfile(): Promise<void> {
 		savingProfile = true;
 		try {
-			await auth.saveProfile({ firstName, lastName });
+			await auth.saveProfile();
 			profileOpen = false;
 		} finally {
 			savingProfile = false;
@@ -119,11 +115,11 @@
 				<form onsubmit={(event) => void (event.preventDefault(), saveProfile())}>
 					<label>
 						<span>{t('auth.profile.firstName')}</span>
-						<input autocomplete="given-name" bind:value={firstName} />
+						<input autocomplete="given-name" bind:value={auth.profileDraft.firstName} />
 					</label>
 					<label>
 						<span>{t('auth.profile.lastName')}</span>
-						<input autocomplete="family-name" bind:value={lastName} />
+						<input autocomplete="family-name" bind:value={auth.profileDraft.lastName} />
 					</label>
 					<div class="profile-actions">
 						<button type="submit" disabled={savingProfile}>

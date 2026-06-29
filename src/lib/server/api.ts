@@ -32,7 +32,7 @@ const profileName = z
 	.string()
 	.trim()
 	.max(80)
-	.transform((value) => (value.length === 0 ? undefined : value))
+	.transform((value) => (value.length === 0 ? null : value))
 	.optional();
 
 export const profileUpdateRequestSchema = z.object({

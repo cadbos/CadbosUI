@@ -5,7 +5,7 @@ import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
 // Relative import: the `$lib` alias is not resolved while Vite evaluates this config.
 import { heyApiOpenApiConfig } from './openapi-ts.config';
-import { NOSTR_CONNECT_RELAYS, NOSTR_PROFILE_BOOTSTRAP_RELAYS } from './src/lib/nostr/connect';
+import { NOSTR_CONNECT_RELAYS } from './src/lib/nostr/connect';
 
 export default defineConfig({
 	plugins: [
@@ -34,7 +34,7 @@ export default defineConfig({
 					'img-src': ['self', 'data:', 'https:'],
 					'font-src': ['self'],
 					// `self` for our own endpoints; the NIP-46 rendezvous relays (wss://).
-					'connect-src': ['self', ...NOSTR_CONNECT_RELAYS, ...NOSTR_PROFILE_BOOTSTRAP_RELAYS],
+					'connect-src': ['self', ...NOSTR_CONNECT_RELAYS],
 					'object-src': ['none'],
 					'base-uri': ['self'],
 					'frame-ancestors': ['none'],

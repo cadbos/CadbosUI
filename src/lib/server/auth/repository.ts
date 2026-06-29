@@ -113,11 +113,16 @@ export async function deleteSession(db: D1Database, id: string): Promise<void> {
 export async function updateUserProfile(
 	db: D1Database,
 	pubkey: string,
-	firstName: string | undefined,
-	lastName: string | undefined
+	firstName: string | null | undefined,
+	lastName: string | null | undefined
 ): Promise<SessionUser> {
-	const firstNameValue = firstName ?? null;
-	const lastNameValue = lastName ?? null;
+	const existing = await db
+		.prepare('SELECT first_name, last_name FROM users WHERE pubkey = ?')
+		.bind(pubkey)
+		.first<Pick<UserRow, 'first_name' | 'last_name'>>();
+	if (!existing) throw new Error('user profile update failed');
+	const firstNameValue = firstName === undefined ? existing.first_name : firstName;
+	const lastNameValue = lastName === undefined ? existing.last_name : lastName;
 	await db
 		.prepare('UPDATE users SET first_name = ?, last_name = ? WHERE pubkey = ?')
 		.bind(firstNameValue, lastNameValue, pubkey)

@@ -1,21 +1,7 @@
 import { SimplePool } from 'nostr-tools/pool';
 import type { Event } from 'nostr-tools/pure';
+import type { NostrProfile, RelayInfo } from '$lib/api/contract';
 import { NOSTR_PROFILE_BOOTSTRAP_RELAYS } from './connect';
-
-export interface RelayInfo {
-	url: string;
-	read: boolean;
-	write: boolean;
-}
-
-export interface NostrProfile {
-	name?: string;
-	picture?: string;
-	about?: string;
-	nip05?: string;
-	website?: string;
-	relays: RelayInfo[];
-}
 
 interface ProfilePool {
 	querySync(
@@ -65,15 +51,23 @@ export async function fetchNostrProfile(
 			.map((relay) => relay.url);
 		const profileRelays = unique([...readRelays, ...bootstrapRelays]);
 		profileRelays.forEach((relay) => closeRelays.add(relay));
+		const bootstrapProfile = {
+			...parseMetadata(latestEvent(bootstrapEvents, PROFILE_KIND)),
+			relays
+		};
 
-		const profileEvents =
-			readRelays.length > 0
-				? await pool.querySync(
-						profileRelays,
-						{ kinds: [PROFILE_KIND], authors: [pubkey] },
-						{ maxWait }
-					)
-				: [];
+		let profileEvents: Event[] = [];
+		if (readRelays.length > 0) {
+			try {
+				profileEvents = await pool.querySync(
+					profileRelays,
+					{ kinds: [PROFILE_KIND], authors: [pubkey] },
+					{ maxWait }
+				);
+			} catch {
+				return bootstrapProfile;
+			}
+		}
 		const profileEvent = latestEvent([...bootstrapEvents, ...profileEvents], PROFILE_KIND);
 
 		return { ...parseMetadata(profileEvent), relays };
@@ -92,14 +86,10 @@ export function parseMetadata(event: Event | undefined): Omit<NostrProfile, 'rel
 		if (!isRecord(data)) return {};
 		return {
 			...(typeof data.name === 'string' && data.name.trim() ? { name: data.name.trim() } : {}),
-			...(typeof data.picture === 'string' && data.picture.trim()
-				? { picture: data.picture.trim() }
-				: {}),
+			...(safeHttpUrl(data.picture) ? { picture: safeHttpUrl(data.picture) } : {}),
 			...(typeof data.about === 'string' && data.about.trim() ? { about: data.about.trim() } : {}),
 			...(typeof data.nip05 === 'string' && data.nip05.trim() ? { nip05: data.nip05.trim() } : {}),
-			...(typeof data.website === 'string' && data.website.trim()
-				? { website: data.website.trim() }
-				: {})
+			...(safeHttpUrl(data.website) ? { website: safeHttpUrl(data.website) } : {})
 		};
 	} catch {
 		return {};
@@ -143,6 +133,16 @@ function normalizedRelayUrl(value: string): string | null {
 
 function unique(values: string[]): string[] {
 	return [...new Set(values)];
+}
+
+function safeHttpUrl(value: unknown): string | undefined {
+	if (typeof value !== 'string' || !value.trim()) return undefined;
+	try {
+		const url = new URL(value.trim());
+		return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined;
+	} catch {
+		return undefined;
+	}
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

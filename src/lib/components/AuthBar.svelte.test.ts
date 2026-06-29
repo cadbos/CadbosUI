@@ -29,16 +29,6 @@ vi.mock('nostr-tools/nip46', () => ({
 	BunkerSigner: { fromURI: nip46.fromURI }
 }));
 
-vi.mock('$lib/nostr/profile', () => ({
-	fetchNostrProfile: vi.fn(() =>
-		Promise.resolve({
-			name: 'cadbos-nostr',
-			picture: 'https://example.com/avatar.jpg',
-			relays: [{ url: 'wss://relay.example/', read: true, write: true }]
-		})
-	)
-}));
-
 const sk = generateSecretKey();
 const pk = getPublicKey(sk);
 
@@ -63,7 +53,19 @@ function mockFetch(
 				return Promise.resolve(Response.json({ challenge: 'a'.repeat(64) }));
 			}
 			if (input.endsWith('/auth/verify')) return Promise.resolve(verify(init));
+			if (input.endsWith('/auth/nostr-profile')) {
+				return Promise.resolve(
+					Response.json({
+						profile: {
+							name: 'cadbos-nostr',
+							picture: 'https://example.com/avatar.jpg',
+							relays: [{ url: 'wss://relay.example/', read: true, write: true }]
+						}
+					})
+				);
+			}
 			if (input.endsWith('/auth/profile')) {
+				if (init?.method !== 'PATCH') return Promise.resolve(new Response(null, { status: 405 }));
 				return Promise.resolve(
 					profile?.(init) ??
 						Response.json({ user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' } })
@@ -80,6 +82,8 @@ beforeEach(() => {
 	auth.status = 'anonymous';
 	auth.user = null;
 	auth.nostrProfile = null;
+	auth.profileDraft.firstName = '';
+	auth.profileDraft.lastName = '';
 	auth.error = null;
 	auth.connectUri = null;
 	auth.authUrl = null;

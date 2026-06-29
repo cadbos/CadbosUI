@@ -39,7 +39,7 @@ describe('parseMetadata', () => {
 			picture: 'https://example.com/pic.jpg',
 			about: 'Interior profile',
 			nip05: 'user@example.com',
-			website: 'https://example.com'
+			website: 'https://example.com/'
 		});
 	});
 
@@ -47,6 +47,36 @@ describe('parseMetadata', () => {
 		expect(parseMetadata(event(0, 1, 'not json'))).toEqual({});
 		expect(parseMetadata(event(0, 1, JSON.stringify({ name: 12, about: ' ok ' })))).toEqual({
 			about: 'ok'
+		});
+	});
+
+	it('drops unsafe profile URLs', () => {
+		expect(
+			parseMetadata(
+				event(
+					0,
+					1,
+					JSON.stringify({
+						picture: 'javascript:alert(1)',
+						website: 'data:text/html,unsafe'
+					})
+				)
+			)
+		).toEqual({});
+		expect(
+			parseMetadata(
+				event(
+					0,
+					1,
+					JSON.stringify({
+						picture: 'https://example.com/avatar.png',
+						website: 'http://example.com'
+					})
+				)
+			)
+		).toEqual({
+			picture: 'https://example.com/avatar.png',
+			website: 'http://example.com/'
 		});
 	});
 });
@@ -120,6 +150,28 @@ describe('fetchNostrProfile', () => {
 			})
 		).resolves.toEqual({ name: 'bootstrap', relays: [] });
 		expect(querySync).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps bootstrap profile data when read relay enrichment fails', async () => {
+		const querySync = vi.fn<QuerySync>();
+		querySync
+			.mockResolvedValueOnce([
+				event(0, 3, JSON.stringify({ name: 'bootstrap' })),
+				event(10002, 1, '', [['r', 'wss://read.example', 'read']])
+			])
+			.mockRejectedValueOnce(new Error('read relay down'));
+
+		await expect(
+			fetchNostrProfile('a'.repeat(64), {
+				pool: { querySync },
+				relays: ['wss://bootstrap.example'],
+				allowedReadRelays: ['wss://read.example/'],
+				maxWait: 25
+			})
+		).resolves.toEqual({
+			name: 'bootstrap',
+			relays: [{ url: 'wss://read.example/', read: true, write: false }]
+		});
 	});
 
 	it('returns an empty profile for invalid pubkeys or relay failures', async () => {

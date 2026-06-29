@@ -239,10 +239,36 @@ describe('auth flow', () => {
 			lastName: 'Lovelace'
 		});
 
-		const me = await call(meGET, {
-			locals: { user: { pubkey, firstName: 'Ada', lastName: 'Lovelace' } }
+		const firstNameOnly = await call(profilePATCH, {
+			request: new Request(VERIFY_URL, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ firstName: 'Grace' })
+			}),
+			platform: platform(db),
+			locals: { user: { pubkey } }
 		});
-		expect((await me.json()).user).toEqual({ pubkey, firstName: 'Ada', lastName: 'Lovelace' });
+		expect(await firstNameOnly.json()).toEqual({
+			user: { pubkey, firstName: 'Grace', lastName: 'Lovelace' }
+		});
+
+		const clearLastName = await call(profilePATCH, {
+			request: new Request(VERIFY_URL, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ lastName: '' })
+			}),
+			platform: platform(db),
+			locals: { user: { pubkey } }
+		});
+		expect(await clearLastName.json()).toEqual({
+			user: { pubkey, firstName: 'Grace' }
+		});
+
+		const me = await call(meGET, {
+			locals: { user: { pubkey, firstName: 'Grace' } }
+		});
+		expect((await me.json()).user).toEqual({ pubkey, firstName: 'Grace' });
 	});
 });
 
