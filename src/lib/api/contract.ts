@@ -54,6 +54,11 @@ export interface SessionUser {
 	lastName?: string;
 }
 
+export interface ProfileUpdateRequest {
+	firstName?: string;
+	lastName?: string;
+}
+
 export interface Quota {
 	balanceOrLimit: number;
 	usage: number;

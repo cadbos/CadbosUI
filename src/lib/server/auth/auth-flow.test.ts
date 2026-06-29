@@ -4,12 +4,13 @@ import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { finalizeEvent, generateSecretKey, getPublicKey, type Event } from 'nostr-tools/pure';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Cookies, RequestEvent } from '@sveltejs/kit';
-import { CHALLENGE_TTL_MS,NIP98_KIND, SESSION_COOKIE } from './config';
+import { CHALLENGE_TTL_MS, NIP98_KIND, SESSION_COOKIE } from './config';
 import { consumeChallenge, createChallenge, findValidSession } from './repository';
 import { POST as challengePOST } from '../../../routes/auth/challenge/+server';
 import { POST as verifyPOST } from '../../../routes/auth/verify/+server';
 import { GET as meGET } from '../../../routes/auth/me/+server';
 import { POST as logoutPOST } from '../../../routes/auth/logout/+server';
+import { PATCH as profilePATCH } from '../../../routes/auth/profile/+server';
 
 const SCHEMA = readFileSync(
 	new URL('../../../../migrations/0001_auth.sql', import.meta.url),
@@ -200,6 +201,49 @@ describe('auth flow', () => {
 		expect(body.user).toEqual({ pubkey: 'a'.repeat(64) });
 		expect(body.quota).toBeUndefined();
 	});
+
+	it('updates Cadbos profile fields only for an authenticated user', async () => {
+		const sk = generateSecretKey();
+		const pubkey = getPublicKey(sk);
+		const challenge = await requestChallenge(db, pubkey);
+		const cookies = makeCookies();
+		await verify(db, cookies, signLogin(sk, challenge));
+
+		const unauthenticated = await call(profilePATCH, {
+			request: new Request(VERIFY_URL, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ firstName: 'Ada', lastName: 'Lovelace' })
+			}),
+			platform: platform(db),
+			locals: { user: null }
+		});
+		expect(unauthenticated.status).toBe(401);
+
+		const response = await call(profilePATCH, {
+			request: new Request(VERIFY_URL, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ firstName: ' Ada ', lastName: ' Lovelace ' })
+			}),
+			platform: platform(db),
+			locals: { user: { pubkey } }
+		});
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			user: { pubkey, firstName: 'Ada', lastName: 'Lovelace' }
+		});
+		expect(await findValidSession(db, requireSessionId(cookies), Date.now())).toEqual({
+			pubkey,
+			firstName: 'Ada',
+			lastName: 'Lovelace'
+		});
+
+		const me = await call(meGET, {
+			locals: { user: { pubkey, firstName: 'Ada', lastName: 'Lovelace' } }
+		});
+		expect((await me.json()).user).toEqual({ pubkey, firstName: 'Ada', lastName: 'Lovelace' });
+	});
 });
 
 describe('repository challenge atomicity', () => {
@@ -208,14 +252,20 @@ describe('repository challenge atomicity', () => {
 		const now = Date.now();
 		await createChallenge(db, 'nonce-1', 'p'.repeat(64), now);
 
-		expect(await consumeChallenge(db, 'nonce-1', 'p'.repeat(64), now - CHALLENGE_TTL_MS, now)).toBe(true);
-		expect(await consumeChallenge(db, 'nonce-1', 'p'.repeat(64), now - CHALLENGE_TTL_MS, now)).toBe(false);
+		expect(await consumeChallenge(db, 'nonce-1', 'p'.repeat(64), now - CHALLENGE_TTL_MS, now)).toBe(
+			true
+		);
+		expect(await consumeChallenge(db, 'nonce-1', 'p'.repeat(64), now - CHALLENGE_TTL_MS, now)).toBe(
+			false
+		);
 	});
 
 	it('consumeChallenge rejects an expired nonce', async () => {
 		const db = makeD1();
 		const now = Date.now();
 		await createChallenge(db, 'old', 'p'.repeat(64), now - CHALLENGE_TTL_MS - 1);
-		expect(await consumeChallenge(db, 'old', 'p'.repeat(64), now - CHALLENGE_TTL_MS, now)).toBe(false);
+		expect(await consumeChallenge(db, 'old', 'p'.repeat(64), now - CHALLENGE_TTL_MS, now)).toBe(
+			false
+		);
 	});
 });

@@ -20,6 +20,12 @@ export const ru = {
 	'auth.connect.cancel': 'Отмена',
 	'auth.connecting': 'Подключение…',
 	'auth.logout': 'Выйти',
+	'auth.profile.relays': 'Релеи',
+	'auth.profile.completeHint': 'Заполните имя и фамилию для профиля Cadbos.',
+	'auth.profile.firstName': 'Имя',
+	'auth.profile.lastName': 'Фамилия',
+	'auth.profile.save': 'Сохранить',
+	'auth.profile.saving': 'Сохранение…',
 	'auth.error.extensionMissing': 'Расширение Nostr не найдено. Установите Alby или nos2x.',
 	'auth.error.rejected': 'Вход отменён в подписанте.',
 	'auth.error.failed': 'Не удалось войти. Попробуйте снова.'

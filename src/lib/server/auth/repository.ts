@@ -109,3 +109,27 @@ export async function findValidSession(
 export async function deleteSession(db: D1Database, id: string): Promise<void> {
 	await db.prepare('DELETE FROM sessions WHERE id = ?').bind(id).run();
 }
+
+export async function updateUserProfile(
+	db: D1Database,
+	pubkey: string,
+	firstName: string | undefined,
+	lastName: string | undefined
+): Promise<SessionUser> {
+	const firstNameValue = firstName ?? null;
+	const lastNameValue = lastName ?? null;
+	await db
+		.prepare('UPDATE users SET first_name = ?, last_name = ? WHERE pubkey = ?')
+		.bind(firstNameValue, lastNameValue, pubkey)
+		.run();
+	const row = await db
+		.prepare('SELECT pubkey, first_name, last_name FROM users WHERE pubkey = ?')
+		.bind(pubkey)
+		.first<Pick<UserRow, 'pubkey' | 'first_name' | 'last_name'>>();
+	if (!row) throw new Error('user profile update failed');
+	return {
+		pubkey: row.pubkey,
+		...(row.first_name ? { firstName: row.first_name } : {}),
+		...(row.last_name ? { lastName: row.last_name } : {})
+	};
+}

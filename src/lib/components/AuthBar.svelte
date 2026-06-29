@@ -17,6 +17,22 @@
 	});
 
 	let menuOpen = $state(false);
+	let profileOpen = $state(false);
+	let firstName = $state('');
+	let lastName = $state('');
+	let savingProfile = $state(false);
+
+	const displayName = $derived(auth.nostrProfile?.name ?? shortNpub);
+	const missingCadbosName = $derived(
+		auth.status === 'authenticated' && (!auth.user?.firstName || !auth.user?.lastName)
+	);
+	const relayCount = $derived(auth.nostrProfile?.relays.length ?? 0);
+
+	$effect(() => {
+		firstName = auth.user?.firstName ?? '';
+		lastName = auth.user?.lastName ?? '';
+		if (missingCadbosName) profileOpen = true;
+	});
 
 	// Track which URI was copied so the hint resets automatically when a fresh
 	// connection (a different URI) is started.
@@ -42,6 +58,16 @@
 		method();
 	}
 
+	async function saveProfile(): Promise<void> {
+		savingProfile = true;
+		try {
+			await auth.saveProfile({ firstName, lastName });
+			profileOpen = false;
+		} finally {
+			savingProfile = false;
+		}
+	}
+
 	// Dismiss the open menu on an outside pointer press or Escape. An attachment
 	// keeps the listeners tied to the element's lifetime without an effect.
 	function dismissable(node: HTMLElement) {
@@ -65,8 +91,51 @@
 
 <div class="auth">
 	{#if auth.status === 'authenticated'}
-		<span class="who" title={auth.pubkey ?? ''}>{shortNpub}</span>
-		<button type="button" onclick={() => auth.logout()}>{t('auth.logout')}</button>
+		<div class="profile">
+			<button
+				type="button"
+				class="profile-toggle"
+				aria-expanded={profileOpen}
+				aria-controls="auth-profile"
+				onclick={() => (profileOpen = !profileOpen)}
+			>
+				{#if auth.nostrProfile?.picture}
+					<img src={auth.nostrProfile.picture} alt="" />
+				{:else}
+					<span class="avatar" aria-hidden="true">{displayName.slice(0, 1).toUpperCase()}</span>
+				{/if}
+				<span class="identity">
+					<span class="display">{displayName}</span>
+					<span class="who" title={auth.pubkey ?? ''}>{shortNpub}</span>
+				</span>
+			</button>
+			<div id="auth-profile" class="profile-panel" hidden={!profileOpen}>
+				<div class="profile-meta">
+					<span>{t('auth.profile.relays')}: {relayCount}</span>
+					{#if missingCadbosName}
+						<span class="notice">{t('auth.profile.completeHint')}</span>
+					{/if}
+				</div>
+				<form onsubmit={(event) => void (event.preventDefault(), saveProfile())}>
+					<label>
+						<span>{t('auth.profile.firstName')}</span>
+						<input autocomplete="given-name" bind:value={firstName} />
+					</label>
+					<label>
+						<span>{t('auth.profile.lastName')}</span>
+						<input autocomplete="family-name" bind:value={lastName} />
+					</label>
+					<div class="profile-actions">
+						<button type="submit" disabled={savingProfile}>
+							{savingProfile ? t('auth.profile.saving') : t('auth.profile.save')}
+						</button>
+						<button type="button" class="secondary" onclick={() => auth.logout()}>
+							{t('auth.logout')}
+						</button>
+					</div>
+				</form>
+			</div>
+		</div>
 	{:else if auth.connectUri}
 		<div class="connect">
 			<p class="hint">{t('auth.connect.scan')}</p>
@@ -126,8 +195,121 @@
 
 	.who {
 		font-family: ui-monospace, monospace;
-		font-size: 0.9rem;
+		font-size: 0.78rem;
 		color: var(--color-muted);
+	}
+
+	.profile {
+		position: relative;
+	}
+
+	button.profile-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		padding: var(--space-1);
+		color: var(--color-text);
+		background: var(--color-surface);
+		border-color: var(--color-border);
+	}
+
+	.profile-toggle img,
+	.avatar {
+		width: 2rem;
+		height: 2rem;
+		border-radius: 50%;
+		flex: 0 0 auto;
+	}
+
+	.profile-toggle img {
+		object-fit: cover;
+	}
+
+	.avatar {
+		display: grid;
+		place-items: center;
+		color: var(--color-accent-contrast);
+		background: var(--color-accent);
+		font-weight: 700;
+	}
+
+	.identity {
+		display: grid;
+		gap: 0.1rem;
+		text-align: left;
+		min-width: 0;
+	}
+
+	.display {
+		max-width: 11rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-weight: 700;
+	}
+
+	.profile-panel {
+		position: absolute;
+		right: 0;
+		top: calc(100% + var(--space-1));
+		z-index: 2;
+		width: min(22rem, calc(100vw - var(--space-4)));
+		padding: var(--space-2);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+	}
+
+	.profile-panel[hidden] {
+		display: none;
+	}
+
+	.profile-meta {
+		display: grid;
+		gap: var(--space-1);
+		margin-bottom: var(--space-2);
+		font-size: 0.85rem;
+		color: var(--color-muted);
+	}
+
+	.notice {
+		color: var(--color-text);
+	}
+
+	form {
+		display: grid;
+		gap: var(--space-2);
+	}
+
+	label {
+		display: grid;
+		gap: 0.35rem;
+		font-size: 0.85rem;
+		color: var(--color-muted);
+	}
+
+	input {
+		width: 100%;
+		box-sizing: border-box;
+		padding: var(--space-1) var(--space-2);
+		font: inherit;
+		color: var(--color-text);
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+	}
+
+	.profile-actions {
+		display: flex;
+		gap: var(--space-2);
+		justify-content: flex-end;
+	}
+
+	button.secondary {
+		color: var(--color-text);
+		background: var(--color-surface);
+		border-color: var(--color-border);
 	}
 
 	.signin {
