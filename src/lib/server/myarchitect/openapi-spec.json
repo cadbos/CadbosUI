@@ -1,0 +1,856 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "MyArchitectAI API",
+    "description": "AI rendering API for architecture and interior design. Create photorealistic renderings, transfer styles between images, edit images with natural language, upscale images up to 8K, turn static renders into animations, and more. Rendering images in 13s, editing images in 1-3s, animating renders in 60-90s. Best practices [here](https://www.myarchitectai.com/rendering-tutorials).",
+    "version": "1.0.0",
+    "contact": {
+      "name": "MyArchitectAI",
+      "url": "https://www.myarchitectai.com"
+    },
+    "termsOfService": "https://www.myarchitectai.com/terms-and-conditions"
+  },
+  "servers": [
+    {
+      "url": "https://api.myarchitectai.com/v1"
+    }
+  ],
+  "paths": {
+    "/render/interior": {
+      "post": {
+        "summary": "Render Interior",
+        "description": "Generate a photorealistic interior render from a 3D view export from any CAD or 3D modeling tool. Optionally guide the output with a text prompt.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenderInteriorInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful generation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Generation failed due to invalid input or processing error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/render/exterior": {
+      "post": {
+        "summary": "Render Exterior",
+        "description": "Generate a photorealistic exterior render from a 3D view export from any CAD or 3D modeling tool. Optionally guide the output with a text prompt.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenderInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful generation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Generation failed due to invalid input or processing error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/auto-prompt": {
+      "post": {
+        "summary": "Auto Prompt",
+        "description": "Analyze the input image and generate a detailed, comma-separated prompt describing its every aspect. Returns the generated prompt as text in output (not a URL). We highly recommend using it for pre-filling the prompt field of the render endpoints.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoPromptInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful generation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoPromptResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Generation failed due to invalid input or processing error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/edit-by-prompt": {
+      "post": {
+        "summary": "Edit by Prompt",
+        "description": "Edit an existing image with a natural-language instruction. The model applies the requested change while matching the input's aspect ratio. Returns the edited image URL.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditByPromptInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful generation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Generation failed due to invalid input or processing error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/style-transfer": {
+      "post": {
+        "summary": "Style Transfer",
+        "description": "Transfer the visual style of a reference image onto a source architectural image. Control the strength of the effect with the styleTransferStrength parameter.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StyleTransferInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful generation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Generation failed due to invalid input or processing error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/animate": {
+      "post": {
+        "summary": "Animate Image",
+        "description": "Turn a single image into a short video or create a smooth transition between two images. Use the prompt to describe the camera motion. Returns a video URL in output.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnimateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful generation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Generation failed due to invalid input or processing error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/upscale-4k": {
+      "post": {
+        "summary": "Upscale to 4K",
+        "description": "Upscale an image to 4K resolution while preserving details and sharpness. Accepts images up to 2K and outputs up to 4K or 8K.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Upscale4kInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful generation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Generation failed due to invalid input or processing error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/text-to-image": {
+      "post": {
+        "summary": "Text to Image",
+        "description": "Generate an architectural image from a text description. Specify output dimensions (128-2048px) and format. Use negativePrompt to exclude unwanted elements.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TextToImageInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful generation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SingleGenerationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Generation failed due to invalid input or processing error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "RenderInteriorInput": {
+        "required": [
+          "image",
+          "outputFormat"
+        ],
+        "type": "object",
+        "properties": {
+          "image": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the source image (sketch, drawing, or photo)"
+          },
+          "outputFormat": {
+            "type": "string",
+            "enum": [
+              "webp",
+              "jpg",
+              "png",
+              "avif"
+            ],
+            "description": "Output image format"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Text prompt to guide the interior render style and elements"
+          }
+        }
+      },
+      "GatewayErrorResponse": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Error message returned by the API gateway"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error",
+          "balance",
+          "cost"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message describing what went wrong"
+          },
+          "balance": {
+            "type": "number",
+            "description": "Remaining account balance"
+          },
+          "cost": {
+            "type": "number",
+            "description": "Cost charged for this request (typically 0 on error)"
+          }
+        }
+      },
+      "SingleGenerationResponse": {
+        "type": "object",
+        "required": [
+          "output",
+          "balance",
+          "cost"
+        ],
+        "properties": {
+          "output": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the generated image (or video, for /animate)"
+          },
+          "balance": {
+            "type": "number",
+            "description": "Remaining account balance after this request"
+          },
+          "cost": {
+            "type": "number",
+            "description": "Cost charged for this request"
+          }
+        }
+      },
+      "ArrayGenerationResponse": {
+        "type": "object",
+        "required": [
+          "output",
+          "balance",
+          "cost"
+        ],
+        "properties": {
+          "output": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            },
+            "description": "List of generated image URLs"
+          },
+          "balance": {
+            "type": "number",
+            "description": "Remaining account balance after this request"
+          },
+          "cost": {
+            "type": "number",
+            "description": "Cost charged for this request"
+          }
+        }
+      },
+      "Upscale4kInput": {
+        "required": [
+          "image"
+        ],
+        "type": "object",
+        "properties": {
+          "image": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the source image to upscale"
+          },
+          "outputFormat": {
+            "type": "string",
+            "enum": [
+              "webp",
+              "jpg",
+              "png",
+              "avif"
+            ],
+            "default": "jpg",
+            "description": "Output image format. Defaults to jpg if omitted"
+          }
+        }
+      },
+      "TextToImageInput": {
+        "required": [
+          "outputFormat",
+          "outputHeight",
+          "outputWidth",
+          "prompt"
+        ],
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Text description of the architectural image to generate"
+          },
+          "outputFormat": {
+            "type": "string",
+            "enum": [
+              "png",
+              "jpg",
+              "webp"
+            ],
+            "description": "Output image format (avif is not supported for text-to-image)"
+          },
+          "outputHeight": {
+            "maximum": 2048,
+            "minimum": 128,
+            "type": "number",
+            "description": "Output image height in pixels"
+          },
+          "outputWidth": {
+            "maximum": 2048,
+            "minimum": 128,
+            "type": "number",
+            "description": "Output image width in pixels"
+          },
+          "negativePrompt": {
+            "type": "string",
+            "description": "Text describing elements to exclude from the generated image"
+          }
+        }
+      },
+      "RenderInput": {
+        "required": [
+          "image",
+          "outputFormat"
+        ],
+        "type": "object",
+        "properties": {
+          "image": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the source image (sketch, drawing, or photo)"
+          },
+          "outputFormat": {
+            "type": "string",
+            "enum": [
+              "webp",
+              "jpg",
+              "png",
+              "avif"
+            ],
+            "description": "Output image format"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Text prompt to guide the exterior render style and elements"
+          }
+        }
+      },
+      "StyleTransferInput": {
+        "required": [
+          "image",
+          "outputFormat",
+          "referenceImage"
+        ],
+        "type": "object",
+        "properties": {
+          "image": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the source architectural image"
+          },
+          "outputFormat": {
+            "type": "string",
+            "enum": [
+              "webp",
+              "jpg",
+              "png",
+              "avif"
+            ],
+            "description": "Output image format"
+          },
+          "referenceImage": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the style reference image to transfer from"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Text prompt to guide the style transfer"
+          },
+          "negativePrompt": {
+            "type": "string",
+            "description": "Text describing elements to exclude from the output"
+          },
+          "styleTransferStrength": {
+            "type": "number",
+            "description": "How strongly to apply the reference style (0 = no effect, 1 = full transfer)"
+          }
+        }
+      },
+      "EditByPromptInput": {
+        "required": [
+          "image",
+          "prompt"
+        ],
+        "type": "object",
+        "properties": {
+          "image": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the source image to edit"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Natural-language instruction describing the edit to apply"
+          }
+        }
+      },
+      "AnimateInput": {
+        "required": [
+          "startFrameUrl",
+          "prompt"
+        ],
+        "type": "object",
+        "properties": {
+          "startFrameUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the source image used as the start frame of the video"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Text prompt describing the motion to animate"
+          },
+          "endFrameUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Optional URL of an image to use as the end frame. When provided, the video interpolates from the start frame to this frame."
+          }
+        }
+      },
+      "AutoPromptInput": {
+        "required": [
+          "image"
+        ],
+        "type": "object",
+        "properties": {
+          "image": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the source image to analyze"
+          }
+        }
+      },
+      "AutoPromptResponse": {
+        "type": "object",
+        "required": [
+          "output",
+          "balance",
+          "cost"
+        ],
+        "properties": {
+          "output": {
+            "type": "string",
+            "description": "The generated comma-separated render prompt (plain text, not a URL)"
+          },
+          "balance": {
+            "type": "number",
+            "description": "Remaining account balance after this request"
+          },
+          "cost": {
+            "type": "number",
+            "description": "Cost charged for this request"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "api_key": {
+        "type": "apiKey",
+        "name": "x-api-key",
+        "in": "header"
+      }
+    }
+  }
+}
