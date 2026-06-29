@@ -24,10 +24,13 @@
 	const copied = $derived(copiedUri !== null && copiedUri === auth.connectUri);
 
 	async function copyUri(): Promise<void> {
-		if (!auth.connectUri) return;
+		// Capture before awaiting: connectUri may change mid-write, and we must mark
+		// the URI we actually wrote as copied — not a newer one.
+		const uri = auth.connectUri;
+		if (!uri) return;
 		try {
-			await navigator.clipboard.writeText(auth.connectUri);
-			copiedUri = auth.connectUri;
+			await navigator.clipboard.writeText(uri);
+			copiedUri = uri;
 		} catch {
 			// Clipboard unavailable (denied permission / insecure context): leave the
 			// connect panel untouched so the user can still scan or copy manually.
