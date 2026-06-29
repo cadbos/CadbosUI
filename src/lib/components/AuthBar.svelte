@@ -25,8 +25,13 @@
 
 	async function copyUri(): Promise<void> {
 		if (!auth.connectUri) return;
-		await navigator.clipboard.writeText(auth.connectUri);
-		copiedUri = auth.connectUri;
+		try {
+			await navigator.clipboard.writeText(auth.connectUri);
+			copiedUri = auth.connectUri;
+		} catch {
+			// Clipboard unavailable (denied permission / insecure context): leave the
+			// connect panel untouched so the user can still scan or copy manually.
+		}
 	}
 
 	function choose(method: () => Promise<void>): void {
