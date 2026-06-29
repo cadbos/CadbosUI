@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { finalizeEvent, generateSecretKey, getPublicKey, type Event } from 'nostr-tools/pure';
 import type { D1Database } from '@cloudflare/workers-types';
-import type { Cookies } from '@sveltejs/kit';
+import type { Cookies, RequestEvent } from '@sveltejs/kit';
 import { CHALLENGE_TTL_MS,NIP98_KIND, SESSION_COOKIE } from './config';
 import { consumeChallenge, createChallenge, findValidSession } from './repository';
 import { POST as challengePOST } from '../../../routes/auth/challenge/+server';
@@ -79,8 +79,12 @@ function signLogin(secretKey: Uint8Array, challenge: string): Event {
 
 const platform = (db: D1Database) => ({ env: { DB: db } }) as unknown as App.Platform;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const call = (handler: any, args: Record<string, unknown>) => handler(args);
+// Invoke an endpoint with a partial RequestEvent. The handler's own signature
+// drives the types, so strict mode still validates the fake event's shape.
+const call = <Event extends RequestEvent, Result>(
+	handler: (event: Event) => Result,
+	event: Partial<Event>
+): Result => handler(event as Event);
 
 async function requestChallenge(db: D1Database, pubkey: string): Promise<string> {
 	const response = await call(challengePOST, {
@@ -95,7 +99,7 @@ async function requestChallenge(db: D1Database, pubkey: string): Promise<string>
 	return (await response.json()).challenge as string;
 }
 
-function verify(db: D1Database, cookies: Cookies, event: Event): Promise<Response> {
+async function verify(db: D1Database, cookies: Cookies, event: Event): Promise<Response> {
 	return call(verifyPOST, {
 		request: new Request(VERIFY_URL, {
 			method: 'POST',
