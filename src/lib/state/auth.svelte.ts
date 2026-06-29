@@ -8,11 +8,25 @@
 // `unsafe-eval`). NIP-46 (QR) will use nostr-tools' eval-free `nip46` in a later
 // sub-module.
 
+import { z } from 'zod';
 import type { Event, EventTemplate } from 'nostr-tools/pure';
 import type { SessionUser } from '$lib/api/contract';
 
 // NIP-98 HTTP-Auth event kind — a protocol constant, mirrored on the server.
 const NIP98_KIND = 27235;
+
+// Validate server responses at the boundary, so downstream consumers (npubEncode,
+// the session cookie, the UI) only ever see well-formed data. The pubkey/challenge
+// shapes mirror the server (32-byte lowercase hex).
+const hex32 = z.string().regex(/^[0-9a-f]{64}$/);
+const sessionUserSchema = z.object({
+	pubkey: hex32,
+	firstName: z.string().optional(),
+	lastName: z.string().optional()
+});
+const meResponseSchema = z.object({ user: sessionUserSchema });
+const challengeResponseSchema = z.object({ challenge: hex32 });
+const verifyResponseSchema = z.object({ user: sessionUserSchema });
 
 // The subset of the NIP-07 provider we use. The extension keeps the private key.
 interface Nip07Provider {
@@ -49,10 +63,11 @@ class AuthState {
 		try {
 			const response = await fetch('/auth/me');
 			if (!response.ok) return;
-			this.user = (await response.json()).user as SessionUser;
+			this.user = (await parseJsonOrFail(response, meResponseSchema)).user;
 			this.status = 'authenticated';
 		} catch {
-			// Network hiccup on load — stay anonymous, the user can sign in manually.
+			// Network hiccup or malformed response on load — stay anonymous, the user
+			// can sign in manually.
 		}
 	}
 
@@ -95,7 +110,7 @@ class AuthState {
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ pubkey })
 		});
-		return (await response.json()).challenge as string;
+		return (await parseJsonOrFail(response, challengeResponseSchema)).challenge;
 	}
 
 	// Sign the NIP-98 login event in the extension. A rejection there (user declined)
@@ -124,7 +139,7 @@ class AuthState {
 			method: 'POST',
 			headers: { authorization: header }
 		});
-		return (await response.json()).user as SessionUser;
+		return (await parseJsonOrFail(response, verifyResponseSchema)).user;
 	}
 
 	#fail(error: AuthError): void {
@@ -142,6 +157,15 @@ async function fetchOrFail(input: string, init: RequestInit): Promise<Response> 
 	}
 	if (!response.ok) throw new AuthFlowError('failed');
 	return response;
+}
+
+async function parseJsonOrFail<S extends z.ZodType>(
+	response: Response,
+	schema: S
+): Promise<z.infer<S>> {
+	const result = schema.safeParse(await response.json().catch(() => null));
+	if (!result.success) throw new AuthFlowError('failed');
+	return result.data;
 }
 
 // UTF-8-safe base64 for the Authorization header (mirrors the server's decode).
