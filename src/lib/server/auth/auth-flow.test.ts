@@ -34,13 +34,31 @@ function makeD1(): D1Database {
 	return { prepare: (sql: string) => stmt(sql) } as unknown as D1Database;
 }
 
-function makeCookies(): Cookies {
+type SetOptions = Parameters<Cookies['set']>[2];
+type DeleteOptions = Parameters<Cookies['delete']>[1];
+
+interface TestCookies extends Cookies {
+	setCalls: { name: string; value: string; options: SetOptions }[];
+	deleteCalls: { name: string; options: DeleteOptions }[];
+}
+
+function makeCookies(): TestCookies {
 	const store = new Map<string, string>();
+	const setCalls: TestCookies['setCalls'] = [];
+	const deleteCalls: TestCookies['deleteCalls'] = [];
 	return {
+		setCalls,
+		deleteCalls,
 		get: (name: string) => store.get(name),
-		set: (name: string, value: string) => store.set(name, value),
-		delete: (name: string) => void store.delete(name)
-	} as unknown as Cookies;
+		set: (name: string, value: string, options: SetOptions) => {
+			store.set(name, value);
+			setCalls.push({ name, value, options });
+		},
+		delete: (name: string, options: DeleteOptions) => {
+			store.delete(name);
+			deleteCalls.push({ name, options });
+		}
+	} as unknown as TestCookies;
 }
 
 function signLogin(secretKey: Uint8Array, challenge: string): Event {
@@ -110,6 +128,19 @@ describe('auth flow', () => {
 		const sessionId = cookies.get(SESSION_COOKIE);
 		expect(sessionId).toBeTruthy();
 		expect(await findValidSession(db, sessionId!, Date.now())).toEqual({ pubkey });
+
+		// The session cookie must be hardened: HttpOnly + Secure + SameSite=Lax,
+		// scoped to the whole site, with a future expiry.
+		expect(cookies.setCalls).toHaveLength(1);
+		const { name, value, options } = cookies.setCalls[0];
+		expect(name).toBe(SESSION_COOKIE);
+		expect(value).toBe(sessionId);
+		expect(options.httpOnly).toBe(true);
+		expect(options.secure).toBe(true);
+		expect(options.sameSite).toBe('lax');
+		expect(options.path).toBe('/');
+		expect(options.expires).toBeInstanceOf(Date);
+		expect(options.expires!.getTime()).toBeGreaterThan(Date.now());
 	});
 
 	it('blocks a replayed challenge (second verify with the same nonce fails 401)', async () => {
@@ -141,6 +172,11 @@ describe('auth flow', () => {
 		expect(response.status).toBe(204);
 		expect(cookies.get(SESSION_COOKIE)).toBeUndefined();
 		expect(await findValidSession(db, sessionId, Date.now())).toBeNull();
+
+		// Logout must clear the same cookie, path-scoped to the whole site.
+		expect(cookies.deleteCalls).toHaveLength(1);
+		expect(cookies.deleteCalls[0].name).toBe(SESSION_COOKIE);
+		expect(cookies.deleteCalls[0].options.path).toBe('/');
 	});
 
 	it('me returns 401 without a session and the user + quota with one', async () => {
