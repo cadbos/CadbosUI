@@ -2,6 +2,8 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
+// Relative import: the `$lib` alias is not resolved while Vite evaluates this config.
+import { NOSTR_CONNECT_RELAY } from './src/lib/nostr/connect';
 
 export default defineConfig({
 	plugins: [
@@ -23,7 +25,8 @@ export default defineConfig({
 					'style-src': ['self'],
 					'img-src': ['self', 'data:', 'https:'],
 					'font-src': ['self'],
-					'connect-src': ['self'],
+					// `self` for our own endpoints; the NIP-46 relay for Nostr Connect (wss://).
+					'connect-src': ['self', NOSTR_CONNECT_RELAY],
 					'object-src': ['none'],
 					'base-uri': ['self'],
 					'frame-ancestors': ['none'],

@@ -1,16 +1,22 @@
 // Client auth store (SRS Appendix B.4) — the single source of truth for sign-in
-// state. Sign-in uses the NIP-07 browser extension directly (window.nostr): the
-// private key never leaves the extension; the server only sees the pubkey and a
-// signed NIP-98 challenge.
+// state. Two sign-in methods produce the same signed NIP-98 challenge, so the
+// server side is identical for both; they differ only in *what* signs the event:
+//   - NIP-07: a browser extension (window.nostr);
+//   - NIP-46 (Nostr Connect): a remote signer reached over a relay, driven by a
+//     `nostrconnect://` QR the user scans. The private key never leaves the signer;
+//     the server only ever sees the pubkey and the signed challenge.
 //
-// We deliberately avoid NDK here: it pulls in `tseep`, which compiles emit handlers
-// with `eval()`, and that is blocked by our strict CSP (`script-src 'self'`, no
-// `unsafe-eval`). NIP-46 (QR) will use nostr-tools' eval-free `nip46` in a later
-// sub-module.
+// We deliberately avoid NDK: it pulls in `tseep`, which compiles emit handlers with
+// `eval()`, blocked by our strict CSP (`script-src 'self'`, no `unsafe-eval`). The
+// NIP-46 path uses nostr-tools' eval-free `nip46` instead.
 
 import { z } from 'zod';
+import { BunkerSigner, createNostrConnectURI } from 'nostr-tools/nip46';
+import { SimplePool } from 'nostr-tools/pool';
+import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { Event, EventTemplate } from 'nostr-tools/pure';
 import type { SessionUser } from '$lib/api/contract';
+import { NOSTR_CONNECT_RELAY } from '$lib/nostr/connect';
 
 // NIP-98 HTTP-Auth event kind — a protocol constant, mirrored on the server.
 const NIP98_KIND = 27235;
@@ -28,15 +34,17 @@ const meResponseSchema = z.object({ user: sessionUserSchema });
 const challengeResponseSchema = z.object({ challenge: hex32 });
 const verifyResponseSchema = z.object({ user: sessionUserSchema });
 
-// The subset of the NIP-07 provider we use. The extension keeps the private key.
-interface Nip07Provider {
+// The signer surface both methods share: get the user's pubkey and sign an event.
+// `window.nostr` (NIP-07) and `BunkerSigner` (NIP-46) both satisfy it, so the login
+// flow is written once against this type.
+interface NostrSigner {
 	getPublicKey(): Promise<string>;
 	signEvent(event: EventTemplate): Promise<Event>;
 }
 
 declare global {
 	interface Window {
-		nostr?: Nip07Provider;
+		nostr?: NostrSigner;
 	}
 }
 
@@ -53,6 +61,14 @@ class AuthState {
 	status = $state<AuthStatus>('anonymous');
 	user = $state<SessionUser | null>(null);
 	error = $state<AuthError | null>(null);
+	// The pending `nostrconnect://` URI to render as a QR while we wait for the
+	// remote signer; null whenever no NIP-46 connection is in flight.
+	connectUri = $state<string | null>(null);
+	// An auth_url some signers ask the user to visit to approve the connection.
+	authUrl = $state<string | null>(null);
+
+	// Lets cancelNip46() abort an in-flight BunkerSigner.fromURI() wait.
+	#connectAbort: AbortController | null = null;
 
 	get pubkey(): string | null {
 		return this.user?.pubkey ?? null;
@@ -82,15 +98,69 @@ class AuthState {
 		}
 
 		try {
-			const provider = window.nostr;
-			const pubkey = await provider.getPublicKey();
-			const challenge = await this.#requestChallenge(pubkey);
-			const header = await this.#signLogin(provider, challenge);
-			this.user = await this.#verify(header);
-			this.status = 'authenticated';
+			await this.#runLogin(window.nostr);
 		} catch (err) {
 			this.#fail(err instanceof AuthFlowError ? err.code : 'rejected');
 		}
+	}
+
+	// NIP-46 (Nostr Connect): generate an ephemeral client key, publish a
+	// `nostrconnect://` request to the connect relay, and render its QR. The promise
+	// resolves once the user's remote signer connects; the shared login flow then
+	// signs the challenge through it. cancelNip46() aborts the wait.
+	async loginNip46(): Promise<void> {
+		if (this.status === 'connecting') return;
+		this.error = null;
+		this.status = 'connecting';
+
+		const clientSecret = generateSecretKey();
+		const uri = createNostrConnectURI({
+			clientPubkey: getPublicKey(clientSecret),
+			relays: [NOSTR_CONNECT_RELAY],
+			secret: randomHex(32),
+			perms: [`sign_event:${NIP98_KIND}`],
+			name: 'Cadbos',
+			url: location.origin
+		});
+		this.connectUri = uri;
+
+		const abort = new AbortController();
+		this.#connectAbort = abort;
+		const pool = new SimplePool();
+		let signer: BunkerSigner | undefined;
+		try {
+			signer = await BunkerSigner.fromURI(
+				clientSecret,
+				uri,
+				{ pool, onauth: (url) => (this.authUrl = url) },
+				abort.signal
+			);
+			await this.#runLogin(signer);
+		} catch (err) {
+			// An aborted wait is a deliberate cancel, not an error to surface.
+			if (abort.signal.aborted) this.status = 'anonymous';
+			else this.#fail(err instanceof AuthFlowError ? err.code : 'failed');
+		} finally {
+			this.connectUri = null;
+			this.authUrl = null;
+			this.#connectAbort = null;
+			void signer?.close().catch(() => {});
+			pool.close([NOSTR_CONNECT_RELAY]);
+		}
+	}
+
+	// Abort an in-flight NIP-46 connection; loginNip46()'s catch handles the rest.
+	cancelNip46(): void {
+		this.#connectAbort?.abort();
+	}
+
+	// The login steps shared by both methods, once a signer is available.
+	async #runLogin(signer: NostrSigner): Promise<void> {
+		const pubkey = await signer.getPublicKey();
+		const challenge = await this.#requestChallenge(pubkey);
+		const header = await this.#signLogin(signer, challenge);
+		this.user = await this.#verify(header);
+		this.status = 'authenticated';
 	}
 
 	async logout(): Promise<void> {
@@ -117,12 +187,12 @@ class AuthState {
 		return (await parseJsonOrFail(response, challengeResponseSchema)).challenge;
 	}
 
-	// Sign the NIP-98 login event in the extension. A rejection there (user declined)
+	// Sign the NIP-98 login event in the signer. A rejection there (user declined)
 	// surfaces as `rejected` rather than a generic failure.
-	async #signLogin(provider: Nip07Provider, challenge: string): Promise<string> {
+	async #signLogin(signer: NostrSigner, challenge: string): Promise<string> {
 		let signed: Event;
 		try {
-			signed = await provider.signEvent({
+			signed = await signer.signEvent({
 				kind: NIP98_KIND,
 				created_at: Math.floor(Date.now() / 1000),
 				tags: [
@@ -175,6 +245,14 @@ async function parseJsonOrFail<S extends z.ZodType>(
 // UTF-8-safe base64 for the Authorization header (mirrors the server's decode).
 function base64(value: string): string {
 	return btoa(String.fromCharCode(...new TextEncoder().encode(value)));
+}
+
+// A random hex string for the NIP-46 connect secret (the signer echoes it back so
+// we can match its response to our request).
+function randomHex(bytes: number): string {
+	return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) =>
+		b.toString(16).padStart(2, '0')
+	).join('');
 }
 
 export const auth = new AuthState();
