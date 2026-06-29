@@ -4,6 +4,7 @@
 	import ChatView from '$lib/components/ChatView.svelte';
 	import KeyValueView from '$lib/components/KeyValueView.svelte';
 	import GraphView from '$lib/components/GraphView.svelte';
+	import { request } from '$lib/state/request.svelte';
 
 	type ViewId = 'chat' | 'keyValue' | 'graph';
 
@@ -14,7 +15,9 @@
 	];
 
 	let activeIndex = $state(0);
+	let imageUrl = $state('');
 	let tabs = $state<HTMLElement[]>([]);
+	let renderRequestJson = $derived(JSON.stringify(request.toRenderRequest()));
 
 	function activate(index: number): void {
 		activeIndex = index;
@@ -34,6 +37,17 @@
 			activate(next);
 		}
 	}
+
+	function applyImage(): void {
+		const trimmedUrl = imageUrl.trim();
+		request.setImage(
+			trimmedUrl
+				? {
+						url: trimmedUrl
+					}
+				: undefined
+		);
+	}
 </script>
 
 <section class="workspace">
@@ -41,6 +55,14 @@
 		<h1>{t('app.title')}</h1>
 		<p>{t('app.subtitle')}</p>
 	</header>
+
+	<form class="image-input" onsubmit={(event) => event.preventDefault()}>
+		<label>
+			<span>{t('request.imageUrl')}</span>
+			<input bind:value={imageUrl} />
+		</label>
+		<button type="button" onclick={applyImage}>{t('request.applyImage')}</button>
+	</form>
 
 	<div class="switcher" role="tablist" aria-label={t('view.switcher.label')}>
 		{#each views as view, index (view.id)}
@@ -81,6 +103,17 @@
 			</svelte:boundary>
 		</div>
 	{/each}
+
+	<section class="request-summary">
+		<div class="summary-field">
+			<span>{t('request.finalPrompt')}</span>
+			<output aria-label={t('request.finalPrompt')}>{request.prompt}</output>
+		</div>
+		<div class="summary-field">
+			<span>{t('request.renderRequest')}</span>
+			<pre aria-label={t('request.renderRequest')}>{renderRequestJson}</pre>
+		</div>
+	</section>
 </section>
 
 <style>
@@ -114,6 +147,32 @@
 		justify-content: center;
 	}
 
+	.image-input,
+	.request-summary {
+		display: grid;
+		gap: var(--space-2);
+	}
+
+	.image-input {
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: end;
+	}
+
+	label {
+		display: grid;
+		gap: var(--space-1);
+	}
+
+	.summary-field {
+		display: grid;
+		gap: var(--space-1);
+	}
+
+	input,
+	button {
+		font: inherit;
+	}
+
 	.switcher button {
 		padding: var(--space-1) var(--space-2);
 		font: inherit;
@@ -138,6 +197,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		padding: var(--space-3);
 	}
 
 	.panel[hidden] {
@@ -148,5 +208,23 @@
 		margin: 0;
 		padding: var(--space-4);
 		color: var(--color-muted);
+	}
+
+	output,
+	pre {
+		min-height: 2.5rem;
+		margin: 0;
+		padding: var(--space-2);
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+	}
+
+	@media (max-width: 40rem) {
+		.image-input {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>
