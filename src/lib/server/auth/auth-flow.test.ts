@@ -4,7 +4,7 @@ import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { finalizeEvent, generateSecretKey, getPublicKey, type Event } from 'nostr-tools/pure';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Cookies } from '@sveltejs/kit';
-import { NIP98_KIND, SESSION_COOKIE } from './config';
+import { CHALLENGE_TTL_MS,NIP98_KIND, SESSION_COOKIE } from './config';
 import { consumeChallenge, createChallenge, findValidSession } from './repository';
 import { POST as challengePOST } from '../../../routes/auth/challenge/+server';
 import { POST as verifyPOST } from '../../../routes/auth/verify/+server';
@@ -160,14 +160,14 @@ describe('repository challenge atomicity', () => {
 		const now = Date.now();
 		await createChallenge(db, 'nonce-1', 'p'.repeat(64), now);
 
-		expect(await consumeChallenge(db, 'nonce-1', 'p'.repeat(64), now - 60_000, now)).toBe(true);
-		expect(await consumeChallenge(db, 'nonce-1', 'p'.repeat(64), now - 60_000, now)).toBe(false);
+		expect(await consumeChallenge(db, 'nonce-1', 'p'.repeat(64), now - CHALLENGE_TTL_MS, now)).toBe(true);
+		expect(await consumeChallenge(db, 'nonce-1', 'p'.repeat(64), now - CHALLENGE_TTL_MS, now)).toBe(false);
 	});
 
 	it('consumeChallenge rejects an expired nonce', async () => {
 		const db = makeD1();
 		const now = Date.now();
-		await createChallenge(db, 'old', 'p'.repeat(64), now - 120_000);
-		expect(await consumeChallenge(db, 'old', 'p'.repeat(64), now - 60_000, now)).toBe(false);
+		await createChallenge(db, 'old', 'p'.repeat(64), now - CHALLENGE_TTL_MS - 1);
+		expect(await consumeChallenge(db, 'old', 'p'.repeat(64), now - CHALLENGE_TTL_MS, now)).toBe(false);
 	});
 });
