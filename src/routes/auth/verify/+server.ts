@@ -52,7 +52,7 @@ export const POST: RequestHandler = async ({
 		now
 	);
 	if (!consumed) {
-		logAuthFailure('verify_challenge_rejected', { pubkey: result.pubkey });
+		logAuthFailure('verify_challenge_rejected', { pubkeyPrefix: result.pubkey.slice(0, 8) });
 		return apiError(401, 'invalid_authorization', 'Invalid authorization');
 	}
 
