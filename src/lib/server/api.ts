@@ -24,6 +24,7 @@ export const challengeRequestSchema = z.object({
 	pubkey: z
 		.string()
 		.trim()
+		.toLowerCase()
 		.regex(/^[0-9a-f]{64}$/)
 });
 
