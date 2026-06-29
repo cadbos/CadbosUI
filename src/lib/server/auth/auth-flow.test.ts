@@ -61,6 +61,12 @@ function makeCookies(): TestCookies {
 	} as unknown as TestCookies;
 }
 
+function requireSessionId(cookies: Cookies): string {
+	const sessionId = cookies.get(SESSION_COOKIE);
+	if (sessionId === undefined) throw new Error('expected a session cookie to be set');
+	return sessionId;
+}
+
 function signLogin(secretKey: Uint8Array, challenge: string): Event {
 	return finalizeEvent(
 		{
@@ -129,9 +135,8 @@ describe('auth flow', () => {
 		expect(response.status).toBe(200);
 		expect((await response.json()).user).toEqual({ pubkey });
 
-		const sessionId = cookies.get(SESSION_COOKIE);
-		expect(sessionId).toBeTruthy();
-		expect(await findValidSession(db, sessionId!, Date.now())).toEqual({ pubkey });
+		const sessionId = requireSessionId(cookies);
+		expect(await findValidSession(db, sessionId, Date.now())).toEqual({ pubkey });
 
 		// The session cookie must be hardened: HttpOnly + Secure + SameSite=Lax,
 		// scoped to the whole site, with a future expiry.
@@ -170,7 +175,7 @@ describe('auth flow', () => {
 		const challenge = await requestChallenge(db, getPublicKey(sk));
 		const cookies = makeCookies();
 		await verify(db, cookies, signLogin(sk, challenge));
-		const sessionId = cookies.get(SESSION_COOKIE)!;
+		const sessionId = requireSessionId(cookies);
 
 		// hooks.server.ts resolves the session into locals before the handler runs;
 		// logout mutates the DB only for this verified session.
