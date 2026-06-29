@@ -150,13 +150,18 @@ it('cancelling after the signer connects but before verification stays anonymous
 	});
 
 	// A signer that connects but holds its signature pending until we release it,
-	// so we can cancel while login is mid-flight.
-	let releaseSign: (() => void) | null = null;
+	// so we can cancel while login is mid-flight. `whenSigning` resolves with the
+	// release callback once the signer is asked to sign; if that never happens the
+	// awaiting test simply times out, surfacing the failure clearly.
+	let onSignRequested!: (release: () => void) => void;
+	const whenSigning = new Promise<() => void>((resolve) => {
+		onSignRequested = resolve;
+	});
 	const pendingSigner = {
 		getPublicKey: () => Promise.resolve(pk),
 		signEvent: (event: EventTemplate) =>
 			new Promise<ReturnType<typeof finalizeEvent>>((resolve) => {
-				releaseSign = () => resolve(finalizeEvent(event, sk));
+				onSignRequested(() => resolve(finalizeEvent(event, sk)));
 			}),
 		close: () => Promise.resolve()
 	};
@@ -168,11 +173,11 @@ it('cancelling after the signer connects but before verification stays anonymous
 
 	// Signer connects; login proceeds to signing and then parks there.
 	nip46.connect(pendingSigner);
-	await vi.waitFor(() => expect(releaseSign).not.toBeNull());
+	const releaseSignature = await whenSigning;
 
 	// Cancel mid-login, then let the (now-stale) signature resolve.
 	auth.cancelNip46();
-	releaseSign!();
+	releaseSignature();
 
 	await expect.element(screen.getByRole('button', { name: 'Войти' })).toBeVisible();
 	expect(auth.status).toBe('anonymous');
