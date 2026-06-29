@@ -54,6 +54,7 @@
 	},
 	"dependencies": {
 		"nostr-tools": "^2.23.8",
+		"uqr": "^0.1.3",
 		"zod": "^4.4.3"
 	}
 }
