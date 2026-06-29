@@ -172,7 +172,10 @@ describe('auth flow', () => {
 		await verify(db, cookies, signLogin(sk, challenge));
 		const sessionId = cookies.get(SESSION_COOKIE)!;
 
-		const response = await call(logoutPOST, { platform: platform(db), cookies });
+		// hooks.server.ts resolves the session into locals before the handler runs;
+		// logout mutates the DB only for this verified session.
+		const locals = { user: { pubkey: getPublicKey(sk) } };
+		const response = await call(logoutPOST, { platform: platform(db), cookies, locals });
 		expect(response.status).toBe(204);
 		expect(cookies.get(SESSION_COOKIE)).toBeUndefined();
 		expect(await findValidSession(db, sessionId, Date.now())).toBeNull();
