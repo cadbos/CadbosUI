@@ -63,5 +63,5 @@ export interface Quota {
 // GET /auth/me → 401 when no session.
 export interface MeResponse {
 	user: SessionUser;
-	quota: Quota;
+	quota?: Quota;
 }

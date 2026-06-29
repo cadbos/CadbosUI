@@ -19,8 +19,13 @@ export const editRequestSchema = z.object({
 	prompt: z.string().trim().min(1)
 });
 
+// Nostr pubkey: 32-byte lowercase hex (x-only schnorr public key).
 export const challengeRequestSchema = z.object({
-	pubkey: z.string().trim().min(1)
+	pubkey: z
+		.string()
+		.trim()
+		.toLowerCase()
+		.regex(/^[0-9a-f]{64}$/)
 });
 
 export async function parseBody<S extends z.ZodType>(

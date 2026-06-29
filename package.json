@@ -21,6 +21,7 @@
 		"e2e": "playwright test"
 	},
 	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20260626.1",
 		"@eslint/js": "^10.0.1",
 		"@playwright/test": "^1.60.0",
 		"@sveltejs/adapter-cloudflare": "^7.2.9",
@@ -52,6 +53,7 @@
 		]
 	},
 	"dependencies": {
+		"nostr-tools": "^2.23.8",
 		"zod": "^4.4.3"
 	}
 }

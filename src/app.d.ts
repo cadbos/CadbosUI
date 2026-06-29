@@ -1,3 +1,4 @@
+import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 
 // See https://svelte.dev/docs/kit/types#app.d.ts
@@ -10,7 +11,11 @@ declare global {
 		}
 		// interface PageData {}
 		// interface PageState {}
-		// interface Platform {}
+		// `ctx`/`caches`/`cf` come from adapter-cloudflare's ambient types; `env` is
+		// typed here (the adapter intentionally leaves it to the app).
+		interface Platform {
+			env: { DB: D1Database };
+		}
 	}
 }
 
