@@ -8,5 +8,11 @@ export const ru = {
 	'view.chat.placeholder': 'Чат-интерфейс появится здесь.',
 	'view.keyValue.placeholder': 'Интерфейс «ключ-значение» появится здесь.',
 	'view.graph.placeholder': 'Граф-интерфейс появится здесь.',
-	'boundary.failed': 'Не удалось загрузить этот раздел.'
+	'boundary.failed': 'Не удалось загрузить этот раздел.',
+	'auth.login.nip07': 'Войти через расширение Nostr',
+	'auth.connecting': 'Подключение…',
+	'auth.logout': 'Выйти',
+	'auth.error.extensionMissing': 'Расширение Nostr не найдено. Установите Alby или nos2x.',
+	'auth.error.rejected': 'Вход отменён в подписанте.',
+	'auth.error.failed': 'Не удалось войти. Попробуйте снова.'
 } as const;
