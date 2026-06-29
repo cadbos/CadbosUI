@@ -129,12 +129,7 @@ class AuthState {
 		const pool = new SimplePool();
 		let signer: BunkerSigner | undefined;
 		try {
-			signer = await BunkerSigner.fromURI(
-				clientSecret,
-				uri,
-				{ pool, onauth: (url) => (this.authUrl = url) },
-				abort.signal
-			);
+			signer = await this.#awaitSigner(clientSecret, uri, pool, abort.signal);
 			await this.#runLogin(signer);
 		} catch (err) {
 			// An aborted wait is a deliberate cancel, not an error to surface.
@@ -152,6 +147,26 @@ class AuthState {
 	// Abort an in-flight NIP-46 connection; loginNip46()'s catch handles the rest.
 	cancelNip46(): void {
 		this.#connectAbort?.abort();
+	}
+
+	// Wait for the remote signer to connect, but reject promptly on cancel.
+	// BunkerSigner.fromURI wires the abort signal through a single `signal.onabort`
+	// handler that the multi-relay subscription overwrites, so its own abort never
+	// settles the promise — race it against our own listener instead. The dangling
+	// fromURI promise is harmless once we close the pool in loginNip46()'s finally.
+	#awaitSigner(
+		secretKey: Uint8Array,
+		uri: string,
+		pool: SimplePool,
+		signal: AbortSignal
+	): Promise<BunkerSigner> {
+		return new Promise<BunkerSigner>((resolve, reject) => {
+			const onAbort = () => reject(signal.reason);
+			signal.addEventListener('abort', onAbort, { once: true });
+			BunkerSigner.fromURI(secretKey, uri, { pool, onauth: (url) => (this.authUrl = url) }, signal)
+				.then(resolve, reject)
+				.finally(() => signal.removeEventListener('abort', onAbort));
+		});
 	}
 
 	// The login steps shared by both methods, once a signer is available.

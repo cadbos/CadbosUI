@@ -10,20 +10,16 @@ import AuthBar from './AuthBar.svelte';
 import { auth } from '$lib/state/auth.svelte';
 
 // Drive the NIP-46 path without a real relay: createNostrConnectURI returns a fixed
-// URI, and BunkerSigner.fromURI hands back a promise we resolve (signer connected) or
-// reject via its abort signal (user cancelled) at the point the test chooses.
+// URI, and BunkerSigner.fromURI hands back a promise we resolve (signer connected) at
+// the point the test chooses. It deliberately ignores the abort signal — matching the
+// real nostr-tools, whose abort never settles the promise — so cancellation is left to
+// the store's own race to handle.
 const nip46 = vi.hoisted(() => {
 	let resolveSigner: ((signer: unknown) => void) | null = null;
 	return {
 		uri: 'nostrconnect://cadbos-test?relay=wss%3A%2F%2Frelay.nsec.app',
 		createNostrConnectURI: vi.fn(() => nip46.uri),
-		fromURI: vi.fn(
-			(_sk: unknown, _uri: string, _params: unknown, signal?: AbortSignal) =>
-				new Promise((resolve, reject) => {
-					resolveSigner = resolve;
-					signal?.addEventListener('abort', () => reject(new Error('aborted')));
-				})
-		),
+		fromURI: vi.fn(() => new Promise((resolve) => (resolveSigner = resolve))),
 		connect: (signer: unknown) => resolveSigner?.(signer)
 	};
 });
