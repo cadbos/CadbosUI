@@ -193,7 +193,7 @@ describe('auth flow', () => {
 		expect(response.status).toBe(200);
 		const body = await response.json();
 		expect(body.user).toEqual({ pubkey: 'a'.repeat(64) });
-		expect(body.quota).toMatchObject({ period: expect.any(String) });
+		expect(body.quota).toBeUndefined();
 	});
 });
 
