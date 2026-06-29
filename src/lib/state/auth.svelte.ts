@@ -16,7 +16,7 @@ import { SimplePool } from 'nostr-tools/pool';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { Event, EventTemplate } from 'nostr-tools/pure';
 import type { SessionUser } from '$lib/api/contract';
-import { NOSTR_CONNECT_RELAY } from '$lib/nostr/connect';
+import { NOSTR_CONNECT_RELAYS } from '$lib/nostr/connect';
 
 // NIP-98 HTTP-Auth event kind — a protocol constant, mirrored on the server.
 const NIP98_KIND = 27235;
@@ -116,7 +116,7 @@ class AuthState {
 		const clientSecret = generateSecretKey();
 		const uri = createNostrConnectURI({
 			clientPubkey: getPublicKey(clientSecret),
-			relays: [NOSTR_CONNECT_RELAY],
+			relays: [...NOSTR_CONNECT_RELAYS],
 			secret: randomHex(32),
 			perms: [`sign_event:${NIP98_KIND}`],
 			name: 'Cadbos',
@@ -145,7 +145,7 @@ class AuthState {
 			this.authUrl = null;
 			this.#connectAbort = null;
 			void signer?.close().catch(() => {});
-			pool.close([NOSTR_CONNECT_RELAY]);
+			pool.close([...NOSTR_CONNECT_RELAYS]);
 		}
 	}
 
