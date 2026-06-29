@@ -94,11 +94,15 @@ class AuthState {
 	}
 
 	async logout(): Promise<void> {
+		let response: Response;
 		try {
-			await fetch('/auth/logout', { method: 'POST' });
+			response = await fetch('/auth/logout', { method: 'POST' });
 		} catch {
-			// Best effort: clear local state regardless of the network result.
+			// Couldn't reach the server: the httpOnly cookie and server session are
+			// still live, so keep the user signed in rather than show a false logout.
+			return;
 		}
+		if (!response.ok) return;
 		this.user = null;
 		this.error = null;
 		this.status = 'anonymous';
