@@ -120,7 +120,7 @@ it('offers to complete Cadbos profile fields after sign-in', async () => {
 		() => Response.json({ user: { pubkey: pk } }),
 		(init) => {
 			profileRequest = init;
-			return Response.json({ user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' } });
+			return Response.json({ user: { pubkey: pk, firstName: 'Ada' } });
 		}
 	);
 
@@ -131,8 +131,8 @@ it('offers to complete Cadbos profile fields after sign-in', async () => {
 	await expect
 		.element(screen.getByText('Заполните имя и фамилию для профиля Cadbos.'))
 		.toBeVisible();
-	await screen.getByLabelText('Имя').fill('Ada');
-	await screen.getByLabelText('Фамилия').fill('Lovelace');
+	await screen.getByLabelText('Имя').fill('  Ada  ');
+	await screen.getByLabelText('Фамилия').fill('   ');
 	await screen.getByRole('button', { name: 'Сохранить' }).click();
 
 	expect(new Headers((profileRequest as RequestInit).headers).get('content-type')).toBe(
@@ -140,7 +140,7 @@ it('offers to complete Cadbos profile fields after sign-in', async () => {
 	);
 	expect(JSON.parse(String((profileRequest as RequestInit).body))).toEqual({
 		firstName: 'Ada',
-		lastName: 'Lovelace'
+		lastName: null
 	});
 	await expect
 		.element(screen.getByText('Заполните имя и фамилию для профиля Cadbos.'))

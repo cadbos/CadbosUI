@@ -34,6 +34,7 @@ const meResponseSchema = z.object({ user: sessionUserSchema });
 const challengeResponseSchema = z.object({ challenge: hex32 });
 const verifyResponseSchema = z.object({ user: sessionUserSchema });
 const profileResponseSchema = z.object({ user: sessionUserSchema });
+const PROFILE_NAME_MAX_LENGTH = 80;
 const nostrProfileSchema = z.object({
 	profile: z.object({
 		name: z.string().optional(),
@@ -230,10 +231,11 @@ class AuthState {
 	}
 
 	async saveProfile(input: ProfileUpdateRequest = this.profileDraft): Promise<void> {
+		const profile = normalizeProfileUpdate(input);
 		const response = await fetchOrFail('/auth/profile', {
 			method: 'PATCH',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(input)
+			body: JSON.stringify(profile)
 		});
 		this.user = (await parseJsonOrFail(response, profileResponseSchema)).user;
 		this.#resetProfileDraft(this.user);
@@ -329,6 +331,19 @@ function randomHex(bytes: number): string {
 	return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) =>
 		b.toString(16).padStart(2, '0')
 	).join('');
+}
+
+export function normalizeProfileUpdate(input: ProfileUpdateRequest): ProfileUpdateRequest {
+	return {
+		...(input.firstName !== undefined ? { firstName: normalizeProfileName(input.firstName) } : {}),
+		...(input.lastName !== undefined ? { lastName: normalizeProfileName(input.lastName) } : {})
+	};
+}
+
+function normalizeProfileName(value: string | null): string | null {
+	if (value === null) return null;
+	const normalized = value.trim().slice(0, PROFILE_NAME_MAX_LENGTH);
+	return normalized.length === 0 ? null : normalized;
 }
 
 export const auth = new AuthState();
