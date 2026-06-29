@@ -130,7 +130,7 @@ class AuthState {
 		let signer: BunkerSigner | undefined;
 		try {
 			signer = await this.#awaitSigner(clientSecret, uri, pool, abort.signal);
-			await this.#runLogin(signer);
+			await this.#runLogin(signer, abort.signal);
 		} catch (err) {
 			// An aborted wait is a deliberate cancel, not an error to surface.
 			if (abort.signal.aborted) this.status = 'anonymous';
@@ -169,11 +169,15 @@ class AuthState {
 		});
 	}
 
-	// The login steps shared by both methods, once a signer is available.
-	async #runLogin(signer: NostrSigner): Promise<void> {
+	// The login steps shared by both methods, once a signer is available. A late
+	// NIP-46 cancel (the signer connected, but signing/verification is still in
+	// flight) must win, so we re-check the abort signal before /auth/verify creates
+	// the server session.
+	async #runLogin(signer: NostrSigner, signal?: AbortSignal): Promise<void> {
 		const pubkey = await signer.getPublicKey();
 		const challenge = await this.#requestChallenge(pubkey);
 		const header = await this.#signLogin(signer, challenge);
+		if (signal?.aborted) throw signal.reason;
 		this.user = await this.#verify(header);
 		this.status = 'authenticated';
 	}

@@ -141,3 +141,41 @@ it('returns to anonymous when the NIP-46 connection is cancelled', async () => {
 	expect(auth.status).toBe('anonymous');
 	expect(auth.error).toBeNull();
 });
+
+it('cancelling after the signer connects but before verification stays anonymous', async () => {
+	let verifyCalled = false;
+	mockFetch(() => {
+		verifyCalled = true;
+		return Response.json({ user: { pubkey: pk } });
+	});
+
+	// A signer that connects but holds its signature pending until we release it,
+	// so we can cancel while login is mid-flight.
+	let releaseSign: (() => void) | null = null;
+	const pendingSigner = {
+		getPublicKey: () => Promise.resolve(pk),
+		signEvent: (event: EventTemplate) =>
+			new Promise<ReturnType<typeof finalizeEvent>>((resolve) => {
+				releaseSign = () => resolve(finalizeEvent(event, sk));
+			}),
+		close: () => Promise.resolve()
+	};
+
+	const screen = render(AuthBar);
+	await screen.getByRole('button', { name: 'Войти' }).click();
+	await screen.getByRole('button', { name: 'Nostr Connect (QR)' }).click();
+	await expect.element(screen.getByRole('button', { name: 'Отмена' })).toBeVisible();
+
+	// Signer connects; login proceeds to signing and then parks there.
+	nip46.connect(pendingSigner);
+	await vi.waitFor(() => expect(releaseSign).not.toBeNull());
+
+	// Cancel mid-login, then let the (now-stale) signature resolve.
+	auth.cancelNip46();
+	releaseSign!();
+
+	await expect.element(screen.getByRole('button', { name: 'Войти' })).toBeVisible();
+	expect(auth.status).toBe('anonymous');
+	expect(auth.pubkey).toBeNull();
+	expect(verifyCalled).toBe(false);
+});
