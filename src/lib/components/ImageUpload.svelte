@@ -55,14 +55,14 @@
 
 <div
 	class="upload"
-	class:has-image={imageUrl !== null}
+	class:has-image={imageUrl !== null || previewUrl !== null}
 	ondragover={(e) => e.preventDefault()}
 	ondrop={onDrop}
 	role="region"
 	aria-label={t('upload.label')}
 >
-	{#if imageUrl}
-		<img src={previewUrl ?? imageUrl} alt={t('upload.label')} class="preview" />
+	{#if imageUrl || previewUrl}
+		<img src={previewUrl ?? imageUrl ?? ''} alt={t('upload.label')} class="preview" />
 		<button type="button" class="change-btn" onclick={() => inputEl?.click()} disabled={uploading}>
 			{uploading ? t('upload.uploading') : t('upload.change')}
 		</button>

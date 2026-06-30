@@ -1,4 +1,5 @@
 import { heyApiPlugin } from '@hey-api/vite-plugin';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-cloudflare';
@@ -9,6 +10,7 @@ import { NOSTR_CONNECT_RELAYS } from './src/lib/nostr/connect';
 
 export default defineConfig({
 	plugins: [
+		tailwindcss(),
 		heyApiPlugin({ config: heyApiOpenApiConfig }),
 		sveltekit({
 			compilerOptions: {

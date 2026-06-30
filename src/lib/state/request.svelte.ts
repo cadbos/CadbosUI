@@ -357,7 +357,6 @@ class RequestState {
 
 	validate(): ValidationResult {
 		const missing: ValidationField[] = [];
-		if (!this.prompt.trim()) missing.push('prompt');
 		if (!this.image?.url) missing.push('image');
 		return { valid: missing.length === 0, missing };
 	}
