@@ -58,7 +58,6 @@ function mockFetch(
 					Response.json({
 						profile: {
 							name: 'cadbos-nostr',
-							picture: 'https://example.com/avatar.jpg',
 							relays: [{ url: 'wss://relay.example/', read: true, write: true }]
 						}
 					})
