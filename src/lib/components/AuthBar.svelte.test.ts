@@ -41,7 +41,10 @@ const nostr = {
 	close: () => Promise.resolve()
 };
 
-function mockFetch(verify: (init?: RequestInit) => Response) {
+function mockFetch(
+	verify: (init?: RequestInit) => Response,
+	profile?: (init?: RequestInit) => Response
+) {
 	vi.stubGlobal(
 		'fetch',
 		vi.fn((input: string, init?: RequestInit) => {
@@ -50,6 +53,23 @@ function mockFetch(verify: (init?: RequestInit) => Response) {
 				return Promise.resolve(Response.json({ challenge: 'a'.repeat(64) }));
 			}
 			if (input.endsWith('/auth/verify')) return Promise.resolve(verify(init));
+			if (input.endsWith('/auth/nostr-profile')) {
+				return Promise.resolve(
+					Response.json({
+						profile: {
+							name: 'cadbos-nostr',
+							relays: [{ url: 'wss://relay.example/', read: true, write: true }]
+						}
+					})
+				);
+			}
+			if (input.endsWith('/auth/profile')) {
+				if (init?.method !== 'PATCH') return Promise.resolve(new Response(null, { status: 405 }));
+				return Promise.resolve(
+					profile?.(init) ??
+						Response.json({ user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' } })
+				);
+			}
 			if (input.endsWith('/auth/logout'))
 				return Promise.resolve(new Response(null, { status: 204 }));
 			return Promise.resolve(new Response(null, { status: 404 }));
@@ -60,6 +80,9 @@ function mockFetch(verify: (init?: RequestInit) => Response) {
 beforeEach(() => {
 	auth.status = 'anonymous';
 	auth.user = null;
+	auth.nostrProfile = null;
+	auth.profileDraft.firstName = '';
+	auth.profileDraft.lastName = '';
 	auth.error = null;
 	auth.connectUri = null;
 	auth.authUrl = null;
@@ -88,6 +111,39 @@ it('signs in via NIP-07 (sends a Nostr authorization) and signs out', async () =
 
 	await screen.getByRole('button', { name: 'Выйти' }).click();
 	await expect.element(screen.getByRole('button', { name: 'Войти' })).toBeVisible();
+});
+
+it('offers to complete Cadbos profile fields after sign-in', async () => {
+	let profileRequest: unknown = null;
+	mockFetch(
+		() => Response.json({ user: { pubkey: pk } }),
+		(init) => {
+			profileRequest = init;
+			return Response.json({ user: { pubkey: pk, firstName: 'Ada' } });
+		}
+	);
+
+	const screen = render(AuthBar);
+	await screen.getByRole('button', { name: 'Войти' }).click();
+	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
+
+	await expect
+		.element(screen.getByText('Заполните имя и фамилию для профиля Cadbos.'))
+		.toBeVisible();
+	await screen.getByLabelText('Имя').fill('  Ada  ');
+	await screen.getByLabelText('Фамилия').fill('   ');
+	await screen.getByRole('button', { name: 'Сохранить' }).click();
+
+	expect(new Headers((profileRequest as RequestInit).headers).get('content-type')).toBe(
+		'application/json'
+	);
+	expect(JSON.parse(String((profileRequest as RequestInit).body))).toEqual({
+		firstName: 'Ada',
+		lastName: null
+	});
+	await expect
+		.element(screen.getByText('Заполните имя и фамилию для профиля Cadbos.'))
+		.not.toBeVisible();
 });
 
 it('shows an error when no Nostr extension is present', async () => {

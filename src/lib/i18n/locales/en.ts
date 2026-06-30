@@ -22,6 +22,13 @@ export const en: Dictionary = {
 	'auth.connect.cancel': 'Cancel',
 	'auth.connecting': 'Connecting…',
 	'auth.logout': 'Sign out',
+	'auth.profile.relayCount': 'Relays: {count}',
+	'auth.profile.completeHint': 'Add your first and last name for your Cadbos profile.',
+	'auth.profile.firstName': 'First name',
+	'auth.profile.lastName': 'Last name',
+	'auth.profile.save': 'Save',
+	'auth.profile.saving': 'Saving…',
+	'auth.profile.saveError': 'Failed to save profile. Please try again.',
 	'auth.error.extensionMissing': 'No Nostr extension found. Install Alby or nos2x.',
 	'auth.error.rejected': 'Sign-in was declined in the signer.',
 	'auth.error.failed': 'Sign-in failed. Please try again.'

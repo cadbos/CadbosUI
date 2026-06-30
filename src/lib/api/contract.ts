@@ -54,6 +54,26 @@ export interface SessionUser {
 	lastName?: string;
 }
 
+export interface ProfileUpdateRequest {
+	firstName?: string | null;
+	lastName?: string | null;
+}
+
+export interface RelayInfo {
+	url: string;
+	read: boolean;
+	write: boolean;
+}
+
+export interface NostrProfile {
+	name?: string;
+	picture?: string;
+	about?: string;
+	nip05?: string;
+	website?: string;
+	relays: RelayInfo[];
+}
+
 export interface Quota {
 	balanceOrLimit: number;
 	usage: number;

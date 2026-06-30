@@ -4,8 +4,8 @@ import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
 // Relative import: the `$lib` alias is not resolved while Vite evaluates this config.
-import { NOSTR_CONNECT_RELAYS } from './src/lib/nostr/connect';
 import { heyApiOpenApiConfig } from './openapi-ts.config';
+import { NOSTR_CONNECT_RELAYS } from './src/lib/nostr/connect';
 
 export default defineConfig({
 	plugins: [

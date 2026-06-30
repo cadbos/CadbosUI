@@ -15,7 +15,7 @@ import { BunkerSigner, createNostrConnectURI } from 'nostr-tools/nip46';
 import { SimplePool } from 'nostr-tools/pool';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { Event, EventTemplate } from 'nostr-tools/pure';
-import type { SessionUser } from '$lib/api/contract';
+import type { NostrProfile, ProfileUpdateRequest, SessionUser } from '$lib/api/contract';
 import { NOSTR_CONNECT_RELAYS } from '$lib/nostr/connect';
 
 // NIP-98 HTTP-Auth event kind — a protocol constant, mirrored on the server.
@@ -33,6 +33,24 @@ const sessionUserSchema = z.object({
 const meResponseSchema = z.object({ user: sessionUserSchema });
 const challengeResponseSchema = z.object({ challenge: hex32 });
 const verifyResponseSchema = z.object({ user: sessionUserSchema });
+const profileResponseSchema = z.object({ user: sessionUserSchema });
+const PROFILE_NAME_MAX_LENGTH = 80;
+const nostrProfileSchema = z.object({
+	profile: z.object({
+		name: z.string().optional(),
+		picture: z.string().optional(),
+		about: z.string().optional(),
+		nip05: z.string().optional(),
+		website: z.string().optional(),
+		relays: z.array(
+			z.object({
+				url: z.string(),
+				read: z.boolean(),
+				write: z.boolean()
+			})
+		)
+	})
+});
 
 // The signer surface both methods share: get the user's pubkey and sign an event.
 // `window.nostr` (NIP-07) and `BunkerSigner` (NIP-46) both satisfy it, so the login
@@ -60,6 +78,8 @@ class AuthFlowError extends Error {
 class AuthState {
 	status = $state<AuthStatus>('anonymous');
 	user = $state<SessionUser | null>(null);
+	nostrProfile = $state<NostrProfile | null>(null);
+	profileDraft = $state({ firstName: '', lastName: '' });
 	error = $state<AuthError | null>(null);
 	// The pending `nostrconnect://` URI to render as a QR while we wait for the
 	// remote signer; null whenever no NIP-46 connection is in flight.
@@ -79,8 +99,7 @@ class AuthState {
 		try {
 			const response = await fetch('/auth/me');
 			if (!response.ok) return;
-			this.user = (await parseJsonOrFail(response, meResponseSchema)).user;
-			this.status = 'authenticated';
+			this.#authenticate((await parseJsonOrFail(response, meResponseSchema)).user);
 		} catch {
 			// Network hiccup or malformed response on load — stay anonymous, the user
 			// can sign in manually.
@@ -178,8 +197,7 @@ class AuthState {
 		const challenge = await this.#requestChallenge(pubkey);
 		const header = await this.#signLogin(signer, challenge);
 		if (signal?.aborted) throw signal.reason;
-		this.user = await this.#verify(header);
-		this.status = 'authenticated';
+		this.#authenticate(await this.#verify(header));
 	}
 
 	async logout(): Promise<void> {
@@ -193,8 +211,34 @@ class AuthState {
 		}
 		if (!response.ok) return;
 		this.user = null;
+		this.nostrProfile = null;
+		this.#resetProfileDraft(null);
 		this.error = null;
 		this.status = 'anonymous';
+	}
+
+	async refreshNostrProfile(): Promise<void> {
+		const pubkey = this.user?.pubkey;
+		if (!pubkey) return;
+		try {
+			const response = await fetch('/auth/nostr-profile');
+			if (!response.ok) return;
+			const profile = (await parseJsonOrFail(response, nostrProfileSchema)).profile;
+			if (this.user?.pubkey === pubkey) this.nostrProfile = profile;
+		} catch {
+			if (this.user?.pubkey === pubkey) this.nostrProfile = { relays: [] };
+		}
+	}
+
+	async saveProfile(input: ProfileUpdateRequest = this.profileDraft): Promise<void> {
+		const profile = normalizeProfileUpdate(input);
+		const response = await fetchOrFail('/auth/profile', {
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify(profile)
+		});
+		this.user = (await parseJsonOrFail(response, profileResponseSchema)).user;
+		this.#resetProfileDraft(this.user);
 	}
 
 	async #requestChallenge(pubkey: string): Promise<string> {
@@ -237,7 +281,22 @@ class AuthState {
 
 	#fail(error: AuthError): void {
 		this.status = 'anonymous';
+		this.nostrProfile = null;
+		this.#resetProfileDraft(null);
 		this.error = error;
+	}
+
+	#authenticate(user: SessionUser): void {
+		this.user = user;
+		this.nostrProfile = null;
+		this.#resetProfileDraft(user);
+		this.status = 'authenticated';
+		void this.refreshNostrProfile();
+	}
+
+	#resetProfileDraft(user: SessionUser | null): void {
+		this.profileDraft.firstName = user?.firstName ?? '';
+		this.profileDraft.lastName = user?.lastName ?? '';
 	}
 }
 
@@ -272,6 +331,19 @@ function randomHex(bytes: number): string {
 	return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) =>
 		b.toString(16).padStart(2, '0')
 	).join('');
+}
+
+export function normalizeProfileUpdate(input: ProfileUpdateRequest): ProfileUpdateRequest {
+	return {
+		...(input.firstName !== undefined ? { firstName: normalizeProfileName(input.firstName) } : {}),
+		...(input.lastName !== undefined ? { lastName: normalizeProfileName(input.lastName) } : {})
+	};
+}
+
+function normalizeProfileName(value: string | null): string | null {
+	if (value === null) return null;
+	const normalized = value.trim().slice(0, PROFILE_NAME_MAX_LENGTH);
+	return normalized.length === 0 ? null : normalized;
 }
 
 export const auth = new AuthState();

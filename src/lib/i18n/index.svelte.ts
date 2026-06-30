@@ -26,3 +26,7 @@ export function setLocale(next: Locale): void {
 export function t(key: TranslationKey): string {
 	return dictionaries[locale][key] ?? dictionaries[defaultLocale][key];
 }
+
+export function ti(key: TranslationKey, params: Record<string, string | number>): string {
+	return t(key).replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? ''));
+}

@@ -14,3 +14,9 @@
 // `connect-src` source type at build time; runtime callers spread into a fresh
 // `string[]` where a mutable array is needed.
 export const NOSTR_CONNECT_RELAYS = ['wss://relay.damus.io', 'wss://nos.lol'] as const;
+
+export const NOSTR_PROFILE_BOOTSTRAP_RELAYS = [
+	...NOSTR_CONNECT_RELAYS,
+	'wss://nostr.band',
+	'wss://nostr-pub.wellorder.net'
+] as const;

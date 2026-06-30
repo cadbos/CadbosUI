@@ -28,6 +28,18 @@ export const challengeRequestSchema = z.object({
 		.regex(/^[0-9a-f]{64}$/)
 });
 
+const profileName = z
+	.string()
+	.trim()
+	.max(80)
+	.transform((value) => (value.length === 0 ? null : value))
+	.optional();
+
+export const profileUpdateRequestSchema = z.object({
+	firstName: profileName,
+	lastName: profileName
+});
+
 export async function parseBody<S extends z.ZodType>(
 	request: Request,
 	schema: S
