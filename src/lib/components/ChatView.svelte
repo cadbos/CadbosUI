@@ -7,15 +7,12 @@
 	}
 
 	function setPrompt(value: string): void {
-		request.setPrompt(value);
+		request.setPromptOverride(value);
 	}
 </script>
 
 <div class="chat-view">
-	<textarea
-		bind:value={getPrompt, setPrompt}
-		rows="4"
-		placeholder={t('view.chat.placeholder')}
+	<textarea bind:value={getPrompt, setPrompt} rows="4" placeholder={t('view.chat.placeholder')}
 	></textarea>
 	<p class="hint">{t('view.chat.hint')}</p>
 </div>
