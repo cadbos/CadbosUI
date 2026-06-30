@@ -14,7 +14,11 @@ declare global {
 		// `ctx`/`caches`/`cf` come from adapter-cloudflare's ambient types; `env` is
 		// typed here (the adapter intentionally leaves it to the app).
 		interface Platform {
-			env: { DB: D1Database };
+			env: {
+				DB: D1Database;
+				MYARCHITECT_API_KEY: string;
+				UPLOADTHING_TOKEN: string;
+			};
 		}
 	}
 }

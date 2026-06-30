@@ -19,4 +19,6 @@
 			"migrations_dir": "migrations"
 		}
 	]
+	// Secrets set via `wrangler secret put <NAME>` — never committed to source:
+	// MYARCHITECT_API_KEY, UPLOADTHING_TOKEN
 }
