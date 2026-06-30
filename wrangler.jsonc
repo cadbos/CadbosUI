@@ -19,6 +19,7 @@
 			"migrations_dir": "migrations"
 		}
 	]
+	// Server-only variable: UPLOADTHING_APP_ID
 	// Secrets set via `wrangler secret put <NAME>` — never committed to source:
 	// ARCHAI_API_KEY, UPLOADTHING_TOKEN
 }

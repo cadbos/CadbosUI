@@ -3,6 +3,12 @@ import { UTApi } from 'uploadthing/server';
 import type { UploadResult } from '$lib/api/contract';
 import { mockUpload } from '$lib/server/mocks/fixtures';
 
+type UploadthingDataWithUrl = { url: string } | { ufsUrl: string };
+
+function uploadthingStorageUrl(data: UploadthingDataWithUrl): string {
+	return 'ufsUrl' in data ? data.ufsUrl : data.url;
+}
+
 export async function uploadImage(
 	platform: App.Platform | undefined,
 	file: File
@@ -22,7 +28,7 @@ export async function uploadImage(
 	}
 
 	return {
-		url: data.ufsUrl,
+		url: uploadthingStorageUrl(data),
 		mime: file.type,
 		size: file.size
 	};

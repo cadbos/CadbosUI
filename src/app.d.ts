@@ -17,6 +17,7 @@ declare global {
 			env: {
 				DB: D1Database;
 				ARCHAI_API_KEY: string;
+				UPLOADTHING_APP_ID: string;
 				UPLOADTHING_TOKEN: string;
 			};
 		}
