@@ -1,8 +1,10 @@
+import { dev } from '$app/environment';
 import type { Handle } from '@sveltejs/kit';
 import { defaultLocale } from '$lib/i18n/index.svelte';
 import { apiError } from '$lib/server/api';
 import { SESSION_COOKIE } from '$lib/server/auth/config';
 import { findValidSession, getDb } from '$lib/server/auth/repository';
+import { DEMO_SESSION_ID, DEMO_USER } from '$lib/server/demo';
 
 const securityHeaders: Record<string, string> = {
 	'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
@@ -18,9 +20,16 @@ const guardedPaths = ['/api/render', '/api/edit', '/api/uploads'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get(SESSION_COOKIE);
-	event.locals.user = sessionId
-		? await findValidSession(getDb(event.platform), sessionId, Date.now())
-		: null;
+
+	// Demo bypass: in dev mode a special session cookie skips D1 entirely so the
+	// showcase branch works without a local D1 database being configured.
+	if (dev && sessionId === DEMO_SESSION_ID) {
+		event.locals.user = DEMO_USER;
+	} else {
+		event.locals.user = sessionId
+			? await findValidSession(getDb(event.platform), sessionId, Date.now())
+			: null;
+	}
 
 	const blocked =
 		!event.locals.user && guardedPaths.some((path) => event.url.pathname.startsWith(path));
