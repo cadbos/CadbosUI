@@ -32,7 +32,9 @@
 
 		uploading = true;
 		try {
-			const response = await fetch('/api/uploads', { method: 'POST' });
+			const formData = new FormData();
+			formData.append('file', file);
+			const response = await fetch('/api/uploads', { method: 'POST', body: formData });
 			if (!response.ok) throw new Error('upload failed');
 			const result = await response.json();
 			request.setImage({
