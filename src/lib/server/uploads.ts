@@ -21,8 +21,13 @@ export async function uploadImage(
 		throw new Error(error?.message ?? 'Upload failed');
 	}
 
+	// Append the original filename so the URL includes a file extension.
+	// The render API requires an extension to identify the image format.
+	const baseUrl = data.ufsUrl;
+	const url = `${baseUrl}/${encodeURIComponent(file.name)}`;
+
 	return {
-		url: data.ufsUrl ?? data.url,
+		url,
 		mime: file.type,
 		size: file.size
 	};
