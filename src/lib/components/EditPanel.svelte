@@ -66,34 +66,47 @@
 
 <section class="edit-panel">
 	<div class="header">
-		<h2>{t('edit.title')}</h2>
-		<button type="button" class="close-btn" onclick={onClose} aria-label="Close">✕</button>
+		<h3>{t('edit.title')}</h3>
+		<button type="button" class="close-btn" onclick={onClose} aria-label="Close">
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+				<path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+			</svg>
+		</button>
 	</div>
 
-	<div class="templates">
-		<button type="button" class="template-btn" onclick={() => applyTemplate(t('edit.templateReplaceFill'))}>
+	<div class="chips">
+		<button type="button" class="chip" onclick={() => applyTemplate(t('edit.templateReplaceFill'))}>
 			{t('edit.templateReplace')}
 		</button>
-		<button type="button" class="template-btn" onclick={() => applyTemplate(t('edit.templateColorFill'))}>
+		<button type="button" class="chip" onclick={() => applyTemplate(t('edit.templateColorFill'))}>
 			{t('edit.templateColor')}
 		</button>
 	</div>
 
-	<label class="instruction-label">
-		<span>{t('edit.instruction')}</span>
-		<textarea bind:value={instruction} rows="3" disabled={applying}></textarea>
+	<label class="field">
+		<span class="field-label">{t('edit.instruction')}</span>
+		<textarea
+			bind:value={instruction}
+			rows="3"
+			disabled={applying}
+			placeholder={t('edit.templateReplaceFill')}
+		></textarea>
 	</label>
 
 	<div class="actions">
 		<button
 			type="button"
+			class="btn-apply"
 			disabled={!instruction.trim() || applying || !currentRender}
 			onclick={() => void applyEdit()}
 		>
+			{#if applying}
+				<span class="spinner" aria-hidden="true"></span>
+			{/if}
 			{applying ? t('edit.applying') : t('edit.apply')}
 		</button>
 		{#if canUndo}
-			<button type="button" class="undo-btn" onclick={undoEdit} disabled={applying}>
+			<button type="button" class="btn-undo" onclick={undoEdit} disabled={applying}>
 				{t('edit.undo')}
 			</button>
 		{/if}
@@ -106,12 +119,15 @@
 
 <style>
 	.edit-panel {
-		display: grid;
-		gap: var(--space-2);
-		padding: var(--space-3);
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		padding: 1.25rem 1.5rem 1.5rem;
 		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius);
+		border: 1.5px solid var(--color-border);
+		border-left: 4px solid var(--color-accent);
+		border-radius: 16px;
+		box-shadow: 0 4px 16px rgb(0 0 0 / 0.07);
 	}
 
 	.header {
@@ -120,87 +136,169 @@
 		justify-content: space-between;
 	}
 
-	h2 {
+	h3 {
 		margin: 0;
-		font-size: 1rem;
+		font-size: 0.9375rem;
+		font-weight: 600;
+		color: var(--color-text);
 	}
 
 	.close-btn {
-		padding: var(--space-1);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		padding: 0;
 		background: transparent;
 		border: none;
 		color: var(--color-muted);
-		font: inherit;
+		border-radius: 8px;
 		cursor: pointer;
-		line-height: 1;
+		transition: background 0.15s, color 0.15s;
 	}
 
-	.templates {
+	.close-btn:hover {
+		background: var(--color-background);
+		color: var(--color-text);
+	}
+
+	.chips {
 		display: flex;
-		gap: var(--space-1);
+		gap: 0.5rem;
 		flex-wrap: wrap;
 	}
 
-	.template-btn {
-		padding: var(--space-1) var(--space-2);
+	.chip {
+		padding: 0.3rem 0.75rem;
 		font: inherit;
-		font-size: 0.85rem;
-		color: var(--color-text);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius);
+		font-size: 0.8125rem;
+		color: var(--color-accent);
+		background: color-mix(in srgb, var(--color-accent) 8%, white);
+		border: 1.5px solid color-mix(in srgb, var(--color-accent) 25%, transparent);
+		border-radius: 100px;
 		cursor: pointer;
+		transition: background 0.15s, border-color 0.15s;
+		white-space: nowrap;
 	}
 
-	.template-btn:hover {
+	.chip:hover {
+		background: color-mix(in srgb, var(--color-accent) 14%, white);
 		border-color: var(--color-accent);
 	}
 
-	.instruction-label {
-		display: grid;
-		gap: var(--space-1);
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+
+	.field-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--color-muted);
 	}
 
 	textarea {
 		font: inherit;
+		font-size: 0.9375rem;
 		resize: vertical;
-		padding: var(--space-1) var(--space-2);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius);
-		background: var(--color-bg);
+		padding: 0.625rem 0.875rem;
+		border: 1.5px solid var(--color-border);
+		border-radius: 10px;
+		background: var(--color-background);
 		color: var(--color-text);
+		transition: border-color 0.15s;
+		min-height: 5rem;
+	}
+
+	textarea:focus {
+		outline: none;
+		border-color: var(--color-accent);
+	}
+
+	textarea::placeholder {
+		color: var(--color-muted);
+		opacity: 0.6;
+	}
+
+	textarea:disabled {
+		opacity: 0.6;
 	}
 
 	.actions {
 		display: flex;
-		gap: var(--space-2);
+		gap: 0.625rem;
 		flex-wrap: wrap;
 	}
 
-	button {
-		padding: var(--space-1) var(--space-2);
+	.btn-apply {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.6rem 1.25rem;
 		font: inherit;
+		font-size: 0.9375rem;
+		font-weight: 600;
 		color: var(--color-accent-contrast);
 		background: var(--color-accent);
-		border: 1px solid var(--color-accent);
-		border-radius: var(--radius);
+		border: none;
+		border-radius: 10px;
 		cursor: pointer;
+		transition: background 0.15s;
 	}
 
-	button:disabled {
-		opacity: 0.5;
+	.btn-apply:hover:not(:disabled) {
+		background: var(--color-accent-hover);
+	}
+
+	.btn-apply:disabled {
+		opacity: 0.45;
 		cursor: not-allowed;
 	}
 
-	.undo-btn {
+	.btn-undo {
+		padding: 0.6rem 1.25rem;
+		font: inherit;
+		font-size: 0.9375rem;
+		font-weight: 500;
 		color: var(--color-text);
-		background: var(--color-surface);
-		border-color: var(--color-border);
+		background: var(--color-background);
+		border: 1.5px solid var(--color-border);
+		border-radius: 10px;
+		cursor: pointer;
+		transition: border-color 0.15s, background 0.15s;
+	}
+
+	.btn-undo:hover:not(:disabled) {
+		border-color: var(--color-muted);
+		background: var(--color-surface-hover);
+	}
+
+	.btn-undo:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+
+	.spinner {
+		width: 0.875rem;
+		height: 0.875rem;
+		border: 2px solid rgb(255 255 255 / 0.35);
+		border-top-color: white;
+		border-radius: 50%;
+		animation: spin 0.7s linear infinite;
+		flex-shrink: 0;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.error {
 		margin: 0;
-		font-size: 0.85rem;
+		font-size: 0.8125rem;
 		color: var(--color-danger);
 	}
 </style>

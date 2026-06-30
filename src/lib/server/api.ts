@@ -10,13 +10,13 @@ const outputFormat = z.enum(['webp', 'jpg', 'png', 'avif']);
 
 export const renderRequestSchema = z.object({
 	image: z.string().trim().min(1),
-	prompt: z.string().trim().min(1),
+	prompt: z.string().trim().default(''),
 	outputFormat
 });
 
 export const editRequestSchema = z.object({
 	image: z.string().trim().min(1),
-	prompt: z.string().trim().min(1)
+	prompt: z.string().trim().default('')
 });
 
 // Nostr pubkey: 32-byte lowercase hex (x-only schnorr public key).

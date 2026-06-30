@@ -6,46 +6,56 @@
 		return request.prompt;
 	}
 
-	function setPrompt(prompt: string): void {
-		request.setPromptOverride(prompt);
-	}
-
-	function applyPrompt(): void {
-		request.setPromptOverride(request.prompt);
+	function setPrompt(value: string): void {
+		request.setPrompt(value);
 	}
 </script>
 
-<form class="entry" onsubmit={(event) => event.preventDefault()}>
-	<label>
-		<span>{t('view.chat.prompt')}</span>
-		<textarea bind:value={getPrompt, setPrompt} rows="5"></textarea>
-	</label>
-	<button type="button" onclick={applyPrompt}>{t('view.chat.apply')}</button>
-</form>
+<div class="chat-view">
+	<textarea
+		bind:value={getPrompt, setPrompt}
+		rows="4"
+		placeholder={t('view.chat.placeholder')}
+	></textarea>
+	<p class="hint">{t('view.chat.hint')}</p>
+</div>
 
 <style>
-	.entry {
-		width: min(100%, 34rem);
-		display: grid;
-		gap: var(--space-2);
-	}
-
-	label {
-		display: grid;
-		gap: var(--space-1);
+	.chat-view {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		width: 100%;
 	}
 
 	textarea {
-		min-height: 8rem;
-		resize: vertical;
-	}
-
-	textarea,
-	button {
+		width: 100%;
 		font: inherit;
+		font-size: 0.9375rem;
+		line-height: 1.6;
+		resize: vertical;
+		padding: 0.75rem 1rem;
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius);
+		background: var(--color-surface);
+		color: var(--color-text);
+		transition: border-color 0.15s;
+		box-sizing: border-box;
+		min-height: 6rem;
 	}
 
-	button {
-		justify-self: start;
+	textarea:focus {
+		outline: none;
+		border-color: var(--color-border-focus);
+	}
+
+	textarea::placeholder {
+		color: var(--color-muted);
+	}
+
+	.hint {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--color-muted);
 	}
 </style>
