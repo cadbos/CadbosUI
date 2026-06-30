@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { dev } from '$app/environment';
 	import { npubEncode } from 'nostr-tools/nip19';
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -105,6 +106,9 @@
 					<span class="avatar" aria-hidden="true">{displayName.slice(0, 1).toUpperCase()}</span>
 				{/if}
 				<span class="identity">
+					{#if dev && auth.user?.pubkey?.startsWith('000000')}
+						<span class="demo-badge">{t('auth.demo.badge')}</span>
+					{/if}
 					<span class="display">{displayName}</span>
 					<span class="who" title={auth.pubkey ?? ''}>{shortNpub}</span>
 				</span>
@@ -112,6 +116,14 @@
 			<div id="auth-profile" class="profile-panel" hidden={!profileOpen}>
 				<div class="profile-meta">
 					<span>{ti('auth.profile.relayCount', { count: relayCount })}</span>
+					{#if auth.quota}
+						<span class="quota">
+							{ti('auth.demo.quota', {
+								remaining: auth.quota.balanceOrLimit - auth.quota.usage,
+								total: auth.quota.balanceOrLimit
+							})}
+						</span>
+					{/if}
 					{#if missingCadbosName}
 						<span class="notice">{t('auth.profile.completeHint')}</span>
 					{/if}
@@ -183,6 +195,11 @@
 		</div>
 		{#if auth.error}
 			<p class="error" role="alert">{t(errorKeys[auth.error])}</p>
+		{/if}
+		{#if dev}
+			<button type="button" class="demo-btn" onclick={() => void auth.loginDemo()}>
+				{t('auth.demo.login')}
+			</button>
 		{/if}
 	{/if}
 </div>
@@ -417,5 +434,30 @@
 		margin: 0;
 		color: var(--color-danger);
 		font-size: 0.9rem;
+	}
+
+	.demo-btn {
+		color: var(--color-text);
+		background: transparent;
+		border-color: var(--color-border);
+		font-size: 0.85rem;
+	}
+
+	.demo-badge {
+		display: inline-block;
+		padding: 0 0.3rem;
+		font-size: 0.65rem;
+		font-weight: 700;
+		letter-spacing: 0.05em;
+		color: var(--color-accent-contrast);
+		background: var(--color-accent);
+		border-radius: 2px;
+		vertical-align: middle;
+	}
+
+	.quota {
+		font-size: 0.8rem;
+		color: var(--color-text);
+		font-weight: 500;
 	}
 </style>
