@@ -66,6 +66,7 @@ export const en: Dictionary = {
 	'upload.uploading': 'Uploading…',
 	'upload.errorType': 'Images only (JPEG, PNG, WEBP, AVIF)',
 	'upload.errorSize': 'File exceeds 8 MB',
+	'upload.errorUpload': 'Upload failed. Please try again.',
 	'upload.change': 'Change photo',
 	'render.generate': 'Generate',
 	'render.generating': 'Generating…',

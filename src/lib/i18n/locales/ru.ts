@@ -64,6 +64,7 @@ export const ru = {
 	'upload.uploading': 'Загрузка…',
 	'upload.errorType': 'Только изображения (JPEG, PNG, WEBP, AVIF)',
 	'upload.errorSize': 'Файл превышает 8 МБ',
+	'upload.errorUpload': 'Ошибка загрузки. Попробуйте ещё раз.',
 	'upload.change': 'Изменить фото',
 	'render.generate': 'Сгенерировать',
 	'render.generating': 'Генерация…',

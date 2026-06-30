@@ -35,7 +35,11 @@
 			const formData = new FormData();
 			formData.append('file', file);
 			const response = await fetch('/api/uploads', { method: 'POST', body: formData });
-			if (!response.ok) throw new Error('upload failed');
+			if (!response.ok) {
+				const body = await response.json().catch(() => null);
+				error = body?.error?.message ?? t('upload.errorUpload');
+				return;
+			}
 			const result = await response.json();
 			request.setImage({
 				url: result.url,
@@ -44,7 +48,7 @@
 				dimensions: result.dimensions
 			});
 		} catch {
-			error = t('upload.errorType');
+			error = t('upload.errorUpload');
 		} finally {
 			uploading = false;
 		}
