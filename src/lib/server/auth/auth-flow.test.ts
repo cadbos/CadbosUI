@@ -265,10 +265,10 @@ describe('auth flow', () => {
 			user: { pubkey, firstName: 'Grace' }
 		});
 
-		const me = await call(meGET, {
-			locals: { user: { pubkey, firstName: 'Grace' } }
+		expect(await findValidSession(db, requireSessionId(cookies), Date.now())).toEqual({
+			pubkey,
+			firstName: 'Grace'
 		});
-		expect((await me.json()).user).toEqual({ pubkey, firstName: 'Grace' });
 	});
 });
 
