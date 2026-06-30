@@ -1,7 +1,7 @@
 import { SimplePool } from 'nostr-tools/pool';
 import type { Event } from 'nostr-tools/pure';
 import type { NostrProfile, RelayInfo } from '$lib/api/contract';
-import { NOSTR_PROFILE_BOOTSTRAP_RELAYS } from './connect';
+import { NOSTR_PROFILE_BOOTSTRAP_RELAYS } from '$lib/nostr/connect';
 
 interface ProfilePool {
 	querySync(

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Event } from 'nostr-tools/pure';
-import { fetchNostrProfile, parseMetadata, parseRelayList } from './profile';
+import { fetchNostrProfile, parseMetadata, parseRelayList } from '$lib/nostr/profile';
 
 type FetchOptions = NonNullable<Parameters<typeof fetchNostrProfile>[1]>;
 type ProfilePool = NonNullable<FetchOptions['pool']>;
