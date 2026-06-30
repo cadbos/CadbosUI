@@ -40,7 +40,9 @@ export async function renderInterior(
 	if (!data) throw new Error('Empty response from render service');
 
 	const outputUrl = Array.isArray(data.output) ? data.output[0] : data.output;
-	if (!outputUrl) throw new Error('No output URL in render response');
+	if (!outputUrl) {
+		throw new Error(`Render returned no image URL (output: ${JSON.stringify(data.output)})`);
+	}
 
 	return { outputUrl, cost: data.cost, balance: data.balance };
 }
