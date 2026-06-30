@@ -2,7 +2,9 @@
 // external-service responses to these shapes, so the client never depends on
 // provider quirks. Dev mocks and real endpoints return exactly these types.
 
-export type OutputFormat = 'webp' | 'jpg' | 'png' | 'avif';
+export const OUTPUT_FORMATS = ['webp', 'jpg', 'png', 'avif'] as const;
+
+export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
 
 // Unified error body (HTTP 4xx/5xx) — no stack, paths, or internal ids.
 export interface ApiError {
