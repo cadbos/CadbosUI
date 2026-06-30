@@ -35,3 +35,8 @@ temp/
 
 # Internal development spec (SRS) — kept out of commits
 docs/tz.md
+
+.claude/
+.cursor/
+.agents/
+.codex/
