@@ -83,8 +83,8 @@ describe('prompt override', () => {
 });
 
 describe('validate', () => {
-	it('reports missing prompt and image', () => {
-		expect(request.validate()).toEqual({ valid: false, missing: ['prompt', 'image'] });
+	it('reports missing image when no state is set', () => {
+		expect(request.validate()).toEqual({ valid: false, missing: ['image'] });
 	});
 
 	it('reports missing image when prompt is present', () => {
@@ -92,9 +92,9 @@ describe('validate', () => {
 		expect(request.validate()).toEqual({ valid: false, missing: ['image'] });
 	});
 
-	it('reports missing prompt when image is present', () => {
+	it('is valid when only image is set', () => {
 		request.setImage(AC9_IMAGE);
-		expect(request.validate()).toEqual({ valid: false, missing: ['prompt'] });
+		expect(request.validate()).toEqual({ valid: true, missing: [] });
 	});
 
 	it('accepts an image URL without derived metadata', () => {
