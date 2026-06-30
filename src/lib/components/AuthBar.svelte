@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { npubEncode } from 'nostr-tools/nip19';
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
-	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import QrCode from './QrCode.svelte';
 
 	const errorKeys: Record<AuthError, TranslationKey> = {
@@ -17,18 +17,19 @@
 	});
 
 	let menuOpen = $state(false);
-	let profileOpen = $state(false);
+	// 'auto' = open iff missingCadbosName; 'open'/'closed' = user overrode.
+	let profileState = $state<'auto' | 'open' | 'closed'>('auto');
 	let savingProfile = $state(false);
+	let saveError = $state<string | null>(null);
 
 	const displayName = $derived(auth.nostrProfile?.name ?? shortNpub);
 	const missingCadbosName = $derived(
 		auth.status === 'authenticated' && (!auth.user?.firstName || !auth.user?.lastName)
 	);
 	const relayCount = $derived(auth.nostrProfile?.relays.length ?? 0);
-
-	$effect(() => {
-		if (missingCadbosName) profileOpen = true;
-	});
+	const profileOpen = $derived(
+		profileState === 'open' || (profileState === 'auto' && missingCadbosName)
+	);
 
 	// Track which URI was copied so the hint resets automatically when a fresh
 	// connection (a different URI) is started.
@@ -56,9 +57,12 @@
 
 	async function saveProfile(): Promise<void> {
 		savingProfile = true;
+		saveError = null;
 		try {
 			await auth.saveProfile();
-			profileOpen = false;
+			profileState = 'closed';
+		} catch {
+			saveError = t('auth.profile.saveError');
 		} finally {
 			savingProfile = false;
 		}
@@ -93,7 +97,7 @@
 				class="profile-toggle"
 				aria-expanded={profileOpen}
 				aria-controls="auth-profile"
-				onclick={() => (profileOpen = !profileOpen)}
+				onclick={() => (profileState = profileOpen ? 'closed' : 'open')}
 			>
 				{#if auth.nostrProfile?.picture}
 					<img src={auth.nostrProfile.picture} alt="" />
@@ -107,7 +111,7 @@
 			</button>
 			<div id="auth-profile" class="profile-panel" hidden={!profileOpen}>
 				<div class="profile-meta">
-					<span>{t('auth.profile.relays')}: {relayCount}</span>
+					<span>{ti('auth.profile.relayCount', { count: relayCount })}</span>
 					{#if missingCadbosName}
 						<span class="notice">{t('auth.profile.completeHint')}</span>
 					{/if}
@@ -129,6 +133,9 @@
 							{t('auth.logout')}
 						</button>
 					</div>
+					{#if saveError}
+						<p class="error" role="alert">{saveError}</p>
+					{/if}
 				</form>
 			</div>
 		</div>
