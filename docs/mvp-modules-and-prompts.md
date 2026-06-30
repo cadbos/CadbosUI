@@ -1,494 +1,494 @@
-# Cadbos MVP — разбиение на модули и профильные промпты
+# Cadbos MVP — module breakdown and development prompts
 
-Источник требований: [ТЗ v0.11](tz-cadbos-interior-ai.md). Документ декомпозирует MVP на
-разрабатываемые модули и даёт по каждому **готовый профильный промпт** для разработки
-в Claude Code — с привязкой к нашим скиллам (`.claude/skills/`) и субагентам
-(`.claude/agents/`).
+Source of requirements: [SRS v0.11](tz-cadbos-interior-ai.md). This document decomposes
+the MVP into development modules and provides a **focused prompt** for each one for use in
+Claude Code — referencing our skills (`.claude/skills/`) and subagents (`.claude/agents/`).
 
-> Файловая раскладка во всех промптах соответствует
-> [cadbos-structure](../.claude/skills/cadbos-structure/SKILL.md). Все модули
-> подчиняются «Absolute rules» из [AGENTS.md](../AGENTS.md): руны-only, секреты —
-> server-only, единый store, `svelte-autofixer` в ноль, i18n без хардкода.
+> File layout in all prompts follows
+> [cadbos-structure](../.claude/skills/cadbos-structure/SKILL.md). All modules
+> are governed by the "Absolute rules" in [AGENTS.md](../AGENTS.md): runes-only, secrets
+> server-only, single store, `svelte-autofixer` to zero, i18n without hardcoded strings.
 
 ---
 
-## Карта модулей
+## Module map
 
-| # | Модуль | Фаза | Зависит от | Ключевые FR/AC | Профильные скиллы | Субагент |
+| # | Module | Phase | Depends on | Key FR/AC | Primary skills | Subagent |
 |---|---|---|---|---|---|---|
-| 0 | Скаффолд приложения + i18n + security-каркас | A | — | NFR-9/11/13/14, заголовки безопасности | `cadbos-structure`, `cadbos-conventions`, `svelte-deployment` | `svelte-file-editor` |
-| 1 | Ядро: единая модель запроса (контракт) | A | 0 | FR-А1…А6, AC-9 | `cadbos-request-model`, `cadbos-conventions`, `svelte-runes` | `svelte-file-editor` |
-| 3 | Key-value интерфейс | B | 1 | FR-В1…В4, AC-4 | `cadbos-request-model`, `svelte-components`, `svelte-styling` | `svelte-file-editor`, `a11y-validator` |
-| 8 | Чат-интерфейс | B | 1 | FR-Б1…Б5, AC-3 | `cadbos-request-model`, `svelte-components` | `svelte-file-editor`, `a11y-validator` |
-| 9 | Граф-интерфейс | B | 1 | FR-Г1…Г5, AC-5 | `cadbos-request-model`, `svelte-template-directives`, `svelte-styling` | `svelte-file-editor`, `a11y-validator` |
-| 2 | Nostr-авторизация (клиент + сервер) | C | 1 | FR-И1, FR-И7, AC-11, Прил. B | `cadbos-security`, `cadbos-structure`, `sveltekit-data-flow` | `svelte-file-editor`, `code-reviewer` |
-| 4 | Загрузка изображения (UploadThing) | C | 1, 2 | FR-Ж0…Ж1, И-UT-*, AC-1 | `cadbos-integrations`, `cadbos-security` | `svelte-file-editor` |
-| 5 | Создание рендера + серверный прокси | C | 1, 4 | FR-Ж2…Ж7, И-MA-*, AC-1/6/7 | `cadbos-integrations`, `cadbos-security` | `svelte-file-editor`, `code-reviewer` |
-| 6 | Тарификация / лимиты (Account/Quota) | C | 2, 5 | FR-И4, NFR-18, AC-10/12 | `cadbos-integrations`, `cadbos-security` | `code-reviewer` |
-| 7 | Редактирование рендера (`edit-by-prompt`) | C | 5, 6 | FR-К1…К7, И-MA-ED*, AC-13/14/15 | `cadbos-integrations`, `cadbos-request-model` | `svelte-file-editor` |
-| 10 | Hardening: a11y / i18n / адаптив / безопасность | D | все | NFR-2,7-12,16-18 | `cadbos-testing`, `cadbos-self-review`, `cadbos-security` | `a11y-validator`, `test-runner`, `code-reviewer` |
+| 0 | App scaffold + i18n + security shell | A | — | NFR-9/11/13/14, security headers | `cadbos-structure`, `cadbos-conventions`, `svelte-deployment` | `svelte-file-editor` |
+| 1 | Core: unified request model (contract) | A | 0 | FR-А1…А6, AC-9 | `cadbos-request-model`, `cadbos-conventions`, `svelte-runes` | `svelte-file-editor` |
+| 3 | Key-value interface | B | 1 | FR-В1…В4, AC-4 | `cadbos-request-model`, `svelte-components`, `svelte-styling` | `svelte-file-editor`, `a11y-validator` |
+| 8 | Chat interface | B | 1 | FR-Б1…Б5, AC-3 | `cadbos-request-model`, `svelte-components` | `svelte-file-editor`, `a11y-validator` |
+| 9 | Graph interface | B | 1 | FR-Г1…Г5, AC-5 | `cadbos-request-model`, `svelte-template-directives`, `svelte-styling` | `svelte-file-editor`, `a11y-validator` |
+| 2 | Nostr auth (client + server) | C | 1 | FR-И1, FR-И7, AC-11, App. B | `cadbos-security`, `cadbos-structure`, `sveltekit-data-flow` | `svelte-file-editor`, `code-reviewer` |
+| 4 | Image upload (UploadThing) | C | 1, 2 | FR-Ж0…Ж1, И-UT-*, AC-1 | `cadbos-integrations`, `cadbos-security` | `svelte-file-editor` |
+| 5 | Render creation + server proxy | C | 1, 4 | FR-Ж2…Ж7, И-MA-*, AC-1/6/7 | `cadbos-integrations`, `cadbos-security` | `svelte-file-editor`, `code-reviewer` |
+| 6 | Billing / limits (Account/Quota) | C | 2, 5 | FR-И4, NFR-18, AC-10/12 | `cadbos-integrations`, `cadbos-security` | `code-reviewer` |
+| 7 | Render editing (`edit-by-prompt`) | C | 5, 6 | FR-К1…К7, И-MA-ED*, AC-13/14/15 | `cadbos-integrations`, `cadbos-request-model` | `svelte-file-editor` |
+| 10 | Hardening: a11y / i18n / responsive / security | D | all | NFR-2,7-12,16-18 | `cadbos-testing`, `cadbos-self-review`, `cadbos-security` | `a11y-validator`, `test-runner`, `code-reviewer` |
 
-**Мэппинг на milestone'ы ТЗ §11.3:** Фаза A → M1 (ядро); Фаза B → часть M1 + M4 (три
-вида); Фаза C → M1(auth)+M2+M3 (auth, загрузка, рендер, тарификация, правка);
-Фаза D → M5 (hardening). Фазы — основная ось планирования; milestone'ы ТЗ — для
-трассируемости к договору.
-
----
-
-## Стратегия разработки: UI-first на контракте
-
-Цель — быстро получить видимый, кликабельный UI и только затем подключать внешнюю
-логику, **без последующего переписывания**. Это совместимо с «Absolute rules» при двух
-условиях: (1) виды строятся поверх **настоящего стора** (Модуль 1), а не выбрасываемого
-локального состояния; (2) и мок-, и реальные endpoint'ы реализуют **один и тот же
-контракт API** (ниже). Три вида — проекции одного источника истины
-(`cadbos-request-model`), и AC-9 (идентичность трёх UI) держится на сторе с первого дня.
-
-Что можно отложить (чистые границы — мокаются на уровне endpoint'а):
-`/auth/*`, `/api/uploads`, `/api/render`, `/api/edit` и server-only модули за ними
-(`auth.ts`, `uploads.ts`, `generation.ts`, `billing.ts`). На UI-этапе они отвечают
-фикстурами **в форме контракта API**.
-Что отложить **нельзя**: сам стор, деривацию `prompt` и контракт API.
-
-**Фазы и критерии выхода (phase gates):**
-
-- **Фаза A — каркас и контракт.** Модуль 0 → Модуль 1.
-  *Выход:* `pnpm dev` и `pnpm build` поднимаются; стор проходит unit-тесты;
-  три плейсхолдер-вида переключаются без ошибок; мок-endpoint'ы возвращают DTO
-  контракта; заголовки безопасности и CSP отдаются (проверяемо в DevTools).
-- **Фаза B — UI на контракте (моки).** Модули 3 ∥ 8 ∥ 9.
-  *Выход:* AC-3, AC-4, AC-5 зелёные на моках; AC-9 (идентичность трёх UI) проходит на
-  моках; a11y-validator без блокеров по трём видам.
-- **Фаза C — реальная логика.** Модули 2 → 4 → 5 → 6 → 7.
-  *Выход:* AC-1, AC-6, AC-7, AC-10, AC-11, AC-12, AC-13, AC-14, AC-15 зелёные против
-  реальных server-only модулей (внешние сервисы — в моках); ключей нет в клиенте;
-  UI из фазы B не переписан.
-- **Фаза D — hardening.** Модуль 10.
-  *Выход:* весь NFR-блок; e2e AC-9 по процедуре §10.1; `/security-review` чистый.
-
-**Порядок (зависимости):** 0 → 1 → (3 ∥ 8 ∥ 9, на моках) → 2 → 4 → 5 → 6 → 7 → 10.
-Тестирование (`cadbos-testing` + `test-runner`) и self-review (`cadbos-self-review`)
-применяются в каждом модуле, не только в фазе D.
-
-> Скиллы `cadbos-structure` и `cadbos-security` уже приведены в соответствие с ТЗ
-> v0.11 (Nostr-авторизация, без логина/пароля и `nsec`).
+**Mapping to SRS milestones §11.3:** Phase A → M1 (core); Phase B → part of M1 + M4 (three
+views); Phase C → M1(auth)+M2+M3 (auth, upload, render, billing, editing);
+Phase D → M5 (hardening). Phases are the primary planning axis; SRS milestones are for
+contract traceability.
 
 ---
 
-## Контракт API (wire DTO) — единый для мока и реального бэкенда
+## Development strategy: UI-first on contract
 
-Это «контракт» из названия стратегии. Прокси нормализует ответы внешних сервисов к
-этим формам, поэтому клиент не зависит от различий MyArchitectAI (`output` массив vs
-строка, И-MA-4). И dev-моки (Модуль 0), и реальные endpoint'ы (фаза C) отдают **ровно
-эти типы** — UI не переписывается при переходе. Тела запросов валидируются на сервере
-схемой (Zod/Valibot), ошибки — обобщённые, без внутренних деталей (NFR-6/8).
+The goal is to get a visible, clickable UI quickly and only then wire in external logic,
+**without subsequent rewrites**. This is compatible with the "Absolute rules" given two
+conditions: (1) views are built on top of the **real store** (Module 1), not throwaway local
+state; (2) both mock and real endpoints implement **the same API contract** (below).
+Three views are projections of a single source of truth (`cadbos-request-model`), and
+AC-9 (three-UI identity) is held by the store from day one.
+
+What can be deferred (clean boundaries — mocked at the endpoint level):
+`/auth/*`, `/api/uploads`, `/api/render`, `/api/edit` and the server-only modules behind them
+(`auth.ts`, `uploads.ts`, `generation.ts`, `billing.ts`). During the UI phase they respond
+with fixtures **strictly in API contract form**.
+What **cannot** be deferred: the store itself, `prompt` derivation, and the API contract.
+
+**Phase gates:**
+
+- **Phase A — scaffold and contract.** Module 0 → Module 1.
+  *Exit:* `pnpm dev` and `pnpm build` succeed; store passes unit tests;
+  three placeholder views switch without errors; mock endpoints return contract DTOs;
+  security headers and CSP are served (verifiable in DevTools).
+- **Phase B — UI on contract (mocks).** Modules 3 ∥ 8 ∥ 9.
+  *Exit:* AC-3, AC-4, AC-5 green on mocks; AC-9 (three-UI identity) passes on
+  mocks; a11y-validator with no blockers across three views.
+- **Phase C — real logic.** Modules 2 → 4 → 5 → 6 → 7.
+  *Exit:* AC-1, AC-6, AC-7, AC-10, AC-11, AC-12, AC-13, AC-14, AC-15 green against
+  real server-only modules (external services mocked); no keys on the client;
+  UI from Phase B not rewritten.
+- **Phase D — hardening.** Module 10.
+  *Exit:* full NFR block; e2e AC-9 per §10.1 procedure; `/security-review` clean.
+
+**Order (dependencies):** 0 → 1 → (3 ∥ 8 ∥ 9, on mocks) → 2 → 4 → 5 → 6 → 7 → 10.
+Testing (`cadbos-testing` + `test-runner`) and self-review (`cadbos-self-review`)
+apply in every module, not only in Phase D.
+
+> Skills `cadbos-structure` and `cadbos-security` have been aligned with SRS
+> v0.11 (Nostr auth, no password/nsec).
+
+---
+
+## API contract (wire DTO) — shared between mock and real backend
+
+This is the "contract" the strategy refers to. The proxy normalises external service
+responses to these shapes, so the client does not depend on archAI differences (`output`
+array vs string, И-MA-4). Both dev mocks (Module 0) and real endpoints (Phase C) return
+**exactly these types** — no UI rewrite on transition. Request bodies are validated server-
+side with a schema (Zod/Valibot); errors are generic, without internal details (NFR-6/8).
 
 ```ts
-// src/lib/api/contract.ts — общие типы клиент↔сервер (без секретов)
+// src/lib/api/contract.ts — shared client↔server types (no secrets)
 
 type OutputFormat = 'webp' | 'jpg' | 'png' | 'avif';
 
-// Унифицированная ошибка (тело при HTTP 4xx/5xx) — без stack/путей/внутр. id
+// Unified error (body on HTTP 4xx/5xx) — no stack/paths/internal ids
 interface ApiError { error: { code: string; message: string } }
 
-// POST /api/uploads (после UploadThing) → данные для ImageInput
+// POST /api/uploads (after UploadThing) → data for ImageInput
 interface UploadResult { url: string; mime: string; size: number; dimensions?: [number, number] }
 
-// POST /api/render — { image, prompt, outputFormat } → нормализованный результат
+// POST /api/render — { image, prompt, outputFormat } → normalised result
 interface RenderRequest { image: string; prompt: string; outputFormat: OutputFormat }
-// POST /api/edit — { image, prompt } (без outputFormat; aspect ratio сохраняется)
+// POST /api/edit — { image, prompt } (no outputFormat; aspect ratio is preserved)
 interface EditRequest { image: string; prompt: string }
-// Общий ответ генерации и правки (output[0] для render, output для edit — нормализованы)
+// Shared response for generation and editing (output[0] for render, output for edit — normalised)
 interface RenderResponse { outputUrl: string; cost: number; balance: number }
 
-// Auth (Приложение B). Подписанное событие NIP-98 — в заголовке Authorization: Nostr <base64>
+// Auth (Appendix B). Signed NIP-98 event — in Authorization: Nostr <base64> header
 interface ChallengeRequest { pubkey: string }
-interface ChallengeResponse { challenge: string }              // nonce, single-use, TTL ~60c
+interface ChallengeResponse { challenge: string }              // nonce, single-use, TTL ~60s
 interface SessionUser { pubkey: string; firstName?: string; lastName?: string }
 interface Quota { balanceOrLimit: number; usage: number; period: string }
-interface MeResponse { user: SessionUser; quota: Quota }       // GET /auth/me; 401 если нет сессии
-// POST /auth/verify → 200 + Set-Cookie (httpOnly); тело: { user: SessionUser }
+interface MeResponse { user: SessionUser; quota: Quota }       // GET /auth/me; 401 if no session
+// POST /auth/verify → 200 + Set-Cookie (httpOnly); body: { user: SessionUser }
 // POST /auth/logout → 204
 ```
 
-Клиентский адаптер заворачивает `RenderResponse` в `RenderResult` стора
-(`outputUrls: [outputUrl]`, плюс `parentId`/`editOp` при правке) — массив в сторе нужен
-под задел revision history (Д-16).
+The client adapter wraps `RenderResponse` into a store `RenderResult`
+(`outputUrls: [outputUrl]`, plus `parentId`/`editOp` for edits) — the array in the store
+is a provision for revision history (Д-16).
 
 ---
 
-## Шаблон промпта (структура всех модулей ниже)
+## Prompt template (structure for all modules below)
 
-Каждый промпт следует единой структуре для предсказуемости агента:
+Each prompt follows a uniform structure for agent predictability:
 
 ```
-Прочитай: <разделы ТЗ + скиллы — стартовый контекст>
-Цель: <что и зачем, со ссылками на FR/AC>
-Сделай: <конкретные шаги, файлы, поведение>
-НЕ делай: <границы scope — что НЕ трогаем в этом модуле>
-Готово: <критерии завершения> · Тесты: <Vitest unit | Playwright e2e + AC>
+Read: <SRS sections + skills — starting context>
+Goal: <what and why, with FR/AC references>
+Do: <concrete steps, files, behaviour>
+Do NOT: <scope boundaries — what NOT to touch in this module>
+Done: <completion criteria> · Tests: <Vitest unit | Playwright e2e + AC>
 ```
 
-**Общая преамбула** (подразумевается в каждом промпте): стек Svelte 5 (руны) +
-SvelteKit; прочитать AGENTS.md и соблюдать «Absolute rules»; сверять синтаксис
-Svelte/SvelteKit и внешние API с актуальными доками (Svelte MCP: list-sections →
-get-documentation), не доверять памяти; каждый `.svelte`/`.svelte.ts` — через
-`svelte-autofixer` до нуля; весь UI-текст через i18n (`src/lib/i18n`), без хардкода,
-основной язык RU; TypeScript strict, без `any`, явные типы у публичных API;
-комментарии — только если нужны; по завершении — self-review по `cadbos-self-review`.
+**Common preamble** (implied in every prompt): stack Svelte 5 (runes) +
+SvelteKit; read AGENTS.md and follow "Absolute rules"; cross-check Svelte/SvelteKit
+syntax and external APIs against current docs (Svelte MCP: list-sections →
+get-documentation), do not rely on memory; every `.svelte`/`.svelte.ts` — through
+`svelte-autofixer` to zero; all UI text via i18n (`src/lib/i18n`), no hardcoding,
+primary language RU; TypeScript strict, no `any`, explicit types on public APIs;
+comments only if needed; on completion — self-review with `cadbos-self-review`.
 
 ---
 
-## Модуль 0 — Скаффолд приложения + i18n + security-каркас
+## Module 0 — App scaffold + i18n + security shell
 
 ```
-Прочитай: ТЗ §9 (NFR-9/11/13/14), cadbos-structure, cadbos-conventions, cadbos-security
-  (Do/Avoid: заголовки, CSP, CSRF), sveltekit-structure, svelte-deployment.
+Read: SRS §9 (NFR-9/11/13/14), cadbos-structure, cadbos-conventions, cadbos-security
+  (Do/Avoid: headers, CSP, CSRF), sveltekit-structure, svelte-deployment.
 
-Цель: поднять базовое SvelteKit-приложение как фундамент UI-first разработки и задать
-security-каркас с первого коммита.
+Goal: stand up a base SvelteKit app as the foundation for UI-first development and
+establish the security shell from the very first commit.
 
-Сделай:
-- Инициализируй проект: SvelteKit + Svelte 5 (руны), TypeScript strict, пакетный
-  менеджер **pnpm** (как в AGENTS.md «Commands»; commit `pnpm-lock.yaml`).
-  Скрипты: dev / build / test (type-check + lint + Vitest), e2e (Playwright).
-- Раскладка по cadbos-structure: src/lib/state, src/lib/components, src/lib/server,
-  src/lib/api (контракт), src/lib/i18n, routes/+layout.svelte, routes/+page.svelte,
+Do:
+- Initialise project: SvelteKit + Svelte 5 (runes), TypeScript strict, package
+  manager **pnpm** (as per AGENTS.md "Commands"; commit `pnpm-lock.yaml`).
+  Scripts: dev / build / test (type-check + lint + Vitest), e2e (Playwright).
+- Layout per cadbos-structure: src/lib/state, src/lib/components, src/lib/server,
+  src/lib/api (contract), src/lib/i18n, routes/+layout.svelte, routes/+page.svelte,
   routes/api/, routes/auth/.
-- src/lib/api/contract.ts — типы из раздела «Контракт API» этого документа.
-- i18n-каркас (src/lib/i18n): механизм словарей, RU основной, EN-готовность.
-- Базовый workspace (routes/+page.svelte): переключатель трёх видов (chat / key-value /
-  graph) — пока плейсхолдеры; каждая область вида в svelte:boundary (NFR-9).
-- hooks.server.ts: заголовки безопасности (Strict-Transport-Security, X-Content-Type-
-  Options: nosniff, X-Frame-Options: DENY, Referrer-Policy, Permissions-Policy) и CSP
-  с nonce/hash (без unsafe-inline/eval); csrf.checkOrigin включён.
-- Dev-стабы бэкенда: src/lib/server/mocks + dev-режим /api/* и /auth/*, отвечающие
-  фикстурами СТРОГО в форме контракта API (UploadResult, RenderResponse, MeResponse,
-  ChallengeResponse). Помечены dev-only, заменяются в фазе C.
+- src/lib/api/contract.ts — types from the "API contract" section of this document.
+- i18n shell (src/lib/i18n): dictionary mechanism, RU primary, EN-ready.
+- Base workspace (routes/+page.svelte): switcher for three views (chat / key-value /
+  graph) — placeholders for now; each view area in svelte:boundary (NFR-9).
+- hooks.server.ts: security headers (Strict-Transport-Security, X-Content-Type-
+  Options: nosniff, X-Frame-Options: DENY, Referrer-Policy, Permissions-Policy) and
+  CSP with nonce/hash (no unsafe-inline/eval); csrf.checkOrigin enabled.
+- Backend dev stubs: src/lib/server/mocks + dev-mode /api/* and /auth/* responding
+  with fixtures STRICTLY in API contract form (UploadResult, RenderResponse, MeResponse,
+  ChallengeResponse). Marked dev-only, replaced in Phase C.
 
-НЕ делай: реальные интеграции (UploadThing/MyArchitectAI/NDK), бизнес-логику стора и
-видов, аутентификацию по-настоящему — только мок-сессия.
+Do NOT: real integrations (UploadThing/archAI/NDK), store business logic and
+views, real authentication — mock session only.
 
-Готово: dev и build поднимаются; заголовки/CSP видны в DevTools; svelte-autofixer = 0.
-  Тесты: Vitest smoke (страница рендерится, виды переключаются); каркас Playwright готов.
+Done: dev and build succeed; headers/CSP visible in DevTools; svelte-autofixer = 0.
+  Tests: Vitest smoke (page renders, views switch); Playwright scaffold ready.
 ```
 
 ---
 
-## Модуль 1 — Ядро: единая модель запроса (контракт)
+## Module 1 — Core: unified request model (contract)
 
 ```
-Прочитай: ТЗ §6(а) FR-А1…А6, §7 (модель/синхронизация), §10.1 (AC-9),
+Read: SRS §6(а) FR-А1…А6, §7 (model/sync), §10.1 (AC-9),
   cadbos-request-model, svelte-runes, cadbos-conventions.
 
-Цель: единый источник истины для трёх представлений (FR-А1…А6, AC-9). Это контракт
-фазы A: стор чисто клиентский (бэкенд не нужен), типы и API стабильны и далее не
-переписываются — на них строятся все виды.
+Goal: single source of truth for three views (FR-А1…А6, AC-9). This is the Phase A
+contract: the store is purely client-side (no backend needed), types and API are stable
+and not rewritten later — all views are built on top of them.
 
-Сделай: src/lib/state/request.svelte.ts — единственный владелец данных запроса.
-- Модель: id, image?: ImageInput (url/mime/size/dimensions), promptFragments:
-  PromptFragment[] (id, label?, text, order), outputFormat: OutputFormat (дефолт 'webp'),
+Do: src/lib/state/request.svelte.ts — sole owner of request data.
+- Model: id, image?: ImageInput (url/mime/size/dimensions), promptFragments:
+  PromptFragment[] (id, label?, text, order), outputFormat: OutputFormat (default 'webp'),
   currentRender?: RenderResult (id, outputUrls, cost, balance, parentId?, editOp?, ts),
-  status. Типы переиспользуют src/lib/api/contract.ts где уместно.
-- prompt — $derived: конкатенация promptFragments[] по order; прямое редактирование
-  prompt — явный override-флаг, не теряется при переключении видов.
+  status. Types reuse src/lib/api/contract.ts where appropriate.
+- prompt — $derived: concatenation of promptFragments[] by order; direct prompt
+  editing — explicit override flag, not lost on view switch.
 - API: addFragment/updateFragment/removeFragment/reorder, setImage, setOutputFormat,
   setCurrentRender, reset, toJSON()/fromJSON() (FR-А6).
-- validate(): непустой prompt + загруженное image; список незаполненных полей; submit
-  блокируется до валидности (FR-А5) + защита от двойной отправки (FR-Ж6).
-- Детерминизм (FR-А4): одинаковое наполнение → побайтово одинаковый prompt и
-  нормализованная модель (без UI-полей) — основа AC-9.
+- validate(): non-empty prompt + uploaded image; list of missing fields; submit
+  blocked until valid (FR-А5) + double-submit protection (FR-Ж6).
+- Determinism (FR-А4): same content → byte-identical prompt and normalised model
+  (without UI fields) — basis for AC-9.
 
-НЕ делай: сетевые вызовы из стора; UI-компоненты; revision history (только parentId/
-editOp в типах как задел Д-16, без логики версий/дерева).
+Do NOT: network calls from the store; UI components; revision history (only parentId/
+editOp in types as a provision for Д-16, without version/tree logic).
 
-Готово: svelte-autofixer = 0. Тесты: Vitest unit — деривация prompt, reorder,
-  override-флаг, validate, сериализация туда-обратно; фикстуры-помощник для AC-9.
+Done: svelte-autofixer = 0. Tests: Vitest unit — prompt derivation, reorder,
+  override flag, validate, round-trip serialisation; fixture helpers for AC-9.
 ```
 
 ---
 
-## Модуль 3 — Key-value интерфейс
+## Module 3 — Key-value interface
 
 ```
-Прочитай: ТЗ §6(в) FR-В1…В4, §10 AC-4, cadbos-request-model, svelte-components,
+Read: SRS §6(в) FR-В1…В4, §10 AC-4, cadbos-request-model, svelte-components,
   svelte-styling.
 
-Цель: представление «Key-value» над стором Модуля 1 (FR-В1…В4, AC-4).
+Goal: "Key-value" view on top of the Module 1 store (FR-В1…В4, AC-4).
 
-Сделай: src/lib/components/KeyValueView.svelte.
-- Редактируемый список пар «метка → текст» = promptFragments[] стора.
-- Добавление / удаление / переупорядочивание (drag и кнопки) — порядок задаёт порядок
-  конкатенации (FR-А4); мутации только через API стора, без теневого state.
-- Предпросмотр итогового prompt ($derived из стора).
-- Изменение сегмента мгновенно обновляет модель → отражается в чате и графе (FR-А2).
-- a11y: клавиатурное управление списком и переупорядочиванием, ARIA, контраст
-  WCAG 2.1 AA (NFR-10). Полная функциональность на мобильных (NFR-12).
+Do: src/lib/components/KeyValueView.svelte.
+- Editable list of "label → text" pairs = store promptFragments[].
+- Add / remove / reorder (drag and buttons) — order determines concatenation order
+  (FR-А4); mutations only via store API, no shadow state.
+- Preview of the final prompt ($derived from store).
+- Segment change immediately updates model → reflected in chat and graph (FR-А2).
+- a11y: keyboard control for list and reordering, ARIA, contrast WCAG 2.1 AA
+  (NFR-10). Fully functional on mobile (NFR-12).
 
-НЕ делай: собственное хранилище сегментов; вызовы бэкенда; стилизацию вне дизайн-токенов.
+Do NOT: own segment storage; backend calls; styling outside design tokens.
 
-Готово: svelte-autofixer = 0, a11y-validator без блокеров. Тесты: Vitest component
-  (CRUD/reorder сегмента → стор); Playwright AC-4 (отражение в чат/граф — на phase-gate B).
+Done: svelte-autofixer = 0, a11y-validator no blockers. Tests: Vitest component
+  (CRUD/reorder segment → store); Playwright AC-4 (reflected in chat/graph — at phase gate B).
 ```
 
 ---
 
-## Модуль 8 — Чат-интерфейс
+## Module 8 — Chat interface
 
 ```
-Прочитай: ТЗ §6(б) FR-Б1…Б5, §10 AC-3, cadbos-request-model, svelte-components.
+Read: SRS §6(б) FR-Б1…Б5, §10 AC-3, cadbos-request-model, svelte-components.
 
-Цель: чат-подобное представление БЕЗ LLM (FR-Б1…Б5, AC-3). «Ответы» в ленте — результаты
-генерации/правок и статус. В фазе B результаты приходят из мок-endpoint'а (контракт
-RenderResponse); реальные вызовы подключаются в фазе C (Модули 5, 7) без переписывания.
+Goal: chat-like view WITHOUT LLM (FR-Б1…Б5, AC-3). "Responses" in the feed are the results
+of generation/edits and status. In Phase B results come from the mock endpoint (contract
+RenderResponse); real calls are wired in Phase C (Modules 5, 7) without rewriting.
 
-Сделай: src/lib/components/ChatView.svelte.
-- Ввод сообщений (фрагменты промпта / команды правок) → формируют итоговый prompt и
-  отражаются в key-value/графе (FR-Б2); мутации через стор Модуля 1.
-- Прикрепление изображения → setImage() стора (FR-Б4).
-- При создании/правке — статус, затем результат-изображение в ленте (FR-Б3).
-- История диалога в рамках сессии, хронологически (FR-Б5).
-- a11y: чат полностью функционален на мобильных (NFR-12), клавиатура/ARIA (NFR-10).
+Do: src/lib/components/ChatView.svelte.
+- Message input (prompt fragments / edit instructions) → form the final prompt and
+  are reflected in key-value/graph (FR-Б2); mutations via Module 1 store.
+- Attach image → store setImage() (FR-Б4).
+- On creation/edit — status, then result image in the feed (FR-Б3).
+- Session chat history, chronologically (FR-Б5).
+- a11y: chat fully functional on mobile (NFR-12), keyboard/ARIA (NFR-10).
 
-НЕ делай: интеграцию с LLM/OpenRouter; прямые вызовы внешних API (только контракт-
-endpoint, в фазе B — мок); собственное состояние промпта вне стора.
+Do NOT: LLM/OpenRouter integration; direct external API calls (contract endpoint only,
+mock in Phase B); own prompt state outside the store.
 
-Готово: svelte-autofixer = 0, a11y-validator без блокеров. Тесты: Vitest component;
-  Playwright AC-3; участие в e2e AC-9.
+Done: svelte-autofixer = 0, a11y-validator no blockers. Tests: Vitest component;
+  Playwright AC-3; participation in e2e AC-9.
 ```
 
 ---
 
-## Модуль 9 — Граф-интерфейс
+## Module 9 — Graph interface
 
 ```
-Прочитай: ТЗ §6(г) FR-Г1…Г5, §10 AC-5, §7.2 (mapping), cadbos-request-model,
+Read: SRS §6(г) FR-Г1…Г5, §10 AC-5, §7.2 (mapping), cadbos-request-model,
   svelte-template-directives, svelte-styling.
 
-Цель: графовое представление модели (FR-Г1…Г5, AC-5).
+Goal: graph view of the model (FR-Г1…Г5, AC-5).
 
-Сделай: src/lib/components/GraphView.svelte.
-- Узлы: image / fragment / compose; рёбра — порядок включения фрагментов в сборку.
-- Добавление/удаление узлов-фрагментов, соединение с compose; мутации через стор
-  Модуля 1; позиции узлов — локальное UI-состояние (не в сторе).
-- Однозначный mapping граф ↔ key-value: узел-фрагмент = сегмент, ребро = включение в
-  порядке связей (FR-Г3).
-- Предотвращение невалидных конфигураций (циклы, висячие узлы) с понятной индикацией
+Do: src/lib/components/GraphView.svelte.
+- Nodes: image / fragment / compose; edges — inclusion order of fragments in assembly.
+- Add/remove fragment nodes, connect to compose; mutations via Module 1 store;
+  node positions — local UI state (not in store).
+- Unambiguous mapping graph ↔ key-value: fragment node = segment, edge = inclusion in
+  connection order (FR-Г3).
+- Prevent invalid configurations (cycles, dangling nodes) with clear indication
   (FR-Г5).
-- На узких экранах граф деградирует (NFR-12), не ломая приложение (svelte:boundary).
+- On narrow screens graph degrades (NFR-12), without breaking the app (svelte:boundary).
 
-НЕ делай: хранение содержимого фрагментов в графе вместо стора; вызовы бэкенда.
+Do NOT: store fragment content in the graph instead of the store; backend calls.
 
-Готово: svelte-autofixer = 0, a11y-validator без блокеров. Тесты: Vitest unit
-  (валидация графа: циклы/висячие; граф→сегменты); Playwright AC-5; участие в AC-9.
+Done: svelte-autofixer = 0, a11y-validator no blockers. Tests: Vitest unit
+  (graph validation: cycles/dangling; graph→segments); Playwright AC-5; participation in AC-9.
 ```
 
 ---
 
-## Модуль 2 — Nostr-авторизация (клиент + сервер)
+## Module 2 — Nostr auth (client + server)
 
 ```
-Прочитай: ТЗ Д-11, FR-И1/И7, §8.4 (И-NO), NFR-17, AC-11, Приложение B целиком;
-  cadbos-security (auth, cookies, rate-limit, валидация, лог событий), cadbos-structure,
-  sveltekit-data-flow, svelte-runes. Сверь API NDK / nostr-tools с актуальными доками.
+Read: SRS Д-11, FR-И1/И7, §8.4 (И-NO), NFR-17, AC-11, Appendix B in full;
+  cadbos-security (auth, cookies, rate-limit, validation, security event log),
+  cadbos-structure, sveltekit-data-flow, svelte-runes. Cross-check NDK / nostr-tools
+  API against current docs.
 
-Цель: фаза C — заменить dev-стаб /auth/* реальной Nostr-авторизацией; построить UI входа.
-Авторизация ТОЛЬКО через Nostr: паролей нет, импорт nsec НЕ поддерживается, приватный
-ключ на сервер не уходит. Методы: (а) NIP-07 (NDKNip07Signer); (б) QR/NIP-46 Nostr
-Connect (NDKNip46Signer). Библиотека — NDK.
+Goal: Phase C — replace the /auth/* dev stub with real Nostr auth; build the login UI.
+Auth ONLY via Nostr: no passwords, nsec import NOT supported, private key never reaches
+the server. Methods: (а) NIP-07 (NDKNip07Signer); (б) QR/NIP-46 Nostr Connect
+(NDKNip46Signer). Library — NDK.
 
-Сделай:
-- Клиент: src/lib/state/auth.svelte.ts (руны) — источник истины состояния входа:
-  метод, активный NDKSigner, pubkey, кэш профиля (picture/name из kind:0), флаг сессии.
-  NDK + загрузка профиля (kind:0) и релеев (NIP-65, kind:10002) от конфигурируемого
-  bootstrap-набора.
-- Сервер: src/lib/server/auth.ts + routes/auth/*, контракт из раздела «Контракт API».
-  · POST /auth/challenge {pubkey} → ChallengeResponse (nonce, single-use, TTL ~60c).
-  · POST /auth/verify (Authorization: Nostr <base64>) → проверка NIP-98 (kind 27235):
-    kind, окно времени ±60c, теги u/method, одноразовость nonce, schnorr строго по
-    pubkey ИЗ события (nostr-tools verifyEvent). Найти/создать User{pubkey}, открыть
-    Session, Set-Cookie httpOnly+Secure+SameSite=Lax, ротация id.
+Do:
+- Client: src/lib/state/auth.svelte.ts (runes) — source of truth for auth state:
+  method, active NDKSigner, pubkey, profile cache (picture/name from kind:0), session flag.
+  NDK + profile fetch (kind:0) and relays (NIP-65, kind:10002) from a configurable
+  bootstrap set.
+- Server: src/lib/server/auth.ts + routes/auth/*, contract from the "API contract" section.
+  · POST /auth/challenge {pubkey} → ChallengeResponse (nonce, single-use, TTL ~60s).
+  · POST /auth/verify (Authorization: Nostr <base64>) → verify NIP-98 (kind 27235):
+    kind, time window ±60s, u/method tags, nonce single-use, schnorr strictly against
+    pubkey FROM the event (nostr-tools verifyEvent). Find/create User{pubkey}, open
+    Session, Set-Cookie httpOnly+Secure+SameSite=Lax, rotate id.
   · POST /auth/logout → 204; GET /auth/me → MeResponse | 401.
   · hooks.server.ts: cookie → event.locals.user; guard /api/render|edit|uploads.
-- Валидация тел запросов схемой (Zod/Valibot); rate-limit /auth/challenge и /auth/verify
-  (анти-брутфорс); лог событий безопасности (отказы подписи/nonce) без PII/секретов.
-- Модель данных (§7): User(pubkey hex unique, firstName?, lastName?, createdAt), Session,
-  AuthChallenge(nonce, pubkey, createdAt, usedAt?). Профиль-кэш на сервере не храним.
-  Хранилище минимальное (KV/файл/мини-БД), схема forward-совместима (P-7).
-  firstName/lastName — поля Cadbos; после первого входа предложить дозаполнить (FR-И7).
-- Зафиксировать как конфиг (ОВ-11): формат подписи = NIP-98; TTL сессии и «remember me»;
-  connectRelay для NIP-46; bootstrap-список релеев.
+- Validate request bodies with schema (Zod/Valibot); rate-limit /auth/challenge and
+  /auth/verify (anti-brute-force); security event log (signature/nonce failures) without
+  PII/secrets.
+- Data model (§7): User(pubkey hex unique, firstName?, lastName?, createdAt), Session,
+  AuthChallenge(nonce, pubkey, createdAt, usedAt?). No server-side profile cache.
+  Minimal storage (KV/file/mini-DB), schema forward-compatible (P-7).
+  firstName/lastName — Cadbos fields; after first login prompt to fill in (FR-И7).
+- Establish as config (ОВ-11): signature format = NIP-98; session TTL and "remember me";
+  connectRelay for NIP-46; bootstrap relay list.
 
-НЕ делай: приём nsec/seed в любом виде; хранение приватного ключа/пароля; логирование
-ключей/подписей; серверное хранение истории/настроек (пост-MVP).
+Do NOT: accept nsec/seed in any form; store private key/password; log keys/signatures;
+server-side storage of history/settings (post-MVP).
 
-Готово: svelte-autofixer = 0, code-reviewer без блокеров. Тесты: Vitest unit —
-  верификация подписи (валид/реплей/просрочка/чужой pubkey), guard endpoint'ов,
-  rate-limit; Playwright AC-11 (с тестовым signer-моком: вход открывает доступ).
+Done: svelte-autofixer = 0, code-reviewer no blockers. Tests: Vitest unit —
+  signature verification (valid/replay/expired/wrong pubkey), endpoint guard,
+  rate-limit; Playwright AC-11 (with test signer mock: login grants access).
 ```
 
 ---
 
-## Модуль 4 — Загрузка изображения (UploadThing)
+## Module 4 — Image upload (UploadThing)
 
 ```
-Прочитай: ТЗ FR-Ж0/Ж1, §8.3 (И-UT-*), Д-8/Д-9/Д-9a, AC-1; cadbos-integrations,
-  cadbos-security (валидация загрузок, server-only токены). Сверь @uploadthing/svelte
-  с актуальными доками.
+Read: SRS FR-Ж0/Ж1, §8.3 (И-UT-*), Д-8/Д-9/Д-9a, AC-1; cadbos-integrations,
+  cadbos-security (upload validation, server-only tokens). Cross-check @uploadthing/svelte
+  against current docs.
 
-Цель: загрузка одного изображения и публичный URL для поля image (FR-Ж0/Ж1, И-UT-*).
-Заменяет мок /api/uploads, отдаёт UploadResult (контракт API).
+Goal: upload one image and get a public URL for the image field (FR-Ж0/Ж1, И-UT-*).
+Replaces the /api/uploads mock, returns UploadResult (API contract).
 
-Сделай:
-- Сервер: src/lib/server/uploads.ts (file router) + routes/api/uploads/+server.ts.
-  Токен UPLOADTHING_TOKEN — server-only, не в клиентский бандл (NFR-4/14, AC-7).
-- Ограничения маршрута: тип image, maxFileSize 8 MB, maxFileCount 1 (И-UT-3);
-  серверная пере-проверка типа/размера (не доверять клиенту); ACL public-read (Д-9a).
-- Клиент: компонент загрузки на @uploadthing/svelte; результат UploadResult →
-  setImage() стора Модуля 1 (И-UT-4).
-- Ошибки (тип/размер/сбой) → локализованное сообщение в форме ApiError, повторный
-  выбор (И-UT-6). Доступ — только при валидной сессии (guard из Модуля 2).
+Do:
+- Server: src/lib/server/uploads.ts (file router) + routes/api/uploads/+server.ts.
+  Token UPLOADTHING_TOKEN — server-only, not in client bundle (NFR-4/14, AC-7).
+- Route constraints: type image, maxFileSize 8 MB, maxFileCount 1 (И-UT-3);
+  server-side re-check of type/size (do not trust the client); ACL public-read (Д-9a).
+- Client: upload component on @uploadthing/svelte; result UploadResult →
+  Module 1 store setImage() (И-UT-4).
+- Errors (type/size/failure) → localised ApiError message, re-select file
+  (И-UT-6). Access — only with a valid session (guard from Module 2).
 
-НЕ делай: мульти-загрузку/батч; private+signed URL (пост-MVP); раскрытие токена клиенту.
+Do NOT: multi-upload/batch; private+signed URL (post-MVP); expose token to client.
 
-Готово: svelte-autofixer = 0; токена нет в клиентском бандле (проверка). Тесты:
-  Vitest (валидация типа/размера на сервере, форма UploadResult); guard без сессии → 401.
-```
-
----
-
-## Модуль 5 — Создание рендера + серверный прокси
-
-```
-Прочитай: ТЗ FR-Ж2…Ж7, §8.2.0 (И-MA-1…8), Д-5/Д-10, AC-1/6/7; cadbos-integrations,
-  cadbos-security (прокси, секреты, rate-limit, маппинг ошибок), sveltekit-data-flow.
-
-Цель: создать визуал через серверный прокси к render/interior (FR-Ж2…Ж7). Заменяет мок
-/api/render; прокси нормализует output[] → RenderResponse (контракт API).
-
-Сделай:
-- Сервер: src/lib/server/generation.ts + routes/api/render/+server.ts.
-  POST https://api.myarchitectai.com/v1/render/interior, тело {image, prompt,
-  outputFormat}; x-api-key — ТОЛЬКО на сервере (NFR-4/5, AC-7). Синхронно, таймаут 120c
-  конфигурируемо (И-MA-6). output — массив → берём output[0] (Д-5), нормализуем в
-  RenderResponse; адаптер терпит и строковый формат (И-MA-4).
-- Валидация тела схемой (Zod/Valibot, RenderRequest); rate-limit /api/render
-  (анти-cost-abuse, привязка к pubkey).
-- Ошибки: обобщённый маппинг HTTP → локализованные сообщения ApiError (валидация/лимит/
-  таймаут/отказ/недостаточный баланс); секреты не в логах/ответах (NFR-6/8, AC-6).
-  Ретраи только без подтверждённого ответа (И-MA-7); защита от двойной отправки (FR-Ж6).
-- Клиент: запуск из workspace, состояние «генерация выполняется» (FR-Ж3); по ответу —
-  просмотр в полном размере + скачивание; результат → currentRender (FR-Ж4) для Модуля 7.
-  cost/balance (FR-Ж7) — связка с Модулем 6. Guard: только при валидной сессии.
-
-НЕ делай: edit-by-prompt (это Модуль 7); мульти-изображения; auto-prompt/upscale (пост-
-MVP); раскрытие x-api-key клиенту.
-
-Готово: svelte-autofixer = 0, code-reviewer без блокеров. Тесты: Vitest (прокси с моками:
-  успех/таймаут/ошибки/нормализация output, анти-дубль, rate-limit); Playwright
-  AC-1/AC-6; проверка отсутствия ключа в клиенте (AC-7).
+Done: svelte-autofixer = 0; token absent from client bundle (verified). Tests:
+  Vitest (type/size validation server-side, UploadResult shape); guard without session → 401.
 ```
 
 ---
 
-## Модуль 6 — Тарификация / лимиты (Account/Quota)
+## Module 5 — Render creation + server proxy
 
 ```
-Прочитай: ТЗ FR-И4, NFR-18, AC-10/12; cadbos-integrations, cadbos-security
-  (авторизация на уровне данных).
+Read: SRS FR-Ж2…Ж7, §8.2.0 (И-MA-1…8), Д-5/Д-10, AC-1/6/7; cadbos-integrations,
+  cadbos-security (proxy, secrets, rate-limit, error mapping), sveltekit-data-flow.
 
-Цель: учёт стоимости и лимиты на уровне аккаунта Cadbos (FR-И4, NFR-18, AC-10/12).
+Goal: create a visual via server proxy to render/interior (FR-Ж2…Ж7). Replaces the
+/api/render mock; proxy normalises output[] → RenderResponse (API contract).
 
-Сделай:
-- Сервер: src/lib/server/billing.ts. Модель Account/Quota(userId, balanceOrLimit,
-  usage, period), привязка к pubkey (Модуль 2). Авторизация на уровне данных: квота
-  принадлежит текущему pubkey, не просто валидной сессии.
-- На каждую подтверждённую генерацию (Модуль 5) и правку (Модуль 7) списывать cost из
-  ответа; согласованность с cost/balance, защита от двойного списания (NFR-18, FR-Ж6);
-  списание атомарно с подтверждением вызова.
-- Перед запуском: исчерпан баланс/лимит → блокировать с сообщением (AC-12); до операции
-  показывать ожидаемую стоимость и остаток (AC-10).
-- Клиент: индикатор остатка/лимита и стоимости операции в workspace (FR-Ж7, FR-И4).
+Do:
+- Server: src/lib/server/generation.ts + routes/api/render/+server.ts.
+  POST https://api.myarchitectai.com/v1/render/interior, body {image, prompt,
+  outputFormat}; x-api-key — server-side ONLY (NFR-4/5, AC-7). Synchronous, timeout 120s
+  configurable (И-MA-6). output — array → take output[0] (Д-5), normalise to
+  RenderResponse; adapter tolerates string format too (И-MA-4).
+- Validate body with schema (Zod/Valibot, RenderRequest); rate-limit /api/render
+  (anti-cost-abuse, bound to pubkey).
+- Errors: generic HTTP → localised ApiError messages (validation/limit/timeout/failure/
+  insufficient balance); secrets not in logs/responses (NFR-6/8, AC-6).
+  Retry only without a confirmed response (И-MA-7); double-submit protection (FR-Ж6).
+- Client: trigger from workspace, "generation in progress" state (FR-Ж3); on response —
+  full-size view + download; result → currentRender (FR-Ж4) for Module 7.
+  cost/balance (FR-Ж7) — link with Module 6. Guard: valid session only.
 
-НЕ делай: приём платежей/платёжные шлюзы (пост-MVP); списание до подтверждения вызова.
+Do NOT: edit-by-prompt (Module 7); multi-image; auto-prompt/upscale (post-MVP);
+expose x-api-key to client.
 
-Готово: code-reviewer без блокеров. Тесты: Vitest — списание ровно один раз, блокировка
-  при исчерпании, нет двойного списания, изоляция квот по pubkey; Playwright AC-10/AC-12.
+Done: svelte-autofixer = 0, code-reviewer no blockers. Tests: Vitest (proxy with mocks:
+  success/timeout/errors/output normalisation, anti-dup, rate-limit); Playwright
+  AC-1/AC-6; verify key absent from client (AC-7).
 ```
 
 ---
 
-## Модуль 7 — Редактирование рендера (`edit-by-prompt`)
+## Module 6 — Billing / limits (Account/Quota)
 
 ```
-Прочитай: ТЗ FR-К1…К7, §8.2.1 (И-MA-ED1…3), Д-15/Д-16/Д-17, AC-13/14/15;
+Read: SRS FR-И4, NFR-18, AC-10/12; cadbos-integrations, cadbos-security
+  (data-level authorisation).
+
+Goal: cost tracking and limits at the Cadbos account level (FR-И4, NFR-18, AC-10/12).
+
+Do:
+- Server: src/lib/server/billing.ts. Model Account/Quota(userId, balanceOrLimit,
+  usage, period), bound to pubkey (Module 2). Data-level authorisation: quota belongs
+  to the current pubkey, not just any valid session.
+- On each confirmed generation (Module 5) and edit (Module 7) deduct cost from the
+  response; consistency with cost/balance, double-deduction protection (NFR-18, FR-Ж6);
+  deduction atomic with call confirmation.
+- Before launch: balance/limit exhausted → block with message (AC-12); before operation
+  show expected cost and remaining balance (AC-10).
+- Client: balance/limit and operation cost indicator in workspace (FR-Ж7, FR-И4).
+
+Do NOT: payment processing/gateways (post-MVP); deduct before call is confirmed.
+
+Done: code-reviewer no blockers. Tests: Vitest — deduction exactly once, block on
+  exhaustion, no double-deduction, quota isolation by pubkey; Playwright AC-10/AC-12.
+```
+
+---
+
+## Module 7 — Render editing (`edit-by-prompt`)
+
+```
+Read: SRS FR-К1…К7, §8.2.1 (И-MA-ED1…3), Д-15/Д-16/Д-17, AC-13/14/15;
   cadbos-integrations, cadbos-request-model, cadbos-security.
 
-Цель: итеративная правка текущего рендера натуральным языком (FR-К1…К7). Масок нет —
-цель словами. Заменяет мок /api/edit; ответ нормализуется в RenderResponse.
+Goal: iterative natural-language editing of the current render (FR-К1…К7). No masks —
+target specified in words. Replaces the /api/edit mock; response normalised to RenderResponse.
 
-Сделай:
-- Сервер: расширить src/lib/server/generation.ts + routes/api/edit/+server.ts.
-  POST /v1/edit-by-prompt, тело {image, prompt} (БЕЗ outputFormat). image = URL текущего
-  рендера currentRender.outputUrls[0] (Д-17). output — строка → RenderResponse (И-MA-4).
-  Таймаут/ретраи/ошибки как у render (И-MA-ED3). Валидация схемой (EditRequest);
+Do:
+- Server: extend src/lib/server/generation.ts + routes/api/edit/+server.ts.
+  POST /v1/edit-by-prompt, body {image, prompt} (NO outputFormat). image = URL of current
+  render currentRender.outputUrls[0] (Д-17). output — string → RenderResponse (И-MA-4).
+  Timeout/retry/errors same as render (И-MA-ED3). Validate with schema (EditRequest);
   rate-limit /api/edit.
-- Модель: EditOperation(type: 'replace-object'|'change-surface-color'|'freeform',
-  instruction). На API уходит instruction; type — UX-категория. Результат → новый
-  currentRender с parentId/editOp (задел Д-16). Итеративность (FR-К4).
-- Откат последней правки к предыдущему currentRender — in-session (FR-К6).
-- Клиент: связный цикл «создание → улучшение»; шаблоны-подсказки для «замена объекта»/
-  «смена цвета поверхности» как UX-обёртка над свободным текстом (FR-К7); индикация
-  состояния и стоимости. Каждая правка — платный вызов через Модуль 6 (FR-К5), анти-дубль.
+- Model: EditOperation(type: 'replace-object'|'change-surface-color'|'freeform',
+  instruction). API receives instruction; type is a UX category. Result → new
+  currentRender with parentId/editOp (provision for Д-16). Iterative (FR-К4).
+- Undo last edit to previous currentRender — in-session (FR-К6).
+- Client: coherent "create → refine" cycle; suggestion templates for "replace object"/
+  "change surface colour" as UX wrapper over free text (FR-К7); state and cost indication.
+  Each edit is a paid call via Module 6 (FR-К5), anti-dup.
 
-НЕ делай: полную revision history/дерево/откат к произвольной версии (пост-MVP Д-16,
-только parent-link); маски/выделение области; upscale (пост-MVP).
+Do NOT: full revision history/tree/revert to arbitrary version (post-MVP Д-16,
+only parent-link); masks/region selection; upscale (post-MVP).
 
-Готово: svelte-autofixer = 0. Тесты: Vitest (нормализация output, цепочка image=
-  предыдущий рендер, анти-дубль, rate-limit); Playwright AC-13 (замена объекта),
-  AC-14 (смена цвета), AC-15 (итеративность + откат).
+Done: svelte-autofixer = 0. Tests: Vitest (output normalisation, chain image=
+  previous render, anti-dup, rate-limit); Playwright AC-13 (object replacement),
+  AC-14 (surface colour), AC-15 (iterative + undo).
 ```
 
 ---
 
-## Модуль 10 — Hardening (a11y / i18n / адаптив / производительность / безопасность)
+## Module 10 — Hardening (a11y / i18n / responsive / performance / security)
 
 ```
-Прочитай: ТЗ §9 (весь NFR-блок), §10.1 (AC-9); cadbos-testing, cadbos-self-review,
-  cadbos-security (полный чек-лист). Субагенты: a11y-validator, test-runner, code-reviewer.
+Read: SRS §9 (full NFR block), §10.1 (AC-9); cadbos-testing, cadbos-self-review,
+  cadbos-security (full checklist). Subagents: a11y-validator, test-runner, code-reviewer.
 
-Цель: довести MVP до Definition of done по NFR-блоку перед приёмкой.
+Goal: bring the MVP to Definition of Done on the NFR block before acceptance.
 
-Сделай:
-- a11y (NFR-10): аудит — клавиатура, ARIA-роли/labels, контраст WCAG 2.1 AA по трём
-  видам + auth + результат рендера.
-- i18n (NFR-11): ни одной хардкод-строки; полный RU-словарь, EN-готовность.
-- Адаптивность (NFR-12): desktop + mobile; деградация графа; чат и key-value полностью
-  рабочие на мобильных; вечнозелёные браузеры.
-- Производительность (NFR-2/3): переключение видов и деривация prompt ≤100мс на ≤50
-  сегментов; TTI-бюджет, SSR/код-сплиттинг.
-- Изоляция сбоев (NFR-9): svelte:boundary вокруг видов/вызовов.
-- Безопасность (NFR-4/6/7/17, AC-7): финальный прогон cadbos-security — секреты только
-  server-only и не в логах; нет приватных ключей на сервере; серверная валидация
-  ввода/файлов (Zod/Valibot); cookie httpOnly/Secure/SameSite; заголовки безопасности +
-  CSP активны; rate-limit на /auth/* и /api/render|edit на месте. Запусти
-  /security-review по диффу ветки и закрой findings.
+Do:
+- a11y (NFR-10): audit — keyboard, ARIA roles/labels, WCAG 2.1 AA contrast across three
+  views + auth + render result.
+- i18n (NFR-11): no hardcoded strings; full RU dictionary, EN-ready.
+- Responsive (NFR-12): desktop + mobile; graph degradation; chat and key-value fully
+  functional on mobile; evergreen browsers.
+- Performance (NFR-2/3): view switching and prompt derivation ≤100ms at ≤50 segments;
+  TTI budget, SSR/code-splitting.
+- Failure isolation (NFR-9): svelte:boundary around views/calls.
+- Security (NFR-4/6/7/17, AC-7): final pass of cadbos-security — secrets server-only
+  and not in logs; no private keys on server; server-side input/file validation (Zod/Valibot);
+  cookie httpOnly/Secure/SameSite; security headers + CSP active; rate-limit on /auth/* and
+  /api/render|edit in place. Run /security-review on the branch diff and close all findings.
 
-НЕ делай: новую функциональность; рефактор стора/контракта без необходимости.
+Do NOT: new features; store/contract refactor without necessity.
 
-Готово: весь NFR-блок выполнен, svelte-autofixer = 0 по всем компонентам,
-  /security-review чистый. Тесты: Playwright — полный e2e AC-9 по процедуре §10.1
-  (chat → key-value → граф дают побайтово идентичный prompt и тело запроса);
-  весь e2e/unit зелёный (test-runner).
+Done: full NFR block satisfied, svelte-autofixer = 0 across all components,
+  /security-review clean. Tests: Playwright — full e2e AC-9 per §10.1 procedure
+  (chat → key-value → graph produce byte-identical prompt and request body);
+  all e2e/unit green (test-runner).
 ```
 
 ---
 
-## Что осознанно вне MVP (не делаем в этих модулях)
+## What is intentionally out of MVP scope (not done in these modules)
 
-Revision history / ветвление / откат к произвольной версии (Д-16, заложен только
-parent-link); OpenRouter (LLM-чат, выбор моделей, мульти-изображения); пошаговый
-конструктор и каталог ключей (Приложение A); EN-требование и LLM-пост-обработка
-промпта; серверное хранение истории/настроек; `auto-prompt`, `upscale-4k`,
-`style-transfer`, экстерьер, видео, batch; платёжные шлюзы; маски/выделение области
-при редактировании.
+Revision history / branching / revert to arbitrary version (Д-16, only parent-link
+provisioned); OpenRouter (LLM chat, model selection, multi-image); step-by-step prompt
+constructor and key catalogue (Appendix A); EN-requirement and LLM post-processing of
+the prompt; server-side history/settings storage; `auto-prompt`, `upscale-4k`,
+`style-transfer`, exterior, video, batch; payment gateways; masks/region selection
+when editing.
