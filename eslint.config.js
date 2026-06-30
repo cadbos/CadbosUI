@@ -12,6 +12,8 @@ export default defineConfig(
 	includeIgnoreFile(gitignorePath),
 	// Non-app content: agent skills/docs are not part of the app's TS project.
 	{ ignores: ['.claude/**', 'docs/**'] },
+	// Auto-generated SDK (openapi-ts) — not hand-authored, do not lint.
+	{ ignores: ['src/lib/server/myarchitect/**'] },
 	js.configs.recommended,
 	ts.configs.recommended,
 	svelte.configs.recommended,

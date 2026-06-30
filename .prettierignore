@@ -15,3 +15,6 @@ bun.lockb
 /.claude/
 /docs/
 skills-lock.json
+
+# Auto-generated SDK (openapi-ts) — do not reformat
+src/lib/server/myarchitect/
