@@ -1,6 +1,6 @@
 import { dev } from '$app/environment';
-import { createClient } from '$lib/server/myarchitect/client';
-import { postRenderInterior } from '$lib/server/myarchitect';
+import { createClient } from '$lib/server/archai/client';
+import { postRenderInterior } from '$lib/server/archai';
 import type { RenderResponse, OutputFormat } from '$lib/api/contract';
 import { mockRender } from '$lib/server/mocks/fixtures';
 
@@ -8,11 +8,11 @@ export async function renderInterior(
 	platform: App.Platform | undefined,
 	params: { image: string; prompt: string; outputFormat: OutputFormat }
 ): Promise<RenderResponse> {
-	const apiKey = platform?.env?.MYARCHITECT_API_KEY;
+	const apiKey = platform?.env?.ARCHAI_API_KEY;
 
 	if (!apiKey) {
 		if (dev) return mockRender();
-		throw new Error('MYARCHITECT_API_KEY not configured');
+		throw new Error('ARCHAI_API_KEY not configured');
 	}
 
 	// Per-request client — setting headers on the singleton is not safe in Workers.

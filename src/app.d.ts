@@ -16,7 +16,7 @@ declare global {
 		interface Platform {
 			env: {
 				DB: D1Database;
-				MYARCHITECT_API_KEY: string;
+				ARCHAI_API_KEY: string;
 				UPLOADTHING_TOKEN: string;
 			};
 		}
