@@ -35,7 +35,12 @@
 			const response = await fetch('/api/uploads', { method: 'POST' });
 			if (!response.ok) throw new Error('upload failed');
 			const result = await response.json();
-			request.setImage({ url: result.url, mime: result.mime, size: result.size, dimensions: result.dimensions });
+			request.setImage({
+				url: result.url,
+				mime: result.mime,
+				size: result.size,
+				dimensions: result.dimensions
+			});
 		} catch {
 			error = t('upload.errorType');
 		} finally {
@@ -101,9 +106,28 @@
 			{#if uploading}
 				<span class="uploading-text">{t('upload.uploading')}</span>
 			{:else}
-				<svg class="upload-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-					<path d="M12 16V8M12 8L9 11M12 8L15 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-					<path d="M20 16.7428C21.2215 15.9808 22 14.5985 22 13C22 10.5147 19.9956 8.5 17.5 8.5C17.3557 8.5 17.2143 8.506 17.075 8.518C16.5554 6.22048 14.4981 4.5 12 4.5C9.01766 4.5 6.6 6.9 6.6 9.9C6.6 9.9483 6.60107 9.99645 6.60319 10.0445C4.55587 10.3177 3 12.0896 3 14.2C3 16.5196 4.89543 18.4 7.2 18.4H9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+				<svg
+					class="upload-icon"
+					width="32"
+					height="32"
+					viewBox="0 0 24 24"
+					fill="none"
+					aria-hidden="true"
+				>
+					<path
+						d="M12 16V8M12 8L9 11M12 8L15 11"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+					<path
+						d="M20 16.7428C21.2215 15.9808 22 14.5985 22 13C22 10.5147 19.9956 8.5 17.5 8.5C17.3557 8.5 17.2143 8.506 17.075 8.518C16.5554 6.22048 14.4981 4.5 12 4.5C9.01766 4.5 6.6 6.9 6.6 9.9C6.6 9.9483 6.60107 9.99645 6.60319 10.0445C4.55587 10.3177 3 12.0896 3 14.2C3 16.5196 4.89543 18.4 7.2 18.4H9"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
 				</svg>
 				<span class="drop-title">{t('upload.dropTitle')}</span>
 				<span class="drop-subtitle">{t('upload.dropSubtitle')}</span>

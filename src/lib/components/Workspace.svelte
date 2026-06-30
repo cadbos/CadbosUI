@@ -13,12 +13,11 @@
 
 	type ViewId = 'chat' | 'keyValue' | 'graph';
 
-	const views: { id: ViewId; label: TranslationKey; component: Component; disabled?: boolean }[] =
-		[
-			{ id: 'chat', label: 'view.chat', component: ChatView },
-			{ id: 'keyValue', label: 'view.keyValue', component: KeyValueView, disabled: true },
-			{ id: 'graph', label: 'view.graph', component: GraphView, disabled: true }
-		];
+	const views: { id: ViewId; label: TranslationKey; component: Component; disabled?: boolean }[] = [
+		{ id: 'chat', label: 'view.chat', component: ChatView },
+		{ id: 'keyValue', label: 'view.keyValue', component: KeyValueView, disabled: true },
+		{ id: 'graph', label: 'view.graph', component: GraphView, disabled: true }
+	];
 
 	let activeIndex = $state(0);
 	let tabs = $state<HTMLElement[]>([]);
@@ -239,7 +238,9 @@
 		max-width: 640px;
 		background: var(--color-surface);
 		border-radius: 20px;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.06), 0 8px 32px rgb(0 0 0 / 0.08);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.06),
+			0 8px 32px rgb(0 0 0 / 0.08);
 		padding: 2rem;
 		display: flex;
 		flex-direction: column;
@@ -334,7 +335,9 @@
 		border: none;
 		border-radius: 10px;
 		cursor: pointer;
-		transition: background 0.15s, color 0.15s;
+		transition:
+			background 0.15s,
+			color 0.15s;
 		text-align: center;
 	}
 
@@ -422,13 +425,20 @@
 		border: none;
 		border-radius: 12px;
 		cursor: pointer;
-		transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
-		box-shadow: 0 1px 2px rgb(0 0 0 / 0.1), 0 4px 12px rgb(47 111 79 / 0.3);
+		transition:
+			background 0.15s,
+			transform 0.1s,
+			box-shadow 0.15s;
+		box-shadow:
+			0 1px 2px rgb(0 0 0 / 0.1),
+			0 4px 12px rgb(47 111 79 / 0.3);
 	}
 
 	.generate-btn:hover:not(:disabled) {
 		background: var(--color-accent-hover);
-		box-shadow: 0 2px 4px rgb(0 0 0 / 0.1), 0 6px 16px rgb(47 111 79 / 0.35);
+		box-shadow:
+			0 2px 4px rgb(0 0 0 / 0.1),
+			0 6px 16px rgb(47 111 79 / 0.35);
 		transform: translateY(-1px);
 	}
 

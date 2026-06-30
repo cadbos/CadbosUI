@@ -69,7 +69,12 @@
 		<h3>{t('edit.title')}</h3>
 		<button type="button" class="close-btn" onclick={onClose} aria-label="Close">
 			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-				<path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+				<path
+					d="M18 6L6 18M6 6l12 12"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+				/>
 			</svg>
 		</button>
 	</div>
@@ -89,8 +94,7 @@
 			bind:value={instruction}
 			rows="3"
 			disabled={applying}
-			placeholder={t('edit.templateReplaceFill')}
-		></textarea>
+			placeholder={t('edit.templateReplaceFill')}></textarea>
 	</label>
 
 	<div class="actions">
@@ -155,7 +159,9 @@
 		color: var(--color-muted);
 		border-radius: 8px;
 		cursor: pointer;
-		transition: background 0.15s, color 0.15s;
+		transition:
+			background 0.15s,
+			color 0.15s;
 	}
 
 	.close-btn:hover {
@@ -178,7 +184,9 @@
 		border: 1.5px solid color-mix(in srgb, var(--color-accent) 25%, transparent);
 		border-radius: 100px;
 		cursor: pointer;
-		transition: background 0.15s, border-color 0.15s;
+		transition:
+			background 0.15s,
+			border-color 0.15s;
 		white-space: nowrap;
 	}
 
@@ -267,7 +275,9 @@
 		border: 1.5px solid var(--color-border);
 		border-radius: 10px;
 		cursor: pointer;
-		transition: border-color 0.15s, background 0.15s;
+		transition:
+			border-color 0.15s,
+			background 0.15s;
 	}
 
 	.btn-undo:hover:not(:disabled) {
