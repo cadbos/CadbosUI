@@ -4,7 +4,12 @@
 	import ChatView from '$lib/components/ChatView.svelte';
 	import KeyValueView from '$lib/components/KeyValueView.svelte';
 	import GraphView from '$lib/components/GraphView.svelte';
+	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import RenderResult from '$lib/components/RenderResult.svelte';
+	import EditPanel from '$lib/components/EditPanel.svelte';
 	import { request } from '$lib/state/request.svelte';
+	import { auth } from '$lib/state/auth.svelte';
+	import type { RenderResult as RenderResultType } from '$lib/state/request.svelte';
 
 	type ViewId = 'chat' | 'keyValue' | 'graph';
 
@@ -15,9 +20,10 @@
 	];
 
 	let activeIndex = $state(0);
-	let imageUrl = $state('');
 	let tabs = $state<HTMLElement[]>([]);
-	let renderRequestJson = $derived(JSON.stringify(request.toRenderRequest()));
+	let submitting = $state(false);
+	let submitError = $state<string | null>(null);
+	let showEditPanel = $state(false);
 
 	function activate(index: number): void {
 		activeIndex = index;
@@ -38,15 +44,37 @@
 		}
 	}
 
-	function applyImage(): void {
-		const trimmedUrl = imageUrl.trim();
-		request.setImage(
-			trimmedUrl
-				? {
-						url: trimmedUrl
-					}
-				: undefined
-		);
+	async function generate(): Promise<void> {
+		const validation = request.validate();
+		if (!validation.valid || submitting) return;
+		submitting = true;
+		submitError = null;
+		request.setStatus('rendering');
+		try {
+			const body = request.toRenderRequest();
+			const response = await fetch('/api/render', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			if (!response.ok) throw new Error('render failed');
+			const result = await response.json();
+			const render: RenderResultType = {
+				id: crypto.randomUUID(),
+				outputUrls: [result.outputUrl],
+				cost: result.cost,
+				balance: result.balance,
+				ts: Date.now()
+			};
+			request.setCurrentRender(render);
+			request.setStatus('idle');
+			showEditPanel = false;
+		} catch {
+			request.setStatus('error');
+			submitError = t('render.generate');
+		} finally {
+			submitting = false;
+		}
 	}
 </script>
 
@@ -56,13 +84,7 @@
 		<p>{t('app.subtitle')}</p>
 	</header>
 
-	<form class="image-input" onsubmit={(event) => event.preventDefault()}>
-		<label>
-			<span>{t('request.imageUrl')}</span>
-			<input bind:value={imageUrl} />
-		</label>
-		<button type="button" onclick={applyImage}>{t('request.applyImage')}</button>
-	</form>
+	<ImageUpload />
 
 	<div class="switcher" role="tablist" aria-label={t('view.switcher.label')}>
 		{#each views as view, index (view.id)}
@@ -104,16 +126,48 @@
 		</div>
 	{/each}
 
-	<section class="request-summary">
-		<div class="summary-field">
-			<span>{t('request.finalPrompt')}</span>
-			<output aria-label={t('request.finalPrompt')}>{request.prompt}</output>
+	<section class="generate-section">
+		<div class="format-row">
+			<label>
+				<span>{t('render.outputFormat')}</span>
+				<select bind:value={request.outputFormat}>
+					<option value="webp">WebP</option>
+					<option value="jpg">JPG</option>
+					<option value="png">PNG</option>
+					<option value="avif">AVIF</option>
+				</select>
+			</label>
 		</div>
-		<div class="summary-field">
-			<span>{t('request.renderRequest')}</span>
-			<pre aria-label={t('request.renderRequest')}>{renderRequestJson}</pre>
-		</div>
+		<button
+			type="button"
+			class="generate-btn"
+			disabled={submitting || request.status === 'rendering' || auth.status !== 'authenticated'}
+			onclick={() => void generate()}
+		>
+			{request.status === 'rendering' ? t('render.generating') : t('render.generate')}
+		</button>
+		{#if submitError}
+			<p class="submit-error" role="alert">{submitError}</p>
+		{/if}
 	</section>
+
+	{#if request.currentRender}
+		<svelte:boundary>
+			<RenderResult onEditRequest={() => (showEditPanel = !showEditPanel)} />
+			{#snippet failed()}
+				<p class="boundary-failed">{t('boundary.failed')}</p>
+			{/snippet}
+		</svelte:boundary>
+	{/if}
+
+	{#if showEditPanel && request.currentRender}
+		<svelte:boundary>
+			<EditPanel onClose={() => (showEditPanel = false)} />
+			{#snippet failed()}
+				<p class="boundary-failed">{t('boundary.failed')}</p>
+			{/snippet}
+		</svelte:boundary>
+	{/if}
 </section>
 
 <style>
@@ -147,30 +201,9 @@
 		justify-content: center;
 	}
 
-	.image-input,
-	.request-summary {
-		display: grid;
-		gap: var(--space-2);
-	}
-
-	.image-input {
-		grid-template-columns: minmax(0, 1fr) auto;
-		align-items: end;
-	}
-
 	label {
 		display: grid;
 		gap: var(--space-1);
-	}
-
-	.summary-field {
-		display: grid;
-		gap: var(--space-1);
-	}
-
-	input,
-	button {
-		font: inherit;
 	}
 
 	.switcher button {
@@ -210,21 +243,47 @@
 		color: var(--color-muted);
 	}
 
-	output,
-	pre {
-		min-height: 2.5rem;
-		margin: 0;
-		padding: var(--space-2);
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius);
+	.generate-section {
+		display: grid;
+		gap: var(--space-2);
 	}
 
-	@media (max-width: 40rem) {
-		.image-input {
-			grid-template-columns: 1fr;
-		}
+	.format-row {
+		display: flex;
+		align-items: end;
+		gap: var(--space-2);
+	}
+
+	select {
+		font: inherit;
+		padding: var(--space-1) var(--space-2);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		background: var(--color-surface);
+		color: var(--color-text);
+	}
+
+	.generate-btn {
+		padding: var(--space-2) var(--space-4);
+		font: inherit;
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--color-accent-contrast);
+		background: var(--color-accent);
+		border: 1px solid var(--color-accent);
+		border-radius: var(--radius);
+		cursor: pointer;
+		width: 100%;
+	}
+
+	.generate-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.submit-error {
+		margin: 0;
+		color: var(--color-danger);
+		font-size: 0.85rem;
 	}
 </style>
