@@ -171,6 +171,14 @@ before the Change Date. See LICENSE for complete terms.
 		gap: var(--space-2);
 	}
 
+	.fragment input {
+		padding: var(--space-1);
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius);
+		background: var(--color-surface);
+		color: var(--color-text);
+	}
+
 	.fragment-actions {
 		display: flex;
 		gap: var(--space-1);
