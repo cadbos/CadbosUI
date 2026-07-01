@@ -1,9 +1,9 @@
 import { defineConfig } from '@hey-api/openapi-ts';
 
 export const heyApiOpenApiConfig = {
-	input: 'src/lib/server/myarchitect/openapi-spec.json',
+	input: 'src/lib/server/archai/openapi-spec.json',
 	output: {
-		path: 'src/lib/server/myarchitect',
+		path: 'src/lib/server/archai',
 		clean: false
 	}
 } as const;
