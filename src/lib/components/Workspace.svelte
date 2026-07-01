@@ -30,7 +30,7 @@ before the Change Date. See LICENSE for complete terms.
 	const views: { id: ViewId; label: TranslationKey; component: Component; disabled?: boolean }[] = [
 		{ id: 'chat', label: 'view.chat', component: ChatView },
 		{ id: 'keyValue', label: 'view.keyValue', component: KeyValueView },
-		{ id: 'graph', label: 'view.graph', component: GraphView, disabled: true }
+		{ id: 'graph', label: 'view.graph', component: GraphView }
 	];
 
 	let activeIndex = $state(0);

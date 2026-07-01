@@ -58,6 +58,7 @@
 		]
 	},
 	"dependencies": {
+		"@xyflow/svelte": "^1.6.1",
 		"bits-ui": "^2.18.1",
 		"clsx": "^2.1.1",
 		"lucide-svelte": "^1.0.1",
