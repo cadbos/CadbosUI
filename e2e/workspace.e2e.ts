@@ -5,13 +5,41 @@ test('renders the workspace and switches views', async ({ page }) => {
 	await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
 	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
+});
 
-	// Graph tab interaction is restored in feat/module-9-graph-flow; for now it stays disabled.
+test('switches to the graph view and adds a fragment node reflected in key-value', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 1024, height: 768 });
+	await page.goto('/');
+
 	const graphTab = page.getByRole('tab', { name: 'Граф' });
-	await expect(graphTab).toHaveAttribute('aria-disabled', 'true');
-	await graphTab.click({ force: true });
-	await expect(graphTab).toHaveAttribute('aria-selected', 'false');
-	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
+	await graphTab.click();
+	await expect(graphTab).toHaveAttribute('aria-selected', 'true');
+
+	await page.getByRole('button', { name: 'Добавить узел фрагмента' }).click();
+	const fragmentNode = page.getByRole('textbox', { name: 'Узел фрагмента 1' });
+	await expect(fragmentNode).toBeVisible();
+	await fragmentNode.fill('cozy reading nook');
+
+	await expect(page.getByLabel('Итоговый промпт').filter({ visible: true })).toHaveValue(
+		'cozy reading nook'
+	);
+
+	await page.getByRole('tab', { name: 'Ключ-значение' }).click();
+	await expect(page.getByLabel('Текст 1')).toHaveValue('cozy reading nook');
+});
+
+test('degrades the graph view to a message on narrow screens', async ({ page }) => {
+	await page.setViewportSize({ width: 375, height: 800 });
+	await page.goto('/');
+
+	await page.getByRole('tab', { name: 'Граф' }).click();
+	await expect(
+		page.getByText(
+			'Графовый режим недоступен на маленьких экранах. Используйте вкладку «Чат» или «Ключ-значение».'
+		)
+	).toBeVisible();
 });
 
 test('keeps the prompt byte-identical when switching from chat to key-value', async ({ page }) => {
@@ -26,7 +54,7 @@ test('keeps the prompt byte-identical when switching from chat to key-value', as
 		'true'
 	);
 
-	await expect(page.getByLabel('Итоговый промпт')).toHaveValue(prompt);
+	await expect(page.getByLabel('Итоговый промпт').filter({ visible: true })).toHaveValue(prompt);
 });
 
 test('navigates tabs with the keyboard', async ({ page }) => {
