@@ -32,7 +32,18 @@ export const en: Dictionary = {
 	'view.graph.addFragment': 'Add fragment node',
 	'view.graph.remove': 'Remove',
 	'view.graph.removeFragment': 'Remove fragment node {order}',
-	'view.graph.apply': 'Apply graph prompt',
+	'view.graph.fragmentRemoved': 'Fragment node {order} removed',
+	'view.graph.imageNode.alt': 'Room photo',
+	'view.graph.imageNode.placeholder': 'No photo uploaded yet',
+	'view.graph.validation.heading': 'Fix the prompt graph:',
+	'view.graph.validation.cycle': 'The graph contains a cycle — nodes form a closed loop.',
+	'view.graph.validation.branchingNode':
+		'A node has more than one incoming or outgoing connection — keep only one.',
+	'view.graph.validation.danglingNode':
+		'A fragment node is not connected in the chain from the photo to the result.',
+	'view.graph.validation.unknownNode': 'A connection refers to a node that no longer exists.',
+	'view.graph.mobileUnsupported':
+		"Graph view isn't available on small screens. Use the Chat or Key-value tab instead.",
 	'boundary.failed': 'This section failed to load.',
 	'auth.signIn': 'Sign in',
 	'auth.login.nip07': 'Nostr extension',
