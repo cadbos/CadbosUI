@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 
 // See https://svelte.dev/docs/kit/types#app.d.ts
@@ -17,8 +17,7 @@ declare global {
 			env: {
 				DB: D1Database;
 				ARCHAI_API_KEY: string;
-				UPLOADTHING_APP_ID: string;
-				UPLOADTHING_TOKEN: string;
+				UPLOADS_BUCKET: R2Bucket;
 			};
 		}
 	}

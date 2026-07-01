@@ -18,8 +18,14 @@
 			"database_id": "d1f2f49c-bb39-473c-ae35-2d78eebcbc53",
 			"migrations_dir": "migrations"
 		}
+	],
+	// Provisioned with `wrangler r2 bucket create cadbos-uploads`.
+	"r2_buckets": [
+		{
+			"binding": "UPLOADS_BUCKET",
+			"bucket_name": "cadbos-uploads"
+		}
 	]
-	// Server-only variable: UPLOADTHING_APP_ID
 	// Secrets set via `wrangler secret put <NAME>` — never committed to source:
-	// ARCHAI_API_KEY, UPLOADTHING_TOKEN
+	// ARCHAI_API_KEY
 }

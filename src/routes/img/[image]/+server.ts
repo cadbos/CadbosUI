@@ -1,36 +1,24 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import {
-	imageCacheControl,
-	imageMimeMatchesExtension,
-	normalizeImageContentType,
-	parseProxyImageName,
-	uploadthingFileUrl
-} from '$lib/server/uploadthing-images';
+import { imageCacheControl, parseProxyImageName } from '$lib/server/image-utils';
 
-export const GET: RequestHandler = async ({ params, platform, fetch }) => {
+// Public — no session required. The render service fetches this URL server-side.
+export const GET: RequestHandler = async ({ params, platform }) => {
 	const parsed = parseProxyImageName(params.image);
 	if (parsed === null) throw error(400, 'Invalid image path');
 
-	const appId = platform?.env?.UPLOADTHING_APP_ID;
-	if (!appId) throw error(500, 'UPLOADTHING_APP_ID not configured');
+	const bucket = platform?.env?.UPLOADS_BUCKET;
+	if (!bucket) throw error(503, 'Storage not configured');
 
-	const upstreamUrl = uploadthingFileUrl(appId, parsed.fileKey);
-	if (upstreamUrl === null) throw error(500, 'Invalid Uploadthing configuration');
+	const key = `${parsed.fileKey}.${parsed.extension}`;
+	const object = await bucket.get(key);
+	if (!object) throw error(404, 'Image not found');
 
-	const upstream = await fetch(upstreamUrl);
-	if (!upstream.ok) throw error(502, 'Failed to fetch image from storage');
-
-	const contentType = normalizeImageContentType(upstream.headers.get('content-type'));
-	if (contentType === null) throw error(502, 'Storage returned an unsupported image type');
-	if (!imageMimeMatchesExtension(contentType, parsed.extension)) {
-		throw error(400, 'Image extension does not match image type');
-	}
-
-	return new Response(upstream.body, {
+	return new Response(await object.arrayBuffer(), {
 		headers: {
-			'content-type': contentType,
-			'cache-control': imageCacheControl()
+			'content-type': object.httpMetadata?.contentType ?? 'application/octet-stream',
+			'cache-control': imageCacheControl(),
+			etag: object.httpEtag
 		}
 	});
 };

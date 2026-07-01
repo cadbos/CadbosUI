@@ -3,64 +3,58 @@ import { GET } from './+server';
 
 type ImageRouteEvent = Parameters<typeof GET>[0];
 
-function platform(appId = 'app-id'): App.Platform {
-	return { env: { UPLOADTHING_APP_ID: appId } } as App.Platform;
+function mockBucket(object: unknown) {
+	return { get: vi.fn(async () => object) };
+}
+
+function r2Object(contentType: string, body: string) {
+	const bytes = new TextEncoder().encode(body);
+	return {
+		arrayBuffer: async () => bytes.buffer as ArrayBuffer,
+		httpMetadata: { contentType },
+		httpEtag: '"abc123"'
+	};
+}
+
+function platform(bucket: ReturnType<typeof mockBucket>): App.Platform {
+	return { env: { UPLOADS_BUCKET: bucket } } as unknown as App.Platform;
 }
 
 function call(event: Partial<ImageRouteEvent>): ReturnType<typeof GET> {
 	return GET(event as ImageRouteEvent);
 }
 
-describe('/img image proxy', () => {
-	it('streams an Uploadthing image with cache and content type headers', async () => {
-		const fetch = vi.fn(async () => {
-			return new Response('image-bytes', {
-				headers: { 'content-type': 'image/jpeg; charset=binary' }
-			});
-		});
+describe('/img R2 image proxy', () => {
+	it('streams an R2 image with cache and content-type headers', async () => {
+		const bucket = mockBucket(r2Object('image/jpeg', 'image-bytes'));
 
 		const response = await call({
-			params: { image: 'file-key.jpg' },
-			platform: platform(),
-			fetch
+			params: { image: 'uuid-1234.jpg' },
+			platform: platform(bucket)
 		});
 
-		expect(fetch).toHaveBeenCalledWith('https://app-id.ufs.sh/f/file-key');
+		expect(bucket.get).toHaveBeenCalledWith('uuid-1234.jpg');
 		expect(response.status).toBe(200);
 		expect(response.headers.get('content-type')).toBe('image/jpeg');
 		expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
 		expect(await response.text()).toBe('image-bytes');
 	});
 
-	it('rejects paths whose extension does not match the stored image', async () => {
-		const fetch = vi.fn(async () => {
-			return new Response('image-bytes', {
-				headers: { 'content-type': 'image/png' }
-			});
-		});
+	it('returns 404 when the key is not in R2', async () => {
+		const bucket = mockBucket(null);
 
 		await expect(
-			call({
-				params: { image: 'file-key.jpg' },
-				platform: platform(),
-				fetch
-			})
-		).rejects.toMatchObject({ status: 400 });
-
-		expect(fetch).toHaveBeenCalledWith('https://app-id.ufs.sh/f/file-key');
+			call({ params: { image: 'missing.jpg' }, platform: platform(bucket) })
+		).rejects.toMatchObject({ status: 404 });
 	});
 
-	it('rejects invalid image paths before fetching storage', async () => {
-		const fetch = vi.fn();
+	it('rejects invalid image paths before accessing storage', async () => {
+		const bucket = mockBucket(null);
 
 		await expect(
-			call({
-				params: { image: 'file-key.txt' },
-				platform: platform(),
-				fetch
-			})
+			call({ params: { image: 'file.txt' }, platform: platform(bucket) })
 		).rejects.toMatchObject({ status: 400 });
 
-		expect(fetch).not.toHaveBeenCalled();
+		expect(bucket.get).not.toHaveBeenCalled();
 	});
 });

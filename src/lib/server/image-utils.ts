@@ -1,8 +1,3 @@
-const CACHE_CONTROL = 'public, max-age=31536000, immutable';
-const FILE_KEY_PATTERN = /^[A-Za-z0-9_.~-]+$/;
-const APP_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
-const STORAGE_HOST_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]*\.ufs\.sh$/;
-
 const IMAGE_MIME_BY_EXTENSION = {
 	avif: 'image/avif',
 	gif: 'image/gif',
@@ -17,8 +12,10 @@ type ImageMime = (typeof IMAGE_MIME_BY_EXTENSION)[ImageExtension];
 
 const IMAGE_EXTENSIONS = new Set<string>(Object.keys(IMAGE_MIME_BY_EXTENSION));
 
+const FILE_KEY_PATTERN = /^[A-Za-z0-9_.~-]+$/;
+
 export function imageCacheControl(): string {
-	return CACHE_CONTROL;
+	return 'public, max-age=31536000, immutable';
 }
 
 export function imageExtensionFromMime(mime: string): ImageExtension | null {
@@ -61,42 +58,4 @@ export function parseProxyImageName(
 	if (!FILE_KEY_PATTERN.test(fileKey) || !IMAGE_EXTENSIONS.has(extension)) return null;
 
 	return { fileKey, extension: extension as ImageExtension };
-}
-
-export function parseUploadthingStorageUrl(storageUrl: string): { fileKey: string } | null {
-	let url: URL;
-	try {
-		url = new URL(storageUrl);
-	} catch {
-		return null;
-	}
-
-	if (url.protocol !== 'https:' || !STORAGE_HOST_PATTERN.test(url.hostname)) return null;
-
-	const match = /^\/f\/([^/]+)$/.exec(url.pathname);
-	if (match === null) return null;
-
-	let fileKey: string;
-	try {
-		fileKey = decodeURIComponent(match[1]);
-	} catch {
-		return null;
-	}
-	if (!FILE_KEY_PATTERN.test(fileKey)) return null;
-
-	return { fileKey };
-}
-
-export function proxiedUploadthingImageUrl(
-	requestUrl: string,
-	fileKey: string,
-	extension: ImageExtension
-): string {
-	return new URL(`/img/${encodeURIComponent(fileKey)}.${extension}`, requestUrl).toString();
-}
-
-export function uploadthingFileUrl(appId: string, fileKey: string): string | null {
-	if (!APP_ID_PATTERN.test(appId) || !FILE_KEY_PATTERN.test(fileKey)) return null;
-
-	return new URL(`/f/${encodeURIComponent(fileKey)}`, `https://${appId}.ufs.sh`).toString();
 }
