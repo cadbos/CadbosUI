@@ -99,6 +99,7 @@ export const ru = {
 	'render.edit': 'Редактировать',
 	'render.validationImage': 'Загрузите фото комнаты',
 	'render.validationPrompt': 'Введите промпт',
+	'render.quotaExceeded': 'Лимит генераций исчерпан',
 	'edit.title': 'Редактирование рендера',
 	'edit.close': 'Закрыть',
 	'edit.templateReplace': 'Заменить объект',

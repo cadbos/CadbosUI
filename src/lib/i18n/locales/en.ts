@@ -99,6 +99,7 @@ export const en = {
 	'render.edit': 'Edit render',
 	'render.validationImage': 'Upload a room photo',
 	'render.validationPrompt': 'Enter a prompt',
+	'render.quotaExceeded': 'Generation limit reached',
 	'edit.title': 'Edit render',
 	'edit.close': 'Close',
 	'edit.templateReplace': 'Replace object',
