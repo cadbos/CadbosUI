@@ -90,6 +90,7 @@ export const en: Dictionary = {
 	'render.edit': 'Edit render',
 	'render.validationImage': 'Upload a room photo',
 	'render.validationPrompt': 'Enter a prompt',
+	'render.quotaExceeded': 'Generation limit reached',
 	'edit.title': 'Edit render',
 	'edit.templateReplace': 'Replace object',
 	'edit.templateColor': 'Change colour',
