@@ -13,11 +13,10 @@
  */
 
 import { beforeEach, describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { finalizeEvent, generateSecretKey, getPublicKey, type Event } from 'nostr-tools/pure';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Cookies, RequestEvent } from '@sveltejs/kit';
+import { makeD1 } from '../testing/d1-shim';
 import { CHALLENGE_TTL_MS, NIP98_KIND, SESSION_COOKIE } from './config';
 import { consumeChallenge, createChallenge, findValidSession } from './repository';
 import { POST as challengePOST } from '../../../routes/auth/challenge/+server';
@@ -26,28 +25,7 @@ import { GET as meGET } from '../../../routes/auth/me/+server';
 import { POST as logoutPOST } from '../../../routes/auth/logout/+server';
 import { PATCH as profilePATCH } from '../../../routes/auth/profile/+server';
 
-const SCHEMA = readFileSync(
-	new URL('../../../../migrations/0001_auth.sql', import.meta.url),
-	'utf8'
-);
 const VERIFY_URL = 'https://cadbos.example/auth/verify';
-
-// Minimal D1Database shim over node:sqlite — exercises the real SQL (atomic upserts,
-// RETURNING, UNIQUE constraints) without a Workers runtime.
-function makeD1(): D1Database {
-	const db = new DatabaseSync(':memory:');
-	db.exec(SCHEMA);
-	const stmt = (sql: string, args: SQLInputValue[] = []) => ({
-		bind: (...next: SQLInputValue[]) => stmt(sql, next),
-		run: () => ({ success: true, meta: { changes: Number(db.prepare(sql).run(...args).changes) } }),
-		first: (col?: string) => {
-			const row = db.prepare(sql).get(...args) as Record<string, unknown> | undefined;
-			if (row === undefined) return null;
-			return col ? row[col] : row;
-		}
-	});
-	return { prepare: (sql: string) => stmt(sql) } as unknown as D1Database;
-}
 
 type SetOptions = Parameters<Cookies['set']>[2];
 type DeleteOptions = Parameters<Cookies['delete']>[1];
@@ -209,11 +187,21 @@ describe('auth flow', () => {
 	it('me returns 401 without a session and the user + quota with one', async () => {
 		expect((await call(meGET, { locals: { user: null } })).status).toBe(401);
 
-		const response = await call(meGET, { locals: { user: { pubkey: 'a'.repeat(64) } } });
+		// A real (non-demo) user is billing.ts-backed by D1 (Module 6): quota is
+		// provisioned on first touch, not left undefined as it was pre-billing.
+		const sk = generateSecretKey();
+		const pubkey = getPublicKey(sk);
+		const challenge = await requestChallenge(db, pubkey);
+		await verify(db, makeCookies(), signLogin(sk, challenge));
+
+		const response = await call(meGET, {
+			locals: { user: { pubkey } },
+			platform: platform(db)
+		});
 		expect(response.status).toBe(200);
 		const body = await response.json();
-		expect(body.user).toEqual({ pubkey: 'a'.repeat(64) });
-		expect(body.quota).toBeUndefined();
+		expect(body.user).toEqual({ pubkey });
+		expect(body.quota).toEqual({ balanceOrLimit: 50, usage: 0, period: 'lifetime' });
 	});
 
 	it('updates Cadbos profile fields only for an authenticated user', async () => {
