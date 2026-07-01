@@ -33,5 +33,7 @@ Scan this before declaring a change done. Each item links to the skill with deta
 
 ## Cross-cutting
 - [ ] UI text via i18n, no hardcoded strings.
+- [ ] Touched Cadbos source files have the correct `docs/license-headers` header or
+      are explicitly excluded by that guide.
 - [ ] User-visible behavior covered per `cadbos-testing` (e2e where it matters).
 - [ ] No out-of-scope work snuck in (aggregator LLM models, prompt builder, history storage).

@@ -30,6 +30,10 @@ SvelteKit.
   client bundle or traffic; external APIs go through SvelteKit server endpoints.
 - **Single source of truth state.** One `.svelte.ts` store owns the data; views are
   projections. The final prompt is `$derived`, never imperatively synced.
+- **License headers.** New or modified Cadbos source files must carry the
+  appropriate header from [docs/license-headers](docs/license-headers). Do not add
+  headers to documentation, generated files, lockfiles, vendored files, binary
+  assets, or files with a different third-party license notice.
 - **Definition of done.** Every `.svelte` passes `svelte-autofixer` with zero
   findings; user-visible behavior covered per the `cadbos-testing` policy.
 
@@ -83,7 +87,8 @@ Detailed style reference:
 [.claude/skills/cadbos-conventions/references/code-style.md](.claude/skills/cadbos-conventions/references/code-style.md).
 Key points: TypeScript strict (no `any`, explicit return types on public APIs),
 `PascalCase.svelte` components, kebab-case for `.ts` modules, co-located `*.test.ts`,
-i18n for all UI text (no hardcoded strings), no comments unless requested.
+i18n for all UI text (no hardcoded strings), required license headers, no other
+comments unless requested.
 
 ---
 

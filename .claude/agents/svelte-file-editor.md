@@ -50,6 +50,11 @@ Read the file to understand the current implementation.
 
 Apply edits following Svelte 5 best practices:
 
+- Ensure every new or modified `.svelte`, `.svelte.ts`, or `.svelte.js` source file
+  has the correct file-level license header from `docs/license-headers`, unless
+  that guide excludes the file. Use the HTML-comment header for `.svelte` and the
+  block-comment header for `.svelte.ts` / `.svelte.js`.
+
 ### 4. Validate Changes
 
 After editing, ALWAYS call `svelte-autofixer` with the updated code to check for issues.

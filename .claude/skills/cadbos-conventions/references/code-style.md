@@ -34,8 +34,15 @@ demand from the `cadbos-conventions` skill.
 ## i18n & comments
 
 - All UI text via the i18n layer — no hardcoded strings. Russian primary, English-ready.
-- No comments unless explicitly requested; no placeholder comments. If a `TODO` is
-  truly needed, reference an issue.
+- Every new or modified Cadbos source file must include the appropriate file-level
+  license header from `docs/license-headers`. Place it before source code; in
+  shebang scripts, keep the shebang first and place the line-comment header
+  immediately after it.
+- Do not add license headers to documentation, binary assets, generated files,
+  lockfiles, vendored third-party files, or files that already carry a different
+  third-party license notice.
+- No comments other than required license headers unless explicitly requested; no
+  placeholder comments. If a `TODO` is truly needed, reference an issue.
 
 ## Imports
 

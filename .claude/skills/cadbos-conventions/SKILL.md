@@ -43,7 +43,10 @@ For *where* files live see `cadbos-structure`; for Svelte 5 syntax details use t
 
 ## Code style
 
-- No comments unless explicitly requested. No placeholder comments.
+- Add the required file-level license header from `docs/license-headers` to every
+  new or modified Cadbos source file, unless that guide excludes the file.
+- No comments other than required license headers unless explicitly requested. No
+  placeholder comments.
 - Keep files focused; split by responsibility as they grow.
 - Full style reference (TypeScript, naming, imports, files):
   [references/code-style.md](references/code-style.md).
@@ -53,4 +56,6 @@ For *where* files live see `cadbos-structure`; for Svelte 5 syntax details use t
 - Component passes `svelte-autofixer` with **zero** issues/suggestions — iterate
   until clean. Use the `svelte-file-editor` subagent for `.svelte` work.
 - No provider secret reachable from the client.
+- Touched source files have the correct license header or are excluded by
+  `docs/license-headers`.
 - New user-visible behavior covered per the `cadbos-testing` policy.
