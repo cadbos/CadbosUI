@@ -1,8 +1,29 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { request } from '$lib/state/request.svelte';
 
 	const fragments = $derived([...request.promptFragments].sort((a, b) => a.order - b.order));
+
+	let liveMessage = $state('');
+	let addFragmentButton: HTMLButtonElement | undefined;
+	let removeButtons: (HTMLButtonElement | undefined)[] = [];
+
+	function captureAddFragmentButton(node: HTMLButtonElement): () => void {
+		addFragmentButton = node;
+		return () => {
+			if (addFragmentButton === node) addFragmentButton = undefined;
+		};
+	}
+
+	function captureRemoveButton(index: number) {
+		return (node: HTMLButtonElement): (() => void) => {
+			removeButtons[index] = node;
+			return () => {
+				if (removeButtons[index] === node) removeButtons[index] = undefined;
+			};
+		};
+	}
 
 	function inputValue(event: Event): string {
 		return event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : '';
@@ -21,6 +42,31 @@
 		request.updateFragment(id, { text: inputValue(event) });
 	}
 
+	function reorderFragment(index: number, offset: -1 | 1): void {
+		const target = index + offset;
+		if (target < 0 || target >= fragments.length) return;
+		const orderedIds = fragments.map((fragment) => fragment.id);
+		[orderedIds[index], orderedIds[target]] = [orderedIds[target], orderedIds[index]];
+		request.reorder(orderedIds);
+		liveMessage = ti(offset === -1 ? 'view.keyValue.movedUp' : 'view.keyValue.movedDown', {
+			order: target + 1
+		});
+	}
+
+	function removeFragment(index: number, id: string): void {
+		request.removeFragment(id);
+		liveMessage = ti('view.keyValue.removed', { order: index + 1 });
+		tick().then(() => {
+			const remaining = fragments.length;
+			if (remaining === 0) {
+				addFragmentButton?.focus();
+				return;
+			}
+			const nextIndex = Math.min(index, remaining - 1);
+			removeButtons[nextIndex]?.focus();
+		});
+	}
+
 	function applyPrompt(event: SubmitEvent): void {
 		event.preventDefault();
 		request.clearPromptOverride();
@@ -28,9 +74,9 @@
 </script>
 
 <form class="entry" onsubmit={applyPrompt}>
-	<div class="fragments">
+	<ul class="fragments">
 		{#each fragments as fragment, index (fragment.id)}
-			<div class="fragment">
+			<li class="fragment">
 				<label>
 					<span>{ti('view.keyValue.label', { order: index + 1 })}</span>
 					<input
@@ -42,20 +88,46 @@
 					<span>{ti('view.keyValue.text', { order: index + 1 })}</span>
 					<input value={fragment.text} oninput={(event) => updateText(fragment.id, event)} />
 				</label>
-				<button
-					type="button"
-					aria-label={ti('view.keyValue.removeFragment', { order: index + 1 })}
-					onclick={() => request.removeFragment(fragment.id)}
-				>
-					{t('view.keyValue.remove')}
-				</button>
-			</div>
+				<div class="fragment-actions">
+					<button
+						type="button"
+						aria-label={ti('view.keyValue.moveUp', { order: index + 1 })}
+						aria-disabled={index === 0 ? 'true' : undefined}
+						onclick={() => reorderFragment(index, -1)}
+					>
+						<span aria-hidden="true">↑</span>
+					</button>
+					<button
+						type="button"
+						aria-label={ti('view.keyValue.moveDown', { order: index + 1 })}
+						aria-disabled={index === fragments.length - 1 ? 'true' : undefined}
+						onclick={() => reorderFragment(index, 1)}
+					>
+						<span aria-hidden="true">↓</span>
+					</button>
+					<button
+						type="button"
+						aria-label={ti('view.keyValue.removeFragment', { order: index + 1 })}
+						{@attach captureRemoveButton(index)}
+						onclick={() => removeFragment(index, fragment.id)}
+					>
+						{t('view.keyValue.remove')}
+					</button>
+				</div>
+			</li>
 		{/each}
-	</div>
+	</ul>
+	<label class="prompt-preview">
+		<span>{t('view.keyValue.promptPreview')}</span>
+		<textarea readonly value={request.prompt}></textarea>
+	</label>
 	<div class="actions">
-		<button type="button" onclick={addFragment}>{t('view.keyValue.addFragment')}</button>
+		<button type="button" {@attach captureAddFragmentButton} onclick={addFragment}>
+			{t('view.keyValue.addFragment')}
+		</button>
 		<button type="submit">{t('view.keyValue.apply')}</button>
 	</div>
+	<div class="visually-hidden" role="status" aria-live="polite">{liveMessage}</div>
 </form>
 
 <style>
@@ -73,6 +145,9 @@
 	.fragments {
 		display: grid;
 		gap: var(--space-2);
+		list-style: none;
+		margin: 0;
+		padding: 0;
 	}
 
 	.fragment {
@@ -82,6 +157,38 @@
 		gap: var(--space-2);
 	}
 
+	.fragment-actions {
+		display: flex;
+		gap: var(--space-1);
+	}
+
+	.fragment-actions button:disabled,
+	.fragment-actions button[aria-disabled='true'] {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+
+	@media (max-width: 640px) {
+		.fragment {
+			grid-template-columns: 1fr;
+		}
+
+		.fragment-actions button {
+			flex: 1;
+			min-height: 2.75rem;
+		}
+	}
+
+	.prompt-preview textarea {
+		resize: vertical;
+		min-height: 4rem;
+		padding: var(--space-1);
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius);
+		background: var(--color-surface);
+		color: var(--color-text);
+	}
+
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
@@ -89,7 +196,20 @@
 	}
 
 	input,
-	button {
+	button,
+	textarea {
 		font: inherit;
+	}
+
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 </style>
