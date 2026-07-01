@@ -178,6 +178,28 @@ reviews:
     unit_tests:
       enabled: false
 
+  pre_merge_checks:
+    custom_checks:
+      - mode: error
+        name: License headers
+        instructions: >
+          Verify that every source file created or modified by the PR has the
+          required file-level license notice from docs/license-headers. Use
+          docs/license-headers/README.md as the policy source, and compare
+          against the appropriate template for each file type:
+          docs/license-headers/block-comment.txt for .ts, .js, .css, .scss,
+          .sql, .jsonc, .cjs, and .mjs; docs/license-headers/html-comment.txt
+          for .svelte, .html, .svg, and .xml; docs/license-headers/line-comment.txt
+          for .sh, .yml, .yaml, .toml, .env.example, and extensionless scripts.
+          For line-comment formats, require the same legal notice text using the
+          file type's valid line-comment marker. For executable scripts with a
+          shebang, require the line-comment header immediately after the shebang.
+          Exclude documentation, generated files, lockfiles, vendored third-party
+          files, binary assets, and files that already carry a different
+          third-party license notice. Fail this check if any required header is
+          missing, incomplete, uses a different SPDX identifier, appears after
+          source code, or uses an invalid comment style for the file type.
+
   tools:
     # JS/TS/Svelte linting & formatting — respect project config when present.
     eslint:
