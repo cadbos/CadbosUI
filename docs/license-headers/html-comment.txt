@@ -11,9 +11,3 @@ agreement with Cadbos company.
 Commercial use in Interior Design & AEC Generative AI Services is prohibited
 before the Change Date. See LICENSE for complete terms.
 -->
-
-<script lang="ts">
-	import Workspace from '$lib/components/Workspace.svelte';
-</script>
-
-<Workspace />

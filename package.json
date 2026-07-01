@@ -1,6 +1,7 @@
 {
 	"name": "cadbos",
 	"private": true,
+	"license": "SEE LICENSE IN LICENSE",
 	"version": "0.0.1",
 	"type": "module",
 	"packageManager": "pnpm@10.18.0",
