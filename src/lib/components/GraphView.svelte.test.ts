@@ -12,35 +12,33 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { page } from 'vitest/browser';
 import { beforeEach, expect, it } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import GraphView from './GraphView.svelte';
 import { request } from '$lib/state/request.svelte';
 
-beforeEach(() => {
+beforeEach(async () => {
 	request.reset();
+	// The default test viewport is narrower than the graph view's 640px mobile
+	// breakpoint, which hides the canvas by design (NFR-12). Widen it so these
+	// tests exercise the desktop graph, not the mobile fallback message.
+	await page.viewport(1024, 768);
 });
 
-it('hydrates fields from request fragments and preserves labels/ids on apply', async () => {
-	const styleId = request.addFragment({ label: 'Style', text: 'Scandinavian ', order: 0 });
-	const roomId = request.addFragment({ label: 'Room', text: 'living room', order: 1 });
+it('renders store fragments with the derived prompt preview', async () => {
+	request.addFragment({ text: 'Scandinavian', order: 0 });
+	request.addFragment({ text: 'kitchen', order: 1 });
 
 	const screen = render(GraphView);
 
-	expect(
-		(screen.getByRole('textbox', { name: 'Узел фрагмента 1' }).element() as HTMLInputElement).value
-	).toBe('Scandinavian ');
-	expect(
-		(screen.getByRole('textbox', { name: 'Узел фрагмента 2' }).element() as HTMLInputElement).value
-	).toBe('living room');
-
-	await screen.getByRole('textbox', { name: 'Узел фрагмента 2' }).fill('kitchen');
-	await screen.getByRole('button', { name: 'Применить графовый промпт' }).click();
-
-	// Labels and ids survive the round-trip — only edited text (and order) change.
-	expect(request.toJSON().promptFragments).toEqual([
-		expect.objectContaining({ id: styleId, label: 'Style', text: 'Scandinavian ', order: 0 }),
-		expect.objectContaining({ id: roomId, label: 'Room', text: 'kitchen', order: 1 })
-	]);
-	expect(request.prompt).toBe('Style: Scandinavian\nRoom: kitchen');
+	await expect
+		.element(screen.getByRole('textbox', { name: 'Узел фрагмента 1' }))
+		.toHaveValue('Scandinavian');
+	await expect
+		.element(screen.getByRole('textbox', { name: 'Узел фрагмента 2' }))
+		.toHaveValue('kitchen');
+	await expect
+		.element(screen.getByRole('textbox', { name: 'Итоговый промпт' }))
+		.toHaveValue('Scandinaviankitchen');
 });

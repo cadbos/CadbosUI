@@ -39,7 +39,15 @@ export interface Dictionary {
 	'view.graph.addFragment': string;
 	'view.graph.remove': string;
 	'view.graph.removeFragment': string;
-	'view.graph.apply': string;
+	'view.graph.fragmentRemoved': string;
+	'view.graph.imageNode.alt': string;
+	'view.graph.imageNode.placeholder': string;
+	'view.graph.validation.heading': string;
+	'view.graph.validation.cycle': string;
+	'view.graph.validation.branchingNode': string;
+	'view.graph.validation.danglingNode': string;
+	'view.graph.validation.unknownNode': string;
+	'view.graph.mobileUnsupported': string;
 	'boundary.failed': string;
 	'auth.signIn': string;
 	'auth.login.nip07': string;

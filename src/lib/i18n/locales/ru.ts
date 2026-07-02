@@ -41,7 +41,18 @@ export const ru = {
 	'view.graph.addFragment': 'Добавить узел фрагмента',
 	'view.graph.remove': 'Удалить',
 	'view.graph.removeFragment': 'Удалить узел фрагмента {order}',
-	'view.graph.apply': 'Применить графовый промпт',
+	'view.graph.fragmentRemoved': 'Узел фрагмента {order} удалён',
+	'view.graph.imageNode.alt': 'Фото комнаты',
+	'view.graph.imageNode.placeholder': 'Фото ещё не загружено',
+	'view.graph.validation.heading': 'Исправьте граф промпта:',
+	'view.graph.validation.cycle': 'Граф содержит цикл — узлы образуют замкнутую цепочку.',
+	'view.graph.validation.branchingNode':
+		'Узел имеет больше одного входящего или исходящего соединения — оставьте только одно.',
+	'view.graph.validation.danglingNode':
+		'Есть узел фрагмента, не связанный цепочкой от фото до результата.',
+	'view.graph.validation.unknownNode': 'Соединение ссылается на несуществующий узел.',
+	'view.graph.mobileUnsupported':
+		'Графовый режим недоступен на маленьких экранах. Используйте вкладку «Чат» или «Ключ-значение».',
 	'boundary.failed': 'Не удалось загрузить этот раздел.',
 	'auth.signIn': 'Войти',
 	'auth.login.nip07': 'Расширение Nostr',
