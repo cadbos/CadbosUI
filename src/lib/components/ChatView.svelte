@@ -12,9 +12,13 @@
 </script>
 
 <div class="chat-view">
-	<textarea bind:value={getPrompt, setPrompt} rows="4" placeholder={t('view.chat.placeholder')}
-	></textarea>
-	<p class="hint">{t('view.chat.hint')}</p>
+	<textarea
+		bind:value={getPrompt, setPrompt}
+		rows="4"
+		aria-label={t('view.chat.prompt')}
+		aria-describedby="chat-hint"
+		placeholder={t('view.chat.placeholder')}></textarea>
+	<p class="hint" id="chat-hint">{t('view.chat.hint')}</p>
 </div>
 
 <style>
