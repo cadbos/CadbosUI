@@ -12,9 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { Dictionary } from '$lib/i18n/index.svelte';
+import type { Dictionary } from '$lib/i18n/locales';
 
-export const en: Dictionary = {
+export const en = {
 	'app.title': 'Cadbos — Interior Design AI',
 	'app.subtitle': 'Upload a room photo and build a prompt in the interface you prefer.',
 	'view.switcher.label': 'Input method',
@@ -100,4 +100,4 @@ export const en: Dictionary = {
 	'edit.undo': 'Undo edit',
 	'edit.cost': 'Edit cost: {cost}',
 	'edit.balance': 'Balance: {balance}'
-};
+} as const satisfies Dictionary;

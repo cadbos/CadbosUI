@@ -12,6 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import type { Dictionary } from '$lib/i18n/locales';
+
 export const ru = {
 	'app.title': 'Cadbos — ИИ-дизайн интерьера',
 	'app.subtitle': 'Загрузите фото комнаты и соберите промпт в удобном вам интерфейсе.',
@@ -98,4 +100,4 @@ export const ru = {
 	'edit.undo': 'Отменить правку',
 	'edit.cost': 'Стоимость правки: {cost}',
 	'edit.balance': 'Баланс: {balance}'
-} as const;
+} as const satisfies Dictionary;
