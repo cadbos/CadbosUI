@@ -9,7 +9,7 @@
 	import EditPanel from '$lib/components/EditPanel.svelte';
 	import { request } from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
-	import type { RenderResult as RenderResultType } from '$lib/state/request.svelte';
+	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
 
 	type ViewId = 'chat' | 'keyValue' | 'graph';
 
@@ -168,7 +168,11 @@
 		<section class="generate-section">
 			<label class="format-label">
 				<span class="format-text">{t('render.outputFormat')}</span>
-				<select bind:value={request.outputFormat} class="format-select">
+				<select
+					value={request.outputFormat}
+					onchange={(event) => request.setOutputFormat(event.currentTarget.value as OutputFormat)}
+					class="format-select"
+				>
 					<option value="webp">WebP</option>
 					<option value="jpg">JPG</option>
 					<option value="png">PNG</option>
