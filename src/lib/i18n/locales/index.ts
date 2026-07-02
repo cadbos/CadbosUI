@@ -104,6 +104,7 @@ export interface Dictionary {
 	'edit.instruction': string;
 	'edit.apply': string;
 	'edit.applying': string;
+	'edit.failed': string;
 	'edit.undo': string;
 	'edit.cost': string;
 	'edit.balance': string;

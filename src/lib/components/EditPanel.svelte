@@ -13,9 +13,8 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { t } from '$lib/i18n/index.svelte';
-	import { request } from '$lib/state/request.svelte';
-	import type { RenderResult } from '$lib/state/request.svelte';
+	import { t, ti } from '$lib/i18n/index.svelte';
+	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
 
 	interface Props {
 		onClose: () => void;
@@ -25,10 +24,9 @@ before the Change Date. See LICENSE for complete terms.
 	let instruction = $state('');
 	let applying = $state(false);
 	let error = $state<string | null>(null);
-	let previousRender = $state<RenderResult | undefined>(undefined);
 
 	const currentRender = $derived(request.currentRender);
-	const canUndo = $derived(previousRender !== undefined);
+	const canUndo = $derived(request.canUndoEdit);
 
 	function applyTemplate(fill: string): void {
 		instruction = fill;
@@ -40,7 +38,6 @@ before the Change Date. See LICENSE for complete terms.
 		error = null;
 
 		const imageUrl = currentRender.outputUrls[0];
-		previousRender = currentRender;
 
 		try {
 			const response = await fetch('/api/edit', {
@@ -50,31 +47,22 @@ before the Change Date. See LICENSE for complete terms.
 			});
 			if (!response.ok) throw new Error('edit failed');
 			const result = await response.json();
-			const newRender: RenderResult = {
-				id: crypto.randomUUID(),
-				outputUrls: [result.outputUrl],
-				cost: result.cost,
-				balance: result.balance,
+			const newRender = renderResultFromResponse(result, {
 				parentId: currentRender.id,
-				editOp: { type: 'freeform', instruction: instruction.trim() },
-				ts: Date.now()
-			};
-			request.setCurrentRender(newRender);
+				editOp: { type: 'freeform', instruction: instruction.trim() }
+			});
+			request.applyEditResult(newRender);
 			instruction = '';
 		} catch {
-			error = t('edit.apply');
-			previousRender = undefined;
+			error = t('edit.failed');
 		} finally {
 			applying = false;
 		}
 	}
 
 	function undoEdit(): void {
-		if (previousRender) {
-			request.setCurrentRender(previousRender);
-			previousRender = undefined;
-			instruction = '';
-		}
+		request.undoLastEdit();
+		instruction = '';
 	}
 </script>
 
@@ -129,6 +117,14 @@ before the Change Date. See LICENSE for complete terms.
 			</button>
 		{/if}
 	</div>
+
+	{#if currentRender?.editOp}
+		<div class="meta">
+			<span>{ti('edit.cost', { cost: currentRender.cost })}</span>
+			<span class="sep">·</span>
+			<span>{ti('edit.balance', { balance: currentRender.balance })}</span>
+		</div>
+	{/if}
 
 	{#if error}
 		<p class="error" role="alert">{error}</p>
@@ -302,6 +298,18 @@ before the Change Date. See LICENSE for complete terms.
 	.btn-undo:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
+	}
+
+	.meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.8125rem;
+		color: var(--color-muted);
+	}
+
+	.meta .sep {
+		opacity: 0.4;
 	}
 
 	.spinner {
