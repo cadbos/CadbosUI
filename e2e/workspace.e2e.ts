@@ -20,7 +20,7 @@ test('renders the workspace and switches views', async ({ page }) => {
 	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
 
-	// Graph tab interaction is restored in feat/module-9-graph-flow; for now it stays disabled.
+	// Graph tab remains disabled until feat/module-9-graph-flow lands.
 	const graphTab = page.getByRole('tab', { name: 'Граф' });
 	await expect(graphTab).toHaveAttribute('aria-disabled', 'true');
 	await graphTab.click({ force: true });
