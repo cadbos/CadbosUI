@@ -28,6 +28,9 @@ SvelteKit.
   `$bindable`); never Svelte 4 syntax (`on:click`, `export let`, `<slot>`, `$:`).
 - **Secrets are server-only.** Provider API keys / upload tokens never reach the
   client bundle or traffic; external APIs go through SvelteKit server endpoints.
+- **Never swallow errors.** Do not skip, drop, suppress, or ignore errors. Every
+  caught error must be handled, rethrown, surfaced, or logged with useful context;
+  logs must stay sanitized and never include secrets or private user data.
 - **Single source of truth state.** One `.svelte.ts` store owns the data; views are
   projections. The final prompt is `$derived`, never imperatively synced.
 - **License headers.** New or modified Cadbos source files must carry the
