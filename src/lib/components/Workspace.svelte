@@ -102,7 +102,7 @@ before the Change Date. See LICENSE for complete terms.
 			showEditPanel = false;
 		} catch {
 			request.setStatus('error');
-			submitError = t('render.generate');
+			submitError = t('render.failed');
 		} finally {
 			submitting = false;
 		}

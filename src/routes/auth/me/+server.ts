@@ -17,12 +17,23 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { MeResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
-import { DEMO_PUBKEY, DEMO_QUOTA } from '$lib/server/demo';
+import { getDb } from '$lib/server/auth/repository';
+import { getBalance, getUserIdByPubkey } from '$lib/server/billing';
+import { DEMO_BALANCE, DEMO_PUBKEY } from '$lib/server/demo';
 
-export const GET: RequestHandler = ({ locals }) => {
+export const GET: RequestHandler = async ({ locals, platform }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
 
-	const quota = dev && locals.user.pubkey === DEMO_PUBKEY ? DEMO_QUOTA : undefined;
+	// The demo session bypasses D1 entirely (hooks.server.ts) and always gets the
+	// hardcoded showcase balance; real sessions are always backed by a D1 user row.
+	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
+		return json({ user: locals.user, balance: DEMO_BALANCE } satisfies MeResponse);
+	}
 
-	return json({ user: locals.user, quota } satisfies MeResponse);
+	const db = getDb(platform);
+	const userId = await getUserIdByPubkey(db, locals.user.pubkey);
+	// undefined (not a default) until the user has generated at least once.
+	const balance = userId ? ((await getBalance(db, userId)) ?? undefined) : undefined;
+
+	return json({ user: locals.user, balance } satisfies MeResponse);
 };
