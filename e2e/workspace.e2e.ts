@@ -12,7 +12,11 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+
+function promptPreview(page: Page): Locator {
+	return page.getByLabel('Итоговый промпт').filter({ visible: true });
+}
 
 test('renders the workspace and switches views', async ({ page }) => {
 	await page.goto('/');
@@ -36,9 +40,7 @@ test('switches to the graph view and adds a fragment node reflected in key-value
 	await expect(fragmentNode).toBeVisible();
 	await fragmentNode.fill('cozy reading nook');
 
-	await expect(page.getByLabel('Итоговый промпт').filter({ visible: true })).toHaveValue(
-		'cozy reading nook'
-	);
+	await expect(promptPreview(page)).toHaveValue('cozy reading nook');
 
 	await page.getByRole('tab', { name: 'Ключ-значение' }).click();
 	await expect(page.getByLabel('Текст 1')).toHaveValue('cozy reading nook');
@@ -68,7 +70,7 @@ test('keeps the prompt byte-identical when switching from chat to key-value', as
 		'true'
 	);
 
-	await expect(page.getByLabel('Итоговый промпт').filter({ visible: true })).toHaveValue(prompt);
+	await expect(promptPreview(page)).toHaveValue(prompt);
 });
 
 test('navigates tabs with the keyboard', async ({ page }) => {
