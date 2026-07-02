@@ -4,6 +4,17 @@ import { postRenderInterior } from '$lib/server/archai';
 import type { RenderResponse, OutputFormat } from '$lib/api/contract';
 import { mockRender } from '$lib/server/mocks/fixtures';
 
+// И-MA-6: default sync-call timeout, configurable.
+const RENDER_TIMEOUT_MS = 120_000;
+
+// Provider error details (raw response text, internal ids) must stay server-side
+// (NFR-6/8) — log them here and surface only a generic message to the caller,
+// which the route handler passes straight through to the client.
+function renderFailed(detail: unknown): never {
+	console.error('archAI render/interior failed:', detail);
+	throw new Error('Render failed');
+}
+
 export async function renderInterior(
 	platform: App.Platform | undefined,
 	params: { image: string; prompt: string; outputFormat: OutputFormat }
@@ -23,6 +34,7 @@ export async function renderInterior(
 
 	const result = await postRenderInterior({
 		client: requestClient,
+		signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
 		body: {
 			image: params.image,
 			outputFormat: params.outputFormat,
@@ -31,18 +43,13 @@ export async function renderInterior(
 		}
 	});
 
-	if (result.error) {
-		const err = result.error as { error?: string; message?: string };
-		throw new Error(err.error ?? err.message ?? 'Render failed');
-	}
+	if (result.error) renderFailed(result.error);
 
 	const data = result.data;
-	if (!data) throw new Error('Empty response from render service');
+	if (!data) renderFailed('empty response from render service');
 
 	const outputUrl = Array.isArray(data.output) ? data.output[0] : data.output;
-	if (!outputUrl) {
-		throw new Error(`Render returned no image URL (output: ${JSON.stringify(data.output)})`);
-	}
+	if (!outputUrl) renderFailed(`no image URL in output: ${JSON.stringify(data.output)}`);
 
 	return { outputUrl, cost: data.cost, balance: data.balance };
 }
