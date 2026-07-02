@@ -29,7 +29,7 @@ import { BunkerSigner, createNostrConnectURI } from 'nostr-tools/nip46';
 import { SimplePool } from 'nostr-tools/pool';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { Event, EventTemplate } from 'nostr-tools/pure';
-import type { NostrProfile, ProfileUpdateRequest, SessionUser, Quota } from '$lib/api/contract';
+import type { NostrProfile, ProfileUpdateRequest, SessionUser, Balance } from '$lib/api/contract';
 import { NOSTR_CONNECT_RELAYS } from '$lib/nostr/connect';
 
 // NIP-98 HTTP-Auth event kind — a protocol constant, mirrored on the server.
@@ -44,12 +44,11 @@ const sessionUserSchema = z.object({
 	firstName: z.string().optional(),
 	lastName: z.string().optional()
 });
-const quotaSchema = z.object({
-	balanceOrLimit: z.number(),
-	usage: z.number(),
-	period: z.string()
+const balanceSchema = z.object({
+	balance: z.number(),
+	updatedAt: z.number()
 });
-const meResponseSchema = z.object({ user: sessionUserSchema, quota: quotaSchema.optional() });
+const meResponseSchema = z.object({ user: sessionUserSchema, balance: balanceSchema.optional() });
 const challengeResponseSchema = z.object({ challenge: hex32 });
 const verifyResponseSchema = z.object({ user: sessionUserSchema });
 const profileResponseSchema = z.object({ user: sessionUserSchema });
@@ -97,7 +96,7 @@ class AuthFlowError extends Error {
 class AuthState {
 	status = $state<AuthStatus>('anonymous');
 	user = $state<SessionUser | null>(null);
-	quota = $state<Quota | null>(null);
+	balance = $state<Balance | null>(null);
 	nostrProfile = $state<NostrProfile | null>(null);
 	profileDraft = $state({ firstName: '', lastName: '' });
 	error = $state<AuthError | null>(null);
@@ -121,7 +120,7 @@ class AuthState {
 			if (!response.ok) return;
 			const data = await parseJsonOrFail(response, meResponseSchema);
 			this.#authenticate(data.user);
-			this.quota = data.quota ?? null;
+			this.balance = data.balance ?? null;
 		} catch {
 			// Network hiccup or malformed response on load — stay anonymous, the user
 			// can sign in manually.
@@ -233,7 +232,7 @@ class AuthState {
 		}
 		if (!response.ok) return;
 		this.user = null;
-		this.quota = null;
+		this.balance = null;
 		this.nostrProfile = null;
 		this.#resetProfileDraft(null);
 		this.error = null;
@@ -251,7 +250,7 @@ class AuthState {
 			const meResponse = await fetch('/auth/me');
 			if (meResponse.ok) {
 				const me = await parseJsonOrFail(meResponse, meResponseSchema);
-				this.quota = me.quota ?? null;
+				this.balance = me.balance ?? null;
 			}
 		} catch {
 			this.#fail('failed');

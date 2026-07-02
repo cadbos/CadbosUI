@@ -72,8 +72,6 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
-	class QuotaExceededError extends Error {}
-
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const validation = $derived(request.validate());
 	const canGenerate = $derived(validation.valid && !submitting && request.status !== 'rendering');
@@ -90,7 +88,6 @@ before the Change Date. See LICENSE for complete terms.
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(body)
 			});
-			if (response.status === 402) throw new QuotaExceededError();
 			if (!response.ok) throw new Error('render failed');
 			const result = await response.json();
 			const render: RenderResultType = {
@@ -103,10 +100,9 @@ before the Change Date. See LICENSE for complete terms.
 			request.setCurrentRender(render);
 			request.setStatus('idle');
 			showEditPanel = false;
-		} catch (err) {
+		} catch {
 			request.setStatus('error');
-			submitError =
-				err instanceof QuotaExceededError ? t('render.quotaExceeded') : t('render.generate');
+			submitError = t('render.failed');
 		} finally {
 			submitting = false;
 		}

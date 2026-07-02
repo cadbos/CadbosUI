@@ -184,11 +184,12 @@ describe('auth flow', () => {
 		expect(cookies.deleteCalls[0].options.path).toBe('/');
 	});
 
-	it('me returns 401 without a session and the user + quota with one', async () => {
+	it('me returns 401 without a session and the user + balance with one', async () => {
 		expect((await call(meGET, { locals: { user: null } })).status).toBe(401);
 
-		// A real (non-demo) user is billing.ts-backed by D1 (Module 6): quota is
-		// provisioned on first touch, not left undefined as it was pre-billing.
+		// A real (non-demo) user is billing.ts-backed by D1 (Module 6), but there is
+		// nothing to show until they've generated at least once — no default balance
+		// is provisioned the way the old quota system used to.
 		const sk = generateSecretKey();
 		const pubkey = getPublicKey(sk);
 		const challenge = await requestChallenge(db, pubkey);
@@ -201,7 +202,7 @@ describe('auth flow', () => {
 		expect(response.status).toBe(200);
 		const body = await response.json();
 		expect(body.user).toEqual({ pubkey });
-		expect(body.quota).toEqual({ balanceOrLimit: 50, usage: 0, period: 'lifetime' });
+		expect(body.balance).toBeUndefined();
 	});
 
 	it('updates Cadbos profile fields only for an authenticated user', async () => {

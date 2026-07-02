@@ -25,12 +25,6 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 		.run();
 }
 
-function seedQuota(db: D1Database, userId: string, balanceOrLimit: number, usage: number): void {
-	db.prepare('INSERT INTO quotas (user_id, balance_or_limit, usage, period) VALUES (?, ?, ?, ?)')
-		.bind(userId, balanceOrLimit, usage, 'lifetime')
-		.run();
-}
-
 type RenderEvent = Parameters<typeof POST>[0];
 
 function call(
@@ -56,40 +50,47 @@ describe('POST /api/render — billing', () => {
 		expect(response.status).toBe(401);
 	});
 
-	it('blocks generation once the quota is exhausted, without deducting further', async () => {
+	it('records the real balance archAI reports on a successful call', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedQuota(db, 'user-1', 50, 50);
-
-		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(402);
-		const payload = (await response.json()) as { error: { code: string } };
-		expect(payload.error.code).toBe('quota_exceeded');
-
-		const quotaRow = await db
-			.prepare('SELECT usage FROM quotas WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ usage: number }>();
-		expect(quotaRow?.usage).toBe(50);
-	});
-
-	it('deducts the mock render cost exactly once on a successful call', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedQuota(db, 'user-1', 50, 0);
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { cost: number };
+		const result = (await response.json()) as { balance: number };
 
-		const quotaRow = await db
-			.prepare('SELECT usage FROM quotas WHERE user_id = ?')
+		const balanceRow = await db
+			.prepare('SELECT balance FROM balances WHERE user_id = ?')
 			.bind('user-1')
-			.first<{ usage: number }>();
-		expect(quotaRow?.usage).toBe(result.cost);
+			.first<{ balance: number }>();
+		expect(balanceRow?.balance).toBe(result.balance);
 	});
 
-	it('bypasses quota enforcement entirely for the dev-only demo session', async () => {
+	it('overwrites the stored balance rather than accumulating it across calls', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+
+		await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
+		const second = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
+		const result = (await second.json()) as { balance: number };
+
+		const balanceRow = await db
+			.prepare('SELECT balance FROM balances WHERE user_id = ?')
+			.bind('user-1')
+			.first<{ balance: number }>();
+		expect(balanceRow?.balance).toBe(result.balance);
+	});
+
+	it('never blocks generation locally — archAI is the only spend gate', async () => {
+		// No local quota table to seed at all; a brand-new user with no prior
+		// balance record must still be able to generate.
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+
+		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
+		expect(response.status).toBe(200);
+	});
+
+	it('bypasses balance recording entirely for the dev-only demo session', async () => {
 		// No D1 binding at all — proves the demo path never touches billing.
 		const response = await call({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform, body);
 		expect(response.status).toBe(200);

@@ -90,14 +90,16 @@ export interface NostrProfile {
 	relays: RelayInfo[];
 }
 
-export interface Quota {
-	balanceOrLimit: number;
-	usage: number;
-	period: string;
+// Real per-account balance as reported by archAI after the user's last
+// generation (Module 6) — not a locally-enforced allowance. Absent until the
+// user has generated at least once.
+export interface Balance {
+	balance: number;
+	updatedAt: number;
 }
 
 // GET /auth/me → 401 when no session.
 export interface MeResponse {
 	user: SessionUser;
-	quota?: Quota;
+	balance?: Balance;
 }

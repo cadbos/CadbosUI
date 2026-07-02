@@ -130,13 +130,8 @@ before the Change Date. See LICENSE for complete terms.
 			<div id="auth-profile" class="profile-panel" hidden={!profileOpen}>
 				<div class="profile-meta">
 					<span>{ti('auth.profile.relayCount', { count: relayCount })}</span>
-					{#if auth.quota}
-						<span class="quota">
-							{ti('auth.demo.quota', {
-								remaining: auth.quota.balanceOrLimit - auth.quota.usage,
-								total: auth.quota.balanceOrLimit
-							})}
-						</span>
+					{#if auth.balance}
+						<span class="balance">{ti('auth.balance', { balance: auth.balance.balance })}</span>
 					{/if}
 					{#if missingCadbosName}
 						<span class="notice">{t('auth.profile.completeHint')}</span>
@@ -469,7 +464,7 @@ before the Change Date. See LICENSE for complete terms.
 		vertical-align: middle;
 	}
 
-	.quota {
+	.balance {
 		font-size: 0.8rem;
 		color: var(--color-text);
 		font-weight: 500;

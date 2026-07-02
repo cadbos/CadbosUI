@@ -17,14 +17,18 @@
 // auth/billing schema without a Workers runtime. Test-only — never imported from
 // production code.
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const SCHEMA = readFileSync(
-	new URL('../../../../migrations/0001_auth.sql', import.meta.url),
-	'utf8'
-);
+const MIGRATIONS_DIR = new URL('../../../../migrations/', import.meta.url);
+// Mirrors `wrangler d1 migrations apply`: every *.sql file in the migrations
+// dir, applied in filename order.
+const SCHEMA = readdirSync(MIGRATIONS_DIR)
+	.filter((file) => file.endsWith('.sql'))
+	.sort()
+	.map((file) => readFileSync(new URL(file, MIGRATIONS_DIR), 'utf8'))
+	.join('\n');
 
 export function makeD1(): D1Database {
 	const db = new DatabaseSync(':memory:');

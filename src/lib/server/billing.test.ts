@@ -15,7 +15,7 @@
 import { beforeEach, describe, it, expect } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { makeD1 } from './testing/d1-shim';
-import { deductQuota, getOrCreateQuota, getUserIdByPubkey, hasQuota } from './billing';
+import { getBalance, getUserIdByPubkey, recordBalance } from './billing';
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -40,59 +40,44 @@ describe('getUserIdByPubkey', () => {
 	});
 });
 
-describe('getOrCreateQuota', () => {
-	it('provisions a default quota on first touch', async () => {
+describe('getBalance', () => {
+	it('is null before the user has ever generated', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		const quota = await getOrCreateQuota(db, 'user-1');
-		expect(quota).toEqual({ balanceOrLimit: 50, usage: 0, period: 'lifetime' });
+		await expect(getBalance(db, 'user-1')).resolves.toBeNull();
 	});
 
-	it('is idempotent — a second call does not reset usage', async () => {
+	it('returns the last recorded balance', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		await getOrCreateQuota(db, 'user-1');
-		await deductQuota(db, 'user-1', 5);
+		await recordBalance(db, 'user-1', 24.97);
 
-		const quota = await getOrCreateQuota(db, 'user-1');
-		expect(quota).toEqual({ balanceOrLimit: 50, usage: 5, period: 'lifetime' });
+		const balance = await getBalance(db, 'user-1');
+		expect(balance?.balance).toBe(24.97);
+	});
+});
+
+describe('recordBalance', () => {
+	it('creates a row on first generation', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const balance = await recordBalance(db, 'user-1', 25);
+		expect(balance.balance).toBe(25);
 	});
 
-	it('isolates quotas per user', async () => {
+	it('overwrites the previous balance rather than accumulating it', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		await recordBalance(db, 'user-1', 25);
+		const second = await recordBalance(db, 'user-1', 24.97);
+
+		expect(second.balance).toBe(24.97);
+		await expect(getBalance(db, 'user-1')).resolves.toEqual(second);
+	});
+
+	it('isolates balances per user', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
-		await getOrCreateQuota(db, 'user-1');
-		await deductQuota(db, 'user-1', 10);
+		await recordBalance(db, 'user-1', 25);
+		await recordBalance(db, 'user-2', 10);
 
-		const quota1 = await getOrCreateQuota(db, 'user-1');
-		const quota2 = await getOrCreateQuota(db, 'user-2');
-		expect(quota1.usage).toBe(10);
-		expect(quota2.usage).toBe(0);
-	});
-});
-
-describe('hasQuota', () => {
-	it('is true while usage is below the limit', () => {
-		expect(hasQuota({ balanceOrLimit: 50, usage: 49, period: 'lifetime' })).toBe(true);
-	});
-
-	it('is false once usage reaches or exceeds the limit', () => {
-		expect(hasQuota({ balanceOrLimit: 50, usage: 50, period: 'lifetime' })).toBe(false);
-		expect(hasQuota({ balanceOrLimit: 50, usage: 51, period: 'lifetime' })).toBe(false);
-	});
-});
-
-describe('deductQuota', () => {
-	it('increments usage by the given cost exactly once', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		await getOrCreateQuota(db, 'user-1');
-
-		const first = await deductQuota(db, 'user-1', 2);
-		expect(first.usage).toBe(2);
-
-		const second = await deductQuota(db, 'user-1', 3);
-		expect(second.usage).toBe(5);
-	});
-
-	it('throws if the user has no quota row yet', async () => {
-		await expect(deductQuota(db, 'no-such-user', 1)).rejects.toThrow();
+		expect((await getBalance(db, 'user-1'))?.balance).toBe(25);
+		expect((await getBalance(db, 'user-2'))?.balance).toBe(10);
 	});
 });
