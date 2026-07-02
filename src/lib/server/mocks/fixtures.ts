@@ -2,7 +2,7 @@
 // built against the real wire types before the integrations land (phase C),
 // where every endpoint below is replaced by a real server-only module.
 //
-// Demo branch: URLs point to real Unsplash CC0 photos so the UI looks
+// Demo branch: URLs point to real Unsplash-licensed photos so the UI looks
 // convincing without requiring live external services.
 
 import type { RenderResponse, UploadResult } from '$lib/api/contract';
