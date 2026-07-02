@@ -45,6 +45,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		if (db && userId) await recordBalance(db, userId, result.balance);
 		return json(result);
 	} catch (err) {
+		console.error(err);
 		const message = err instanceof Error ? err.message : 'Render failed';
 		return apiError(500, 'render_failed', message);
 	}
