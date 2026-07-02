@@ -227,6 +227,7 @@ class AuthState {
 	}
 
 	async loginDemo(): Promise<void> {
+		if (this.status === 'connecting') return;
 		this.error = null;
 		this.status = 'connecting';
 		try {
