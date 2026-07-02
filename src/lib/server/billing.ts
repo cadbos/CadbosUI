@@ -1,3 +1,17 @@
+/*
+ * Copyright (c) 2026 Cadbos company. All rights reserved.
+ *
+ * SPDX-License-Identifier: LicenseRef-Cadbos-BSL-1.1
+ *
+ * Cadbos Interior Design AI is licensed under the Business Source License 1.1.
+ * Access is limited to automated analysis tools for analysis of this repository.
+ * This code is not open for contribution or usage except under a separate
+ * written agreement with Cadbos company.
+ *
+ * Commercial use in Interior Design & AEC Generative AI Services is prohibited
+ * before the Change Date. See LICENSE for complete terms.
+ */
+
 // D1-backed billing/quota storage (SRS FR-И4, NFR-18). The `quotas` table itself
 // is scaffolded in migrations/0001_auth.sql (Module 2); this module owns the
 // charging/limit logic against it. Quota is keyed by the internal D1 user id
