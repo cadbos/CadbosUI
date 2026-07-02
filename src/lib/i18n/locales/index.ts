@@ -72,7 +72,7 @@ export interface Dictionary {
 	'auth.error.failed': string;
 	'auth.demo.login': string;
 	'auth.demo.badge': string;
-	'auth.demo.quota': string;
+	'auth.balance': string;
 	'upload.label': string;
 	'upload.button': string;
 	'upload.dropHint': string;
@@ -94,6 +94,7 @@ export interface Dictionary {
 	'render.edit': string;
 	'render.validationImage': string;
 	'render.validationPrompt': string;
+	'render.failed': string;
 	'edit.title': string;
 	'edit.close': string;
 	'edit.templateReplace': string;
