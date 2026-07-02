@@ -12,12 +12,31 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { POST } from './+server';
+
+// Lets a single test force recordBalance to reject, to prove a bookkeeping
+// failure doesn't discard an already-successful, already-charged edit.
+const billingMock = vi.hoisted(() => ({ failNextRecordBalance: false }));
+
+vi.mock('$lib/server/billing', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/billing')>();
+	return {
+		...actual,
+		recordBalance: vi.fn((...args: Parameters<typeof actual.recordBalance>) => {
+			if (billingMock.failNextRecordBalance) {
+				billingMock.failNextRecordBalance = false;
+				return Promise.reject(new Error('simulated D1 failure'));
+			}
+			return actual.recordBalance(...args);
+		})
+	};
+});
+
+const { POST } = await import('./+server');
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -64,6 +83,17 @@ describe('POST /api/edit — billing', () => {
 		expect(response.status).toBe(400);
 	});
 
+	it('rejects an image value that is not a URL', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+
+		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, {
+			...body,
+			image: 'not-a-url'
+		});
+		expect(response.status).toBe(400);
+	});
+
 	it('chains the edit onto the previous render (Д-17: image = prior render URL)', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
@@ -87,6 +117,18 @@ describe('POST /api/edit — billing', () => {
 			.bind('user-1')
 			.first<{ balance: number }>();
 		expect(balanceRow?.balance).toBe(result.balance);
+	});
+
+	it('still returns the completed, already-charged edit if recording the balance fails', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		billingMock.failNextRecordBalance = true;
+
+		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
+
+		expect(response.status).toBe(200);
+		const result = (await response.json()) as { outputUrl: string };
+		expect(result.outputUrl).toMatch(/^https:\/\//);
 	});
 
 	it('never blocks editing locally — archAI is the only spend gate', async () => {

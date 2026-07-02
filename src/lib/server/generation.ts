@@ -18,15 +18,16 @@ import { postEditByPrompt, postRenderInterior } from '$lib/server/archai';
 import type { RenderResponse, OutputFormat } from '$lib/api/contract';
 import { mockEdit, mockRender } from '$lib/server/mocks/fixtures';
 
-// И-MA-6 / И-MA-ED3: default sync-call timeout, configurable, shared by render and edit.
+// И-MA-6 / И-MA-ED3: default sync-call timeout, shared by render and edit.
 const RENDER_TIMEOUT_MS = 120_000;
 
 // Provider error details (raw response text, internal ids) must stay server-side
-// (NFR-6/8) — log them here and surface only a generic message to the caller,
-// which the route handler passes straight through to the client.
-function generationFailed(operation: string, detail: unknown): never {
+// (NFR-6/8) — log them here and surface only a generic, operation-appropriate
+// message to the caller, which the route handler passes straight through to the
+// client.
+function generationFailed(operation: string, clientMessage: string, detail: unknown): never {
 	console.error(`archAI ${operation} failed:`, detail);
-	throw new Error('Render failed');
+	throw new Error(clientMessage);
 }
 
 function requestClientFor(apiKey: string): ReturnType<typeof createClient> {
@@ -59,14 +60,20 @@ export async function renderInterior(
 		}
 	});
 
-	if (result.error) generationFailed('render/interior', result.error);
+	if (result.error) generationFailed('render/interior', 'Render failed', result.error);
 
 	const data = result.data;
-	if (!data) generationFailed('render/interior', 'empty response from render service');
+	if (!data) {
+		generationFailed('render/interior', 'Render failed', 'empty response from render service');
+	}
 
 	const outputUrl = Array.isArray(data.output) ? data.output[0] : data.output;
 	if (!outputUrl) {
-		generationFailed('render/interior', `no image URL in output: ${JSON.stringify(data.output)}`);
+		generationFailed(
+			'render/interior',
+			'Render failed',
+			`no image URL in output: ${JSON.stringify(data.output)}`
+		);
 	}
 
 	return { outputUrl, cost: data.cost, balance: data.balance };
@@ -92,15 +99,21 @@ export async function editInterior(
 		body: { image: params.image, prompt: params.prompt }
 	});
 
-	if (result.error) generationFailed('edit-by-prompt', result.error);
+	if (result.error) generationFailed('edit-by-prompt', 'Edit failed', result.error);
 
 	const data = result.data;
-	if (!data) generationFailed('edit-by-prompt', 'empty response from edit service');
+	if (!data) {
+		generationFailed('edit-by-prompt', 'Edit failed', 'empty response from edit service');
+	}
 
 	// И-MA-ED2: output is always a single URL string, unlike render/interior's
 	// array-or-string response (И-MA-4).
 	if (!data.output) {
-		generationFailed('edit-by-prompt', `no image URL in output: ${JSON.stringify(data.output)}`);
+		generationFailed(
+			'edit-by-prompt',
+			'Edit failed',
+			`no image URL in output: ${JSON.stringify(data.output)}`
+		);
 	}
 
 	return { outputUrl: data.output, cost: data.cost, balance: data.balance };

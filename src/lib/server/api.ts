@@ -31,7 +31,7 @@ export const renderRequestSchema = z.object({
 // Unlike render, edit-by-prompt has no "enhance" fallback for an empty prompt —
 // the instruction is the whole point of the call (FR-К2/К3).
 export const editRequestSchema = z.object({
-	image: z.string().trim().min(1),
+	image: z.string().trim().url(),
 	prompt: z.string().trim().min(1)
 });
 

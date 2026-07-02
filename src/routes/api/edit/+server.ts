@@ -15,6 +15,7 @@
 import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import type { RenderResponse } from '$lib/api/contract';
 import { apiError, editRequestSchema, parseBody } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
@@ -55,12 +56,24 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		if (limited) return apiError(429, 'rate_limited', 'Too many requests');
 	}
 
+	let result: RenderResponse;
 	try {
-		const result = await editInterior(platform, parsed.data);
-		if (db && userId) await recordBalance(db, userId, result.balance);
-		return json(result);
+		result = await editInterior(platform, parsed.data);
 	} catch (err) {
 		const message = err instanceof Error ? err.message : 'Edit failed';
 		return apiError(500, 'edit_failed', message);
 	}
+
+	// The edit already succeeded and archAI already charged for it — a failure to
+	// cache the resulting balance is a bookkeeping gap, not a reason to make the
+	// user think a completed, paid edit failed.
+	if (db && userId) {
+		try {
+			await recordBalance(db, userId, result.balance);
+		} catch (err) {
+			console.error('recordBalance failed after a successful edit:', err);
+		}
+	}
+
+	return json(result);
 };

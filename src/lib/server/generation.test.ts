@@ -136,7 +136,7 @@ describe('editInterior', () => {
 				image: 'https://example.test/prev-render.jpg',
 				prompt: 'replace the sofa'
 			})
-		).rejects.toThrow('Render failed');
+		).rejects.toThrow('Edit failed');
 	});
 
 	it('throws when the response has no output URL', async () => {
@@ -149,6 +149,6 @@ describe('editInterior', () => {
 				image: 'https://example.test/prev-render.jpg',
 				prompt: 'replace the sofa'
 			})
-		).rejects.toThrow('Render failed');
+		).rejects.toThrow('Edit failed');
 	});
 });
