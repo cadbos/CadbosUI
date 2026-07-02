@@ -48,6 +48,7 @@ before the Change Date. See LICENSE for complete terms.
 	const FRAGMENT_X = 280;
 	const FRAGMENT_Y_STEP = 120;
 	const COMPOSE_X = 560;
+	const INITIAL_VIEWPORT = { x: 16, y: 16, zoom: 0.68 };
 
 	// Svelte Flow keeps a node invisible until it has a known width/height (either
 	// measured via ResizeObserver, or supplied up front). Our node cards have a
@@ -223,7 +224,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <div class="graph-view">
 	<div class="graph-canvas">
-		<SvelteFlow bind:nodes bind:edges {nodeTypes} fitView>
+		<SvelteFlow bind:nodes bind:edges {nodeTypes} initialViewport={INITIAL_VIEWPORT}>
 			<Background />
 			<Controls />
 		</SvelteFlow>
@@ -259,10 +260,15 @@ before the Change Date. See LICENSE for complete terms.
 
 	.graph-canvas {
 		width: 100%;
-		min-height: 24rem;
+		height: 24rem;
 		border: 1.5px solid var(--color-border);
 		border-radius: var(--radius);
 		overflow: hidden;
+	}
+
+	.graph-canvas :global(.svelte-flow) {
+		width: 100%;
+		height: 100%;
 	}
 
 	.graph-validation {

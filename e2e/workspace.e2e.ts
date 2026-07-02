@@ -25,7 +25,7 @@ test('renders the workspace and switches views', async ({ page }) => {
 	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('switches to the graph view and adds a fragment node reflected in key-value', async ({
+test('switches to the graph view and edits fragment nodes reflected in key-value', async ({
 	page
 }) => {
 	await page.setViewportSize({ width: 1024, height: 768 });
@@ -39,11 +39,15 @@ test('switches to the graph view and adds a fragment node reflected in key-value
 	const fragmentNode = page.getByRole('textbox', { name: 'Узел фрагмента 1' });
 	await expect(fragmentNode).toBeVisible();
 	await fragmentNode.fill('cozy reading nook');
+	await page.getByRole('button', { name: 'Добавить узел фрагмента' }).click();
+	await page.getByRole('textbox', { name: 'Узел фрагмента 2' }).fill('warm natural light');
+	await page.getByRole('button', { name: 'Удалить узел фрагмента 1' }).click();
 
-	await expect(promptPreview(page)).toHaveValue('cozy reading nook');
+	await expect(promptPreview(page)).toHaveValue('warm natural light');
 
 	await page.getByRole('tab', { name: 'Ключ-значение' }).click();
-	await expect(page.getByLabel('Текст 1')).toHaveValue('cozy reading nook');
+	await expect(page.getByLabel('Текст 1')).toHaveValue('warm natural light');
+	await expect(page.getByLabel('Текст 2')).toHaveCount(0);
 });
 
 test('degrades the graph view to a message on narrow screens', async ({ page }) => {
