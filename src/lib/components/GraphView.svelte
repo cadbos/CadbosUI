@@ -32,15 +32,21 @@
 				return [node.id, typeof text === 'string' ? text : ''];
 			})
 		);
+		// Validate via the graph (catches cycles/branching/dangling nodes, FR-Г5), but
+		// commit through updateFragment by id rather than remove-all/add-all — the
+		// graph's fragment set always mirrors the store 1:1 here (no reconnect UI yet),
+		// and result.fragments (text + order only) would silently drop each
+		// fragment's label and regenerate its id.
 		const result = graphToPromptFragments(graphWithFragmentText(graph, textByNodeId));
 		if (!result.valid) return;
 
 		request.clearPromptOverride();
-		for (const fragment of [...request.promptFragments]) {
-			request.removeFragment(fragment.id);
-		}
-		for (const fragment of result.fragments) {
-			request.addFragment(fragment);
+		for (const node of fragmentNodes) {
+			const fragmentId = fragmentIdFromNodeId(node.id);
+			const text = textByNodeId.get(node.id);
+			if (fragmentId !== null && text !== undefined) {
+				request.updateFragment(fragmentId, { text });
+			}
 		}
 	}
 </script>

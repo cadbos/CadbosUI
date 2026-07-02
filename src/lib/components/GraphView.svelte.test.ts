@@ -7,9 +7,9 @@ beforeEach(() => {
 	request.reset();
 });
 
-it('hydrates fields from request fragments and applies text-only fragments', async () => {
-	request.addFragment({ label: 'Style', text: 'Scandinavian ', order: 0 });
-	request.addFragment({ label: 'Room', text: 'living room', order: 1 });
+it('hydrates fields from request fragments and preserves labels/ids on apply', async () => {
+	const styleId = request.addFragment({ label: 'Style', text: 'Scandinavian ', order: 0 });
+	const roomId = request.addFragment({ label: 'Room', text: 'living room', order: 1 });
 
 	const screen = render(GraphView);
 
@@ -23,10 +23,10 @@ it('hydrates fields from request fragments and applies text-only fragments', asy
 	await screen.getByRole('textbox', { name: 'Узел фрагмента 2' }).fill('kitchen');
 	await screen.getByRole('button', { name: 'Применить графовый промпт' }).click();
 
+	// Labels and ids survive the round-trip — only edited text (and order) change.
 	expect(request.toJSON().promptFragments).toEqual([
-		expect.objectContaining({ text: 'Scandinavian ', order: 0 }),
-		expect.objectContaining({ text: 'kitchen', order: 1 })
+		expect.objectContaining({ id: styleId, label: 'Style', text: 'Scandinavian ', order: 0 }),
+		expect.objectContaining({ id: roomId, label: 'Room', text: 'kitchen', order: 1 })
 	]);
-	expect(request.toJSON().promptFragments.some((fragment) => 'label' in fragment)).toBe(false);
-	expect(request.prompt).toBe('Scandinavian kitchen');
+	expect(request.prompt).toBe('Style: Scandinavian\nRoom: kitchen');
 });
