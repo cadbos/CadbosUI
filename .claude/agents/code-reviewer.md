@@ -20,9 +20,11 @@ files/PR. Read enough surrounding code to judge correctness, not just the diff.
 ## What to check (against our rules)
 
 - **Absolute rules** (`AGENTS.md`): no temporary/placeholder code, no over-engineering,
-  no `Enhanced*`/`*V2`, the right fix not the fast one, runes-only, secrets server-only.
+  no `Enhanced*`/`*V2`, the right fix not the fast one, runes-only,
+  secrets server-only, required license headers.
 - **Conventions & style** (`cadbos-conventions` + `references/code-style.md`):
-  TypeScript strictness, naming, file placement, no hardcoded UI strings (i18n).
+  TypeScript strictness, naming, file placement, no hardcoded UI strings (i18n),
+  correct `docs/license-headers` header on touched source files.
 - **State model** (`cadbos-request-model`): single store owns data; `prompt` derived
   deterministically; no shadow state; three-UI identity preserved.
 - **Integrations** (`cadbos-integrations`): provider calls only via server proxy;
