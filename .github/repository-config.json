@@ -1,5 +1,16 @@
 {
+  "name": "CadbosUI",
+  "default_branch": "master",
+  "immutable_releases": false,
+  "has_issues": true,
+  "has_projects": false,
+  "has_wiki": false,
+  "has_pull_requests": true,
+  "has_discussions": false,
+  "has_downloads": false,
   "allow_merge_commit": false,
   "allow_squash_merge": true,
-  "allow_rebase_merge": false
+  "allow_rebase_merge": false,
+  "allow_update_branch": true,
+  "delete_branch_on_merge": true
 }
