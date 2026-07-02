@@ -1,16 +1,19 @@
-import { createContext } from 'svelte';
 import { z } from 'zod';
 import {
 	OUTPUT_FORMATS,
 	type OutputFormat,
 	type RenderRequest,
-	type RenderResponse,
-	type UploadResult
+	type RenderResponse
 } from '$lib/api/contract';
 
 export type { OutputFormat };
 
-export type ImageInput = UploadResult;
+export interface ImageInput {
+	url: string;
+	mime?: string;
+	size?: number;
+	dimensions?: [number, number];
+}
 
 export interface PromptFragment {
 	id: string;
@@ -19,7 +22,12 @@ export interface PromptFragment {
 	order: number;
 }
 
-export type EditOperation = string;
+export type EditOperationType = 'replace-object' | 'change-surface-color' | 'freeform';
+
+export interface EditOperation {
+	type: EditOperationType;
+	instruction: string;
+}
 
 export interface RenderResult {
 	id: string;
@@ -61,8 +69,8 @@ const outputFormatSchema = z.enum(OUTPUT_FORMATS);
 
 const imageInputSchema = z.object({
 	url: z.string().trim().url(),
-	mime: z.string().min(1),
-	size: z.number().nonnegative(),
+	mime: z.string().min(1).optional(),
+	size: z.number().nonnegative().optional(),
 	dimensions: z.tuple([z.number().positive(), z.number().positive()]).optional()
 });
 const optionalImageInputSchema = imageInputSchema.optional();
@@ -74,13 +82,18 @@ const promptFragmentSchema = z.object({
 	order: z.number().int().nonnegative()
 });
 
+const editOperationSchema = z.object({
+	type: z.enum(['replace-object', 'change-surface-color', 'freeform']),
+	instruction: z.string()
+});
+
 const renderResultSchema = z.object({
 	id: z.string().min(1),
 	outputUrls: z.array(z.string().min(1)).min(1),
 	cost: z.number(),
 	balance: z.number(),
 	parentId: z.string().optional(),
-	editOp: z.string().optional(),
+	editOp: editOperationSchema.optional(),
 	ts: z.number()
 });
 
@@ -169,8 +182,8 @@ function cloneImage(image: ImageInput | undefined): ImageInput | undefined {
 	if (!image) return undefined;
 	return {
 		url: image.url,
-		mime: image.mime,
-		size: image.size,
+		...(image.mime !== undefined ? { mime: image.mime } : {}),
+		...(image.size !== undefined ? { size: image.size } : {}),
 		...(image.dimensions ? { dimensions: [...image.dimensions] } : {})
 	};
 }
@@ -189,7 +202,8 @@ function cloneFragments(fragments: PromptFragment[]): PromptFragment[] {
 }
 
 function cloneEditOperation(editOp: EditOperation | undefined): EditOperation | undefined {
-	return editOp;
+	if (!editOp) return undefined;
+	return { type: editOp.type, instruction: editOp.instruction };
 }
 
 function cloneRenderResult(render: RenderResult | undefined): RenderResult | undefined {
@@ -245,7 +259,7 @@ export function renderResultFromResponse(
 	};
 }
 
-export class RequestState {
+class RequestState {
 	id = $state<string>(crypto.randomUUID());
 	image = $state<ImageInput | undefined>(undefined);
 	promptFragments = $state<PromptFragment[]>([]);
@@ -310,14 +324,11 @@ export class RequestState {
 		if (orderedIds.some((id, index) => orderedIds.indexOf(id) !== index)) {
 			throw new RequestReorderError('orderedIds must include every fragment exactly once');
 		}
-		if (orderedIds.some((id) => !this.promptFragments.some((fragment) => fragment.id === id))) {
+		const byId = new Map(this.promptFragments.map((fragment) => [fragment.id, fragment]));
+		if (orderedIds.some((id) => !byId.has(id))) {
 			throw new RequestReorderError('orderedIds contains unknown fragment id');
 		}
-		this.promptFragments = orderedIds.map((id, order) => {
-			const fragment = this.promptFragments.find((item) => item.id === id);
-			if (!fragment) throw new RequestReorderError('orderedIds contains unknown fragment id');
-			return { ...fragment, order };
-		});
+		this.promptFragments = orderedIds.map((id, order) => ({ ...byId.get(id)!, order }));
 	}
 
 	setImage(image: ImageInput | undefined): void {
@@ -346,7 +357,6 @@ export class RequestState {
 
 	validate(): ValidationResult {
 		const missing: ValidationField[] = [];
-		if (!this.prompt.trim()) missing.push('prompt');
 		if (!this.image?.url) missing.push('image');
 		return { valid: missing.length === 0, missing };
 	}
@@ -404,8 +414,4 @@ export class RequestState {
 	}
 }
 
-export function createRequestState(): RequestState {
-	return new RequestState();
-}
-
-export const [getRequestState, setRequestState] = createContext<RequestState>();
+export const request = new RequestState();

@@ -1,9 +1,5 @@
-import type {
-	ImageInput,
-	PromptFragment,
-	RequestJSON,
-	RequestState
-} from '$lib/state/request.svelte';
+import type { ImageInput, PromptFragment, RequestJSON } from '$lib/state/request.svelte';
+import { request } from '$lib/state/request.svelte';
 
 export const AC9_REQUEST_ID = 'ac9-request-0001';
 
@@ -51,6 +47,6 @@ export function buildAc9RequestJSON(): RequestJSON {
 	};
 }
 
-export function applyAc9Fixture(request: RequestState): void {
+export function applyAc9Fixture(): void {
 	request.fromJSON(buildAc9RequestJSON());
 }

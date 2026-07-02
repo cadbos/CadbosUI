@@ -1,4 +1,5 @@
 import { heyApiPlugin } from '@hey-api/vite-plugin';
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-cloudflare';
@@ -9,6 +10,7 @@ import { NOSTR_CONNECT_RELAYS } from './src/lib/nostr/connect';
 
 export default defineConfig({
 	plugins: [
+		tailwindcss(),
 		heyApiPlugin({ config: heyApiOpenApiConfig }),
 		sveltekit({
 			compilerOptions: {
@@ -31,7 +33,7 @@ export default defineConfig({
 					// Nonces/hashes can't cover style *attributes*, so scope a relaxation to
 					// them only — `style-src` stays strict for <style>/<link> stylesheets.
 					'style-src-attr': ['unsafe-inline'],
-					'img-src': ['self', 'data:', 'https:'],
+					'img-src': ['self', 'blob:', 'data:', 'https:'],
 					'font-src': ['self'],
 					// `self` for our own endpoints; the NIP-46 rendezvous relays (wss://).
 					'connect-src': ['self', ...NOSTR_CONNECT_RELAYS],

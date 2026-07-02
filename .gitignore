@@ -26,6 +26,7 @@ test-results
 
 # Claude Code – personal, machine-local settings (not shared)
 .claude/settings.local.json
+.claude/launch.json
 
 # AI context knowledge base (maintained out-of-band, git-ignored)
 /ai-context
@@ -35,3 +36,8 @@ temp/
 
 # Internal development spec (SRS) — kept out of commits
 docs/tz.md
+
+# Other coding-agent tool caches (machine-local, not shared)
+.cursor/
+.agents/
+.codex/

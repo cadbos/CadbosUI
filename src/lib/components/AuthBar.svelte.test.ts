@@ -102,7 +102,7 @@ it('signs in via NIP-07 (sends a Nostr authorization) and signs out', async () =
 	});
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти' }).click();
+	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
 	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
 
 	await expect.element(screen.getByRole('button', { name: 'Выйти' })).toBeVisible();
@@ -110,7 +110,7 @@ it('signs in via NIP-07 (sends a Nostr authorization) and signs out', async () =
 	expect(auth.pubkey).toBe(pk);
 
 	await screen.getByRole('button', { name: 'Выйти' }).click();
-	await expect.element(screen.getByRole('button', { name: 'Войти' })).toBeVisible();
+	await expect.element(screen.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
 });
 
 it('offers to complete Cadbos profile fields after sign-in', async () => {
@@ -124,7 +124,7 @@ it('offers to complete Cadbos profile fields after sign-in', async () => {
 	);
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти' }).click();
+	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
 	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
 
 	await expect
@@ -151,7 +151,7 @@ it('shows an error when no Nostr extension is present', async () => {
 	delete window.nostr;
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти' }).click();
+	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
 	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
 
 	await expect
@@ -167,7 +167,7 @@ it('signs in via NIP-46: shows the QR, then completes when the signer connects',
 	});
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти' }).click();
+	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
 	await screen.getByRole('button', { name: 'Nostr Connect (QR)' }).click();
 
 	// The connect panel (QR + actions) is shown while we await the remote signer.
@@ -187,13 +187,13 @@ it('returns to anonymous when the NIP-46 connection is cancelled', async () => {
 	mockFetch(() => Response.json({ user: { pubkey: pk } }));
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти' }).click();
+	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
 	await screen.getByRole('button', { name: 'Nostr Connect (QR)' }).click();
 	await expect.element(screen.getByRole('button', { name: 'Отмена' })).toBeVisible();
 
 	await screen.getByRole('button', { name: 'Отмена' }).click();
 
-	await expect.element(screen.getByRole('button', { name: 'Войти' })).toBeVisible();
+	await expect.element(screen.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
 	expect(auth.status).toBe('anonymous');
 	expect(auth.error).toBeNull();
 });
@@ -223,7 +223,7 @@ it('cancelling after the signer connects but before verification stays anonymous
 	};
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти' }).click();
+	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
 	await screen.getByRole('button', { name: 'Nostr Connect (QR)' }).click();
 	await expect.element(screen.getByRole('button', { name: 'Отмена' })).toBeVisible();
 
@@ -235,7 +235,7 @@ it('cancelling after the signer connects but before verification stays anonymous
 	auth.cancelNip46();
 	releaseSignature();
 
-	await expect.element(screen.getByRole('button', { name: 'Войти' })).toBeVisible();
+	await expect.element(screen.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
 	expect(auth.status).toBe('anonymous');
 	expect(auth.pubkey).toBeNull();
 	expect(verifyCalled).toBe(false);

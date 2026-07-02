@@ -6,16 +6,10 @@ import {
 	applyAc9Fixture,
 	buildAc9RequestJSON
 } from '$lib/state/request-fixtures';
-import {
-	createRequestState,
-	RequestReorderError,
-	type RequestState
-} from '$lib/state/request.svelte';
-
-let request: RequestState;
+import { RequestReorderError, request } from '$lib/state/request.svelte';
 
 beforeEach(() => {
-	request = createRequestState();
+	request.reset();
 });
 
 describe('prompt derivation', () => {
@@ -89,8 +83,8 @@ describe('prompt override', () => {
 });
 
 describe('validate', () => {
-	it('reports missing prompt and image', () => {
-		expect(request.validate()).toEqual({ valid: false, missing: ['prompt', 'image'] });
+	it('reports missing image when no state is set', () => {
+		expect(request.validate()).toEqual({ valid: false, missing: ['image'] });
 	});
 
 	it('reports missing image when prompt is present', () => {
@@ -98,50 +92,49 @@ describe('validate', () => {
 		expect(request.validate()).toEqual({ valid: false, missing: ['image'] });
 	});
 
-	it('reports missing prompt when image is present', () => {
+	it('is valid when only image is set', () => {
 		request.setImage(AC9_IMAGE);
-		expect(request.validate()).toEqual({ valid: false, missing: ['prompt'] });
+		expect(request.validate()).toEqual({ valid: true, missing: [] });
+	});
+
+	it('accepts an image URL without derived metadata', () => {
+		request.setImage({ url: AC9_IMAGE.url });
+		expect(request.toJSON().image).toEqual({ url: AC9_IMAGE.url });
 	});
 
 	it('trims image URLs at the store boundary', () => {
-		request.setImage({ ...AC9_IMAGE, url: ` ${AC9_IMAGE.url} ` });
-		expect(request.toJSON().image).toEqual(AC9_IMAGE);
+		request.setImage({ url: ` ${AC9_IMAGE.url} ` });
+		expect(request.toJSON().image).toEqual({ url: AC9_IMAGE.url });
 	});
 
 	it('rejects invalid image URLs at the store boundary', () => {
 		request.setImage(AC9_IMAGE);
-		expect(() => request.setImage({ ...AC9_IMAGE, url: 'not a url' })).toThrow();
+		expect(() => request.setImage({ url: 'not a url' })).toThrow();
 		expect(request.image?.url).toBe(AC9_IMAGE.url);
 	});
 
-	it('rejects uploaded images without contract metadata from JSON', () => {
-		const snapshot = buildAc9RequestJSON();
-		snapshot.image = { url: AC9_IMAGE.url } as unknown as typeof snapshot.image;
-		expect(() => request.fromJSON(snapshot)).toThrow();
-	});
-
 	it('is valid when prompt and image are present', () => {
-		applyAc9Fixture(request);
+		applyAc9Fixture();
 		expect(request.validate()).toEqual({ valid: true, missing: [] });
 	});
 });
 
 describe('canSubmit', () => {
 	it('is false while rendering', () => {
-		applyAc9Fixture(request);
+		applyAc9Fixture();
 		request.setStatus('rendering');
 		expect(request.canSubmit).toBe(false);
 	});
 
 	it('is true when valid and idle', () => {
-		applyAc9Fixture(request);
+		applyAc9Fixture();
 		expect(request.canSubmit).toBe(true);
 	});
 });
 
 describe('serialization', () => {
 	it('round-trips through toJSON and fromJSON including override', () => {
-		applyAc9Fixture(request);
+		applyAc9Fixture();
 		request.setPromptOverride('override text');
 		const snapshot = request.toJSON();
 		request.reset();
@@ -156,7 +149,7 @@ describe('serialization', () => {
 
 	it('rejects invalid image URLs from JSON', () => {
 		const snapshot = buildAc9RequestJSON();
-		snapshot.image = { ...AC9_IMAGE, url: 'not a url' };
+		snapshot.image = { url: 'not a url' };
 		expect(() => request.fromJSON(snapshot)).toThrow();
 	});
 
@@ -179,7 +172,7 @@ describe('serialization', () => {
 	});
 
 	it('does not expose mutable state through JSON snapshots', () => {
-		applyAc9Fixture(request);
+		applyAc9Fixture();
 		const snapshot = request.toJSON();
 		expect(snapshot.image).toBeDefined();
 		if (!snapshot.image) return;
@@ -208,7 +201,7 @@ describe('serialization', () => {
 
 describe('normalizeForComparison', () => {
 	it('ignores request id and status', () => {
-		applyAc9Fixture(request);
+		applyAc9Fixture();
 		const baseline = request.normalizeForComparison();
 		request.id = 'different-id';
 		request.setStatus('rendering');
@@ -216,7 +209,7 @@ describe('normalizeForComparison', () => {
 	});
 
 	it('matches across two loads of the same fixture content', () => {
-		applyAc9Fixture(request);
+		applyAc9Fixture();
 		const first = request.normalizeForComparison();
 		request.reset();
 		request.fromJSON(buildAc9RequestJSON());
@@ -226,7 +219,7 @@ describe('normalizeForComparison', () => {
 
 describe('toRenderRequest', () => {
 	it('returns the wire body for a valid AC-9 fixture', () => {
-		applyAc9Fixture(request);
+		applyAc9Fixture();
 		expect(request.toRenderRequest()).toEqual(AC9_RENDER_REQUEST);
 		expect(request.prompt).toBe(AC9_PROMPT);
 	});
