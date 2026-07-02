@@ -61,6 +61,9 @@ it('reorders fragments via the move-down button and updates the prompt preview',
 		expect.objectContaining({ id: thirdId, text: 'cozy mood', order: 2 })
 	]);
 	expect(request.prompt).toBe('warm lighting Scandinavian style cozy mood');
+	expect(screen.getByRole('status').element().textContent).toBe(
+		'Фрагмент перемещён вниз, позиция 2'
+	);
 
 	expect(
 		(screen.getByRole('textbox', { name: 'Итоговый промпт' }).element() as HTMLTextAreaElement)
