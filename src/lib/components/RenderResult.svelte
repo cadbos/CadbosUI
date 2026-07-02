@@ -9,6 +9,9 @@
 
 	const render = $derived(request.currentRender);
 	const imageUrl = $derived(render?.outputUrls[0]);
+	// The render result doesn't carry its own format, so the current form setting
+	// is the best available signal for the download filename's extension.
+	const downloadName = $derived(`render.${request.outputFormat}`);
 </script>
 
 {#if render && imageUrl}
@@ -23,7 +26,7 @@
 				<span>{ti('render.balance', { balance: render.balance })}</span>
 			</div>
 			<div class="actions">
-				<a href={imageUrl} download="render.jpg" class="btn btn-secondary">
+				<a href={imageUrl} download={downloadName} class="btn btn-secondary">
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 						<path
 							d="M12 4v12M12 16l-4-4M12 16l4-4"
