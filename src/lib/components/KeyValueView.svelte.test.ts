@@ -45,3 +45,28 @@ it('edits request fragments in place without writing localized labels', async ()
 	expect(request.toJSON().promptFragments.map((fragment) => fragment.label)).not.toContain('Стиль');
 	expect(request.prompt).toBe('mood: Scandinavian\nroom: kitchen');
 });
+
+it('reorders fragments via the move-down button and updates the prompt preview', async () => {
+	const firstId = request.addFragment({ text: 'Scandinavian style ', order: 0 });
+	const secondId = request.addFragment({ text: 'warm lighting ', order: 1 });
+	const thirdId = request.addFragment({ text: 'cozy mood', order: 2 });
+
+	const screen = render(KeyValueView);
+
+	await screen.getByRole('button', { name: 'Переместить фрагмент 1 вниз' }).click();
+
+	expect(request.toJSON().promptFragments).toEqual([
+		expect.objectContaining({ id: secondId, text: 'warm lighting ', order: 0 }),
+		expect.objectContaining({ id: firstId, text: 'Scandinavian style ', order: 1 }),
+		expect.objectContaining({ id: thirdId, text: 'cozy mood', order: 2 })
+	]);
+	expect(request.prompt).toBe('warm lighting Scandinavian style cozy mood');
+	expect(screen.getByRole('status').element().textContent).toBe(
+		'Фрагмент перемещён вниз, позиция 2'
+	);
+
+	expect(
+		(screen.getByRole('textbox', { name: 'Итоговый промпт' }).element() as HTMLTextAreaElement)
+			.value
+	).toBe('warm lighting Scandinavian style cozy mood');
+});

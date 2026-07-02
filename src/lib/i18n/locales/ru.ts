@@ -12,6 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import type { Dictionary } from '$lib/i18n/locales';
+
 export const ru = {
 	'app.title': 'Cadbos — ИИ-дизайн интерьера',
 	'app.subtitle': 'Загрузите фото комнаты и соберите промпт в удобном вам интерфейсе.',
@@ -23,18 +25,18 @@ export const ru = {
 	'view.chat.prompt': 'Промпт чата',
 	'view.chat.placeholder': 'Скандинавский стиль, тёплые тона, натуральный свет…',
 	'view.chat.hint': 'Оставьте пустым для авто-улучшения фото',
-	'view.keyValue.style': 'Стиль',
-	'view.keyValue.room': 'Комната',
-	'view.keyValue.lighting': 'Свет',
 	'view.keyValue.label': 'Метка {order}',
 	'view.keyValue.text': 'Текст {order}',
 	'view.keyValue.addFragment': 'Добавить фрагмент',
 	'view.keyValue.remove': 'Удалить',
 	'view.keyValue.removeFragment': 'Удалить фрагмент {order}',
+	'view.keyValue.moveUp': 'Переместить фрагмент {order} вверх',
+	'view.keyValue.moveDown': 'Переместить фрагмент {order} вниз',
+	'view.keyValue.movedUp': 'Фрагмент перемещён вверх, позиция {order}',
+	'view.keyValue.movedDown': 'Фрагмент перемещён вниз, позиция {order}',
+	'view.keyValue.removed': 'Фрагмент {order} удалён',
+	'view.keyValue.promptPreview': 'Итоговый промпт',
 	'view.keyValue.apply': 'Применить промпт ключ-значение',
-	'view.graph.style': 'Узел стиля',
-	'view.graph.room': 'Узел комнаты',
-	'view.graph.lighting': 'Узел света',
 	'view.graph.fragment': 'Узел фрагмента {order}',
 	'view.graph.addFragment': 'Добавить узел фрагмента',
 	'view.graph.remove': 'Удалить',
@@ -98,4 +100,4 @@ export const ru = {
 	'edit.undo': 'Отменить правку',
 	'edit.cost': 'Стоимость правки: {cost}',
 	'edit.balance': 'Баланс: {balance}'
-} as const;
+} as const satisfies Dictionary;

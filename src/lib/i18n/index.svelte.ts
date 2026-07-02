@@ -15,10 +15,10 @@
 import { browser } from '$app/environment';
 import { ru } from '$lib/i18n/locales/ru';
 import { en } from '$lib/i18n/locales/en';
+import type { Dictionary } from '$lib/i18n/locales';
 
 export type Locale = 'ru' | 'en';
-export type TranslationKey = keyof typeof ru;
-export type Dictionary = Record<TranslationKey, string>;
+export type TranslationKey = keyof Dictionary;
 
 export const defaultLocale: Locale = 'ru';
 export const locales: readonly Locale[] = ['ru', 'en'];
