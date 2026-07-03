@@ -21,7 +21,7 @@ import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import { getUserIdByPubkey, recordBalance } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { recordGeneratedImage } from '$lib/server/generated-images';
+import { GeneratedImageRecordError, recordGeneratedImage } from '$lib/server/generated-images';
 import { editInterior } from '$lib/server/generation';
 
 // Anti-cost-abuse (FR-К5): each edit is its own paid call, so it gets its own
@@ -75,6 +75,9 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			await recordGeneratedImage(db, userId, result.outputUrl);
 		} catch (err) {
 			console.error('recordGeneratedImage failed after a successful edit:', err);
+			if (err instanceof GeneratedImageRecordError && err.code === 'unknown_user_id') {
+				return apiError(500, 'account_error', 'Account record not found');
+			}
 			return apiError(500, 'image_record_failed', 'Image record failed');
 		}
 

@@ -41,7 +41,8 @@ export function makeD1(): D1Database {
 			const row = db.prepare(sql).get(...args) as Record<string, unknown> | undefined;
 			if (row === undefined) return null;
 			return col ? row[col] : row;
-		}
+		},
+		all: () => ({ success: true, results: db.prepare(sql).all(...args), meta: {} })
 	});
 	return { prepare: (sql: string) => stmt(sql) } as unknown as D1Database;
 }

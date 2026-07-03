@@ -20,7 +20,7 @@ import { apiError, parseBody, renderRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { getUserIdByPubkey, recordBalance } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { recordGeneratedImage } from '$lib/server/generated-images';
+import { GeneratedImageRecordError, recordGeneratedImage } from '$lib/server/generated-images';
 import { renderInterior } from '$lib/server/generation';
 
 // Session is enforced centrally in hooks.server.ts (guardedPaths). Spend limits
@@ -46,6 +46,14 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	try {
 		result = await renderInterior(platform, parsed.data);
 	} catch (err) {
+		if (err instanceof GeneratedImageRecordError) {
+			console.error('recordGeneratedImage failed after a successful render:', err);
+			if (err.code === 'unknown_user_id') {
+				return apiError(500, 'account_error', 'Account record not found');
+			}
+			return apiError(500, 'image_record_failed', 'Image record failed');
+		}
+
 		// generation.ts already sanitizes/logs the detail; this route is the last
 		// line of defense (NFR-6/8) — never forward err.message to the client.
 		console.error(err);
