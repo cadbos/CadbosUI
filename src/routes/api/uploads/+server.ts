@@ -15,7 +15,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { apiError } from '$lib/server/api';
-import { uploadImage, imageExtensionFromMime } from '$lib/server/uploads';
+import { imageExtensionFromMime } from '$lib/server/image-utils';
+import { uploadImage } from '$lib/server/uploads';
 
 // FR-Ж1/И-UT-3: 8 MB max, enforced server-side — the client-side check in
 // ImageUpload.svelte is a UX nicety, not a trust boundary.

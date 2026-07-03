@@ -13,7 +13,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { uploadImage } from './uploads';
+import { uploadImage, uploadImageBytes } from './uploads';
 
 function mockBucket(): { put: ReturnType<typeof vi.fn> } {
 	return { put: vi.fn(async () => undefined) };
@@ -57,5 +57,49 @@ describe('uploadImage', () => {
 		await expect(uploadImage(platform(mockBucket()), file)).rejects.toThrow(
 			'UPLOADS_PUBLIC_URL not configured'
 		);
+	});
+
+	it('stores generated image bytes and returns the public object URL', async () => {
+		const bucket = mockBucket();
+		const id = '123e4567-e89b-12d3-a456-426614174001' as ReturnType<typeof crypto.randomUUID>;
+		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
+
+		const bytes = await new Blob(['generated-image']).arrayBuffer();
+		const result = await uploadImageBytes(
+			platform(bucket, 'https://uploads.cadbos.example'),
+			bytes,
+			'image/webp'
+		);
+
+		expect(bucket.put).toHaveBeenCalledWith(`${id}.webp`, bytes, {
+			httpMetadata: { contentType: 'image/webp' }
+		});
+		expect(result).toEqual({
+			url: `https://uploads.cadbos.example/${id}.webp`,
+			mime: 'image/webp',
+			size: bytes.byteLength
+		});
+	});
+
+	it('normalizes parameterized image content types before storing and returning metadata', async () => {
+		const bucket = mockBucket();
+		const id = '123e4567-e89b-12d3-a456-426614174002' as ReturnType<typeof crypto.randomUUID>;
+		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
+
+		const bytes = await new Blob(['generated-image']).arrayBuffer();
+		const result = await uploadImageBytes(
+			platform(bucket, 'https://uploads.cadbos.example'),
+			bytes,
+			'image/jpeg; charset=binary'
+		);
+
+		expect(bucket.put).toHaveBeenCalledWith(`${id}.jpg`, bytes, {
+			httpMetadata: { contentType: 'image/jpeg' }
+		});
+		expect(result).toEqual({
+			url: `https://uploads.cadbos.example/${id}.jpg`,
+			mime: 'image/jpeg',
+			size: bytes.byteLength
+		});
 	});
 });

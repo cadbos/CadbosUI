@@ -22,8 +22,10 @@ const IMAGE_MIME_BY_EXTENSION = {
 } as const;
 
 type ImageExtension = keyof typeof IMAGE_MIME_BY_EXTENSION;
-type ImageMime = (typeof IMAGE_MIME_BY_EXTENSION)[ImageExtension];
+export type ImageMime = (typeof IMAGE_MIME_BY_EXTENSION)[ImageExtension];
 
+export function imageExtensionFromMime(mime: ImageMime): ImageExtension;
+export function imageExtensionFromMime(mime: string): ImageExtension | null;
 export function imageExtensionFromMime(mime: string): ImageExtension | null {
 	const normalized = normalizeImageContentType(mime);
 	if (normalized === null) return null;
@@ -36,7 +38,7 @@ export function imageExtensionFromMime(mime: string): ImageExtension | null {
 	return null;
 }
 
-function normalizeImageContentType(contentType: string | null): ImageMime | null {
+export function normalizeImageContentType(contentType: string | null): ImageMime | null {
 	const normalized = contentType?.split(';', 1)[0]?.trim().toLowerCase();
 	if (normalized === undefined) return null;
 

@@ -16,10 +16,13 @@ import { dev } from '$app/environment';
 import { createClient } from '$lib/server/archai/client';
 import { postEditByPrompt, postRenderInterior } from '$lib/server/archai';
 import type { RenderResponse, OutputFormat } from '$lib/api/contract';
+import { imageExtensionFromMime } from '$lib/server/image-utils';
 import { mockEdit, mockRender } from '$lib/server/mocks/fixtures';
+import { uploadImageBytes } from '$lib/server/uploads';
 
 // И-MA-6 / И-MA-ED3: default sync-call timeout, shared by render and edit.
 const RENDER_TIMEOUT_MS = 120_000;
+const GENERATED_IMAGE_FETCH_TIMEOUT_MS = 60_000;
 
 // Provider error details (raw response text, internal ids) must stay server-side
 // (NFR-6/8) — log them here and surface only a generic, operation-appropriate
@@ -36,6 +39,76 @@ function requestClientFor(apiKey: string): ReturnType<typeof createClient> {
 		baseUrl: 'https://api.myarchitectai.com/v1',
 		headers: { 'x-api-key': apiKey }
 	});
+}
+
+function caughtErrorKind(err: unknown): string {
+	return err instanceof Error ? err.name : typeof err;
+}
+
+async function storeGeneratedImage(
+	platform: App.Platform | undefined,
+	imageUrl: string,
+	operation: string
+): Promise<string> {
+	let response: Response;
+	try {
+		response = await fetch(imageUrl, {
+			signal: AbortSignal.timeout(GENERATED_IMAGE_FETCH_TIMEOUT_MS)
+		});
+	} catch (err) {
+		console.error(
+			`archAI ${operation} image mirror failed after successful generation:`,
+			`download fetch failed (${caughtErrorKind(err)})`
+		);
+		return imageUrl;
+	}
+
+	if (!response.ok) {
+		console.error(
+			`archAI ${operation} image mirror failed after successful generation:`,
+			`unexpected download status ${response.status}`
+		);
+		return imageUrl;
+	}
+
+	const contentType = response.headers.get('content-type') ?? '';
+	if (imageExtensionFromMime(contentType) === null) {
+		console.error(
+			`archAI ${operation} image mirror failed after successful generation:`,
+			`unexpected content type ${contentType || '(missing)'}`
+		);
+		return imageUrl;
+	}
+
+	let bytes: ArrayBuffer;
+	try {
+		bytes = await response.arrayBuffer();
+	} catch (err) {
+		console.error(
+			`archAI ${operation} image mirror failed after successful generation:`,
+			`download body read failed (${caughtErrorKind(err)})`
+		);
+		return imageUrl;
+	}
+
+	if (bytes.byteLength === 0) {
+		console.error(
+			`archAI ${operation} image mirror failed after successful generation:`,
+			'empty image response'
+		);
+		return imageUrl;
+	}
+
+	try {
+		const stored = await uploadImageBytes(platform, bytes, contentType);
+		return stored.url;
+	} catch (err) {
+		console.error(
+			`archAI ${operation} image mirror failed after successful generation:`,
+			`storage upload failed (${caughtErrorKind(err)})`
+		);
+		return imageUrl;
+	}
 }
 
 export async function renderInterior(
@@ -81,7 +154,11 @@ export async function renderInterior(
 		);
 	}
 
-	return { outputUrl, cost: data.cost, balance: data.balance };
+	return {
+		outputUrl: await storeGeneratedImage(platform, outputUrl, 'render/interior'),
+		cost: data.cost,
+		balance: data.balance
+	};
 }
 
 // Д-17: `image` is the URL of the render being edited (the caller passes
@@ -126,5 +203,9 @@ export async function editInterior(
 		);
 	}
 
-	return { outputUrl: data.output, cost: data.cost, balance: data.balance };
+	return {
+		outputUrl: await storeGeneratedImage(platform, data.output, 'edit-by-prompt'),
+		cost: data.cost,
+		balance: data.balance
+	};
 }
