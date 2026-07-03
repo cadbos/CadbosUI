@@ -15,10 +15,12 @@
 import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import type { RenderResponse } from '$lib/api/contract';
 import { apiError, parseBody, renderRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { getUserIdByPubkey, recordBalance } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+import { recordGeneratedImage } from '$lib/server/generated-images';
 import { renderInterior } from '$lib/server/generation';
 
 // Session is enforced centrally in hooks.server.ts (guardedPaths). Spend limits
@@ -40,14 +42,29 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	// a normal case — fail closed rather than charge a call we can't attribute.
 	if (db && !userId) return apiError(500, 'account_error', 'Account record not found');
 
+	let result: RenderResponse;
 	try {
-		const result = await renderInterior(platform, parsed.data);
-		if (db && userId) await recordBalance(db, userId, result.balance);
-		return json(result);
+		result = await renderInterior(platform, parsed.data);
 	} catch (err) {
 		// generation.ts already sanitizes/logs the detail; this route is the last
 		// line of defense (NFR-6/8) — never forward err.message to the client.
 		console.error(err);
 		return apiError(500, 'render_failed', 'Render failed');
 	}
+
+	if (db && userId) {
+		try {
+			await recordGeneratedImage(db, userId, result.outputUrl);
+		} catch (err) {
+			console.error('recordGeneratedImage failed after a successful render:', err);
+		}
+
+		try {
+			await recordBalance(db, userId, result.balance);
+		} catch (err) {
+			console.error('recordBalance failed after a successful render:', err);
+		}
+	}
+
+	return json(result);
 };

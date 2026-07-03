@@ -12,12 +12,44 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { POST } from './+server';
+
+const billingMock = vi.hoisted(() => ({ failNextRecordBalance: false }));
+const generatedImagesMock = vi.hoisted(() => ({ failNextRecordGeneratedImage: false }));
+
+vi.mock('$lib/server/billing', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/billing')>();
+	return {
+		...actual,
+		recordBalance: vi.fn((...args: Parameters<typeof actual.recordBalance>) => {
+			if (billingMock.failNextRecordBalance) {
+				billingMock.failNextRecordBalance = false;
+				return Promise.reject(new Error('simulated D1 failure'));
+			}
+			return actual.recordBalance(...args);
+		})
+	};
+});
+
+vi.mock('$lib/server/generated-images', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/generated-images')>();
+	return {
+		...actual,
+		recordGeneratedImage: vi.fn((...args: Parameters<typeof actual.recordGeneratedImage>) => {
+			if (generatedImagesMock.failNextRecordGeneratedImage) {
+				generatedImagesMock.failNextRecordGeneratedImage = false;
+				return Promise.reject(new Error('simulated generated image record failure'));
+			}
+			return actual.recordGeneratedImage(...args);
+		})
+	};
+});
+
+const { POST } = await import('./+server');
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -65,6 +97,21 @@ describe('POST /api/render — billing', () => {
 		expect(balanceRow?.balance).toBe(result.balance);
 	});
 
+	it('records the generated image against the authenticated profile', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+
+		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
+		expect(response.status).toBe(200);
+		const result = (await response.json()) as { outputUrl: string };
+
+		const imageRow = await db
+			.prepare('SELECT user_id, url FROM generated_images WHERE user_id = ?')
+			.bind('user-1')
+			.first<{ user_id: string; url: string }>();
+		expect(imageRow).toEqual({ user_id: 'user-1', url: result.outputUrl });
+	});
+
 	it('overwrites the stored balance rather than accumulating it across calls', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
@@ -78,6 +125,56 @@ describe('POST /api/render — billing', () => {
 			.bind('user-1')
 			.first<{ balance: number }>();
 		expect(balanceRow?.balance).toBe(result.balance);
+	});
+
+	it('still returns the completed, already-charged render if recording the image fails', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		generatedImagesMock.failNextRecordGeneratedImage = true;
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		try {
+			const response = await call(
+				{ pubkey: 'pubkey-1' },
+				{ env: { DB: db } } as App.Platform,
+				body
+			);
+
+			expect(response.status).toBe(200);
+			const result = (await response.json()) as { outputUrl: string };
+			expect(result.outputUrl).toMatch(/^https:\/\//);
+			expect(consoleError).toHaveBeenCalledWith(
+				'recordGeneratedImage failed after a successful render:',
+				expect.any(Error)
+			);
+		} finally {
+			consoleError.mockRestore();
+		}
+	});
+
+	it('still returns the completed, already-charged render if recording the balance fails', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		billingMock.failNextRecordBalance = true;
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		try {
+			const response = await call(
+				{ pubkey: 'pubkey-1' },
+				{ env: { DB: db } } as App.Platform,
+				body
+			);
+
+			expect(response.status).toBe(200);
+			const result = (await response.json()) as { outputUrl: string };
+			expect(result.outputUrl).toMatch(/^https:\/\//);
+			expect(consoleError).toHaveBeenCalledWith(
+				'recordBalance failed after a successful render:',
+				expect.any(Error)
+			);
+		} finally {
+			consoleError.mockRestore();
+		}
 	});
 
 	it('never blocks generation locally — archAI is the only spend gate', async () => {

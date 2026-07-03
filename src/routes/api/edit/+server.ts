@@ -21,6 +21,7 @@ import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import { getUserIdByPubkey, recordBalance } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+import { recordGeneratedImage } from '$lib/server/generated-images';
 import { editInterior } from '$lib/server/generation';
 
 // Anti-cost-abuse (FR-К5): each edit is its own paid call, so it gets its own
@@ -70,6 +71,13 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	// cache the resulting balance is a bookkeeping gap, not a reason to make the
 	// user think a completed, paid edit failed.
 	if (db && userId) {
+		try {
+			await recordGeneratedImage(db, userId, result.outputUrl);
+		} catch (err) {
+			console.error('recordGeneratedImage failed after a successful edit:', err);
+			return apiError(500, 'image_record_failed', 'Image record failed');
+		}
+
 		try {
 			await recordBalance(db, userId, result.balance);
 		} catch (err) {
