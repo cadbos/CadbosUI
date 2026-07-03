@@ -34,7 +34,6 @@ export interface Dictionary {
 	'view.keyValue.movedDown': string;
 	'view.keyValue.removed': string;
 	'view.keyValue.promptPreview': string;
-	'view.keyValue.apply': string;
 	'view.graph.fragment': string;
 	'view.graph.addFragment': string;
 	'view.graph.remove': string;
@@ -47,7 +46,6 @@ export interface Dictionary {
 	'view.graph.validation.branchingNode': string;
 	'view.graph.validation.danglingNode': string;
 	'view.graph.validation.unknownNode': string;
-	'view.graph.mobileUnsupported': string;
 	'boundary.failed': string;
 	'auth.signIn': string;
 	'auth.login.nip07': string;

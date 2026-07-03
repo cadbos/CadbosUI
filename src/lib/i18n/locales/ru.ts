@@ -15,7 +15,7 @@
 import type { Dictionary } from '$lib/i18n/locales';
 
 export const ru = {
-	'app.title': 'Cadbos — ИИ-дизайн интерьера',
+	'app.title': 'ИИ-дизайн интерьера',
 	'app.subtitle': 'Загрузите фото комнаты и соберите промпт в удобном вам интерфейсе.',
 	'view.switcher.label': 'Способ ввода',
 	'view.chat': 'Чат',
@@ -36,7 +36,6 @@ export const ru = {
 	'view.keyValue.movedDown': 'Фрагмент перемещён вниз, позиция {order}',
 	'view.keyValue.removed': 'Фрагмент {order} удалён',
 	'view.keyValue.promptPreview': 'Итоговый промпт',
-	'view.keyValue.apply': 'Применить промпт ключ-значение',
 	'view.graph.fragment': 'Узел фрагмента {order}',
 	'view.graph.addFragment': 'Добавить узел фрагмента',
 	'view.graph.remove': 'Удалить',
@@ -51,8 +50,6 @@ export const ru = {
 	'view.graph.validation.danglingNode':
 		'Есть узел фрагмента, не связанный цепочкой от фото до результата.',
 	'view.graph.validation.unknownNode': 'Соединение ссылается на несуществующий узел.',
-	'view.graph.mobileUnsupported':
-		'Графовый режим недоступен на маленьких экранах. Используйте вкладку «Чат» или «Ключ-значение».',
 	'boundary.failed': 'Не удалось загрузить этот раздел.',
 	'auth.signIn': 'Войти',
 	'auth.login.nip07': 'Расширение Nostr',
@@ -66,7 +63,7 @@ export const ru = {
 	'auth.connecting': 'Подключение…',
 	'auth.logout': 'Выйти',
 	'auth.profile.relayCount': 'Релеев: {count}',
-	'auth.profile.completeHint': 'Заполните имя и фамилию для профиля Cadbos.',
+	'auth.profile.completeHint': 'Заполните имя и фамилию для профиля.',
 	'auth.profile.firstName': 'Имя',
 	'auth.profile.lastName': 'Фамилия',
 	'auth.profile.save': 'Сохранить',

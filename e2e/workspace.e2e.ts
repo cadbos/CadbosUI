@@ -50,31 +50,44 @@ test('switches to the graph view and edits fragment nodes reflected in key-value
 	await expect(page.getByLabel('Текст 2')).toHaveCount(0);
 });
 
-test('degrades the graph view to a message on narrow screens', async ({ page }) => {
+test('the graph view stays usable on a narrow (phone-sized) screen', async ({ page }) => {
 	await page.setViewportSize({ width: 375, height: 800 });
 	await page.goto('/');
 
-	await page.getByRole('tab', { name: 'Граф' }).click();
-	await expect(
-		page.getByText(
-			'Графовый режим недоступен на маленьких экранах. Используйте вкладку «Чат» или «Ключ-значение».'
-		)
-	).toBeVisible();
+	const graphTab = page.getByRole('tab', { name: 'Граф' });
+	await graphTab.click();
+	await expect(graphTab).toHaveAttribute('aria-selected', 'true');
+
+	const addButton = page.getByRole('button', { name: 'Добавить узел фрагмента' });
+	await expect(addButton).toBeVisible();
+	await addButton.click();
+	await expect(page.getByRole('textbox', { name: 'Узел фрагмента 1' })).toBeVisible();
 });
 
-test('keeps the prompt byte-identical when switching from chat to key-value', async ({ page }) => {
+test('keeps the prompt byte-identical when switching from chat to graph', async ({ page }) => {
+	await page.setViewportSize({ width: 1024, height: 768 });
 	await page.goto('/');
 	const prompt = 'Scandinavian style, warm natural light';
 
 	await page.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…').fill(prompt);
 
-	await page.getByRole('tab', { name: 'Ключ-значение' }).click();
-	await expect(page.getByRole('tab', { name: 'Ключ-значение' })).toHaveAttribute(
-		'aria-selected',
-		'true'
-	);
+	await page.getByRole('tab', { name: 'Граф' }).click();
+	await expect(page.getByRole('tab', { name: 'Граф' })).toHaveAttribute('aria-selected', 'true');
 
 	await expect(promptPreview(page)).toHaveValue(prompt);
+});
+
+test('key-value edits survive a round trip through the chat tab', async ({ page }) => {
+	await page.goto('/');
+
+	await page.getByRole('tab', { name: 'Ключ-значение' }).click();
+	await page.getByRole('button', { name: 'Добавить фрагмент' }).click();
+	await page.getByLabel('Текст 1').fill('warm natural light');
+
+	await page.getByRole('tab', { name: 'Чат' }).click();
+	await page.getByRole('tab', { name: 'Ключ-значение' }).click();
+
+	await expect(page.getByLabel('Текст 1')).toHaveValue('warm natural light');
 });
 
 test('navigates tabs with the keyboard', async ({ page }) => {

@@ -15,7 +15,7 @@
 import type { Dictionary } from '$lib/i18n/locales';
 
 export const en = {
-	'app.title': 'Cadbos — Interior Design AI',
+	'app.title': 'AI Interior Design',
 	'app.subtitle': 'Upload a room photo and build a prompt in the interface you prefer.',
 	'view.switcher.label': 'Input method',
 	'view.chat': 'Chat',
@@ -36,7 +36,6 @@ export const en = {
 	'view.keyValue.movedDown': 'Fragment moved down to position {order}',
 	'view.keyValue.removed': 'Fragment {order} removed',
 	'view.keyValue.promptPreview': 'Final prompt',
-	'view.keyValue.apply': 'Apply key-value prompt',
 	'view.graph.fragment': 'Fragment node {order}',
 	'view.graph.addFragment': 'Add fragment node',
 	'view.graph.remove': 'Remove',
@@ -51,8 +50,6 @@ export const en = {
 	'view.graph.validation.danglingNode':
 		'A fragment node is not connected in the chain from the photo to the result.',
 	'view.graph.validation.unknownNode': 'A connection refers to a node that no longer exists.',
-	'view.graph.mobileUnsupported':
-		"Graph view isn't available on small screens. Use the Chat or Key-value tab instead.",
 	'boundary.failed': 'This section failed to load.',
 	'auth.signIn': 'Sign in',
 	'auth.login.nip07': 'Nostr extension',
@@ -66,7 +63,7 @@ export const en = {
 	'auth.connecting': 'Connecting…',
 	'auth.logout': 'Sign out',
 	'auth.profile.relayCount': 'Relays: {count}',
-	'auth.profile.completeHint': 'Add your first and last name for your Cadbos profile.',
+	'auth.profile.completeHint': 'Add your first and last name for your profile.',
 	'auth.profile.firstName': 'First name',
 	'auth.profile.lastName': 'Last name',
 	'auth.profile.save': 'Save',
