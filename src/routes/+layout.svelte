@@ -17,6 +17,7 @@ before the Change Date. See LICENSE for complete terms.
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import AuthBar from '$lib/components/AuthBar.svelte';
+	import { t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 
 	let { children } = $props();
@@ -27,6 +28,7 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <svelte:head>
+	<title>{t('app.title')}</title>
 	<link rel="icon" href={favicon} />
 </svelte:head>
 

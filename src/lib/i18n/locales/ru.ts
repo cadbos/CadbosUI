@@ -15,7 +15,7 @@
 import type { Dictionary } from '$lib/i18n/locales';
 
 export const ru = {
-	'app.title': 'Cadbos — ИИ-дизайн интерьера',
+	'app.title': 'ИИ-дизайн интерьера',
 	'app.subtitle': 'Загрузите фото комнаты и соберите промпт в удобном вам интерфейсе.',
 	'view.switcher.label': 'Способ ввода',
 	'view.chat': 'Чат',
@@ -66,7 +66,7 @@ export const ru = {
 	'auth.connecting': 'Подключение…',
 	'auth.logout': 'Выйти',
 	'auth.profile.relayCount': 'Релеев: {count}',
-	'auth.profile.completeHint': 'Заполните имя и фамилию для профиля Cadbos.',
+	'auth.profile.completeHint': 'Заполните имя и фамилию для профиля.',
 	'auth.profile.firstName': 'Имя',
 	'auth.profile.lastName': 'Фамилия',
 	'auth.profile.save': 'Сохранить',

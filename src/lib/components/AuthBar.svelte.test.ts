@@ -142,7 +142,7 @@ it('offers to complete Cadbos profile fields after sign-in', async () => {
 	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
 
 	await expect
-		.element(screen.getByText('Заполните имя и фамилию для профиля Cadbos.'))
+		.element(screen.getByText('Заполните имя и фамилию для профиля.'))
 		.toBeVisible();
 	await screen.getByLabelText('Имя').fill('  Ada  ');
 	await screen.getByLabelText('Фамилия').fill('   ');
@@ -156,7 +156,7 @@ it('offers to complete Cadbos profile fields after sign-in', async () => {
 		lastName: null
 	});
 	await expect
-		.element(screen.getByText('Заполните имя и фамилию для профиля Cadbos.'))
+		.element(screen.getByText('Заполните имя и фамилию для профиля.'))
 		.not.toBeVisible();
 });
 
