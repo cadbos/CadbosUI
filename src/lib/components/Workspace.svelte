@@ -21,8 +21,10 @@ before the Change Date. See LICENSE for complete terms.
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import RenderResult from '$lib/components/RenderResult.svelte';
 	import EditPanel from '$lib/components/EditPanel.svelte';
+	import GeneratedImagesSidebar from '$lib/components/GeneratedImagesSidebar.svelte';
 	import { request } from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
+	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
 
 	type ViewId = 'chat' | 'keyValue' | 'graph';
@@ -76,6 +78,11 @@ before the Change Date. See LICENSE for complete terms.
 	const validation = $derived(request.validate());
 	const canGenerate = $derived(validation.valid && !submitting && request.status !== 'rendering');
 
+	$effect(() => {
+		if (auth.canLoadGeneratedImages) void generatedImages.load();
+		else generatedImages.clear();
+	});
+
 	async function generate(): Promise<void> {
 		if (!canGenerate) return;
 		submitting = true;
@@ -100,7 +107,9 @@ before the Change Date. See LICENSE for complete terms.
 			request.setCurrentRender(render);
 			request.setStatus('idle');
 			showEditPanel = false;
-		} catch {
+			if (auth.canLoadGeneratedImages) void generatedImages.load();
+		} catch (error) {
+			console.error('Render request failed:', error);
 			request.setStatus('error');
 			submitError = t('render.failed');
 		} finally {
@@ -110,135 +119,144 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <main class="page">
-	<div class="card">
-		<header class="intro">
-			<h1>{t('app.title')}</h1>
-			<p>{t('app.subtitle')}</p>
-		</header>
+	<div class="workspace-shell">
+		<div class="workspace-main">
+			<div class="card">
+				<header class="intro">
+					<h1>{t('app.title')}</h1>
+					<p>{t('app.subtitle')}</p>
+				</header>
 
-		<section class="step">
-			<div class="step-header">
-				<span class="step-num" aria-hidden="true">①</span>
-				<h2>{t('upload.label')}</h2>
-			</div>
-			<ImageUpload />
-		</section>
-
-		<section class="step">
-			<div class="step-header">
-				<span class="step-num" aria-hidden="true">②</span>
-				<h2>{t('view.switcher.label')}</h2>
-				<span class="optional-badge">{t('render.optional')}</span>
-			</div>
-
-			<div class="tabs" role="tablist" aria-label={t('view.switcher.label')}>
-				{#each views as view, index (view.id)}
-					<div class="tab-item">
-						<button
-							{@attach (node) => {
-								tabs[index] = node as HTMLElement;
-							}}
-							type="button"
-							role="tab"
-							id={`tab-${view.id}`}
-							aria-selected={!view.disabled && activeIndex === index}
-							aria-disabled={view.disabled ? 'true' : undefined}
-							aria-controls={`panel-${view.id}`}
-							tabindex={!view.disabled && activeIndex === index ? 0 : -1}
-							class:active={!view.disabled && activeIndex === index}
-							class:tab-disabled={view.disabled}
-							onclick={() => activate(index)}
-							onkeydown={onKeydown}
-						>
-							{t(view.label)}
-						</button>
-						{#if view.disabled}
-							<span class="coming-soon">{t('view.comingSoon')}</span>
-						{/if}
+				<section class="step">
+					<div class="step-header">
+						<span class="step-num" aria-hidden="true">①</span>
+						<h2>{t('upload.label')}</h2>
 					</div>
-				{/each}
+					<ImageUpload />
+				</section>
+
+				<section class="step">
+					<div class="step-header">
+						<span class="step-num" aria-hidden="true">②</span>
+						<h2>{t('view.switcher.label')}</h2>
+						<span class="optional-badge">{t('render.optional')}</span>
+					</div>
+
+					<div class="tabs" role="tablist" aria-label={t('view.switcher.label')}>
+						{#each views as view, index (view.id)}
+							<div class="tab-item">
+								<button
+									{@attach (node) => {
+										tabs[index] = node as HTMLElement;
+									}}
+									type="button"
+									role="tab"
+									id={`tab-${view.id}`}
+									aria-selected={!view.disabled && activeIndex === index}
+									aria-disabled={view.disabled ? 'true' : undefined}
+									aria-controls={`panel-${view.id}`}
+									tabindex={!view.disabled && activeIndex === index ? 0 : -1}
+									class:active={!view.disabled && activeIndex === index}
+									class:tab-disabled={view.disabled}
+									onclick={() => activate(index)}
+									onkeydown={onKeydown}
+								>
+									{t(view.label)}
+								</button>
+								{#if view.disabled}
+									<span class="coming-soon">{t('view.comingSoon')}</span>
+								{/if}
+							</div>
+						{/each}
+					</div>
+
+					{#each views as view, index (view.id)}
+						{@const View = view.component}
+						<div
+							class="panel"
+							role="tabpanel"
+							id={`panel-${view.id}`}
+							aria-labelledby={`tab-${view.id}`}
+							tabindex="0"
+							hidden={activeIndex !== index}
+						>
+							<svelte:boundary>
+								<View />
+								{#snippet failed()}
+									<p class="boundary-failed">{t('boundary.failed')}</p>
+								{/snippet}
+							</svelte:boundary>
+						</div>
+					{/each}
+				</section>
+
+				<section class="generate-section">
+					<label class="format-label">
+						<span class="format-text">{t('render.outputFormat')}</span>
+						<select
+							value={request.outputFormat}
+							onchange={(event) =>
+								request.setOutputFormat(event.currentTarget.value as OutputFormat)}
+							class="format-select"
+						>
+							<option value="webp">WebP</option>
+							<option value="jpg">JPG</option>
+							<option value="png">PNG</option>
+							<option value="avif">AVIF</option>
+						</select>
+					</label>
+
+					{#if !isAuthenticated}
+						<p class="auth-hint">{t('render.signInToGenerate')}</p>
+					{/if}
+
+					<button
+						type="button"
+						class="generate-btn"
+						disabled={!canGenerate || !isAuthenticated}
+						onclick={() => void generate()}
+					>
+						{#if request.status === 'rendering'}
+							<span class="spinner" aria-hidden="true"></span>
+							{t('render.generating')}
+						{:else}
+							{t('render.generate')}
+						{/if}
+					</button>
+
+					{#if submitError}
+						<p class="submit-error" role="alert">{submitError}</p>
+					{/if}
+				</section>
 			</div>
 
-			{#each views as view, index (view.id)}
-				{@const View = view.component}
-				<div
-					class="panel"
-					role="tabpanel"
-					id={`panel-${view.id}`}
-					aria-labelledby={`tab-${view.id}`}
-					tabindex="0"
-					hidden={activeIndex !== index}
-				>
+			{#if request.currentRender}
+				<div class="result-wrap">
 					<svelte:boundary>
-						<View />
+						<RenderResult onEditRequest={() => (showEditPanel = !showEditPanel)} />
 						{#snippet failed()}
 							<p class="boundary-failed">{t('boundary.failed')}</p>
 						{/snippet}
 					</svelte:boundary>
 				</div>
-			{/each}
-		</section>
-
-		<section class="generate-section">
-			<label class="format-label">
-				<span class="format-text">{t('render.outputFormat')}</span>
-				<select
-					value={request.outputFormat}
-					onchange={(event) => request.setOutputFormat(event.currentTarget.value as OutputFormat)}
-					class="format-select"
-				>
-					<option value="webp">WebP</option>
-					<option value="jpg">JPG</option>
-					<option value="png">PNG</option>
-					<option value="avif">AVIF</option>
-				</select>
-			</label>
-
-			{#if !isAuthenticated}
-				<p class="auth-hint">{t('render.signInToGenerate')}</p>
 			{/if}
 
-			<button
-				type="button"
-				class="generate-btn"
-				disabled={!canGenerate || !isAuthenticated}
-				onclick={() => void generate()}
-			>
-				{#if request.status === 'rendering'}
-					<span class="spinner" aria-hidden="true"></span>
-					{t('render.generating')}
-				{:else}
-					{t('render.generate')}
-				{/if}
-			</button>
-
-			{#if submitError}
-				<p class="submit-error" role="alert">{submitError}</p>
+			{#if showEditPanel && request.currentRender}
+				<div class="result-wrap">
+					<svelte:boundary>
+						<EditPanel onClose={() => (showEditPanel = false)} />
+						{#snippet failed()}
+							<p class="boundary-failed">{t('boundary.failed')}</p>
+						{/snippet}
+					</svelte:boundary>
+				</div>
 			{/if}
-		</section>
+		</div>
+
+		{#if isAuthenticated}
+			<GeneratedImagesSidebar />
+		{/if}
 	</div>
-
-	{#if request.currentRender}
-		<div class="result-wrap">
-			<svelte:boundary>
-				<RenderResult onEditRequest={() => (showEditPanel = !showEditPanel)} />
-				{#snippet failed()}
-					<p class="boundary-failed">{t('boundary.failed')}</p>
-				{/snippet}
-			</svelte:boundary>
-		</div>
-	{/if}
-
-	{#if showEditPanel && request.currentRender}
-		<div class="result-wrap">
-			<svelte:boundary>
-				<EditPanel onClose={() => (showEditPanel = false)} />
-				{#snippet failed()}
-					<p class="boundary-failed">{t('boundary.failed')}</p>
-				{/snippet}
-			</svelte:boundary>
-		</div>
-	{/if}
 </main>
 
 <style>
@@ -256,9 +274,27 @@ before the Change Date. See LICENSE for complete terms.
 		--content-width: clamp(640px, calc(100vw - 4rem), 1800px);
 	}
 
-	.card {
+	.workspace-shell {
+		width: 100%;
+		max-width: calc(var(--content-width) + 368px + 1.5rem);
+		display: flex;
+		align-items: flex-start;
+		justify-content: center;
+		gap: 1.5rem;
+	}
+
+	.workspace-main {
 		width: 100%;
 		max-width: var(--content-width);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1.5rem;
+		min-width: 0;
+	}
+
+	.card {
+		width: 100%;
 		background: var(--color-surface);
 		border-radius: 20px;
 		box-shadow:
@@ -500,5 +536,12 @@ before the Change Date. See LICENSE for complete terms.
 	.result-wrap {
 		width: 100%;
 		max-width: var(--content-width);
+	}
+
+	@media (max-width: 960px) {
+		.workspace-shell {
+			flex-direction: column;
+			align-items: center;
+		}
 	}
 </style>

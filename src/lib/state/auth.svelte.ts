@@ -114,6 +114,10 @@ class AuthState {
 		return this.user?.pubkey ?? null;
 	}
 
+	get canLoadGeneratedImages(): boolean {
+		return this.status === 'authenticated' && this.pubkey !== null;
+	}
+
 	// Restore an existing server session (httpOnly cookie) on app load.
 	async loadSession(): Promise<void> {
 		try {

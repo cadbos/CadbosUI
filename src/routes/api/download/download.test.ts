@@ -47,6 +47,32 @@ describe('GET /api/download', () => {
 		expect(await response.text()).toBe('image-bytes');
 	});
 
+	it('adds the image extension when the requested filename is bare', async () => {
+		const fetch = vi.fn(async () => imageResponse('image/webp'));
+
+		const response = await call(
+			{ url: 'https://cdn.example/generated/newest.webp', filename: 'generated-image-newest' },
+			fetch
+		);
+
+		expect(response.headers.get('content-disposition')).toBe(
+			'attachment; filename="generated-image-newest.webp"'
+		);
+	});
+
+	it('escapes filename characters that can alter the forced-download header', async () => {
+		const fetch = vi.fn(async () => imageResponse('image/webp'));
+
+		const response = await call(
+			{ url: 'https://cdn.example/generated/newest.webp', filename: 'render"; name="evil\\file' },
+			fetch
+		);
+
+		expect(response.headers.get('content-disposition')).toBe(
+			String.raw`attachment; filename="render\"; name=\"evil\\file.webp"`
+		);
+	});
+
 	it('rejects a missing url parameter', async () => {
 		const fetch = vi.fn();
 		await expect(call({}, fetch)).rejects.toMatchObject({ status: 400 });

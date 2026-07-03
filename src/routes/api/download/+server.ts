@@ -13,6 +13,7 @@
  */
 
 import { error } from '@sveltejs/kit';
+import { imageExtensionFromMime } from '$lib/server/image-utils';
 import type { RequestHandler } from './$types';
 
 // Forces a real download of a render/edit result hosted on archAI's external
@@ -37,7 +38,7 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 	}
 	if (parsed.protocol !== 'https:') throw error(400, 'Only https URLs are supported');
 
-	const filename = url.searchParams.get('filename') || 'render';
+	const requestedFilename = url.searchParams.get('filename') || 'render';
 
 	let upstream: Response;
 	try {
@@ -49,12 +50,37 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 
 	const contentType = upstream.headers.get('content-type') ?? '';
 	if (!contentType.startsWith('image/')) throw error(502, 'Unexpected content type');
+	const extension = imageExtensionFromMime(contentType);
+	const filename =
+		extension && !hasExtension(requestedFilename)
+			? `${requestedFilename}.${extension}`
+			: requestedFilename;
 
 	return new Response(upstream.body, {
 		headers: {
 			'content-type': contentType,
-			'content-disposition': `attachment; filename="${filename}"`,
+			'content-disposition': `attachment; filename="${contentDispositionFilename(filename)}"`,
 			'cache-control': 'private, no-store'
 		}
 	});
 };
+
+function hasExtension(filename: string): boolean {
+	return /\.[a-z0-9]+$/i.test(filename);
+}
+
+function contentDispositionFilename(filename: string): string {
+	let escaped = '';
+	for (let index = 0; index < filename.length; index += 1) {
+		const character = filename[index];
+		const characterCode = character.charCodeAt(0);
+		if (characterCode < 0x20 || characterCode === 0x7f) {
+			escaped += '_';
+		} else if (character === '"' || character === '\\') {
+			escaped += `\\${character}`;
+		} else {
+			escaped += character;
+		}
+	}
+	return escaped;
+}

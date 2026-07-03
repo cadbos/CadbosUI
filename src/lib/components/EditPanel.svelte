@@ -15,6 +15,8 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
+	import { auth } from '$lib/state/auth.svelte';
+	import { generatedImages } from '$lib/state/generated-images.svelte';
 
 	interface Props {
 		onClose: () => void;
@@ -53,6 +55,7 @@ before the Change Date. See LICENSE for complete terms.
 			});
 			request.applyEditResult(newRender);
 			instruction = '';
+			if (auth.canLoadGeneratedImages) void generatedImages.load();
 		} catch {
 			error = t('edit.failed');
 		} finally {
