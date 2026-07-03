@@ -14,7 +14,7 @@
 
 // Minimal D1Database shim over node:sqlite, shared by server-side tests that need
 // to exercise real SQL (atomic upserts, RETURNING, UNIQUE constraints) against the
-// auth/billing schema without a Workers runtime. Test-only — never imported from
+// server schema without a Workers runtime. Test-only — never imported from
 // production code.
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -32,6 +32,7 @@ const SCHEMA = readdirSync(MIGRATIONS_DIR)
 
 export function makeD1(): D1Database {
 	const db = new DatabaseSync(':memory:');
+	db.exec('PRAGMA foreign_keys = ON');
 	db.exec(SCHEMA);
 	const stmt = (sql: string, args: SQLInputValue[] = []) => ({
 		bind: (...next: SQLInputValue[]) => stmt(sql, next),
