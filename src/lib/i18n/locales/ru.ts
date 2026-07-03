@@ -51,8 +51,6 @@ export const ru = {
 	'view.graph.validation.danglingNode':
 		'Есть узел фрагмента, не связанный цепочкой от фото до результата.',
 	'view.graph.validation.unknownNode': 'Соединение ссылается на несуществующий узел.',
-	'view.graph.mobileUnsupported':
-		'Графовый режим недоступен на маленьких экранах. Используйте вкладку «Чат» или «Ключ-значение».',
 	'boundary.failed': 'Не удалось загрузить этот раздел.',
 	'auth.signIn': 'Войти',
 	'auth.login.nip07': 'Расширение Nostr',

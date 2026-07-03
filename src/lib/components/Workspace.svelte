@@ -249,11 +249,16 @@ before the Change Date. See LICENSE for complete terms.
 		flex-direction: column;
 		align-items: center;
 		gap: 1.5rem;
+		/* Unchanged up to ~890px viewport (640px is the floor); on tablet/desktop it
+		   fills the screen minus a comfortable side margin — the graph view in
+		   particular benefits from the extra room — capped well above any real
+		   monitor width so it never gets absurd on an ultrawide display. */
+		--content-width: clamp(640px, calc(100vw - 4rem), 1800px);
 	}
 
 	.card {
 		width: 100%;
-		max-width: 640px;
+		max-width: var(--content-width);
 		background: var(--color-surface);
 		border-radius: 20px;
 		box-shadow:
@@ -494,6 +499,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	.result-wrap {
 		width: 100%;
-		max-width: 640px;
+		max-width: var(--content-width);
 	}
 </style>

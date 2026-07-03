@@ -51,8 +51,6 @@ export const en = {
 	'view.graph.validation.danglingNode':
 		'A fragment node is not connected in the chain from the photo to the result.',
 	'view.graph.validation.unknownNode': 'A connection refers to a node that no longer exists.',
-	'view.graph.mobileUnsupported':
-		"Graph view isn't available on small screens. Use the Chat or Key-value tab instead.",
 	'boundary.failed': 'This section failed to load.',
 	'auth.signIn': 'Sign in',
 	'auth.login.nip07': 'Nostr extension',

@@ -47,7 +47,6 @@ export interface Dictionary {
 	'view.graph.validation.branchingNode': string;
 	'view.graph.validation.danglingNode': string;
 	'view.graph.validation.unknownNode': string;
-	'view.graph.mobileUnsupported': string;
 	'boundary.failed': string;
 	'auth.signIn': string;
 	'auth.login.nip07': string;

@@ -247,7 +247,6 @@ before the Change Date. See LICENSE for complete terms.
 		</button>
 	</div>
 
-	<p class="graph-mobile-message">{t('view.graph.mobileUnsupported')}</p>
 	<div class="visually-hidden" role="status" aria-live="polite">{liveMessage}</div>
 </div>
 
@@ -260,7 +259,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	.graph-canvas {
 		width: 100%;
-		height: 24rem;
+		/* Scales with the viewport so the graph gets real room on tablet/desktop
+		   instead of a fixed, small box, while staying usable on a phone. */
+		height: clamp(20rem, 60vh, 44rem);
 		border: 1.5px solid var(--color-border);
 		border-radius: var(--radius);
 		overflow: hidden;
@@ -299,12 +300,6 @@ before the Change Date. See LICENSE for complete terms.
 		font: inherit;
 	}
 
-	.graph-mobile-message {
-		display: none;
-		margin: 0;
-		color: var(--color-muted);
-	}
-
 	.visually-hidden {
 		position: absolute;
 		width: 1px;
@@ -315,17 +310,5 @@ before the Change Date. See LICENSE for complete terms.
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
-	}
-
-	@media (max-width: 640px) {
-		.graph-canvas,
-		.graph-validation,
-		.actions {
-			display: none;
-		}
-
-		.graph-mobile-message {
-			display: block;
-		}
 	}
 </style>
