@@ -109,6 +109,7 @@ export const ru = {
 	'edit.instruction': 'Инструкция для правки',
 	'edit.apply': 'Применить правку',
 	'edit.applying': 'Применение…',
+	'edit.failed': 'Не удалось применить правку. Попробуйте ещё раз.',
 	'edit.undo': 'Отменить правку',
 	'edit.cost': 'Стоимость правки: {cost}',
 	'edit.balance': 'Баланс: {balance}'

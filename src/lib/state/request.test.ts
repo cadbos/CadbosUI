@@ -20,7 +20,7 @@ import {
 	applyAc9Fixture,
 	buildAc9RequestJSON
 } from '$lib/state/request-fixtures';
-import { RequestReorderError, request } from '$lib/state/request.svelte';
+import { RequestReorderError, request, type RenderResult } from '$lib/state/request.svelte';
 
 beforeEach(() => {
 	request.reset();
@@ -240,5 +240,72 @@ describe('toRenderRequest', () => {
 
 	it('returns null when invalid', () => {
 		expect(request.toRenderRequest()).toBeNull();
+	});
+});
+
+describe('edit lifecycle (FR-К4/К6)', () => {
+	function render(id: string): RenderResult {
+		return { id, outputUrls: [`https://example.test/${id}.jpg`], cost: 1, balance: 24, ts: 0 };
+	}
+
+	it('a fresh generation has nothing to undo', () => {
+		request.setCurrentRender(render('gen-1'));
+		expect(request.canUndoEdit).toBe(false);
+	});
+
+	it('applying an edit makes the prior render the undo target', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.applyEditResult(render('edit-1'));
+
+		expect(request.currentRender?.id).toBe('edit-1');
+		expect(request.canUndoEdit).toBe(true);
+	});
+
+	it('undoing restores the render from before the last edit', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.applyEditResult(render('edit-1'));
+
+		request.undoLastEdit();
+
+		expect(request.currentRender?.id).toBe('gen-1');
+		expect(request.canUndoEdit).toBe(false);
+	});
+
+	it('undo is a no-op when there is nothing to undo', () => {
+		request.setCurrentRender(render('gen-1'));
+
+		request.undoLastEdit();
+
+		expect(request.currentRender?.id).toBe('gen-1');
+	});
+
+	it('only holds a single undo step — a second edit replaces the earlier one', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.applyEditResult(render('edit-1'));
+		request.applyEditResult(render('edit-2'));
+
+		request.undoLastEdit();
+
+		expect(request.currentRender?.id).toBe('edit-1');
+		expect(request.canUndoEdit).toBe(false);
+	});
+
+	it('a fresh generation clears any pending undo from a prior edit chain', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.applyEditResult(render('edit-1'));
+
+		request.setCurrentRender(render('gen-2'));
+
+		expect(request.canUndoEdit).toBe(false);
+	});
+
+	it('reset() clears both the current and the undo target', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.applyEditResult(render('edit-1'));
+
+		request.reset();
+
+		expect(request.currentRender).toBeUndefined();
+		expect(request.canUndoEdit).toBe(false);
 	});
 });

@@ -280,12 +280,20 @@ class RequestState {
 	outputFormat = $state<OutputFormat>('webp');
 	promptOverride = $state<string | null>(null);
 	currentRender = $state<RenderResult | undefined>(undefined);
+	// Single-step undo for the last edit (FR-К6) — in-session only, deliberately
+	// not part of toJSON()/fromJSON(): it's session UI state, not the request model
+	// full revision history/tree is out of MVP scope (Д-16).
+	previousRender = $state<RenderResult | undefined>(undefined);
 	status = $state<RequestStatus>('idle');
 
 	prompt = $derived.by(() => derivePrompt(this.promptOverride, this.promptFragments));
 
 	get canSubmit(): boolean {
 		return this.validate().valid && this.status === 'idle';
+	}
+
+	get canUndoEdit(): boolean {
+		return this.previousRender !== undefined;
 	}
 
 	addFragment(input: AddFragmentInput): string {
@@ -361,8 +369,26 @@ class RequestState {
 		this.promptOverride = null;
 	}
 
+	// A fresh generation (not an edit) starts a new edit chain — any pending undo
+	// from a previous chain no longer applies.
 	setCurrentRender(render: RenderResult | undefined): void {
 		this.currentRender = cloneRenderResult(render);
+		this.previousRender = undefined;
+	}
+
+	// Applies the result of an edit (FR-К4): the prior currentRender becomes the
+	// one-step undo target (FR-К6), and the edit result becomes current.
+	applyEditResult(render: RenderResult): void {
+		this.previousRender = this.currentRender;
+		this.currentRender = cloneRenderResult(render);
+	}
+
+	// Rolls back to the render before the last edit (FR-К6). No-op if there's
+	// nothing to undo.
+	undoLastEdit(): void {
+		if (this.previousRender === undefined) return;
+		this.currentRender = this.previousRender;
+		this.previousRender = undefined;
 	}
 
 	setStatus(status: RequestStatus): void {
@@ -424,6 +450,7 @@ class RequestState {
 		this.outputFormat = 'webp';
 		this.promptOverride = null;
 		this.currentRender = undefined;
+		this.previousRender = undefined;
 		this.status = 'idle';
 	}
 }

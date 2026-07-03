@@ -109,6 +109,7 @@ export const en = {
 	'edit.instruction': 'Edit instruction',
 	'edit.apply': 'Apply edit',
 	'edit.applying': 'Applying…',
+	'edit.failed': 'Edit failed. Please try again.',
 	'edit.undo': 'Undo edit',
 	'edit.cost': 'Edit cost: {cost}',
 	'edit.balance': 'Balance: {balance}'
