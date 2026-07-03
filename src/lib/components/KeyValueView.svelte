@@ -43,16 +43,22 @@ before the Change Date. See LICENSE for complete terms.
 		return event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : '';
 	}
 
+	// Key-value edits always win over a promptOverride set elsewhere (e.g. Chat) —
+	// there's no separate "apply" step, so every mutation here must itself make
+	// the fragments authoritative again.
 	function addFragment(): void {
+		request.clearPromptOverride();
 		request.addFragment({ text: '', order: request.promptFragments.length });
 	}
 
 	function updateLabel(id: string, event: Event): void {
 		const label = inputValue(event);
+		request.clearPromptOverride();
 		request.updateFragment(id, { label: label === '' ? null : label });
 	}
 
 	function updateText(id: string, event: Event): void {
+		request.clearPromptOverride();
 		request.updateFragment(id, { text: inputValue(event) });
 	}
 
@@ -61,6 +67,7 @@ before the Change Date. See LICENSE for complete terms.
 		if (target < 0 || target >= fragments.length) return;
 		const orderedIds = fragments.map((fragment) => fragment.id);
 		[orderedIds[index], orderedIds[target]] = [orderedIds[target], orderedIds[index]];
+		request.clearPromptOverride();
 		request.reorder(orderedIds);
 		liveMessage = ti(offset === -1 ? 'view.keyValue.movedUp' : 'view.keyValue.movedDown', {
 			order: target + 1
@@ -68,6 +75,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function removeFragment(index: number, id: string): void {
+		request.clearPromptOverride();
 		request.removeFragment(id);
 		liveMessage = ti('view.keyValue.removed', { order: index + 1 });
 		tick().then(() => {
@@ -80,14 +88,9 @@ before the Change Date. See LICENSE for complete terms.
 			removeButtons[nextIndex]?.focus();
 		});
 	}
-
-	function applyPrompt(event: SubmitEvent): void {
-		event.preventDefault();
-		request.clearPromptOverride();
-	}
 </script>
 
-<form class="entry" onsubmit={applyPrompt}>
+<div class="entry">
 	<ul class="fragments">
 		{#each fragments as fragment, index (fragment.id)}
 			<li class="fragment">
@@ -131,18 +134,18 @@ before the Change Date. See LICENSE for complete terms.
 			</li>
 		{/each}
 	</ul>
-	<label class="prompt-preview">
-		<span>{t('view.keyValue.promptPreview')}</span>
-		<textarea readonly value={request.prompt}></textarea>
-	</label>
 	<div class="actions">
-		<button type="button" {@attach captureAddFragmentButton} onclick={addFragment}>
+		<button
+			type="button"
+			class="btn-secondary"
+			{@attach captureAddFragmentButton}
+			onclick={addFragment}
+		>
 			{t('view.keyValue.addFragment')}
 		</button>
-		<button type="submit">{t('view.keyValue.apply')}</button>
 	</div>
 	<div class="visually-hidden" role="status" aria-live="polite">{liveMessage}</div>
-</form>
+</div>
 
 <style>
 	.entry {
@@ -201,25 +204,33 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
-	.prompt-preview textarea {
-		resize: vertical;
-		min-height: 4rem;
-		padding: var(--space-1);
-		border: 1.5px solid var(--color-border);
-		border-radius: var(--radius);
-		background: var(--color-surface);
-		color: var(--color-text);
-	}
-
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space-2);
 	}
 
+	.btn-secondary {
+		padding: 0.5rem 1rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius);
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			border-color 0.15s;
+	}
+
+	.btn-secondary:hover {
+		background: var(--color-surface-hover);
+		border-color: var(--color-muted);
+	}
+
 	input,
-	button,
-	textarea {
+	button {
 		font: inherit;
 	}
 

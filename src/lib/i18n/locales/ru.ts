@@ -36,7 +36,6 @@ export const ru = {
 	'view.keyValue.movedDown': 'Фрагмент перемещён вниз, позиция {order}',
 	'view.keyValue.removed': 'Фрагмент {order} удалён',
 	'view.keyValue.promptPreview': 'Итоговый промпт',
-	'view.keyValue.apply': 'Применить промпт ключ-значение',
 	'view.graph.fragment': 'Узел фрагмента {order}',
 	'view.graph.addFragment': 'Добавить узел фрагмента',
 	'view.graph.remove': 'Удалить',

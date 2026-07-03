@@ -36,7 +36,6 @@ it('edits request fragments in place without writing localized labels', async ()
 
 	await screen.getByRole('textbox', { name: 'Метка 1' }).fill('mood');
 	await screen.getByRole('textbox', { name: 'Текст 2' }).fill('kitchen');
-	await screen.getByRole('button', { name: 'Применить промпт ключ-значение' }).click();
 
 	expect(request.toJSON().promptFragments).toEqual([
 		expect.objectContaining({ id: styleId, label: 'mood', text: 'Scandinavian ', order: 0 }),
@@ -46,7 +45,7 @@ it('edits request fragments in place without writing localized labels', async ()
 	expect(request.prompt).toBe('mood: Scandinavian\nroom: kitchen');
 });
 
-it('reorders fragments via the move-down button and updates the prompt preview', async () => {
+it('reorders fragments via the move-down button', async () => {
 	const firstId = request.addFragment({ text: 'Scandinavian style ', order: 0 });
 	const secondId = request.addFragment({ text: 'warm lighting ', order: 1 });
 	const thirdId = request.addFragment({ text: 'cozy mood', order: 2 });
@@ -64,9 +63,14 @@ it('reorders fragments via the move-down button and updates the prompt preview',
 	expect(screen.getByRole('status').element().textContent).toBe(
 		'Фрагмент перемещён вниз, позиция 2'
 	);
+});
 
-	expect(
-		(screen.getByRole('textbox', { name: 'Итоговый промпт' }).element() as HTMLTextAreaElement)
-			.value
-	).toBe('warm lighting Scandinavian style cozy mood');
+it('clears a promptOverride from Chat as soon as a key-value fragment is edited', async () => {
+	request.addFragment({ text: 'Scandinavian style', order: 0 });
+	request.setPromptOverride('something typed in chat');
+
+	const screen = render(KeyValueView);
+	await screen.getByRole('textbox', { name: 'Текст 1' }).fill('cozy living room');
+
+	expect(request.prompt).toBe('cozy living room');
 });

@@ -34,7 +34,6 @@ export interface Dictionary {
 	'view.keyValue.movedDown': string;
 	'view.keyValue.removed': string;
 	'view.keyValue.promptPreview': string;
-	'view.keyValue.apply': string;
 	'view.graph.fragment': string;
 	'view.graph.addFragment': string;
 	'view.graph.remove': string;

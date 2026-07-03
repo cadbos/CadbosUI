@@ -36,7 +36,6 @@ export const en = {
 	'view.keyValue.movedDown': 'Fragment moved down to position {order}',
 	'view.keyValue.removed': 'Fragment {order} removed',
 	'view.keyValue.promptPreview': 'Final prompt',
-	'view.keyValue.apply': 'Apply key-value prompt',
 	'view.graph.fragment': 'Fragment node {order}',
 	'view.graph.addFragment': 'Add fragment node',
 	'view.graph.remove': 'Remove',
