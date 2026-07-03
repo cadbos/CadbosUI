@@ -23,11 +23,14 @@ export async function uploadImage(
 	file: File
 ): Promise<{ url: string; mime: string; size: number }> {
 	const bucket = platform?.env?.UPLOADS_BUCKET;
+	const publicUrl = platform?.env?.UPLOADS_PUBLIC_URL;
 
 	if (!bucket) {
 		if (dev) return mockUpload();
 		throw new Error('UPLOADS_BUCKET not configured');
 	}
+
+	if (!publicUrl) throw new Error('UPLOADS_PUBLIC_URL not configured');
 
 	const extension = imageExtensionFromMime(file.type);
 	if (extension === null) throw new Error(`Unsupported image type: ${file.type}`);
@@ -37,5 +40,9 @@ export async function uploadImage(
 		httpMetadata: { contentType: file.type }
 	});
 
-	return { url: `/img/${key}`, mime: file.type, size: file.size };
+	return {
+		url: new URL(key, publicUrl).toString(),
+		mime: file.type,
+		size: file.size
+	};
 }

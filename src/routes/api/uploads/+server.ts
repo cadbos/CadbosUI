@@ -44,7 +44,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 	try {
 		const result = await uploadImage(platform, file);
-		return json({ ...result, url: new URL(result.url, request.url).toString() });
+		return json(result);
 	} catch (err) {
 		// Provider/internal detail stays server-side (NFR-6/8) — the client only
 		// ever sees a generic failure.
