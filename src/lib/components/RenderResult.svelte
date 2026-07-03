@@ -26,6 +26,15 @@ before the Change Date. See LICENSE for complete terms.
 	// The render result doesn't carry its own format, so the current form setting
 	// is the best available signal for the download filename's extension.
 	const downloadName = $derived(`render.${request.outputFormat}`);
+	// archAI hosts the output on its own CDN, so a plain <a download> to imageUrl
+	// only works same-origin — cross-origin, browsers just navigate away instead,
+	// losing all in-page form state. Routing through our own proxy with
+	// Content-Disposition: attachment forces a real download with no navigation.
+	const downloadHref = $derived(
+		imageUrl
+			? `/api/download?url=${encodeURIComponent(imageUrl)}&filename=${encodeURIComponent(downloadName)}`
+			: undefined
+	);
 </script>
 
 {#if render && imageUrl}
@@ -40,7 +49,7 @@ before the Change Date. See LICENSE for complete terms.
 				<span>{ti('render.balance', { balance: render.balance })}</span>
 			</div>
 			<div class="actions">
-				<a href={imageUrl} download={downloadName} class="btn btn-secondary">
+				<a href={downloadHref} download={downloadName} class="btn btn-secondary">
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 						<path
 							d="M12 4v12M12 16l-4-4M12 16l4-4"
