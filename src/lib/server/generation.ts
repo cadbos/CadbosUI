@@ -46,19 +46,24 @@ export async function renderInterior(
 
 	if (!apiKey) {
 		if (dev) return mockRender();
-		throw new Error('ARCHAI_API_KEY not configured');
+		generationFailed('render/interior', 'Render failed', 'ARCHAI_API_KEY not configured');
 	}
 
-	const result = await postRenderInterior({
-		client: requestClientFor(apiKey),
-		signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
-		body: {
-			image: params.image,
-			outputFormat: params.outputFormat,
-			// Omit empty prompt — API treats its absence as Enhance mode.
-			...(params.prompt ? { prompt: params.prompt } : {})
-		}
-	});
+	let result: Awaited<ReturnType<typeof postRenderInterior>>;
+	try {
+		result = await postRenderInterior({
+			client: requestClientFor(apiKey),
+			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+			body: {
+				image: params.image,
+				outputFormat: params.outputFormat,
+				// Omit empty prompt — API treats its absence as Enhance mode.
+				...(params.prompt ? { prompt: params.prompt } : {})
+			}
+		});
+	} catch (err) {
+		generationFailed('render/interior', 'Render failed', err);
+	}
 
 	if (result.error) generationFailed('render/interior', 'Render failed', result.error);
 
@@ -90,14 +95,19 @@ export async function editInterior(
 
 	if (!apiKey) {
 		if (dev) return mockEdit();
-		throw new Error('ARCHAI_API_KEY not configured');
+		generationFailed('edit-by-prompt', 'Edit failed', 'ARCHAI_API_KEY not configured');
 	}
 
-	const result = await postEditByPrompt({
-		client: requestClientFor(apiKey),
-		signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
-		body: { image: params.image, prompt: params.prompt }
-	});
+	let result: Awaited<ReturnType<typeof postEditByPrompt>>;
+	try {
+		result = await postEditByPrompt({
+			client: requestClientFor(apiKey),
+			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+			body: { image: params.image, prompt: params.prompt }
+		});
+	} catch (err) {
+		generationFailed('edit-by-prompt', 'Edit failed', err);
+	}
 
 	if (result.error) generationFailed('edit-by-prompt', 'Edit failed', result.error);
 

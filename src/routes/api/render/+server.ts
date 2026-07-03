@@ -45,8 +45,9 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		if (db && userId) await recordBalance(db, userId, result.balance);
 		return json(result);
 	} catch (err) {
+		// generation.ts already sanitizes/logs the detail; this route is the last
+		// line of defense (NFR-6/8) — never forward err.message to the client.
 		console.error(err);
-		const message = err instanceof Error ? err.message : 'Render failed';
-		return apiError(500, 'render_failed', message);
+		return apiError(500, 'render_failed', 'Render failed');
 	}
 };

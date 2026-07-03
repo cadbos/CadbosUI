@@ -60,8 +60,10 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	try {
 		result = await editInterior(platform, parsed.data);
 	} catch (err) {
-		const message = err instanceof Error ? err.message : 'Edit failed';
-		return apiError(500, 'edit_failed', message);
+		// generation.ts already sanitizes/logs the detail; this route is the last
+		// line of defense (NFR-6/8) — never forward err.message to the client.
+		console.error(err);
+		return apiError(500, 'edit_failed', 'Edit failed');
 	}
 
 	// The edit already succeeded and archAI already charged for it — a failure to
