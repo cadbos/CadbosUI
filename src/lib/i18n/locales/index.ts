@@ -116,6 +116,7 @@ export interface Dictionary {
 	'generatedImages.confirmDeleteConfirm': string;
 	'generatedImages.confirmDeleteDeleting': string;
 	'render.insufficientCredit': string;
+	'render.generationRestricted': string;
 	'edit.title': string;
 	'edit.close': string;
 	'edit.templateReplace': string;
@@ -127,6 +128,7 @@ export interface Dictionary {
 	'edit.applying': string;
 	'edit.failed': string;
 	'edit.insufficientCredit': string;
+	'edit.generationRestricted': string;
 	'edit.undo': string;
 	'edit.cost': string;
 	'edit.balance': string;

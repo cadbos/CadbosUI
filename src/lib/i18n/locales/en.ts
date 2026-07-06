@@ -120,6 +120,7 @@ export const en = {
 	'generatedImages.confirmDeleteConfirm': 'Delete',
 	'generatedImages.confirmDeleteDeleting': 'Deleting…',
 	'render.insufficientCredit': 'Test balance exhausted.',
+	'render.generationRestricted': 'Generation is available to a limited set of accounts.',
 	'edit.title': 'Edit render',
 	'edit.close': 'Close',
 	'edit.templateReplace': 'Replace object',
@@ -131,6 +132,7 @@ export const en = {
 	'edit.applying': 'Applying…',
 	'edit.failed': 'Edit failed. Please try again.',
 	'edit.insufficientCredit': 'Test balance exhausted.',
+	'edit.generationRestricted': 'Generation is available to a limited set of accounts.',
 	'edit.undo': 'Undo edit',
 	'edit.cost': 'Edit cost: {cost}',
 	'edit.balance': 'Balance: {balance}'

@@ -121,6 +121,7 @@ export const ru = {
 	'generatedImages.confirmDeleteConfirm': 'Удалить',
 	'generatedImages.confirmDeleteDeleting': 'Удаление…',
 	'render.insufficientCredit': 'Тестовый баланс исчерпан.',
+	'render.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
 	'edit.title': 'Редактирование рендера',
 	'edit.close': 'Закрыть',
 	'edit.templateReplace': 'Заменить объект',
@@ -132,6 +133,7 @@ export const ru = {
 	'edit.applying': 'Применение…',
 	'edit.failed': 'Не удалось применить правку. Попробуйте ещё раз.',
 	'edit.insufficientCredit': 'Тестовый баланс исчерпан.',
+	'edit.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
 	'edit.undo': 'Отменить правку',
 	'edit.cost': 'Стоимость правки: {cost}',
 	'edit.balance': 'Баланс: {balance}'

@@ -18,17 +18,25 @@ import { makeD1 } from './testing/d1-shim';
 import {
 	deductCredit,
 	getBalance,
-	getOrCreateCredit,
+	getCredit,
 	getUserIdByPubkey,
+	hasGenerationAccess,
 	hasSufficientCredit,
-	isMeteredPubkey,
 	listCreditHistory,
-	recordBalance
+	recordBalance,
+	type CreditAccess
 } from './billing';
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
+		.run();
+}
+
+// The admin's manual approval step — no auto-provisioning exists anymore.
+function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
+	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
+		.bind(userId, balance, Date.now(), enabled)
 		.run();
 }
 
@@ -91,52 +99,60 @@ describe('recordBalance', () => {
 	});
 });
 
-describe('isMeteredPubkey', () => {
-	it('is false when the env var is unset', () => {
-		expect(isMeteredPubkey(undefined, 'pubkey-1')).toBe(false);
+describe('getCredit', () => {
+	it('is null when no admin has approved this account', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		await expect(getCredit(db, 'user-1')).resolves.toBeNull();
 	});
 
-	it('is false for a pubkey not in the list', () => {
-		expect(isMeteredPubkey('pubkey-1,pubkey-2', 'pubkey-3')).toBe(false);
+	it('returns the admin-chosen balance and enabled flag for an approved account', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 12, 1);
+
+		const credit = await getCredit(db, 'user-1');
+		expect(credit).toEqual(expect.objectContaining({ balance: 12, enabled: true }));
 	});
 
-	it('is true for a pubkey in the comma-separated list, trimmed and case-insensitive', () => {
-		expect(isMeteredPubkey('pubkey-1, PubKey-2 ', 'pubkey-2')).toBe(true);
+	it('reflects an account the admin disabled', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 12, 0);
+
+		const credit = await getCredit(db, 'user-1');
+		expect(credit?.enabled).toBe(false);
 	});
 });
 
-describe('getOrCreateCredit', () => {
-	it('provisions the starting balance on first check', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		const credit = await getOrCreateCredit(db, 'user-1');
-		expect(credit.balance).toBe(5);
+describe('hasGenerationAccess', () => {
+	it('is false when there is no row at all', () => {
+		expect(hasGenerationAccess(null)).toBe(false);
 	});
 
-	it('returns the same row on a later check rather than re-provisioning', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		await getOrCreateCredit(db, 'user-1');
-		await deductCredit(db, 'user-1', 2, 'render');
+	it('is false when the row exists but is disabled', () => {
+		expect(hasGenerationAccess({ balance: 5, updatedAt: 0, enabled: false })).toBe(false);
+	});
 
-		const credit = await getOrCreateCredit(db, 'user-1');
-		expect(credit.balance).toBe(3);
+	it('is true once enabled, regardless of remaining balance', () => {
+		expect(hasGenerationAccess({ balance: 0, updatedAt: 0, enabled: true })).toBe(true);
 	});
 });
 
 describe('hasSufficientCredit', () => {
+	const enabled = (balance: number): CreditAccess => ({ balance, updatedAt: 0, enabled: true });
+
 	it('is true while balance is positive', () => {
-		expect(hasSufficientCredit({ balance: 0.01, updatedAt: 0 })).toBe(true);
+		expect(hasSufficientCredit(enabled(0.01))).toBe(true);
 	});
 
 	it('is false once balance hits zero or goes negative', () => {
-		expect(hasSufficientCredit({ balance: 0, updatedAt: 0 })).toBe(false);
-		expect(hasSufficientCredit({ balance: -1, updatedAt: 0 })).toBe(false);
+		expect(hasSufficientCredit(enabled(0))).toBe(false);
+		expect(hasSufficientCredit(enabled(-1))).toBe(false);
 	});
 });
 
 describe('deductCredit', () => {
 	it('subtracts the real cost and logs a transaction', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		await getOrCreateCredit(db, 'user-1');
+		grantAccess(db, 'user-1', 5);
 
 		const result = await deductCredit(db, 'user-1', 1.5, 'render');
 		expect(result.balance).toBe(3.5);
@@ -150,26 +166,26 @@ describe('deductCredit', () => {
 	it('isolates credit balances per user', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
-		await getOrCreateCredit(db, 'user-1');
-		await getOrCreateCredit(db, 'user-2');
+		grantAccess(db, 'user-1', 5);
+		grantAccess(db, 'user-2', 5);
 
 		await deductCredit(db, 'user-1', 2, 'render');
 
-		expect((await getOrCreateCredit(db, 'user-1')).balance).toBe(3);
-		expect((await getOrCreateCredit(db, 'user-2')).balance).toBe(5);
+		expect((await getCredit(db, 'user-1'))?.balance).toBe(3);
+		expect((await getCredit(db, 'user-2'))?.balance).toBe(5);
 	});
 });
 
 describe('listCreditHistory', () => {
 	it('is empty before any deduction', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		await getOrCreateCredit(db, 'user-1');
+		grantAccess(db, 'user-1', 5);
 		await expect(listCreditHistory(db, 'user-1')).resolves.toEqual([]);
 	});
 
 	it('orders entries most-recent first', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		await getOrCreateCredit(db, 'user-1');
+		grantAccess(db, 'user-1', 5);
 		await deductCredit(db, 'user-1', 1, 'render');
 		await deductCredit(db, 'user-1', 2, 'edit');
 

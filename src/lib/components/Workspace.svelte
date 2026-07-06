@@ -97,9 +97,7 @@ before the Change Date. See LICENSE for complete terms.
 			});
 			if (!response.ok) {
 				const errorBody = await response.json().catch(() => null);
-				throw new Error(
-					errorBody?.error?.code === 'insufficient_credit' ? 'insufficient_credit' : 'render_failed'
-				);
+				throw new Error(errorBody?.error?.code ?? 'render_failed');
 			}
 			const result = await response.json();
 			const render: RenderResultType = {
@@ -115,13 +113,17 @@ before the Change Date. See LICENSE for complete terms.
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 		} catch (err) {
 			request.setStatus('error');
-			submitError =
-				err instanceof Error && err.message === 'insufficient_credit'
-					? t('render.insufficientCredit')
-					: t('render.failed');
+			submitError = t(renderErrorKey(err));
 		} finally {
 			submitting = false;
 		}
+	}
+
+	function renderErrorKey(err: unknown): TranslationKey {
+		if (!(err instanceof Error)) return 'render.failed';
+		if (err.message === 'insufficient_credit') return 'render.insufficientCredit';
+		if (err.message === 'generation_restricted') return 'render.generationRestricted';
+		return 'render.failed';
 	}
 </script>
 

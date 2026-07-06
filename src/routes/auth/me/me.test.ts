@@ -25,47 +25,62 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 		.run();
 }
 
+// The admin's manual approval step (migrations/0004) — no auto-provisioning
+// exists anymore.
+function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
+	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
+		.bind(userId, balance, Date.now(), enabled)
+		.run();
+}
+
 type MeEvent = Parameters<typeof GET>[0];
 
 function call(user: SessionUser | null, platform: App.Platform): ReturnType<typeof GET> {
 	return GET({ platform, locals: { user } } as MeEvent);
 }
 
-describe('GET /auth/me — metered designer accounts', () => {
+const pubkey = 'a'.repeat(64);
+
+describe('GET /auth/me — generation access control', () => {
 	it('rejects unauthenticated requests', async () => {
 		const response = await call(null, { env: { DB: makeD1() } } as App.Platform);
 		expect(response.status).toBe(401);
 	});
 
-	it('omits credit for an account absent from METERED_DESIGNER_PUBKEYS', async () => {
+	it('omits credit for an account no admin has approved', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-1', pubkey);
 
-		const response = await call({ pubkey: 'pubkey-1' }, {
-			env: { DB: db, METERED_DESIGNER_PUBKEYS: 'some-other-pubkey' }
-		} as App.Platform);
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
 		const result = (await response.json()) as MeResponse;
 		expect(result.credit).toBeUndefined();
 	});
 
-	it('provisions and returns the starting balance on first check for a metered account', async () => {
+	it('returns the admin-chosen balance for an approved account', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-1', pubkey);
+		grantAccess(db, 'user-1', 12);
 
-		const response = await call({ pubkey: 'pubkey-1' }, {
-			env: { DB: db, METERED_DESIGNER_PUBKEYS: 'pubkey-1' }
-		} as App.Platform);
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
 		const result = (await response.json()) as MeResponse;
-		expect(result.credit?.balance).toBe(5);
+		expect(result.credit?.balance).toBe(12);
 		expect(result.credit?.history).toEqual([]);
 	});
 
-	it('includes spend history for a metered account', async () => {
+	it('still shows balance/history for an account the admin has since disabled', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
-		db.prepare('INSERT INTO credits (user_id, balance, updated_at) VALUES (?, ?, ?)')
-			.bind('user-1', 5, Date.now())
-			.run();
+		seedUser(db, 'user-1', pubkey);
+		grantAccess(db, 'user-1', 12, 0);
+
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
+		const result = (await response.json()) as MeResponse;
+		expect(result.credit?.balance).toBe(12);
+	});
+
+	it('includes spend history for an approved account', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', pubkey);
+		grantAccess(db, 'user-1', 5);
 		db.prepare(
 			'INSERT INTO credit_transactions (id, user_id, amount, balance_after, kind, created_at) ' +
 				'VALUES (?, ?, ?, ?, ?, ?)'
@@ -73,9 +88,7 @@ describe('GET /auth/me — metered designer accounts', () => {
 			.bind('tx-1', 'user-1', 2, 3, 'render', Date.now())
 			.run();
 
-		const response = await call({ pubkey: 'pubkey-1' }, {
-			env: { DB: db, METERED_DESIGNER_PUBKEYS: 'pubkey-1' }
-		} as App.Platform);
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
 		const result = (await response.json()) as MeResponse;
 		expect(result.credit?.history).toEqual([
 			expect.objectContaining({ amount: 2, balanceAfter: 3, kind: 'render' })

@@ -72,44 +72,45 @@ export async function recordBalance(
 	return toBalance(row);
 }
 
-// Metered evaluation accounts (e.g. designer test accounts) — additive to the
-// balance mirror above, not a replacement. A pubkey is metered only if it's
-// listed in METERED_DESIGNER_PUBKEYS; every other account never gets a
-// `credits` row and keeps the unlimited behavior. Pubkeys aren't secret, so
-// this list travels as a plain env var — swapping test accounts is a
-// redeploy, not a code change.
-export function isMeteredPubkey(rawList: string | undefined, pubkey: string): boolean {
-	if (!rawList) return false;
-	const target = pubkey.toLowerCase();
-	return rawList
-		.split(',')
-		.map((entry) => entry.trim().toLowerCase())
-		.includes(target);
+// Generation access control (security requirement, not a billing nicety): by
+// default nobody can render/edit — an account can only generate once an admin
+// manually inserts a `credits` row for it (via `wrangler d1 execute`, keyed by
+// the internal user id — see the workflow note in migrations/0004). The
+// `enabled` flag lets the admin revoke access without losing the row's
+// balance/history; `balance` is whatever limit the admin chose for that
+// account, not a fixed constant.
+export interface CreditAccess extends Balance {
+	enabled: boolean;
 }
 
-// Fixed starting allowance for a metered account, in the same numeric unit
-// archAI's own cost/balance fields use.
-const METERED_STARTING_BALANCE = 5;
+interface CreditRow {
+	balance: number;
+	updated_at: number;
+	enabled: number;
+}
 
-// Provisions the starting balance on first check, then returns the current
-// one — mirrors the INSERT-OR-IGNORE-then-SELECT pattern used for users.
-export async function getOrCreateCredit(db: D1Database, userId: string): Promise<Balance> {
-	await db
-		.prepare(
-			'INSERT INTO credits (user_id, balance, updated_at) VALUES (?, ?, ?) ' +
-				'ON CONFLICT (user_id) DO NOTHING'
-		)
-		.bind(userId, METERED_STARTING_BALANCE, Date.now())
-		.run();
+function toCreditAccess(row: CreditRow): CreditAccess {
+	return { balance: row.balance, updatedAt: row.updated_at, enabled: row.enabled === 1 };
+}
+
+// Null when no admin has approved this account yet — the caller must treat
+// that as "not allowed to generate", not "unlimited".
+export async function getCredit(db: D1Database, userId: string): Promise<CreditAccess | null> {
 	const row = await db
-		.prepare('SELECT balance, updated_at FROM credits WHERE user_id = ?')
+		.prepare('SELECT balance, updated_at, enabled FROM credits WHERE user_id = ?')
 		.bind(userId)
-		.first<BalanceRow>();
-	if (!row) throw new Error('credit provisioning failed');
-	return toBalance(row);
+		.first<CreditRow>();
+	return row ? toCreditAccess(row) : null;
 }
 
-export function hasSufficientCredit(credit: Balance): boolean {
+// Whether the account is allowed to attempt generation at all, independent of
+// remaining balance — false for both "never approved" (no row) and "approved
+// but disabled by the admin".
+export function hasGenerationAccess(credit: CreditAccess | null): credit is CreditAccess {
+	return credit?.enabled === true;
+}
+
+export function hasSufficientCredit(credit: CreditAccess): boolean {
 	return credit.balance > 0;
 }
 
@@ -132,6 +133,14 @@ function toCreditTransaction(row: CreditTransactionRow): CreditTransaction {
 // Deducts the real cost archAI charged (not a fixed fee) and logs it, so the
 // account's own spend history can be shown. Called exactly once, only after a
 // confirmed successful archAI response — same discipline as recordBalance.
+//
+// The balance check in the route happens before the (slow) archAI call, not
+// atomically with this deduction — two concurrent requests for the same
+// account can each pass that check and both land here, taking balance below
+// zero. Left unguarded on purpose: the ledger must reflect what archAI
+// actually charged, so silently refusing to record a real, already-paid
+// deduction here would make the spend history wrong. For a small number of
+// manually-approved accounts this is an accepted soft cap, not a hard one.
 export async function deductCredit(
 	db: D1Database,
 	userId: string,

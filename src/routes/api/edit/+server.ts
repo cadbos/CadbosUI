@@ -21,10 +21,10 @@ import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import {
 	deductCredit,
-	getOrCreateCredit,
+	getCredit,
 	getUserIdByPubkey,
+	hasGenerationAccess,
 	hasSufficientCredit,
-	isMeteredPubkey,
 	recordBalance
 } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
@@ -35,10 +35,10 @@ import { editInterior } from '$lib/server/generation';
 // rate-limit bucket, bound to the authenticated pubkey rather than IP.
 const EDIT_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
 
-// Session is enforced centrally in hooks.server.ts (guardedPaths). Spend limits
-// are archAI's job for everyone else (mirrors /api/render) — except for metered
-// evaluation accounts (METERED_DESIGNER_PUBKEYS), which also get a local credit
-// pre-check/deduction (billing.ts).
+// Session is enforced centrally in hooks.server.ts (guardedPaths). Editing
+// itself is restricted further, by design: only accounts an admin has
+// manually approved (a `credits` row, billing.ts) may edit at all — a fresh
+// Nostr login alone is not enough (mirrors /api/render).
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
 
@@ -66,13 +66,18 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		if (limited) return apiError(429, 'rate_limited', 'Too many requests');
 	}
 
-	const metered = Boolean(
-		db && userId && isMeteredPubkey(platform?.env?.METERED_DESIGNER_PUBKEYS, locals.user.pubkey)
-	);
-	if (metered && db && userId) {
-		const credit = await getOrCreateCredit(db, userId);
-		if (!hasSufficientCredit(credit)) {
-			return apiError(402, 'insufficient_credit', 'Test balance exhausted');
+	if (db && userId) {
+		try {
+			const credit = await getCredit(db, userId);
+			if (!hasGenerationAccess(credit)) {
+				return apiError(403, 'generation_restricted', 'Generation is limited to approved accounts');
+			}
+			if (!hasSufficientCredit(credit)) {
+				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
+			}
+		} catch (err) {
+			console.error('credit pre-check failed:', err);
+			return apiError(500, 'edit_failed', 'Edit failed');
 		}
 	}
 
@@ -87,8 +92,8 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	}
 
 	// The edit already succeeded and archAI already charged for it — a failure to
-	// cache the resulting balance is a bookkeeping gap, not a reason to make the
-	// user think a completed, paid edit failed.
+	// cache the resulting balance/deduction is a bookkeeping gap, not a reason to
+	// make the user think a completed, paid edit failed.
 	if (db && userId) {
 		try {
 			await recordGeneratedImage(db, userId, result.outputUrl);
@@ -102,7 +107,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 
 		try {
 			await recordBalance(db, userId, result.balance);
-			if (metered) await deductCredit(db, userId, result.cost, 'edit');
+			await deductCredit(db, userId, result.cost, 'edit');
 		} catch (err) {
 			console.error('recordBalance/deductCredit failed after a successful edit:', err);
 		}

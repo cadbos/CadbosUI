@@ -20,20 +20,20 @@ import { apiError, parseBody, renderRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import {
 	deductCredit,
-	getOrCreateCredit,
+	getCredit,
 	getUserIdByPubkey,
+	hasGenerationAccess,
 	hasSufficientCredit,
-	isMeteredPubkey,
 	recordBalance
 } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { GeneratedImageRecordError, recordGeneratedImage } from '$lib/server/generated-images';
 import { renderInterior } from '$lib/server/generation';
 
-// Session is enforced centrally in hooks.server.ts (guardedPaths). Spend limits
-// are archAI's job for everyone else — it already rejects a call it can't
-// afford — except for metered evaluation accounts (METERED_DESIGNER_PUBKEYS),
-// which also get a local credit pre-check/deduction (billing.ts).
+// Session is enforced centrally in hooks.server.ts (guardedPaths). Generation
+// itself is restricted further, by design: only accounts an admin has
+// manually approved (a `credits` row, billing.ts) may render at all — a
+// fresh Nostr login alone is not enough.
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
 
@@ -50,13 +50,18 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	// a normal case — fail closed rather than charge a call we can't attribute.
 	if (db && !userId) return apiError(500, 'account_error', 'Account record not found');
 
-	const metered = Boolean(
-		db && userId && isMeteredPubkey(platform?.env?.METERED_DESIGNER_PUBKEYS, locals.user.pubkey)
-	);
-	if (metered && db && userId) {
-		const credit = await getOrCreateCredit(db, userId);
-		if (!hasSufficientCredit(credit)) {
-			return apiError(402, 'insufficient_credit', 'Test balance exhausted');
+	if (db && userId) {
+		try {
+			const credit = await getCredit(db, userId);
+			if (!hasGenerationAccess(credit)) {
+				return apiError(403, 'generation_restricted', 'Generation is limited to approved accounts');
+			}
+			if (!hasSufficientCredit(credit)) {
+				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
+			}
+		} catch (err) {
+			console.error('credit pre-check failed:', err);
+			return apiError(500, 'render_failed', 'Render failed');
 		}
 	}
 
@@ -85,21 +90,14 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			console.error('recordGeneratedImage failed after a successful render:', err);
 		}
 
+		// The render already succeeded and archAI already charged for it — a failure to
+		// cache the resulting balance/deduction is a bookkeeping gap, not a reason to
+		// make the user think a completed, paid render failed.
 		try {
 			await recordBalance(db, userId, result.balance);
+			await deductCredit(db, userId, result.cost, 'render');
 		} catch (err) {
-			console.error('recordBalance failed after a successful render:', err);
-		}
-
-		if (metered) {
-			try {
-				const credit = await deductCredit(db, userId, result.cost, 'render');
-				result = { ...result, balance: credit.balance };
-			} catch (err) {
-				console.error('deductCredit failed after a successful render:', err);
-				const fallback = await getOrCreateCredit(db, userId).catch(() => null);
-				if (fallback) result = { ...result, balance: fallback.balance };
-			}
+			console.error('recordBalance/deductCredit failed after a successful render:', err);
 		}
 	}
 

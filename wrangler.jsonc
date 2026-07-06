@@ -42,8 +42,8 @@
 	]
 	// Secrets set via `wrangler secret put <NAME>` — never committed to source:
 	// ARCHAI_API_KEY
-	// METERED_DESIGNER_PUBKEYS — comma-separated hex pubkeys subject to the local
-	// metered credit limit (src/lib/server/billing.ts). Not cryptographically
-	// secret, but kept out of source so swapping test accounts doesn't touch a
-	// committed file. Unset (or empty) disables metering for everyone.
+	//
+	// Generation access itself is controlled in D1, not an env var: an account
+	// can render/edit only once an admin inserts a row for it into the `credits`
+	// table (see the workflow note in migrations/0004_generation_access.sql).
 }

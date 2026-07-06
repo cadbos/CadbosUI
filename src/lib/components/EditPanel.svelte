@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { t, ti } from '$lib/i18n/index.svelte';
+	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
@@ -49,9 +49,7 @@ before the Change Date. See LICENSE for complete terms.
 			});
 			if (!response.ok) {
 				const errorBody = await response.json().catch(() => null);
-				throw new Error(
-					errorBody?.error?.code === 'insufficient_credit' ? 'insufficient_credit' : 'edit_failed'
-				);
+				throw new Error(errorBody?.error?.code ?? 'edit_failed');
 			}
 			const result = await response.json();
 			const newRender = renderResultFromResponse(result, {
@@ -62,13 +60,17 @@ before the Change Date. See LICENSE for complete terms.
 			instruction = '';
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 		} catch (err) {
-			error =
-				err instanceof Error && err.message === 'insufficient_credit'
-					? t('edit.insufficientCredit')
-					: t('edit.failed');
+			error = t(editErrorKey(err));
 		} finally {
 			applying = false;
 		}
+	}
+
+	function editErrorKey(err: unknown): TranslationKey {
+		if (!(err instanceof Error)) return 'edit.failed';
+		if (err.message === 'insufficient_credit') return 'edit.insufficientCredit';
+		if (err.message === 'generation_restricted') return 'edit.generationRestricted';
+		return 'edit.failed';
 	}
 
 	function undoEdit(): void {

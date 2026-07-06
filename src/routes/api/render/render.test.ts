@@ -57,6 +57,15 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 		.run();
 }
 
+// The admin's manual approval step (migrations/0004) — no auto-provisioning
+// exists anymore, so every test that expects a render to succeed must grant
+// access first.
+function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
+	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
+		.bind(userId, balance, Date.now(), enabled)
+		.run();
+}
+
 type RenderEvent = Parameters<typeof POST>[0];
 
 function call(
@@ -75,6 +84,7 @@ function call(
 }
 
 const body = { image: 'https://example.test/room.jpg', prompt: 'cozy', outputFormat: 'webp' };
+const pubkey = 'a'.repeat(64);
 
 describe('POST /api/render — billing', () => {
 	it('rejects unauthenticated requests', async () => {
@@ -84,9 +94,10 @@ describe('POST /api/render — billing', () => {
 
 	it('records the real balance archAI reports on a successful call', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-1', pubkey);
+		grantAccess(db, 'user-1', 12);
 
-		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { balance: number };
 
@@ -114,10 +125,11 @@ describe('POST /api/render — billing', () => {
 
 	it('overwrites the stored balance rather than accumulating it across calls', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-1', pubkey);
+		grantAccess(db, 'user-1', 12);
 
-		await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
-		const second = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
+		await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
+		const second = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		const result = (await second.json()) as { balance: number };
 
 		const balanceRow = await db
@@ -130,6 +142,7 @@ describe('POST /api/render — billing', () => {
 	it('still returns the completed, already-charged render if recording the image fails', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 12);
 		generatedImagesMock.failNextRecordGeneratedImage = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -155,6 +168,7 @@ describe('POST /api/render — billing', () => {
 	it('still returns the completed, already-charged render if recording the balance fails', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 12);
 		billingMock.failNextRecordBalance = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -169,7 +183,7 @@ describe('POST /api/render — billing', () => {
 			const result = (await response.json()) as { outputUrl: string };
 			expect(result.outputUrl).toMatch(/^https:\/\//);
 			expect(consoleError).toHaveBeenCalledWith(
-				'recordBalance failed after a successful render:',
+				'recordBalance/deductCredit failed after a successful render:',
 				expect.any(Error)
 			);
 		} finally {
@@ -177,15 +191,6 @@ describe('POST /api/render — billing', () => {
 		}
 	});
 
-	it('never blocks generation locally — archAI is the only spend gate', async () => {
-		// No local quota table to seed at all; a brand-new user with no prior
-		// balance record must still be able to generate.
-		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
-
-		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(200);
-	});
 
 	it('bypasses balance recording entirely for the dev-only demo session', async () => {
 		// No D1 binding at all — proves the demo path never touches billing.
@@ -203,32 +208,34 @@ describe('POST /api/render — billing', () => {
 		expect(response.status).toBe(500);
 	});
 
-	describe('metered designer accounts', () => {
-		it('does not affect an account absent from METERED_DESIGNER_PUBKEYS', async () => {
+	describe('generation access control', () => {
+		it('blocks an account with no credits row at all', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', 'pubkey-1');
-			const platform = {
-				env: { DB: db, METERED_DESIGNER_PUBKEYS: 'some-other-pubkey' }
-			} as App.Platform;
+			seedUser(db, 'user-1', pubkey);
 
-			const response = await call({ pubkey: 'pubkey-1' }, platform, body);
-			expect(response.status).toBe(200);
-
-			const creditRow = await db
-				.prepare('SELECT 1 FROM credits WHERE user_id = ?')
-				.bind('user-1')
-				.first();
-			expect(creditRow).toBeNull();
+			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
+			expect(response.status).toBe(403);
+			const result = (await response.json()) as { error: { code: string } };
+			expect(result.error.code).toBe('generation_restricted');
 		});
 
-		it('provisions and deducts the real archAI cost for a metered account', async () => {
+		it('blocks an account the admin disabled, even with balance remaining', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', 'pubkey-1');
-			const platform = {
-				env: { DB: db, METERED_DESIGNER_PUBKEYS: 'pubkey-1' }
-			} as App.Platform;
+			seedUser(db, 'user-1', pubkey);
+			grantAccess(db, 'user-1', 5, 0);
 
-			const response = await call({ pubkey: 'pubkey-1' }, platform, body);
+			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
+			expect(response.status).toBe(403);
+			const result = (await response.json()) as { error: { code: string } };
+			expect(result.error.code).toBe('generation_restricted');
+		});
+
+		it('allows and deducts the real archAI cost for an approved, enabled account', async () => {
+			const db = makeD1();
+			seedUser(db, 'user-1', pubkey);
+			grantAccess(db, 'user-1', 12);
+
+			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(200);
 			const result = (await response.json()) as { cost: number };
 
@@ -236,23 +243,27 @@ describe('POST /api/render — billing', () => {
 				.prepare('SELECT balance FROM credits WHERE user_id = ?')
 				.bind('user-1')
 				.first<{ balance: number }>();
-			expect(creditRow?.balance).toBe(5 - result.cost);
+			expect(creditRow?.balance).toBe(12 - result.cost);
 		});
 
-		it('blocks generation once the metered balance is exhausted', async () => {
+		it('blocks generation once an approved account exhausts its balance', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', 'pubkey-1');
-			db.prepare('INSERT INTO credits (user_id, balance, updated_at) VALUES (?, ?, ?)')
-				.bind('user-1', 0, Date.now())
-				.run();
-			const platform = {
-				env: { DB: db, METERED_DESIGNER_PUBKEYS: 'pubkey-1' }
-			} as App.Platform;
+			seedUser(db, 'user-1', pubkey);
+			grantAccess(db, 'user-1', 0);
 
-			const response = await call({ pubkey: 'pubkey-1' }, platform, body);
+			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(402);
 			const result = (await response.json()) as { error: { code: string } };
 			expect(result.error.code).toBe('insufficient_credit');
+		});
+
+		it('returns a clean 500 instead of crashing if the credits table is missing (unapplied migration)', async () => {
+			const db = makeD1();
+			seedUser(db, 'user-1', pubkey);
+			db.prepare('DROP TABLE credits').run();
+
+			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
+			expect(response.status).toBe(500);
 		});
 	});
 });

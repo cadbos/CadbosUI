@@ -18,13 +18,7 @@ import type { RequestHandler } from './$types';
 import type { MeResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
-import {
-	getBalance,
-	getOrCreateCredit,
-	getUserIdByPubkey,
-	isMeteredPubkey,
-	listCreditHistory
-} from '$lib/server/billing';
+import { getBalance, getCredit, getUserIdByPubkey, listCreditHistory } from '$lib/server/billing';
 import { DEMO_BALANCE, DEMO_PUBKEY } from '$lib/server/demo';
 
 export const GET: RequestHandler = async ({ locals, platform }) => {
@@ -41,13 +35,15 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 	// undefined (not a default) until the user has generated at least once.
 	const balance = userId ? ((await getBalance(db, userId)) ?? undefined) : undefined;
 
+	// Present only for an admin-approved account (a `credits` row) — absent for
+	// every other login, same as before an admin ever approved anyone.
 	let credit: MeResponse['credit'];
-	if (userId && isMeteredPubkey(platform?.env?.METERED_DESIGNER_PUBKEYS, locals.user.pubkey)) {
-		const [creditBalance, history] = await Promise.all([
-			getOrCreateCredit(db, userId),
-			listCreditHistory(db, userId)
-		]);
-		credit = { ...creditBalance, history };
+	if (userId) {
+		const approved = await getCredit(db, userId);
+		if (approved) {
+			const history = await listCreditHistory(db, userId);
+			credit = { balance: approved.balance, updatedAt: approved.updatedAt, history };
+		}
 	}
 
 	return json({ user: locals.user, balance, credit } satisfies MeResponse);
