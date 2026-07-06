@@ -92,25 +92,29 @@ describe('POST /api/render — billing', () => {
 		expect(response.status).toBe(401);
 	});
 
-	it('records the real balance archAI reports on a successful call', async () => {
+	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { balance: number };
+		const result = (await response.json()) as { balance: number; cost: number };
 
+		// The archAI mock reports balance 48 — that must land in the ops-only
+		// mirror, never in the response the client sees.
 		const balanceRow = await db
 			.prepare('SELECT balance FROM balances WHERE user_id = ?')
 			.bind('user-1')
 			.first<{ balance: number }>();
-		expect(balanceRow?.balance).toBe(result.balance);
+		expect(balanceRow?.balance).toBe(48);
+		expect(result.balance).toBe(12 - result.cost);
 	});
 
 	it('records the generated image against the authenticated profile', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
@@ -123,20 +127,19 @@ describe('POST /api/render — billing', () => {
 		expect(imageRow).toEqual({ user_id: 'user-1', url: result.outputUrl });
 	});
 
-	it('overwrites the stored balance rather than accumulating it across calls', async () => {
+	it('overwrites the mirrored archAI balance rather than accumulating it across calls', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-		const second = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-		const result = (await second.json()) as { balance: number };
+		await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 
 		const balanceRow = await db
 			.prepare('SELECT balance FROM balances WHERE user_id = ?')
 			.bind('user-1')
 			.first<{ balance: number }>();
-		expect(balanceRow?.balance).toBe(result.balance);
+		expect(balanceRow?.balance).toBe(48);
 	});
 
 	it('still returns the completed, already-charged render if recording the image fails', async () => {
@@ -190,7 +193,6 @@ describe('POST /api/render — billing', () => {
 			consoleError.mockRestore();
 		}
 	});
-
 
 	it('bypasses balance recording entirely for the dev-only demo session', async () => {
 		// No D1 binding at all — proves the demo path never touches billing.

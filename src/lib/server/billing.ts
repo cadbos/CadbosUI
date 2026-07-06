@@ -15,11 +15,13 @@
 // D1-backed balance cache (SRS FR-И4, NFR-18). archAI is the only source of
 // truth for real funds — it already rejects a call it can't afford — so this
 // module doesn't enforce anything; it just mirrors the `balance` archAI
-// reports after each generation (migrations/0002_balance.sql) so the UI can
-// show it without an extra round trip. Keyed by the internal D1 user id (not
-// pubkey directly) to reuse the users table as designed without touching
-// Module 2's SessionUser contract — one extra indexed lookup on users.pubkey
-// per paid call.
+// reports after each generation (migrations/0002_balance.sql) for ops
+// visibility (query the `balances` table directly) — this is the one shared
+// ARCHAI_API_KEY account's balance, never a given user's own, so it's
+// intentionally never read back out to the client. Keyed by the internal D1
+// user id (not pubkey directly) to reuse the users table as designed without
+// touching Module 2's SessionUser contract — one extra indexed lookup on
+// users.pubkey per paid call.
 
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Balance, CreditTransaction } from '$lib/api/contract';
@@ -39,16 +41,6 @@ interface BalanceRow {
 
 function toBalance(row: BalanceRow): Balance {
 	return { balance: row.balance, updatedAt: row.updated_at };
-}
-
-// Null until the user has generated at least once — there is nothing to show
-// before archAI has ever reported a balance for them.
-export async function getBalance(db: D1Database, userId: string): Promise<Balance | null> {
-	const row = await db
-		.prepare('SELECT balance, updated_at FROM balances WHERE user_id = ?')
-		.bind(userId)
-		.first<BalanceRow>();
-	return row ? toBalance(row) : null;
 }
 
 // Upserts the balance archAI reported. Called exactly once, only after a

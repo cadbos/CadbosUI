@@ -18,25 +18,25 @@ import type { RequestHandler } from './$types';
 import type { MeResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
-import { getBalance, getCredit, getUserIdByPubkey, listCreditHistory } from '$lib/server/billing';
-import { DEMO_BALANCE, DEMO_PUBKEY } from '$lib/server/demo';
+import { getCredit, getUserIdByPubkey, listCreditHistory } from '$lib/server/billing';
+import { DEMO_PUBKEY } from '$lib/server/demo';
 
 export const GET: RequestHandler = async ({ locals, platform }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
 
-	// The demo session bypasses D1 entirely (hooks.server.ts) and always gets the
-	// hardcoded showcase balance; real sessions are always backed by a D1 user row.
+	// The demo session bypasses D1 entirely (hooks.server.ts) — no approved-account
+	// balance to show; real sessions are always backed by a D1 user row.
 	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
-		return json({ user: locals.user, balance: DEMO_BALANCE } satisfies MeResponse);
+		return json({ user: locals.user } satisfies MeResponse);
 	}
 
 	const db = getDb(platform);
 	const userId = await getUserIdByPubkey(db, locals.user.pubkey);
-	// undefined (not a default) until the user has generated at least once.
-	const balance = userId ? ((await getBalance(db, userId)) ?? undefined) : undefined;
 
 	// Present only for an admin-approved account (a `credits` row) — absent for
-	// every other login, same as before an admin ever approved anyone.
+	// every other login, same as before an admin ever approved anyone. This is
+	// the only balance ever sent to the client — archAI's own (shared) account
+	// balance is mirrored server-side (billing.ts) but never exposed here.
 	let credit: MeResponse['credit'];
 	if (userId) {
 		const approved = await getCredit(db, userId);
@@ -46,5 +46,5 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 		}
 	}
 
-	return json({ user: locals.user, balance, credit } satisfies MeResponse);
+	return json({ user: locals.user, credit } satisfies MeResponse);
 };

@@ -84,6 +84,9 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	}
 
 	if (db && userId) {
+		// recordBalance mirrors archAI's own (shared) account balance for ops
+		// visibility only — it must never reach the client, so read it before
+		// overwriting `result.balance` with the caller's own remaining limit.
 		try {
 			await recordGeneratedImage(db, userId, result.outputUrl);
 		} catch (err) {
@@ -95,9 +98,18 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		// make the user think a completed, paid render failed.
 		try {
 			await recordBalance(db, userId, result.balance);
-			await deductCredit(db, userId, result.cost, 'render');
 		} catch (err) {
-			console.error('recordBalance/deductCredit failed after a successful render:', err);
+			console.error('recordBalance failed after a successful render:', err);
+		}
+		try {
+			const credit = await deductCredit(db, userId, result.cost, 'render');
+			result = { ...result, balance: credit.balance };
+		} catch (err) {
+			console.error('deductCredit failed after a successful render:', err);
+			// Even on failure, never fall through to archAI's raw (shared) balance —
+			// fall back to the last-known approved-account balance instead.
+			const fallback = await getCredit(db, userId).catch(() => null);
+			if (fallback) result = { ...result, balance: fallback.balance };
 		}
 	}
 

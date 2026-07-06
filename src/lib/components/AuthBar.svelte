@@ -140,9 +140,6 @@ before the Change Date. See LICENSE for complete terms.
 			<div id="auth-profile" class="profile-panel" hidden={!profileOpen}>
 				<div class="profile-meta">
 					<span>{ti('auth.profile.relayCount', { count: relayCount })}</span>
-					{#if auth.balance}
-						<span class="balance">{ti('auth.balance', { balance: auth.balance.balance })}</span>
-					{/if}
 					{#if auth.credit}
 						<span class="balance">
 							{ti('auth.credit.balance', { balance: auth.credit.balance })}

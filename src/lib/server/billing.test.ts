@@ -17,7 +17,6 @@ import type { D1Database } from '@cloudflare/workers-types';
 import { makeD1 } from './testing/d1-shim';
 import {
 	deductCredit,
-	getBalance,
 	getCredit,
 	getUserIdByPubkey,
 	hasGenerationAccess,
@@ -26,6 +25,13 @@ import {
 	recordBalance,
 	type CreditAccess
 } from './billing';
+
+async function readBalanceRow(db: D1Database, userId: string): Promise<{ balance: number } | null> {
+	return db
+		.prepare('SELECT balance FROM balances WHERE user_id = ?')
+		.bind(userId)
+		.first<{ balance: number }>();
+}
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -57,21 +63,6 @@ describe('getUserIdByPubkey', () => {
 	});
 });
 
-describe('getBalance', () => {
-	it('is null before the user has ever generated', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		await expect(getBalance(db, 'user-1')).resolves.toBeNull();
-	});
-
-	it('returns the last recorded balance', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		await recordBalance(db, 'user-1', 24.97);
-
-		const balance = await getBalance(db, 'user-1');
-		expect(balance?.balance).toBe(24.97);
-	});
-});
-
 describe('recordBalance', () => {
 	it('creates a row on first generation', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
@@ -82,10 +73,9 @@ describe('recordBalance', () => {
 	it('overwrites the previous balance rather than accumulating it', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		await recordBalance(db, 'user-1', 25);
-		const second = await recordBalance(db, 'user-1', 24.97);
+		await recordBalance(db, 'user-1', 24.97);
 
-		expect(second.balance).toBe(24.97);
-		await expect(getBalance(db, 'user-1')).resolves.toEqual(second);
+		await expect(readBalanceRow(db, 'user-1')).resolves.toEqual({ balance: 24.97 });
 	});
 
 	it('isolates balances per user', async () => {
@@ -94,8 +84,8 @@ describe('recordBalance', () => {
 		await recordBalance(db, 'user-1', 25);
 		await recordBalance(db, 'user-2', 10);
 
-		expect((await getBalance(db, 'user-1'))?.balance).toBe(25);
-		expect((await getBalance(db, 'user-2'))?.balance).toBe(10);
+		await expect(readBalanceRow(db, 'user-1')).resolves.toEqual({ balance: 25 });
+		await expect(readBalanceRow(db, 'user-2')).resolves.toEqual({ balance: 10 });
 	});
 });
 

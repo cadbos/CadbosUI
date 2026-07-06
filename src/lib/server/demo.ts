@@ -16,7 +16,7 @@
 // All demo logic is gated behind the `dev` flag from $app/environment
 // so nothing leaks into production builds.
 
-import type { Balance, SessionUser } from '$lib/api/contract';
+import type { SessionUser } from '$lib/api/contract';
 
 // A predictable session id that hooks.server.ts recognises without hitting D1.
 export const DEMO_SESSION_ID = 'cadbos-demo-session-showcase-2026';
@@ -30,10 +30,4 @@ export const DEMO_USER: SessionUser = {
 	pubkey: DEMO_PUBKEY,
 	firstName: 'Demo',
 	lastName: 'User'
-};
-
-// A static showcase figure — no real archAI account backs the demo session.
-export const DEMO_BALANCE: Balance = {
-	balance: 12.5,
-	updatedAt: Date.now()
 };

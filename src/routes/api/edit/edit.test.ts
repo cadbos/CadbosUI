@@ -132,20 +132,23 @@ describe('POST /api/edit — billing', () => {
 		expect(result.outputUrl).toMatch(/^https:\/\//);
 	});
 
-	it('records the real balance archAI reports on a successful call', async () => {
+	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { balance: number };
+		const result = (await response.json()) as { balance: number; cost: number };
 
+		// The archAI mock reports balance 46 — that must land in the ops-only
+		// mirror, never in the response the client sees.
 		const balanceRow = await db
 			.prepare('SELECT balance FROM balances WHERE user_id = ?')
 			.bind('user-1')
 			.first<{ balance: number }>();
-		expect(balanceRow?.balance).toBe(result.balance);
+		expect(balanceRow?.balance).toBe(46);
+		expect(result.balance).toBe(12 - result.cost);
 	});
 
 	it('records the edited image against the authenticated profile', async () => {
