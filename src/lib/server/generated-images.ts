@@ -111,6 +111,32 @@ export async function getGeneratedImage(
 	return row ? toGeneratedImage(row) : null;
 }
 
+export async function getGeneratedImageForUser(
+	db: D1Database,
+	userId: string,
+	id: string
+): Promise<GeneratedImage | null> {
+	const row = await db
+		.prepare(
+			'SELECT id, user_id, url, created_at FROM generated_images WHERE id = ? AND user_id = ?'
+		)
+		.bind(id, userId)
+		.first<GeneratedImageRow>();
+	return row ? toGeneratedImage(row) : null;
+}
+
+export async function deleteGeneratedImage(
+	db: D1Database,
+	userId: string,
+	id: string
+): Promise<boolean> {
+	const result = await db
+		.prepare('DELETE FROM generated_images WHERE id = ? AND user_id = ?')
+		.bind(id, userId)
+		.run();
+	return result.meta.changes === 1;
+}
+
 export async function listGeneratedImages(
 	db: D1Database,
 	userId: string,
