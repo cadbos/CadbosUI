@@ -18,7 +18,13 @@ import type { SessionUser } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
-const billingMock = vi.hoisted(() => ({ failNextRecordBalance: false }));
+// Lets a single test force deductCredit and/or the getCredit fallback to reject,
+// to prove the response never falls back to archAI's raw (shared) balance.
+const billingMock = vi.hoisted(() => ({
+	failNextRecordBalance: false,
+	failNextDeductCredit: false,
+	failNextGetCredit: false
+}));
 const generatedImagesMock = vi.hoisted(() => ({ failNextRecordGeneratedImage: false }));
 
 vi.mock('$lib/server/billing', async (importOriginal) => {
@@ -31,6 +37,20 @@ vi.mock('$lib/server/billing', async (importOriginal) => {
 				return Promise.reject(new Error('simulated D1 failure'));
 			}
 			return actual.recordBalance(...args);
+		}),
+		deductCredit: vi.fn((...args: Parameters<typeof actual.deductCredit>) => {
+			if (billingMock.failNextDeductCredit) {
+				billingMock.failNextDeductCredit = false;
+				return Promise.reject(new Error('simulated D1 failure'));
+			}
+			return actual.deductCredit(...args);
+		}),
+		getCredit: vi.fn((...args: Parameters<typeof actual.getCredit>) => {
+			if (billingMock.failNextGetCredit) {
+				billingMock.failNextGetCredit = false;
+				return Promise.reject(new Error('simulated D1 failure'));
+			}
+			return actual.getCredit(...args);
 		})
 	};
 });
@@ -192,6 +212,23 @@ describe('POST /api/render — billing', () => {
 		} finally {
 			consoleError.mockRestore();
 		}
+	});
+
+	it('never falls back to the raw archAI balance if deductCredit and the getCredit fallback both fail', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', pubkey);
+		grantAccess(db, 'user-1', 12);
+		billingMock.failNextDeductCredit = true;
+		billingMock.failNextGetCredit = true;
+
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
+		expect(response.status).toBe(200);
+		const result = (await response.json()) as { balance: number };
+
+		// The archAI mock reports balance 48 (the shared account) — even with every
+		// approved-account balance read failing, the client must never see it.
+		expect(result.balance).not.toBe(48);
+		expect(result.balance).toBe(12);
 	});
 
 	it('bypasses balance recording entirely for the dev-only demo session', async () => {

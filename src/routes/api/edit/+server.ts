@@ -20,11 +20,10 @@ import { apiError, editRequestSchema, parseBody } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import {
+	assertGenerationAllowed,
 	deductCredit,
 	getCredit,
 	getUserIdByPubkey,
-	hasGenerationAccess,
-	hasSufficientCredit,
 	recordBalance
 } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
@@ -66,15 +65,20 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		if (limited) return apiError(429, 'rate_limited', 'Too many requests');
 	}
 
+	// The account's own balance right before this call — kept as the final,
+	// definitely-safe fallback if both deductCredit and its own getCredit
+	// fallback fail below, so the response never falls through to
+	// editInterior's raw (shared) archAI balance.
+	let precheckBalance: number | undefined;
 	if (db && userId) {
 		try {
-			const credit = await getCredit(db, userId);
-			if (!hasGenerationAccess(credit)) {
-				return apiError(403, 'generation_restricted', 'Generation is limited to approved accounts');
+			const check = await assertGenerationAllowed(db, userId);
+			if (!check.allowed) {
+				return check.reason === 'not_approved'
+					? apiError(403, 'generation_restricted', 'Generation is limited to approved accounts')
+					: apiError(402, 'insufficient_credit', 'Test balance exhausted');
 			}
-			if (!hasSufficientCredit(credit)) {
-				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
-			}
+			precheckBalance = check.balance;
 		} catch (err) {
 			console.error('credit pre-check failed:', err);
 			return apiError(500, 'edit_failed', 'Edit failed');
@@ -118,10 +122,12 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			result = { ...result, balance: credit.balance };
 		} catch (err) {
 			console.error('deductCredit failed after a successful edit:', err);
-			// Even on failure, never fall through to archAI's raw (shared) balance —
-			// fall back to the last-known approved-account balance instead.
+			// Even on failure, never fall through to archAI's raw (shared) balance.
+			// Prefer a fresh read; if that also fails, fall back to the balance we
+			// already had from the precheck — still an approved-account balance,
+			// never the shared one.
 			const fallback = await getCredit(db, userId).catch(() => null);
-			if (fallback) result = { ...result, balance: fallback.balance };
+			result = { ...result, balance: fallback?.balance ?? precheckBalance ?? 0 };
 		}
 	}
 

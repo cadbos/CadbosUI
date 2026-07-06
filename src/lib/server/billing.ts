@@ -107,6 +107,7 @@ export function hasSufficientCredit(credit: CreditAccess): boolean {
 }
 
 interface CreditTransactionRow {
+	id: string;
 	amount: number;
 	balance_after: number;
 	kind: string;
@@ -115,6 +116,7 @@ interface CreditTransactionRow {
 
 function toCreditTransaction(row: CreditTransactionRow): CreditTransaction {
 	return {
+		id: row.id,
 		amount: row.amount,
 		balanceAfter: row.balance_after,
 		kind: row.kind as CreditTransaction['kind'],
@@ -133,28 +135,36 @@ function toCreditTransaction(row: CreditTransactionRow): CreditTransaction {
 // actually charged, so silently refusing to record a real, already-paid
 // deduction here would make the spend history wrong. For a small number of
 // manually-approved accounts this is an accepted soft cap, not a hard one.
+//
+// The balance update and the audit-row insert run as one D1 batch (a single
+// transaction) so a failure between the two can never leave the balance
+// changed without a matching history row. The insert reads `balance` back
+// from `credits` itself (rather than the UPDATE's RETURNING value) because
+// batched statements can't pass results to each other — only to the caller,
+// after the whole batch has committed.
 export async function deductCredit(
 	db: D1Database,
 	userId: string,
 	amount: number,
 	kind: CreditTransaction['kind']
 ): Promise<Balance> {
-	const row = await db
-		.prepare(
-			'UPDATE credits SET balance = balance - ?, updated_at = ? WHERE user_id = ? ' +
-				'RETURNING balance, updated_at'
-		)
-		.bind(amount, Date.now(), userId)
-		.first<BalanceRow>();
+	const now = Date.now();
+	const [updateResult] = await db.batch<BalanceRow>([
+		db
+			.prepare(
+				'UPDATE credits SET balance = balance - ?, updated_at = ? WHERE user_id = ? ' +
+					'RETURNING balance, updated_at'
+			)
+			.bind(amount, now, userId),
+		db
+			.prepare(
+				'INSERT INTO credit_transactions (id, user_id, amount, balance_after, kind, created_at) ' +
+					'SELECT ?, ?, ?, balance, ?, ? FROM credits WHERE user_id = ?'
+			)
+			.bind(crypto.randomUUID(), userId, amount, kind, now, userId)
+	]);
+	const row = updateResult.results[0];
 	if (!row) throw new Error('credit deduction failed: no credit row for user');
-
-	await db
-		.prepare(
-			'INSERT INTO credit_transactions (id, user_id, amount, balance_after, kind, created_at) ' +
-				'VALUES (?, ?, ?, ?, ?, ?)'
-		)
-		.bind(crypto.randomUUID(), userId, amount, row.balance, kind, Date.now())
-		.run();
 
 	return toBalance(row);
 }
@@ -168,10 +178,29 @@ export async function listCreditHistory(
 	// otherwise sort arbitrarily on created_at alone.
 	const { results } = await db
 		.prepare(
-			'SELECT amount, balance_after, kind, created_at FROM credit_transactions ' +
+			'SELECT id, amount, balance_after, kind, created_at FROM credit_transactions ' +
 				'WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?'
 		)
 		.bind(userId, limit)
 		.all<CreditTransactionRow>();
 	return (results ?? []).map(toCreditTransaction);
+}
+
+// Shared by /api/render and /api/edit (both gate generation the same way):
+// resolves whether an account may attempt a paid call at all, independent of
+// the route-specific error response each caller wants to send back. Returns
+// the pre-call balance on success so callers don't need a second getCredit
+// round-trip to get it.
+export type GenerationCheck =
+	| { allowed: true; balance: number }
+	| { allowed: false; reason: 'not_approved' | 'insufficient_credit' };
+
+export async function assertGenerationAllowed(
+	db: D1Database,
+	userId: string
+): Promise<GenerationCheck> {
+	const credit = await getCredit(db, userId);
+	if (!hasGenerationAccess(credit)) return { allowed: false, reason: 'not_approved' };
+	if (!hasSufficientCredit(credit)) return { allowed: false, reason: 'insufficient_credit' };
+	return { allowed: true, balance: credit.balance };
 }

@@ -22,7 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 	import RenderResult from '$lib/components/RenderResult.svelte';
 	import EditPanel from '$lib/components/EditPanel.svelte';
 	import GeneratedImagesSidebar from '$lib/components/GeneratedImagesSidebar.svelte';
-	import { request } from '$lib/state/request.svelte';
+	import { creditErrorKey, extractApiErrorCode, request } from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
@@ -96,8 +96,7 @@ before the Change Date. See LICENSE for complete terms.
 				body: JSON.stringify(body)
 			});
 			if (!response.ok) {
-				const errorBody = await response.json().catch(() => null);
-				throw new Error(errorBody?.error?.code ?? 'render_failed');
+				throw new Error(await extractApiErrorCode(response, 'render_failed'));
 			}
 			const result = await response.json();
 			const render: RenderResultType = {
@@ -121,10 +120,14 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function renderErrorKey(err: unknown): TranslationKey {
-		if (!(err instanceof Error)) return 'render.failed';
-		if (err.message === 'insufficient_credit') return 'render.insufficientCredit';
-		if (err.message === 'generation_restricted') return 'render.generationRestricted';
-		return 'render.failed';
+		return creditErrorKey(
+			{
+				failed: 'render.failed',
+				insufficientCredit: 'render.insufficientCredit',
+				generationRestricted: 'render.generationRestricted'
+			},
+			err
+		);
 	}
 </script>
 

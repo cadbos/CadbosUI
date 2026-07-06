@@ -222,7 +222,13 @@ it('shows the approved-account balance and history rounded to two decimals after
 					balance: 4.9399999999999995,
 					updatedAt: Date.now(),
 					history: [
-						{ amount: 0.06, balanceAfter: 4.9399999999999995, kind: 'render', createdAt: 1 }
+						{
+							id: 'txn-1',
+							amount: 0.06,
+							balanceAfter: 4.9399999999999995,
+							kind: 'render',
+							createdAt: 1
+						}
 					]
 				}
 			})

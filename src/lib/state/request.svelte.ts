@@ -19,6 +19,7 @@ import {
 	type RenderRequest,
 	type RenderResponse
 } from '$lib/api/contract';
+import type { TranslationKey } from '$lib/i18n/index.svelte';
 
 export type { OutputFormat };
 
@@ -271,6 +272,35 @@ export function renderResultFromResponse(
 		editOp: opts?.editOp,
 		ts: Date.now()
 	};
+}
+
+const apiErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
+
+// Shared by the render/edit call sites: a non-ok response's body is untrusted
+// input, so validate it at the boundary instead of reading `error.code` off an
+// implicit `any`. Falls back to `fallbackCode` for a malformed/missing body.
+export async function extractApiErrorCode(
+	response: Response,
+	fallbackCode: string
+): Promise<string> {
+	const body: unknown = await response.json().catch(() => null);
+	const parsed = apiErrorSchema.safeParse(body);
+	return parsed.success ? parsed.data.error.code : fallbackCode;
+}
+
+export interface CreditErrorKeys {
+	failed: TranslationKey;
+	insufficientCredit: TranslationKey;
+	generationRestricted: TranslationKey;
+}
+
+// Shared by renderErrorKey/editErrorKey (Workspace.svelte/EditPanel.svelte): both
+// map the same server error codes to feature-prefixed translation keys.
+export function creditErrorKey(keys: CreditErrorKeys, err: unknown): TranslationKey {
+	if (!(err instanceof Error)) return keys.failed;
+	if (err.message === 'insufficient_credit') return keys.insufficientCredit;
+	if (err.message === 'generation_restricted') return keys.generationRestricted;
+	return keys.failed;
 }
 
 class RequestState {

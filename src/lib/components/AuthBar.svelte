@@ -151,7 +151,7 @@ before the Change Date. See LICENSE for complete terms.
 								<p class="history-empty">{t('auth.credit.historyEmpty')}</p>
 							{:else}
 								<ul>
-									{#each auth.credit.history as entry (entry.createdAt)}
+									{#each auth.credit.history as entry (entry.id)}
 										<li>{creditEntryText(entry)}</li>
 									{/each}
 								</ul>

@@ -30,11 +30,20 @@ const SCHEMA = readdirSync(MIGRATIONS_DIR)
 	.map((file) => readFileSync(new URL(file, MIGRATIONS_DIR), 'utf8'))
 	.join('\n');
 
+interface ShimStatement {
+	bind: (...next: SQLInputValue[]) => ShimStatement;
+	run: () => { success: true; meta: { changes: number } };
+	first: (col?: string) => unknown;
+	all: () => { results: Record<string, unknown>[] };
+	sql: string;
+	args: SQLInputValue[];
+}
+
 export function makeD1(): D1Database {
 	const db = new DatabaseSync(':memory:');
 	db.exec('PRAGMA foreign_keys = ON');
 	db.exec(SCHEMA);
-	const stmt = (sql: string, args: SQLInputValue[] = []) => ({
+	const stmt = (sql: string, args: SQLInputValue[] = []): ShimStatement => ({
 		bind: (...next: SQLInputValue[]) => stmt(sql, next),
 		run: () => ({ success: true, meta: { changes: Number(db.prepare(sql).run(...args).changes) } }),
 		first: (col?: string) => {
@@ -42,7 +51,27 @@ export function makeD1(): D1Database {
 			if (row === undefined) return null;
 			return col ? row[col] : row;
 		},
-		all: () => ({ success: true, results: db.prepare(sql).all(...args), meta: {} })
+		all: () => ({ results: db.prepare(sql).all(...args) as Record<string, unknown>[] }),
+		sql,
+		args
 	});
-	return { prepare: (sql: string) => stmt(sql) } as unknown as D1Database;
+	return {
+		prepare: (sql: string) => stmt(sql),
+		// Mirrors D1's batch(): every statement commits or rolls back together.
+		batch: (statements: ShimStatement[]) => {
+			db.exec('BEGIN');
+			try {
+				const results = statements.map((statement) => ({
+					results: db.prepare(statement.sql).all(...statement.args) as Record<string, unknown>[],
+					success: true as const,
+					meta: {}
+				}));
+				db.exec('COMMIT');
+				return results;
+			} catch (err) {
+				db.exec('ROLLBACK');
+				throw err;
+			}
+		}
+	} as unknown as D1Database;
 }

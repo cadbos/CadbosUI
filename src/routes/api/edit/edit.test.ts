@@ -201,8 +201,16 @@ describe('POST /api/edit — billing', () => {
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
+		const result = (await response.json()) as { outputUrl: string; cost: number };
 		expect(result.outputUrl).toMatch(/^https:\/\//);
+
+		// recordBalance mirrors archAI's own (shared) balance for ops visibility only —
+		// its failure must not skip the actual credit ledger deduction.
+		const creditRow = await db
+			.prepare('SELECT balance FROM credits WHERE user_id = ?')
+			.bind('user-1')
+			.first<{ balance: number }>();
+		expect(creditRow?.balance).toBe(12 - result.cost);
 	});
 
 	it('rate-limits repeated edits from the same account (anti-cost-abuse, FR-К5)', async () => {

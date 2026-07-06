@@ -117,8 +117,10 @@ export interface Balance {
 }
 
 // A single deduction from an approved account's own limit (see CreditInfo
-// below). `amount` is the real cost archAI charged.
+// below). `amount` is the real cost archAI charged. `id` is a stable identifier
+// for list rendering — createdAt alone can collide across concurrent calls.
 export interface CreditTransaction {
+	id: string;
 	amount: number;
 	balanceAfter: number;
 	kind: 'render' | 'edit';

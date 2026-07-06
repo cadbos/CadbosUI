@@ -51,6 +51,7 @@ const sessionUserSchema = z.object({
 	lastName: z.string().optional()
 });
 const creditTransactionSchema = z.object({
+	id: z.string(),
 	amount: z.number(),
 	balanceAfter: z.number(),
 	kind: z.enum(['render', 'edit']),
@@ -276,13 +277,18 @@ class AuthState {
 	// page reload. A stale read here just leaves the last-known values in place.
 	async refreshCredit(): Promise<void> {
 		if (this.status !== 'authenticated') return;
+		const pubkey = this.user?.pubkey;
 		try {
 			const response = await fetch('/auth/me');
 			if (!response.ok) return;
 			const data = await parseJsonOrFail(response, meResponseSchema);
-			this.credit = data.credit ?? null;
-		} catch {
-			// Network hiccup — keep the last-known balance/history rather than clearing it.
+			// A logout or account switch mid-request must not write this response's
+			// credit onto whatever session is now active — same guard as refreshNostrProfile.
+			if (this.user?.pubkey === pubkey) this.credit = data.credit ?? null;
+		} catch (err) {
+			// Network hiccup or malformed response — keep the last-known balance/history
+			// rather than clearing it, but don't let the failure disappear silently.
+			console.error('refreshCredit failed:', err);
 		}
 	}
 

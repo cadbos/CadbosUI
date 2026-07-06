@@ -52,8 +52,12 @@ async function storeImage(
 		httpMetadata: { contentType: normalizedMime }
 	});
 
+	// A relative URL resolves against the *directory* of its base, so a base
+	// without a trailing slash (e.g. https://cdn.example.com/uploads) would
+	// otherwise have its last path segment replaced instead of extended.
+	const base = publicUrl.endsWith('/') ? publicUrl : `${publicUrl}/`;
 	return {
-		url: new URL(key, publicUrl).toString(),
+		url: new URL(key, base).toString(),
 		mime: normalizedMime,
 		size: bytes.byteLength
 	};
