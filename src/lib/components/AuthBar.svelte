@@ -18,6 +18,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import type { CreditTransaction } from '$lib/api/contract';
+	import { formatCredit } from '$lib/utils';
 	import QrCode from './QrCode.svelte';
 
 	const errorKeys: Record<AuthError, TranslationKey> = {
@@ -70,8 +71,8 @@ before the Change Date. See LICENSE for complete terms.
 		const key = entry.kind === 'render' ? 'auth.credit.entryRender' : 'auth.credit.entryEdit';
 		return ti(key, {
 			date: new Date(entry.createdAt).toLocaleString(),
-			amount: entry.amount,
-			balance: entry.balanceAfter
+			amount: formatCredit(entry.amount),
+			balance: formatCredit(entry.balanceAfter)
 		});
 	}
 
@@ -142,7 +143,7 @@ before the Change Date. See LICENSE for complete terms.
 					<span>{ti('auth.profile.relayCount', { count: relayCount })}</span>
 					{#if auth.credit}
 						<span class="balance">
-							{ti('auth.credit.balance', { balance: auth.credit.balance })}
+							{ti('auth.credit.balance', { balance: formatCredit(auth.credit.balance) })}
 						</span>
 						<details class="credit-history">
 							<summary>{t('auth.credit.history')}</summary>

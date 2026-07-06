@@ -139,8 +139,7 @@ class AuthState {
 			const response = await fetch('/auth/me');
 			if (!response.ok) return;
 			const data = await parseJsonOrFail(response, meResponseSchema);
-			this.#authenticate(data.user);
-			this.credit = data.credit ?? null;
+			this.#authenticate(data.user, data.credit ?? null);
 		} catch {
 			// Network hiccup or malformed response on load — stay anonymous, the user
 			// can sign in manually.
@@ -267,13 +266,23 @@ class AuthState {
 			const response = await fetchOrFail('/auth/demo', { method: 'POST' });
 			const data = await parseJsonOrFail(response, verifyResponseSchema);
 			this.#authenticate(data.user);
-			const meResponse = await fetch('/auth/me');
-			if (meResponse.ok) {
-				const me = await parseJsonOrFail(meResponse, meResponseSchema);
-				this.credit = me.credit ?? null;
-			}
 		} catch {
 			this.#fail('failed');
+		}
+	}
+
+	// Re-pulls the approved-account balance/history (e.g. after a render/edit
+	// deducted credit server-side) so the profile panel reflects it without a
+	// page reload. A stale read here just leaves the last-known values in place.
+	async refreshCredit(): Promise<void> {
+		if (this.status !== 'authenticated') return;
+		try {
+			const response = await fetch('/auth/me');
+			if (!response.ok) return;
+			const data = await parseJsonOrFail(response, meResponseSchema);
+			this.credit = data.credit ?? null;
+		} catch {
+			// Network hiccup — keep the last-known balance/history rather than clearing it.
 		}
 	}
 
@@ -346,12 +355,17 @@ class AuthState {
 		this.error = error;
 	}
 
-	#authenticate(user: SessionUser): void {
+	// `credit` is passed when the caller already has it from the same response
+	// (loadSession's /auth/me) — otherwise (a fresh NIP-07/NIP-46/demo login,
+	// which only get `user` back) it's fetched separately via refreshCredit().
+	#authenticate(user: SessionUser, credit?: CreditInfo | null): void {
 		this.user = user;
 		this.nostrProfile = null;
 		this.#resetProfileDraft(user);
 		this.status = 'authenticated';
 		void this.refreshNostrProfile();
+		if (credit !== undefined) this.credit = credit;
+		else void this.refreshCredit();
 	}
 
 	#resetProfileDraft(user: SessionUser | null): void {

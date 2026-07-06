@@ -110,6 +110,7 @@ before the Change Date. See LICENSE for complete terms.
 			request.setCurrentRender(render);
 			request.setStatus('idle');
 			showEditPanel = false;
+			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 		} catch (err) {
 			request.setStatus('error');

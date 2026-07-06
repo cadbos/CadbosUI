@@ -17,6 +17,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
+	import { formatCredit } from '$lib/utils';
 
 	interface Props {
 		onClose: () => void;
@@ -57,6 +58,7 @@ before the Change Date. See LICENSE for complete terms.
 				editOp: { type: 'freeform', instruction: instruction.trim() }
 			});
 			request.applyEditResult(newRender);
+			void auth.refreshCredit();
 			instruction = '';
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 		} catch (err) {
@@ -133,9 +135,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	{#if currentRender?.editOp}
 		<div class="meta">
-			<span>{ti('edit.cost', { cost: currentRender.cost })}</span>
+			<span>{ti('edit.cost', { cost: formatCredit(currentRender.cost) })}</span>
 			<span class="sep">·</span>
-			<span>{ti('edit.balance', { balance: currentRender.balance })}</span>
+			<span>{ti('edit.balance', { balance: formatCredit(currentRender.balance) })}</span>
 		</div>
 	{/if}
 
