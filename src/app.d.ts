@@ -33,6 +33,11 @@ declare global {
 				ARCHAI_API_KEY: string;
 				UPLOADS_BUCKET: R2Bucket;
 				UPLOADS_PUBLIC_URL?: string;
+				// Comma-separated Nostr pubkeys (hex) subject to the local metered
+				// credit limit (billing.ts) — everyone else keeps the unlimited,
+				// archAI-is-the-only-gate behavior. Not a secret; swap accounts by
+				// redeploying this var, no code change needed.
+				METERED_DESIGNER_PUBKEYS?: string;
 			};
 		}
 	}

@@ -18,14 +18,22 @@ import type { RequestHandler } from './$types';
 import type { RenderResponse } from '$lib/api/contract';
 import { apiError, parseBody, renderRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
-import { getUserIdByPubkey, recordBalance } from '$lib/server/billing';
+import {
+	deductCredit,
+	getOrCreateCredit,
+	getUserIdByPubkey,
+	hasSufficientCredit,
+	isMeteredPubkey,
+	recordBalance
+} from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { GeneratedImageRecordError, recordGeneratedImage } from '$lib/server/generated-images';
 import { renderInterior } from '$lib/server/generation';
 
 // Session is enforced centrally in hooks.server.ts (guardedPaths). Spend limits
-// are archAI's job, not ours — it already rejects a call it can't afford, so
-// there's no local pre-check here.
+// are archAI's job for everyone else — it already rejects a call it can't
+// afford — except for metered evaluation accounts (METERED_DESIGNER_PUBKEYS),
+// which also get a local credit pre-check/deduction (billing.ts).
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
 
@@ -41,6 +49,16 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	// so a resolvable session with no matching user row is a data-integrity fault, not
 	// a normal case — fail closed rather than charge a call we can't attribute.
 	if (db && !userId) return apiError(500, 'account_error', 'Account record not found');
+
+	const metered = Boolean(
+		db && userId && isMeteredPubkey(platform?.env?.METERED_DESIGNER_PUBKEYS, locals.user.pubkey)
+	);
+	if (metered && db && userId) {
+		const credit = await getOrCreateCredit(db, userId);
+		if (!hasSufficientCredit(credit)) {
+			return apiError(402, 'insufficient_credit', 'Test balance exhausted');
+		}
+	}
 
 	let result: RenderResponse;
 	try {
@@ -71,6 +89,17 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			await recordBalance(db, userId, result.balance);
 		} catch (err) {
 			console.error('recordBalance failed after a successful render:', err);
+		}
+
+		if (metered) {
+			try {
+				const credit = await deductCredit(db, userId, result.cost, 'render');
+				result = { ...result, balance: credit.balance };
+			} catch (err) {
+				console.error('deductCredit failed after a successful render:', err);
+				const fallback = await getOrCreateCredit(db, userId).catch(() => null);
+				if (fallback) result = { ...result, balance: fallback.balance };
+			}
 		}
 	}
 

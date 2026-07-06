@@ -113,8 +113,28 @@ export interface Balance {
 	updatedAt: number;
 }
 
+// A single deduction from a metered evaluation account (Balance for such an
+// account, see CreditInfo below). `amount` is the real cost archAI charged.
+export interface CreditTransaction {
+	amount: number;
+	balanceAfter: number;
+	kind: 'render' | 'edit';
+	createdAt: number;
+}
+
+// A local, additive spend cap for a metered evaluation account (e.g. a
+// designer test account) — separate from the real archAI balance in
+// `MeResponse.balance`. Present only for pubkeys listed in the
+// METERED_DESIGNER_PUBKEYS env var.
+export interface CreditInfo {
+	balance: number;
+	updatedAt: number;
+	history: CreditTransaction[];
+}
+
 // GET /auth/me → 401 when no session.
 export interface MeResponse {
 	user: SessionUser;
 	balance?: Balance;
+	credit?: CreditInfo;
 }

@@ -47,7 +47,12 @@ before the Change Date. See LICENSE for complete terms.
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ image: imageUrl, prompt: instruction.trim() })
 			});
-			if (!response.ok) throw new Error('edit failed');
+			if (!response.ok) {
+				const errorBody = await response.json().catch(() => null);
+				throw new Error(
+					errorBody?.error?.code === 'insufficient_credit' ? 'insufficient_credit' : 'edit_failed'
+				);
+			}
 			const result = await response.json();
 			const newRender = renderResultFromResponse(result, {
 				parentId: currentRender.id,
@@ -56,8 +61,11 @@ before the Change Date. See LICENSE for complete terms.
 			request.applyEditResult(newRender);
 			instruction = '';
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
-		} catch {
-			error = t('edit.failed');
+		} catch (err) {
+			error =
+				err instanceof Error && err.message === 'insufficient_credit'
+					? t('edit.insufficientCredit')
+					: t('edit.failed');
 		} finally {
 			applying = false;
 		}

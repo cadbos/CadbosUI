@@ -18,7 +18,13 @@ import type { RequestHandler } from './$types';
 import type { MeResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
-import { getBalance, getUserIdByPubkey } from '$lib/server/billing';
+import {
+	getBalance,
+	getOrCreateCredit,
+	getUserIdByPubkey,
+	isMeteredPubkey,
+	listCreditHistory
+} from '$lib/server/billing';
 import { DEMO_BALANCE, DEMO_PUBKEY } from '$lib/server/demo';
 
 export const GET: RequestHandler = async ({ locals, platform }) => {
@@ -35,5 +41,14 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 	// undefined (not a default) until the user has generated at least once.
 	const balance = userId ? ((await getBalance(db, userId)) ?? undefined) : undefined;
 
-	return json({ user: locals.user, balance } satisfies MeResponse);
+	let credit: MeResponse['credit'];
+	if (userId && isMeteredPubkey(platform?.env?.METERED_DESIGNER_PUBKEYS, locals.user.pubkey)) {
+		const [creditBalance, history] = await Promise.all([
+			getOrCreateCredit(db, userId),
+			listCreditHistory(db, userId)
+		]);
+		credit = { ...creditBalance, history };
+	}
+
+	return json({ user: locals.user, balance, credit } satisfies MeResponse);
 };

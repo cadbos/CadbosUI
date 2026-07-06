@@ -29,7 +29,13 @@ import { BunkerSigner, createNostrConnectURI } from 'nostr-tools/nip46';
 import { SimplePool } from 'nostr-tools/pool';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { Event, EventTemplate } from 'nostr-tools/pure';
-import type { NostrProfile, ProfileUpdateRequest, SessionUser, Balance } from '$lib/api/contract';
+import type {
+	NostrProfile,
+	ProfileUpdateRequest,
+	SessionUser,
+	Balance,
+	CreditInfo
+} from '$lib/api/contract';
 import { t } from '$lib/i18n/index.svelte';
 import { NOSTR_CONNECT_RELAYS } from '$lib/nostr/connect';
 
@@ -49,7 +55,18 @@ const balanceSchema = z.object({
 	balance: z.number(),
 	updatedAt: z.number()
 });
-const meResponseSchema = z.object({ user: sessionUserSchema, balance: balanceSchema.optional() });
+const creditTransactionSchema = z.object({
+	amount: z.number(),
+	balanceAfter: z.number(),
+	kind: z.enum(['render', 'edit']),
+	createdAt: z.number()
+});
+const creditSchema = balanceSchema.extend({ history: z.array(creditTransactionSchema) });
+const meResponseSchema = z.object({
+	user: sessionUserSchema,
+	balance: balanceSchema.optional(),
+	credit: creditSchema.optional()
+});
 const challengeResponseSchema = z.object({ challenge: hex32 });
 const verifyResponseSchema = z.object({ user: sessionUserSchema });
 const profileResponseSchema = z.object({ user: sessionUserSchema });
@@ -98,6 +115,7 @@ class AuthState {
 	status = $state<AuthStatus>('anonymous');
 	user = $state<SessionUser | null>(null);
 	balance = $state<Balance | null>(null);
+	credit = $state<CreditInfo | null>(null);
 	nostrProfile = $state<NostrProfile | null>(null);
 	profileDraft = $state({ firstName: '', lastName: '' });
 	error = $state<AuthError | null>(null);
@@ -126,6 +144,7 @@ class AuthState {
 			const data = await parseJsonOrFail(response, meResponseSchema);
 			this.#authenticate(data.user);
 			this.balance = data.balance ?? null;
+			this.credit = data.credit ?? null;
 		} catch {
 			// Network hiccup or malformed response on load — stay anonymous, the user
 			// can sign in manually.
@@ -238,6 +257,7 @@ class AuthState {
 		if (!response.ok) return;
 		this.user = null;
 		this.balance = null;
+		this.credit = null;
 		this.nostrProfile = null;
 		this.#resetProfileDraft(null);
 		this.error = null;
@@ -256,6 +276,7 @@ class AuthState {
 			if (meResponse.ok) {
 				const me = await parseJsonOrFail(meResponse, meResponseSchema);
 				this.balance = me.balance ?? null;
+				this.credit = me.credit ?? null;
 			}
 		} catch {
 			this.#fail('failed');

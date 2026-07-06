@@ -22,7 +22,7 @@
 // per paid call.
 
 import type { D1Database } from '@cloudflare/workers-types';
-import type { Balance } from '$lib/api/contract';
+import type { Balance, CreditTransaction } from '$lib/api/contract';
 
 export async function getUserIdByPubkey(db: D1Database, pubkey: string): Promise<string | null> {
 	const row = await db
@@ -70,4 +70,107 @@ export async function recordBalance(
 		.first<BalanceRow>();
 	if (!row) throw new Error('balance upsert failed');
 	return toBalance(row);
+}
+
+// Metered evaluation accounts (e.g. designer test accounts) — additive to the
+// balance mirror above, not a replacement. A pubkey is metered only if it's
+// listed in METERED_DESIGNER_PUBKEYS; every other account never gets a
+// `credits` row and keeps the unlimited behavior. Pubkeys aren't secret, so
+// this list travels as a plain env var — swapping test accounts is a
+// redeploy, not a code change.
+export function isMeteredPubkey(rawList: string | undefined, pubkey: string): boolean {
+	if (!rawList) return false;
+	const target = pubkey.toLowerCase();
+	return rawList
+		.split(',')
+		.map((entry) => entry.trim().toLowerCase())
+		.includes(target);
+}
+
+// Fixed starting allowance for a metered account, in the same numeric unit
+// archAI's own cost/balance fields use.
+const METERED_STARTING_BALANCE = 5;
+
+// Provisions the starting balance on first check, then returns the current
+// one — mirrors the INSERT-OR-IGNORE-then-SELECT pattern used for users.
+export async function getOrCreateCredit(db: D1Database, userId: string): Promise<Balance> {
+	await db
+		.prepare(
+			'INSERT INTO credits (user_id, balance, updated_at) VALUES (?, ?, ?) ' +
+				'ON CONFLICT (user_id) DO NOTHING'
+		)
+		.bind(userId, METERED_STARTING_BALANCE, Date.now())
+		.run();
+	const row = await db
+		.prepare('SELECT balance, updated_at FROM credits WHERE user_id = ?')
+		.bind(userId)
+		.first<BalanceRow>();
+	if (!row) throw new Error('credit provisioning failed');
+	return toBalance(row);
+}
+
+export function hasSufficientCredit(credit: Balance): boolean {
+	return credit.balance > 0;
+}
+
+interface CreditTransactionRow {
+	amount: number;
+	balance_after: number;
+	kind: string;
+	created_at: number;
+}
+
+function toCreditTransaction(row: CreditTransactionRow): CreditTransaction {
+	return {
+		amount: row.amount,
+		balanceAfter: row.balance_after,
+		kind: row.kind as CreditTransaction['kind'],
+		createdAt: row.created_at
+	};
+}
+
+// Deducts the real cost archAI charged (not a fixed fee) and logs it, so the
+// account's own spend history can be shown. Called exactly once, only after a
+// confirmed successful archAI response — same discipline as recordBalance.
+export async function deductCredit(
+	db: D1Database,
+	userId: string,
+	amount: number,
+	kind: CreditTransaction['kind']
+): Promise<Balance> {
+	const row = await db
+		.prepare(
+			'UPDATE credits SET balance = balance - ?, updated_at = ? WHERE user_id = ? ' +
+				'RETURNING balance, updated_at'
+		)
+		.bind(amount, Date.now(), userId)
+		.first<BalanceRow>();
+	if (!row) throw new Error('credit deduction failed: no credit row for user');
+
+	await db
+		.prepare(
+			'INSERT INTO credit_transactions (id, user_id, amount, balance_after, kind, created_at) ' +
+				'VALUES (?, ?, ?, ?, ?, ?)'
+		)
+		.bind(crypto.randomUUID(), userId, amount, row.balance, kind, Date.now())
+		.run();
+
+	return toBalance(row);
+}
+
+export async function listCreditHistory(
+	db: D1Database,
+	userId: string,
+	limit = 50
+): Promise<CreditTransaction[]> {
+	// rowid as a tiebreaker: two deductions within the same millisecond would
+	// otherwise sort arbitrarily on created_at alone.
+	const { results } = await db
+		.prepare(
+			'SELECT amount, balance_after, kind, created_at FROM credit_transactions ' +
+				'WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?'
+		)
+		.bind(userId, limit)
+		.all<CreditTransactionRow>();
+	return (results ?? []).map(toCreditTransaction);
 }

@@ -237,4 +237,57 @@ describe('POST /api/edit — billing', () => {
 		);
 		expect(response.status).toBe(500);
 	});
+
+	describe('metered designer accounts', () => {
+		it('does not affect an account absent from METERED_DESIGNER_PUBKEYS', async () => {
+			const db = makeD1();
+			seedUser(db, 'user-1', 'pubkey-1');
+			const platform = {
+				env: { DB: db, METERED_DESIGNER_PUBKEYS: 'some-other-pubkey' }
+			} as App.Platform;
+
+			const response = await call({ pubkey: 'pubkey-1' }, platform, body);
+			expect(response.status).toBe(200);
+
+			const creditRow = await db
+				.prepare('SELECT 1 FROM credits WHERE user_id = ?')
+				.bind('user-1')
+				.first();
+			expect(creditRow).toBeNull();
+		});
+
+		it('provisions and deducts the real archAI cost for a metered account', async () => {
+			const db = makeD1();
+			seedUser(db, 'user-1', 'pubkey-1');
+			const platform = {
+				env: { DB: db, METERED_DESIGNER_PUBKEYS: 'pubkey-1' }
+			} as App.Platform;
+
+			const response = await call({ pubkey: 'pubkey-1' }, platform, body);
+			expect(response.status).toBe(200);
+			const result = (await response.json()) as { cost: number };
+
+			const creditRow = await db
+				.prepare('SELECT balance FROM credits WHERE user_id = ?')
+				.bind('user-1')
+				.first<{ balance: number }>();
+			expect(creditRow?.balance).toBe(5 - result.cost);
+		});
+
+		it('blocks editing once the metered balance is exhausted', async () => {
+			const db = makeD1();
+			seedUser(db, 'user-1', 'pubkey-1');
+			db.prepare('INSERT INTO credits (user_id, balance, updated_at) VALUES (?, ?, ?)')
+				.bind('user-1', 0, Date.now())
+				.run();
+			const platform = {
+				env: { DB: db, METERED_DESIGNER_PUBKEYS: 'pubkey-1' }
+			} as App.Platform;
+
+			const response = await call({ pubkey: 'pubkey-1' }, platform, body);
+			expect(response.status).toBe(402);
+			const result = (await response.json()) as { error: { code: string } };
+			expect(result.error.code).toBe('insufficient_credit');
+		});
+	});
 });

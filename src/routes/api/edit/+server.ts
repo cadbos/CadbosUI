@@ -19,7 +19,14 @@ import type { RenderResponse } from '$lib/api/contract';
 import { apiError, editRequestSchema, parseBody } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
-import { getUserIdByPubkey, recordBalance } from '$lib/server/billing';
+import {
+	deductCredit,
+	getOrCreateCredit,
+	getUserIdByPubkey,
+	hasSufficientCredit,
+	isMeteredPubkey,
+	recordBalance
+} from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { GeneratedImageRecordError, recordGeneratedImage } from '$lib/server/generated-images';
 import { editInterior } from '$lib/server/generation';
@@ -29,7 +36,9 @@ import { editInterior } from '$lib/server/generation';
 const EDIT_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
 
 // Session is enforced centrally in hooks.server.ts (guardedPaths). Spend limits
-// are archAI's job, not ours (mirrors /api/render) — no local balance pre-check.
+// are archAI's job for everyone else (mirrors /api/render) — except for metered
+// evaluation accounts (METERED_DESIGNER_PUBKEYS), which also get a local credit
+// pre-check/deduction (billing.ts).
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
 
@@ -55,6 +64,16 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			EDIT_RATE_LIMIT
 		);
 		if (limited) return apiError(429, 'rate_limited', 'Too many requests');
+	}
+
+	const metered = Boolean(
+		db && userId && isMeteredPubkey(platform?.env?.METERED_DESIGNER_PUBKEYS, locals.user.pubkey)
+	);
+	if (metered && db && userId) {
+		const credit = await getOrCreateCredit(db, userId);
+		if (!hasSufficientCredit(credit)) {
+			return apiError(402, 'insufficient_credit', 'Test balance exhausted');
+		}
 	}
 
 	let result: RenderResponse;
@@ -83,8 +102,9 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 
 		try {
 			await recordBalance(db, userId, result.balance);
+			if (metered) await deductCredit(db, userId, result.cost, 'edit');
 		} catch (err) {
-			console.error('recordBalance failed after a successful edit:', err);
+			console.error('recordBalance/deductCredit failed after a successful edit:', err);
 		}
 	}
 

@@ -95,7 +95,12 @@ before the Change Date. See LICENSE for complete terms.
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(body)
 			});
-			if (!response.ok) throw new Error('render failed');
+			if (!response.ok) {
+				const errorBody = await response.json().catch(() => null);
+				throw new Error(
+					errorBody?.error?.code === 'insufficient_credit' ? 'insufficient_credit' : 'render_failed'
+				);
+			}
 			const result = await response.json();
 			const render: RenderResultType = {
 				id: crypto.randomUUID(),
@@ -108,10 +113,12 @@ before the Change Date. See LICENSE for complete terms.
 			request.setStatus('idle');
 			showEditPanel = false;
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
-		} catch (error) {
-			console.error('Render request failed:', error);
+		} catch (err) {
 			request.setStatus('error');
-			submitError = t('render.failed');
+			submitError =
+				err instanceof Error && err.message === 'insufficient_credit'
+					? t('render.insufficientCredit')
+					: t('render.failed');
 		} finally {
 			submitting = false;
 		}
