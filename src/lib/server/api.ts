@@ -50,6 +50,11 @@ export const styleTransferRequestSchema = z.object({
 	styleTransferStrength: z.number().min(0).max(1).optional()
 });
 
+export const upscaleRequestSchema = z.object({
+	image: z.url().trim(),
+	outputFormat: outputFormat.optional()
+});
+
 // Nostr pubkey: 32-byte lowercase hex (x-only schnorr public key).
 export const challengeRequestSchema = z.object({
 	pubkey: z

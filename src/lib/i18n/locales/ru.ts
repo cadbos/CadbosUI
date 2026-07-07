@@ -106,6 +106,15 @@ export const ru = {
 	'render.validationImage': 'Загрузите фото комнаты',
 	'render.validationPrompt': 'Введите промпт',
 	'render.failed': 'Не удалось сгенерировать. Попробуйте ещё раз.',
+	'toolbar.undo': 'Отменить',
+	'toolbar.redo': 'Повторить',
+	'toolbar.compare': 'Сравнить до/после',
+	'toolbar.before': 'До',
+	'toolbar.after': 'После',
+	'toolbar.upscale': 'Улучшить до 4K',
+	'toolbar.signInToUpscale': 'Войдите, чтобы улучшить до 4K',
+	'toolbar.upscaleDone': 'Улучшено до 4K',
+	'toolbar.upscaleFailed': 'Не удалось улучшить изображение. Попробуйте ещё раз.',
 	'generatedImages.title': 'Сгенерированные изображения',
 	'generatedImages.loading': 'Загрузка изображений…',
 	'generatedImages.empty': 'Пока нет сгенерированных изображений.',
@@ -135,7 +144,6 @@ export const ru = {
 	'edit.instruction': 'Инструкция для правки',
 	'edit.apply': 'Применить правку',
 	'edit.applying': 'Применение…',
-	'edit.undo': 'Отменить',
 	'edit.failed': 'Не удалось применить правку. Попробуйте ещё раз.',
 	'edit.insufficientCredit': 'Тестовый баланс исчерпан.',
 	'edit.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
@@ -145,6 +153,7 @@ export const ru = {
 	'edit.tool.freeform': 'Свой промпт',
 	'edit.tool.addObject': 'Добавить объект',
 	'edit.tool.removeObject': 'Удалить объект',
+	'edit.tool.atmosphere': 'Атмосфера',
 	'edit.addObject.apply': 'Добавить объект',
 	'edit.addObject.applying': 'Добавление…',
 	'edit.addObject.selectHint': 'Выберите, что добавить на изображение.',
@@ -181,5 +190,41 @@ export const ru = {
 	'edit.removeObject.apply': 'Удалить объект',
 	'edit.removeObject.applying': 'Удаление…',
 	'edit.removeObject.promptTemplate':
-		'Убери с изображения {object}, аккуратно восстановив то, что было на его месте.'
+		'Убери с изображения {object}, аккуратно восстановив то, что было на его месте.',
+	'edit.atmosphere.sceneLabel': 'Тип сцены',
+	'edit.atmosphere.interior': 'Интерьер',
+	'edit.atmosphere.exterior': 'Экстерьер',
+	'edit.atmosphere.apply': 'Применить',
+	'edit.atmosphere.applying': 'Применение…',
+	'edit.atmosphere.selectHint': 'Выберите освещение сцены.',
+	'edit.atmosphere.midday.label': 'Полдень',
+	'edit.atmosphere.midday.promptInterior':
+		'Измени освещение сцены на яркий полуденный дневной свет, естественный и нейтральный по цвету.',
+	'edit.atmosphere.midday.promptExterior':
+		'Измени освещение сцены на яркий полуденный свет с чётким солнцем и нейтральными тенями.',
+	'edit.atmosphere.goldenHour.label': 'Золотой час',
+	'edit.atmosphere.goldenHour.promptInterior':
+		'Измени освещение на золотой час: тёплый закатный свет, мягкие длинные тени, оранжево-розовые тона.',
+	'edit.atmosphere.goldenHour.promptExterior':
+		'Измени освещение на золотой час: тёплый закатный свет с длинными тенями.',
+	'edit.atmosphere.blueHour.label': 'Синий час',
+	'edit.atmosphere.blueHour.promptInterior':
+		'Измени освещение на синий час: прохладный сумеречный свет с включённым искусственным освещением в интерьере.',
+	'edit.atmosphere.blueHour.promptExterior':
+		'Измени освещение на синий час: сумеречное небо и включённое наружное освещение здания.',
+	'edit.atmosphere.overcast.label': 'Облачно',
+	'edit.atmosphere.overcast.promptInterior':
+		'Измени освещение на пасмурный рассеянный дневной свет без резких теней.',
+	'edit.atmosphere.overcast.promptExterior':
+		'Сделай небо пасмурным, с мягким рассеянным светом без резких теней.',
+	'edit.atmosphere.warmLight.label': 'Тёплый свет',
+	'edit.atmosphere.warmLight.promptInterior':
+		'Сделай освещение тёплым и уютным, с мягким жёлтым светом от внутренних источников.',
+	'edit.atmosphere.warmLight.promptExterior':
+		'Добавь тёплый свет фасадного освещения в вечерней сцене.',
+	'edit.atmosphere.dim.label': 'Приглушённый свет',
+	'edit.atmosphere.dim.promptInterior':
+		'Сделай освещение приглушённым и атмосферным, с мягкими тенями и низкой яркостью.',
+	'edit.atmosphere.dim.promptExterior':
+		'Сделай сцену тёмной и приглушённой, с минимальным освещением.'
 } as const satisfies Dictionary;

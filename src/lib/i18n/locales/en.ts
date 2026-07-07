@@ -106,6 +106,15 @@ export const en = {
 	'render.validationImage': 'Upload a room photo',
 	'render.validationPrompt': 'Enter a prompt',
 	'render.failed': 'Generation failed. Please try again.',
+	'toolbar.undo': 'Undo',
+	'toolbar.redo': 'Redo',
+	'toolbar.compare': 'Compare before/after',
+	'toolbar.before': 'Before',
+	'toolbar.after': 'After',
+	'toolbar.upscale': 'Upscale to 4K',
+	'toolbar.signInToUpscale': 'Sign in to upscale',
+	'toolbar.upscaleDone': 'Upscaled to 4K',
+	'toolbar.upscaleFailed': 'Upscale failed. Please try again.',
 	'generatedImages.title': 'Generated images',
 	'generatedImages.loading': 'Loading images…',
 	'generatedImages.empty': 'No generated images yet.',
@@ -134,7 +143,6 @@ export const en = {
 	'edit.instruction': 'Edit instruction',
 	'edit.apply': 'Apply edit',
 	'edit.applying': 'Applying…',
-	'edit.undo': 'Undo',
 	'edit.failed': 'Edit failed. Please try again.',
 	'edit.insufficientCredit': 'Test balance exhausted.',
 	'edit.generationRestricted': 'Generation is available to a limited set of accounts.',
@@ -144,6 +152,7 @@ export const en = {
 	'edit.tool.freeform': 'Custom prompt',
 	'edit.tool.addObject': 'Add object',
 	'edit.tool.removeObject': 'Remove object',
+	'edit.tool.atmosphere': 'Atmosphere',
 	'edit.addObject.apply': 'Add object',
 	'edit.addObject.applying': 'Adding…',
 	'edit.addObject.selectHint': 'Choose what to add to the image.',
@@ -179,5 +188,39 @@ export const en = {
 	'edit.removeObject.apply': 'Remove object',
 	'edit.removeObject.applying': 'Removing…',
 	'edit.removeObject.promptTemplate':
-		'Remove {object} from the image, carefully restoring what was behind/underneath it.'
+		'Remove {object} from the image, carefully restoring what was behind/underneath it.',
+	'edit.atmosphere.sceneLabel': 'Scene type',
+	'edit.atmosphere.interior': 'Interior',
+	'edit.atmosphere.exterior': 'Exterior',
+	'edit.atmosphere.apply': 'Apply',
+	'edit.atmosphere.applying': 'Applying…',
+	'edit.atmosphere.selectHint': 'Choose the lighting for the scene.',
+	'edit.atmosphere.midday.label': 'Midday',
+	'edit.atmosphere.midday.promptInterior':
+		'Change the scene lighting to bright midday daylight, natural and neutral in colour.',
+	'edit.atmosphere.midday.promptExterior':
+		'Change the scene lighting to bright midday sun with crisp, neutral shadows.',
+	'edit.atmosphere.goldenHour.label': 'Golden hour',
+	'edit.atmosphere.goldenHour.promptInterior':
+		'Change the lighting to golden hour: warm sunset light, soft long shadows, orange-pink tones.',
+	'edit.atmosphere.goldenHour.promptExterior':
+		'Change the lighting to golden hour: warm sunset light with long shadows.',
+	'edit.atmosphere.blueHour.label': 'Blue hour',
+	'edit.atmosphere.blueHour.promptInterior':
+		'Change the lighting to blue hour: cool twilight light with the interior lights turned on.',
+	'edit.atmosphere.blueHour.promptExterior':
+		'Change the lighting to blue hour: twilight sky with the building exterior lighting turned on.',
+	'edit.atmosphere.overcast.label': 'Overcast',
+	'edit.atmosphere.overcast.promptInterior':
+		'Change the lighting to overcast, diffused daylight with no harsh shadows.',
+	'edit.atmosphere.overcast.promptExterior':
+		'Make the sky overcast, with soft diffused light and no harsh shadows.',
+	'edit.atmosphere.warmLight.label': 'Warm light',
+	'edit.atmosphere.warmLight.promptInterior':
+		'Make the lighting warm and cosy, with soft yellow light from indoor fixtures.',
+	'edit.atmosphere.warmLight.promptExterior': 'Add warm facade lighting to an evening scene.',
+	'edit.atmosphere.dim.label': 'Dim',
+	'edit.atmosphere.dim.promptInterior':
+		'Make the lighting dim and atmospheric, with soft shadows and low brightness.',
+	'edit.atmosphere.dim.promptExterior': 'Make the scene dark and dim, with minimal lighting.'
 } as const satisfies Dictionary;

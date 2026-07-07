@@ -56,3 +56,12 @@ export function mockStyleTransfer(): RenderResponse {
 		balance: 44
 	};
 }
+
+export function mockUpscale(): RenderResponse {
+	return {
+		// Same scene at a higher resolution — Unsplash free
+		outputUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=3840&q=90',
+		cost: 3,
+		balance: 43
+	};
+}

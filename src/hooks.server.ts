@@ -30,7 +30,7 @@ const securityHeaders: Record<string, string> = {
 
 // Endpoints that require an authenticated session (FR-И1, AC-11). Guarded centrally
 // so a new route under these prefixes can't accidentally ship unauthenticated.
-const guardedPaths = ['/api/render', '/api/edit', '/api/uploads', '/api/download'];
+const guardedPaths = ['/api/render', '/api/edit', '/api/upscale', '/api/uploads', '/api/download'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get(SESSION_COOKIE);

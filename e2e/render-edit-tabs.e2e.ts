@@ -197,6 +197,102 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 	await expect(page.getByLabel('Инструкция для правки')).toBeVisible();
 });
 
+test('the result toolbar supports undo/redo, comparing before/after, and upscaling to 4K', async ({
+	page
+}) => {
+	await authenticate(page);
+	await page.route('**/api/uploads', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				url: 'https://cdn.example.test/uploaded.webp',
+				mime: 'image/webp',
+				size: 1024,
+				dimensions: [800, 600]
+			})
+		});
+	});
+	await page.route('**/api/render', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/render.webp',
+				cost: 5,
+				balance: 95
+			})
+		});
+	});
+	await page.route('**/api/edit', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/edited.webp',
+				cost: 3,
+				balance: 92
+			})
+		});
+	});
+	await page.route('**/api/upscale', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/edited-4k.webp',
+				cost: 4,
+				balance: 88
+			})
+		});
+	});
+
+	await page.goto('/');
+
+	await page
+		.locator('#mode-panel-render input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+	await page.getByRole('button', { name: 'Сгенерировать' }).click();
+
+	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render.webp');
+
+	const undoButton = page.getByRole('button', { name: 'Отменить' });
+	const redoButton = page.getByRole('button', { name: 'Повторить' });
+	const compareButton = page.getByRole('button', { name: 'Сравнить до/после' });
+	const upscaleButton = page.getByRole('button', { name: 'Улучшить до 4K' });
+
+	// Undo/redo/compare have nothing to act on before any edit exists yet.
+	await expect(undoButton).toBeDisabled();
+	await expect(redoButton).toBeDisabled();
+	await expect(compareButton).toBeDisabled();
+
+	await page.getByRole('button', { name: 'Редактировать' }).click();
+	await page.getByLabel('Инструкция для правки').fill('Replace the sofa with an armchair');
+	await page.getByRole('button', { name: 'Применить правку' }).click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/edited.webp');
+
+	await expect(undoButton).toBeEnabled();
+	await expect(compareButton).toBeEnabled();
+
+	await compareButton.click();
+	await expect(page.getByText('До', { exact: true })).toBeVisible();
+	await expect(page.getByText('После', { exact: true })).toBeVisible();
+	await compareButton.click();
+
+	await undoButton.click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render.webp');
+	await expect(undoButton).toBeDisabled();
+	await expect(redoButton).toBeEnabled();
+
+	await redoButton.click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/edited.webp');
+	await expect(redoButton).toBeDisabled();
+
+	await upscaleButton.click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/edited-4k.webp');
+});
+
 test('the Add Object tool applies a selected preset to the current image', async ({ page }) => {
 	await authenticate(page);
 	await mockUpload(page);
@@ -271,5 +367,53 @@ test('the Remove Object tool builds a removal prompt from the described object',
 	);
 	expect(capturedPrompt).toBe(
 		'Убери с изображения старый диван, аккуратно восстановив то, что было на его месте.'
+	);
+});
+
+test('the Atmosphere tool applies the exterior variant of a lighting preset', async ({ page }) => {
+	await authenticate(page);
+	await page.route('**/api/uploads', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				url: 'https://cdn.example.test/uploaded.webp',
+				mime: 'image/webp',
+				size: 1024,
+				dimensions: [800, 600]
+			})
+		});
+	});
+	let capturedPrompt: string | undefined;
+	await page.route('**/api/edit', async (route) => {
+		capturedPrompt = (route.request().postDataJSON() as { prompt: string }).prompt;
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/golden-hour.webp',
+				cost: 2,
+				balance: 90
+			})
+		});
+	});
+
+	await page.goto('/');
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
+	await page
+		.locator('#mode-panel-edit input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+
+	await page.getByRole('tab', { name: 'Атмосфера' }).click();
+	await page.getByRole('tab', { name: 'Экстерьер' }).click();
+	await page.getByRole('button', { name: 'Золотой час' }).click();
+	await page.getByRole('button', { name: 'Применить' }).click();
+
+	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/golden-hour.webp'
+	);
+	expect(capturedPrompt).toBe(
+		'Измени освещение на золотой час: тёплый закатный свет с длинными тенями.'
 	);
 });

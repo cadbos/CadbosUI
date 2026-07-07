@@ -309,3 +309,67 @@ describe('edit lifecycle (FR-К4/К6)', () => {
 		expect(request.canUndoEdit).toBe(false);
 	});
 });
+
+describe('edit redo (symmetric one-step undo/redo, not a history tree — Д-16)', () => {
+	function render(id: string): RenderResult {
+		return { id, outputUrls: [`https://example.test/${id}.jpg`], cost: 1, balance: 24, ts: 0 };
+	}
+
+	it('there is nothing to redo before an undo happens', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.applyEditResult(render('edit-1'));
+
+		expect(request.canRedoEdit).toBe(false);
+	});
+
+	it('redo re-applies the edit that undo just reverted', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.applyEditResult(render('edit-1'));
+		request.undoLastEdit();
+
+		request.redoEdit();
+
+		expect(request.currentRender?.id).toBe('edit-1');
+		expect(request.canRedoEdit).toBe(false);
+		expect(request.canUndoEdit).toBe(true);
+	});
+
+	it('redo is a no-op when there is nothing to redo', () => {
+		request.setCurrentRender(render('gen-1'));
+
+		request.redoEdit();
+
+		expect(request.currentRender?.id).toBe('gen-1');
+	});
+
+	it('a new edit after undo discards the redo target instead of continuing it', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.applyEditResult(render('edit-1'));
+		request.undoLastEdit();
+
+		request.applyEditResult(render('edit-2'));
+
+		expect(request.currentRender?.id).toBe('edit-2');
+		expect(request.canRedoEdit).toBe(false);
+	});
+
+	it('a fresh generation clears any pending redo from a prior edit chain', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.applyEditResult(render('edit-1'));
+		request.undoLastEdit();
+
+		request.setCurrentRender(render('gen-2'));
+
+		expect(request.canRedoEdit).toBe(false);
+	});
+
+	it('reset() clears the redo target too', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.applyEditResult(render('edit-1'));
+		request.undoLastEdit();
+
+		request.reset();
+
+		expect(request.canRedoEdit).toBe(false);
+	});
+});
