@@ -56,6 +56,7 @@ export function buildAc9RequestJSON(): RequestJSON {
 			order: fragment.order
 		})),
 		outputFormat: 'webp',
+		sceneType: 'interior',
 		promptOverride: null,
 		status: 'idle'
 	};

@@ -22,6 +22,7 @@ import {
 import type { TranslationKey } from '$lib/i18n/index.svelte';
 
 export type { OutputFormat };
+export type SceneType = 'interior' | 'exterior';
 
 export interface ImageInput {
 	url: string;
@@ -78,6 +79,7 @@ export interface RequestJSON {
 	image?: ImageInput;
 	promptFragments: PromptFragment[];
 	outputFormat: OutputFormat;
+	sceneType: SceneType;
 	promptOverride: string | null;
 	currentRender?: RenderResult;
 	status: RequestStatus;
@@ -87,10 +89,12 @@ export interface NormalizedRequest {
 	image?: ImageInput;
 	promptFragments: PromptFragment[];
 	outputFormat: OutputFormat;
+	sceneType: SceneType;
 	prompt: string;
 }
 
 const outputFormatSchema = z.enum(OUTPUT_FORMATS);
+const sceneTypeSchema = z.enum(['interior', 'exterior']);
 
 const imageInputSchema = z.object({
 	url: z.string().trim().url(),
@@ -128,6 +132,8 @@ const requestJsonSchema = z
 		image: optionalImageInputSchema,
 		promptFragments: z.array(promptFragmentSchema),
 		outputFormat: outputFormatSchema,
+		// Defaults to interior for persisted requests saved before this field existed.
+		sceneType: sceneTypeSchema.default('interior'),
 		promptOverride: z.string().nullable(),
 		currentRender: renderResultSchema.optional(),
 		status: z.enum(['idle', 'rendering', 'error'])
@@ -318,6 +324,7 @@ class RequestState {
 	image = $state<ImageInput | undefined>(undefined);
 	promptFragments = $state<PromptFragment[]>([]);
 	outputFormat = $state<OutputFormat>('webp');
+	sceneType = $state<SceneType>('interior');
 	promptOverride = $state<string | null>(null);
 	currentRender = $state<RenderResult | undefined>(undefined);
 	// Single-step undo/redo for the last edit (FR-К6) — in-session only, deliberately
@@ -407,6 +414,10 @@ class RequestState {
 		this.outputFormat = format;
 	}
 
+	setSceneType(type: SceneType): void {
+		this.sceneType = type;
+	}
+
 	setPromptOverride(text: string): void {
 		this.promptOverride = text;
 	}
@@ -477,6 +488,7 @@ class RequestState {
 			image: cloneImage(this.image),
 			promptFragments: cloneFragments(this.promptFragments),
 			outputFormat: this.outputFormat,
+			sceneType: this.sceneType,
 			promptOverride: this.promptOverride,
 			currentRender: cloneRenderResult(this.currentRender),
 			status: this.status
@@ -489,6 +501,7 @@ class RequestState {
 		this.image = cloneImage(parsed.image);
 		this.promptFragments = cloneFragments(parsed.promptFragments);
 		this.outputFormat = parsed.outputFormat;
+		this.sceneType = parsed.sceneType;
 		this.promptOverride = parsed.promptOverride;
 		this.currentRender = cloneRenderResult(parsed.currentRender);
 		this.status = parsed.status;
@@ -499,6 +512,7 @@ class RequestState {
 			image: cloneImage(this.image),
 			promptFragments: cloneFragments(this.promptFragments),
 			outputFormat: this.outputFormat,
+			sceneType: this.sceneType,
 			prompt: this.prompt
 		};
 	}
@@ -508,6 +522,7 @@ class RequestState {
 		this.image = undefined;
 		this.promptFragments = [];
 		this.outputFormat = 'webp';
+		this.sceneType = 'interior';
 		this.promptOverride = null;
 		this.currentRender = undefined;
 		this.previousRender = undefined;

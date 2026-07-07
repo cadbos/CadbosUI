@@ -22,7 +22,12 @@ before the Change Date. See LICENSE for complete terms.
 	import RenderResult from '$lib/components/RenderResult.svelte';
 	import EditPanel from '$lib/components/EditPanel.svelte';
 	import GeneratedImagesSidebar from '$lib/components/GeneratedImagesSidebar.svelte';
-	import { creditErrorKey, extractApiErrorCode, request } from '$lib/state/request.svelte';
+	import {
+		creditErrorKey,
+		extractApiErrorCode,
+		request,
+		type SceneType
+	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
@@ -42,12 +47,18 @@ before the Change Date. See LICENSE for complete terms.
 		{ id: 'edit', label: 'mode.edit' }
 	];
 
+	const sceneTypes: { id: SceneType; label: TranslationKey }[] = [
+		{ id: 'interior', label: 'render.sceneType.interior' },
+		{ id: 'exterior', label: 'render.sceneType.exterior' }
+	];
+
 	let activeIndex = $state(0);
 	let tabs = $state<HTMLElement[]>([]);
 	let submitting = $state(false);
 	let submitError = $state<string | null>(null);
 	let mode = $state<Mode>('render');
 	let modeTabs = $state<HTMLElement[]>([]);
+	let sceneTypeTabs = $state<HTMLElement[]>([]);
 
 	const viewTabs = createTabController({
 		itemCount: () => views.length,
@@ -68,9 +79,32 @@ before the Change Date. See LICENSE for complete terms.
 		focusTab: (index) => modeTabs[index]?.focus()
 	});
 
+	function activateSceneType(index: number): void {
+		request.setSceneType(sceneTypes[index].id);
+		sceneTypeTabs[index]?.focus();
+	}
+
+	function onSceneTypeKeydown(event: KeyboardEvent): void {
+		const last = sceneTypes.length - 1;
+		const currentIndex = sceneTypes.findIndex((s) => s.id === request.sceneType);
+		let next: number | null = null;
+		if (event.key === 'ArrowRight') next = currentIndex === last ? 0 : currentIndex + 1;
+		else if (event.key === 'ArrowLeft') next = currentIndex === 0 ? last : currentIndex - 1;
+		else if (event.key === 'Home') next = 0;
+		else if (event.key === 'End') next = last;
+
+		if (next !== null && next !== currentIndex) {
+			event.preventDefault();
+			activateSceneType(next);
+		}
+	}
+
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const validation = $derived(request.validate());
 	const canGenerate = $derived(validation.valid && !submitting && request.status !== 'rendering');
+	const uploadLabel = $derived(
+		request.sceneType === 'exterior' ? t('upload.labelExterior') : t('upload.label')
+	);
 
 	$effect(() => {
 		if (auth.canLoadGeneratedImages) void generatedImages.load();
@@ -84,7 +118,8 @@ before the Change Date. See LICENSE for complete terms.
 		request.setStatus('rendering');
 		try {
 			const body = request.toRenderRequest();
-			const response = await fetch('/api/render', {
+			const endpoint = request.sceneType === 'exterior' ? '/api/render/exterior' : '/api/render';
+			const response = await fetch(endpoint, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(body)
@@ -166,14 +201,40 @@ before the Change Date. See LICENSE for complete terms.
 				<section class="card step-card">
 					<div class="step-header">
 						<span class="step-num" aria-hidden="true">①</span>
-						<h2>{t('upload.label')}</h2>
+						<h2>{t('render.sceneType.label')}</h2>
+					</div>
+
+					<div class="scene-type-toggle" role="tablist" aria-label={t('render.sceneType.label')}>
+						{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
+							<button
+								{@attach (node) => {
+									sceneTypeTabs[index] = node as HTMLElement;
+								}}
+								type="button"
+								role="tab"
+								aria-selected={request.sceneType === sceneTypeOption.id}
+								tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
+								class:active={request.sceneType === sceneTypeOption.id}
+								onclick={() => activateSceneType(index)}
+								onkeydown={onSceneTypeKeydown}
+							>
+								{t(sceneTypeOption.label)}
+							</button>
+						{/each}
+					</div>
+				</section>
+
+				<section class="card step-card">
+					<div class="step-header">
+						<span class="step-num" aria-hidden="true">②</span>
+						<h2>{uploadLabel}</h2>
 					</div>
 					<ImageUpload />
 				</section>
 
 				<section class="card step-card">
 					<div class="step-header">
-						<span class="step-num" aria-hidden="true">②</span>
+						<span class="step-num" aria-hidden="true">③</span>
 						<h2>{t('view.switcher.label')}</h2>
 						<span class="optional-badge">{t('render.optional')}</span>
 					</div>
@@ -454,6 +515,36 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: var(--shadow-lg);
 		padding: 1.5rem;
 		gap: 1rem;
+	}
+
+	.scene-type-toggle {
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.25rem;
+		background: var(--color-background);
+		border-radius: 12px;
+	}
+
+	.scene-type-toggle button {
+		flex: 1;
+		padding: 0.5rem 1.25rem;
+		font: inherit;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--color-muted);
+		background: transparent;
+		border: none;
+		border-radius: 9px;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			color 0.15s;
+	}
+
+	.scene-type-toggle button.active {
+		background: var(--color-surface);
+		color: var(--color-text);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 	}
 
 	.step-header {

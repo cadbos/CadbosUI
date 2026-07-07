@@ -40,6 +40,15 @@ export function mockRender(): RenderResponse {
 	};
 }
 
+export function mockRenderExterior(): RenderResponse {
+	return {
+		// Modern house facade render — Unsplash free
+		outputUrl: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&q=80',
+		cost: 2,
+		balance: 48
+	};
+}
+
 export function mockEdit(): RenderResponse {
 	return {
 		// Different colour scheme after edit — Unsplash free

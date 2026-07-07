@@ -33,7 +33,7 @@ export interface UploadResult {
 	dimensions?: [number, number];
 }
 
-// POST /api/render — create an interior render.
+// POST /api/render or /api/render/exterior — create a render.
 export interface RenderRequest {
 	image: string;
 	prompt: string;
