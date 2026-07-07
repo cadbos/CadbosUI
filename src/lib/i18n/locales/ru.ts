@@ -140,5 +140,46 @@ export const ru = {
 	'edit.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
 	'edit.cost': 'Стоимость правки: {cost}',
 	'edit.balance': 'Баланс: {balance}',
-	'edit.undo': 'Отменить правку'
+	'edit.tool.switcher.label': 'Способ редактирования',
+	'edit.tool.freeform': 'Свой промпт',
+	'edit.tool.addObject': 'Добавить объект',
+	'edit.tool.removeObject': 'Удалить объект',
+	'edit.addObject.apply': 'Добавить объект',
+	'edit.addObject.applying': 'Добавление…',
+	'edit.addObject.selectHint': 'Выберите, что добавить на изображение.',
+	'edit.addObject.ledStrip.label': 'Светодиодная лента',
+	'edit.addObject.ledStrip.prompt':
+		'Добавь светодиодную ленту по периметру потолка для мягкой фоновой подсветки.',
+	'edit.addObject.recessedLights.label': 'Точечные светильники',
+	'edit.addObject.recessedLights.prompt':
+		'Добавь точечные светильники в потолок, равномерно распределив их по комнате.',
+	'edit.addObject.coveLighting.label': 'Подсветка потолка',
+	'edit.addObject.coveLighting.prompt':
+		'Добавь скрытую подсветку по контуру потолка для мягкого рассеянного света.',
+	'edit.addObject.people.label': 'Люди',
+	'edit.addObject.people.prompt':
+		'Добавь одного-двух человек в сцену, органично вписав их в интерьер.',
+	'edit.addObject.peopleMotion.label': 'Люди в движении',
+	'edit.addObject.peopleMotion.prompt':
+		'Добавь силуэты людей в лёгком движении, как в архитектурной визуализации, не привлекая к ним лишнего внимания.',
+	'edit.addObject.vehicles.label': 'Автомобили',
+	'edit.addObject.vehicles.prompt':
+		'Добавь автомобиль на видимую снаружи проезжую часть или парковку.',
+	'edit.addObject.vehiclesMotion.label': 'Автомобили в движении',
+	'edit.addObject.vehiclesMotion.prompt':
+		'Добавь автомобили в движении с эффектом лёгкого смаза, как на архитектурной визуализации.',
+	'edit.addObject.shrubs.label': 'Кустарники',
+	'edit.addObject.shrubs.prompt':
+		'Добавь кустарники и невысокую растительность за окном или у входа.',
+	'edit.addObject.trees.label': 'Деревья',
+	'edit.addObject.trees.prompt':
+		'Добавь деревья за окном, органично вписав их в окружающий ландшафт.',
+	'edit.removeObject.label': 'Что убрать?',
+	'edit.removeObject.placeholder': 'например: старый диван',
+	'edit.removeObject.hint':
+		'Опишите объект как можно точнее словами — так модели будет проще его найти и убрать.',
+	'edit.removeObject.apply': 'Удалить объект',
+	'edit.removeObject.applying': 'Удаление…',
+	'edit.removeObject.promptTemplate':
+		'Убери с изображения {object}, аккуратно восстановив то, что было на его месте.'
 } as const satisfies Dictionary;

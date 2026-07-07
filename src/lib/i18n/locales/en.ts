@@ -139,5 +139,44 @@ export const en = {
 	'edit.generationRestricted': 'Generation is available to a limited set of accounts.',
 	'edit.cost': 'Edit cost: {cost}',
 	'edit.balance': 'Balance: {balance}',
-	'edit.undo': 'Undo edit'
+	'edit.tool.switcher.label': 'Editing method',
+	'edit.tool.freeform': 'Custom prompt',
+	'edit.tool.addObject': 'Add object',
+	'edit.tool.removeObject': 'Remove object',
+	'edit.addObject.apply': 'Add object',
+	'edit.addObject.applying': 'Adding…',
+	'edit.addObject.selectHint': 'Choose what to add to the image.',
+	'edit.addObject.ledStrip.label': 'LED strip',
+	'edit.addObject.ledStrip.prompt': 'Add an LED strip around the ceiling for soft ambient light.',
+	'edit.addObject.recessedLights.label': 'Recessed lights',
+	'edit.addObject.recessedLights.prompt':
+		'Add recessed lights into the ceiling, evenly spaced across the room.',
+	'edit.addObject.coveLighting.label': 'Cove lighting',
+	'edit.addObject.coveLighting.prompt':
+		'Add hidden cove lighting along the ceiling perimeter for soft, diffused light.',
+	'edit.addObject.people.label': 'People',
+	'edit.addObject.people.prompt':
+		'Add one or two people to the scene, blended naturally into the space.',
+	'edit.addObject.peopleMotion.label': 'People in motion',
+	'edit.addObject.peopleMotion.prompt':
+		'Add motion-blurred human silhouettes, as in architectural visualization, without drawing attention to them.',
+	'edit.addObject.vehicles.label': 'Vehicles',
+	'edit.addObject.vehicles.prompt': 'Add a vehicle on the visible street or parking area outside.',
+	'edit.addObject.vehiclesMotion.label': 'Vehicles in motion',
+	'edit.addObject.vehiclesMotion.prompt':
+		'Add vehicles in motion with a subtle motion-blur effect, as in architectural visualization.',
+	'edit.addObject.shrubs.label': 'Shrubs & bushes',
+	'edit.addObject.shrubs.prompt':
+		'Add shrubs and low greenery outside the window or by the entrance.',
+	'edit.addObject.trees.label': 'Trees',
+	'edit.addObject.trees.prompt':
+		'Add trees outside the window, blended naturally into the surrounding landscape.',
+	'edit.removeObject.label': 'What to remove?',
+	'edit.removeObject.placeholder': 'e.g. the old sofa',
+	'edit.removeObject.hint':
+		'Describe the object as precisely as you can — that makes it easier for the model to find and remove it.',
+	'edit.removeObject.apply': 'Remove object',
+	'edit.removeObject.applying': 'Removing…',
+	'edit.removeObject.promptTemplate':
+		'Remove {object} from the image, carefully restoring what was behind/underneath it.'
 } as const satisfies Dictionary;
