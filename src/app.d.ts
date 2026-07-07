@@ -12,7 +12,6 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 
@@ -33,6 +32,7 @@ declare global {
 				DB: D1Database;
 				ARCHAI_API_KEY: string;
 				UPLOADS_BUCKET: R2Bucket;
+				UPLOADS_PUBLIC_URL?: string;
 			};
 		}
 	}

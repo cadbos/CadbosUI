@@ -54,6 +54,21 @@ export interface RenderResponse {
 	balance: number;
 }
 
+export interface GeneratedImageRecord {
+	id: string;
+	url: string;
+	createdAt: number;
+}
+
+export interface GeneratedImagesResponse {
+	images: GeneratedImageRecord[];
+	pagination: {
+		offset: number;
+		size: number;
+		hasMore: boolean;
+	};
+}
+
 // Auth (Appendix B). The signed NIP-98 event travels in
 // `Authorization: Nostr <base64>`.
 export interface ChallengeRequest {

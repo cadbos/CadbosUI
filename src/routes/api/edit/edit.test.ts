@@ -21,6 +21,7 @@ import { DEMO_PUBKEY } from '$lib/server/demo';
 // Lets a single test force recordBalance to reject, to prove a bookkeeping
 // failure doesn't discard an already-successful, already-charged edit.
 const billingMock = vi.hoisted(() => ({ failNextRecordBalance: false }));
+const generatedImagesMock = vi.hoisted(() => ({ failNextRecordGeneratedImage: false }));
 
 vi.mock('$lib/server/billing', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/billing')>();
@@ -32,6 +33,20 @@ vi.mock('$lib/server/billing', async (importOriginal) => {
 				return Promise.reject(new Error('simulated D1 failure'));
 			}
 			return actual.recordBalance(...args);
+		})
+	};
+});
+
+vi.mock('$lib/server/generated-images', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/generated-images')>();
+	return {
+		...actual,
+		recordGeneratedImage: vi.fn((...args: Parameters<typeof actual.recordGeneratedImage>) => {
+			if (generatedImagesMock.failNextRecordGeneratedImage) {
+				generatedImagesMock.failNextRecordGeneratedImage = false;
+				return Promise.reject(new Error('simulated generated image record failure'));
+			}
+			return actual.recordGeneratedImage(...args);
 		})
 	};
 });
@@ -117,6 +132,47 @@ describe('POST /api/edit — billing', () => {
 			.bind('user-1')
 			.first<{ balance: number }>();
 		expect(balanceRow?.balance).toBe(result.balance);
+	});
+
+	it('records the edited image against the authenticated profile', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+
+		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
+		expect(response.status).toBe(200);
+		const result = (await response.json()) as { outputUrl: string };
+
+		const imageRow = await db
+			.prepare('SELECT user_id, url FROM generated_images WHERE user_id = ?')
+			.bind('user-1')
+			.first<{ user_id: string; url: string }>();
+		expect(imageRow).toEqual({ user_id: 'user-1', url: result.outputUrl });
+	});
+
+	it('returns 500 if recording the edited image fails', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		generatedImagesMock.failNextRecordGeneratedImage = true;
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		try {
+			const response = await call(
+				{ pubkey: 'pubkey-1' },
+				{ env: { DB: db } } as App.Platform,
+				body
+			);
+
+			expect(response.status).toBe(500);
+			await expect(response.json()).resolves.toEqual({
+				error: { code: 'image_record_failed', message: 'Image record failed' }
+			});
+			expect(consoleError).toHaveBeenCalledWith(
+				'recordGeneratedImage failed after a successful edit:',
+				expect.any(Error)
+			);
+		} finally {
+			consoleError.mockRestore();
+		}
 	});
 
 	it('still returns the completed, already-charged edit if recording the balance fails', async () => {

@@ -13,29 +13,63 @@
  */
 
 import { dev } from '$app/environment';
-import { imageExtensionFromMime } from '$lib/server/image-utils';
+import {
+	imageExtensionFromMime,
+	normalizeImageContentType,
+	type ImageMime
+} from '$lib/server/image-utils';
 import { mockUpload } from '$lib/server/mocks/fixtures';
 
-export { imageExtensionFromMime };
+type StoredImage = { url: string; mime: ImageMime; size: number; dimensions?: [number, number] };
+
+async function storeImage(
+	platform: App.Platform | undefined,
+	bytes: ArrayBuffer,
+	mime: string
+): Promise<StoredImage> {
+	const bucket = platform?.env?.UPLOADS_BUCKET;
+	const publicUrl = platform?.env?.UPLOADS_PUBLIC_URL;
+
+	if (!bucket) {
+		if (dev) {
+			const upload = mockUpload();
+			const normalizedMime = normalizeImageContentType(upload.mime);
+			if (normalizedMime === null) throw new Error(`Unsupported image type: ${upload.mime}`);
+
+			return { ...upload, mime: normalizedMime };
+		}
+		throw new Error('UPLOADS_BUCKET not configured');
+	}
+
+	if (!publicUrl) throw new Error('UPLOADS_PUBLIC_URL not configured');
+
+	const normalizedMime = normalizeImageContentType(mime);
+	if (normalizedMime === null) throw new Error(`Unsupported image type: ${mime}`);
+
+	const extension = imageExtensionFromMime(normalizedMime);
+	const key = `${crypto.randomUUID()}.${extension}`;
+	await bucket.put(key, bytes, {
+		httpMetadata: { contentType: normalizedMime }
+	});
+
+	return {
+		url: new URL(key, publicUrl).toString(),
+		mime: normalizedMime,
+		size: bytes.byteLength
+	};
+}
 
 export async function uploadImage(
 	platform: App.Platform | undefined,
 	file: File
-): Promise<{ url: string; mime: string; size: number }> {
-	const bucket = platform?.env?.UPLOADS_BUCKET;
+): Promise<StoredImage> {
+	return storeImage(platform, await file.arrayBuffer(), file.type);
+}
 
-	if (!bucket) {
-		if (dev) return mockUpload();
-		throw new Error('UPLOADS_BUCKET not configured');
-	}
-
-	const extension = imageExtensionFromMime(file.type);
-	if (extension === null) throw new Error(`Unsupported image type: ${file.type}`);
-
-	const key = `${crypto.randomUUID()}.${extension}`;
-	await bucket.put(key, await file.arrayBuffer(), {
-		httpMetadata: { contentType: file.type }
-	});
-
-	return { url: `/img/${key}`, mime: file.type, size: file.size };
+export async function uploadImageBytes(
+	platform: App.Platform | undefined,
+	bytes: ArrayBuffer,
+	mime: string
+): Promise<StoredImage> {
+	return storeImage(platform, bytes, mime);
 }

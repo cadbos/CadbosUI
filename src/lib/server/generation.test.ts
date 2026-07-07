@@ -23,11 +23,39 @@ vi.mock('$lib/server/archai', () => archai);
 
 const { editInterior, renderInterior } = await import('./generation');
 
-const withKey = { env: { ARCHAI_API_KEY: 'test-key' } } as App.Platform;
 const withoutKey = { env: {} } as App.Platform;
+const publicUploadsUrl = 'https://uploads.cadbos.example';
+
+function mockBucket(): { put: ReturnType<typeof vi.fn> } {
+	return { put: vi.fn(async () => undefined) };
+}
+
+function withKey(bucket: ReturnType<typeof mockBucket> = mockBucket()): App.Platform {
+	return {
+		env: {
+			ARCHAI_API_KEY: 'test-key',
+			UPLOADS_BUCKET: bucket,
+			UPLOADS_PUBLIC_URL: publicUploadsUrl
+		}
+	} as unknown as App.Platform;
+}
+
+function mockDownloadedImage(mime = 'image/webp'): ReturnType<typeof vi.fn> {
+	const fetch = vi.fn(
+		async () => new Response('generated-image-bytes', { headers: { 'content-type': mime } })
+	);
+	vi.stubGlobal('fetch', fetch);
+	return fetch;
+}
+
+function mockImageId(id: string): void {
+	vi.spyOn(crypto, 'randomUUID').mockReturnValue(id as ReturnType<typeof crypto.randomUUID>);
+}
 
 afterEach(() => {
+	vi.restoreAllMocks();
 	vi.clearAllMocks();
+	vi.unstubAllGlobals();
 });
 
 describe('renderInterior', () => {
@@ -41,6 +69,9 @@ describe('renderInterior', () => {
 	});
 
 	it('normalizes an array output to its first element (И-MA-4)', async () => {
+		const bucket = mockBucket();
+		const fetch = mockDownloadedImage();
+		mockImageId('123e4567-e89b-12d3-a456-426614174000');
 		archai.postRenderInterior.mockResolvedValue({
 			data: {
 				output: ['https://example.test/a.jpg', 'https://example.test/b.jpg'],
@@ -49,27 +80,48 @@ describe('renderInterior', () => {
 			}
 		});
 
-		const result = await renderInterior(withKey, {
+		const result = await renderInterior(withKey(bucket), {
 			image: 'https://example.test/room.jpg',
 			prompt: 'cozy',
 			outputFormat: 'webp'
 		});
 
-		expect(result).toEqual({ outputUrl: 'https://example.test/a.jpg', cost: 1, balance: 24 });
+		expect(fetch).toHaveBeenCalledWith(
+			'https://example.test/a.jpg',
+			expect.objectContaining({ signal: expect.any(AbortSignal) })
+		);
+		expect(bucket.put).toHaveBeenCalledWith(
+			'123e4567-e89b-12d3-a456-426614174000.webp',
+			expect.any(ArrayBuffer),
+			{ httpMetadata: { contentType: 'image/webp' } }
+		);
+		expect(result).toEqual({
+			outputUrl: `${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174000.webp`,
+			cost: 1,
+			balance: 24
+		});
 	});
 
-	it('normalizes a string output unchanged', async () => {
+	it('stores a string output URL and returns the bucket URL', async () => {
+		const bucket = mockBucket();
+		mockDownloadedImage('image/png');
+		mockImageId('123e4567-e89b-12d3-a456-426614174001');
 		archai.postRenderInterior.mockResolvedValue({
 			data: { output: 'https://example.test/a.jpg', cost: 1, balance: 24 }
 		});
 
-		const result = await renderInterior(withKey, {
+		const result = await renderInterior(withKey(bucket), {
 			image: 'https://example.test/room.jpg',
 			prompt: '',
 			outputFormat: 'webp'
 		});
 
-		expect(result.outputUrl).toBe('https://example.test/a.jpg');
+		expect(bucket.put).toHaveBeenCalledWith(
+			'123e4567-e89b-12d3-a456-426614174001.png',
+			expect.any(ArrayBuffer),
+			{ httpMetadata: { contentType: 'image/png' } }
+		);
+		expect(result.outputUrl).toBe(`${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174001.png`);
 	});
 
 	it('throws a generic error without leaking provider details', async () => {
@@ -78,12 +130,42 @@ describe('renderInterior', () => {
 		});
 
 		await expect(
-			renderInterior(withKey, {
+			renderInterior(withKey(), {
 				image: 'https://example.test/room.jpg',
 				prompt: '',
 				outputFormat: 'webp'
 			})
 		).rejects.toThrow('Render failed');
+	});
+
+	it('returns the charged provider result when downloading the mirror image fails', async () => {
+		const providerUrl = 'https://example.test/a.jpg';
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => {
+				throw new Error('network unavailable');
+			})
+		);
+		archai.postRenderInterior.mockResolvedValue({
+			data: { output: providerUrl, cost: 1, balance: 24 }
+		});
+
+		try {
+			const result = await renderInterior(withKey(), {
+				image: 'https://example.test/room.jpg',
+				prompt: '',
+				outputFormat: 'webp'
+			});
+
+			expect(result).toEqual({ outputUrl: providerUrl, cost: 1, balance: 24 });
+			expect(consoleError).toHaveBeenCalledWith(
+				'archAI render/interior image mirror failed after successful generation:',
+				'download fetch failed (Error)'
+			);
+		} finally {
+			consoleError.mockRestore();
+		}
 	});
 });
 
@@ -97,24 +179,38 @@ describe('editInterior', () => {
 	});
 
 	it('normalizes the single-string output (И-MA-ED2)', async () => {
+		const bucket = mockBucket();
+		mockDownloadedImage();
+		mockImageId('123e4567-e89b-12d3-a456-426614174002');
 		archai.postEditByPrompt.mockResolvedValue({
 			data: { output: 'https://example.test/edited.jpg', cost: 1, balance: 23 }
 		});
 
-		const result = await editInterior(withKey, {
+		const result = await editInterior(withKey(bucket), {
 			image: 'https://example.test/prev-render.jpg',
 			prompt: 'make the wall sage green'
 		});
 
-		expect(result).toEqual({ outputUrl: 'https://example.test/edited.jpg', cost: 1, balance: 23 });
+		expect(bucket.put).toHaveBeenCalledWith(
+			'123e4567-e89b-12d3-a456-426614174002.webp',
+			expect.any(ArrayBuffer),
+			{ httpMetadata: { contentType: 'image/webp' } }
+		);
+		expect(result).toEqual({
+			outputUrl: `${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174002.webp`,
+			cost: 1,
+			balance: 23
+		});
 	});
 
 	it('sends image/prompt with no outputFormat field (И-MA-ED1)', async () => {
+		mockDownloadedImage();
+		mockImageId('123e4567-e89b-12d3-a456-426614174003');
 		archai.postEditByPrompt.mockResolvedValue({
 			data: { output: 'https://example.test/edited.jpg', cost: 1, balance: 23 }
 		});
 
-		await editInterior(withKey, {
+		await editInterior(withKey(), {
 			image: 'https://example.test/prev-render.jpg',
 			prompt: 'replace the sofa with a leather armchair'
 		});
@@ -132,7 +228,7 @@ describe('editInterior', () => {
 		});
 
 		await expect(
-			editInterior(withKey, {
+			editInterior(withKey(), {
 				image: 'https://example.test/prev-render.jpg',
 				prompt: 'replace the sofa'
 			})
@@ -145,10 +241,64 @@ describe('editInterior', () => {
 		});
 
 		await expect(
-			editInterior(withKey, {
+			editInterior(withKey(), {
 				image: 'https://example.test/prev-render.jpg',
 				prompt: 'replace the sofa'
 			})
 		).rejects.toThrow('Edit failed');
+	});
+
+	it('returns the charged provider result when R2 upload fails', async () => {
+		const providerUrl = 'https://example.test/edited.jpg';
+		const bucket = {
+			put: vi.fn(async () => {
+				throw new Error('R2 unavailable');
+			})
+		};
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		mockDownloadedImage();
+		archai.postEditByPrompt.mockResolvedValue({
+			data: { output: providerUrl, cost: 1, balance: 23 }
+		});
+
+		try {
+			const result = await editInterior(withKey(bucket), {
+				image: 'https://example.test/prev-render.jpg',
+				prompt: 'replace the sofa'
+			});
+
+			expect(bucket.put).toHaveBeenCalled();
+			expect(result).toEqual({ outputUrl: providerUrl, cost: 1, balance: 23 });
+			expect(consoleError).toHaveBeenCalledWith(
+				'archAI edit-by-prompt image mirror failed after successful generation:',
+				'storage upload failed (Error)'
+			);
+		} finally {
+			consoleError.mockRestore();
+		}
+	});
+
+	it('returns the charged provider result when the mirror response is not an image', async () => {
+		const providerUrl = 'https://example.test/edited.jpg';
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		mockDownloadedImage('text/html');
+		archai.postEditByPrompt.mockResolvedValue({
+			data: { output: providerUrl, cost: 1, balance: 23 }
+		});
+
+		try {
+			const result = await editInterior(withKey(), {
+				image: 'https://example.test/prev-render.jpg',
+				prompt: 'replace the sofa'
+			});
+
+			expect(result).toEqual({ outputUrl: providerUrl, cost: 1, balance: 23 });
+			expect(consoleError).toHaveBeenCalledWith(
+				'archAI edit-by-prompt image mirror failed after successful generation:',
+				'unexpected content type text/html'
+			);
+		} finally {
+			consoleError.mockRestore();
+		}
 	});
 });
