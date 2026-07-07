@@ -16,12 +16,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const archai = vi.hoisted(() => ({
 	postRenderInterior: vi.fn(),
-	postEditByPrompt: vi.fn()
+	postEditByPrompt: vi.fn(),
+	postStyleTransfer: vi.fn()
 }));
+const appEnvironment = vi.hoisted(() => ({ dev: true }));
 
 vi.mock('$lib/server/archai', () => archai);
+vi.mock('$app/environment', () => ({
+	get dev() {
+		return appEnvironment.dev;
+	}
+}));
 
-const { editInterior, renderInterior } = await import('./generation');
+const { editInterior, renderInterior, styleTransferInterior } = await import('./generation');
 
 const withoutKey = { env: {} } as App.Platform;
 const publicUploadsUrl = 'https://uploads.cadbos.example';
@@ -53,6 +60,7 @@ function mockImageId(id: string): void {
 }
 
 afterEach(() => {
+	appEnvironment.dev = true;
 	vi.restoreAllMocks();
 	vi.clearAllMocks();
 	vi.unstubAllGlobals();
@@ -300,5 +308,103 @@ describe('editInterior', () => {
 		} finally {
 			consoleError.mockRestore();
 		}
+	});
+});
+
+describe('styleTransferInterior', () => {
+	it('falls back to the dev mock when no API key is configured', async () => {
+		const result = await styleTransferInterior(withoutKey, {
+			image: 'https://example.test/room.jpg',
+			referenceImage: 'https://example.test/style.jpg',
+			outputFormat: 'webp'
+		});
+		expect(result.outputUrl).toMatch(/^https:\/\//);
+	});
+
+	it('throws a generic production misconfiguration error without leaking API key details', async () => {
+		appEnvironment.dev = false;
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		try {
+			const transfer = styleTransferInterior(withoutKey, {
+				image: 'https://example.test/room.jpg',
+				referenceImage: 'https://example.test/style.jpg',
+				outputFormat: 'webp'
+			});
+
+			await expect(transfer).rejects.toThrow(/^Style transfer failed$/);
+			await expect(transfer).rejects.not.toThrow('ARCHAI_API_KEY not configured');
+		} finally {
+			consoleError.mockRestore();
+		}
+	});
+
+	it('normalizes the first array output and stores the generated image', async () => {
+		const bucket = mockBucket();
+		mockDownloadedImage('image/png');
+		mockImageId('123e4567-e89b-12d3-a456-426614174004');
+		archai.postStyleTransfer.mockResolvedValue({
+			data: {
+				output: ['https://example.test/styled-a.jpg', 'https://example.test/styled-b.jpg'],
+				cost: 2,
+				balance: 22
+			}
+		});
+
+		const result = await styleTransferInterior(withKey(bucket), {
+			image: 'https://example.test/room.jpg',
+			referenceImage: 'https://example.test/style.jpg',
+			outputFormat: 'webp',
+			prompt: 'preserve the layout',
+			negativePrompt: 'no people',
+			styleTransferStrength: 0
+		});
+
+		expect(archai.postStyleTransfer.mock.calls[0][0].body).toEqual({
+			image: 'https://example.test/room.jpg',
+			referenceImage: 'https://example.test/style.jpg',
+			outputFormat: 'webp',
+			prompt: 'preserve the layout',
+			negativePrompt: 'no people',
+			styleTransferStrength: 0
+		});
+		expect(bucket.put).toHaveBeenCalledWith(
+			'123e4567-e89b-12d3-a456-426614174004.png',
+			expect.any(ArrayBuffer),
+			{ httpMetadata: { contentType: 'image/png' } }
+		);
+		expect(result).toEqual({
+			outputUrl: `${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174004.png`,
+			cost: 2,
+			balance: 22
+		});
+	});
+
+	it('throws a generic error without leaking provider details', async () => {
+		archai.postStyleTransfer.mockResolvedValue({
+			error: { message: 'internal provider trace 9f3a' }
+		});
+
+		await expect(
+			styleTransferInterior(withKey(), {
+				image: 'https://example.test/room.jpg',
+				referenceImage: 'https://example.test/style.jpg',
+				outputFormat: 'webp'
+			})
+		).rejects.toThrow('Style transfer failed');
+	});
+
+	it('throws when the response has no output URL', async () => {
+		archai.postStyleTransfer.mockResolvedValue({
+			data: { output: [], cost: 0, balance: 25 }
+		});
+
+		await expect(
+			styleTransferInterior(withKey(), {
+				image: 'https://example.test/room.jpg',
+				referenceImage: 'https://example.test/style.jpg',
+				outputFormat: 'webp'
+			})
+		).rejects.toThrow('Style transfer failed');
 	});
 });

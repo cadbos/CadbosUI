@@ -26,6 +26,11 @@ before the Change Date. See LICENSE for complete terms.
 		rejected: 'auth.error.rejected',
 		failed: 'auth.error.failed'
 	};
+	const creditEntryKeys: Record<CreditTransaction['kind'], TranslationKey> = {
+		render: 'auth.credit.entryRender',
+		edit: 'auth.credit.entryEdit',
+		'style-transfer': 'auth.credit.entryStyleTransfer'
+	};
 
 	const shortNpub = $derived.by(() => {
 		if (!auth.pubkey) return '';
@@ -68,8 +73,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function creditEntryText(entry: CreditTransaction): string {
-		const key = entry.kind === 'render' ? 'auth.credit.entryRender' : 'auth.credit.entryEdit';
-		return ti(key, {
+		return ti(creditEntryKeys[entry.kind], {
 			date: new Date(entry.createdAt).toLocaleString(),
 			amount: formatCredit(entry.amount),
 			balance: formatCredit(entry.balanceAfter)

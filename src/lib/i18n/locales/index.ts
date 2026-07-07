@@ -78,6 +78,7 @@ export interface Dictionary {
 	'auth.credit.historyEmpty': string;
 	'auth.credit.entryRender': string;
 	'auth.credit.entryEdit': string;
+	'auth.credit.entryStyleTransfer': string;
 	'upload.label': string;
 	'upload.button': string;
 	'upload.dropHint': string;
