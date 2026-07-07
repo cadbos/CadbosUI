@@ -19,17 +19,24 @@ import type { RenderResponse } from '$lib/api/contract';
 import { apiError, editRequestSchema, parseBody } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
-import { getUserIdByPubkey, recordBalance } from '$lib/server/billing';
+import {
+	assertGenerationAllowed,
+	getCredit,
+	getUserIdByPubkey,
+	recordBalance
+} from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { GeneratedImageRecordError, recordGeneratedImage } from '$lib/server/generated-images';
 import { editInterior } from '$lib/server/generation';
+import { recordGeneration } from '$lib/server/generations';
 
 // Anti-cost-abuse (FR-К5): each edit is its own paid call, so it gets its own
 // rate-limit bucket, bound to the authenticated pubkey rather than IP.
 const EDIT_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
 
-// Session is enforced centrally in hooks.server.ts (guardedPaths). Spend limits
-// are archAI's job, not ours (mirrors /api/render) — no local balance pre-check.
+// Session is enforced centrally in hooks.server.ts (guardedPaths). Editing
+// itself is restricted further, by design: only accounts an admin has
+// manually approved (a `credits` row, billing.ts) may edit at all — a fresh
+// Nostr login alone is not enough (mirrors /api/render).
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
 
@@ -57,6 +64,26 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		if (limited) return apiError(429, 'rate_limited', 'Too many requests');
 	}
 
+	// The account's own balance right before this call — kept as the final,
+	// definitely-safe fallback if both recordGeneration and its own getCredit
+	// fallback fail below, so the response never falls through to
+	// editInterior's raw (shared) archAI balance.
+	let precheckBalance: number | undefined;
+	if (db && userId) {
+		try {
+			const check = await assertGenerationAllowed(db, userId);
+			if (!check.allowed) {
+				return check.reason === 'not_approved'
+					? apiError(403, 'generation_restricted', 'Generation is limited to approved accounts')
+					: apiError(402, 'insufficient_credit', 'Test balance exhausted');
+			}
+			precheckBalance = check.balance;
+		} catch (err) {
+			console.error('credit pre-check failed:', err);
+			return apiError(500, 'edit_failed', 'Edit failed');
+		}
+	}
+
 	let result: RenderResponse;
 	try {
 		result = await editInterior(platform, parsed.data);
@@ -68,23 +95,34 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	}
 
 	// The edit already succeeded and archAI already charged for it — a failure to
-	// cache the resulting balance is a bookkeeping gap, not a reason to make the
-	// user think a completed, paid edit failed.
+	// cache the resulting balance/deduction is a bookkeeping gap, not a reason to
+	// make the user think a completed, paid edit failed.
 	if (db && userId) {
-		try {
-			await recordGeneratedImage(db, userId, result.outputUrl);
-		} catch (err) {
-			console.error('recordGeneratedImage failed after a successful edit:', err);
-			if (err instanceof GeneratedImageRecordError && err.code === 'unknown_user_id') {
-				return apiError(500, 'account_error', 'Account record not found');
-			}
-			return apiError(500, 'image_record_failed', 'Image record failed');
-		}
-
+		// recordBalance mirrors archAI's own (shared) account balance for ops
+		// visibility only — it must never reach the client, so read it before
+		// overwriting `result.balance` with the caller's own remaining limit.
 		try {
 			await recordBalance(db, userId, result.balance);
 		} catch (err) {
 			console.error('recordBalance failed after a successful edit:', err);
+		}
+		try {
+			const credit = await recordGeneration(db, userId, {
+				url: result.outputUrl,
+				sourceUrl: parsed.data.image,
+				prompt: parsed.data.prompt,
+				kind: 'edit',
+				amount: result.cost
+			});
+			result = { ...result, balance: credit.balance };
+		} catch (err) {
+			console.error('recordGeneration failed after a successful edit:', err);
+			// Even on failure, never fall through to archAI's raw (shared) balance.
+			// Prefer a fresh read; if that also fails, fall back to the balance we
+			// already had from the precheck — still an approved-account balance,
+			// never the shared one.
+			const fallback = await getCredit(db, userId).catch(() => null);
+			result = { ...result, balance: fallback?.balance ?? precheckBalance ?? 0 };
 		}
 	}
 

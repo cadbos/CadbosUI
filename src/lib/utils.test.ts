@@ -12,16 +12,17 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { type ClassValue, clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { expect, it } from 'vitest';
+import { formatCredit } from './utils';
 
-export function cn(...inputs: ClassValue[]): string {
-	return twMerge(clsx(inputs));
-}
+it('rounds binary floating-point noise to two decimals', () => {
+	expect(formatCredit(4.9399999999999995)).toBe('4.94');
+});
 
-// Credit amounts (balance/cost) come from archAI and repeated D1 arithmetic, so
-// they can carry binary floating-point noise (e.g. 4.9399999999999995). Round for
-// display only — the stored/compared values stay full-precision.
-export function formatCredit(amount: number): string {
-	return amount.toFixed(2);
-}
+it('pads whole numbers to two decimals', () => {
+	expect(formatCredit(48)).toBe('48.00');
+});
+
+it('keeps exact two-decimal values unchanged', () => {
+	expect(formatCredit(2.5)).toBe('2.50');
+});

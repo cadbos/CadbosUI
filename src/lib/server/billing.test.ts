@@ -15,11 +15,32 @@
 import { beforeEach, describe, it, expect } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { makeD1 } from './testing/d1-shim';
-import { getBalance, getUserIdByPubkey, recordBalance } from './billing';
+import {
+	getCredit,
+	getUserIdByPubkey,
+	hasGenerationAccess,
+	hasSufficientCredit,
+	recordBalance,
+	type CreditAccess
+} from './billing';
+
+async function readBalanceRow(db: D1Database, userId: string): Promise<{ balance: number } | null> {
+	return db
+		.prepare('SELECT balance FROM balances WHERE user_id = ?')
+		.bind(userId)
+		.first<{ balance: number }>();
+}
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
+		.run();
+}
+
+// The admin's manual approval step — no auto-provisioning exists anymore.
+function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
+	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
+		.bind(userId, balance, Date.now(), enabled)
 		.run();
 }
 
@@ -40,21 +61,6 @@ describe('getUserIdByPubkey', () => {
 	});
 });
 
-describe('getBalance', () => {
-	it('is null before the user has ever generated', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		await expect(getBalance(db, 'user-1')).resolves.toBeNull();
-	});
-
-	it('returns the last recorded balance', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		await recordBalance(db, 'user-1', 24.97);
-
-		const balance = await getBalance(db, 'user-1');
-		expect(balance?.balance).toBe(24.97);
-	});
-});
-
 describe('recordBalance', () => {
 	it('creates a row on first generation', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
@@ -65,10 +71,9 @@ describe('recordBalance', () => {
 	it('overwrites the previous balance rather than accumulating it', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		await recordBalance(db, 'user-1', 25);
-		const second = await recordBalance(db, 'user-1', 24.97);
+		await recordBalance(db, 'user-1', 24.97);
 
-		expect(second.balance).toBe(24.97);
-		await expect(getBalance(db, 'user-1')).resolves.toEqual(second);
+		await expect(readBalanceRow(db, 'user-1')).resolves.toEqual({ balance: 24.97 });
 	});
 
 	it('isolates balances per user', async () => {
@@ -77,7 +82,57 @@ describe('recordBalance', () => {
 		await recordBalance(db, 'user-1', 25);
 		await recordBalance(db, 'user-2', 10);
 
-		expect((await getBalance(db, 'user-1'))?.balance).toBe(25);
-		expect((await getBalance(db, 'user-2'))?.balance).toBe(10);
+		await expect(readBalanceRow(db, 'user-1')).resolves.toEqual({ balance: 25 });
+		await expect(readBalanceRow(db, 'user-2')).resolves.toEqual({ balance: 10 });
+	});
+});
+
+describe('getCredit', () => {
+	it('is null when no admin has approved this account', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		await expect(getCredit(db, 'user-1')).resolves.toBeNull();
+	});
+
+	it('returns the admin-chosen balance and enabled flag for an approved account', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 12, 1);
+
+		const credit = await getCredit(db, 'user-1');
+		expect(credit).toEqual(expect.objectContaining({ balance: 12, enabled: true }));
+	});
+
+	it('reflects an account the admin disabled', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 12, 0);
+
+		const credit = await getCredit(db, 'user-1');
+		expect(credit?.enabled).toBe(false);
+	});
+});
+
+describe('hasGenerationAccess', () => {
+	it('is false when there is no row at all', () => {
+		expect(hasGenerationAccess(null)).toBe(false);
+	});
+
+	it('is false when the row exists but is disabled', () => {
+		expect(hasGenerationAccess({ balance: 5, updatedAt: 0, enabled: false })).toBe(false);
+	});
+
+	it('is true once enabled, regardless of remaining balance', () => {
+		expect(hasGenerationAccess({ balance: 0, updatedAt: 0, enabled: true })).toBe(true);
+	});
+});
+
+describe('hasSufficientCredit', () => {
+	const enabled = (balance: number): CreditAccess => ({ balance, updatedAt: 0, enabled: true });
+
+	it('is true while balance is positive', () => {
+		expect(hasSufficientCredit(enabled(0.01))).toBe(true);
+	});
+
+	it('is false once balance hits zero or goes negative', () => {
+		expect(hasSufficientCredit(enabled(0))).toBe(false);
+		expect(hasSufficientCredit(enabled(-1))).toBe(false);
 	});
 });

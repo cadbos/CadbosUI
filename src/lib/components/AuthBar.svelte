@@ -17,6 +17,8 @@ before the Change Date. See LICENSE for complete terms.
 	import { npubEncode } from 'nostr-tools/nip19';
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
+	import type { CreditTransaction } from '$lib/api/contract';
+	import { formatCredit } from '$lib/utils';
 	import QrCode from './QrCode.svelte';
 
 	const errorKeys: Record<AuthError, TranslationKey> = {
@@ -63,6 +65,15 @@ before the Change Date. See LICENSE for complete terms.
 			// Clipboard unavailable (denied permission / insecure context): leave the
 			// connect panel untouched so the user can still scan or copy manually.
 		}
+	}
+
+	function creditEntryText(entry: CreditTransaction): string {
+		const key = entry.kind === 'render' ? 'auth.credit.entryRender' : 'auth.credit.entryEdit';
+		return ti(key, {
+			date: new Date(entry.createdAt).toLocaleString(),
+			amount: formatCredit(entry.amount),
+			balance: formatCredit(entry.balanceAfter)
+		});
 	}
 
 	function choose(method: () => Promise<void>): void {
@@ -130,8 +141,22 @@ before the Change Date. See LICENSE for complete terms.
 			<div id="auth-profile" class="profile-panel" hidden={!profileOpen}>
 				<div class="profile-meta">
 					<span>{ti('auth.profile.relayCount', { count: relayCount })}</span>
-					{#if auth.balance}
-						<span class="balance">{ti('auth.balance', { balance: auth.balance.balance })}</span>
+					{#if auth.credit}
+						<span class="balance">
+							{ti('auth.credit.balance', { balance: formatCredit(auth.credit.balance) })}
+						</span>
+						<details class="credit-history">
+							<summary>{t('auth.credit.history')}</summary>
+							{#if auth.credit.history.length === 0}
+								<p class="history-empty">{t('auth.credit.historyEmpty')}</p>
+							{:else}
+								<ul>
+									{#each auth.credit.history as entry (entry.id)}
+										<li>{creditEntryText(entry)}</li>
+									{/each}
+								</ul>
+							{/if}
+						</details>
 					{/if}
 					{#if missingCadbosName}
 						<span class="notice">{t('auth.profile.completeHint')}</span>
@@ -468,5 +493,31 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 0.8rem;
 		color: var(--color-text);
 		font-weight: 500;
+	}
+
+	.credit-history {
+		font-size: 0.8rem;
+		color: var(--color-text);
+	}
+
+	.credit-history summary {
+		cursor: pointer;
+		color: var(--color-accent);
+	}
+
+	.credit-history ul {
+		margin: var(--space-1) 0 0;
+		padding-left: 1.1rem;
+		max-height: 8rem;
+		overflow-y: auto;
+	}
+
+	.credit-history li {
+		color: var(--color-muted);
+	}
+
+	.history-empty {
+		margin: var(--space-1) 0 0;
+		color: var(--color-muted);
 	}
 </style>

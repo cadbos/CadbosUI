@@ -47,7 +47,9 @@ export interface EditRequest {
 }
 
 // Normalized response for both render and edit (output[0] for render,
-// output for edit — both normalized to a single url).
+// output for edit — both normalized to a single url). `balance` is the
+// caller's own remaining approved-account balance after this call — never
+// archAI's raw (shared) account balance, which the client must never see.
 export interface RenderResponse {
 	outputUrl: string;
 	cost: number;
@@ -106,15 +108,37 @@ export interface NostrProfile {
 }
 
 // Real per-account balance as reported by archAI after the user's last
-// generation (Module 6) — not a locally-enforced allowance. Absent until the
-// user has generated at least once.
+// generation (Module 6) — mirrored server-side for ops visibility only
+// (billing.ts's `balances` table). Never sent to the client: it reflects the
+// one shared ARCHAI_API_KEY account, not anything personal to a given user.
 export interface Balance {
 	balance: number;
 	updatedAt: number;
 }
 
+// A single deduction from an approved account's own limit (see CreditInfo
+// below). `amount` is the real cost archAI charged. `id` is a stable identifier
+// for list rendering — createdAt alone can collide across concurrent calls.
+export interface CreditTransaction {
+	id: string;
+	amount: number;
+	balanceAfter: number;
+	kind: 'render' | 'edit';
+	createdAt: number;
+}
+
+// An account's own generation limit, set by an admin (billing.ts) — the only
+// balance a user is ever shown, both in their profile and after a render/edit
+// (see RenderResponse.balance). Present only once an admin has approved the
+// account (a `credits` row).
+export interface CreditInfo {
+	balance: number;
+	updatedAt: number;
+	history: CreditTransaction[];
+}
+
 // GET /auth/me → 401 when no session.
 export interface MeResponse {
 	user: SessionUser;
-	balance?: Balance;
+	credit?: CreditInfo;
 }

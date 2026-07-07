@@ -22,7 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 	import RenderResult from '$lib/components/RenderResult.svelte';
 	import EditPanel from '$lib/components/EditPanel.svelte';
 	import GeneratedImagesSidebar from '$lib/components/GeneratedImagesSidebar.svelte';
-	import { request } from '$lib/state/request.svelte';
+	import { creditErrorKey, extractApiErrorCode, request } from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
@@ -95,7 +95,9 @@ before the Change Date. See LICENSE for complete terms.
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(body)
 			});
-			if (!response.ok) throw new Error('render failed');
+			if (!response.ok) {
+				throw new Error(await extractApiErrorCode(response, 'render_failed'));
+			}
 			const result = await response.json();
 			const render: RenderResultType = {
 				id: crypto.randomUUID(),
@@ -107,14 +109,25 @@ before the Change Date. See LICENSE for complete terms.
 			request.setCurrentRender(render);
 			request.setStatus('idle');
 			showEditPanel = false;
+			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
-		} catch (error) {
-			console.error('Render request failed:', error);
+		} catch (err) {
 			request.setStatus('error');
-			submitError = t('render.failed');
+			submitError = t(renderErrorKey(err));
 		} finally {
 			submitting = false;
 		}
+	}
+
+	function renderErrorKey(err: unknown): TranslationKey {
+		return creditErrorKey(
+			{
+				failed: 'render.failed',
+				insufficientCredit: 'render.insufficientCredit',
+				generationRestricted: 'render.generationRestricted'
+			},
+			err
+		);
 	}
 </script>
 

@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { request } from '$lib/state/request.svelte';
+	import { formatCredit } from '$lib/utils';
 
 	interface Props {
 		onEditRequest: () => void;
@@ -44,9 +45,9 @@ before the Change Date. See LICENSE for complete terms.
 		</div>
 		<div class="footer">
 			<div class="meta">
-				<span>{ti('render.cost', { cost: render.cost })}</span>
+				<span>{ti('render.cost', { cost: formatCredit(render.cost) })}</span>
 				<span class="sep">·</span>
-				<span>{ti('render.balance', { balance: render.balance })}</span>
+				<span>{ti('render.balance', { balance: formatCredit(render.balance) })}</span>
 			</div>
 			<div class="actions">
 				<a href={downloadHref} download={downloadName} class="btn btn-secondary">

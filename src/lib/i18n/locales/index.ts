@@ -70,7 +70,11 @@ export interface Dictionary {
 	'auth.error.failed': string;
 	'auth.demo.login': string;
 	'auth.demo.badge': string;
-	'auth.balance': string;
+	'auth.credit.balance': string;
+	'auth.credit.history': string;
+	'auth.credit.historyEmpty': string;
+	'auth.credit.entryRender': string;
+	'auth.credit.entryEdit': string;
 	'upload.label': string;
 	'upload.button': string;
 	'upload.dropHint': string;
@@ -110,6 +114,8 @@ export interface Dictionary {
 	'generatedImages.confirmDeleteCancel': string;
 	'generatedImages.confirmDeleteConfirm': string;
 	'generatedImages.confirmDeleteDeleting': string;
+	'render.insufficientCredit': string;
+	'render.generationRestricted': string;
 	'edit.title': string;
 	'edit.close': string;
 	'edit.templateReplace': string;
@@ -120,6 +126,8 @@ export interface Dictionary {
 	'edit.apply': string;
 	'edit.applying': string;
 	'edit.failed': string;
+	'edit.insufficientCredit': string;
+	'edit.generationRestricted': string;
 	'edit.undo': string;
 	'edit.cost': string;
 	'edit.balance': string;

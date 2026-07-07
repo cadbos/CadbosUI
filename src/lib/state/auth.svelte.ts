@@ -29,7 +29,12 @@ import { BunkerSigner, createNostrConnectURI } from 'nostr-tools/nip46';
 import { SimplePool } from 'nostr-tools/pool';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { Event, EventTemplate } from 'nostr-tools/pure';
-import type { NostrProfile, ProfileUpdateRequest, SessionUser, Balance } from '$lib/api/contract';
+import type {
+	NostrProfile,
+	ProfileUpdateRequest,
+	SessionUser,
+	CreditInfo
+} from '$lib/api/contract';
 import { t } from '$lib/i18n/index.svelte';
 import { NOSTR_CONNECT_RELAYS } from '$lib/nostr/connect';
 
@@ -45,11 +50,22 @@ const sessionUserSchema = z.object({
 	firstName: z.string().optional(),
 	lastName: z.string().optional()
 });
-const balanceSchema = z.object({
-	balance: z.number(),
-	updatedAt: z.number()
+const creditTransactionSchema = z.object({
+	id: z.string(),
+	amount: z.number(),
+	balanceAfter: z.number(),
+	kind: z.enum(['render', 'edit']),
+	createdAt: z.number()
 });
-const meResponseSchema = z.object({ user: sessionUserSchema, balance: balanceSchema.optional() });
+const creditSchema = z.object({
+	balance: z.number(),
+	updatedAt: z.number(),
+	history: z.array(creditTransactionSchema)
+});
+const meResponseSchema = z.object({
+	user: sessionUserSchema,
+	credit: creditSchema.optional()
+});
 const challengeResponseSchema = z.object({ challenge: hex32 });
 const verifyResponseSchema = z.object({ user: sessionUserSchema });
 const profileResponseSchema = z.object({ user: sessionUserSchema });
@@ -97,7 +113,7 @@ class AuthFlowError extends Error {
 class AuthState {
 	status = $state<AuthStatus>('anonymous');
 	user = $state<SessionUser | null>(null);
-	balance = $state<Balance | null>(null);
+	credit = $state<CreditInfo | null>(null);
 	nostrProfile = $state<NostrProfile | null>(null);
 	profileDraft = $state({ firstName: '', lastName: '' });
 	error = $state<AuthError | null>(null);
@@ -124,8 +140,7 @@ class AuthState {
 			const response = await fetch('/auth/me');
 			if (!response.ok) return;
 			const data = await parseJsonOrFail(response, meResponseSchema);
-			this.#authenticate(data.user);
-			this.balance = data.balance ?? null;
+			this.#authenticate(data.user, data.credit ?? null);
 		} catch {
 			// Network hiccup or malformed response on load — stay anonymous, the user
 			// can sign in manually.
@@ -237,7 +252,7 @@ class AuthState {
 		}
 		if (!response.ok) return;
 		this.user = null;
-		this.balance = null;
+		this.credit = null;
 		this.nostrProfile = null;
 		this.#resetProfileDraft(null);
 		this.error = null;
@@ -252,13 +267,28 @@ class AuthState {
 			const response = await fetchOrFail('/auth/demo', { method: 'POST' });
 			const data = await parseJsonOrFail(response, verifyResponseSchema);
 			this.#authenticate(data.user);
-			const meResponse = await fetch('/auth/me');
-			if (meResponse.ok) {
-				const me = await parseJsonOrFail(meResponse, meResponseSchema);
-				this.balance = me.balance ?? null;
-			}
 		} catch {
 			this.#fail('failed');
+		}
+	}
+
+	// Re-pulls the approved-account balance/history (e.g. after a render/edit
+	// deducted credit server-side) so the profile panel reflects it without a
+	// page reload. A stale read here just leaves the last-known values in place.
+	async refreshCredit(): Promise<void> {
+		if (this.status !== 'authenticated') return;
+		const pubkey = this.user?.pubkey;
+		try {
+			const response = await fetch('/auth/me');
+			if (!response.ok) return;
+			const data = await parseJsonOrFail(response, meResponseSchema);
+			// A logout or account switch mid-request must not write this response's
+			// credit onto whatever session is now active — same guard as refreshNostrProfile.
+			if (this.user?.pubkey === pubkey) this.credit = data.credit ?? null;
+		} catch (err) {
+			// Network hiccup or malformed response — keep the last-known balance/history
+			// rather than clearing it, but don't let the failure disappear silently.
+			console.error('refreshCredit failed:', err);
 		}
 	}
 
@@ -331,12 +361,17 @@ class AuthState {
 		this.error = error;
 	}
 
-	#authenticate(user: SessionUser): void {
+	// `credit` is passed when the caller already has it from the same response
+	// (loadSession's /auth/me) — otherwise (a fresh NIP-07/NIP-46/demo login,
+	// which only get `user` back) it's fetched separately via refreshCredit().
+	#authenticate(user: SessionUser, credit?: CreditInfo | null): void {
 		this.user = user;
 		this.nostrProfile = null;
 		this.#resetProfileDraft(user);
 		this.status = 'authenticated';
 		void this.refreshNostrProfile();
+		if (credit !== undefined) this.credit = credit;
+		else void this.refreshCredit();
 	}
 
 	#resetProfileDraft(user: SessionUser | null): void {

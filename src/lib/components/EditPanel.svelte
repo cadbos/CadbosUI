@@ -13,10 +13,16 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { t, ti } from '$lib/i18n/index.svelte';
-	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
+	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
+	import {
+		creditErrorKey,
+		extractApiErrorCode,
+		request,
+		renderResultFromResponse
+	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
+	import { formatCredit } from '$lib/utils';
 
 	interface Props {
 		onClose: () => void;
@@ -47,20 +53,34 @@ before the Change Date. See LICENSE for complete terms.
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ image: imageUrl, prompt: instruction.trim() })
 			});
-			if (!response.ok) throw new Error('edit failed');
+			if (!response.ok) {
+				throw new Error(await extractApiErrorCode(response, 'edit_failed'));
+			}
 			const result = await response.json();
 			const newRender = renderResultFromResponse(result, {
 				parentId: currentRender.id,
 				editOp: { type: 'freeform', instruction: instruction.trim() }
 			});
 			request.applyEditResult(newRender);
+			void auth.refreshCredit();
 			instruction = '';
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
-		} catch {
-			error = t('edit.failed');
+		} catch (err) {
+			error = t(editErrorKey(err));
 		} finally {
 			applying = false;
 		}
+	}
+
+	function editErrorKey(err: unknown): TranslationKey {
+		return creditErrorKey(
+			{
+				failed: 'edit.failed',
+				insufficientCredit: 'edit.insufficientCredit',
+				generationRestricted: 'edit.generationRestricted'
+			},
+			err
+		);
 	}
 
 	function undoEdit(): void {
@@ -123,9 +143,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	{#if currentRender?.editOp}
 		<div class="meta">
-			<span>{ti('edit.cost', { cost: currentRender.cost })}</span>
+			<span>{ti('edit.cost', { cost: formatCredit(currentRender.cost) })}</span>
 			<span class="sep">·</span>
-			<span>{ti('edit.balance', { balance: currentRender.balance })}</span>
+			<span>{ti('edit.balance', { balance: formatCredit(currentRender.balance) })}</span>
 		</div>
 	{/if}
 

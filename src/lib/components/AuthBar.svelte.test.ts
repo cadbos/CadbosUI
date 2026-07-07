@@ -57,12 +57,15 @@ const nostr = {
 
 function mockFetch(
 	verify: (init?: RequestInit) => Response,
-	profile?: (init?: RequestInit) => Response
+	profile?: (init?: RequestInit) => Response,
+	me?: () => Response
 ) {
 	vi.stubGlobal(
 		'fetch',
 		vi.fn((input: string, init?: RequestInit) => {
-			if (input.endsWith('/auth/me')) return Promise.resolve(new Response(null, { status: 401 }));
+			if (input.endsWith('/auth/me')) {
+				return Promise.resolve(me?.() ?? new Response(null, { status: 401 }));
+			}
 			if (input.endsWith('/auth/challenge')) {
 				return Promise.resolve(Response.json({ challenge: 'a'.repeat(64) }));
 			}
@@ -141,9 +144,7 @@ it('offers to complete Cadbos profile fields after sign-in', async () => {
 	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
 	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
 
-	await expect
-		.element(screen.getByText('Заполните имя и фамилию для профиля.'))
-		.toBeVisible();
+	await expect.element(screen.getByText('Заполните имя и фамилию для профиля.')).toBeVisible();
 	await screen.getByLabelText('Имя').fill('  Ada  ');
 	await screen.getByLabelText('Фамилия').fill('   ');
 	await screen.getByRole('button', { name: 'Сохранить' }).click();
@@ -155,9 +156,7 @@ it('offers to complete Cadbos profile fields after sign-in', async () => {
 		firstName: 'Ada',
 		lastName: null
 	});
-	await expect
-		.element(screen.getByText('Заполните имя и фамилию для профиля.'))
-		.not.toBeVisible();
+	await expect.element(screen.getByText('Заполните имя и фамилию для профиля.')).not.toBeVisible();
 });
 
 it('shows an error when no Nostr extension is present', async () => {
@@ -210,6 +209,38 @@ it('returns to anonymous when the NIP-46 connection is cancelled', async () => {
 	await expect.element(screen.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
 	expect(auth.status).toBe('anonymous');
 	expect(auth.error).toBeNull();
+});
+
+it('shows the approved-account balance and history rounded to two decimals after sign-in', async () => {
+	mockFetch(
+		() => Response.json({ user: { pubkey: pk } }),
+		undefined,
+		() =>
+			Response.json({
+				user: { pubkey: pk },
+				credit: {
+					balance: 4.9399999999999995,
+					updatedAt: Date.now(),
+					history: [
+						{
+							id: 'txn-1',
+							amount: 0.06,
+							balanceAfter: 4.9399999999999995,
+							kind: 'render',
+							createdAt: 1
+						}
+					]
+				}
+			})
+	);
+
+	const screen = render(AuthBar);
+	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
+	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
+
+	await expect.element(screen.getByText('Баланс: 4.94')).toBeVisible();
+	await screen.getByText('История трат').click();
+	await expect.element(screen.getByText(/−0\.06 → 4\.94/)).toBeVisible();
 });
 
 it('cancelling after the signer connects but before verification stays anonymous', async () => {

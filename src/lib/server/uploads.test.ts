@@ -51,6 +51,17 @@ describe('uploadImage', () => {
 		});
 	});
 
+	it('joins a path-bearing base URL without dropping the path segment', async () => {
+		const bucket = mockBucket();
+		const id = '123e4567-e89b-12d3-a456-426614174000' as ReturnType<typeof crypto.randomUUID>;
+		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
+
+		const file = new File(['image-bytes'], 'room.jpg', { type: 'image/jpeg' });
+		const result = await uploadImage(platform(bucket, 'https://cdn.example.com/uploads'), file);
+
+		expect(result.url).toBe(`https://cdn.example.com/uploads/${id}.jpg`);
+	});
+
 	it('requires a public upload base URL when storage is configured', async () => {
 		const file = new File(['image-bytes'], 'room.jpg', { type: 'image/jpeg' });
 
