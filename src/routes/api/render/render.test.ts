@@ -18,14 +18,13 @@ import type { SessionUser } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
-// Lets a single test force deductCredit and/or the getCredit fallback to reject,
-// to prove the response never falls back to archAI's raw (shared) balance.
+// Lets a single test force recordGeneration and/or the getCredit fallback to
+// reject, to prove the response never falls back to archAI's raw (shared) balance.
 const billingMock = vi.hoisted(() => ({
 	failNextRecordBalance: false,
-	failNextDeductCredit: false,
 	failNextGetCredit: false
 }));
-const generatedImagesMock = vi.hoisted(() => ({ failNextRecordGeneratedImage: false }));
+const generationsMock = vi.hoisted(() => ({ failNextRecordGeneration: false }));
 
 vi.mock('$lib/server/billing', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/billing')>();
@@ -38,13 +37,6 @@ vi.mock('$lib/server/billing', async (importOriginal) => {
 			}
 			return actual.recordBalance(...args);
 		}),
-		deductCredit: vi.fn((...args: Parameters<typeof actual.deductCredit>) => {
-			if (billingMock.failNextDeductCredit) {
-				billingMock.failNextDeductCredit = false;
-				return Promise.reject(new Error('simulated D1 failure'));
-			}
-			return actual.deductCredit(...args);
-		}),
 		getCredit: vi.fn((...args: Parameters<typeof actual.getCredit>) => {
 			if (billingMock.failNextGetCredit) {
 				billingMock.failNextGetCredit = false;
@@ -55,16 +47,16 @@ vi.mock('$lib/server/billing', async (importOriginal) => {
 	};
 });
 
-vi.mock('$lib/server/generated-images', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/generated-images')>();
+vi.mock('$lib/server/generations', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/generations')>();
 	return {
 		...actual,
-		recordGeneratedImage: vi.fn((...args: Parameters<typeof actual.recordGeneratedImage>) => {
-			if (generatedImagesMock.failNextRecordGeneratedImage) {
-				generatedImagesMock.failNextRecordGeneratedImage = false;
-				return Promise.reject(new Error('simulated generated image record failure'));
+		recordGeneration: vi.fn((...args: Parameters<typeof actual.recordGeneration>) => {
+			if (generationsMock.failNextRecordGeneration) {
+				generationsMock.failNextRecordGeneration = false;
+				return Promise.reject(new Error('simulated D1 failure'));
 			}
-			return actual.recordGeneratedImage(...args);
+			return actual.recordGeneration(...args);
 		})
 	};
 });
@@ -77,7 +69,7 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 		.run();
 }
 
-// The admin's manual approval step (migrations/0004) — no auto-provisioning
+// The admin's manual approval step (migrations/0005) — no auto-provisioning
 // exists anymore, so every test that expects a render to succeed must grant
 // access first.
 function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
@@ -131,7 +123,7 @@ describe('POST /api/render — billing', () => {
 		expect(result.balance).toBe(12 - result.cost);
 	});
 
-	it('records the generated image against the authenticated profile', async () => {
+	it('records the generated image, source and prompt against the authenticated profile', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 12);
@@ -140,11 +132,17 @@ describe('POST /api/render — billing', () => {
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { outputUrl: string };
 
-		const imageRow = await db
-			.prepare('SELECT user_id, url FROM generated_images WHERE user_id = ?')
+		const row = await db
+			.prepare('SELECT user_id, url, source_url, prompt, kind FROM generations WHERE user_id = ?')
 			.bind('user-1')
-			.first<{ user_id: string; url: string }>();
-		expect(imageRow).toEqual({ user_id: 'user-1', url: result.outputUrl });
+			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
+		expect(row).toEqual({
+			user_id: 'user-1',
+			url: result.outputUrl,
+			source_url: body.image,
+			prompt: body.prompt,
+			kind: 'render'
+		});
 	});
 
 	it('overwrites the mirrored archAI balance rather than accumulating it across calls', async () => {
@@ -162,11 +160,11 @@ describe('POST /api/render — billing', () => {
 		expect(balanceRow?.balance).toBe(48);
 	});
 
-	it('still returns the completed, already-charged render if recording the image fails', async () => {
+	it('still returns the completed, already-charged render if recordGeneration fails', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 12);
-		generatedImagesMock.failNextRecordGeneratedImage = true;
+		generationsMock.failNextRecordGeneration = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 		try {
@@ -180,7 +178,7 @@ describe('POST /api/render — billing', () => {
 			const result = (await response.json()) as { outputUrl: string };
 			expect(result.outputUrl).toMatch(/^https:\/\//);
 			expect(consoleError).toHaveBeenCalledWith(
-				'recordGeneratedImage failed after a successful render:',
+				'recordGeneration failed after a successful render:',
 				expect.any(Error)
 			);
 		} finally {
@@ -206,7 +204,7 @@ describe('POST /api/render — billing', () => {
 			const result = (await response.json()) as { outputUrl: string };
 			expect(result.outputUrl).toMatch(/^https:\/\//);
 			expect(consoleError).toHaveBeenCalledWith(
-				'recordBalance/deductCredit failed after a successful render:',
+				'recordBalance failed after a successful render:',
 				expect.any(Error)
 			);
 		} finally {
@@ -214,11 +212,11 @@ describe('POST /api/render — billing', () => {
 		}
 	});
 
-	it('never falls back to the raw archAI balance if deductCredit and the getCredit fallback both fail', async () => {
+	it('never falls back to the raw archAI balance if recordGeneration and the getCredit fallback both fail', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
-		billingMock.failNextDeductCredit = true;
+		generationsMock.failNextRecordGeneration = true;
 		billingMock.failNextGetCredit = true;
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);

@@ -16,12 +16,10 @@ import { beforeEach, describe, it, expect } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { makeD1 } from './testing/d1-shim';
 import {
-	deductCredit,
 	getCredit,
 	getUserIdByPubkey,
 	hasGenerationAccess,
 	hasSufficientCredit,
-	listCreditHistory,
 	recordBalance,
 	type CreditAccess
 } from './billing';
@@ -136,50 +134,5 @@ describe('hasSufficientCredit', () => {
 	it('is false once balance hits zero or goes negative', () => {
 		expect(hasSufficientCredit(enabled(0))).toBe(false);
 		expect(hasSufficientCredit(enabled(-1))).toBe(false);
-	});
-});
-
-describe('deductCredit', () => {
-	it('subtracts the real cost and logs a transaction', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 5);
-
-		const result = await deductCredit(db, 'user-1', 1.5, 'render');
-		expect(result.balance).toBe(3.5);
-
-		const history = await listCreditHistory(db, 'user-1');
-		expect(history).toEqual([
-			expect.objectContaining({ amount: 1.5, balanceAfter: 3.5, kind: 'render' })
-		]);
-	});
-
-	it('isolates credit balances per user', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
-		grantAccess(db, 'user-1', 5);
-		grantAccess(db, 'user-2', 5);
-
-		await deductCredit(db, 'user-1', 2, 'render');
-
-		expect((await getCredit(db, 'user-1'))?.balance).toBe(3);
-		expect((await getCredit(db, 'user-2'))?.balance).toBe(5);
-	});
-});
-
-describe('listCreditHistory', () => {
-	it('is empty before any deduction', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 5);
-		await expect(listCreditHistory(db, 'user-1')).resolves.toEqual([]);
-	});
-
-	it('orders entries most-recent first', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 5);
-		await deductCredit(db, 'user-1', 1, 'render');
-		await deductCredit(db, 'user-1', 2, 'edit');
-
-		const history = await listCreditHistory(db, 'user-1');
-		expect(history.map((entry) => entry.kind)).toEqual(['edit', 'render']);
 	});
 });

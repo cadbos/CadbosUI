@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
--- Turns `credits` (0003) from "a couple of metered test accounts, everyone
+-- Turns `credits` (0004) from "a couple of metered test accounts, everyone
 -- else unlimited" into the access-control gate for generation: from this
 -- point on, an account can render/edit only if it has a row here, and
 -- `enabled` lets the admin revoke that access without losing the balance or

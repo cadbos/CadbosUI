@@ -24,7 +24,7 @@
 // users.pubkey per paid call.
 
 import type { D1Database } from '@cloudflare/workers-types';
-import type { Balance, CreditTransaction } from '$lib/api/contract';
+import type { Balance } from '$lib/api/contract';
 
 export async function getUserIdByPubkey(db: D1Database, pubkey: string): Promise<string | null> {
 	const row = await db
@@ -67,7 +67,7 @@ export async function recordBalance(
 // Generation access control (security requirement, not a billing nicety): by
 // default nobody can render/edit — an account can only generate once an admin
 // manually inserts a `credits` row for it (via `wrangler d1 execute`, keyed by
-// the internal user id — see the workflow note in migrations/0004). The
+// the internal user id — see the workflow note in migrations/0005). The
 // `enabled` flag lets the admin revoke access without losing the row's
 // balance/history; `balance` is whatever limit the admin chose for that
 // account, not a fixed constant.
@@ -104,86 +104,6 @@ export function hasGenerationAccess(credit: CreditAccess | null): credit is Cred
 
 export function hasSufficientCredit(credit: CreditAccess): boolean {
 	return credit.balance > 0;
-}
-
-interface CreditTransactionRow {
-	id: string;
-	amount: number;
-	balance_after: number;
-	kind: string;
-	created_at: number;
-}
-
-function toCreditTransaction(row: CreditTransactionRow): CreditTransaction {
-	return {
-		id: row.id,
-		amount: row.amount,
-		balanceAfter: row.balance_after,
-		kind: row.kind as CreditTransaction['kind'],
-		createdAt: row.created_at
-	};
-}
-
-// Deducts the real cost archAI charged (not a fixed fee) and logs it, so the
-// account's own spend history can be shown. Called exactly once, only after a
-// confirmed successful archAI response — same discipline as recordBalance.
-//
-// The balance check in the route happens before the (slow) archAI call, not
-// atomically with this deduction — two concurrent requests for the same
-// account can each pass that check and both land here, taking balance below
-// zero. Left unguarded on purpose: the ledger must reflect what archAI
-// actually charged, so silently refusing to record a real, already-paid
-// deduction here would make the spend history wrong. For a small number of
-// manually-approved accounts this is an accepted soft cap, not a hard one.
-//
-// The balance update and the audit-row insert run as one D1 batch (a single
-// transaction) so a failure between the two can never leave the balance
-// changed without a matching history row. The insert reads `balance` back
-// from `credits` itself (rather than the UPDATE's RETURNING value) because
-// batched statements can't pass results to each other — only to the caller,
-// after the whole batch has committed.
-export async function deductCredit(
-	db: D1Database,
-	userId: string,
-	amount: number,
-	kind: CreditTransaction['kind']
-): Promise<Balance> {
-	const now = Date.now();
-	const [updateResult] = await db.batch<BalanceRow>([
-		db
-			.prepare(
-				'UPDATE credits SET balance = balance - ?, updated_at = ? WHERE user_id = ? ' +
-					'RETURNING balance, updated_at'
-			)
-			.bind(amount, now, userId),
-		db
-			.prepare(
-				'INSERT INTO credit_transactions (id, user_id, amount, balance_after, kind, created_at) ' +
-					'SELECT ?, ?, ?, balance, ?, ? FROM credits WHERE user_id = ?'
-			)
-			.bind(crypto.randomUUID(), userId, amount, kind, now, userId)
-	]);
-	const row = updateResult.results[0];
-	if (!row) throw new Error('credit deduction failed: no credit row for user');
-
-	return toBalance(row);
-}
-
-export async function listCreditHistory(
-	db: D1Database,
-	userId: string,
-	limit = 50
-): Promise<CreditTransaction[]> {
-	// rowid as a tiebreaker: two deductions within the same millisecond would
-	// otherwise sort arbitrarily on created_at alone.
-	const { results } = await db
-		.prepare(
-			'SELECT id, amount, balance_after, kind, created_at FROM credit_transactions ' +
-				'WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?'
-		)
-		.bind(userId, limit)
-		.all<CreditTransactionRow>();
-	return (results ?? []).map(toCreditTransaction);
 }
 
 // Shared by /api/render and /api/edit (both gate generation the same way):

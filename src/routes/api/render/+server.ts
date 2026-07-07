@@ -20,14 +20,13 @@ import { apiError, parseBody, renderRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import {
 	assertGenerationAllowed,
-	deductCredit,
 	getCredit,
 	getUserIdByPubkey,
 	recordBalance
 } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { GeneratedImageRecordError, recordGeneratedImage } from '$lib/server/generated-images';
 import { renderInterior } from '$lib/server/generation';
+import { recordGeneration } from '$lib/server/generations';
 
 // Session is enforced centrally in hooks.server.ts (guardedPaths). Generation
 // itself is restricted further, by design: only accounts an admin has
@@ -50,7 +49,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	if (db && !userId) return apiError(500, 'account_error', 'Account record not found');
 
 	// The account's own balance right before this call — kept as the final,
-	// definitely-safe fallback if both deductCredit and its own getCredit
+	// definitely-safe fallback if both recordGeneration and its own getCredit
 	// fallback fail below, so the response never falls through to
 	// renderInterior's raw (shared) archAI balance.
 	let precheckBalance: number | undefined;
@@ -73,43 +72,35 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	try {
 		result = await renderInterior(platform, parsed.data);
 	} catch (err) {
-		if (err instanceof GeneratedImageRecordError) {
-			console.error('recordGeneratedImage failed after a successful render:', err);
-			if (err.code === 'unknown_user_id') {
-				return apiError(500, 'account_error', 'Account record not found');
-			}
-			return apiError(500, 'image_record_failed', 'Image record failed');
-		}
-
 		// generation.ts already sanitizes/logs the detail; this route is the last
 		// line of defense (NFR-6/8) — never forward err.message to the client.
 		console.error(err);
 		return apiError(500, 'render_failed', 'Render failed');
 	}
 
+	// The render already succeeded and archAI already charged for it — a failure to
+	// cache the resulting balance/deduction is a bookkeeping gap, not a reason to
+	// make the user think a completed, paid render failed.
 	if (db && userId) {
 		// recordBalance mirrors archAI's own (shared) account balance for ops
 		// visibility only — it must never reach the client, so read it before
 		// overwriting `result.balance` with the caller's own remaining limit.
-		try {
-			await recordGeneratedImage(db, userId, result.outputUrl);
-		} catch (err) {
-			console.error('recordGeneratedImage failed after a successful render:', err);
-		}
-
-		// The render already succeeded and archAI already charged for it — a failure to
-		// cache the resulting balance/deduction is a bookkeeping gap, not a reason to
-		// make the user think a completed, paid render failed.
 		try {
 			await recordBalance(db, userId, result.balance);
 		} catch (err) {
 			console.error('recordBalance failed after a successful render:', err);
 		}
 		try {
-			const credit = await deductCredit(db, userId, result.cost, 'render');
+			const credit = await recordGeneration(db, userId, {
+				url: result.outputUrl,
+				sourceUrl: parsed.data.image,
+				prompt: parsed.data.prompt,
+				kind: 'render',
+				amount: result.cost
+			});
 			result = { ...result, balance: credit.balance };
 		} catch (err) {
-			console.error('deductCredit failed after a successful render:', err);
+			console.error('recordGeneration failed after a successful render:', err);
 			// Even on failure, never fall through to archAI's raw (shared) balance.
 			// Prefer a fresh read; if that also fails, fall back to the balance we
 			// already had from the precheck — still an approved-account balance,

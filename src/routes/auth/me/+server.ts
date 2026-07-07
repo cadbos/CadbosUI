@@ -18,8 +18,9 @@ import type { RequestHandler } from './$types';
 import type { MeResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
-import { getCredit, getUserIdByPubkey, listCreditHistory } from '$lib/server/billing';
+import { getCredit, getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+import { listCreditHistory } from '$lib/server/generations';
 
 export const GET: RequestHandler = async ({ locals, platform }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');

@@ -26,7 +26,11 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 }
 
 function seedGeneratedImage(db: D1Database, id: string, userId: string, createdAt: number): void {
-	db.prepare('INSERT INTO generated_images (id, user_id, url, created_at) VALUES (?, ?, ?, ?)')
+	db.prepare(
+		'INSERT INTO generations ' +
+			'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
+			"VALUES (?, ?, ?, 'https://cdn.example.test/source.jpg', 'cozy', 'render', 1, 10, ?)"
+	)
 		.bind(id, userId, `https://cdn.example.test/${id}.webp`, createdAt)
 		.run();
 }
@@ -211,7 +215,7 @@ describe('DELETE /api/generated-images', () => {
 		);
 
 		const row = await db
-			.prepare('SELECT id FROM generated_images WHERE id = ?')
+			.prepare('SELECT id FROM generations WHERE id = ?')
 			.bind('image-1')
 			.first<{ id: string }>();
 
@@ -239,7 +243,7 @@ describe('DELETE /api/generated-images', () => {
 			{ id: 'image-2' }
 		);
 		const row = await db
-			.prepare('SELECT id FROM generated_images WHERE id = ?')
+			.prepare('SELECT id FROM generations WHERE id = ?')
 			.bind('image-2')
 			.first<{ id: string }>();
 
@@ -266,7 +270,7 @@ describe('DELETE /api/generated-images', () => {
 			{ id: 'image-1' }
 		);
 		const row = await db
-			.prepare('SELECT id FROM generated_images WHERE id = ?')
+			.prepare('SELECT id FROM generations WHERE id = ?')
 			.bind('image-1')
 			.first<{ id: string }>();
 

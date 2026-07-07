@@ -25,7 +25,7 @@ import {
 	deleteGeneratedImage,
 	getGeneratedImageForUser,
 	listGeneratedImages
-} from '$lib/server/generated-images';
+} from '$lib/server/generations';
 
 const DEFAULT_IMAGE_PAGE_OFFSET = 0;
 const DEFAULT_IMAGE_PAGE_SIZE = 20;

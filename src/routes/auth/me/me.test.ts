@@ -25,7 +25,7 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 		.run();
 }
 
-// The admin's manual approval step (migrations/0004) — no auto-provisioning
+// The admin's manual approval step (migrations/0005) — no auto-provisioning
 // exists anymore.
 function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
 	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
@@ -82,10 +82,12 @@ describe('GET /auth/me — generation access control', () => {
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 5);
 		db.prepare(
-			'INSERT INTO credit_transactions (id, user_id, amount, balance_after, kind, created_at) ' +
-				'VALUES (?, ?, ?, ?, ?, ?)'
+			'INSERT INTO generations ' +
+				'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
+				"VALUES (?, ?, 'https://cdn.example.test/out.webp', 'https://cdn.example.test/room.jpg', " +
+				"'cozy', ?, ?, ?, ?)"
 		)
-			.bind('tx-1', 'user-1', 2, 3, 'render', Date.now())
+			.bind('tx-1', 'user-1', 'render', 2, 3, Date.now())
 			.run();
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);

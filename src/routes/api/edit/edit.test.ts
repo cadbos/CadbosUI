@@ -18,10 +18,10 @@ import type { SessionUser } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
-// Lets a single test force recordBalance to reject, to prove a bookkeeping
-// failure doesn't discard an already-successful, already-charged edit.
+// Lets a single test force recordBalance/recordGeneration to reject, to prove
+// a bookkeeping failure doesn't discard an already-successful, already-charged edit.
 const billingMock = vi.hoisted(() => ({ failNextRecordBalance: false }));
-const generatedImagesMock = vi.hoisted(() => ({ failNextRecordGeneratedImage: false }));
+const generationsMock = vi.hoisted(() => ({ failNextRecordGeneration: false }));
 
 vi.mock('$lib/server/billing', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/billing')>();
@@ -37,16 +37,16 @@ vi.mock('$lib/server/billing', async (importOriginal) => {
 	};
 });
 
-vi.mock('$lib/server/generated-images', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/generated-images')>();
+vi.mock('$lib/server/generations', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/generations')>();
 	return {
 		...actual,
-		recordGeneratedImage: vi.fn((...args: Parameters<typeof actual.recordGeneratedImage>) => {
-			if (generatedImagesMock.failNextRecordGeneratedImage) {
-				generatedImagesMock.failNextRecordGeneratedImage = false;
-				return Promise.reject(new Error('simulated generated image record failure'));
+		recordGeneration: vi.fn((...args: Parameters<typeof actual.recordGeneration>) => {
+			if (generationsMock.failNextRecordGeneration) {
+				generationsMock.failNextRecordGeneration = false;
+				return Promise.reject(new Error('simulated D1 failure'));
 			}
-			return actual.recordGeneratedImage(...args);
+			return actual.recordGeneration(...args);
 		})
 	};
 });
@@ -59,7 +59,7 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 		.run();
 }
 
-// The admin's manual approval step (migrations/0004) — no auto-provisioning
+// The admin's manual approval step (migrations/0005) — no auto-provisioning
 // exists anymore, so every test that expects an edit to succeed must grant
 // access first.
 function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
@@ -151,25 +151,33 @@ describe('POST /api/edit — billing', () => {
 		expect(result.balance).toBe(12 - result.cost);
 	});
 
-	it('records the edited image against the authenticated profile', async () => {
+	it('records the edited image, source and prompt against the authenticated profile', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { outputUrl: string };
 
-		const imageRow = await db
-			.prepare('SELECT user_id, url FROM generated_images WHERE user_id = ?')
+		const row = await db
+			.prepare('SELECT user_id, url, source_url, prompt, kind FROM generations WHERE user_id = ?')
 			.bind('user-1')
-			.first<{ user_id: string; url: string }>();
-		expect(imageRow).toEqual({ user_id: 'user-1', url: result.outputUrl });
+			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
+		expect(row).toEqual({
+			user_id: 'user-1',
+			url: result.outputUrl,
+			source_url: body.image,
+			prompt: body.prompt,
+			kind: 'edit'
+		});
 	});
 
-	it('returns 500 if recording the edited image fails', async () => {
+	it('still returns the completed, already-charged edit if recordGeneration fails', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		generatedImagesMock.failNextRecordGeneratedImage = true;
+		grantAccess(db, 'user-1', 12);
+		generationsMock.failNextRecordGeneration = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 		try {
@@ -179,12 +187,11 @@ describe('POST /api/edit — billing', () => {
 				body
 			);
 
-			expect(response.status).toBe(500);
-			await expect(response.json()).resolves.toEqual({
-				error: { code: 'image_record_failed', message: 'Image record failed' }
-			});
+			expect(response.status).toBe(200);
+			const result = (await response.json()) as { outputUrl: string };
+			expect(result.outputUrl).toMatch(/^https:\/\//);
 			expect(consoleError).toHaveBeenCalledWith(
-				'recordGeneratedImage failed after a successful edit:',
+				'recordGeneration failed after a successful edit:',
 				expect.any(Error)
 			);
 		} finally {
