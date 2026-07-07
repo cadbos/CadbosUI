@@ -324,7 +324,7 @@ before the Change Date. See LICENSE for complete terms.
 	.item {
 		display: grid;
 		grid-template-columns: 4.5rem minmax(0, 1fr);
-		align-items: start;
+		align-items: stretch;
 		gap: 0.75rem;
 		padding: 0.5rem;
 		border: 1px solid var(--color-border);
@@ -334,8 +334,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	.thumb {
 		display: block;
-		width: 4rem;
-		aspect-ratio: 1;
+		width: 100%;
+		height: 100%;
+		min-height: 4.5rem;
 		overflow: hidden;
 		border-radius: var(--radius-sm);
 		object-fit: cover;
