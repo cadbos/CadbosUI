@@ -24,41 +24,36 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { formatCredit } from '$lib/utils';
 
-	interface Props {
-		onClose: () => void;
-	}
-	let { onClose }: Props = $props();
-
 	let instruction = $state('');
 	let applying = $state(false);
 	let error = $state<string | null>(null);
 
 	const currentRender = $derived(request.currentRender);
 	const canUndo = $derived(request.canUndoEdit);
+	const isAuthenticated = $derived(auth.status === 'authenticated');
+	const targetImageUrl = $derived(currentRender?.outputUrls[0] ?? request.image?.url);
 
 	function applyTemplate(fill: string): void {
 		instruction = fill;
 	}
 
 	async function applyEdit(): Promise<void> {
-		if (!currentRender || !instruction.trim() || applying) return;
+		if (!targetImageUrl || !instruction.trim() || applying || !isAuthenticated) return;
 		applying = true;
 		error = null;
-
-		const imageUrl = currentRender.outputUrls[0];
 
 		try {
 			const response = await fetch('/api/edit', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ image: imageUrl, prompt: instruction.trim() })
+				body: JSON.stringify({ image: targetImageUrl, prompt: instruction.trim() })
 			});
 			if (!response.ok) {
 				throw new Error(await extractApiErrorCode(response, 'edit_failed'));
 			}
 			const result = await response.json();
 			const newRender = renderResultFromResponse(result, {
-				parentId: currentRender.id,
+				parentId: currentRender?.id,
 				editOp: { type: 'freeform', instruction: instruction.trim() }
 			});
 			request.applyEditResult(newRender);
@@ -90,20 +85,6 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <section class="edit-panel">
-	<div class="header">
-		<h3>{t('edit.title')}</h3>
-		<button type="button" class="close-btn" onclick={onClose} aria-label={t('edit.close')}>
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-				<path
-					d="M18 6L6 18M6 6l12 12"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-				/>
-			</svg>
-		</button>
-	</div>
-
 	<div class="chips">
 		<button type="button" class="chip" onclick={() => applyTemplate(t('edit.templateReplaceFill'))}>
 			{t('edit.templateReplace')}
@@ -126,7 +107,7 @@ before the Change Date. See LICENSE for complete terms.
 		<button
 			type="button"
 			class="btn-apply"
-			disabled={!instruction.trim() || applying || !currentRender}
+			disabled={!instruction.trim() || applying || !targetImageUrl || !isAuthenticated}
 			onclick={() => void applyEdit()}
 		>
 			{#if applying}
@@ -140,6 +121,10 @@ before the Change Date. See LICENSE for complete terms.
 			</button>
 		{/if}
 	</div>
+
+	{#if !isAuthenticated}
+		<p class="auth-hint">{t('edit.signInToApply')}</p>
+	{/if}
 
 	{#if currentRender?.editOp}
 		<div class="meta">
@@ -165,41 +150,6 @@ before the Change Date. See LICENSE for complete terms.
 		border-left: 4px solid var(--color-accent);
 		border-radius: 16px;
 		box-shadow: 0 4px 16px rgb(0 0 0 / 0.07);
-	}
-
-	.header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-
-	h3 {
-		margin: 0;
-		font-size: 0.9375rem;
-		font-weight: 600;
-		color: var(--color-text);
-	}
-
-	.close-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		padding: 0;
-		background: transparent;
-		border: none;
-		color: var(--color-muted);
-		border-radius: 8px;
-		cursor: pointer;
-		transition:
-			background 0.15s,
-			color 0.15s;
-	}
-
-	.close-btn:hover {
-		background: var(--color-background);
-		color: var(--color-text);
 	}
 
 	.chips {
@@ -265,6 +215,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	textarea:disabled {
 		opacity: 0.6;
+	}
+
+	.auth-hint {
+		margin: 0;
+		font-size: 0.875rem;
+		color: var(--color-muted);
 	}
 
 	.actions {

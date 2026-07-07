@@ -28,6 +28,7 @@ before the Change Date. See LICENSE for complete terms.
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
 
 	type ViewId = 'chat' | 'keyValue' | 'graph';
+	type Mode = 'render' | 'edit';
 
 	const views: { id: ViewId; label: TranslationKey; component: Component; disabled?: boolean }[] = [
 		{ id: 'chat', label: 'view.chat', component: ChatView },
@@ -35,11 +36,17 @@ before the Change Date. See LICENSE for complete terms.
 		{ id: 'graph', label: 'view.graph', component: GraphView }
 	];
 
+	const modes: { id: Mode; label: TranslationKey }[] = [
+		{ id: 'render', label: 'mode.render' },
+		{ id: 'edit', label: 'mode.edit' }
+	];
+
 	let activeIndex = $state(0);
 	let tabs = $state<HTMLElement[]>([]);
 	let submitting = $state(false);
 	let submitError = $state<string | null>(null);
-	let showEditPanel = $state(false);
+	let mode = $state<Mode>('render');
+	let modeTabs = $state<HTMLElement[]>([]);
 
 	function activate(index: number): void {
 		if (views[index]?.disabled) return;
@@ -71,6 +78,26 @@ before the Change Date. See LICENSE for complete terms.
 		if (next !== null && next !== activeIndex) {
 			event.preventDefault();
 			activate(next);
+		}
+	}
+
+	function activateMode(index: number): void {
+		mode = modes[index].id;
+		modeTabs[index]?.focus();
+	}
+
+	function onModeKeydown(event: KeyboardEvent): void {
+		const last = modes.length - 1;
+		const currentIndex = modes.findIndex((m) => m.id === mode);
+		let next: number | null = null;
+		if (event.key === 'ArrowRight') next = currentIndex === last ? 0 : currentIndex + 1;
+		else if (event.key === 'ArrowLeft') next = currentIndex === 0 ? last : currentIndex - 1;
+		else if (event.key === 'Home') next = 0;
+		else if (event.key === 'End') next = last;
+
+		if (next !== null && next !== currentIndex) {
+			event.preventDefault();
+			activateMode(next);
 		}
 	}
 
@@ -108,7 +135,6 @@ before the Change Date. See LICENSE for complete terms.
 			};
 			request.setCurrentRender(render);
 			request.setStatus('idle');
-			showEditPanel = false;
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 		} catch (err) {
@@ -140,7 +166,37 @@ before the Change Date. See LICENSE for complete terms.
 					<p>{t('app.subtitle')}</p>
 				</header>
 
-				<section class="step">
+				<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
+					{#each modes as modeOption, index (modeOption.id)}
+						<button
+							{@attach (node) => {
+								modeTabs[index] = node as HTMLElement;
+							}}
+							type="button"
+							role="tab"
+							id={`mode-tab-${modeOption.id}`}
+							aria-selected={mode === modeOption.id}
+							aria-controls={`mode-panel-${modeOption.id}`}
+							tabindex={mode === modeOption.id ? 0 : -1}
+							class:active={mode === modeOption.id}
+							onclick={() => activateMode(index)}
+							onkeydown={onModeKeydown}
+						>
+							{t(modeOption.label)}
+						</button>
+					{/each}
+				</div>
+			</div>
+
+			<div
+				class="mode-panel"
+				role="tabpanel"
+				id="mode-panel-render"
+				aria-labelledby="mode-tab-render"
+				tabindex="0"
+				hidden={mode !== 'render'}
+			>
+				<section class="card step-card">
 					<div class="step-header">
 						<span class="step-num" aria-hidden="true">①</span>
 						<h2>{t('upload.label')}</h2>
@@ -148,7 +204,7 @@ before the Change Date. See LICENSE for complete terms.
 					<ImageUpload />
 				</section>
 
-				<section class="step">
+				<section class="card step-card">
 					<div class="step-header">
 						<span class="step-num" aria-hidden="true">②</span>
 						<h2>{t('view.switcher.label')}</h2>
@@ -203,7 +259,7 @@ before the Change Date. See LICENSE for complete terms.
 					{/each}
 				</section>
 
-				<section class="generate-section">
+				<section class="card step-card generate-section">
 					<label class="format-label">
 						<span class="format-text">{t('render.outputFormat')}</span>
 						<select
@@ -244,26 +300,49 @@ before the Change Date. See LICENSE for complete terms.
 			</div>
 
 			{#if request.currentRender}
-				<div class="result-wrap">
+				<section class="result-wrap" aria-label={t('render.result')}>
 					<svelte:boundary>
-						<RenderResult onEditRequest={() => (showEditPanel = !showEditPanel)} />
+						<RenderResult onEditRequest={() => activateMode(1)} />
 						{#snippet failed()}
 							<p class="boundary-failed">{t('boundary.failed')}</p>
 						{/snippet}
 					</svelte:boundary>
-				</div>
+				</section>
 			{/if}
 
-			{#if showEditPanel && request.currentRender}
-				<div class="result-wrap">
+			<div
+				class="result-wrap"
+				role="tabpanel"
+				id="mode-panel-edit"
+				aria-labelledby="mode-tab-edit"
+				tabindex="0"
+				hidden={mode !== 'edit'}
+			>
+				{#if !request.currentRender}
+					<section class="card step-card">
+						<div class="step-header">
+							<span class="step-num" aria-hidden="true">①</span>
+							<h2>{t('upload.label')}</h2>
+						</div>
+						<ImageUpload />
+					</section>
+				{/if}
+
+				<section class="step">
+					<div class="step-header">
+						<span class="step-num" aria-hidden="true">
+							{request.currentRender ? '①' : '②'}
+						</span>
+						<h2>{t('edit.title')}</h2>
+					</div>
 					<svelte:boundary>
-						<EditPanel onClose={() => (showEditPanel = false)} />
+						<EditPanel />
 						{#snippet failed()}
 							<p class="boundary-failed">{t('boundary.failed')}</p>
 						{/snippet}
 					</svelte:boundary>
-				</div>
-			{/if}
+				</section>
+			</div>
 		</div>
 
 		{#if isAuthenticated}
@@ -337,9 +416,76 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 1rem;
 	}
 
+	.mode-tabs {
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.3rem;
+		background: var(--color-background);
+		border-radius: 14px;
+	}
+
+	.mode-tabs button {
+		flex: 1;
+		padding: 0.7rem 1.5rem;
+		font: inherit;
+		font-size: 0.9375rem;
+		font-weight: 600;
+		/* var(--color-muted) falls below the 4.5:1 AA contrast ratio against
+		   var(--color-background) at this weight/size; this is the primary
+		   top-level nav, so it gets a darker tone than the nested view tabs. */
+		color: #5f5f66;
+		background: transparent;
+		border: none;
+		border-radius: 11px;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			color 0.15s;
+	}
+
+	.mode-tabs button.active {
+		color: var(--color-accent-contrast);
+		background: var(--color-accent);
+	}
+
+	.mode-tabs button.active:focus-visible {
+		/* The default focus outline is the same green as this button's own
+		   active background — switch to the light contrast color so the ring
+		   stays visible regardless of browser outline rendering/zoom level. */
+		outline-color: var(--color-accent-contrast);
+	}
+
+	.mode-panel {
+		/* .workspace-main uses align-items: center, so a flex child needs an
+		   explicit width to stretch — .card gets this "for free" for its own
+		   subtree via the default align-items: stretch, but .mode-panel is a
+		   sibling of .card now, not a descendant. */
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		/* Matches .result-wrap's gap on the Edit tab — the render steps are now
+		   separate cards too, stacked the same way. */
+		gap: 1.5rem;
+	}
+
+	.mode-panel[hidden] {
+		display: none;
+	}
+
 	.step {
 		display: flex;
 		flex-direction: column;
+		gap: 1rem;
+	}
+
+	/* Same visual language as RenderResult/EditPanel's cards (border + shadow,
+	   var(--radius-lg)) — each render step is its own block, matching the Edit tab. */
+	.step-card {
+		background: var(--color-surface);
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-lg);
+		padding: 1.5rem;
 		gap: 1rem;
 	}
 
@@ -549,6 +695,13 @@ before the Change Date. See LICENSE for complete terms.
 	.result-wrap {
 		width: 100%;
 		max-width: var(--content-width);
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
+
+	.result-wrap[hidden] {
+		display: none;
 	}
 
 	@media (max-width: 960px) {

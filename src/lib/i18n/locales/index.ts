@@ -15,6 +15,9 @@
 export interface Dictionary {
 	'app.title': string;
 	'app.subtitle': string;
+	'mode.switcher.label': string;
+	'mode.render': string;
+	'mode.edit': string;
 	'view.switcher.label': string;
 	'view.chat': string;
 	'view.keyValue': string;
@@ -94,6 +97,7 @@ export interface Dictionary {
 	'render.balance': string;
 	'render.download': string;
 	'render.edit': string;
+	'render.result': string;
 	'render.validationImage': string;
 	'render.validationPrompt': string;
 	'render.failed': string;
@@ -117,7 +121,7 @@ export interface Dictionary {
 	'render.insufficientCredit': string;
 	'render.generationRestricted': string;
 	'edit.title': string;
-	'edit.close': string;
+	'edit.signInToApply': string;
 	'edit.templateReplace': string;
 	'edit.templateColor': string;
 	'edit.templateReplaceFill': string;
@@ -128,7 +132,7 @@ export interface Dictionary {
 	'edit.failed': string;
 	'edit.insufficientCredit': string;
 	'edit.generationRestricted': string;
-	'edit.undo': string;
 	'edit.cost': string;
 	'edit.balance': string;
+	'edit.undo': string;
 }

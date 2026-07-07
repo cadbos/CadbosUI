@@ -17,6 +17,9 @@ import type { Dictionary } from '$lib/i18n/locales';
 export const ru = {
 	'app.title': 'ИИ-дизайн интерьера',
 	'app.subtitle': 'Загрузите фото комнаты и соберите промпт в удобном вам интерфейсе.',
+	'mode.switcher.label': 'Режим',
+	'mode.render': 'Рендер',
+	'mode.edit': 'Редактирование',
 	'view.switcher.label': 'Способ ввода',
 	'view.chat': 'Чат',
 	'view.keyValue': 'Ключ-значение',
@@ -98,6 +101,7 @@ export const ru = {
 	'render.balance': 'Баланс: {balance}',
 	'render.download': 'Скачать',
 	'render.edit': 'Редактировать',
+	'render.result': 'Результат рендера',
 	'render.validationImage': 'Загрузите фото комнаты',
 	'render.validationPrompt': 'Введите промпт',
 	'render.failed': 'Не удалось сгенерировать. Попробуйте ещё раз.',
@@ -122,7 +126,7 @@ export const ru = {
 	'render.insufficientCredit': 'Тестовый баланс исчерпан.',
 	'render.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
 	'edit.title': 'Редактирование рендера',
-	'edit.close': 'Закрыть',
+	'edit.signInToApply': 'Войдите, чтобы применить правку',
 	'edit.templateReplace': 'Заменить объект',
 	'edit.templateColor': 'Сменить цвет',
 	'edit.templateReplaceFill': 'Замени [объект] на [новый объект]',
@@ -133,7 +137,7 @@ export const ru = {
 	'edit.failed': 'Не удалось применить правку. Попробуйте ещё раз.',
 	'edit.insufficientCredit': 'Тестовый баланс исчерпан.',
 	'edit.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
-	'edit.undo': 'Отменить правку',
 	'edit.cost': 'Стоимость правки: {cost}',
-	'edit.balance': 'Баланс: {balance}'
+	'edit.balance': 'Баланс: {balance}',
+	'edit.undo': 'Отменить правку'
 } as const satisfies Dictionary;
