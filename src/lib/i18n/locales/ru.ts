@@ -83,6 +83,7 @@ export const ru = {
 	'auth.credit.entryRender': 'Рендер · {date}: −{amount} → {balance}',
 	'auth.credit.entryEdit': 'Правка · {date}: −{amount} → {balance}',
 	'auth.credit.entryStyleTransfer': 'Перенос стиля · {date}: −{amount} → {balance}',
+	'auth.credit.entryAutoPrompt': 'Автопромпт · {date}: −{amount} → {balance}',
 	'upload.label': 'Фото комнаты',
 	'upload.button': 'Выбрать файл',
 	'upload.dropHint': 'Перетащите фото сюда или нажмите для выбора',

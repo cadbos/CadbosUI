@@ -50,6 +50,10 @@ export const styleTransferRequestSchema = z.object({
 	styleTransferStrength: z.number().min(0).max(1).optional()
 });
 
+export const autoPromptRequestSchema = z.object({
+	image: z.url().trim()
+});
+
 // Nostr pubkey: 32-byte lowercase hex (x-only schnorr public key).
 export const challengeRequestSchema = z.object({
 	pubkey: z

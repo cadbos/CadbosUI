@@ -21,6 +21,7 @@ import {
 	getGeneratedImageForUser,
 	listCreditHistory,
 	listGeneratedImages,
+	recordCreditTransaction,
 	recordGeneration
 } from './generations';
 
@@ -94,6 +95,27 @@ describe('recordGeneration', () => {
 
 		expect((await getCredit(db, 'user-1'))?.balance).toBe(3);
 		expect((await getCredit(db, 'user-2'))?.balance).toBe(5);
+	});
+});
+
+describe('recordCreditTransaction', () => {
+	it('subtracts the real cost without adding image history', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 5);
+
+		const result = await recordCreditTransaction(db, 'user-1', {
+			kind: 'auto-prompt',
+			amount: 0.75
+		});
+		expect(result.balance).toBe(4.25);
+
+		const history = await listCreditHistory(db, 'user-1');
+		expect(history).toEqual([
+			expect.objectContaining({ amount: 0.75, balanceAfter: 4.25, kind: 'auto-prompt' })
+		]);
+
+		const images = await listGeneratedImages(db, 'user-1', 0, 10);
+		expect(images.images).toEqual([]);
 	});
 });
 

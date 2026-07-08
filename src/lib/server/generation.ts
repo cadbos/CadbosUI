@@ -14,10 +14,20 @@
 
 import { dev } from '$app/environment';
 import { createClient } from '$lib/server/archai/client';
-import { postEditByPrompt, postRenderInterior, postStyleTransfer } from '$lib/server/archai';
-import type { RenderResponse, OutputFormat } from '$lib/api/contract';
+import type { AutoPromptResponse, RenderResponse, OutputFormat } from '$lib/api/contract';
+import {
+	postAutoPrompt,
+	postEditByPrompt,
+	postRenderInterior,
+	postStyleTransfer
+} from '$lib/server/archai';
 import { imageExtensionFromMime } from '$lib/server/image-utils';
-import { mockEdit, mockRender, mockStyleTransfer } from '$lib/server/mocks/fixtures';
+import {
+	mockAutoPrompt,
+	mockEdit,
+	mockRender,
+	mockStyleTransfer
+} from '$lib/server/mocks/fixtures';
 import { uploadImageBytes } from '$lib/server/uploads';
 
 // И-MA-6 / И-MA-ED3: default sync-call timeout, shared by render and edit.
@@ -270,6 +280,55 @@ export async function styleTransferInterior(
 
 	return {
 		outputUrl: await storeGeneratedImage(platform, outputUrl, 'style-transfer'),
+		cost: data.cost,
+		balance: data.balance
+	};
+}
+
+export async function generateAutoPrompt(
+	platform: App.Platform | undefined,
+	params: { image: string }
+): Promise<AutoPromptResponse> {
+	const apiKey = platform?.env?.ARCHAI_API_KEY;
+
+	if (!apiKey) {
+		if (dev) return mockAutoPrompt();
+		generationFailed('auto-prompt', 'Auto-prompt failed', 'ARCHAI_API_KEY not configured');
+	}
+
+	let result: Awaited<ReturnType<typeof postAutoPrompt>>;
+	try {
+		result = await postAutoPrompt({
+			client: requestClientFor(apiKey),
+			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+			body: { image: params.image }
+		});
+	} catch (err) {
+		generationFailed('auto-prompt', 'Auto-prompt failed', err);
+	}
+
+	if (result.error) generationFailed('auto-prompt', 'Auto-prompt failed', result.error);
+
+	const data = result.data;
+	if (!data) {
+		generationFailed(
+			'auto-prompt',
+			'Auto-prompt failed',
+			'empty response from auto-prompt service'
+		);
+	}
+
+	const prompt = data.output.trim();
+	if (!prompt) {
+		generationFailed(
+			'auto-prompt',
+			'Auto-prompt failed',
+			`no prompt text in output: ${JSON.stringify(data.output)}`
+		);
+	}
+
+	return {
+		prompt,
 		cost: data.cost,
 		balance: data.balance
 	};

@@ -56,12 +56,25 @@ export interface StyleTransferRequest {
 	styleTransferStrength?: number;
 }
 
+// POST /api/auto-prompt — describe an input image as a render prompt.
+export interface AutoPromptRequest {
+	image: string;
+}
+
 // Normalized response for image-generation endpoints. Provider array/string
-// outputs are normalized to a single URL. `balance` is the caller's own
-// remaining approved-account balance after this call — never archAI's raw
-// (shared) account balance, which the client must never see.
+// outputs are normalized to a single URL. `balance` is the
+// caller's own remaining approved-account balance after this call — never
+// archAI's raw (shared) account balance, which the client must never see.
 export interface RenderResponse {
 	outputUrl: string;
+	cost: number;
+	balance: number;
+}
+
+// Normalized auto-prompt response. `prompt` is ArchAI's plain-text output,
+// and `balance` follows the same approved-account rule as RenderResponse.
+export interface AutoPromptResponse {
+	prompt: string;
 	cost: number;
 	balance: number;
 }
@@ -133,7 +146,7 @@ export interface CreditTransaction {
 	id: string;
 	amount: number;
 	balanceAfter: number;
-	kind: 'render' | 'edit' | 'style-transfer';
+	kind: 'render' | 'edit' | 'style-transfer' | 'auto-prompt';
 	createdAt: number;
 }
 

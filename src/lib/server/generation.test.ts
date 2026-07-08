@@ -17,7 +17,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const archai = vi.hoisted(() => ({
 	postRenderInterior: vi.fn(),
 	postEditByPrompt: vi.fn(),
-	postStyleTransfer: vi.fn()
+	postStyleTransfer: vi.fn(),
+	postAutoPrompt: vi.fn()
 }));
 const appEnvironment = vi.hoisted(() => ({ dev: true }));
 
@@ -28,7 +29,8 @@ vi.mock('$app/environment', () => ({
 	}
 }));
 
-const { editInterior, renderInterior, styleTransferInterior } = await import('./generation');
+const { editInterior, generateAutoPrompt, renderInterior, styleTransferInterior } =
+	await import('./generation');
 
 const withoutKey = { env: {} } as App.Platform;
 const publicUploadsUrl = 'https://uploads.cadbos.example';
@@ -406,5 +408,63 @@ describe('styleTransferInterior', () => {
 				outputFormat: 'webp'
 			})
 		).rejects.toThrow('Style transfer failed');
+	});
+});
+
+describe('generateAutoPrompt', () => {
+	it('falls back to the dev mock when no API key is configured', async () => {
+		const result = await generateAutoPrompt(withoutKey, {
+			image: 'https://example.test/room.jpg'
+		});
+		expect(result.prompt).toContain('Scandinavian');
+	});
+
+	it('sends only the image and maps output text to prompt', async () => {
+		const fetch = vi.fn();
+		vi.stubGlobal('fetch', fetch);
+		archai.postAutoPrompt.mockResolvedValue({
+			data: {
+				output: 'cozy living room, oak floors, linen sofa',
+				cost: 0.5,
+				balance: 22.5
+			}
+		});
+
+		const result = await generateAutoPrompt(withKey(), {
+			image: 'https://example.test/room.jpg'
+		});
+
+		const call = archai.postAutoPrompt.mock.calls[0][0];
+		expect(call.body).toEqual({ image: 'https://example.test/room.jpg' });
+		expect(fetch).not.toHaveBeenCalled();
+		expect(result).toEqual({
+			prompt: 'cozy living room, oak floors, linen sofa',
+			cost: 0.5,
+			balance: 22.5
+		});
+	});
+
+	it('throws a generic error without leaking provider details', async () => {
+		archai.postAutoPrompt.mockResolvedValue({
+			error: { message: 'provider request id 9f3a' }
+		});
+
+		await expect(
+			generateAutoPrompt(withKey(), {
+				image: 'https://example.test/room.jpg'
+			})
+		).rejects.toThrow('Auto-prompt failed');
+	});
+
+	it('throws when the response has no prompt text', async () => {
+		archai.postAutoPrompt.mockResolvedValue({
+			data: { output: '   ', cost: 0, balance: 25 }
+		});
+
+		await expect(
+			generateAutoPrompt(withKey(), {
+				image: 'https://example.test/room.jpg'
+			})
+		).rejects.toThrow('Auto-prompt failed');
 	});
 });
