@@ -40,9 +40,7 @@ async function authenticate(page: Page): Promise<void> {
 	});
 }
 
-test('the Edit tab lets you upload an image directly, without generating a render first', async ({
-	page
-}) => {
+async function mockUpload(page: Page): Promise<void> {
 	await page.route('**/api/uploads', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -55,6 +53,12 @@ test('the Edit tab lets you upload an image directly, without generating a rende
 			})
 		});
 	});
+}
+
+test('the Edit tab lets you upload an image directly, without generating a render first', async ({
+	page
+}) => {
+	await mockUpload(page);
 
 	await page.goto('/');
 
@@ -89,18 +93,7 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 	page
 }) => {
 	await authenticate(page);
-	await page.route('**/api/uploads', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				url: 'https://cdn.example.test/uploaded.webp',
-				mime: 'image/webp',
-				size: 1024,
-				dimensions: [800, 600]
-			})
-		});
-	});
+	await mockUpload(page);
 	await page.route('**/api/edit', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -132,22 +125,40 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 	await expect(page.locator('#mode-panel-edit input[type="file"]')).toHaveCount(0);
 });
 
+test('a failed edit request surfaces the error in the Edit tab instead of a result', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockUpload(page);
+	await page.route('**/api/edit', async (route) => {
+		await route.fulfill({
+			status: 500,
+			contentType: 'application/json',
+			body: JSON.stringify({ error: { code: 'edit_failed', message: 'boom' } })
+		});
+	});
+
+	await page.goto('/');
+
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
+	await page
+		.locator('#mode-panel-edit input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+
+	await page.getByLabel('Инструкция для правки').fill('Replace the sofa with an armchair');
+	await page.getByRole('button', { name: 'Применить правку' }).click();
+
+	await expect(page.getByRole('alert')).toHaveText(
+		'Не удалось применить правку. Попробуйте ещё раз.'
+	);
+	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveCount(0);
+});
+
 test('generating a render makes the Edit tab usable, reachable independent of the generate action', async ({
 	page
 }) => {
 	await authenticate(page);
-	await page.route('**/api/uploads', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				url: 'https://cdn.example.test/uploaded.webp',
-				mime: 'image/webp',
-				size: 1024,
-				dimensions: [800, 600]
-			})
-		});
-	});
+	await mockUpload(page);
 	await page.route('**/api/render', async (route) => {
 		await route.fulfill({
 			status: 200,
