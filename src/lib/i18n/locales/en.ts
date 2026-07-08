@@ -124,7 +124,7 @@ export const en = {
 	'generatedImages.confirmDeleteDeleting': 'Deleting…',
 	'render.insufficientCredit': 'Test balance exhausted.',
 	'render.generationRestricted': 'Generation is available to a limited set of accounts.',
-	'edit.title': 'Edit render',
+	'edit.title': 'Edit photo',
 	'edit.signInToApply': 'Sign in to apply an edit',
 	'edit.templateReplace': 'Replace object',
 	'edit.templateColor': 'Change colour',

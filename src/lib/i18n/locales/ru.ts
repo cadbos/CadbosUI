@@ -125,7 +125,7 @@ export const ru = {
 	'generatedImages.confirmDeleteDeleting': 'Удаление…',
 	'render.insufficientCredit': 'Тестовый баланс исчерпан.',
 	'render.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
-	'edit.title': 'Редактирование рендера',
+	'edit.title': 'Редактирование фото',
 	'edit.signInToApply': 'Войдите, чтобы применить правку',
 	'edit.templateReplace': 'Заменить объект',
 	'edit.templateColor': 'Сменить цвет',
