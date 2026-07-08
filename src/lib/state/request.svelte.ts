@@ -37,12 +37,15 @@ export interface PromptFragment {
 	order: number;
 }
 
-export type EditOperationType =
-	| 'replace-object'
-	| 'change-surface-color'
-	| 'freeform'
-	| 'add-object'
-	| 'remove-object';
+export const EDIT_OPERATION_TYPES = [
+	'replace-object',
+	'change-surface-color',
+	'freeform',
+	'add-object',
+	'remove-object'
+] as const;
+
+export type EditOperationType = (typeof EDIT_OPERATION_TYPES)[number];
 
 export interface EditOperation {
 	type: EditOperationType;
@@ -103,7 +106,7 @@ const promptFragmentSchema = z.object({
 });
 
 const editOperationSchema = z.object({
-	type: z.enum(['replace-object', 'change-surface-color', 'freeform', 'add-object', 'remove-object']),
+	type: z.enum(EDIT_OPERATION_TYPES),
 	instruction: z.string()
 });
 
