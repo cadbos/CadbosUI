@@ -31,7 +31,7 @@ import { recordGeneration } from '$lib/server/generations';
 // Session is enforced centrally in hooks.server.ts (guardedPaths). Generation
 // itself is restricted further, by design: only accounts an admin has
 // manually approved (a `credits` row, billing.ts) may render at all — a
-// fresh Nostr login alone is not enough (mirrors /api/render).
+// fresh Nostr login alone is not enough (mirrors /api/render and /api/edit).
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
 

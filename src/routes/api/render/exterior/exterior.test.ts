@@ -108,6 +108,17 @@ describe('POST /api/render/exterior — billing', () => {
 		expect(response.status).toBe(401);
 	});
 
+	it('renders an exterior image and returns a URL', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', pubkey);
+		grantAccess(db, 'user-1', 12);
+
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
+		expect(response.status).toBe(200);
+		const result = (await response.json()) as { outputUrl: string };
+		expect(result.outputUrl).toMatch(/^https:\/\//);
+	});
+
 	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
@@ -127,7 +138,7 @@ describe('POST /api/render/exterior — billing', () => {
 		expect(result.balance).toBe(12 - result.cost);
 	});
 
-	it('records the generated image, source and prompt against the authenticated profile', async () => {
+	it('records the generated exterior image, source and prompt against the authenticated profile', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 12);
@@ -211,10 +222,6 @@ describe('POST /api/render/exterior — billing', () => {
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { balance: number };
-
-		// The archAI mock reports balance 48 (the shared account) — even with every
-		// approved-account balance read failing, the client must never see it.
-		expect(result.balance).not.toBe(48);
 		expect(result.balance).toBe(12);
 	});
 
@@ -281,6 +288,15 @@ describe('POST /api/render/exterior — billing', () => {
 			expect(response.status).toBe(402);
 			const result = (await response.json()) as { error: { code: string } };
 			expect(result.error.code).toBe('insufficient_credit');
+		});
+
+		it('returns a clean 500 instead of crashing if the credits table is missing (unapplied migration)', async () => {
+			const db = makeD1();
+			seedUser(db, 'user-1', pubkey);
+			db.prepare('DROP TABLE credits').run();
+
+			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
+			expect(response.status).toBe(500);
 		});
 	});
 });
