@@ -14,10 +14,10 @@
 
 import { dev } from '$app/environment';
 import { createClient } from '$lib/server/archai/client';
-import { postEditByPrompt, postRenderInterior } from '$lib/server/archai';
+import { postEditByPrompt, postRenderInterior, postStyleTransfer } from '$lib/server/archai';
 import type { RenderResponse, OutputFormat } from '$lib/api/contract';
 import { imageExtensionFromMime } from '$lib/server/image-utils';
-import { mockEdit, mockRender } from '$lib/server/mocks/fixtures';
+import { mockEdit, mockRender, mockStyleTransfer } from '$lib/server/mocks/fixtures';
 import { uploadImageBytes } from '$lib/server/uploads';
 
 // И-MA-6 / И-MA-ED3: default sync-call timeout, shared by render and edit.
@@ -205,6 +205,71 @@ export async function editInterior(
 
 	return {
 		outputUrl: await storeGeneratedImage(platform, data.output, 'edit-by-prompt'),
+		cost: data.cost,
+		balance: data.balance
+	};
+}
+
+export async function styleTransferInterior(
+	platform: App.Platform | undefined,
+	params: {
+		image: string;
+		referenceImage: string;
+		outputFormat: OutputFormat;
+		prompt?: string | undefined;
+		negativePrompt?: string | undefined;
+		styleTransferStrength?: number | undefined;
+	}
+): Promise<RenderResponse> {
+	const apiKey = platform?.env?.ARCHAI_API_KEY;
+
+	if (!apiKey) {
+		if (dev) return mockStyleTransfer();
+		generationFailed('style-transfer', 'Style transfer failed', 'ARCHAI_API_KEY not configured');
+	}
+
+	let result: Awaited<ReturnType<typeof postStyleTransfer>>;
+	try {
+		result = await postStyleTransfer({
+			client: requestClientFor(apiKey),
+			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+			body: {
+				image: params.image,
+				referenceImage: params.referenceImage,
+				outputFormat: params.outputFormat,
+				...(params.prompt ? { prompt: params.prompt } : {}),
+				...(params.negativePrompt ? { negativePrompt: params.negativePrompt } : {}),
+				...(params.styleTransferStrength !== undefined
+					? { styleTransferStrength: params.styleTransferStrength }
+					: {})
+			}
+		});
+	} catch (err) {
+		generationFailed('style-transfer', 'Style transfer failed', err);
+	}
+
+	if (result.error) generationFailed('style-transfer', 'Style transfer failed', result.error);
+
+	const data = result.data;
+	if (!data) {
+		generationFailed(
+			'style-transfer',
+			'Style transfer failed',
+			'empty response from style service'
+		);
+	}
+
+	const outputUrl = Array.isArray(data.output) ? data.output[0] : undefined;
+	if (!outputUrl) {
+		generationFailed(
+			'style-transfer',
+			'Style transfer failed',
+			`no image URL in output: ${JSON.stringify(data.output)}`
+		);
+	}
+
+	return {
+		outputUrl: await storeGeneratedImage(platform, outputUrl, 'style-transfer'),
 		cost: data.cost,
 		balance: data.balance
 	};

@@ -21,6 +21,12 @@ export function apiError(status: number, code: string, message: string): Respons
 }
 
 const outputFormat = z.enum(['webp', 'jpg', 'png', 'avif']);
+const httpImageUrl = z.url({ protocol: /^https?$/ }).trim();
+const optionalText = z
+	.string()
+	.trim()
+	.transform((value) => (value.length === 0 ? undefined : value))
+	.optional();
 
 export const renderRequestSchema = z.object({
 	image: z.string().trim().min(1),
@@ -33,6 +39,15 @@ export const renderRequestSchema = z.object({
 export const editRequestSchema = z.object({
 	image: z.url().trim(),
 	prompt: z.string().trim().min(1)
+});
+
+export const styleTransferRequestSchema = z.object({
+	image: httpImageUrl,
+	referenceImage: httpImageUrl,
+	outputFormat,
+	prompt: optionalText,
+	negativePrompt: optionalText,
+	styleTransferStrength: z.number().min(0).max(1).optional()
 });
 
 // Nostr pubkey: 32-byte lowercase hex (x-only schnorr public key).

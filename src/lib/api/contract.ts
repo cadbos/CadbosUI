@@ -46,10 +46,20 @@ export interface EditRequest {
 	prompt: string;
 }
 
-// Normalized response for both render and edit (output[0] for render,
-// output for edit — both normalized to a single url). `balance` is the
-// caller's own remaining approved-account balance after this call — never
-// archAI's raw (shared) account balance, which the client must never see.
+// POST /api/style-transfer — apply a reference image's style to a source image.
+export interface StyleTransferRequest {
+	image: string;
+	referenceImage: string;
+	outputFormat: OutputFormat;
+	prompt?: string;
+	negativePrompt?: string;
+	styleTransferStrength?: number;
+}
+
+// Normalized response for image-generation endpoints. Provider array/string
+// outputs are normalized to a single URL. `balance` is the caller's own
+// remaining approved-account balance after this call — never archAI's raw
+// (shared) account balance, which the client must never see.
 export interface RenderResponse {
 	outputUrl: string;
 	cost: number;
@@ -123,7 +133,7 @@ export interface CreditTransaction {
 	id: string;
 	amount: number;
 	balanceAfter: number;
-	kind: 'render' | 'edit';
+	kind: 'render' | 'edit' | 'style-transfer';
 	createdAt: number;
 }
 

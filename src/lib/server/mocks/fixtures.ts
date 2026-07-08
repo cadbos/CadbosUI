@@ -48,3 +48,11 @@ export function mockEdit(): RenderResponse {
 		balance: 46
 	};
 }
+
+export function mockStyleTransfer(): RenderResponse {
+	return {
+		outputUrl: 'https://images.unsplash.com/photo-1600210491892-03d54c0aaf87?w=1200&q=80',
+		cost: 2,
+		balance: 44
+	};
+}
