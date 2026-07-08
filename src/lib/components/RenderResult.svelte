@@ -49,18 +49,25 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function upscale(): Promise<void> {
 		if (!render || upscaling || !isAuthenticated) return;
+		// Snapshot the render being upscaled — request.currentRender can move on
+		// (undo/redo, a new edit) while this call is in flight, and the response
+		// must still attach to the chain it was actually requested against.
+		const sourceRender = render;
 		upscaling = true;
 		upscaleError = null;
 		try {
 			const response = await fetch('/api/upscale', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ image: render.outputUrls[0], outputFormat: request.outputFormat })
+				body: JSON.stringify({
+					image: sourceRender.outputUrls[0],
+					outputFormat: request.outputFormat
+				})
 			});
 			if (!response.ok) throw new Error('upscale failed');
 			const result = await response.json();
 			const newRender = renderResultFromResponse(result, {
-				parentId: render.id,
+				parentId: sourceRender.id,
 				editOp: { type: 'upscale', instruction: t('toolbar.upscaleDone') }
 			});
 			request.applyEditResult(newRender);
