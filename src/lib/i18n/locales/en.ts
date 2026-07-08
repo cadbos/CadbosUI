@@ -17,6 +17,9 @@ import type { Dictionary } from '$lib/i18n/locales';
 export const en = {
 	'app.title': 'AI Interior Design',
 	'app.subtitle': 'Upload a room photo and build a prompt in the interface you prefer.',
+	'mode.switcher.label': 'Workflow',
+	'mode.render': 'Render',
+	'mode.edit': 'Edit',
 	'view.switcher.label': 'Input method',
 	'view.chat': 'Chat',
 	'view.keyValue': 'Key-value',
@@ -98,6 +101,7 @@ export const en = {
 	'render.balance': 'Balance: {balance}',
 	'render.download': 'Download',
 	'render.edit': 'Edit render',
+	'render.result': 'Render result',
 	'render.validationImage': 'Upload a room photo',
 	'render.validationPrompt': 'Enter a prompt',
 	'render.failed': 'Generation failed. Please try again.',
@@ -120,8 +124,8 @@ export const en = {
 	'generatedImages.confirmDeleteDeleting': 'Deleting…',
 	'render.insufficientCredit': 'Test balance exhausted.',
 	'render.generationRestricted': 'Generation is available to a limited set of accounts.',
-	'edit.title': 'Edit render',
-	'edit.close': 'Close',
+	'edit.title': 'Edit photo',
+	'edit.signInToApply': 'Sign in to apply an edit',
 	'edit.templateReplace': 'Replace object',
 	'edit.templateColor': 'Change colour',
 	'edit.templateReplaceFill': 'Replace [object] with [new object]',
@@ -132,7 +136,7 @@ export const en = {
 	'edit.failed': 'Edit failed. Please try again.',
 	'edit.insufficientCredit': 'Test balance exhausted.',
 	'edit.generationRestricted': 'Generation is available to a limited set of accounts.',
-	'edit.undo': 'Undo edit',
 	'edit.cost': 'Edit cost: {cost}',
-	'edit.balance': 'Balance: {balance}'
+	'edit.balance': 'Balance: {balance}',
+	'edit.undo': 'Undo edit'
 } as const satisfies Dictionary;
