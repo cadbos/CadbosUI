@@ -105,7 +105,10 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			// Prefer a fresh read; if that also fails, fall back to the balance we
 			// already had from the precheck — still an approved-account balance,
 			// never the shared one.
-			const fallback = await getCredit(db, userId).catch(() => null);
+			const fallback = await getCredit(db, userId).catch((err) => {
+				console.error('getCredit fallback failed after a successful render:', err);
+				return null;
+			});
 			result = { ...result, balance: fallback?.balance ?? precheckBalance ?? 0 };
 		}
 	}

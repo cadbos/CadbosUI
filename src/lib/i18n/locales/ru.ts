@@ -135,10 +135,51 @@ export const ru = {
 	'edit.instruction': 'Инструкция для правки',
 	'edit.apply': 'Применить правку',
 	'edit.applying': 'Применение…',
+	'edit.undo': 'Отменить',
 	'edit.failed': 'Не удалось применить правку. Попробуйте ещё раз.',
 	'edit.insufficientCredit': 'Тестовый баланс исчерпан.',
 	'edit.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
 	'edit.cost': 'Стоимость правки: {cost}',
 	'edit.balance': 'Баланс: {balance}',
-	'edit.undo': 'Отменить правку'
+	'edit.tool.switcher.label': 'Способ редактирования',
+	'edit.tool.freeform': 'Свой промпт',
+	'edit.tool.addObject': 'Добавить объект',
+	'edit.tool.removeObject': 'Удалить объект',
+	'edit.addObject.apply': 'Добавить объект',
+	'edit.addObject.applying': 'Добавление…',
+	'edit.addObject.selectHint': 'Выберите, что добавить на изображение.',
+	'edit.addObject.ledStrip.label': 'Светодиодная лента',
+	'edit.addObject.ledStrip.prompt':
+		'Добавь светодиодную ленту по периметру потолка для мягкой фоновой подсветки.',
+	'edit.addObject.recessedLights.label': 'Точечные светильники',
+	'edit.addObject.recessedLights.prompt':
+		'Добавь точечные светильники в потолок, равномерно распределив их по комнате.',
+	'edit.addObject.coveLighting.label': 'Подсветка потолка',
+	'edit.addObject.coveLighting.prompt':
+		'Добавь скрытую подсветку по контуру потолка для мягкого рассеянного света.',
+	'edit.addObject.people.label': 'Люди',
+	'edit.addObject.people.prompt':
+		'Добавь одного-двух человек в сцену, органично вписав их в интерьер.',
+	'edit.addObject.peopleMotion.label': 'Люди в движении',
+	'edit.addObject.peopleMotion.prompt':
+		'Добавь силуэты людей в лёгком движении, как в архитектурной визуализации, не привлекая к ним лишнего внимания.',
+	'edit.addObject.houseplant.label': 'Комнатное растение',
+	'edit.addObject.houseplant.prompt':
+		'Добавь комнатное растение в горшке в угол комнаты для естественной зелени.',
+	'edit.addObject.wallArt.label': 'Картина на стене',
+	'edit.addObject.wallArt.prompt':
+		'Добавь картину в раме на свободную стену, чтобы завершить композицию.',
+	'edit.addObject.bookshelf.label': 'Книжная полка',
+	'edit.addObject.bookshelf.prompt': 'Добавь книжную полку с книгами вдоль стены.',
+	'edit.addObject.mirror.label': 'Зеркало',
+	'edit.addObject.mirror.prompt':
+		'Добавь большое декоративное зеркало на стену, чтобы комната казалась просторнее.',
+	'edit.removeObject.label': 'Что убрать?',
+	'edit.removeObject.placeholder': 'например: старый диван',
+	'edit.removeObject.hint':
+		'Опишите объект как можно точнее словами — так модели будет проще его найти и убрать.',
+	'edit.removeObject.apply': 'Удалить объект',
+	'edit.removeObject.applying': 'Удаление…',
+	'edit.removeObject.promptTemplate':
+		'Убери с изображения {object}, аккуратно восстановив то, что было на его месте.'
 } as const satisfies Dictionary;

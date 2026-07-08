@@ -13,32 +13,58 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { Eraser, Pencil, Plus } from '@lucide/svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import {
 		creditErrorKey,
 		extractApiErrorCode,
 		request,
-		renderResultFromResponse
+		renderResultFromResponse,
+		type EditOperationType
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
-	import { formatCredit } from '$lib/utils';
+	import { createTabController, formatCredit } from '$lib/utils';
+	import EditAddObjectTool from '$lib/components/EditAddObjectTool.svelte';
+	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
 
+	type ToolId = 'freeform' | 'add-object' | 'remove-object';
+	type LucideIcon = typeof Pencil;
+
+	const TOOLS: { id: ToolId; label: TranslationKey; Icon: LucideIcon }[] = [
+		{ id: 'freeform', label: 'edit.tool.freeform', Icon: Pencil },
+		{ id: 'add-object', label: 'edit.tool.addObject', Icon: Plus },
+		{ id: 'remove-object', label: 'edit.tool.removeObject', Icon: Eraser }
+	];
+
+	let activeTool = $state<ToolId>('freeform');
+	let toolTabButtons = $state<HTMLElement[]>([]);
 	let instruction = $state('');
 	let applying = $state(false);
 	let error = $state<string | null>(null);
+
+	const toolTabs = createTabController({
+		itemCount: () => TOOLS.length,
+		getActiveIndex: () => TOOLS.findIndex((tool) => tool.id === activeTool),
+		setActiveIndex: (index) => {
+			activeTool = TOOLS[index].id;
+		},
+		focusTab: (index) => toolTabButtons[index]?.focus()
+	});
 
 	const currentRender = $derived(request.currentRender);
 	const canUndo = $derived(request.canUndoEdit);
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const targetImageUrl = $derived(currentRender?.outputUrls[0] ?? request.image?.url);
+	const toolDisabled = $derived(applying || !isAuthenticated);
 
 	function applyTemplate(fill: string): void {
 		instruction = fill;
 	}
 
-	async function applyEdit(): Promise<void> {
-		if (!targetImageUrl || !instruction.trim() || applying || !isAuthenticated) return;
+	async function submit(prompt: string, type: EditOperationType): Promise<void> {
+		const trimmed = prompt.trim();
+		if (!targetImageUrl || !trimmed || applying || !isAuthenticated) return;
 		applying = true;
 		error = null;
 
@@ -46,7 +72,7 @@ before the Change Date. See LICENSE for complete terms.
 			const response = await fetch('/api/edit', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ image: targetImageUrl, prompt: instruction.trim() })
+				body: JSON.stringify({ image: targetImageUrl, prompt: trimmed })
 			});
 			if (!response.ok) {
 				throw new Error(await extractApiErrorCode(response, 'edit_failed'));
@@ -54,11 +80,11 @@ before the Change Date. See LICENSE for complete terms.
 			const result = await response.json();
 			const newRender = renderResultFromResponse(result, {
 				parentId: currentRender?.id,
-				editOp: { type: 'freeform', instruction: instruction.trim() }
+				editOp: { type, instruction: trimmed }
 			});
 			request.applyEditResult(newRender);
 			void auth.refreshCredit();
-			instruction = '';
+			if (type === 'freeform') instruction = '';
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 		} catch (err) {
 			error = t(editErrorKey(err));
@@ -85,42 +111,96 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <section class="edit-panel">
-	<div class="chips">
-		<button type="button" class="chip" onclick={() => applyTemplate(t('edit.templateReplaceFill'))}>
-			{t('edit.templateReplace')}
-		</button>
-		<button type="button" class="chip" onclick={() => applyTemplate(t('edit.templateColorFill'))}>
-			{t('edit.templateColor')}
-		</button>
+	<div class="tool-tabs" role="tablist" aria-label={t('edit.tool.switcher.label')}>
+		{#each TOOLS as tool, index (tool.id)}
+			{@const Icon = tool.Icon}
+			<button
+				bind:this={toolTabButtons[index]}
+				type="button"
+				role="tab"
+				id={`edit-tool-tab-${tool.id}`}
+				aria-selected={activeTool === tool.id}
+				aria-controls={`edit-tool-panel-${tool.id}`}
+				tabindex={activeTool === tool.id ? 0 : -1}
+				class:active={activeTool === tool.id}
+				onclick={() => toolTabs.activate(index)}
+				onkeydown={toolTabs.onKeydown}
+			>
+				<Icon size={16} strokeWidth={1.8} aria-hidden="true" />
+				{t(tool.label)}
+			</button>
+		{/each}
 	</div>
 
-	<label class="field">
-		<span class="field-label">{t('edit.instruction')}</span>
-		<textarea
-			bind:value={instruction}
-			rows="3"
-			disabled={applying}
-			placeholder={t('edit.templateReplaceFill')}></textarea>
-	</label>
+	<div
+		class="tool-panel"
+		role="tabpanel"
+		id={`edit-tool-panel-${activeTool}`}
+		aria-labelledby={`edit-tool-tab-${activeTool}`}
+		tabindex="0"
+	>
+		{#if activeTool === 'freeform'}
+			<div class="chips">
+				<button
+					type="button"
+					class="chip"
+					onclick={() => applyTemplate(t('edit.templateReplaceFill'))}
+				>
+					{t('edit.templateReplace')}
+				</button>
+				<button
+					type="button"
+					class="chip"
+					onclick={() => applyTemplate(t('edit.templateColorFill'))}
+				>
+					{t('edit.templateColor')}
+				</button>
+			</div>
 
-	<div class="actions">
-		<button
-			type="button"
-			class="btn-apply"
-			disabled={!instruction.trim() || applying || !targetImageUrl || !isAuthenticated}
-			onclick={() => void applyEdit()}
-		>
-			{#if applying}
-				<span class="spinner" aria-hidden="true"></span>
-			{/if}
-			{applying ? t('edit.applying') : t('edit.apply')}
-		</button>
-		{#if canUndo}
+			<label class="field">
+				<span class="field-label">{t('edit.instruction')}</span>
+				<textarea
+					bind:value={instruction}
+					rows="3"
+					disabled={applying}
+					placeholder={t('edit.templateReplaceFill')}></textarea>
+			</label>
+
+			<div class="actions">
+				<button
+					type="button"
+					class="btn-apply"
+					disabled={!instruction.trim() || toolDisabled || !targetImageUrl}
+					onclick={() => void submit(instruction, 'freeform')}
+				>
+					{#if applying}
+						<span class="spinner" aria-hidden="true"></span>
+					{/if}
+					{applying ? t('edit.applying') : t('edit.apply')}
+				</button>
+			</div>
+		{:else if activeTool === 'add-object'}
+			<EditAddObjectTool
+				disabled={toolDisabled || !targetImageUrl}
+				{applying}
+				onApply={(prompt) => void submit(prompt, 'add-object')}
+			/>
+		{:else if activeTool === 'remove-object'}
+			<EditRemoveObjectTool
+				disabled={toolDisabled || !targetImageUrl}
+				{applying}
+				onApply={(prompt) => void submit(prompt, 'remove-object')}
+			/>
+		{/if}
+	</div>
+
+	{#if canUndo}
+		<div class="actions">
 			<button type="button" class="btn-undo" onclick={undoEdit} disabled={applying}>
 				{t('edit.undo')}
 			</button>
-		{/if}
-	</div>
+		</div>
+	{/if}
 
 	{#if !isAuthenticated}
 		<p class="auth-hint">{t('edit.signInToApply')}</p>
@@ -150,6 +230,48 @@ before the Change Date. See LICENSE for complete terms.
 		border-left: 4px solid var(--color-accent);
 		border-radius: 16px;
 		box-shadow: 0 4px 16px rgb(0 0 0 / 0.07);
+	}
+
+	.tool-tabs {
+		display: flex;
+		gap: 0.375rem;
+		padding: 0.25rem;
+		background: var(--color-background);
+		border-radius: 12px;
+		flex-wrap: wrap;
+	}
+
+	.tool-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.tool-tabs button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		flex: 1;
+		justify-content: center;
+		padding: 0.5rem 0.75rem;
+		font: inherit;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--color-muted);
+		background: transparent;
+		border: none;
+		border-radius: 9px;
+		cursor: pointer;
+		white-space: nowrap;
+		transition:
+			background 0.15s,
+			color 0.15s;
+	}
+
+	.tool-tabs button.active {
+		background: var(--color-surface);
+		color: var(--color-text);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 	}
 
 	.chips {

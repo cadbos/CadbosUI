@@ -134,10 +134,50 @@ export const en = {
 	'edit.instruction': 'Edit instruction',
 	'edit.apply': 'Apply edit',
 	'edit.applying': 'Applying…',
+	'edit.undo': 'Undo',
 	'edit.failed': 'Edit failed. Please try again.',
 	'edit.insufficientCredit': 'Test balance exhausted.',
 	'edit.generationRestricted': 'Generation is available to a limited set of accounts.',
 	'edit.cost': 'Edit cost: {cost}',
 	'edit.balance': 'Balance: {balance}',
-	'edit.undo': 'Undo edit'
+	'edit.tool.switcher.label': 'Editing method',
+	'edit.tool.freeform': 'Custom prompt',
+	'edit.tool.addObject': 'Add object',
+	'edit.tool.removeObject': 'Remove object',
+	'edit.addObject.apply': 'Add object',
+	'edit.addObject.applying': 'Adding…',
+	'edit.addObject.selectHint': 'Choose what to add to the image.',
+	'edit.addObject.ledStrip.label': 'LED strip',
+	'edit.addObject.ledStrip.prompt': 'Add an LED strip around the ceiling for soft ambient light.',
+	'edit.addObject.recessedLights.label': 'Recessed lights',
+	'edit.addObject.recessedLights.prompt':
+		'Add recessed lights into the ceiling, evenly spaced across the room.',
+	'edit.addObject.coveLighting.label': 'Cove lighting',
+	'edit.addObject.coveLighting.prompt':
+		'Add hidden cove lighting along the ceiling perimeter for soft, diffused light.',
+	'edit.addObject.people.label': 'People',
+	'edit.addObject.people.prompt':
+		'Add one or two people to the scene, blended naturally into the space.',
+	'edit.addObject.peopleMotion.label': 'People in motion',
+	'edit.addObject.peopleMotion.prompt':
+		'Add motion-blurred human silhouettes, as in architectural visualization, without drawing attention to them.',
+	'edit.addObject.houseplant.label': 'Houseplant',
+	'edit.addObject.houseplant.prompt':
+		'Add a potted houseplant in the corner of the room for natural greenery.',
+	'edit.addObject.wallArt.label': 'Wall art',
+	'edit.addObject.wallArt.prompt':
+		'Add framed wall art on an empty wall to complete the composition.',
+	'edit.addObject.bookshelf.label': 'Bookshelf',
+	'edit.addObject.bookshelf.prompt': 'Add a bookshelf filled with books along the wall.',
+	'edit.addObject.mirror.label': 'Mirror',
+	'edit.addObject.mirror.prompt':
+		'Add a large decorative mirror on the wall to make the room feel bigger.',
+	'edit.removeObject.label': 'What to remove?',
+	'edit.removeObject.placeholder': 'e.g. the old sofa',
+	'edit.removeObject.hint':
+		'Describe the object as precisely as you can — that makes it easier for the model to find and remove it.',
+	'edit.removeObject.apply': 'Remove object',
+	'edit.removeObject.applying': 'Removing…',
+	'edit.removeObject.promptTemplate':
+		'Remove {object} from the image, carefully restoring what was behind/underneath it.'
 } as const satisfies Dictionary;

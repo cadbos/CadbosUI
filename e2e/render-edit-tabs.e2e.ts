@@ -196,3 +196,80 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 	await editTab.click();
 	await expect(page.getByLabel('Инструкция для правки')).toBeVisible();
 });
+
+test('the Add Object tool applies a selected preset to the current image', async ({ page }) => {
+	await authenticate(page);
+	await mockUpload(page);
+	let capturedPrompt: string | undefined;
+	await page.route('**/api/edit', async (route) => {
+		capturedPrompt = (route.request().postDataJSON() as { prompt: string }).prompt;
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/added-mirror.webp',
+				cost: 2,
+				balance: 90
+			})
+		});
+	});
+
+	await page.goto('/');
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
+	await page
+		.locator('#mode-panel-edit input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+
+	await page.getByRole('tab', { name: 'Добавить объект' }).click();
+	const mirrorPreset = page.getByRole('radio', { name: 'Зеркало' });
+	await expect(mirrorPreset).toHaveAttribute('aria-checked', 'false');
+	await mirrorPreset.click();
+	await expect(mirrorPreset).toHaveAttribute('aria-checked', 'true');
+	await page.getByRole('button', { name: 'Добавить объект' }).click();
+
+	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/added-mirror.webp'
+	);
+	expect(capturedPrompt).toBe(
+		'Добавь большое декоративное зеркало на стену, чтобы комната казалась просторнее.'
+	);
+});
+
+test('the Remove Object tool builds a removal prompt from the described object', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockUpload(page);
+	let capturedPrompt: string | undefined;
+	await page.route('**/api/edit', async (route) => {
+		capturedPrompt = (route.request().postDataJSON() as { prompt: string }).prompt;
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/removed-sofa.webp',
+				cost: 2,
+				balance: 90
+			})
+		});
+	});
+
+	await page.goto('/');
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
+	await page
+		.locator('#mode-panel-edit input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+
+	await page.getByRole('tab', { name: 'Удалить объект' }).click();
+	await page.getByLabel('Что убрать?').fill('старый диван');
+	await page.getByRole('button', { name: 'Удалить объект' }).click();
+
+	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/removed-sofa.webp'
+	);
+	expect(capturedPrompt).toBe(
+		'Убери с изображения старый диван, аккуратно восстановив то, что было на его месте.'
+	);
+});
