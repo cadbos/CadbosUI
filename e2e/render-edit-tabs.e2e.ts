@@ -201,18 +201,7 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	page
 }) => {
 	await authenticate(page);
-	await page.route('**/api/uploads', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				url: 'https://cdn.example.test/uploaded.webp',
-				mime: 'image/webp',
-				size: 1024,
-				dimensions: [800, 600]
-			})
-		});
-	});
+	await mockUpload(page);
 	await page.route('**/api/render', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -372,18 +361,7 @@ test('the Remove Object tool builds a removal prompt from the described object',
 
 test('the Atmosphere tool applies the exterior variant of a lighting preset', async ({ page }) => {
 	await authenticate(page);
-	await page.route('**/api/uploads', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				url: 'https://cdn.example.test/uploaded.webp',
-				mime: 'image/webp',
-				size: 1024,
-				dimensions: [800, 600]
-			})
-		});
-	});
+	await mockUpload(page);
 	let capturedPrompt: string | undefined;
 	await page.route('**/api/edit', async (route) => {
 		capturedPrompt = (route.request().postDataJSON() as { prompt: string }).prompt;
@@ -406,7 +384,7 @@ test('the Atmosphere tool applies the exterior variant of a lighting preset', as
 
 	await page.getByRole('tab', { name: 'Атмосфера' }).click();
 	await page.getByRole('tab', { name: 'Экстерьер' }).click();
-	await page.getByRole('button', { name: 'Золотой час' }).click();
+	await page.getByRole('radio', { name: 'Золотой час' }).click();
 	await page.getByRole('button', { name: 'Применить' }).click();
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
