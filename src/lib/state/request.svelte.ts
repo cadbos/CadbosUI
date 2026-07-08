@@ -428,7 +428,7 @@ class RequestState {
 	// edit invalidates any pending redo — it's a new branch, not a continuation
 	// of whatever was just undone.
 	applyEditResult(render: RenderResult): void {
-		this.previousRender = this.currentRender;
+		this.previousRender = cloneRenderResult(this.currentRender);
 		this.currentRender = cloneRenderResult(render);
 		this.undoneRender = undefined;
 	}
@@ -437,8 +437,8 @@ class RequestState {
 	// nothing to undo. Keeps the render it left as the one-step redo target.
 	undoLastEdit(): void {
 		if (this.previousRender === undefined) return;
-		this.undoneRender = this.currentRender;
-		this.currentRender = this.previousRender;
+		this.undoneRender = cloneRenderResult(this.currentRender);
+		this.currentRender = cloneRenderResult(this.previousRender);
 		this.previousRender = undefined;
 	}
 
@@ -446,8 +446,8 @@ class RequestState {
 	// nothing to redo.
 	redoEdit(): void {
 		if (this.undoneRender === undefined) return;
-		this.previousRender = this.currentRender;
-		this.currentRender = this.undoneRender;
+		this.previousRender = cloneRenderResult(this.currentRender);
+		this.currentRender = cloneRenderResult(this.undoneRender);
 		this.undoneRender = undefined;
 	}
 
