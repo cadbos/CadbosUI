@@ -207,7 +207,7 @@ test('the Add Object tool applies a selected preset to the current image', async
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/added-trees.webp',
+				outputUrl: 'https://cdn.example.test/added-mirror.webp',
 				cost: 2,
 				balance: 90
 			})
@@ -221,18 +221,18 @@ test('the Add Object tool applies a selected preset to the current image', async
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
 	await page.getByRole('tab', { name: 'Добавить объект' }).click();
-	const treesPreset = page.getByRole('button', { name: 'Деревья' });
-	await expect(treesPreset).toHaveAttribute('aria-pressed', 'false');
-	await treesPreset.click();
-	await expect(treesPreset).toHaveAttribute('aria-pressed', 'true');
+	const mirrorPreset = page.getByRole('radio', { name: 'Зеркало' });
+	await expect(mirrorPreset).toHaveAttribute('aria-checked', 'false');
+	await mirrorPreset.click();
+	await expect(mirrorPreset).toHaveAttribute('aria-checked', 'true');
 	await page.getByRole('button', { name: 'Добавить объект' }).click();
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/added-trees.webp'
+		'https://cdn.example.test/added-mirror.webp'
 	);
 	expect(capturedPrompt).toBe(
-		'Добавь деревья за окном, органично вписав их в окружающий ландшафт.'
+		'Добавь большое декоративное зеркало на стену, чтобы комната казалась просторнее.'
 	);
 });
 

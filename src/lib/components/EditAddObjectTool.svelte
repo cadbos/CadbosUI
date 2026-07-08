@@ -13,8 +13,18 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Car, CarFront, Lamp, Lightbulb, Shrub, Sparkles, Trees, Users } from '@lucide/svelte';
+	import {
+		Frame,
+		Lamp,
+		Library,
+		Lightbulb,
+		MirrorRectangular,
+		Sparkles,
+		Sprout,
+		Users
+	} from '@lucide/svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { createTabController } from '$lib/utils';
 
 	type LucideIcon = typeof Lamp;
 
@@ -57,28 +67,28 @@ before the Change Date. See LICENSE for complete terms.
 			Icon: Users
 		},
 		{
-			id: 'vehicles',
-			label: 'edit.addObject.vehicles.label',
-			prompt: 'edit.addObject.vehicles.prompt',
-			Icon: Car
+			id: 'houseplant',
+			label: 'edit.addObject.houseplant.label',
+			prompt: 'edit.addObject.houseplant.prompt',
+			Icon: Sprout
 		},
 		{
-			id: 'vehicles-motion',
-			label: 'edit.addObject.vehiclesMotion.label',
-			prompt: 'edit.addObject.vehiclesMotion.prompt',
-			Icon: CarFront
+			id: 'wall-art',
+			label: 'edit.addObject.wallArt.label',
+			prompt: 'edit.addObject.wallArt.prompt',
+			Icon: Frame
 		},
 		{
-			id: 'shrubs',
-			label: 'edit.addObject.shrubs.label',
-			prompt: 'edit.addObject.shrubs.prompt',
-			Icon: Shrub
+			id: 'bookshelf',
+			label: 'edit.addObject.bookshelf.label',
+			prompt: 'edit.addObject.bookshelf.prompt',
+			Icon: Library
 		},
 		{
-			id: 'trees',
-			label: 'edit.addObject.trees.label',
-			prompt: 'edit.addObject.trees.prompt',
-			Icon: Trees
+			id: 'mirror',
+			label: 'edit.addObject.mirror.label',
+			prompt: 'edit.addObject.mirror.prompt',
+			Icon: MirrorRectangular
 		}
 	];
 
@@ -90,7 +100,23 @@ before the Change Date. See LICENSE for complete terms.
 	let { disabled, applying, onApply }: Props = $props();
 
 	let selectedId = $state<string | null>(null);
+	let presetButtons = $state<HTMLElement[]>([]);
 	const selected = $derived(PRESETS.find((preset) => preset.id === selectedId));
+	const activePresetIndex = $derived(
+		Math.max(
+			PRESETS.findIndex((preset) => preset.id === selectedId),
+			0
+		)
+	);
+
+	const presetRadios = createTabController({
+		itemCount: () => PRESETS.length,
+		getActiveIndex: () => activePresetIndex,
+		setActiveIndex: (index) => {
+			selectedId = PRESETS[index].id;
+		},
+		focusTab: (index) => presetButtons[index]?.focus()
+	});
 
 	function submit(): void {
 		if (!selected) return;
@@ -99,18 +125,22 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <div class="tool">
-	<p class="hint">{t('edit.addObject.selectHint')}</p>
+	<p class="hint" id="add-object-select-hint">{t('edit.addObject.selectHint')}</p>
 
-	<div class="grid">
-		{#each PRESETS as preset (preset.id)}
+	<div class="grid" role="radiogroup" aria-labelledby="add-object-select-hint">
+		{#each PRESETS as preset, index (preset.id)}
 			{@const Icon = preset.Icon}
 			<button
+				bind:this={presetButtons[index]}
 				type="button"
+				role="radio"
 				class="preset"
 				class:selected={selectedId === preset.id}
-				aria-pressed={selectedId === preset.id}
+				aria-checked={selectedId === preset.id}
+				tabindex={index === activePresetIndex ? 0 : -1}
 				{disabled}
-				onclick={() => (selectedId = preset.id)}
+				onclick={() => presetRadios.activate(index)}
+				onkeydown={presetRadios.onKeydown}
 			>
 				<Icon size={20} strokeWidth={1.6} aria-hidden="true" />
 				<span>{t(preset.label)}</span>

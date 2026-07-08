@@ -163,18 +163,17 @@ export const ru = {
 	'edit.addObject.peopleMotion.label': 'Люди в движении',
 	'edit.addObject.peopleMotion.prompt':
 		'Добавь силуэты людей в лёгком движении, как в архитектурной визуализации, не привлекая к ним лишнего внимания.',
-	'edit.addObject.vehicles.label': 'Автомобили',
-	'edit.addObject.vehicles.prompt':
-		'Добавь автомобиль на видимую снаружи проезжую часть или парковку.',
-	'edit.addObject.vehiclesMotion.label': 'Автомобили в движении',
-	'edit.addObject.vehiclesMotion.prompt':
-		'Добавь автомобили в движении с эффектом лёгкого смаза, как на архитектурной визуализации.',
-	'edit.addObject.shrubs.label': 'Кустарники',
-	'edit.addObject.shrubs.prompt':
-		'Добавь кустарники и невысокую растительность за окном или у входа.',
-	'edit.addObject.trees.label': 'Деревья',
-	'edit.addObject.trees.prompt':
-		'Добавь деревья за окном, органично вписав их в окружающий ландшафт.',
+	'edit.addObject.houseplant.label': 'Комнатное растение',
+	'edit.addObject.houseplant.prompt':
+		'Добавь комнатное растение в горшке в угол комнаты для естественной зелени.',
+	'edit.addObject.wallArt.label': 'Картина на стене',
+	'edit.addObject.wallArt.prompt':
+		'Добавь картину в раме на свободную стену, чтобы завершить композицию.',
+	'edit.addObject.bookshelf.label': 'Книжная полка',
+	'edit.addObject.bookshelf.prompt': 'Добавь книжную полку с книгами вдоль стены.',
+	'edit.addObject.mirror.label': 'Зеркало',
+	'edit.addObject.mirror.prompt':
+		'Добавь большое декоративное зеркало на стену, чтобы комната казалась просторнее.',
 	'edit.removeObject.label': 'Что убрать?',
 	'edit.removeObject.placeholder': 'например: старый диван',
 	'edit.removeObject.hint':

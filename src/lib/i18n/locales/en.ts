@@ -161,17 +161,17 @@ export const en = {
 	'edit.addObject.peopleMotion.label': 'People in motion',
 	'edit.addObject.peopleMotion.prompt':
 		'Add motion-blurred human silhouettes, as in architectural visualization, without drawing attention to them.',
-	'edit.addObject.vehicles.label': 'Vehicles',
-	'edit.addObject.vehicles.prompt': 'Add a vehicle on the visible street or parking area outside.',
-	'edit.addObject.vehiclesMotion.label': 'Vehicles in motion',
-	'edit.addObject.vehiclesMotion.prompt':
-		'Add vehicles in motion with a subtle motion-blur effect, as in architectural visualization.',
-	'edit.addObject.shrubs.label': 'Shrubs & bushes',
-	'edit.addObject.shrubs.prompt':
-		'Add shrubs and low greenery outside the window or by the entrance.',
-	'edit.addObject.trees.label': 'Trees',
-	'edit.addObject.trees.prompt':
-		'Add trees outside the window, blended naturally into the surrounding landscape.',
+	'edit.addObject.houseplant.label': 'Houseplant',
+	'edit.addObject.houseplant.prompt':
+		'Add a potted houseplant in the corner of the room for natural greenery.',
+	'edit.addObject.wallArt.label': 'Wall art',
+	'edit.addObject.wallArt.prompt':
+		'Add framed wall art on an empty wall to complete the composition.',
+	'edit.addObject.bookshelf.label': 'Bookshelf',
+	'edit.addObject.bookshelf.prompt': 'Add a bookshelf filled with books along the wall.',
+	'edit.addObject.mirror.label': 'Mirror',
+	'edit.addObject.mirror.prompt':
+		'Add a large decorative mirror on the wall to make the room feel bigger.',
 	'edit.removeObject.label': 'What to remove?',
 	'edit.removeObject.placeholder': 'e.g. the old sofa',
 	'edit.removeObject.hint':
