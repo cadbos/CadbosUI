@@ -115,9 +115,7 @@ before the Change Date. See LICENSE for complete terms.
 		{#each TOOLS as tool, index (tool.id)}
 			{@const Icon = tool.Icon}
 			<button
-				{@attach (node) => {
-					toolTabButtons[index] = node as HTMLElement;
-				}}
+				bind:this={toolTabButtons[index]}
 				type="button"
 				role="tab"
 				id={`edit-tool-tab-${tool.id}`}
@@ -172,7 +170,7 @@ before the Change Date. See LICENSE for complete terms.
 				<button
 					type="button"
 					class="btn-apply"
-					disabled={!instruction.trim() || applying || !targetImageUrl || !isAuthenticated}
+					disabled={!instruction.trim() || toolDisabled || !targetImageUrl}
 					onclick={() => void submit(instruction, 'freeform')}
 				>
 					{#if applying}
