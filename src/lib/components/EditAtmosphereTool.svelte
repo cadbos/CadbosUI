@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { Cloudy, Lamp, Moon, MoonStar, Sun, Sunrise } from '@lucide/svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { createTabController } from '$lib/utils';
 
 	type Scene = 'interior' | 'exterior';
 	type LucideIcon = typeof Lamp;
@@ -26,6 +27,11 @@ before the Change Date. See LICENSE for complete terms.
 		promptExterior: TranslationKey;
 		Icon: LucideIcon;
 	}
+
+	const SCENES: { id: Scene; label: TranslationKey }[] = [
+		{ id: 'interior', label: 'edit.atmosphere.interior' },
+		{ id: 'exterior', label: 'edit.atmosphere.exterior' }
+	];
 
 	const PRESETS: Preset[] = [
 		{
@@ -80,8 +86,34 @@ before the Change Date. See LICENSE for complete terms.
 	let { disabled, applying, onApply }: Props = $props();
 
 	let scene = $state<Scene>('interior');
+	let sceneTabButtons = $state<HTMLElement[]>([]);
 	let selectedId = $state<string | null>(null);
+	let presetButtons = $state<HTMLElement[]>([]);
 	const selected = $derived(PRESETS.find((preset) => preset.id === selectedId));
+	const activePresetIndex = $derived(
+		Math.max(
+			PRESETS.findIndex((preset) => preset.id === selectedId),
+			0
+		)
+	);
+
+	const sceneTabs = createTabController({
+		itemCount: () => SCENES.length,
+		getActiveIndex: () => SCENES.findIndex((s) => s.id === scene),
+		setActiveIndex: (index) => {
+			scene = SCENES[index].id;
+		},
+		focusTab: (index) => sceneTabButtons[index]?.focus()
+	});
+
+	const presetRadios = createTabController({
+		itemCount: () => PRESETS.length,
+		getActiveIndex: () => activePresetIndex,
+		setActiveIndex: (index) => {
+			selectedId = PRESETS[index].id;
+		},
+		focusTab: (index) => presetButtons[index]?.focus()
+	});
 
 	function submit(): void {
 		if (!selected) return;
@@ -91,40 +123,39 @@ before the Change Date. See LICENSE for complete terms.
 
 <div class="tool">
 	<div class="scene-toggle" role="tablist" aria-label={t('edit.atmosphere.sceneLabel')}>
-		<button
-			type="button"
-			role="tab"
-			aria-selected={scene === 'interior'}
-			class:active={scene === 'interior'}
-			{disabled}
-			onclick={() => (scene = 'interior')}
-		>
-			{t('edit.atmosphere.interior')}
-		</button>
-		<button
-			type="button"
-			role="tab"
-			aria-selected={scene === 'exterior'}
-			class:active={scene === 'exterior'}
-			{disabled}
-			onclick={() => (scene = 'exterior')}
-		>
-			{t('edit.atmosphere.exterior')}
-		</button>
+		{#each SCENES as sceneOption, index (sceneOption.id)}
+			<button
+				bind:this={sceneTabButtons[index]}
+				type="button"
+				role="tab"
+				aria-selected={scene === sceneOption.id}
+				tabindex={scene === sceneOption.id ? 0 : -1}
+				class:active={scene === sceneOption.id}
+				{disabled}
+				onclick={() => sceneTabs.activate(index)}
+				onkeydown={sceneTabs.onKeydown}
+			>
+				{t(sceneOption.label)}
+			</button>
+		{/each}
 	</div>
 
-	<p class="hint">{t('edit.atmosphere.selectHint')}</p>
+	<p class="hint" id="atmosphere-select-hint">{t('edit.atmosphere.selectHint')}</p>
 
-	<div class="grid">
-		{#each PRESETS as preset (preset.id)}
+	<div class="grid" role="radiogroup" aria-labelledby="atmosphere-select-hint">
+		{#each PRESETS as preset, index (preset.id)}
 			{@const Icon = preset.Icon}
 			<button
+				bind:this={presetButtons[index]}
 				type="button"
+				role="radio"
 				class="preset"
 				class:selected={selectedId === preset.id}
-				aria-pressed={selectedId === preset.id}
+				aria-checked={selectedId === preset.id}
+				tabindex={index === activePresetIndex ? 0 : -1}
 				{disabled}
-				onclick={() => (selectedId = preset.id)}
+				onclick={() => presetRadios.activate(index)}
+				onkeydown={presetRadios.onKeydown}
 			>
 				<Icon size={20} strokeWidth={1.6} aria-hidden="true" />
 				<span>{t(preset.label)}</span>
