@@ -83,9 +83,8 @@ describe('GET /auth/me — generation access control', () => {
 		grantAccess(db, 'user-1', 5);
 		db.prepare(
 			'INSERT INTO generations ' +
-				'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-				"VALUES (?, ?, 'https://cdn.example.test/out.webp', 'https://cdn.example.test/room.jpg', " +
-				"'cozy', ?, ?, ?, ?)"
+				'(id, user_id, prompt, kind, amount, balance_after, created_at) ' +
+				"VALUES (?, ?, 'cozy', ?, ?, ?, ?)"
 		)
 			.bind('tx-1', 'user-1', 'render', 2, 3, Date.now())
 			.run();

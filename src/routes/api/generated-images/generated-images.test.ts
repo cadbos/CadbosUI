@@ -28,10 +28,16 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 function seedGeneratedImage(db: D1Database, id: string, userId: string, createdAt: number): void {
 	db.prepare(
 		'INSERT INTO generations ' +
-			'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-			"VALUES (?, ?, ?, 'https://cdn.example.test/source.jpg', 'cozy', 'render', 1, 10, ?)"
+			'(id, user_id, prompt, kind, amount, balance_after, created_at) ' +
+			"VALUES (?, ?, 'cozy', 'render', 1, 10, ?)"
 	)
-		.bind(id, userId, `https://cdn.example.test/${id}.webp`, createdAt)
+		.bind(id, userId, createdAt)
+		.run();
+	db.prepare(
+		'INSERT INTO image_generations_details (id, generation_id, output_url, input_url) ' +
+			"VALUES (?, ?, ?, 'https://cdn.example.test/source.jpg')"
+	)
+		.bind(id, id, `https://cdn.example.test/${id}.webp`)
 		.run();
 }
 

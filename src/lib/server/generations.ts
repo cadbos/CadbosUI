@@ -12,10 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-// One row per paid render/edit (migrations/0006): the resulting image, the
-// source image and prompt it was generated from, and the credit ledger entry
-// for that call — all written atomically, so there's no way for the image
-// record and the deduction to fall out of sync with each other.
+// One row per paid render/edit in the generic generations ledger, plus one
+// image-specific details row for the resulting image and source image. Both are
+// written atomically with the credit deduction.
 
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Balance, CreditTransaction } from '$lib/api/contract';
@@ -89,6 +88,7 @@ export async function recordGeneration(
 	input: RecordGenerationInput
 ): Promise<Balance> {
 	const now = Date.now();
+	const generationId = crypto.randomUUID();
 	const [updateResult] = await db.batch<BalanceRow>([
 		db
 			.prepare(
@@ -99,20 +99,16 @@ export async function recordGeneration(
 		db
 			.prepare(
 				'INSERT INTO generations ' +
-					'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ? FROM credits WHERE user_id = ?'
+					'(id, user_id, prompt, kind, amount, balance_after, created_at) ' +
+					'SELECT ?, ?, ?, ?, ?, balance, ? FROM credits WHERE user_id = ?'
 			)
-			.bind(
-				crypto.randomUUID(),
-				userId,
-				input.url,
-				input.sourceUrl,
-				input.prompt,
-				input.kind,
-				input.amount,
-				now,
-				userId
+			.bind(generationId, userId, input.prompt, input.kind, input.amount, now, userId),
+		db
+			.prepare(
+				'INSERT INTO image_generations_details (id, generation_id, output_url, input_url) ' +
+					'SELECT ?, id, ?, ? FROM generations WHERE id = ?'
 			)
+			.bind(generationId, input.url, input.sourceUrl, generationId)
 	]);
 	const row = updateResult.results[0];
 	if (!row) throw new Error('credit deduction failed: no credit row for user');
@@ -126,7 +122,12 @@ export async function getGeneratedImageForUser(
 	id: string
 ): Promise<GeneratedImage | null> {
 	const row = await db
-		.prepare('SELECT id, user_id, url, created_at FROM generations WHERE id = ? AND user_id = ?')
+		.prepare(
+			'SELECT g.id, g.user_id, d.output_url AS url, g.created_at ' +
+				'FROM generations g ' +
+				'JOIN image_generations_details d ON d.generation_id = g.id ' +
+				'WHERE g.id = ? AND g.user_id = ?'
+		)
 		.bind(id, userId)
 		.first<GenerationRow>();
 	return row ? toGeneratedImage(row) : null;
@@ -138,7 +139,10 @@ export async function deleteGeneratedImage(
 	id: string
 ): Promise<boolean> {
 	const result = await db
-		.prepare('DELETE FROM generations WHERE id = ? AND user_id = ?')
+		.prepare(
+			'DELETE FROM generations WHERE id = ? AND user_id = ? ' +
+				'AND EXISTS (SELECT 1 FROM image_generations_details WHERE generation_id = generations.id)'
+		)
 		.bind(id, userId)
 		.run();
 	return result.meta.changes === 1;
@@ -152,8 +156,10 @@ export async function listGeneratedImages(
 ): Promise<GeneratedImagesPage> {
 	const result = await db
 		.prepare(
-			'SELECT id, user_id, url, created_at FROM generations ' +
-				'WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?'
+			'SELECT g.id, g.user_id, d.output_url AS url, g.created_at ' +
+				'FROM generations g ' +
+				'JOIN image_generations_details d ON d.generation_id = g.id ' +
+				'WHERE g.user_id = ? ORDER BY g.created_at DESC, g.id DESC LIMIT ? OFFSET ?'
 		)
 		.bind(userId, size + 1, offset)
 		.all<GenerationRow>();

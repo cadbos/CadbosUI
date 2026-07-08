@@ -136,7 +136,12 @@ describe('POST /api/style-transfer — billing', () => {
 		const result = (await response.json()) as { outputUrl: string };
 
 		const row = await db
-			.prepare('SELECT user_id, url, source_url, prompt, kind FROM generations WHERE user_id = ?')
+			.prepare(
+				'SELECT g.user_id, d.output_url AS url, d.input_url AS source_url, g.prompt, g.kind ' +
+					'FROM generations g ' +
+					'JOIN image_generations_details d ON d.generation_id = g.id ' +
+					'WHERE g.user_id = ?'
+			)
 			.bind('user-1')
 			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
 		expect(row).toEqual({
