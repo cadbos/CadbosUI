@@ -135,6 +135,7 @@ export const ru = {
 	'edit.instruction': 'Инструкция для правки',
 	'edit.apply': 'Применить правку',
 	'edit.applying': 'Применение…',
+	'edit.undo': 'Отменить',
 	'edit.failed': 'Не удалось применить правку. Попробуйте ещё раз.',
 	'edit.insufficientCredit': 'Тестовый баланс исчерпан.',
 	'edit.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',

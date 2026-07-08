@@ -130,6 +130,7 @@ export interface Dictionary {
 	'edit.instruction': string;
 	'edit.apply': string;
 	'edit.applying': string;
+	'edit.undo': string;
 	'edit.failed': string;
 	'edit.insufficientCredit': string;
 	'edit.generationRestricted': string;

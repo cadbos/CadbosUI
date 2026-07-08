@@ -134,6 +134,7 @@ export const en = {
 	'edit.instruction': 'Edit instruction',
 	'edit.apply': 'Apply edit',
 	'edit.applying': 'Applying…',
+	'edit.undo': 'Undo',
 	'edit.failed': 'Edit failed. Please try again.',
 	'edit.insufficientCredit': 'Test balance exhausted.',
 	'edit.generationRestricted': 'Generation is available to a limited set of accounts.',
