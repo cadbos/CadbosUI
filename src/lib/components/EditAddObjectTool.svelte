@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Car, CarFront, Lamp, Lightbulb, Shrub, Sparkles, Trees, Users } from 'lucide-svelte';
+	import { Car, CarFront, Lamp, Lightbulb, Shrub, Sparkles, Trees, Users } from '@lucide/svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 
 	type LucideIcon = typeof Lamp;

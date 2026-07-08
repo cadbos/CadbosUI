@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Download, Trash2 } from 'lucide-svelte';
+	import { Download, Trash2 } from '@lucide/svelte';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 

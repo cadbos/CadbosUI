@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Eraser, Pencil, Plus } from 'lucide-svelte';
+	import { Eraser, Pencil, Plus } from '@lucide/svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import {
 		creditErrorKey,

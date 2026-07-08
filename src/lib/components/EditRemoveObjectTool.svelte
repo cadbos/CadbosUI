@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Eraser } from 'lucide-svelte';
+	import { Eraser } from '@lucide/svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 
 	interface Props {
