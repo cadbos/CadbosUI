@@ -26,6 +26,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
+	import { createTabController } from '$lib/utils';
 
 	type ViewId = 'chat' | 'keyValue' | 'graph';
 	type Mode = 'render' | 'edit';
@@ -48,58 +49,24 @@ before the Change Date. See LICENSE for complete terms.
 	let mode = $state<Mode>('render');
 	let modeTabs = $state<HTMLElement[]>([]);
 
-	function activate(index: number): void {
-		if (views[index]?.disabled) return;
-		activeIndex = index;
-		tabs[index]?.focus();
-	}
+	const viewTabs = createTabController({
+		itemCount: () => views.length,
+		isDisabled: (index) => !!views[index]?.disabled,
+		getActiveIndex: () => activeIndex,
+		setActiveIndex: (index) => {
+			activeIndex = index;
+		},
+		focusTab: (index) => tabs[index]?.focus()
+	});
 
-	function onKeydown(event: KeyboardEvent): void {
-		const last = views.length - 1;
-		let next: number | null = null;
-		if (event.key === 'ArrowRight') {
-			let candidate = activeIndex === last ? 0 : activeIndex + 1;
-			while (views[candidate]?.disabled && candidate !== activeIndex) {
-				candidate = candidate === last ? 0 : candidate + 1;
-			}
-			next = candidate;
-		} else if (event.key === 'ArrowLeft') {
-			let candidate = activeIndex === 0 ? last : activeIndex - 1;
-			while (views[candidate]?.disabled && candidate !== activeIndex) {
-				candidate = candidate === 0 ? last : candidate - 1;
-			}
-			next = candidate;
-		} else if (event.key === 'Home') {
-			next = views.findIndex((v) => !v.disabled);
-		} else if (event.key === 'End') {
-			next = views.findLastIndex((v) => !v.disabled);
-		}
-
-		if (next !== null && next !== activeIndex) {
-			event.preventDefault();
-			activate(next);
-		}
-	}
-
-	function activateMode(index: number): void {
-		mode = modes[index].id;
-		modeTabs[index]?.focus();
-	}
-
-	function onModeKeydown(event: KeyboardEvent): void {
-		const last = modes.length - 1;
-		const currentIndex = modes.findIndex((m) => m.id === mode);
-		let next: number | null = null;
-		if (event.key === 'ArrowRight') next = currentIndex === last ? 0 : currentIndex + 1;
-		else if (event.key === 'ArrowLeft') next = currentIndex === 0 ? last : currentIndex - 1;
-		else if (event.key === 'Home') next = 0;
-		else if (event.key === 'End') next = last;
-
-		if (next !== null && next !== currentIndex) {
-			event.preventDefault();
-			activateMode(next);
-		}
-	}
+	const modeTabController = createTabController({
+		itemCount: () => modes.length,
+		getActiveIndex: () => modes.findIndex((m) => m.id === mode),
+		setActiveIndex: (index) => {
+			mode = modes[index].id;
+		},
+		focusTab: (index) => modeTabs[index]?.focus()
+	});
 
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const validation = $derived(request.validate());
@@ -179,8 +146,8 @@ before the Change Date. See LICENSE for complete terms.
 							aria-controls={`mode-panel-${modeOption.id}`}
 							tabindex={mode === modeOption.id ? 0 : -1}
 							class:active={mode === modeOption.id}
-							onclick={() => activateMode(index)}
-							onkeydown={onModeKeydown}
+							onclick={() => modeTabController.activate(index)}
+							onkeydown={modeTabController.onKeydown}
 						>
 							{t(modeOption.label)}
 						</button>
@@ -227,8 +194,8 @@ before the Change Date. See LICENSE for complete terms.
 									tabindex={!view.disabled && activeIndex === index ? 0 : -1}
 									class:active={!view.disabled && activeIndex === index}
 									class:tab-disabled={view.disabled}
-									onclick={() => activate(index)}
-									onkeydown={onKeydown}
+									onclick={() => viewTabs.activate(index)}
+									onkeydown={viewTabs.onKeydown}
 								>
 									{t(view.label)}
 								</button>
@@ -302,7 +269,7 @@ before the Change Date. See LICENSE for complete terms.
 			{#if request.currentRender}
 				<section class="result-wrap" aria-label={t('render.result')}>
 					<svelte:boundary>
-						<RenderResult onEditRequest={() => activateMode(1)} />
+						<RenderResult onEditRequest={() => modeTabController.activate(1)} />
 						{#snippet failed()}
 							<p class="boundary-failed">{t('boundary.failed')}</p>
 						{/snippet}
