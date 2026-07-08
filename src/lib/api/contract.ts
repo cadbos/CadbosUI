@@ -139,7 +139,7 @@ export interface CreditTransaction {
 	id: string;
 	amount: number;
 	balanceAfter: number;
-	kind: 'render' | 'edit' | 'style-transfer';
+	kind: 'render' | 'edit' | 'style-transfer' | 'upscale';
 	createdAt: number;
 }
 

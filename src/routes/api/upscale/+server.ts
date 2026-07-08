@@ -19,17 +19,24 @@ import type { RenderResponse } from '$lib/api/contract';
 import { apiError, parseBody, upscaleRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
-import { getUserIdByPubkey, recordBalance } from '$lib/server/billing';
+import {
+	assertGenerationAllowed,
+	getCredit,
+	getUserIdByPubkey,
+	recordBalance
+} from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { GeneratedImageRecordError, recordGeneratedImage } from '$lib/server/generated-images';
 import { upscale4k } from '$lib/server/generation';
+import { recordGeneration } from '$lib/server/generations';
 
 // Anti-cost-abuse: each upscale is its own paid call, mirroring /api/edit — its
 // own rate-limit bucket, bound to the authenticated pubkey rather than IP.
 const UPSCALE_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
 
-// Session is enforced centrally in hooks.server.ts (guardedPaths). Spend limits
-// are archAI's job, not ours (mirrors /api/render and /api/edit).
+// Session is enforced centrally in hooks.server.ts (guardedPaths). Upscaling
+// itself is restricted further, by design: only accounts an admin has manually
+// approved (a `credits` row, billing.ts) may upscale at all — a fresh Nostr
+// login alone is not enough (mirrors /api/render and /api/edit).
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
 
@@ -57,6 +64,26 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		if (limited) return apiError(429, 'rate_limited', 'Too many requests');
 	}
 
+	// The account's own balance right before this call — kept as the final,
+	// definitely-safe fallback if both recordGeneration and its own getCredit
+	// fallback fail below, so the response never falls through to upscale4k's
+	// raw (shared) archAI balance.
+	let precheckBalance: number | undefined;
+	if (db && userId) {
+		try {
+			const check = await assertGenerationAllowed(db, userId);
+			if (!check.allowed) {
+				return check.reason === 'not_approved'
+					? apiError(403, 'generation_restricted', 'Generation is limited to approved accounts')
+					: apiError(402, 'insufficient_credit', 'Test balance exhausted');
+			}
+			precheckBalance = check.balance;
+		} catch (err) {
+			console.error('credit pre-check failed:', err);
+			return apiError(500, 'upscale_failed', 'Upscale failed');
+		}
+	}
+
 	let result: RenderResponse;
 	try {
 		result = await upscale4k(platform, parsed.data);
@@ -67,24 +94,38 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		return apiError(500, 'upscale_failed', 'Upscale failed');
 	}
 
-	// The upscale already succeeded and archAI already charged for it — a failure
-	// to cache the resulting balance/image is a bookkeeping gap, not a reason to
+	// The upscale already succeeded and archAI already charged for it — a failure to
+	// cache the resulting balance/deduction is a bookkeeping gap, not a reason to
 	// make the user think a completed, paid upscale failed.
 	if (db && userId) {
-		try {
-			await recordGeneratedImage(db, userId, result.outputUrl);
-		} catch (err) {
-			console.error('recordGeneratedImage failed after a successful upscale:', err);
-			if (err instanceof GeneratedImageRecordError && err.code === 'unknown_user_id') {
-				return apiError(500, 'account_error', 'Account record not found');
-			}
-			return apiError(500, 'image_record_failed', 'Image record failed');
-		}
-
+		// recordBalance mirrors archAI's own (shared) account balance for ops
+		// visibility only — it must never reach the client, so read it before
+		// overwriting `result.balance` with the caller's own remaining limit.
 		try {
 			await recordBalance(db, userId, result.balance);
 		} catch (err) {
 			console.error('recordBalance failed after a successful upscale:', err);
+		}
+		try {
+			const credit = await recordGeneration(db, userId, {
+				url: result.outputUrl,
+				sourceUrl: parsed.data.image,
+				prompt: '4k upscale',
+				kind: 'upscale',
+				amount: result.cost
+			});
+			result = { ...result, balance: credit.balance };
+		} catch (err) {
+			console.error('recordGeneration failed after a successful upscale:', err);
+			// Even on failure, never fall through to archAI's raw (shared) balance.
+			// Prefer a fresh read; if that also fails, fall back to the balance we
+			// already had from the precheck — still an approved-account balance,
+			// never the shared one.
+			const fallback = await getCredit(db, userId).catch((err) => {
+				console.error('getCredit fallback failed after a successful upscale:', err);
+				return null;
+			});
+			result = { ...result, balance: fallback?.balance ?? precheckBalance ?? 0 };
 		}
 	}
 

@@ -83,6 +83,7 @@ export const en = {
 	'auth.credit.entryRender': 'Render · {date}: −{amount} → {balance}',
 	'auth.credit.entryEdit': 'Edit · {date}: −{amount} → {balance}',
 	'auth.credit.entryStyleTransfer': 'Style transfer · {date}: −{amount} → {balance}',
+	'auth.credit.entryUpscale': 'Upscale · {date}: −{amount} → {balance}',
 	'upload.label': 'Room photo',
 	'upload.button': 'Choose file',
 	'upload.dropHint': 'Drop a photo here or click to select',
