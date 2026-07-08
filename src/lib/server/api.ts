@@ -51,7 +51,7 @@ export const styleTransferRequestSchema = z.object({
 });
 
 export const upscaleRequestSchema = z.object({
-	image: z.url().trim(),
+	image: httpImageUrl,
 	outputFormat: outputFormat.optional()
 });
 
