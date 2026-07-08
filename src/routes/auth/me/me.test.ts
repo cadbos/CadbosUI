@@ -82,10 +82,8 @@ describe('GET /auth/me — generation access control', () => {
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 5);
 		db.prepare(
-			'INSERT INTO generations ' +
-				'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-				"VALUES (?, ?, 'https://cdn.example.test/out.webp', 'https://cdn.example.test/room.jpg', " +
-				"'cozy', ?, ?, ?, ?)"
+			'INSERT INTO credit_transactions ' +
+				'(id, user_id, kind, amount, balance_after, created_at) VALUES (?, ?, ?, ?, ?, ?)'
 		)
 			.bind('tx-1', 'user-1', 'render', 2, 3, Date.now())
 			.run();

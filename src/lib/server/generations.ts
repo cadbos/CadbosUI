@@ -12,10 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-// One row per paid render/edit (migrations/0006): the resulting image, the
-// source image and prompt it was generated from, and the credit ledger entry
-// for that call — all written atomically, so there's no way for the image
-// record and the deduction to fall out of sync with each other.
+// Image history and credit history for paid generation operations. Render/edit
+// produce image rows in `generations`; every paid operation records a ledger row
+// in `credit_transactions`.
 
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Balance, CreditTransaction } from '$lib/api/contract';
@@ -61,16 +60,51 @@ export interface RecordGenerationInput {
 	url: string;
 	sourceUrl: string;
 	prompt: string;
+	kind: Extract<CreditTransaction['kind'], 'render' | 'edit' | 'style-transfer'>;
+	amount: number;
+}
+
+export interface RecordCreditTransactionInput {
 	kind: CreditTransaction['kind'];
 	amount: number;
 }
 
-// Deducts the real cost archAI charged (not a fixed fee) and records the
-// resulting image/prompt against it in one D1 batch (a single transaction),
-// so a failure between the two can never leave the ledger and the image
-// history out of sync. Called exactly once, only after a confirmed
-// successful archAI response — the caller must never call this before the
-// call, or on failure.
+// Deducts the real cost archAI charged (not a fixed fee) and records a
+// transaction row in one D1 batch. Called exactly once, only after a confirmed
+// successful archAI response — the caller must never call this before the call,
+// or on failure.
+export async function recordCreditTransaction(
+	db: D1Database,
+	userId: string,
+	input: RecordCreditTransactionInput
+): Promise<Balance> {
+	const now = Date.now();
+	const id = crypto.randomUUID();
+	const [updateResult] = await db.batch<BalanceRow>([
+		db
+			.prepare(
+				'UPDATE credits SET balance = balance - ?, updated_at = ? WHERE user_id = ? ' +
+					'RETURNING balance, updated_at'
+			)
+			.bind(input.amount, now, userId),
+		db
+			.prepare(
+				'INSERT INTO credit_transactions ' +
+					'(id, user_id, amount, balance_after, kind, created_at) ' +
+					'SELECT ?, ?, ?, balance, ?, ? FROM credits WHERE user_id = ?'
+			)
+			.bind(id, userId, input.amount, input.kind, now, userId)
+	]);
+	const row = updateResult.results[0];
+	if (!row) throw new Error('credit deduction failed: no credit row for user');
+
+	return toBalance(row);
+}
+
+// Deducts the real cost archAI charged and records both the resulting
+// image/prompt and credit ledger row in one D1 batch, so a failure between the
+// two can never leave the ledger and image history out of sync. Called exactly
+// once, only after a confirmed successful archAI response.
 //
 // The balance check in the route happens before the (slow) archAI call, not
 // atomically with this deduction — two concurrent requests for the same
@@ -89,6 +123,7 @@ export async function recordGeneration(
 	input: RecordGenerationInput
 ): Promise<Balance> {
 	const now = Date.now();
+	const id = crypto.randomUUID();
 	const [updateResult] = await db.batch<BalanceRow>([
 		db
 			.prepare(
@@ -103,7 +138,7 @@ export async function recordGeneration(
 					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ? FROM credits WHERE user_id = ?'
 			)
 			.bind(
-				crypto.randomUUID(),
+				id,
 				userId,
 				input.url,
 				input.sourceUrl,
@@ -112,7 +147,14 @@ export async function recordGeneration(
 				input.amount,
 				now,
 				userId
+			),
+		db
+			.prepare(
+				'INSERT INTO credit_transactions ' +
+					'(id, user_id, amount, balance_after, kind, created_at) ' +
+					'SELECT ?, ?, ?, balance, ?, ? FROM credits WHERE user_id = ?'
 			)
+			.bind(id, userId, input.amount, input.kind, now, userId)
 	]);
 	const row = updateResult.results[0];
 	if (!row) throw new Error('credit deduction failed: no credit row for user');
@@ -191,7 +233,7 @@ export async function listCreditHistory(
 	// otherwise sort arbitrarily on created_at alone.
 	const { results } = await db
 		.prepare(
-			'SELECT id, amount, balance_after, kind, created_at FROM generations ' +
+			'SELECT id, amount, balance_after, kind, created_at FROM credit_transactions ' +
 				'WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?'
 		)
 		.bind(userId, limit)

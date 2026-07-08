@@ -19,7 +19,7 @@
 // Demo branch: URLs point to real Unsplash-licensed photos so the UI looks
 // convincing without requiring live external services.
 
-import type { RenderResponse, UploadResult } from '$lib/api/contract';
+import type { AutoPromptResponse, RenderResponse, UploadResult } from '$lib/api/contract';
 
 export function mockUpload(): UploadResult {
 	return {
@@ -54,5 +54,14 @@ export function mockStyleTransfer(): RenderResponse {
 		outputUrl: 'https://images.unsplash.com/photo-1600210491892-03d54c0aaf87?w=1200&q=80',
 		cost: 2,
 		balance: 44
+	};
+}
+
+export function mockAutoPrompt(): AutoPromptResponse {
+	return {
+		prompt:
+			'bright Scandinavian living room, light oak flooring, white walls, linen sofa, natural daylight, warm neutral palette',
+		cost: 1,
+		balance: 45
 	};
 }

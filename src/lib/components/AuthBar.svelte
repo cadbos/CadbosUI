@@ -29,7 +29,8 @@ before the Change Date. See LICENSE for complete terms.
 	const creditEntryKeys: Record<CreditTransaction['kind'], TranslationKey> = {
 		render: 'auth.credit.entryRender',
 		edit: 'auth.credit.entryEdit',
-		'style-transfer': 'auth.credit.entryStyleTransfer'
+		'style-transfer': 'auth.credit.entryStyleTransfer',
+		'auto-prompt': 'auth.credit.entryAutoPrompt'
 	};
 
 	const shortNpub = $derived.by(() => {
