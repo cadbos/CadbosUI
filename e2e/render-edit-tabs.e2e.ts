@@ -199,18 +199,7 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 
 test('the Add Object tool applies a selected preset to the current image', async ({ page }) => {
 	await authenticate(page);
-	await page.route('**/api/uploads', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				url: 'https://cdn.example.test/uploaded.webp',
-				mime: 'image/webp',
-				size: 1024,
-				dimensions: [800, 600]
-			})
-		});
-	});
+	await mockUpload(page);
 	let capturedPrompt: string | undefined;
 	await page.route('**/api/edit', async (route) => {
 		capturedPrompt = (route.request().postDataJSON() as { prompt: string }).prompt;
@@ -251,18 +240,7 @@ test('the Remove Object tool builds a removal prompt from the described object',
 	page
 }) => {
 	await authenticate(page);
-	await page.route('**/api/uploads', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				url: 'https://cdn.example.test/uploaded.webp',
-				mime: 'image/webp',
-				size: 1024,
-				dimensions: [800, 600]
-			})
-		});
-	});
+	await mockUpload(page);
 	let capturedPrompt: string | undefined;
 	await page.route('**/api/edit', async (route) => {
 		capturedPrompt = (route.request().postDataJSON() as { prompt: string }).prompt;
