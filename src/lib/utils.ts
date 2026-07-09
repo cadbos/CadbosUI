@@ -26,6 +26,34 @@ export function formatCredit(amount: number): string {
 	return amount.toFixed(2);
 }
 
+export interface BoundaryErrorLog {
+	scope: string;
+	name: string;
+	message: string;
+	stack?: string;
+}
+
+export function toBoundaryErrorLog(scope: string, error: unknown): BoundaryErrorLog {
+	if (error instanceof Error) {
+		return {
+			scope,
+			name: error.name || 'Error',
+			message: error.message || 'Component boundary failed',
+			stack: error.stack
+		};
+	}
+
+	return {
+		scope,
+		name: 'NonError',
+		message: 'Component boundary failed with a non-Error value'
+	};
+}
+
+export function logBoundaryError(scope: string, error: unknown): void {
+	console.error('Component boundary failed:', toBoundaryErrorLog(scope, error));
+}
+
 export interface TabController {
 	activate: (index: number) => void;
 	onKeydown: (event: KeyboardEvent) => void;

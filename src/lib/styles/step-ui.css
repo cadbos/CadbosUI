@@ -1,0 +1,189 @@
+/*
+ * Copyright (c) 2026 Cadbos company. All rights reserved.
+ *
+ * SPDX-License-Identifier: LicenseRef-Cadbos-BSL-1.1
+ *
+ * Cadbos Interior Design AI is licensed under the Business Source License 1.1.
+ * Access is limited to automated analysis tools for analysis of this repository.
+ * This code is not open for contribution or usage except under a separate
+ * written agreement with Cadbos company.
+ *
+ * Commercial use in Interior Design & AEC Generative AI Services is prohibited
+ * before the Change Date. See LICENSE for complete terms.
+ */
+
+.step-card {
+	width: 100%;
+	background: var(--color-surface);
+	border: 1.5px solid var(--color-border);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-lg);
+	padding: 1.5rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.step-header,
+.step-card .column-header {
+	display: flex;
+	align-items: center;
+	gap: 0.625rem;
+}
+
+.step-num {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.75rem;
+	height: 1.75rem;
+	border-radius: 50%;
+	background: var(--color-accent);
+	color: var(--color-accent-contrast);
+	font-size: 0.8rem;
+	font-weight: 700;
+	flex-shrink: 0;
+}
+
+.step-header h2,
+.step-card .column-header h3 {
+	margin: 0;
+	color: var(--color-text);
+}
+
+.step-header h2 {
+	font-size: 1rem;
+	font-weight: 600;
+}
+
+.step-card .column-header {
+	justify-content: space-between;
+	flex-wrap: wrap;
+}
+
+.step-card .column-header h3 {
+	font-size: 0.875rem;
+	font-weight: 600;
+}
+
+.step-card.generate-section {
+	display: flex;
+	flex-direction: column;
+	gap: 0.875rem;
+}
+
+.step-card .format-label {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.5rem;
+	font-size: 0.875rem;
+}
+
+.step-card .format-text {
+	color: var(--color-muted);
+}
+
+.step-card .format-select {
+	font: inherit;
+	font-size: 0.875rem;
+	padding: 0.35rem 0.625rem;
+	border: 1.5px solid var(--color-border);
+	border-radius: 8px;
+	background: var(--color-background);
+	color: var(--color-text);
+	cursor: pointer;
+}
+
+.step-card .auth-hint,
+.step-card .submit-error {
+	margin: 0;
+	font-size: 0.875rem;
+	text-align: center;
+}
+
+.step-card .auth-hint {
+	color: var(--color-muted);
+}
+
+.step-card .submit-error {
+	color: var(--color-danger);
+}
+
+.step-card .generate-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	width: 100%;
+	padding: 0.9rem 1.5rem;
+	font: inherit;
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--color-accent-contrast);
+	background: var(--color-accent);
+	border: none;
+	border-radius: 12px;
+	cursor: pointer;
+	transition:
+		background 0.15s,
+		transform 0.1s,
+		box-shadow 0.15s;
+	box-shadow:
+		0 1px 2px rgb(0 0 0 / 0.1),
+		0 4px 12px rgb(47 111 79 / 0.3);
+}
+
+.step-card .generate-btn:hover:not(:disabled) {
+	background: var(--color-accent-hover);
+	box-shadow:
+		0 2px 4px rgb(0 0 0 / 0.1),
+		0 6px 16px rgb(47 111 79 / 0.35);
+	transform: translateY(-1px);
+}
+
+.step-card .generate-btn:active:not(:disabled) {
+	transform: translateY(0);
+}
+
+.step-card .generate-btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+	box-shadow: none;
+}
+
+.step-card .spinner {
+	width: 1rem;
+	height: 1rem;
+	border: 2px solid rgb(255 255 255 / 0.3);
+	border-top-color: currentcolor;
+	border-radius: 50%;
+	animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.boundary-failed {
+	margin: 0;
+	padding: 1.5rem;
+	color: var(--color-muted);
+	text-align: center;
+}
+
+.boundary-retry {
+	display: block;
+	margin: 0 auto;
+	padding: 0.5rem 1rem;
+	font: inherit;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--color-text);
+	background: var(--color-surface);
+	border: 1.5px solid var(--color-border);
+	border-radius: 8px;
+	cursor: pointer;
+}

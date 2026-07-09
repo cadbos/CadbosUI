@@ -13,14 +13,12 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import type { Component } from 'svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
-	import ChatView from '$lib/components/ChatView.svelte';
-	import KeyValueView from '$lib/components/KeyValueView.svelte';
-	import GraphView from '$lib/components/GraphView.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import RenderResult from '$lib/components/RenderResult.svelte';
 	import EditPanel from '$lib/components/EditPanel.svelte';
+	import PromptViews from '$lib/components/PromptViews.svelte';
+	import StyleTransferPanel from '$lib/components/StyleTransferPanel.svelte';
 	import GeneratedImagesSidebar from '$lib/components/GeneratedImagesSidebar.svelte';
 	import {
 		creditErrorKey,
@@ -31,20 +29,14 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
-	import { createTabController } from '$lib/utils';
+	import { createTabController, logBoundaryError } from '$lib/utils';
 
-	type ViewId = 'chat' | 'keyValue' | 'graph';
-	type Mode = 'render' | 'edit';
-
-	const views: { id: ViewId; label: TranslationKey; component: Component; disabled?: boolean }[] = [
-		{ id: 'chat', label: 'view.chat', component: ChatView },
-		{ id: 'keyValue', label: 'view.keyValue', component: KeyValueView },
-		{ id: 'graph', label: 'view.graph', component: GraphView }
-	];
+	type Mode = 'render' | 'edit' | 'styleTransfer';
 
 	const modes: { id: Mode; label: TranslationKey }[] = [
 		{ id: 'render', label: 'mode.render' },
-		{ id: 'edit', label: 'mode.edit' }
+		{ id: 'edit', label: 'mode.edit' },
+		{ id: 'styleTransfer', label: 'mode.styleTransfer' }
 	];
 
 	const sceneTypes: { id: SceneType; label: TranslationKey }[] = [
@@ -52,23 +44,11 @@ before the Change Date. See LICENSE for complete terms.
 		{ id: 'exterior', label: 'render.sceneType.exterior' }
 	];
 
-	let activeIndex = $state(0);
-	let tabs = $state<HTMLElement[]>([]);
 	let submitting = $state(false);
 	let submitError = $state<string | null>(null);
 	let mode = $state<Mode>('render');
 	let modeTabs = $state<HTMLElement[]>([]);
 	let sceneTypeTabs = $state<HTMLElement[]>([]);
-
-	const viewTabs = createTabController({
-		itemCount: () => views.length,
-		isDisabled: (index) => !!views[index]?.disabled,
-		getActiveIndex: () => activeIndex,
-		setActiveIndex: (index) => {
-			activeIndex = index;
-		},
-		focusTab: (index) => tabs[index]?.focus()
-	});
 
 	const modeTabController = createTabController({
 		itemCount: () => modes.length,
@@ -187,7 +167,7 @@ before the Change Date. See LICENSE for complete terms.
 				tabindex="0"
 				hidden={mode !== 'render'}
 			>
-				<section class="card step-card">
+				<section class="step-card">
 					<div class="step-header">
 						<span class="step-num" aria-hidden="true">①</span>
 						<h2>{t('render.sceneType.label')}</h2>
@@ -213,7 +193,7 @@ before the Change Date. See LICENSE for complete terms.
 					</div>
 				</section>
 
-				<section class="card step-card">
+				<section class="step-card">
 					<div class="step-header">
 						<span class="step-num" aria-hidden="true">②</span>
 						<h2>{uploadLabel}</h2>
@@ -221,62 +201,13 @@ before the Change Date. See LICENSE for complete terms.
 					<ImageUpload />
 				</section>
 
-				<section class="card step-card">
-					<div class="step-header">
-						<span class="step-num" aria-hidden="true">③</span>
-						<h2>{t('view.switcher.label')}</h2>
-						<span class="optional-badge">{t('render.optional')}</span>
-					</div>
+				<PromptViews
+					stepLabel="③"
+					headingKey="view.switcher.label"
+					optionalBadgeKey="render.optional"
+				/>
 
-					<div class="tabs" role="tablist" aria-label={t('view.switcher.label')}>
-						{#each views as view, index (view.id)}
-							<div class="tab-item">
-								<button
-									{@attach (node) => {
-										tabs[index] = node as HTMLElement;
-									}}
-									type="button"
-									role="tab"
-									id={`tab-${view.id}`}
-									aria-selected={!view.disabled && activeIndex === index}
-									aria-disabled={view.disabled ? 'true' : undefined}
-									aria-controls={`panel-${view.id}`}
-									tabindex={!view.disabled && activeIndex === index ? 0 : -1}
-									class:active={!view.disabled && activeIndex === index}
-									class:tab-disabled={view.disabled}
-									onclick={() => viewTabs.activate(index)}
-									onkeydown={viewTabs.onKeydown}
-								>
-									{t(view.label)}
-								</button>
-								{#if view.disabled}
-									<span class="coming-soon">{t('view.comingSoon')}</span>
-								{/if}
-							</div>
-						{/each}
-					</div>
-
-					{#each views as view, index (view.id)}
-						{@const View = view.component}
-						<div
-							class="panel"
-							role="tabpanel"
-							id={`panel-${view.id}`}
-							aria-labelledby={`tab-${view.id}`}
-							tabindex="0"
-							hidden={activeIndex !== index}
-						>
-							<svelte:boundary>
-								<View />
-								{#snippet failed()}
-									<p class="boundary-failed">{t('boundary.failed')}</p>
-								{/snippet}
-							</svelte:boundary>
-						</div>
-					{/each}
-				</section>
-
-				<section class="card step-card generate-section">
+				<section class="step-card generate-section">
 					<label class="format-label">
 						<span class="format-text">{t('render.outputFormat')}</span>
 						<select
@@ -318,10 +249,15 @@ before the Change Date. See LICENSE for complete terms.
 
 			{#if request.currentRender}
 				<section class="result-wrap" aria-label={t('render.result')}>
-					<svelte:boundary>
+					<svelte:boundary
+						onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
+					>
 						<RenderResult onEditRequest={() => modeTabController.activate(1)} />
-						{#snippet failed()}
+						{#snippet failed(_error: unknown, reset: () => void)}
 							<p class="boundary-failed">{t('boundary.failed')}</p>
+							<button type="button" class="boundary-retry" onclick={reset}>
+								{t('boundary.retry')}
+							</button>
 						{/snippet}
 					</svelte:boundary>
 				</section>
@@ -336,7 +272,7 @@ before the Change Date. See LICENSE for complete terms.
 				hidden={mode !== 'edit'}
 			>
 				{#if !request.currentRender}
-					<section class="card step-card">
+					<section class="step-card">
 						<div class="step-header">
 							<span class="step-num" aria-hidden="true">①</span>
 							<h2>{t('upload.label')}</h2>
@@ -352,13 +288,39 @@ before the Change Date. See LICENSE for complete terms.
 						</span>
 						<h2>{t('edit.title')}</h2>
 					</div>
-					<svelte:boundary>
+					<svelte:boundary
+						onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
+					>
 						<EditPanel />
-						{#snippet failed()}
+						{#snippet failed(_error: unknown, reset: () => void)}
 							<p class="boundary-failed">{t('boundary.failed')}</p>
+							<button type="button" class="boundary-retry" onclick={reset}>
+								{t('boundary.retry')}
+							</button>
 						{/snippet}
 					</svelte:boundary>
 				</section>
+			</div>
+
+			<div
+				class="mode-panel"
+				role="tabpanel"
+				id="mode-panel-styleTransfer"
+				aria-labelledby="mode-tab-styleTransfer"
+				tabindex="0"
+				hidden={mode !== 'styleTransfer'}
+			>
+				<svelte:boundary
+					onerror={(error: unknown) => logBoundaryError('workspace.styleTransfer', error)}
+				>
+					<StyleTransferPanel />
+					{#snippet failed(_error: unknown, reset: () => void)}
+						<p class="boundary-failed">{t('boundary.failed')}</p>
+						<button type="button" class="boundary-retry" onclick={reset}>
+							{t('boundary.retry')}
+						</button>
+					{/snippet}
+				</svelte:boundary>
 			</div>
 		</div>
 
@@ -443,10 +405,13 @@ before the Change Date. See LICENSE for complete terms.
 
 	.mode-tabs button {
 		flex: 1;
+		min-width: 0;
 		padding: 0.7rem 1.5rem;
 		font: inherit;
 		font-size: 0.9375rem;
 		font-weight: 600;
+		line-height: 1.2;
+		text-align: center;
 		/* var(--color-muted) falls below the 4.5:1 AA contrast ratio against
 		   var(--color-background) at this weight/size; this is the primary
 		   top-level nav, so it gets a darker tone than the nested view tabs. */
@@ -495,17 +460,6 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 1rem;
 	}
 
-	/* Same visual language as RenderResult/EditPanel's cards (border + shadow,
-	   var(--radius-lg)) — each render step is its own block, matching the Edit tab. */
-	.step-card {
-		background: var(--color-surface);
-		border: 1.5px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		box-shadow: var(--shadow-lg);
-		padding: 1.5rem;
-		gap: 1rem;
-	}
-
 	.scene-type-toggle {
 		display: flex;
 		gap: 0.5rem;
@@ -536,209 +490,6 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 	}
 
-	.step-header {
-		display: flex;
-		align-items: center;
-		gap: 0.625rem;
-	}
-
-	.step-num {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		border-radius: 50%;
-		background: var(--color-accent);
-		color: var(--color-accent-contrast);
-		font-size: 0.8rem;
-		font-weight: 700;
-		flex-shrink: 0;
-	}
-
-	.step-header h2 {
-		margin: 0;
-		font-size: 1rem;
-		font-weight: 600;
-		color: var(--color-text);
-	}
-
-	.optional-badge {
-		margin-left: auto;
-		font-size: 0.75rem;
-		color: var(--color-muted);
-		background: var(--color-background);
-		border: 1px solid var(--color-border);
-		padding: 0.15rem 0.5rem;
-		border-radius: 100px;
-	}
-
-	.tabs {
-		display: flex;
-		gap: 0.5rem;
-		padding: 0.25rem;
-		background: var(--color-background);
-		border-radius: 12px;
-	}
-
-	.tab-item {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.2rem;
-	}
-
-	.tab-item button {
-		width: 100%;
-		padding: 0.5rem 0.75rem;
-		font: inherit;
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: var(--color-muted);
-		background: transparent;
-		border: none;
-		border-radius: 10px;
-		cursor: pointer;
-		transition:
-			background 0.15s,
-			color 0.15s;
-		text-align: center;
-	}
-
-	.tab-item button.active {
-		background: var(--color-surface);
-		color: var(--color-text);
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
-	}
-
-	.tab-item button.tab-disabled {
-		opacity: 0.45;
-		pointer-events: none;
-		cursor: not-allowed;
-	}
-
-	.coming-soon {
-		font-size: 0.6875rem;
-		color: var(--color-muted);
-		text-align: center;
-	}
-
-	.panel {
-		border-radius: 12px;
-	}
-
-	.panel[hidden] {
-		display: none;
-	}
-
-	.boundary-failed {
-		margin: 0;
-		padding: 1.5rem;
-		color: var(--color-muted);
-		text-align: center;
-	}
-
-	.generate-section {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.format-label {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		font-size: 0.875rem;
-	}
-
-	.format-text {
-		color: var(--color-muted);
-		white-space: nowrap;
-	}
-
-	.format-select {
-		font: inherit;
-		font-size: 0.875rem;
-		padding: 0.35rem 0.625rem;
-		border: 1.5px solid var(--color-border);
-		border-radius: 8px;
-		background: var(--color-background);
-		color: var(--color-text);
-		cursor: pointer;
-	}
-
-	.auth-hint {
-		margin: 0;
-		font-size: 0.875rem;
-		color: var(--color-muted);
-		text-align: center;
-	}
-
-	.generate-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.9rem 1.5rem;
-		font: inherit;
-		font-size: 1rem;
-		font-weight: 600;
-		color: var(--color-accent-contrast);
-		background: var(--color-accent);
-		border: none;
-		border-radius: 12px;
-		cursor: pointer;
-		transition:
-			background 0.15s,
-			transform 0.1s,
-			box-shadow 0.15s;
-		box-shadow:
-			0 1px 2px rgb(0 0 0 / 0.1),
-			0 4px 12px rgb(47 111 79 / 0.3);
-	}
-
-	.generate-btn:hover:not(:disabled) {
-		background: var(--color-accent-hover);
-		box-shadow:
-			0 2px 4px rgb(0 0 0 / 0.1),
-			0 6px 16px rgb(47 111 79 / 0.35);
-		transform: translateY(-1px);
-	}
-
-	.generate-btn:active:not(:disabled) {
-		transform: translateY(0);
-	}
-
-	.generate-btn:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
-		box-shadow: none;
-	}
-
-	.spinner {
-		width: 1rem;
-		height: 1rem;
-		border: 2px solid rgb(255 255 255 / 0.3);
-		border-top-color: white;
-		border-radius: 50%;
-		animation: spin 0.7s linear infinite;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
-	.submit-error {
-		margin: 0;
-		color: var(--color-danger);
-		font-size: 0.875rem;
-		text-align: center;
-	}
-
 	.result-wrap {
 		width: 100%;
 		max-width: var(--content-width);
@@ -755,6 +506,33 @@ before the Change Date. See LICENSE for complete terms.
 		.workspace-shell {
 			flex-direction: column;
 			align-items: center;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.page {
+			--content-width: 100%;
+			padding: 1.5rem 1rem 3rem;
+		}
+
+		.card {
+			padding: 1.5rem;
+		}
+
+		.mode-tabs button {
+			padding: 0.7rem 0.75rem;
+			font-size: 0.875rem;
+		}
+	}
+
+	@media (max-width: 420px) {
+		.mode-tabs {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.mode-tabs button:last-child {
+			grid-column: 1 / -1;
 		}
 	}
 </style>

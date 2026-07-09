@@ -16,7 +16,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
 	AC9_IMAGE,
 	AC9_PROMPT,
+	AC9_REFERENCE_IMAGE,
 	AC9_RENDER_REQUEST,
+	AC9_STYLE_TRANSFER_REQUEST,
 	applyAc9Fixture,
 	buildAc9RequestJSON
 } from '$lib/state/request-fixtures';
@@ -157,6 +159,48 @@ describe('serialization', () => {
 		expect(request.prompt).toBe('override text');
 	});
 
+	it('loads snapshots created before style-transfer settings existed', () => {
+		const snapshot = buildAc9RequestJSON() as unknown as Record<string, unknown>;
+		delete snapshot.styleReferenceImage;
+		delete snapshot.styleTransferStrength;
+		delete snapshot.styleNegativePrompt;
+		delete snapshot.styleSourceMode;
+
+		request.fromJSON(snapshot);
+
+		expect(request.toJSON()).toEqual({
+			...snapshot,
+			styleReferenceImage: undefined,
+			styleTransferStrength: 0.7,
+			styleNegativePrompt: '',
+			styleSourceMode: 'current-result'
+		});
+	});
+
+	it('invalidates any pending undo/redo chain when loading a snapshot', () => {
+		applyAc9Fixture();
+		request.setCurrentRender({
+			id: 'render-a',
+			outputUrls: ['https://example.test/a.webp'],
+			cost: 1,
+			balance: 24,
+			ts: 0
+		});
+		request.applyEditResult({
+			id: 'render-b',
+			outputUrls: ['https://example.test/b.webp'],
+			cost: 1,
+			balance: 23,
+			ts: 1
+		});
+		expect(request.canUndoEdit).toBe(true);
+
+		request.fromJSON(buildAc9RequestJSON());
+
+		expect(request.canUndoEdit).toBe(false);
+		expect(request.canRedoEdit).toBe(false);
+	});
+
 	it('rejects invalid JSON', () => {
 		expect(() => request.fromJSON({ id: '' })).toThrow();
 	});
@@ -275,6 +319,106 @@ describe('toRenderRequest', () => {
 
 	it('returns null when invalid', () => {
 		expect(request.toRenderRequest()).toBeNull();
+	});
+});
+
+describe('toStyleTransferRequest', () => {
+	it('reports missing source and reference images when no state is set', () => {
+		expect(request.validateStyleTransfer()).toEqual({
+			valid: false,
+			missing: ['image', 'referenceImage']
+		});
+	});
+
+	it('reports missing reference image when only the source is set', () => {
+		request.setImage(AC9_IMAGE);
+		expect(request.validateStyleTransfer()).toEqual({
+			valid: false,
+			missing: ['referenceImage']
+		});
+	});
+
+	it('builds the wire body from the room photo and reference image', () => {
+		applyAc9Fixture();
+		request.setStyleSourceMode('room-photo');
+		expect(request.toStyleTransferRequest(AC9_PROMPT)).toEqual(AC9_STYLE_TRANSFER_REQUEST);
+	});
+
+	it('uses the current result as the source when selected and available', () => {
+		applyAc9Fixture();
+		request.setCurrentRender({
+			id: 'render-1',
+			outputUrls: ['https://example.test/current-result.webp'],
+			cost: 2,
+			balance: 18,
+			ts: 0
+		});
+
+		expect(request.toStyleTransferRequest(AC9_PROMPT)).toEqual({
+			...AC9_STYLE_TRANSFER_REQUEST,
+			image: 'https://example.test/current-result.webp'
+		});
+	});
+
+	it('falls back to the room photo when current-result is selected before a result exists', () => {
+		applyAc9Fixture();
+		expect(request.toStyleTransferRequest(AC9_PROMPT)?.image).toBe(AC9_IMAGE.url);
+	});
+
+	it('omits optional prompt fields when they are empty', () => {
+		request.setImage(AC9_IMAGE);
+		request.setStyleReferenceImage(AC9_REFERENCE_IMAGE);
+		request.setStyleNegativePrompt('   ');
+
+		expect(request.toStyleTransferRequest('   ')).toEqual({
+			image: AC9_IMAGE.url,
+			referenceImage: AC9_REFERENCE_IMAGE.url,
+			outputFormat: 'webp',
+			styleTransferStrength: 0.7
+		});
+	});
+
+	it('includes a trimmed negative prompt when set', () => {
+		applyAc9Fixture();
+		request.setStyleNegativePrompt('  no people  ');
+
+		expect(request.toStyleTransferRequest(AC9_PROMPT)).toEqual({
+			...AC9_STYLE_TRANSFER_REQUEST,
+			negativePrompt: 'no people'
+		});
+	});
+
+	it('uses explicit style guidance instead of the render prompt', () => {
+		applyAc9Fixture();
+		request.setPromptOverride('render prompt that must stay isolated');
+
+		expect(request.toStyleTransferRequest('  style transfer guidance  ')).toEqual({
+			...AC9_STYLE_TRANSFER_REQUEST,
+			prompt: 'style transfer guidance'
+		});
+	});
+
+	it('rejects strength values outside the provider range', () => {
+		expect(() => request.setStyleTransferStrength(-0.1)).toThrow();
+		expect(() => request.setStyleTransferStrength(1.1)).toThrow();
+	});
+
+	it('round-trips style transfer settings through JSON', () => {
+		applyAc9Fixture();
+		request.setStyleTransferStrength(0.35);
+		request.setStyleNegativePrompt('no people');
+		request.setStyleSourceMode('room-photo');
+		const snapshot = request.toJSON();
+
+		request.reset();
+		request.fromJSON(snapshot);
+
+		expect(request.toJSON()).toEqual(snapshot);
+		expect(request.toStyleTransferRequest(AC9_PROMPT)).toEqual({
+			...AC9_STYLE_TRANSFER_REQUEST,
+			styleTransferStrength: 0.35,
+			negativePrompt: 'no people'
+		});
 	});
 });
 
