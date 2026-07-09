@@ -55,6 +55,7 @@ export const ru = {
 		'Есть узел фрагмента, не связанный цепочкой от фото до результата.',
 	'view.graph.validation.unknownNode': 'Соединение ссылается на несуществующий узел.',
 	'boundary.failed': 'Не удалось загрузить этот раздел.',
+	'boundary.retry': 'Повторить попытку',
 	'auth.signIn': 'Войти',
 	'auth.login.nip07': 'Расширение Nostr',
 	'auth.login.nip46': 'Nostr Connect (QR)',

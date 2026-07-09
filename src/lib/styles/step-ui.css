@@ -166,3 +166,24 @@
 		transform: rotate(360deg);
 	}
 }
+
+.boundary-failed {
+	margin: 0;
+	padding: 1.5rem;
+	color: var(--color-muted);
+	text-align: center;
+}
+
+.boundary-retry {
+	display: block;
+	margin: 0 auto;
+	padding: 0.5rem 1rem;
+	font: inherit;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--color-text);
+	background: var(--color-surface);
+	border: 1.5px solid var(--color-border);
+	border-radius: 8px;
+	cursor: pointer;
+}

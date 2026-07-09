@@ -55,6 +55,7 @@ export const en = {
 		'A fragment node is not connected in the chain from the photo to the result.',
 	'view.graph.validation.unknownNode': 'A connection refers to a node that no longer exists.',
 	'boundary.failed': 'This section failed to load.',
+	'boundary.retry': 'Try again',
 	'auth.signIn': 'Sign in',
 	'auth.login.nip07': 'Nostr extension',
 	'auth.login.nip46': 'Nostr Connect (QR)',

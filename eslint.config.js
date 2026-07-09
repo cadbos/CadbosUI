@@ -54,6 +54,10 @@ export default defineConfig(
 	{
 		// Override or add rule settings here, such as:
 		// 'svelte/button-has-type': 'error'
-		rules: {}
+		rules: {
+			// Svelte's `{#snippet failed(error, reset)}` boundary API requires
+			// declaring `error` positionally even when only `reset` is needed.
+			'@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }]
+		}
 	}
 );

@@ -99,8 +99,11 @@ before the Change Date. See LICENSE for complete terms.
 				onerror={(error: unknown) => logBoundaryError(`promptViews.${view.id}`, error)}
 			>
 				<View />
-				{#snippet failed()}
+				{#snippet failed(_error: unknown, reset: () => void)}
 					<p class="boundary-failed">{t('boundary.failed')}</p>
+					<button type="button" class="boundary-retry" onclick={reset}>
+						{t('boundary.retry')}
+					</button>
 				{/snippet}
 			</svelte:boundary>
 		</div>
@@ -163,12 +166,5 @@ before the Change Date. See LICENSE for complete terms.
 
 	.panel[hidden] {
 		display: none;
-	}
-
-	.boundary-failed {
-		margin: 0;
-		padding: 1.5rem;
-		color: var(--color-muted);
-		text-align: center;
 	}
 </style>

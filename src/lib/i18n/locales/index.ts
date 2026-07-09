@@ -51,6 +51,7 @@ export interface Dictionary {
 	'view.graph.validation.danglingNode': string;
 	'view.graph.validation.unknownNode': string;
 	'boundary.failed': string;
+	'boundary.retry': string;
 	'auth.signIn': string;
 	'auth.login.nip07': string;
 	'auth.login.nip46': string;

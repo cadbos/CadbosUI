@@ -253,8 +253,11 @@ before the Change Date. See LICENSE for complete terms.
 						onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
 					>
 						<RenderResult onEditRequest={() => modeTabController.activate(1)} />
-						{#snippet failed()}
+						{#snippet failed(_error: unknown, reset: () => void)}
 							<p class="boundary-failed">{t('boundary.failed')}</p>
+							<button type="button" class="boundary-retry" onclick={reset}>
+								{t('boundary.retry')}
+							</button>
 						{/snippet}
 					</svelte:boundary>
 				</section>
@@ -289,8 +292,11 @@ before the Change Date. See LICENSE for complete terms.
 						onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
 					>
 						<EditPanel />
-						{#snippet failed()}
+						{#snippet failed(_error: unknown, reset: () => void)}
 							<p class="boundary-failed">{t('boundary.failed')}</p>
+							<button type="button" class="boundary-retry" onclick={reset}>
+								{t('boundary.retry')}
+							</button>
 						{/snippet}
 					</svelte:boundary>
 				</section>
@@ -308,8 +314,11 @@ before the Change Date. See LICENSE for complete terms.
 					onerror={(error: unknown) => logBoundaryError('workspace.styleTransfer', error)}
 				>
 					<StyleTransferPanel />
-					{#snippet failed()}
+					{#snippet failed(_error: unknown, reset: () => void)}
 						<p class="boundary-failed">{t('boundary.failed')}</p>
+						<button type="button" class="boundary-retry" onclick={reset}>
+							{t('boundary.retry')}
+						</button>
 					{/snippet}
 				</svelte:boundary>
 			</div>
@@ -479,13 +488,6 @@ before the Change Date. See LICENSE for complete terms.
 		background: var(--color-surface);
 		color: var(--color-text);
 		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
-	}
-
-	.boundary-failed {
-		margin: 0;
-		padding: 1.5rem;
-		color: var(--color-muted);
-		text-align: center;
 	}
 
 	.result-wrap {
