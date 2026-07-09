@@ -22,7 +22,10 @@ import {
 import type { TranslationKey } from '$lib/i18n/index.svelte';
 
 export type { OutputFormat };
-export type SceneType = 'interior' | 'exterior';
+
+export const SCENE_TYPES = ['interior', 'exterior'] as const;
+
+export type SceneType = (typeof SCENE_TYPES)[number];
 
 export interface ImageInput {
 	url: string;
@@ -94,7 +97,7 @@ export interface NormalizedRequest {
 }
 
 const outputFormatSchema = z.enum(OUTPUT_FORMATS);
-const sceneTypeSchema = z.enum(['interior', 'exterior']);
+const sceneTypeSchema = z.enum(SCENE_TYPES);
 
 const imageInputSchema = z.object({
 	url: z.string().trim().url(),
