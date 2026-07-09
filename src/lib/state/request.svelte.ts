@@ -584,6 +584,8 @@ class RequestState {
 		this.promptOverride = parsed.promptOverride;
 		this.currentRender = cloneRenderResult(parsed.currentRender);
 		this.status = parsed.status;
+		this.previousRender = undefined;
+		this.undoneRender = undefined;
 	}
 
 	normalizeForComparison(): NormalizedRequest {

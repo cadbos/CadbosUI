@@ -177,6 +177,30 @@ describe('serialization', () => {
 		});
 	});
 
+	it('invalidates any pending undo/redo chain when loading a snapshot', () => {
+		applyAc9Fixture();
+		request.setCurrentRender({
+			id: 'render-a',
+			outputUrls: ['https://example.test/a.webp'],
+			cost: 1,
+			balance: 24,
+			ts: 0
+		});
+		request.applyEditResult({
+			id: 'render-b',
+			outputUrls: ['https://example.test/b.webp'],
+			cost: 1,
+			balance: 23,
+			ts: 1
+		});
+		expect(request.canUndoEdit).toBe(true);
+
+		request.fromJSON(buildAc9RequestJSON());
+
+		expect(request.canUndoEdit).toBe(false);
+		expect(request.canRedoEdit).toBe(false);
+	});
+
 	it('rejects invalid JSON', () => {
 		expect(() => request.fromJSON({ id: '' })).toThrow();
 	});
