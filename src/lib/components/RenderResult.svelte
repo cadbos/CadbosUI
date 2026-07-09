@@ -71,6 +71,7 @@ before the Change Date. See LICENSE for complete terms.
 				editOp: { type: 'upscale', instruction: t('toolbar.upscaleDone') }
 			});
 			request.applyEditResult(newRender);
+			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 		} catch {
 			upscaleError = t('toolbar.upscaleFailed');
