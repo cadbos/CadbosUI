@@ -271,6 +271,112 @@ test('navigates tabs with the keyboard', async ({ page }) => {
 	await expect(chat).toHaveAttribute('aria-selected', 'true');
 });
 
+test('the Scene Type toggle switches to exterior and relabels the photo step', async ({ page }) => {
+	await page.goto('/');
+
+	const interiorTab = page.getByRole('tab', { name: 'Интерьер' });
+	const exteriorTab = page.getByRole('tab', { name: 'Экстерьер' });
+
+	await expect(interiorTab).toHaveAttribute('aria-selected', 'true');
+	await expect(page.getByRole('heading', { name: 'Фото комнаты' })).toBeVisible();
+
+	await exteriorTab.click();
+	await expect(exteriorTab).toHaveAttribute('aria-selected', 'true');
+	await expect(interiorTab).toHaveAttribute('aria-selected', 'false');
+	await expect(page.getByRole('heading', { name: 'Фото здания' })).toBeVisible();
+});
+
+test('navigates the Scene Type toggle with the keyboard', async ({ page }) => {
+	await page.goto('/');
+	const interiorTab = page.getByRole('tab', { name: 'Интерьер' });
+	const exteriorTab = page.getByRole('tab', { name: 'Экстерьер' });
+
+	await interiorTab.focus();
+	await page.keyboard.press('ArrowRight');
+	await expect(exteriorTab).toBeFocused();
+	await expect(exteriorTab).toHaveAttribute('aria-selected', 'true');
+
+	await page.keyboard.press('Home');
+	await expect(interiorTab).toBeFocused();
+	await expect(interiorTab).toHaveAttribute('aria-selected', 'true');
+});
+
+test('generating with the exterior scene type calls the exterior render route', async ({
+	page
+}) => {
+	await page.route('**/auth/me', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+			})
+		});
+	});
+	await page.route('**/auth/nostr-profile', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ profile: { relays: [] } })
+		});
+	});
+	await page.route('**/api/generated-images**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ images: [], pagination: { offset: 0, size: 100, hasMore: false } })
+		});
+	});
+	await page.route('**/api/uploads', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				url: 'https://cdn.example.test/facade.webp',
+				mime: 'image/webp',
+				size: 1024,
+				dimensions: [800, 600]
+			})
+		});
+	});
+	let calledExteriorRoute = false;
+	let capturedBody:
+		| { image: string; prompt: string; outputFormat: string; sceneType?: string }
+		| undefined;
+	await page.route('**/api/render/exterior', async (route) => {
+		calledExteriorRoute = true;
+		capturedBody = route.request().postDataJSON() as {
+			image: string;
+			prompt: string;
+			outputFormat: string;
+			sceneType?: string;
+		};
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/exterior-render.webp',
+				cost: 5,
+				balance: 95
+			})
+		});
+	});
+
+	await page.goto('/');
+	await page.getByRole('tab', { name: 'Экстерьер' }).click();
+	await page
+		.locator('#mode-panel-render input[type="file"]')
+		.setInputFiles({ name: 'house.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+	await page.getByRole('button', { name: 'Сгенерировать' }).click();
+
+	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/exterior-render.webp'
+	);
+	expect(calledExteriorRoute).toBe(true);
+	expect(capturedBody?.sceneType).toBeUndefined();
+});
+
 test('serves security headers and a content security policy', async ({ request }) => {
 	const response = await request.get('/');
 	const headers = response.headers();

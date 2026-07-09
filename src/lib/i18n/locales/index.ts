@@ -81,6 +81,7 @@ export interface Dictionary {
 	'auth.credit.entryStyleTransfer': string;
 	'auth.credit.entryUpscale': string;
 	'upload.label': string;
+	'upload.labelExterior': string;
 	'upload.button': string;
 	'upload.dropHint': string;
 	'upload.dropTitle': string;
@@ -90,6 +91,9 @@ export interface Dictionary {
 	'upload.errorSize': string;
 	'upload.errorUpload': string;
 	'upload.change': string;
+	'render.sceneType.label': string;
+	'render.sceneType.interior': string;
+	'render.sceneType.exterior': string;
 	'render.generate': string;
 	'render.generating': string;
 	'render.optional': string;

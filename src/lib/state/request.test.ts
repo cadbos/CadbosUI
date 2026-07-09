@@ -231,6 +231,41 @@ describe('normalizeForComparison', () => {
 	});
 });
 
+describe('sceneType', () => {
+	it('defaults to interior', () => {
+		expect(request.sceneType).toBe('interior');
+	});
+
+	it('setSceneType updates the UI routing value without changing the render body', () => {
+		applyAc9Fixture();
+		request.setSceneType('exterior');
+		expect(request.sceneType).toBe('exterior');
+		expect(request.toRenderRequest()).toEqual(AC9_RENDER_REQUEST);
+	});
+
+	it('reset() reverts to interior', () => {
+		request.setSceneType('exterior');
+		request.reset();
+		expect(request.sceneType).toBe('interior');
+	});
+
+	it('round-trips through toJSON/fromJSON', () => {
+		applyAc9Fixture();
+		request.setSceneType('exterior');
+		const snapshot = request.toJSON();
+		request.reset();
+		request.fromJSON(snapshot);
+		expect(request.sceneType).toBe('exterior');
+	});
+
+	it('defaults to interior when restoring JSON saved before this field existed', () => {
+		const legacySnapshot = buildAc9RequestJSON() as Partial<ReturnType<typeof buildAc9RequestJSON>>;
+		delete legacySnapshot.sceneType;
+		request.fromJSON(legacySnapshot);
+		expect(request.sceneType).toBe('interior');
+	});
+});
+
 describe('toRenderRequest', () => {
 	it('returns the wire body for a valid AC-9 fixture', () => {
 		applyAc9Fixture();

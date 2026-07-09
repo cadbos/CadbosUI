@@ -16,6 +16,7 @@ import { dev } from '$app/environment';
 import { createClient } from '$lib/server/archai/client';
 import {
 	postEditByPrompt,
+	postRenderExterior,
 	postRenderInterior,
 	postStyleTransfer,
 	postUpscale4K
@@ -23,7 +24,13 @@ import {
 import type { ArrayGenerationResponse, SingleGenerationResponse } from '$lib/server/archai';
 import type { RenderResponse, OutputFormat } from '$lib/api/contract';
 import { imageExtensionFromMime } from '$lib/server/image-utils';
-import { mockEdit, mockRender, mockStyleTransfer, mockUpscale } from '$lib/server/mocks/fixtures';
+import {
+	mockEdit,
+	mockRender,
+	mockRenderExterior,
+	mockStyleTransfer,
+	mockUpscale
+} from '$lib/server/mocks/fixtures';
 import { uploadImageBytes } from '$lib/server/uploads';
 
 // И-MA-6 / И-MA-ED3: default sync-call timeout, shared by render and edit.
@@ -117,9 +124,9 @@ async function storeGeneratedImage(
 	}
 }
 
-// Shared by renderInterior/upscale4k: both call an archAI endpoint that
-// returns either a single output URL or an array of them, and both fail the
-// same way (network error, provider error, empty/missing output).
+// Shared by renderInterior/renderExterior/upscale4k: all three call an archAI
+// endpoint that returns either a single output URL or an array of them, and
+// all fail the same way (network error, provider error, empty/missing output).
 async function processRenderResult(
 	operation: string,
 	clientMessage: string,
@@ -178,6 +185,33 @@ export async function renderInterior(
 				image: params.image,
 				outputFormat: params.outputFormat,
 				// Omit empty prompt — API treats its absence as Enhance mode.
+				...(params.prompt ? { prompt: params.prompt } : {})
+			}
+		})
+	);
+}
+
+// Post-MVP addition (docs/tz.md §8.2.2 lists render/exterior as out of the
+// documented MVP scope) — same request/response shape as renderInterior,
+// just a different archAI endpoint/model.
+export async function renderExterior(
+	platform: App.Platform | undefined,
+	params: { image: string; prompt: string; outputFormat: OutputFormat }
+): Promise<RenderResponse> {
+	const apiKey = platform?.env?.ARCHAI_API_KEY;
+
+	if (!apiKey) {
+		if (dev) return mockRenderExterior();
+		generationFailed('render/exterior', 'Render failed', 'ARCHAI_API_KEY not configured');
+	}
+
+	return processRenderResult('render/exterior', 'Render failed', platform, () =>
+		postRenderExterior({
+			client: requestClientFor(apiKey),
+			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+			body: {
+				image: params.image,
+				outputFormat: params.outputFormat,
 				...(params.prompt ? { prompt: params.prompt } : {})
 			}
 		})
