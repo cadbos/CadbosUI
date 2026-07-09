@@ -79,25 +79,14 @@ before the Change Date. See LICENSE for complete terms.
 		focusTab: (index) => modeTabs[index]?.focus()
 	});
 
-	function activateSceneType(index: number): void {
-		request.setSceneType(sceneTypes[index].id);
-		sceneTypeTabs[index]?.focus();
-	}
-
-	function onSceneTypeKeydown(event: KeyboardEvent): void {
-		const last = sceneTypes.length - 1;
-		const currentIndex = sceneTypes.findIndex((s) => s.id === request.sceneType);
-		let next: number | null = null;
-		if (event.key === 'ArrowRight') next = currentIndex === last ? 0 : currentIndex + 1;
-		else if (event.key === 'ArrowLeft') next = currentIndex === 0 ? last : currentIndex - 1;
-		else if (event.key === 'Home') next = 0;
-		else if (event.key === 'End') next = last;
-
-		if (next !== null && next !== currentIndex) {
-			event.preventDefault();
-			activateSceneType(next);
-		}
-	}
+	const sceneTypeTabController = createTabController({
+		itemCount: () => sceneTypes.length,
+		getActiveIndex: () => sceneTypes.findIndex((s) => s.id === request.sceneType),
+		setActiveIndex: (index) => {
+			request.setSceneType(sceneTypes[index].id);
+		},
+		focusTab: (index) => sceneTypeTabs[index]?.focus()
+	});
 
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const validation = $derived(request.validate());
@@ -215,8 +204,8 @@ before the Change Date. See LICENSE for complete terms.
 								aria-selected={request.sceneType === sceneTypeOption.id}
 								tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
 								class:active={request.sceneType === sceneTypeOption.id}
-								onclick={() => activateSceneType(index)}
-								onkeydown={onSceneTypeKeydown}
+								onclick={() => sceneTypeTabController.activate(index)}
+								onkeydown={sceneTypeTabController.onKeydown}
 							>
 								{t(sceneTypeOption.label)}
 							</button>
