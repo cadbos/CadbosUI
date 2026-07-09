@@ -20,15 +20,36 @@ before the Change Date. See LICENSE for complete terms.
 		extractApiErrorCode,
 		renderResultFromResponse,
 		request,
+		type SceneType,
 		type StyleSourceMode
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import { stylePresetsFor, type StylePreset } from '$lib/style-presets';
+	import { createTabController } from '$lib/utils';
+
+	type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
+
+	const REFERENCE_TABS: { id: ReferenceTab; label: TranslationKey }[] = [
+		{ id: 'photorealistic', label: 'styleTransfer.referenceTabPhotorealistic' },
+		{ id: 'conceptual', label: 'styleTransfer.referenceTabConceptual' },
+		{ id: 'custom', label: 'styleTransfer.referenceTabCustom' }
+	];
+
+	const sceneTypes: { id: SceneType; label: TranslationKey }[] = [
+		{ id: 'interior', label: 'render.sceneType.interior' },
+		{ id: 'exterior', label: 'render.sceneType.exterior' }
+	];
 
 	let guidance = $state('');
 	let applying = $state(false);
 	let error = $state<string | null>(null);
+	let referenceTab = $state<ReferenceTab>('photorealistic');
+	let referenceTabButtons = $state<HTMLElement[]>([]);
+	let selectedPresetId = $state<string | null>(null);
+	let presetButtons = $state<HTMLElement[]>([]);
+	let sceneTypeButtons = $state<HTMLElement[]>([]);
 
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const validation = $derived(request.validateStyleTransfer());
@@ -44,6 +65,55 @@ before the Change Date. See LICENSE for complete terms.
 		return 'styleTransfer.strengthStrong';
 	});
 	const strengthValueText = $derived(`${strengthPercent}% ${t(strengthTier)}`);
+	const currentPresets = $derived(
+		referenceTab === 'custom' ? [] : stylePresetsFor(request.sceneType, referenceTab)
+	);
+	const activePresetIndex = $derived(
+		Math.max(
+			currentPresets.findIndex((preset) => preset.id === selectedPresetId),
+			0
+		)
+	);
+
+	const referenceTabs = createTabController({
+		itemCount: () => REFERENCE_TABS.length,
+		getActiveIndex: () => REFERENCE_TABS.findIndex((tab) => tab.id === referenceTab),
+		setActiveIndex: (index) => {
+			const nextTab = REFERENCE_TABS[index].id;
+			if (nextTab === 'custom' && selectedPresetId !== null) {
+				selectedPresetId = null;
+				request.setStyleReferenceImage(undefined);
+			}
+			referenceTab = nextTab;
+		},
+		focusTab: (index) => referenceTabButtons[index]?.focus()
+	});
+
+	const presetRadios = createTabController({
+		itemCount: () => currentPresets.length,
+		getActiveIndex: () => activePresetIndex,
+		setActiveIndex: (index) => {
+			selectPreset(currentPresets[index]);
+		},
+		focusTab: (index) => presetButtons[index]?.focus()
+	});
+
+	const sceneTypeTabs = createTabController({
+		itemCount: () => sceneTypes.length,
+		getActiveIndex: () => sceneTypes.findIndex((s) => s.id === request.sceneType),
+		setActiveIndex: (index) => {
+			request.setSceneType(sceneTypes[index].id);
+		},
+		focusTab: (index) => sceneTypeButtons[index]?.focus()
+	});
+
+	function selectPreset(preset: StylePreset): void {
+		selectedPresetId = preset.id;
+		request.setStyleReferenceImage({
+			url: preset.src,
+			mime: preset.mime
+		});
+	}
 
 	function inputNumber(event: Event): number {
 		return event.currentTarget instanceof HTMLInputElement
@@ -145,7 +215,66 @@ before the Change Date. See LICENSE for complete terms.
 			<div class="column-header">
 				<h3>{t('styleTransfer.referenceImage')}</h3>
 			</div>
-			<ImageUpload target="styleReference" />
+
+			<div class="scene-type-toggle" role="tablist" aria-label={t('render.sceneType.label')}>
+				{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
+					<button
+						bind:this={sceneTypeButtons[index]}
+						type="button"
+						role="tab"
+						aria-selected={request.sceneType === sceneTypeOption.id}
+						tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
+						class:active={request.sceneType === sceneTypeOption.id}
+						onclick={() => sceneTypeTabs.activate(index)}
+						onkeydown={sceneTypeTabs.onKeydown}
+					>
+						{t(sceneTypeOption.label)}
+					</button>
+				{/each}
+			</div>
+
+			<div class="reference-tabs" role="tablist" aria-label={t('styleTransfer.referenceTabsLabel')}>
+				{#each REFERENCE_TABS as tab, index (tab.id)}
+					<button
+						bind:this={referenceTabButtons[index]}
+						type="button"
+						role="tab"
+						aria-selected={referenceTab === tab.id}
+						tabindex={referenceTab === tab.id ? 0 : -1}
+						class:active={referenceTab === tab.id}
+						onclick={() => referenceTabs.activate(index)}
+						onkeydown={referenceTabs.onKeydown}
+					>
+						{t(tab.label)}
+					</button>
+				{/each}
+			</div>
+
+			{#if referenceTab === 'custom'}
+				<ImageUpload target="styleReference" />
+			{:else if currentPresets.length === 0}
+				<p class="presets-empty">{t('styleTransfer.presetsEmpty')}</p>
+			{:else}
+				<p class="presets-hint" id="style-presets-hint">{t('styleTransfer.presetsGridLabel')}</p>
+				<div class="preset-grid" role="radiogroup" aria-labelledby="style-presets-hint">
+					{#each currentPresets as preset, index (preset.id)}
+						<button
+							bind:this={presetButtons[index]}
+							type="button"
+							role="radio"
+							class="preset"
+							class:selected={selectedPresetId === preset.id}
+							aria-checked={selectedPresetId === preset.id}
+							tabindex={index === activePresetIndex ? 0 : -1}
+							onclick={() => presetRadios.activate(index)}
+							onkeydown={presetRadios.onKeydown}
+						>
+							<img src={preset.src} alt={t(preset.label)} loading="lazy" />
+							<span>{t(preset.label)}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	</div>
 </section>
@@ -200,9 +329,8 @@ before the Change Date. See LICENSE for complete terms.
 			oninput={(event) => request.setStyleTransferStrength(inputNumber(event))}
 		/>
 		<span class="strength-scale" aria-hidden="true">
-			<span>{t('styleTransfer.strengthSubtle')}</span>
-			<span>{t('styleTransfer.strengthBalanced')}</span>
-			<span>{t('styleTransfer.strengthStrong')}</span>
+			<span>{t('styleTransfer.strengthLoose')}</span>
+			<span>{t('styleTransfer.strengthStrict')}</span>
 		</span>
 	</label>
 
@@ -312,6 +440,124 @@ before the Change Date. See LICENSE for complete terms.
 		display: block;
 	}
 
+	.scene-type-toggle {
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.25rem;
+		background: var(--color-background);
+		border-radius: 12px;
+	}
+
+	.scene-type-toggle button {
+		flex: 1;
+		padding: 0.5rem 1.25rem;
+		font: inherit;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--color-muted);
+		background: transparent;
+		border: none;
+		border-radius: 9px;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			color 0.15s;
+	}
+
+	.scene-type-toggle button.active {
+		background: var(--color-surface);
+		color: var(--color-text);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+	}
+
+	.reference-tabs {
+		display: flex;
+		width: 100%;
+		gap: 0.25rem;
+		padding: 0.25rem;
+		background: var(--color-background);
+		border-radius: 10px;
+	}
+
+	.reference-tabs button {
+		flex: 1;
+		padding: 0.375rem 0.625rem;
+		font: inherit;
+		font-size: 0.75rem;
+		font-weight: 500;
+		text-align: center;
+		color: var(--color-muted);
+		background: transparent;
+		border: none;
+		border-radius: 8px;
+		cursor: pointer;
+	}
+
+	.reference-tabs button.active {
+		color: var(--color-text);
+		background: var(--color-surface);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.presets-hint,
+	.presets-empty {
+		margin: 0;
+		font-size: 0.75rem;
+		color: var(--color-muted);
+	}
+
+	.preset-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.625rem;
+		max-height: 22rem;
+		padding-right: 0.25rem;
+		overflow-y: auto;
+		scrollbar-gutter: stable;
+	}
+
+	.preset {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+		padding: 0.375rem;
+		font: inherit;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		text-align: center;
+		color: var(--color-text);
+		background: var(--color-background);
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius);
+		cursor: pointer;
+		transition:
+			border-color 0.15s,
+			background 0.15s;
+	}
+
+	.preset:hover {
+		border-color: var(--color-accent);
+	}
+
+	.preset.selected {
+		border-color: var(--color-accent);
+		background: color-mix(in srgb, var(--color-accent) 8%, white);
+	}
+
+	.preset img {
+		width: 100%;
+		aspect-ratio: 1 / 1;
+		object-fit: cover;
+		border-radius: calc(var(--radius) - 4px);
+		display: block;
+	}
+
+	.preset span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
 	.strength-label,
 	.field {
 		display: flex;
@@ -396,6 +642,12 @@ before the Change Date. See LICENSE for complete terms.
 
 		.source-tabs button {
 			flex: 1;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.preset-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 	}
 </style>

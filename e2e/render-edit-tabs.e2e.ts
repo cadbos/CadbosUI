@@ -145,6 +145,7 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 	});
 	await expect(sourceUpload.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
 
+	await panel.getByRole('tab', { name: 'Свои' }).click();
 	const referenceUpload = panel.getByRole('region', { name: 'Референс стиля' });
 	await referenceUpload.locator('input[type="file"]').setInputFiles({
 		name: 'reference.png',
@@ -230,6 +231,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 	const styleTransferTab = page.getByRole('tab', { name: 'Перенос стиля' });
 	await styleTransferTab.click();
 	const stylePanel = page.locator('#mode-panel-styleTransfer');
+	await stylePanel.getByRole('tab', { name: 'Свои' }).click();
 	const referenceUpload = stylePanel.getByRole('region', { name: 'Референс стиля' });
 	await referenceUpload.locator('input[type="file"]').setInputFiles({
 		name: 'reference.png',
@@ -256,6 +258,150 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		image: 'https://cdn.example.test/source.webp',
 		prompt: 'render prompt for paid generation',
 		outputFormat: 'webp'
+	});
+});
+
+test('the Style transfer tab lets you pick a ready-made photorealistic preset as the reference', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockUpload(page);
+	let capturedBody: unknown = null;
+	await page.route('**/api/style-transfer', async (route) => {
+		capturedBody = route.request().postDataJSON();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/styled.webp',
+				cost: 4,
+				balance: 96
+			})
+		});
+	});
+
+	await page.goto('/');
+
+	const panel = page.locator('#mode-panel-styleTransfer');
+	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+
+	await panel
+		.locator('input[type="file"][aria-label="Исходное изображение"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('room') });
+
+	const presetTab = panel.getByRole('tab', { name: 'Реалистичные' });
+	await expect(presetTab).toHaveAttribute('aria-selected', 'true');
+
+	const preset = panel.getByRole('radio', { name: 'Спа-ванная из бетона' });
+	await preset.click();
+	await expect(preset).toHaveAttribute('aria-checked', 'true');
+
+	await panel.getByRole('button', { name: 'Перенести стиль' }).click();
+
+	expect(capturedBody).toMatchObject({
+		image: 'https://cdn.example.test/uploaded.webp',
+		referenceImage:
+			'https://style-presets.cadbos.com/interior/photorealistic/concrete-spa-bathroom.webp',
+		outputFormat: 'webp'
+	});
+});
+
+test('switching scene type clears a selected conceptual preset instead of keeping the stale reference image', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockUpload(page);
+
+	await page.goto('/');
+
+	const panel = page.locator('#mode-panel-styleTransfer');
+	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+
+	await panel
+		.locator('input[type="file"][aria-label="Исходное изображение"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('room') });
+
+	await panel.getByRole('tab', { name: 'Концептуальные' }).click();
+	const ukiyoE = panel.getByRole('radio', { name: 'Укиё-э' });
+	await ukiyoE.click();
+	await expect(ukiyoE).toHaveAttribute('aria-checked', 'true');
+	await expect(panel.getByRole('button', { name: 'Перенести стиль' })).toBeEnabled();
+
+	// Interior and exterior conceptual presets reuse the same id/label
+	// ("Укиё-э"), so this switch must not leave the exterior tile looking
+	// selected while the reference image still points at the interior asset.
+	await panel.getByRole('tab', { name: 'Экстерьер' }).click();
+
+	await expect(panel.getByRole('radio', { name: 'Укиё-э' })).toHaveAttribute(
+		'aria-checked',
+		'false'
+	);
+	await expect(panel.getByRole('button', { name: 'Перенести стиль' })).toBeDisabled();
+});
+
+test('switching from a custom reference upload back to a preset tab clears the uploaded image', async ({
+	page
+}) => {
+	await authenticate(page);
+	let capturedBody: unknown = null;
+	await page.route('**/api/uploads', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				url: styleTransferUploadUrl(route),
+				mime: 'image/webp',
+				size: 1024,
+				dimensions: [800, 600]
+			})
+		});
+	});
+	await page.route('**/api/style-transfer', async (route) => {
+		capturedBody = route.request().postDataJSON();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/styled.webp',
+				cost: 4,
+				balance: 96
+			})
+		});
+	});
+
+	await page.goto('/');
+
+	const panel = page.locator('#mode-panel-styleTransfer');
+	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+
+	const sourceUpload = panel.getByRole('region', { name: 'Исходное изображение' });
+	await sourceUpload.locator('input[type="file"]').setInputFiles({
+		name: 'room.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from('room')
+	});
+
+	await panel.getByRole('tab', { name: 'Свои' }).click();
+	const referenceUpload = panel.getByRole('region', { name: 'Референс стиля' });
+	await referenceUpload.locator('input[type="file"]').setInputFiles({
+		name: 'reference.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from('reference')
+	});
+	await expect(panel.getByRole('button', { name: 'Перенести стиль' })).toBeEnabled();
+
+	await panel.getByRole('tab', { name: 'Реалистичные' }).click();
+	await expect(panel.getByRole('button', { name: 'Перенести стиль' })).toBeDisabled();
+
+	const preset = panel.getByRole('radio', { name: 'Спа-ванная из бетона' });
+	await preset.click();
+	await panel.getByRole('button', { name: 'Перенести стиль' }).click();
+
+	// The submitted reference must be the freshly selected preset, not the
+	// custom upload left over from the earlier "Custom" tab.
+	expect(capturedBody).toMatchObject({
+		referenceImage:
+			'https://style-presets.cadbos.com/interior/photorealistic/concrete-spa-bathroom.webp'
 	});
 });
 
