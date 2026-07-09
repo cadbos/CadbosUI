@@ -47,7 +47,6 @@ before the Change Date. See LICENSE for complete terms.
 	let error = $state<string | null>(null);
 	let referenceTab = $state<ReferenceTab>('photorealistic');
 	let referenceTabButtons = $state<HTMLElement[]>([]);
-	let selectedPresetId = $state<string | null>(null);
 	let presetButtons = $state<HTMLElement[]>([]);
 	let sceneTypeButtons = $state<HTMLElement[]>([]);
 
@@ -67,6 +66,9 @@ before the Change Date. See LICENSE for complete terms.
 	const strengthValueText = $derived(`${strengthPercent}% ${t(strengthTier)}`);
 	const currentPresets = $derived(
 		referenceTab === 'custom' ? [] : stylePresetsFor(request.sceneType, referenceTab)
+	);
+	const selectedPresetId = $derived(
+		currentPresets.find((preset) => preset.src === request.styleReferenceImage?.url)?.id ?? null
 	);
 	const activePresetIndex = $derived(
 		Math.max(
@@ -106,12 +108,10 @@ before the Change Date. See LICENSE for complete terms.
 	});
 
 	function clearReferenceSelection(): void {
-		selectedPresetId = null;
 		request.setStyleReferenceImage(undefined);
 	}
 
 	function selectPreset(preset: StylePreset): void {
-		selectedPresetId = preset.id;
 		request.setStyleReferenceImage({
 			url: preset.src,
 			mime: preset.mime
@@ -225,7 +225,9 @@ before the Change Date. See LICENSE for complete terms.
 						bind:this={sceneTypeButtons[index]}
 						type="button"
 						role="tab"
+						id={`style-scene-tab-${sceneTypeOption.id}`}
 						aria-selected={request.sceneType === sceneTypeOption.id}
+						aria-controls="style-reference-panel"
 						tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
 						class:active={request.sceneType === sceneTypeOption.id}
 						onclick={() => sceneTypeTabs.activate(index)}
@@ -242,7 +244,9 @@ before the Change Date. See LICENSE for complete terms.
 						bind:this={referenceTabButtons[index]}
 						type="button"
 						role="tab"
+						id={`style-reference-tab-${tab.id}`}
 						aria-selected={referenceTab === tab.id}
+						aria-controls="style-reference-panel"
 						tabindex={referenceTab === tab.id ? 0 : -1}
 						class:active={referenceTab === tab.id}
 						onclick={() => referenceTabs.activate(index)}
@@ -253,31 +257,38 @@ before the Change Date. See LICENSE for complete terms.
 				{/each}
 			</div>
 
-			{#if referenceTab === 'custom'}
-				<ImageUpload target="styleReference" />
-			{:else if currentPresets.length === 0}
-				<p class="presets-empty">{t('styleTransfer.presetsEmpty')}</p>
-			{:else}
-				<p class="presets-hint" id="style-presets-hint">{t('styleTransfer.presetsGridLabel')}</p>
-				<div class="preset-grid" role="radiogroup" aria-labelledby="style-presets-hint">
-					{#each currentPresets as preset, index (preset.id)}
-						<button
-							bind:this={presetButtons[index]}
-							type="button"
-							role="radio"
-							class="preset"
-							class:selected={selectedPresetId === preset.id}
-							aria-checked={selectedPresetId === preset.id}
-							tabindex={index === activePresetIndex ? 0 : -1}
-							onclick={() => presetRadios.activate(index)}
-							onkeydown={presetRadios.onKeydown}
-						>
-							<img src={preset.src} alt={t(preset.label)} loading="lazy" />
-							<span>{t(preset.label)}</span>
-						</button>
-					{/each}
-				</div>
-			{/if}
+			<div
+				role="tabpanel"
+				id="style-reference-panel"
+				aria-labelledby={`style-scene-tab-${request.sceneType} style-reference-tab-${referenceTab}`}
+				tabindex="0"
+			>
+				{#if referenceTab === 'custom'}
+					<ImageUpload target="styleReference" />
+				{:else if currentPresets.length === 0}
+					<p class="presets-empty">{t('styleTransfer.presetsEmpty')}</p>
+				{:else}
+					<p class="presets-hint" id="style-presets-hint">{t('styleTransfer.presetsGridLabel')}</p>
+					<div class="preset-grid" role="radiogroup" aria-labelledby="style-presets-hint">
+						{#each currentPresets as preset, index (preset.id)}
+							<button
+								bind:this={presetButtons[index]}
+								type="button"
+								role="radio"
+								class="preset"
+								class:selected={selectedPresetId === preset.id}
+								aria-checked={selectedPresetId === preset.id}
+								tabindex={index === activePresetIndex ? 0 : -1}
+								onclick={() => presetRadios.activate(index)}
+								onkeydown={presetRadios.onKeydown}
+							>
+								<img src={preset.src} alt={t(preset.label)} loading="lazy" />
+								<span>{t(preset.label)}</span>
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
 		</div>
 	</div>
 </section>
