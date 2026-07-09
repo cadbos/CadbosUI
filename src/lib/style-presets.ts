@@ -28,7 +28,7 @@ export interface StylePreset {
 
 export const STYLE_PRESETS: StylePreset[] = [
 	{
-		id: 'concrete-spa-bathroom',
+		id: 'interior-concrete-spa-bathroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.concreteSpaBathroom',
@@ -36,7 +36,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'warm-wood-kitchen',
+		id: 'interior-warm-wood-kitchen',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.warmWoodKitchen',
@@ -44,7 +44,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'dark-matte-kitchen',
+		id: 'interior-dark-matte-kitchen',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.darkMatteKitchen',
@@ -52,7 +52,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'coastal-living-room',
+		id: 'interior-coastal-living-room',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.coastalLivingRoom',
@@ -60,7 +60,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'mid-century-living-room',
+		id: 'interior-mid-century-living-room',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.midCenturyLivingRoom',
@@ -68,7 +68,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'serene-beige-bedroom',
+		id: 'interior-serene-beige-bedroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.sereneBeigeBedroom',
@@ -76,7 +76,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'green-salon-interior',
+		id: 'interior-green-salon-interior',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.greenSalonInterior',
@@ -84,7 +84,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'industrial-concrete-kitchen',
+		id: 'interior-industrial-concrete-kitchen',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.industrialConcreteKitchen',
@@ -92,7 +92,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'retro-teal-bathroom',
+		id: 'interior-retro-teal-bathroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.retroTealBathroom',
@@ -100,7 +100,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'city-view-living-room',
+		id: 'interior-city-view-living-room',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.cityViewLivingRoom',
@@ -108,7 +108,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'blush-kids-bedroom',
+		id: 'interior-blush-kids-bedroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.blushKidsBedroom',
@@ -116,7 +116,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'botanical-sunroom-loft',
+		id: 'interior-botanical-sunroom-loft',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.botanicalSunroomLoft',
@@ -124,7 +124,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'skyline-boardroom',
+		id: 'interior-skyline-boardroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.skylineBoardroom',
@@ -132,7 +132,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'alpine-chalet-bedroom',
+		id: 'interior-alpine-chalet-bedroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.alpineChaletBedroom',
@@ -140,7 +140,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'marble-luxury-bedroom',
+		id: 'interior-marble-luxury-bedroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.marbleLuxuryBedroom',
@@ -148,7 +148,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'skylight-soaking-bathroom',
+		id: 'interior-skylight-soaking-bathroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.skylightSoakingBathroom',
@@ -156,7 +156,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'boutique-retail-space',
+		id: 'interior-boutique-retail-space',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.boutiqueRetailSpace',
@@ -164,7 +164,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'wood-slat-dining-nook',
+		id: 'interior-wood-slat-dining-nook',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.woodSlatDiningNook',
@@ -172,7 +172,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'gold-marble-bathroom',
+		id: 'interior-gold-marble-bathroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.goldMarbleBathroom',
@@ -180,7 +180,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'brick-loft-living-room',
+		id: 'interior-brick-loft-living-room',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.brickLoftLivingRoom',
@@ -188,7 +188,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'sunlit-brick-office',
+		id: 'interior-sunlit-brick-office',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.sunlitBrickOffice',
@@ -196,7 +196,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'japandi-dining-booths',
+		id: 'interior-japandi-dining-booths',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.japandiDiningBooths',
@@ -204,7 +204,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'mediterranean-seaside-loggia',
+		id: 'interior-mediterranean-seaside-loggia',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.mediterraneanSeasideLoggia',
@@ -212,7 +212,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'city-view-bedroom',
+		id: 'interior-city-view-bedroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.cityViewBedroom',
@@ -220,7 +220,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'minimalist-white-kitchen',
+		id: 'interior-minimalist-white-kitchen',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.minimalistWhiteKitchen',
@@ -228,7 +228,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'warm-gray-bathroom',
+		id: 'interior-warm-gray-bathroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.warmGrayBathroom',
@@ -236,7 +236,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'moroccan-lounge-nook',
+		id: 'interior-moroccan-lounge-nook',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.moroccanLoungeNook',
@@ -244,7 +244,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'scandinavian-bedroom',
+		id: 'interior-scandinavian-bedroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.scandinavianBedroom',
@@ -252,7 +252,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'spa-retreat-bathroom',
+		id: 'interior-spa-retreat-bathroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.spaRetreatBathroom',
@@ -260,7 +260,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'rustic-kitchen-nook',
+		id: 'interior-rustic-kitchen-nook',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.rusticKitchenNook',
@@ -268,7 +268,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'japanese-izakaya-interior',
+		id: 'interior-japanese-izakaya-interior',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.japaneseIzakayaInterior',
@@ -276,7 +276,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'tropical-outdoor-bathroom',
+		id: 'interior-tropical-outdoor-bathroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.tropicalOutdoorBathroom',
@@ -284,7 +284,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'pure-white-bathroom',
+		id: 'interior-pure-white-bathroom',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.pureWhiteBathroom',
@@ -292,7 +292,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'dark-luxury-marble-kitchen',
+		id: 'interior-dark-luxury-marble-kitchen',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.darkLuxuryMarbleKitchen',
@@ -300,7 +300,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'blush-glam-living-room',
+		id: 'interior-blush-glam-living-room',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.blushGlamLivingRoom',
@@ -308,7 +308,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'wabi-sabi-dining-room',
+		id: 'interior-wabi-sabi-dining-room',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.wabiSabiDiningRoom',
@@ -316,7 +316,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'retro-checkerboard-cafe',
+		id: 'interior-retro-checkerboard-cafe',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.retroCheckerboardCafe',
@@ -324,7 +324,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'eclectic-colorful-living-room',
+		id: 'interior-eclectic-colorful-living-room',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.eclecticColorfulLivingRoom',
@@ -332,7 +332,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'golden-hour-marble-kitchen',
+		id: 'interior-golden-hour-marble-kitchen',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.goldenHourMarbleKitchen',
@@ -340,7 +340,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'concrete-loft-green-velvet',
+		id: 'interior-concrete-loft-green-velvet',
 		sceneType: 'interior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.interior.photorealistic.concreteLoftGreenVelvet',
@@ -348,7 +348,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'watercolor-v1',
+		id: 'interior-watercolor-v1',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.watercolorV1',
@@ -356,7 +356,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'watercolor-v2',
+		id: 'interior-watercolor-v2',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.watercolorV2',
@@ -364,7 +364,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'architectural-marker',
+		id: 'interior-architectural-marker',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.architecturalMarker',
@@ -372,7 +372,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'marker-sketch',
+		id: 'interior-marker-sketch',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.markerSketch',
@@ -380,7 +380,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'architectural-pen',
+		id: 'interior-architectural-pen',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.architecturalPen',
@@ -388,7 +388,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'pencil-sketch',
+		id: 'interior-pencil-sketch',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.pencilSketch',
@@ -396,7 +396,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'digital-painting',
+		id: 'interior-digital-painting',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.digitalPainting',
@@ -404,7 +404,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'ink-wash',
+		id: 'interior-ink-wash',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.inkWash',
@@ -412,7 +412,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'ukiyo-e',
+		id: 'interior-ukiyo-e',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.ukiyoE',
@@ -420,7 +420,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'hand-painted-anime',
+		id: 'interior-hand-painted-anime',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.handPaintedAnime',
@@ -428,7 +428,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'bauhaus',
+		id: 'interior-bauhaus',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.bauhaus',
@@ -436,7 +436,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'xerox-collage',
+		id: 'interior-xerox-collage',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.xeroxCollage',
@@ -444,7 +444,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'coloring-book',
+		id: 'interior-coloring-book',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.coloringBook',
@@ -452,7 +452,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'risograph',
+		id: 'interior-risograph',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.risograph',
@@ -460,7 +460,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'risograph-mono',
+		id: 'interior-risograph-mono',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.risographMono',
@@ -468,7 +468,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'white-model',
+		id: 'interior-white-model',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.whiteModel',
@@ -476,7 +476,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'editorial-cartoon',
+		id: 'interior-editorial-cartoon',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.editorialCartoon',
@@ -484,7 +484,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'bw-cinematic',
+		id: 'interior-bw-cinematic',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.bwCinematic',
@@ -492,7 +492,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'parallel-lines',
+		id: 'interior-parallel-lines',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.parallelLines',
@@ -500,7 +500,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'travel-poster',
+		id: 'interior-travel-poster',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.travelPoster',
@@ -508,7 +508,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'zen-ink',
+		id: 'interior-zen-ink',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.zenInk',
@@ -516,7 +516,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'light-wash',
+		id: 'interior-light-wash',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.lightWash',
@@ -524,7 +524,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'lofi-pixel',
+		id: 'interior-lofi-pixel',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.lofiPixel',
@@ -532,7 +532,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'impasto-oil',
+		id: 'interior-impasto-oil',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.impastoOil',
@@ -540,7 +540,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'neutral-technical',
+		id: 'interior-neutral-technical',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.neutralTechnical',
@@ -548,7 +548,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'naive-crayon',
+		id: 'interior-naive-crayon',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.naiveCrayon',
@@ -556,7 +556,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'blueprint',
+		id: 'interior-blueprint',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.blueprint',
@@ -564,7 +564,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'brutalist',
+		id: 'interior-brutalist',
 		sceneType: 'interior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.interior.conceptual.brutalist',
@@ -572,7 +572,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'concrete-cube-house',
+		id: 'exterior-concrete-cube-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.concreteCubeHouse',
@@ -580,7 +580,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'black-roof-farmhouse',
+		id: 'exterior-black-roof-farmhouse',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.blackRoofFarmhouse',
@@ -588,7 +588,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'red-brick-corner-building',
+		id: 'exterior-red-brick-corner-building',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.redBrickCornerBuilding',
@@ -596,7 +596,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'black-barn-in-snow',
+		id: 'exterior-black-barn-in-snow',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.blackBarnInSnow',
@@ -604,7 +604,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'cozy-wood-cabin',
+		id: 'exterior-cozy-wood-cabin',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.cozyWoodCabin',
@@ -612,7 +612,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'coastal-tile-roof-house',
+		id: 'exterior-coastal-tile-roof-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.coastalTileRoofHouse',
@@ -620,7 +620,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'concrete-house-at-dusk',
+		id: 'exterior-concrete-house-at-dusk',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.concreteHouseAtDusk',
@@ -628,7 +628,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'white-minimalist-villa',
+		id: 'exterior-white-minimalist-villa',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.whiteMinimalistVilla',
@@ -636,7 +636,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'curved-concrete-atrium',
+		id: 'exterior-curved-concrete-atrium',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.curvedConcreteAtrium',
@@ -644,7 +644,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'japanese-courtyard-house',
+		id: 'exterior-japanese-courtyard-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.japaneseCourtyardHouse',
@@ -652,7 +652,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'foggy-log-cabin',
+		id: 'exterior-foggy-log-cabin',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.foggyLogCabin',
@@ -660,7 +660,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'foggy-beach-house',
+		id: 'exterior-foggy-beach-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.foggyBeachHouse',
@@ -668,7 +668,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'desert-minimalist-house',
+		id: 'exterior-desert-minimalist-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.desertMinimalistHouse',
@@ -676,7 +676,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'mediterranean-white-villa',
+		id: 'exterior-mediterranean-white-villa',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.mediterraneanWhiteVilla',
@@ -684,7 +684,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'corporate-glass-courtyard',
+		id: 'exterior-corporate-glass-courtyard',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.corporateGlassCourtyard',
@@ -692,7 +692,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'craftsman-house-under-trees',
+		id: 'exterior-craftsman-house-under-trees',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.craftsmanHouseUnderTrees',
@@ -700,7 +700,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'desert-dusk-cactus-house',
+		id: 'exterior-desert-dusk-cactus-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.desertDuskCactusHouse',
@@ -708,7 +708,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'foggy-minimalist-beach-house',
+		id: 'exterior-foggy-minimalist-beach-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.foggyMinimalistBeachHouse',
@@ -716,7 +716,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'greek-blue-door-courtyard',
+		id: 'exterior-greek-blue-door-courtyard',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.greekBlueDoorCourtyard',
@@ -724,7 +724,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'southwest-desert-home',
+		id: 'exterior-southwest-desert-home',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.southwestDesertHome',
@@ -732,7 +732,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'snowy-black-barn',
+		id: 'exterior-snowy-black-barn',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.snowyBlackBarn',
@@ -740,7 +740,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'cliffside-sunset-house',
+		id: 'exterior-cliffside-sunset-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.cliffsideSunsetHouse',
@@ -748,7 +748,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'cliffside-infinity-villa',
+		id: 'exterior-cliffside-infinity-villa',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.cliffsideInfinityVilla',
@@ -756,7 +756,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'adobe-cactus-courtyard',
+		id: 'exterior-adobe-cactus-courtyard',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.adobeCactusCourtyard',
@@ -764,7 +764,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'stone-cottage-garden',
+		id: 'exterior-stone-cottage-garden',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.stoneCottageGarden',
@@ -772,7 +772,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'black-cabin-in-meadow',
+		id: 'exterior-black-cabin-in-meadow',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.blackCabinInMeadow',
@@ -780,7 +780,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'brick-townhouse-row',
+		id: 'exterior-brick-townhouse-row',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.brickTownhouseRow',
@@ -788,7 +788,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'thatched-beach-villa',
+		id: 'exterior-thatched-beach-villa',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.thatchedBeachVilla',
@@ -796,7 +796,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'tropical-pool-pavilion',
+		id: 'exterior-tropical-pool-pavilion',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.tropicalPoolPavilion',
@@ -804,7 +804,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'mediterranean-dusk-pool-villa',
+		id: 'exterior-mediterranean-dusk-pool-villa',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.mediterraneanDuskPoolVilla',
@@ -812,7 +812,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'snowy-angular-white-house',
+		id: 'exterior-snowy-angular-white-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.snowyAngularWhiteHouse',
@@ -820,7 +820,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'wood-cabin-at-dusk',
+		id: 'exterior-wood-cabin-at-dusk',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.woodCabinAtDusk',
@@ -828,7 +828,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'perforated-concrete-house',
+		id: 'exterior-perforated-concrete-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.perforatedConcreteHouse',
@@ -836,7 +836,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'cantilevered-mountainside-house',
+		id: 'exterior-cantilevered-mountainside-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.cantileveredMountainsideHouse',
@@ -844,7 +844,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'glass-gable-forest-house',
+		id: 'exterior-glass-gable-forest-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.glassGableForestHouse',
@@ -852,7 +852,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'sculptural-stone-tower',
+		id: 'exterior-sculptural-stone-tower',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.sculpturalStoneTower',
@@ -860,7 +860,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'futuristic-pod-houses',
+		id: 'exterior-futuristic-pod-houses',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.futuristicPodHouses',
@@ -868,7 +868,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'hillside-wood-cabin',
+		id: 'exterior-hillside-wood-cabin',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.hillsideWoodCabin',
@@ -876,7 +876,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'waterfront-glass-tower',
+		id: 'exterior-waterfront-glass-tower',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.waterfrontGlassTower',
@@ -884,7 +884,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'glass-cantilever-building',
+		id: 'exterior-glass-cantilever-building',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.glassCantileverBuilding',
@@ -892,7 +892,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'mediterranean-cafe-patio',
+		id: 'exterior-mediterranean-cafe-patio',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.mediterraneanCafePatio',
@@ -900,7 +900,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'futuristic-geometric-house',
+		id: 'exterior-futuristic-geometric-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.futuristicGeometricHouse',
@@ -908,7 +908,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'lakeside-a-frame-cabin',
+		id: 'exterior-lakeside-a-frame-cabin',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.lakesideAFrameCabin',
@@ -916,7 +916,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'autumn-colonial-house',
+		id: 'exterior-autumn-colonial-house',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.autumnColonialHouse',
@@ -924,7 +924,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'zen-rock-garden-courtyard',
+		id: 'exterior-zen-rock-garden-courtyard',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.zenRockGardenCourtyard',
@@ -932,7 +932,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'urban-modular-office',
+		id: 'exterior-urban-modular-office',
 		sceneType: 'exterior',
 		category: 'photorealistic',
 		label: 'styleTransfer.preset.exterior.photorealistic.urbanModularOffice',
@@ -940,7 +940,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/webp'
 	},
 	{
-		id: 'watercolor-v1',
+		id: 'exterior-watercolor-v1',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.watercolorV1',
@@ -948,7 +948,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'watercolor-v2',
+		id: 'exterior-watercolor-v2',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.watercolorV2',
@@ -956,7 +956,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'architectural-marker',
+		id: 'exterior-architectural-marker',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.architecturalMarker',
@@ -964,7 +964,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'marker-sketch',
+		id: 'exterior-marker-sketch',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.markerSketch',
@@ -972,7 +972,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'architectural-pen',
+		id: 'exterior-architectural-pen',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.architecturalPen',
@@ -980,7 +980,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'pencil-sketch',
+		id: 'exterior-pencil-sketch',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.pencilSketch',
@@ -988,7 +988,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'digital-painting',
+		id: 'exterior-digital-painting',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.digitalPainting',
@@ -996,7 +996,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'ink-wash',
+		id: 'exterior-ink-wash',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.inkWash',
@@ -1004,7 +1004,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'ukiyo-e',
+		id: 'exterior-ukiyo-e',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.ukiyoE',
@@ -1012,7 +1012,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'hand-painted-anime',
+		id: 'exterior-hand-painted-anime',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.handPaintedAnime',
@@ -1020,7 +1020,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'bauhaus',
+		id: 'exterior-bauhaus',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.bauhaus',
@@ -1028,7 +1028,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'xerox-collage',
+		id: 'exterior-xerox-collage',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.xeroxCollage',
@@ -1036,7 +1036,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'coloring-book',
+		id: 'exterior-coloring-book',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.coloringBook',
@@ -1044,7 +1044,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'risograph',
+		id: 'exterior-risograph',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.risograph',
@@ -1052,7 +1052,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'risograph-mono',
+		id: 'exterior-risograph-mono',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.risographMono',
@@ -1060,7 +1060,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'white-model',
+		id: 'exterior-white-model',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.whiteModel',
@@ -1068,7 +1068,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'editorial-cartoon',
+		id: 'exterior-editorial-cartoon',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.editorialCartoon',
@@ -1076,7 +1076,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'bw-cinematic',
+		id: 'exterior-bw-cinematic',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.bwCinematic',
@@ -1084,7 +1084,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'parallel-lines',
+		id: 'exterior-parallel-lines',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.parallelLines',
@@ -1092,7 +1092,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'travel-poster',
+		id: 'exterior-travel-poster',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.travelPoster',
@@ -1100,7 +1100,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'zen-ink',
+		id: 'exterior-zen-ink',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.zenInk',
@@ -1108,7 +1108,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'light-wash',
+		id: 'exterior-light-wash',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.lightWash',
@@ -1116,7 +1116,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'lofi-pixel',
+		id: 'exterior-lofi-pixel',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.lofiPixel',
@@ -1124,7 +1124,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'impasto-oil',
+		id: 'exterior-impasto-oil',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.impastoOil',
@@ -1132,7 +1132,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'neutral-technical',
+		id: 'exterior-neutral-technical',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.neutralTechnical',
@@ -1140,7 +1140,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'naive-crayon',
+		id: 'exterior-naive-crayon',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.naiveCrayon',
@@ -1148,7 +1148,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'blueprint',
+		id: 'exterior-blueprint',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.blueprint',
@@ -1156,7 +1156,7 @@ export const STYLE_PRESETS: StylePreset[] = [
 		mime: 'image/jpeg'
 	},
 	{
-		id: 'brutalist',
+		id: 'exterior-brutalist',
 		sceneType: 'exterior',
 		category: 'conceptual',
 		label: 'styleTransfer.preset.exterior.conceptual.brutalist',
