@@ -80,10 +80,7 @@ before the Change Date. See LICENSE for complete terms.
 		getActiveIndex: () => REFERENCE_TABS.findIndex((tab) => tab.id === referenceTab),
 		setActiveIndex: (index) => {
 			const nextTab = REFERENCE_TABS[index].id;
-			if (nextTab === 'custom' && selectedPresetId !== null) {
-				selectedPresetId = null;
-				request.setStyleReferenceImage(undefined);
-			}
+			if (nextTab !== referenceTab) clearReferenceSelection();
 			referenceTab = nextTab;
 		},
 		focusTab: (index) => referenceTabButtons[index]?.focus()
@@ -102,10 +99,16 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => sceneTypes.length,
 		getActiveIndex: () => sceneTypes.findIndex((s) => s.id === request.sceneType),
 		setActiveIndex: (index) => {
+			if (referenceTab !== 'custom') clearReferenceSelection();
 			request.setSceneType(sceneTypes[index].id);
 		},
 		focusTab: (index) => sceneTypeButtons[index]?.focus()
 	});
+
+	function clearReferenceSelection(): void {
+		selectedPresetId = null;
+		request.setStyleReferenceImage(undefined);
+	}
 
 	function selectPreset(preset: StylePreset): void {
 		selectedPresetId = preset.id;
