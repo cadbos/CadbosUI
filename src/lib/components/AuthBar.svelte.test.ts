@@ -243,6 +243,28 @@ it('shows the approved-account balance and history rounded to two decimals after
 	await expect.element(screen.getByText(/−0\.06 → 4\.94/)).toBeVisible();
 });
 
+it('restores an authenticated session on load, including an upscale entry in credit history', async () => {
+	mockFetch(
+		() => new Response(null, { status: 401 }),
+		undefined,
+		() =>
+			Response.json({
+				user: { pubkey: pk },
+				credit: {
+					balance: 10,
+					updatedAt: Date.now(),
+					history: [{ id: 'txn-2', amount: 1.2, balanceAfter: 10, kind: 'upscale', createdAt: 2 }]
+				}
+			})
+	);
+
+	await auth.loadSession();
+
+	expect(auth.status).toBe('authenticated');
+	expect(auth.pubkey).toBe(pk);
+	expect(auth.credit?.history).toEqual([expect.objectContaining({ kind: 'upscale' })]);
+});
+
 it('cancelling after the signer connects but before verification stays anonymous', async () => {
 	let verifyCalled = false;
 	mockFetch(() => {
