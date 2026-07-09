@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Eraser, Pencil, Plus } from '@lucide/svelte';
+	import { Eraser, Pencil, Plus, Sun } from '@lucide/svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import {
 		creditErrorKey,
@@ -27,14 +27,16 @@ before the Change Date. See LICENSE for complete terms.
 	import { createTabController, formatCredit } from '$lib/utils';
 	import EditAddObjectTool from '$lib/components/EditAddObjectTool.svelte';
 	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
+	import EditAtmosphereTool from '$lib/components/EditAtmosphereTool.svelte';
 
-	type ToolId = 'freeform' | 'add-object' | 'remove-object';
+	type ToolId = 'freeform' | 'add-object' | 'remove-object' | 'atmosphere';
 	type LucideIcon = typeof Pencil;
 
 	const TOOLS: { id: ToolId; label: TranslationKey; Icon: LucideIcon }[] = [
 		{ id: 'freeform', label: 'edit.tool.freeform', Icon: Pencil },
 		{ id: 'add-object', label: 'edit.tool.addObject', Icon: Plus },
-		{ id: 'remove-object', label: 'edit.tool.removeObject', Icon: Eraser }
+		{ id: 'remove-object', label: 'edit.tool.removeObject', Icon: Eraser },
+		{ id: 'atmosphere', label: 'edit.tool.atmosphere', Icon: Sun }
 	];
 
 	let activeTool = $state<ToolId>('freeform');
@@ -53,8 +55,10 @@ before the Change Date. See LICENSE for complete terms.
 	});
 
 	const currentRender = $derived(request.currentRender);
-	const canUndo = $derived(request.canUndoEdit);
 	const isAuthenticated = $derived(auth.status === 'authenticated');
+	// Editing targets the latest render/edit result once one exists; before that,
+	// it falls back to the room photo uploaded on the Render tab (same underlying
+	// state — FR: editing works independent of having rendered first).
 	const targetImageUrl = $derived(currentRender?.outputUrls[0] ?? request.image?.url);
 	const toolDisabled = $derived(applying || !isAuthenticated);
 
@@ -102,11 +106,6 @@ before the Change Date. See LICENSE for complete terms.
 			},
 			err
 		);
-	}
-
-	function undoEdit(): void {
-		request.undoLastEdit();
-		instruction = '';
 	}
 </script>
 
@@ -191,16 +190,14 @@ before the Change Date. See LICENSE for complete terms.
 				{applying}
 				onApply={(prompt) => void submit(prompt, 'remove-object')}
 			/>
+		{:else if activeTool === 'atmosphere'}
+			<EditAtmosphereTool
+				disabled={toolDisabled || !targetImageUrl}
+				{applying}
+				onApply={(prompt) => void submit(prompt, 'atmosphere')}
+			/>
 		{/if}
 	</div>
-
-	{#if canUndo}
-		<div class="actions">
-			<button type="button" class="btn-undo" onclick={undoEdit} disabled={applying}>
-				{t('edit.undo')}
-			</button>
-		</div>
-	{/if}
 
 	{#if !isAuthenticated}
 		<p class="auth-hint">{t('edit.signInToApply')}</p>
@@ -372,31 +369,6 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.btn-apply:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
-	}
-
-	.btn-undo {
-		padding: 0.6rem 1.25rem;
-		font: inherit;
-		font-size: 0.9375rem;
-		font-weight: 500;
-		color: var(--color-text);
-		background: var(--color-background);
-		border: 1.5px solid var(--color-border);
-		border-radius: 10px;
-		cursor: pointer;
-		transition:
-			border-color 0.15s,
-			background 0.15s;
-	}
-
-	.btn-undo:hover:not(:disabled) {
-		border-color: var(--color-muted);
-		background: var(--color-surface-hover);
-	}
-
-	.btn-undo:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
 	}

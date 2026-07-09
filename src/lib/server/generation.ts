@@ -14,10 +14,16 @@
 
 import { dev } from '$app/environment';
 import { createClient } from '$lib/server/archai/client';
-import { postEditByPrompt, postRenderInterior, postStyleTransfer } from '$lib/server/archai';
+import {
+	postEditByPrompt,
+	postRenderInterior,
+	postStyleTransfer,
+	postUpscale4K
+} from '$lib/server/archai';
+import type { ArrayGenerationResponse, SingleGenerationResponse } from '$lib/server/archai';
 import type { RenderResponse, OutputFormat } from '$lib/api/contract';
 import { imageExtensionFromMime } from '$lib/server/image-utils';
-import { mockEdit, mockRender, mockStyleTransfer } from '$lib/server/mocks/fixtures';
+import { mockEdit, mockRender, mockStyleTransfer, mockUpscale } from '$lib/server/mocks/fixtures';
 import { uploadImageBytes } from '$lib/server/uploads';
 
 // И-MA-6 / И-MA-ED3: default sync-call timeout, shared by render and edit.
@@ -111,6 +117,48 @@ async function storeGeneratedImage(
 	}
 }
 
+// Shared by renderInterior/upscale4k: both call an archAI endpoint that
+// returns either a single output URL or an array of them, and both fail the
+// same way (network error, provider error, empty/missing output).
+async function processRenderResult(
+	operation: string,
+	clientMessage: string,
+	platform: App.Platform | undefined,
+	call: () => Promise<{
+		data?: ArrayGenerationResponse | SingleGenerationResponse;
+		error?: unknown;
+	}>
+): Promise<RenderResponse> {
+	let result: Awaited<ReturnType<typeof call>>;
+	try {
+		result = await call();
+	} catch (err) {
+		generationFailed(operation, clientMessage, err);
+	}
+
+	if (result.error) generationFailed(operation, clientMessage, result.error);
+
+	const data = result.data;
+	if (!data) {
+		generationFailed(operation, clientMessage, 'empty response from generation service');
+	}
+
+	const outputUrl = Array.isArray(data.output) ? data.output[0] : data.output;
+	if (!outputUrl) {
+		generationFailed(
+			operation,
+			clientMessage,
+			`no image URL in output: ${JSON.stringify(data.output)}`
+		);
+	}
+
+	return {
+		outputUrl: await storeGeneratedImage(platform, outputUrl, operation),
+		cost: data.cost,
+		balance: data.balance
+	};
+}
+
 export async function renderInterior(
 	platform: App.Platform | undefined,
 	params: { image: string; prompt: string; outputFormat: OutputFormat }
@@ -122,9 +170,8 @@ export async function renderInterior(
 		generationFailed('render/interior', 'Render failed', 'ARCHAI_API_KEY not configured');
 	}
 
-	let result: Awaited<ReturnType<typeof postRenderInterior>>;
-	try {
-		result = await postRenderInterior({
+	return processRenderResult('render/interior', 'Render failed', platform, () =>
+		postRenderInterior({
 			client: requestClientFor(apiKey),
 			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
 			body: {
@@ -133,32 +180,8 @@ export async function renderInterior(
 				// Omit empty prompt — API treats its absence as Enhance mode.
 				...(params.prompt ? { prompt: params.prompt } : {})
 			}
-		});
-	} catch (err) {
-		generationFailed('render/interior', 'Render failed', err);
-	}
-
-	if (result.error) generationFailed('render/interior', 'Render failed', result.error);
-
-	const data = result.data;
-	if (!data) {
-		generationFailed('render/interior', 'Render failed', 'empty response from render service');
-	}
-
-	const outputUrl = Array.isArray(data.output) ? data.output[0] : data.output;
-	if (!outputUrl) {
-		generationFailed(
-			'render/interior',
-			'Render failed',
-			`no image URL in output: ${JSON.stringify(data.output)}`
-		);
-	}
-
-	return {
-		outputUrl: await storeGeneratedImage(platform, outputUrl, 'render/interior'),
-		cost: data.cost,
-		balance: data.balance
-	};
+		})
+	);
 }
 
 // Д-17: `image` is the URL of the render being edited (the caller passes
@@ -273,4 +296,29 @@ export async function styleTransferInterior(
 		cost: data.cost,
 		balance: data.balance
 	};
+}
+
+// Upscales the current render/edit result to 4K. `outputFormat` is optional —
+// archAI defaults to jpg if omitted, mirroring the archAI API itself.
+export async function upscale4k(
+	platform: App.Platform | undefined,
+	params: { image: string; outputFormat?: OutputFormat }
+): Promise<RenderResponse> {
+	const apiKey = platform?.env?.ARCHAI_API_KEY;
+
+	if (!apiKey) {
+		if (dev) return mockUpscale();
+		generationFailed('upscale-4k', 'Upscale failed', 'ARCHAI_API_KEY not configured');
+	}
+
+	return processRenderResult('upscale-4k', 'Upscale failed', platform, () =>
+		postUpscale4K({
+			client: requestClientFor(apiKey),
+			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+			body: {
+				image: params.image,
+				...(params.outputFormat ? { outputFormat: params.outputFormat } : {})
+			}
+		})
+	);
 }

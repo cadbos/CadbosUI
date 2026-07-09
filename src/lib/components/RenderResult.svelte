@@ -13,8 +13,11 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { Download, Pencil, Redo, Sparkles, SquareSplitHorizontal, Undo } from '@lucide/svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
-	import { request } from '$lib/state/request.svelte';
+	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
+	import { auth } from '$lib/state/auth.svelte';
+	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { formatCredit } from '$lib/utils';
 
 	interface Props {
@@ -22,8 +25,15 @@ before the Change Date. See LICENSE for complete terms.
 	}
 	let { onEditRequest }: Props = $props();
 
+	let comparing = $state(false);
+	let upscaling = $state(false);
+	let upscaleError = $state<string | null>(null);
+
 	const render = $derived(request.currentRender);
 	const imageUrl = $derived(render?.outputUrls[0]);
+	const previousImageUrl = $derived(request.previousRender?.outputUrls[0]);
+	const canCompare = $derived(previousImageUrl !== undefined);
+	const isAuthenticated = $derived(auth.status === 'authenticated');
 	// The render result doesn't carry its own format, so the current form setting
 	// is the best available signal for the download filename's extension.
 	const downloadName = $derived(`render.${request.outputFormat}`);
@@ -36,13 +46,121 @@ before the Change Date. See LICENSE for complete terms.
 			? `/api/download?url=${encodeURIComponent(imageUrl)}&filename=${encodeURIComponent(downloadName)}`
 			: undefined
 	);
+
+	async function upscale(): Promise<void> {
+		if (!render || upscaling || !isAuthenticated) return;
+		// Snapshot the render being upscaled — request.currentRender can move on
+		// (undo/redo, a new edit) while this call is in flight, and the response
+		// must still attach to the chain it was actually requested against.
+		const sourceRender = render;
+		upscaling = true;
+		upscaleError = null;
+		try {
+			const response = await fetch('/api/upscale', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					image: sourceRender.outputUrls[0],
+					outputFormat: request.outputFormat
+				})
+			});
+			if (!response.ok) throw new Error('upscale failed');
+			const result = await response.json();
+			const newRender = renderResultFromResponse(result, {
+				parentId: sourceRender.id,
+				editOp: { type: 'upscale', instruction: t('toolbar.upscaleDone') }
+			});
+			request.applyEditResult(newRender);
+			void auth.refreshCredit();
+			if (auth.canLoadGeneratedImages) void generatedImages.load();
+		} catch {
+			upscaleError = t('toolbar.upscaleFailed');
+		} finally {
+			upscaling = false;
+		}
+	}
 </script>
 
 {#if render && imageUrl}
 	<section class="result">
 		<div class="image-card">
-			<img src={imageUrl} alt={t('render.generate')} class="output" />
+			{#if comparing && previousImageUrl}
+				<div class="compare">
+					<div class="compare-half">
+						<span class="compare-label">{t('toolbar.before')}</span>
+						<img src={previousImageUrl} alt={t('toolbar.before')} class="output" />
+					</div>
+					<div class="compare-half">
+						<span class="compare-label">{t('toolbar.after')}</span>
+						<img src={imageUrl} alt={t('toolbar.after')} class="output" />
+					</div>
+				</div>
+			{:else}
+				<img src={imageUrl} alt={t('render.generate')} class="output" />
+			{/if}
 		</div>
+
+		<div class="toolbar">
+			<button
+				type="button"
+				class="icon-btn"
+				disabled={!request.canUndoEdit}
+				aria-label={t('toolbar.undo')}
+				title={t('toolbar.undo')}
+				onclick={() => request.undoLastEdit()}
+			>
+				<Undo size={16} strokeWidth={1.8} aria-hidden="true" />
+			</button>
+			<button
+				type="button"
+				class="icon-btn"
+				disabled={!request.canRedoEdit}
+				aria-label={t('toolbar.redo')}
+				title={t('toolbar.redo')}
+				onclick={() => request.redoEdit()}
+			>
+				<Redo size={16} strokeWidth={1.8} aria-hidden="true" />
+			</button>
+
+			<span class="toolbar-sep" aria-hidden="true"></span>
+
+			<a
+				href={downloadHref}
+				download={downloadName}
+				class="icon-btn"
+				aria-label={t('render.download')}
+				title={t('render.download')}
+			>
+				<Download size={16} strokeWidth={1.8} aria-hidden="true" />
+			</a>
+			<button
+				type="button"
+				class="icon-btn"
+				disabled={upscaling || !isAuthenticated}
+				aria-label={t('toolbar.upscale')}
+				title={isAuthenticated ? t('toolbar.upscale') : t('toolbar.signInToUpscale')}
+				onclick={() => void upscale()}
+			>
+				<Sparkles size={16} strokeWidth={1.8} aria-hidden="true" />
+			</button>
+			<button
+				type="button"
+				class="icon-btn"
+				class:active={comparing}
+				disabled={!canCompare}
+				aria-pressed={comparing}
+				aria-label={t('toolbar.compare')}
+				title={t('toolbar.compare')}
+				onclick={() => (comparing = !comparing)}
+			>
+				<SquareSplitHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
+			</button>
+
+			{#if upscaleError}
+				<p class="toolbar-error" role="alert">{upscaleError}</p>
+			{/if}
+		</div>
+
 		<div class="footer">
 			<div class="meta">
 				<span>{ti('render.cost', { cost: formatCredit(render.cost) })}</span>
@@ -50,36 +168,8 @@ before the Change Date. See LICENSE for complete terms.
 				<span>{ti('render.balance', { balance: formatCredit(render.balance) })}</span>
 			</div>
 			<div class="actions">
-				<a href={downloadHref} download={downloadName} class="btn btn-secondary">
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-						<path
-							d="M12 4v12M12 16l-4-4M12 16l4-4"
-							stroke="currentColor"
-							stroke-width="1.75"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-						<path d="M4 20h16" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
-					</svg>
-					{t('render.download')}
-				</a>
 				<button type="button" class="btn btn-accent" onclick={onEditRequest}>
-					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-						<path
-							d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-							stroke="currentColor"
-							stroke-width="1.75"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-						<path
-							d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-							stroke="currentColor"
-							stroke-width="1.75"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
+					<Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
 					{t('render.edit')}
 				</button>
 			</div>
@@ -109,6 +199,95 @@ before the Change Date. See LICENSE for complete terms.
 		max-height: 480px;
 		object-fit: contain;
 		display: block;
+	}
+
+	.compare {
+		display: flex;
+	}
+
+	.compare-half {
+		position: relative;
+		width: 50%;
+		border-right: 1px solid var(--color-border);
+	}
+
+	.compare-half:last-child {
+		border-right: none;
+	}
+
+	.compare-half .output {
+		max-height: 480px;
+	}
+
+	.compare-label {
+		position: absolute;
+		top: 0.5rem;
+		left: 0.5rem;
+		padding: 0.15rem 0.5rem;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		color: white;
+		background: rgb(0 0 0 / 0.55);
+		border-radius: 100px;
+		z-index: 1;
+	}
+
+	.toolbar {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.625rem 1.25rem;
+		border-top: 1px solid var(--color-border);
+		flex-wrap: wrap;
+	}
+
+	.toolbar-sep {
+		width: 1px;
+		height: 1.25rem;
+		background: var(--color-border);
+		margin: 0 0.125rem;
+	}
+
+	.icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		padding: 0;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-surface);
+		color: var(--color-text);
+		cursor: pointer;
+		text-decoration: none;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			color 0.15s;
+	}
+
+	.icon-btn:hover:not(:disabled) {
+		background: var(--color-surface-hover);
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+	}
+
+	.icon-btn.active {
+		color: var(--color-accent-contrast);
+		background: var(--color-accent);
+		border-color: var(--color-accent);
+	}
+
+	.icon-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.toolbar-error {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--color-danger);
 	}
 
 	.footer {
@@ -154,17 +333,6 @@ before the Change Date. See LICENSE for complete terms.
 			background 0.15s,
 			border-color 0.15s;
 		white-space: nowrap;
-	}
-
-	.btn-secondary {
-		color: var(--color-text);
-		background: var(--color-surface);
-		border: 1.5px solid var(--color-border);
-	}
-
-	.btn-secondary:hover {
-		background: var(--color-surface-hover);
-		border-color: var(--color-muted);
 	}
 
 	.btn-accent {

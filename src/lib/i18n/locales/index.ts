@@ -79,6 +79,7 @@ export interface Dictionary {
 	'auth.credit.entryRender': string;
 	'auth.credit.entryEdit': string;
 	'auth.credit.entryStyleTransfer': string;
+	'auth.credit.entryUpscale': string;
 	'upload.label': string;
 	'upload.button': string;
 	'upload.dropHint': string;
@@ -102,6 +103,15 @@ export interface Dictionary {
 	'render.validationImage': string;
 	'render.validationPrompt': string;
 	'render.failed': string;
+	'toolbar.undo': string;
+	'toolbar.redo': string;
+	'toolbar.compare': string;
+	'toolbar.before': string;
+	'toolbar.after': string;
+	'toolbar.upscale': string;
+	'toolbar.signInToUpscale': string;
+	'toolbar.upscaleDone': string;
+	'toolbar.upscaleFailed': string;
 	'generatedImages.title': string;
 	'generatedImages.loading': string;
 	'generatedImages.empty': string;
@@ -130,7 +140,6 @@ export interface Dictionary {
 	'edit.instruction': string;
 	'edit.apply': string;
 	'edit.applying': string;
-	'edit.undo': string;
 	'edit.failed': string;
 	'edit.insufficientCredit': string;
 	'edit.generationRestricted': string;
@@ -140,6 +149,7 @@ export interface Dictionary {
 	'edit.tool.freeform': string;
 	'edit.tool.addObject': string;
 	'edit.tool.removeObject': string;
+	'edit.tool.atmosphere': string;
 	'edit.addObject.apply': string;
 	'edit.addObject.applying': string;
 	'edit.addObject.selectHint': string;
@@ -167,4 +177,28 @@ export interface Dictionary {
 	'edit.removeObject.apply': string;
 	'edit.removeObject.applying': string;
 	'edit.removeObject.promptTemplate': string;
+	'edit.atmosphere.sceneLabel': string;
+	'edit.atmosphere.interior': string;
+	'edit.atmosphere.exterior': string;
+	'edit.atmosphere.apply': string;
+	'edit.atmosphere.applying': string;
+	'edit.atmosphere.selectHint': string;
+	'edit.atmosphere.midday.label': string;
+	'edit.atmosphere.midday.promptInterior': string;
+	'edit.atmosphere.midday.promptExterior': string;
+	'edit.atmosphere.goldenHour.label': string;
+	'edit.atmosphere.goldenHour.promptInterior': string;
+	'edit.atmosphere.goldenHour.promptExterior': string;
+	'edit.atmosphere.blueHour.label': string;
+	'edit.atmosphere.blueHour.promptInterior': string;
+	'edit.atmosphere.blueHour.promptExterior': string;
+	'edit.atmosphere.overcast.label': string;
+	'edit.atmosphere.overcast.promptInterior': string;
+	'edit.atmosphere.overcast.promptExterior': string;
+	'edit.atmosphere.warmLight.label': string;
+	'edit.atmosphere.warmLight.promptInterior': string;
+	'edit.atmosphere.warmLight.promptExterior': string;
+	'edit.atmosphere.dim.label': string;
+	'edit.atmosphere.dim.promptInterior': string;
+	'edit.atmosphere.dim.promptExterior': string;
 }

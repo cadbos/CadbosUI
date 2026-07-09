@@ -56,6 +56,12 @@ export interface StyleTransferRequest {
 	styleTransferStrength?: number;
 }
 
+// POST /api/upscale — upscale an existing render/edit result to 4K.
+export interface UpscaleRequest {
+	image: string;
+	outputFormat?: OutputFormat;
+}
+
 // Normalized response for image-generation endpoints. Provider array/string
 // outputs are normalized to a single URL. `balance` is the caller's own
 // remaining approved-account balance after this call — never archAI's raw
@@ -133,7 +139,7 @@ export interface CreditTransaction {
 	id: string;
 	amount: number;
 	balanceAfter: number;
-	kind: 'render' | 'edit' | 'style-transfer';
+	kind: 'render' | 'edit' | 'style-transfer' | 'upscale';
 	createdAt: number;
 }
 
