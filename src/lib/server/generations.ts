@@ -18,7 +18,7 @@
 // record and the deduction to fall out of sync with each other.
 
 import type { D1Database } from '@cloudflare/workers-types';
-import type { Balance, CreditTransaction } from '$lib/api/contract';
+import type { Balance, CreditTransaction, UserUsageRecord } from '$lib/api/contract';
 
 export interface GeneratedImage {
 	id: string;
@@ -29,6 +29,11 @@ export interface GeneratedImage {
 
 export interface GeneratedImagesPage {
 	images: GeneratedImage[];
+	hasMore: boolean;
+}
+
+export interface UserUsagePage {
+	users: UserUsageRecord[];
 	hasMore: boolean;
 }
 
@@ -160,6 +165,50 @@ export async function listGeneratedImages(
 	const rows = result.results ?? [];
 	return {
 		images: rows.slice(0, size).map(toGeneratedImage),
+		hasMore: rows.length > size
+	};
+}
+
+interface UserUsageRow {
+	pubkey: string;
+	balance: number;
+	generation_count: number;
+	total_spend: number;
+	latest_spend_at: number | null;
+}
+
+function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
+	return {
+		pubkey: row.pubkey,
+		balance: row.balance,
+		totalDeposit: 0,
+		lastDepositAt: null,
+		generationCount: row.generation_count,
+		totalSpend: row.total_spend,
+		latestSpendAt: row.latest_spend_at
+	};
+}
+
+export async function listUserUsage(
+	db: D1Database,
+	offset: number,
+	size: number
+): Promise<UserUsagePage> {
+	const result = await db
+		.prepare(
+			'SELECT u.pubkey, COALESCE(c.balance, 0) AS balance, ' +
+				'COUNT(g.id) AS generation_count, COALESCE(SUM(g.amount), 0) AS total_spend, ' +
+				'MAX(g.created_at) AS latest_spend_at FROM users u ' +
+				'LEFT JOIN credits c ON c.user_id = u.id ' +
+				'LEFT JOIN generations g ON g.user_id = u.id ' +
+				'GROUP BY u.id, u.pubkey, u.created_at, c.balance ' +
+				'ORDER BY u.created_at DESC, u.id DESC LIMIT ? OFFSET ?'
+		)
+		.bind(size + 1, offset)
+		.all<UserUsageRow>();
+	const rows = result.results ?? [];
+	return {
+		users: rows.slice(0, size).map(toUserUsageRecord),
 		hasMore: rows.length > size
 	};
 }
