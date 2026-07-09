@@ -14,6 +14,7 @@
 
 import type { ImageInput, PromptFragment, RequestJSON } from '$lib/state/request.svelte';
 import { request } from '$lib/state/request.svelte';
+import type { StyleTransferRequest } from '$lib/api/contract';
 
 export const AC9_REQUEST_ID = 'ac9-request-0001';
 
@@ -24,6 +25,13 @@ export const AC9_IMAGE: ImageInput = {
 	mime: 'image/webp',
 	size: 2048,
 	dimensions: [1024, 768]
+};
+
+export const AC9_REFERENCE_IMAGE: ImageInput = {
+	url: 'https://example.ufs.sh/f/ac9-fixture-style-reference',
+	mime: 'image/jpeg',
+	size: 4096,
+	dimensions: [900, 1200]
 };
 
 export const AC9_FRAGMENTS: PromptFragment[] = [
@@ -40,6 +48,14 @@ export const AC9_RENDER_REQUEST = {
 	outputFormat: 'webp' as const
 };
 
+export const AC9_STYLE_TRANSFER_REQUEST: StyleTransferRequest = {
+	image: AC9_IMAGE.url,
+	referenceImage: AC9_REFERENCE_IMAGE.url,
+	outputFormat: 'webp' as const,
+	prompt: AC9_PROMPT,
+	styleTransferStrength: 0.7
+};
+
 export function buildAc9RequestJSON(): RequestJSON {
 	return {
 		id: AC9_REQUEST_ID,
@@ -49,6 +65,12 @@ export function buildAc9RequestJSON(): RequestJSON {
 			size: AC9_IMAGE.size,
 			...(AC9_IMAGE.dimensions ? { dimensions: [...AC9_IMAGE.dimensions] } : {})
 		},
+		styleReferenceImage: {
+			url: AC9_REFERENCE_IMAGE.url,
+			mime: AC9_REFERENCE_IMAGE.mime,
+			size: AC9_REFERENCE_IMAGE.size,
+			...(AC9_REFERENCE_IMAGE.dimensions ? { dimensions: [...AC9_REFERENCE_IMAGE.dimensions] } : {})
+		},
 		promptFragments: AC9_FRAGMENTS.map((fragment) => ({
 			id: fragment.id,
 			...(fragment.label !== undefined ? { label: fragment.label } : {}),
@@ -57,6 +79,9 @@ export function buildAc9RequestJSON(): RequestJSON {
 		})),
 		outputFormat: 'webp',
 		sceneType: 'interior',
+		styleTransferStrength: 0.7,
+		styleNegativePrompt: '',
+		styleSourceMode: 'current-result',
 		promptOverride: null,
 		status: 'idle'
 	};

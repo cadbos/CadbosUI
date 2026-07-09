@@ -13,10 +13,20 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { t } from '$lib/i18n/index.svelte';
-	import { request } from '$lib/state/request.svelte';
+	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
+	import type { UploadResult } from '$lib/api/contract';
+	import { request, type ImageInput } from '$lib/state/request.svelte';
 
 	const MAX_SIZE = 8 * 1024 * 1024;
+
+	type UploadTarget = 'room' | 'styleReference';
+
+	interface Props {
+		target?: UploadTarget;
+		label?: TranslationKey;
+	}
+
+	let { target = 'room', label = undefined }: Props = $props();
 
 	let uploading = $state(false);
 	let error = $state<string | null>(null);
@@ -28,8 +38,32 @@ before the Change Date. See LICENSE for complete terms.
 		inputEl = node;
 	}
 
-	const imageUrl = $derived(request.image?.url ?? null);
+	const image = $derived(target === 'styleReference' ? request.styleReferenceImage : request.image);
+	const ariaLabelKey = $derived<TranslationKey>(
+		label ?? (target === 'styleReference' ? 'styleTransfer.referenceImage' : 'upload.label')
+	);
+	const buttonLabelKey = $derived<TranslationKey>(
+		label ?? (target === 'styleReference' ? 'styleTransfer.referenceImage' : 'upload.button')
+	);
+	const changeKey = $derived<TranslationKey>(
+		target === 'styleReference' ? 'styleTransfer.referenceChange' : 'upload.change'
+	);
+	const dropTitleKey = $derived<TranslationKey>(
+		target === 'styleReference' ? 'styleTransfer.referenceDropTitle' : 'upload.dropTitle'
+	);
+	const dropSubtitleKey = $derived<TranslationKey>(
+		target === 'styleReference' ? 'styleTransfer.referenceDropSubtitle' : 'upload.dropSubtitle'
+	);
+	const imageUrl = $derived(image?.url ?? null);
 	const hasImage = $derived(imageUrl !== null || previewUrl !== null);
+
+	function setUploadedImage(next: ImageInput): void {
+		if (target === 'styleReference') {
+			request.setStyleReferenceImage(next);
+			return;
+		}
+		request.setImage(next);
+	}
 
 	async function handleFile(file: File): Promise<void> {
 		error = null;
@@ -54,8 +88,8 @@ before the Change Date. See LICENSE for complete terms.
 				error = body?.error?.message ?? t('upload.errorUpload');
 				return;
 			}
-			const result = await response.json();
-			request.setImage({
+			const result = (await response.json()) as UploadResult;
+			setUploadedImage({
 				url: result.url,
 				mime: result.mime,
 				size: result.size,
@@ -99,11 +133,11 @@ before the Change Date. See LICENSE for complete terms.
 	ondragleave={onDragLeave}
 	ondrop={onDrop}
 	role="region"
-	aria-label={t('upload.label')}
+	aria-label={t(ariaLabelKey)}
 >
 	{#if hasImage}
 		<div class="image-wrapper">
-			<img src={previewUrl ?? imageUrl ?? ''} alt={t('upload.label')} class="preview" />
+			<img src={previewUrl ?? imageUrl ?? ''} alt={t(ariaLabelKey)} class="preview" />
 			<div class="image-overlay">
 				<button
 					type="button"
@@ -111,7 +145,7 @@ before the Change Date. See LICENSE for complete terms.
 					onclick={() => inputEl?.click()}
 					disabled={uploading}
 				>
-					{uploading ? t('upload.uploading') : t('upload.change')}
+					{uploading ? t('upload.uploading') : t(changeKey)}
 				</button>
 			</div>
 		</div>
@@ -121,7 +155,7 @@ before the Change Date. See LICENSE for complete terms.
 			class="drop-zone"
 			onclick={() => inputEl?.click()}
 			disabled={uploading}
-			aria-label={t('upload.button')}
+			aria-label={t(buttonLabelKey)}
 		>
 			{#if uploading}
 				<span class="uploading-text">{t('upload.uploading')}</span>
@@ -149,8 +183,8 @@ before the Change Date. See LICENSE for complete terms.
 						stroke-linejoin="round"
 					/>
 				</svg>
-				<span class="drop-title">{t('upload.dropTitle')}</span>
-				<span class="drop-subtitle">{t('upload.dropSubtitle')}</span>
+				<span class="drop-title">{t(dropTitleKey)}</span>
+				<span class="drop-subtitle">{t(dropSubtitleKey)}</span>
 			{/if}
 		</button>
 	{/if}
@@ -158,7 +192,7 @@ before the Change Date. See LICENSE for complete terms.
 		{@attach attachInput}
 		type="file"
 		accept="image/*"
-		aria-label={t('upload.button')}
+		aria-label={t(ariaLabelKey)}
 		class="file-input"
 		oninput={onInput}
 	/>

@@ -17,7 +17,8 @@ import {
 	OUTPUT_FORMATS,
 	type OutputFormat,
 	type RenderRequest,
-	type RenderResponse
+	type RenderResponse,
+	type StyleTransferRequest
 } from '$lib/api/contract';
 import type { TranslationKey } from '$lib/i18n/index.svelte';
 
@@ -70,7 +71,10 @@ export interface RenderResult {
 
 export type RequestStatus = 'idle' | 'rendering' | 'error';
 
-export type ValidationField = 'prompt' | 'image';
+export const STYLE_SOURCE_MODES = ['room-photo', 'current-result'] as const;
+export type StyleSourceMode = (typeof STYLE_SOURCE_MODES)[number];
+
+export type ValidationField = 'prompt' | 'image' | 'referenceImage';
 
 export interface ValidationResult {
 	valid: boolean;
@@ -80,9 +84,13 @@ export interface ValidationResult {
 export interface RequestJSON {
 	id: string;
 	image?: ImageInput;
+	styleReferenceImage?: ImageInput;
 	promptFragments: PromptFragment[];
 	outputFormat: OutputFormat;
 	sceneType: SceneType;
+	styleTransferStrength: number;
+	styleNegativePrompt: string;
+	styleSourceMode: StyleSourceMode;
 	promptOverride: string | null;
 	currentRender?: RenderResult;
 	status: RequestStatus;
@@ -90,14 +98,20 @@ export interface RequestJSON {
 
 export interface NormalizedRequest {
 	image?: ImageInput;
+	styleReferenceImage?: ImageInput;
 	promptFragments: PromptFragment[];
 	outputFormat: OutputFormat;
 	sceneType: SceneType;
+	styleTransferStrength: number;
+	styleNegativePrompt: string;
+	styleSourceMode: StyleSourceMode;
 	prompt: string;
 }
 
 const outputFormatSchema = z.enum(OUTPUT_FORMATS);
 const sceneTypeSchema = z.enum(SCENE_TYPES);
+const styleSourceModeSchema = z.enum(STYLE_SOURCE_MODES);
+const styleTransferStrengthSchema = z.number().min(0).max(1);
 
 const imageInputSchema = z.object({
 	url: z.string().trim().url(),
@@ -133,10 +147,14 @@ const requestJsonSchema = z
 	.object({
 		id: z.string().min(1),
 		image: optionalImageInputSchema,
+		styleReferenceImage: optionalImageInputSchema,
 		promptFragments: z.array(promptFragmentSchema),
 		outputFormat: outputFormatSchema,
 		// Defaults to interior for persisted requests saved before this field existed.
 		sceneType: sceneTypeSchema.default('interior'),
+		styleTransferStrength: styleTransferStrengthSchema.default(0.7),
+		styleNegativePrompt: z.string().default(''),
+		styleSourceMode: styleSourceModeSchema.default('current-result'),
 		promptOverride: z.string().nullable(),
 		currentRender: renderResultSchema.optional(),
 		status: z.enum(['idle', 'rendering', 'error'])
@@ -325,9 +343,13 @@ export function creditErrorKey(keys: CreditErrorKeys, err: unknown): Translation
 class RequestState {
 	id = $state<string>(crypto.randomUUID());
 	image = $state<ImageInput | undefined>(undefined);
+	styleReferenceImage = $state<ImageInput | undefined>(undefined);
 	promptFragments = $state<PromptFragment[]>([]);
 	outputFormat = $state<OutputFormat>('webp');
 	sceneType = $state<SceneType>('interior');
+	styleTransferStrength = $state(0.7);
+	styleNegativePrompt = $state('');
+	styleSourceMode = $state<StyleSourceMode>('current-result');
 	promptOverride = $state<string | null>(null);
 	currentRender = $state<RenderResult | undefined>(undefined);
 	// Single-step undo/redo for the last edit (FR-К6) — in-session only, deliberately
@@ -413,12 +435,28 @@ class RequestState {
 		this.image = cloneImage(optionalImageInputSchema.parse(image));
 	}
 
+	setStyleReferenceImage(image: ImageInput | undefined): void {
+		this.styleReferenceImage = cloneImage(optionalImageInputSchema.parse(image));
+	}
+
 	setOutputFormat(format: OutputFormat): void {
 		this.outputFormat = format;
 	}
 
 	setSceneType(type: SceneType): void {
-		this.sceneType = type;
+		this.sceneType = sceneTypeSchema.parse(type);
+	}
+
+	setStyleTransferStrength(strength: number): void {
+		this.styleTransferStrength = styleTransferStrengthSchema.parse(strength);
+	}
+
+	setStyleNegativePrompt(prompt: string): void {
+		this.styleNegativePrompt = prompt;
+	}
+
+	setStyleSourceMode(mode: StyleSourceMode): void {
+		this.styleSourceMode = styleSourceModeSchema.parse(mode);
 	}
 
 	setPromptOverride(text: string): void {
@@ -475,6 +513,20 @@ class RequestState {
 		return { valid: missing.length === 0, missing };
 	}
 
+	validateStyleTransfer(): ValidationResult {
+		const missing: ValidationField[] = [];
+		if (!this.styleTransferSourceUrl()) missing.push('image');
+		if (!this.styleReferenceImage?.url) missing.push('referenceImage');
+		return { valid: missing.length === 0, missing };
+	}
+
+	styleTransferSourceUrl(): string | undefined {
+		if (this.styleSourceMode === 'current-result') {
+			return this.currentRender?.outputUrls[0] ?? this.image?.url;
+		}
+		return this.image?.url;
+	}
+
 	toRenderRequest(): RenderRequest | null {
 		const validation = this.validate();
 		if (!validation.valid || !this.image) return null;
@@ -485,13 +537,33 @@ class RequestState {
 		};
 	}
 
+	toStyleTransferRequest(guidance: string): StyleTransferRequest | null {
+		const validation = this.validateStyleTransfer();
+		const image = this.styleTransferSourceUrl();
+		if (!validation.valid || !image || !this.styleReferenceImage) return null;
+		const prompt = guidance.trim();
+		const negativePrompt = this.styleNegativePrompt.trim();
+		return {
+			image,
+			referenceImage: this.styleReferenceImage.url,
+			outputFormat: this.outputFormat,
+			...(prompt ? { prompt } : {}),
+			...(negativePrompt ? { negativePrompt } : {}),
+			styleTransferStrength: this.styleTransferStrength
+		};
+	}
+
 	toJSON(): RequestJSON {
 		return {
 			id: this.id,
 			image: cloneImage(this.image),
+			styleReferenceImage: cloneImage(this.styleReferenceImage),
 			promptFragments: cloneFragments(this.promptFragments),
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
+			styleTransferStrength: this.styleTransferStrength,
+			styleNegativePrompt: this.styleNegativePrompt,
+			styleSourceMode: this.styleSourceMode,
 			promptOverride: this.promptOverride,
 			currentRender: cloneRenderResult(this.currentRender),
 			status: this.status
@@ -502,9 +574,13 @@ class RequestState {
 		const parsed = requestJsonSchema.parse(data);
 		this.id = parsed.id;
 		this.image = cloneImage(parsed.image);
+		this.styleReferenceImage = cloneImage(parsed.styleReferenceImage);
 		this.promptFragments = cloneFragments(parsed.promptFragments);
 		this.outputFormat = parsed.outputFormat;
 		this.sceneType = parsed.sceneType;
+		this.styleTransferStrength = parsed.styleTransferStrength;
+		this.styleNegativePrompt = parsed.styleNegativePrompt;
+		this.styleSourceMode = parsed.styleSourceMode;
 		this.promptOverride = parsed.promptOverride;
 		this.currentRender = cloneRenderResult(parsed.currentRender);
 		this.status = parsed.status;
@@ -513,9 +589,13 @@ class RequestState {
 	normalizeForComparison(): NormalizedRequest {
 		return {
 			image: cloneImage(this.image),
+			styleReferenceImage: cloneImage(this.styleReferenceImage),
 			promptFragments: cloneFragments(this.promptFragments),
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
+			styleTransferStrength: this.styleTransferStrength,
+			styleNegativePrompt: this.styleNegativePrompt,
+			styleSourceMode: this.styleSourceMode,
 			prompt: this.prompt
 		};
 	}
@@ -523,9 +603,13 @@ class RequestState {
 	reset(): void {
 		this.id = crypto.randomUUID();
 		this.image = undefined;
+		this.styleReferenceImage = undefined;
 		this.promptFragments = [];
 		this.outputFormat = 'webp';
 		this.sceneType = 'interior';
+		this.styleTransferStrength = 0.7;
+		this.styleNegativePrompt = '';
+		this.styleSourceMode = 'current-result';
 		this.promptOverride = null;
 		this.currentRender = undefined;
 		this.previousRender = undefined;

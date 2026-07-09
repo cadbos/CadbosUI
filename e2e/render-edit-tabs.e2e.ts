@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
 
 async function authenticate(page: Page): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
@@ -55,6 +55,14 @@ async function mockUpload(page: Page): Promise<void> {
 	});
 }
 
+function styleTransferUploadUrl(route: Route): string {
+	const body = route.request().postDataBuffer();
+	if (body === null) throw new Error('Upload request body is missing');
+	if (body.includes(Buffer.from('room'))) return 'https://cdn.example.test/source.webp';
+	if (body.includes(Buffer.from('reference'))) return 'https://cdn.example.test/reference.webp';
+	throw new Error('Upload request body does not match the style transfer fixtures');
+}
+
 test('the Edit tab lets you upload an image directly, without generating a render first', async ({
 	page
 }) => {
@@ -87,6 +95,168 @@ test('the Edit tab lets you upload an image directly, without generating a rende
 	await expect(
 		page.locator('#mode-panel-render').getByRole('button', { name: 'Изменить фото' })
 	).toBeVisible();
+});
+
+test('the Style transfer tab uploads a reference and submits transfer settings', async ({
+	page
+}) => {
+	await authenticate(page);
+	let capturedBody: unknown = null;
+	await page.route('**/api/uploads', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				url: styleTransferUploadUrl(route),
+				mime: 'image/webp',
+				size: 1024,
+				dimensions: [800, 600]
+			})
+		});
+	});
+	await page.route('**/api/style-transfer', async (route) => {
+		capturedBody = route.request().postDataJSON();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/styled.webp',
+				cost: 4,
+				balance: 96
+			})
+		});
+	});
+
+	await page.goto('/');
+
+	const panel = page.locator('#mode-panel-styleTransfer');
+	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await expect(page.getByRole('tab', { name: 'Перенос стиля' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await expect(panel.getByRole('button', { name: 'Перенести стиль' })).toBeDisabled();
+
+	const sourceUpload = panel.getByRole('region', { name: 'Исходное изображение' });
+	await sourceUpload.locator('input[type="file"]').setInputFiles({
+		name: 'room.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from('room')
+	});
+	await expect(sourceUpload.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+
+	const referenceUpload = panel.getByRole('region', { name: 'Референс стиля' });
+	await referenceUpload.locator('input[type="file"]').setInputFiles({
+		name: 'reference.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from('reference')
+	});
+	await panel
+		.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…')
+		.fill('keep layout, use warmer materials');
+	await panel.getByRole('slider', { name: 'Сила переноса' }).fill('0.35');
+	await panel.getByText('Дополнительно').click();
+	await panel.getByLabel('Что исключить').fill('people');
+
+	await panel.getByRole('button', { name: 'Перенести стиль' }).click();
+
+	expect(capturedBody).toEqual({
+		image: 'https://cdn.example.test/source.webp',
+		referenceImage: 'https://cdn.example.test/reference.webp',
+		outputFormat: 'webp',
+		prompt: 'keep layout, use warmer materials',
+		negativePrompt: 'people',
+		styleTransferStrength: 0.35
+	});
+	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/styled.webp'
+	);
+});
+
+test('render prompt and style transfer guidance stay isolated across tab switches', async ({
+	page
+}) => {
+	await authenticate(page);
+	let renderBody: unknown = null;
+	let styleTransferBody: unknown = null;
+	await page.route('**/api/uploads', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				url: styleTransferUploadUrl(route),
+				mime: 'image/webp',
+				size: 1024,
+				dimensions: [800, 600]
+			})
+		});
+	});
+	await page.route('**/api/render', async (route) => {
+		renderBody = route.request().postDataJSON();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/render.webp',
+				cost: 5,
+				balance: 95
+			})
+		});
+	});
+	await page.route('**/api/style-transfer', async (route) => {
+		styleTransferBody = route.request().postDataJSON();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/styled.webp',
+				cost: 4,
+				balance: 91
+			})
+		});
+	});
+
+	await page.goto('/');
+
+	const renderPanel = page.locator('#mode-panel-render');
+	await renderPanel
+		.locator('input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('room') });
+	await renderPanel
+		.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…')
+		.fill('render prompt for paid generation');
+
+	const styleTransferTab = page.getByRole('tab', { name: 'Перенос стиля' });
+	await styleTransferTab.click();
+	const stylePanel = page.locator('#mode-panel-styleTransfer');
+	const referenceUpload = stylePanel.getByRole('region', { name: 'Референс стиля' });
+	await referenceUpload.locator('input[type="file"]').setInputFiles({
+		name: 'reference.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from('reference')
+	});
+	await stylePanel
+		.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…')
+		.fill('style transfer guidance only');
+	await stylePanel.getByRole('button', { name: 'Перенести стиль' }).click();
+
+	expect(styleTransferBody).toEqual({
+		image: 'https://cdn.example.test/source.webp',
+		referenceImage: 'https://cdn.example.test/reference.webp',
+		outputFormat: 'webp',
+		prompt: 'style transfer guidance only',
+		styleTransferStrength: 0.7
+	});
+
+	await page.getByRole('tab', { name: 'Рендер' }).click();
+	await renderPanel.getByRole('button', { name: 'Сгенерировать' }).click();
+
+	expect(renderBody).toEqual({
+		image: 'https://cdn.example.test/source.webp',
+		prompt: 'render prompt for paid generation',
+		outputFormat: 'webp'
+	});
 });
 
 test('applying an edit directly from an uploaded image (no prior render) produces a result', async ({
