@@ -15,23 +15,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { GeneratedImagesResponse, SessionUser } from '$lib/api/contract';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { makeD1, seedGeneratedImage } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { DELETE, GET } from './+server';
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
-		.run();
-}
-
-function seedGeneratedImage(db: D1Database, id: string, userId: string, createdAt: number): void {
-	db.prepare(
-		'INSERT INTO generations ' +
-			'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-			"VALUES (?, ?, ?, 'https://cdn.example.test/source.jpg', 'cozy', 'render', 1, 10, ?)"
-	)
-		.bind(id, userId, `https://cdn.example.test/${id}.webp`, createdAt)
 		.run();
 }
 
@@ -214,14 +204,19 @@ describe('DELETE /api/generated-images', () => {
 			{ id: 'image-1' }
 		);
 
-		const row = await db
+		const detail = await db
+			.prepare('SELECT generation_id FROM image_generation_details WHERE generation_id = ?')
+			.bind('image-1')
+			.first<{ generation_id: string }>();
+		const generation = await db
 			.prepare('SELECT id FROM generations WHERE id = ?')
 			.bind('image-1')
 			.first<{ id: string }>();
 
 		expect(response.status).toBe(204);
 		expect(uploadsBucket.delete).toHaveBeenCalledWith('image-1.webp');
-		expect(row).toBeNull();
+		expect(detail).toBeNull();
+		expect(generation).toEqual({ id: 'image-1' });
 	});
 
 	it('does not delete another user image', async () => {
@@ -243,13 +238,13 @@ describe('DELETE /api/generated-images', () => {
 			{ id: 'image-2' }
 		);
 		const row = await db
-			.prepare('SELECT id FROM generations WHERE id = ?')
+			.prepare('SELECT generation_id FROM image_generation_details WHERE generation_id = ?')
 			.bind('image-2')
-			.first<{ id: string }>();
+			.first<{ generation_id: string }>();
 
 		expect(response.status).toBe(404);
 		expect(uploadsBucket.delete).not.toHaveBeenCalled();
-		expect(row).toEqual({ id: 'image-2' });
+		expect(row).toEqual({ generation_id: 'image-2' });
 	});
 
 	it('keeps the D1 row when R2 deletion fails', async () => {
@@ -270,12 +265,12 @@ describe('DELETE /api/generated-images', () => {
 			{ id: 'image-1' }
 		);
 		const row = await db
-			.prepare('SELECT id FROM generations WHERE id = ?')
+			.prepare('SELECT generation_id FROM image_generation_details WHERE generation_id = ?')
 			.bind('image-1')
-			.first<{ id: string }>();
+			.first<{ generation_id: string }>();
 
 		expect(response.status).toBe(500);
-		expect(row).toEqual({ id: 'image-1' });
+		expect(row).toEqual({ generation_id: 'image-1' });
 	});
 
 	it('fails closed for the dev-only demo session without touching D1 or R2', async () => {

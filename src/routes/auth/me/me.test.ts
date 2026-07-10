@@ -15,21 +15,14 @@
 import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { MeResponse, SessionUser } from '$lib/api/contract';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { recordGeneration } from '$lib/server/generations';
+import { grantGenerationAccess, makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { GET } from './+server';
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
-		.run();
-}
-
-// The admin's manual approval step (migrations/0005) — no auto-provisioning
-// exists anymore.
-function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
-		.bind(userId, balance, Date.now(), enabled)
 		.run();
 }
 
@@ -59,7 +52,7 @@ describe('GET /auth/me — generation access control', () => {
 	it('returns the admin-chosen balance for an approved account', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
 		const result = (await response.json()) as MeResponse;
@@ -70,7 +63,7 @@ describe('GET /auth/me — generation access control', () => {
 	it('still shows balance/history for an account the admin has since disabled', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12, 0);
+		grantGenerationAccess(db, 'user-1', 12, 0);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
 		const result = (await response.json()) as MeResponse;
@@ -80,15 +73,14 @@ describe('GET /auth/me — generation access control', () => {
 	it('includes spend history for an approved account', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 5);
-		db.prepare(
-			'INSERT INTO generations ' +
-				'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-				"VALUES (?, ?, 'https://cdn.example.test/out.webp', 'https://cdn.example.test/room.jpg', " +
-				"'cozy', ?, ?, ?, ?)"
-		)
-			.bind('tx-1', 'user-1', 'render', 2, 3, Date.now())
-			.run();
+		grantGenerationAccess(db, 'user-1', 5);
+		await recordGeneration(db, 'user-1', {
+			url: 'https://cdn.example.test/out.webp',
+			sourceUrl: 'https://cdn.example.test/room.jpg',
+			prompt: 'cozy',
+			kind: 'render',
+			amount: 2
+		});
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
 		const result = (await response.json()) as MeResponse;

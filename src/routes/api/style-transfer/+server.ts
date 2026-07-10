@@ -18,12 +18,7 @@ import type { RenderResponse } from '$lib/api/contract';
 import { apiError, parseBody, styleTransferRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
-import {
-	assertGenerationAllowed,
-	getCredit,
-	getUserIdByPubkey,
-	recordBalance
-} from '$lib/server/billing';
+import { assertGenerationAllowed, getCredit, getUserIdByPubkey } from '$lib/server/billing';
 import { styleTransferInterior } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
 
@@ -75,11 +70,6 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	}
 
 	if (db && userId) {
-		try {
-			await recordBalance(db, userId, result.balance);
-		} catch (err) {
-			console.error('recordBalance failed after a successful style transfer:', err);
-		}
 		try {
 			const credit = await recordGeneration(db, userId, {
 				url: result.outputUrl,

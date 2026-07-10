@@ -252,9 +252,9 @@ export interface WalletBalanceResponse {
 	balance: number;
 }
 
-// A single deduction from an approved account's own limit (see CreditInfo
-// below). `amount` is the operation's provider-reported or configured charge.
-// `id` is stable for list rendering — createdAt can collide across concurrent calls.
+// A deduction from an approved account's app-credit ledger. `amount` is the
+// operation's provider-reported or configured charge. `id` is stable for list
+// rendering — createdAt alone can collide across concurrent calls.
 export interface CreditTransaction {
 	id: string;
 	amount: number;
@@ -272,7 +272,7 @@ export interface CreditTransaction {
 // An account's own generation limit, set by an admin (billing.ts) — the only
 // balance a user is ever shown, both in their profile and after a render/edit
 // (see RenderResponse.balance). Present only once an admin has approved the
-// account (a `credits` row).
+// account (an enabled `generation_access` row with an app-credit ledger account).
 export interface CreditInfo {
 	balance: number;
 	updatedAt: number;
