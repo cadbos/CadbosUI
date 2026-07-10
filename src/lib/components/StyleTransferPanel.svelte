@@ -64,6 +64,9 @@ before the Change Date. See LICENSE for complete terms.
 		return 'styleTransfer.strengthStrong';
 	});
 	const strengthValueText = $derived(`${strengthPercent}% ${t(strengthTier)}`);
+	const sourcePhotoLabel = $derived(
+		request.sceneType === 'exterior' ? t('upload.labelExterior') : t('upload.label')
+	);
 	const currentPresets = $derived(
 		referenceTab === 'custom' ? [] : stylePresetsFor(request.sceneType, referenceTab)
 	);
@@ -191,7 +194,7 @@ before the Change Date. See LICENSE for complete terms.
 							aria-pressed={request.styleSourceMode === 'room-photo'}
 							onclick={() => setSourceMode('room-photo')}
 						>
-							{t('styleTransfer.sourceRoomPhoto')}
+							{sourcePhotoLabel}
 						</button>
 						<button
 							type="button"

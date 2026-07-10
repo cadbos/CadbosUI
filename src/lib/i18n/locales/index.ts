@@ -138,7 +138,6 @@ export interface Dictionary {
 	'render.insufficientCredit': string;
 	'render.generationRestricted': string;
 	'styleTransfer.sourceImage': string;
-	'styleTransfer.sourceRoomPhoto': string;
 	'styleTransfer.sourceCurrentResult': string;
 	'styleTransfer.referenceImage': string;
 	'styleTransfer.referenceChange': string;

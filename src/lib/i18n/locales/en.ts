@@ -142,7 +142,6 @@ export const en = {
 	'render.insufficientCredit': 'Test balance exhausted.',
 	'render.generationRestricted': 'Generation is available to a limited set of accounts.',
 	'styleTransfer.sourceImage': 'Source image',
-	'styleTransfer.sourceRoomPhoto': 'Room photo',
 	'styleTransfer.sourceCurrentResult': 'Current result',
 	'styleTransfer.referenceImage': 'Style reference',
 	'styleTransfer.referenceChange': 'Change reference',
