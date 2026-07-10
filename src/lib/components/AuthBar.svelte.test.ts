@@ -14,6 +14,7 @@
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { userEvent } from 'vitest/browser';
 import {
 	finalizeEvent,
 	generateSecretKey,
@@ -22,6 +23,19 @@ import {
 } from 'nostr-tools/pure';
 import AuthBar from './AuthBar.svelte';
 import { auth } from '$lib/state/auth.svelte';
+
+// A real, out-of-component click target for the outside-pointerdown assertions below.
+// `dismissable` only needs the click to land outside the panel's own node, but a
+// synthetic dispatchEvent doesn't reliably drive Svelte's reactive scheduling the way
+// a genuine (Playwright-driven) interaction does — so this is clicked for real.
+function appendOutsideTarget(): HTMLButtonElement {
+	const target = document.createElement('button');
+	target.type = 'button';
+	target.textContent = 'outside';
+	target.style.cssText = 'position:fixed;top:0;left:0;width:2px;height:2px;padding:0;';
+	document.body.appendChild(target);
+	return target;
+}
 
 // Drive the NIP-46 path without a real relay: createNostrConnectURI returns a fixed
 // URI, and BunkerSigner.fromURI hands back a promise we resolve (signer connected) at
@@ -263,6 +277,84 @@ it('restores an authenticated session on load, including an upscale entry in cre
 	expect(auth.status).toBe('authenticated');
 	expect(auth.pubkey).toBe(pk);
 	expect(auth.credit?.history).toEqual([expect.objectContaining({ kind: 'upscale' })]);
+});
+
+it('closes the sign-in menu on an outside click, and on Escape returns focus to the trigger', async () => {
+	mockFetch(() => Response.json({ user: { pubkey: pk } }));
+
+	const screen = render(AuthBar);
+	const trigger = screen.getByRole('button', { name: 'Войти', exact: true });
+	const menuItem = screen.getByRole('button', { name: 'Расширение Nostr' });
+	const outside = appendOutsideTarget();
+	// role queries drop out of the accessibility tree once an ancestor gets the
+	// `hidden` attribute, so the "closed" checks below read `hidden` directly instead
+	// of `.not.toBeVisible()`.
+	const menuPanel = screen.container.querySelector<HTMLElement>('#signin-menu');
+	if (!menuPanel) throw new Error('signin menu not rendered');
+
+	try {
+		await trigger.click();
+		await expect.element(menuItem).toBeVisible();
+
+		await userEvent.click(outside);
+		await expect.poll(() => menuPanel.hidden).toBe(true);
+		expect(trigger.element().getAttribute('aria-expanded')).toBe('false');
+
+		await trigger.click();
+		await expect.element(menuItem).toBeVisible();
+		// Move focus into the menu first so the post-Escape check is meaningful — the
+		// trigger already had focus from the click above.
+		menuItem.element().focus();
+		expect(document.activeElement).toBe(menuItem.element());
+
+		await userEvent.keyboard('{Escape}');
+		await expect.poll(() => menuPanel.hidden).toBe(true);
+		expect(document.activeElement).toBe(trigger.element());
+	} finally {
+		outside.remove();
+	}
+});
+
+it('closes the profile panel on an outside click, and on Escape returns focus to the toggle', async () => {
+	// firstName/lastName present so the panel starts closed (no missingCadbosName
+	// auto-open) — the dismiss/reopen cycle below needs a real closed→open transition.
+	mockFetch(() => Response.json({ user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' } }));
+
+	const screen = render(AuthBar);
+	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
+	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
+
+	const logoutButton = screen.getByRole('button', { name: 'Выйти' });
+	// The panel starts closed, so wait on the always-visible toggle rather than on
+	// panel content to know the authenticated view has actually rendered.
+	await expect.poll(() => screen.container.querySelector('.profile-toggle')).not.toBeNull();
+	const profileToggle = screen.container.querySelector<HTMLButtonElement>('.profile-toggle');
+	if (!profileToggle) throw new Error('profile toggle not rendered');
+	const profilePanel = screen.container.querySelector<HTMLElement>('#auth-profile');
+	if (!profilePanel) throw new Error('profile panel not rendered');
+	expect(profilePanel.hidden).toBe(true);
+
+	const outside = appendOutsideTarget();
+
+	try {
+		await userEvent.click(profileToggle);
+		await expect.element(logoutButton).toBeVisible();
+
+		await userEvent.click(outside);
+		await expect.poll(() => profilePanel.hidden).toBe(true);
+		expect(profileToggle.getAttribute('aria-expanded')).toBe('false');
+
+		await userEvent.click(profileToggle);
+		await expect.element(logoutButton).toBeVisible();
+		logoutButton.element().focus();
+		expect(document.activeElement).toBe(logoutButton.element());
+
+		await userEvent.keyboard('{Escape}');
+		await expect.poll(() => profilePanel.hidden).toBe(true);
+		expect(document.activeElement).toBe(profileToggle);
+	} finally {
+		outside.remove();
+	}
 });
 
 it('cancelling after the signer connects but before verification stays anonymous', async () => {
