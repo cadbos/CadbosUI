@@ -120,7 +120,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.usage-shell {
-		width: min(100%, 72rem);
+		width: 100%;
 		margin: 0 auto;
 		display: flex;
 		flex-direction: column;
@@ -170,8 +170,6 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	table {
-		width: 100%;
-		min-width: 58rem;
 		border-collapse: collapse;
 		font-size: 0.875rem;
 	}
@@ -212,10 +210,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.pubkey {
-		max-width: 22rem;
-		overflow: hidden;
 		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-		text-overflow: ellipsis;
 	}
 
 	.load-more-sentinel {
