@@ -12,13 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-// One row per paid render/edit (migrations/0006): the resulting image, the
-// source image and prompt it was generated from, and the credit ledger entry
-// for that call — all written atomically, so there's no way for the image
-// record and the deduction to fall out of sync with each other.
-
-import type { D1Database } from '@cloudflare/workers-types';
-import type { Balance, CreditTransaction, UserUsageRecord } from '$lib/api/contract';
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
+import type { CreditTransaction, UserUsageRecord } from '$lib/api/contract';
+import { fromLedgerAmountUnits, toLedgerAmountUnits } from '$lib/server/ledger-units';
 
 export interface GeneratedImage {
 	id: string;
@@ -53,13 +49,18 @@ function toGeneratedImage(row: GenerationRow): GeneratedImage {
 	};
 }
 
-interface BalanceRow {
+interface AccountBalanceRow {
 	balance: number;
 	updated_at: number;
 }
 
-function toBalance(row: BalanceRow): Balance {
-	return { balance: row.balance, updatedAt: row.updated_at };
+export interface AccountBalance {
+	balance: number;
+	updatedAt: number;
+}
+
+function toAccountBalance(row: AccountBalanceRow): AccountBalance {
+	return { balance: fromLedgerAmountUnits(row.balance), updatedAt: row.updated_at };
 }
 
 export interface RecordGenerationInput {
@@ -70,59 +71,77 @@ export interface RecordGenerationInput {
 	amount: number;
 }
 
-// Deducts the real cost archAI charged (not a fixed fee) and records the
-// resulting image/prompt against it in one D1 batch (a single transaction),
-// so a failure between the two can never leave the ledger and the image
-// history out of sync. Called exactly once, only after a confirmed
-// successful archAI response — the caller must never call this before the
-// call, or on failure.
-//
-// The balance check in the route happens before the (slow) archAI call, not
-// atomically with this deduction — two concurrent requests for the same
-// account can each pass that check and both land here, taking balance below
-// zero. Left unguarded on purpose: the ledger must reflect what archAI
-// actually charged, so silently refusing to record a real, already-paid
-// deduction here would make the spend history wrong. For a small number of
-// manually-approved accounts this is an accepted soft cap, not a hard one.
-//
-// The insert reads `balance` back from `credits` itself (rather than the
-// UPDATE's RETURNING value) because batched statements can't pass results to
-// each other — only to the caller, after the whole batch has committed.
 export async function recordGeneration(
 	db: D1Database,
 	userId: string,
 	input: RecordGenerationInput
-): Promise<Balance> {
+): Promise<AccountBalance> {
+	if (!Number.isFinite(input.amount) || input.amount < 0) {
+		throw new Error('generation cost must be a finite non-negative number');
+	}
+	const amountUnits = toLedgerAmountUnits(input.amount);
+
+	const generationId = crypto.randomUUID();
+	const transactionId = `generation:${generationId}`;
 	const now = Date.now();
-	const [updateResult] = await db.batch<BalanceRow>([
+	const statements: D1PreparedStatement[] = [
 		db
 			.prepare(
-				'UPDATE credits SET balance = balance - ?, updated_at = ? WHERE user_id = ? ' +
-					'RETURNING balance, updated_at'
+				'INSERT INTO ledger_transactions (id, occurred_at) SELECT ?, ? ' +
+					"WHERE EXISTS (SELECT 1 FROM ledger_accounts WHERE user_id = ? AND asset = 'app_credit') " +
+					"AND EXISTS (SELECT 1 FROM ledger_accounts WHERE user_id IS NULL AND asset = 'archai_token')"
 			)
-			.bind(input.amount, now, userId),
+			.bind(transactionId, now, userId)
+	];
+
+	if (amountUnits > 0) {
+		statements.push(
+			db
+				.prepare(
+					'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
+						'VALUES (?, (SELECT account.id FROM ledger_accounts account ' +
+						'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+						"WHERE account.user_id = ? AND account.asset = 'app_credit' " +
+						'AND balance.balance >= ?), ?)'
+				)
+				.bind(transactionId, userId, amountUnits, -amountUnits),
+			db
+				.prepare(
+					'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
+						"VALUES (?, (SELECT id FROM ledger_accounts WHERE user_id IS NULL AND asset = 'archai_token'), ?)"
+				)
+				.bind(transactionId, -amountUnits)
+		);
+	}
+
+	statements.push(
+		db.prepare('UPDATE ledger_transactions SET finalized = 1 WHERE id = ?').bind(transactionId),
 		db
 			.prepare(
 				'INSERT INTO generations ' +
-					'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ? FROM credits WHERE user_id = ?'
+					'(id, user_id, prompt, kind, ledger_transaction_id, created_at) ' +
+					'VALUES (?, ?, ?, ?, ?, ?)'
 			)
-			.bind(
-				crypto.randomUUID(),
-				userId,
-				input.url,
-				input.sourceUrl,
-				input.prompt,
-				input.kind,
-				input.amount,
-				now,
-				userId
+			.bind(generationId, userId, input.prompt, input.kind, transactionId, now),
+		db
+			.prepare(
+				'INSERT INTO image_generation_details (generation_id, output_url, input_url) ' +
+					'VALUES (?, ?, ?)'
 			)
-	]);
-	const row = updateResult.results[0];
-	if (!row) throw new Error('credit deduction failed: no credit row for user');
+			.bind(generationId, input.url, input.sourceUrl),
+		db
+			.prepare(
+				'SELECT balance.balance, balance.updated_at FROM ledger_accounts account ' +
+					'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+					"WHERE account.user_id = ? AND account.asset = 'app_credit'"
+			)
+			.bind(userId)
+	);
 
-	return toBalance(row);
+	const results = await db.batch<AccountBalanceRow>(statements);
+	const row = results.at(-1)?.results[0];
+	if (!row) throw new Error('credit deduction failed: no app credit ledger account for user');
+	return toAccountBalance(row);
 }
 
 export async function getGeneratedImageForUser(
@@ -131,7 +150,12 @@ export async function getGeneratedImageForUser(
 	id: string
 ): Promise<GeneratedImage | null> {
 	const row = await db
-		.prepare('SELECT id, user_id, url, created_at FROM generations WHERE id = ? AND user_id = ?')
+		.prepare(
+			'SELECT generation.id, generation.user_id, detail.output_url AS url, generation.created_at ' +
+				'FROM generations generation ' +
+				'JOIN image_generation_details detail ON detail.generation_id = generation.id ' +
+				'WHERE generation.id = ? AND generation.user_id = ?'
+		)
 		.bind(id, userId)
 		.first<GenerationRow>();
 	return row ? toGeneratedImage(row) : null;
@@ -143,8 +167,11 @@ export async function deleteGeneratedImage(
 	id: string
 ): Promise<boolean> {
 	const result = await db
-		.prepare('DELETE FROM generations WHERE id = ? AND user_id = ?')
-		.bind(id, userId)
+		.prepare(
+			'DELETE FROM image_generation_details WHERE generation_id = ? ' +
+				'AND EXISTS (SELECT 1 FROM generations WHERE id = ? AND user_id = ?)'
+		)
+		.bind(id, id, userId)
 		.run();
 	return result.meta.changes === 1;
 }
@@ -157,8 +184,11 @@ export async function listGeneratedImages(
 ): Promise<GeneratedImagesPage> {
 	const result = await db
 		.prepare(
-			'SELECT id, user_id, url, created_at FROM generations ' +
-				'WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?'
+			'SELECT generation.id, generation.user_id, detail.output_url AS url, generation.created_at ' +
+				'FROM generations generation ' +
+				'JOIN image_generation_details detail ON detail.generation_id = generation.id ' +
+				'WHERE generation.user_id = ? ' +
+				'ORDER BY generation.created_at DESC, generation.id DESC LIMIT ? OFFSET ?'
 		)
 		.bind(userId, size + 1, offset)
 		.all<GenerationRow>();
@@ -172,6 +202,8 @@ export async function listGeneratedImages(
 interface UserUsageRow {
 	pubkey: string;
 	balance: number;
+	total_deposit: number;
+	last_deposit_at: number | null;
 	generation_count: number;
 	total_spend: number;
 	latest_spend_at: number | null;
@@ -180,11 +212,11 @@ interface UserUsageRow {
 function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
 	return {
 		pubkey: row.pubkey,
-		balance: row.balance,
-		totalDeposit: 0,
-		lastDepositAt: null,
+		balance: fromLedgerAmountUnits(row.balance),
+		totalDeposit: row.total_deposit,
+		lastDepositAt: row.last_deposit_at,
 		generationCount: row.generation_count,
-		totalSpend: row.total_spend,
+		totalSpend: fromLedgerAmountUnits(row.total_spend),
 		latestSpendAt: row.latest_spend_at
 	};
 }
@@ -196,13 +228,30 @@ export async function listUserUsage(
 ): Promise<UserUsagePage> {
 	const result = await db
 		.prepare(
-			'SELECT u.pubkey, COALESCE(c.balance, 0) AS balance, ' +
-				'COUNT(g.id) AS generation_count, COALESCE(SUM(g.amount), 0) AS total_spend, ' +
-				'MAX(g.created_at) AS latest_spend_at FROM users u ' +
-				'LEFT JOIN credits c ON c.user_id = u.id ' +
-				'LEFT JOIN generations g ON g.user_id = u.id ' +
-				'GROUP BY u.id, u.pubkey, u.created_at, c.balance ' +
-				'ORDER BY u.created_at DESC, u.id DESC LIMIT ? OFFSET ?'
+			'WITH credit_accounts AS (' +
+				'SELECT account.user_id, account.id AS account_id, balance.balance ' +
+				'FROM ledger_accounts account ' +
+				'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+				"WHERE account.asset = 'app_credit'" +
+				'), generation_usage AS (' +
+				'SELECT generation.user_id, COUNT(generation.id) AS generation_count, ' +
+				'COALESCE(SUM(CASE WHEN entry.amount < 0 THEN -entry.amount ELSE 0 END), 0) AS total_spend, ' +
+				'MAX(CASE WHEN entry.amount < 0 THEN generation.created_at END) AS latest_spend_at ' +
+				'FROM generations generation ' +
+				'LEFT JOIN ledger_entries entry ON entry.transaction_id = generation.ledger_transaction_id ' +
+				"AND entry.account_id = (SELECT id FROM ledger_accounts WHERE asset = 'archai_token' AND user_id IS NULL) " +
+				'GROUP BY generation.user_id' +
+				'), deposit_usage AS (' +
+				'SELECT user_id, SUM(credits_awarded) AS total_deposit, MAX(paid_at) AS last_deposit_at ' +
+				"FROM deposits WHERE status = 'paid' GROUP BY user_id" +
+				') SELECT user.pubkey, COALESCE(account.balance, 0) AS balance, ' +
+				'COALESCE(deposit.total_deposit, 0) AS total_deposit, deposit.last_deposit_at, ' +
+				'COALESCE(generation.generation_count, 0) AS generation_count, ' +
+				'COALESCE(generation.total_spend, 0) AS total_spend, generation.latest_spend_at ' +
+				'FROM users user LEFT JOIN credit_accounts account ON account.user_id = user.id ' +
+				'LEFT JOIN generation_usage generation ON generation.user_id = user.id ' +
+				'LEFT JOIN deposit_usage deposit ON deposit.user_id = user.id ' +
+				'ORDER BY user.created_at DESC, user.id DESC LIMIT ? OFFSET ?'
 		)
 		.bind(size + 1, offset)
 		.all<UserUsageRow>();
@@ -224,8 +273,8 @@ interface CreditTransactionRow {
 function toCreditTransaction(row: CreditTransactionRow): CreditTransaction {
 	return {
 		id: row.id,
-		amount: row.amount,
-		balanceAfter: row.balance_after,
+		amount: fromLedgerAmountUnits(row.amount),
+		balanceAfter: fromLedgerAmountUnits(row.balance_after),
 		kind: row.kind as CreditTransaction['kind'],
 		createdAt: row.created_at
 	};
@@ -236,12 +285,22 @@ export async function listCreditHistory(
 	userId: string,
 	limit = 50
 ): Promise<CreditTransaction[]> {
-	// rowid as a tiebreaker: two deductions within the same millisecond would
-	// otherwise sort arbitrarily on created_at alone.
 	const { results } = await db
 		.prepare(
-			'SELECT id, amount, balance_after, kind, created_at FROM generations ' +
-				'WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?'
+			'WITH account_history AS (' +
+				'SELECT ledger_transaction.id AS transaction_id, ledger_transaction.occurred_at, ' +
+				'ledger_transaction.rowid AS transaction_order, entry.amount, ' +
+				'SUM(entry.amount) OVER (ORDER BY ledger_transaction.occurred_at, ledger_transaction.rowid ' +
+				'ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS balance_after ' +
+				'FROM ledger_entries entry ' +
+				'JOIN ledger_transactions ledger_transaction ON ledger_transaction.id = entry.transaction_id ' +
+				'JOIN ledger_accounts account ON account.id = entry.account_id ' +
+				"WHERE account.user_id = ? AND account.asset = 'app_credit'" +
+				') SELECT generation.id, -history.amount AS amount, history.balance_after, ' +
+				'generation.kind, history.occurred_at AS created_at FROM account_history history ' +
+				'JOIN generations generation ON generation.ledger_transaction_id = history.transaction_id ' +
+				'WHERE history.amount < 0 ORDER BY history.occurred_at DESC, history.transaction_order DESC ' +
+				'LIMIT ?'
 		)
 		.bind(userId, limit)
 		.all<CreditTransactionRow>();

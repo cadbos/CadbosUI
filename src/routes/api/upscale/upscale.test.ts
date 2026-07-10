@@ -15,27 +15,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { toLedgerAmountUnits } from '$lib/server/ledger-units';
+import { grantGenerationAccess, makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
-// Lets a single test force recordBalance/recordGeneration to reject, to prove
+// Lets a single test force recordGeneration to reject, to prove
 // a bookkeeping failure doesn't discard an already-successful, already-charged upscale.
-const billingMock = vi.hoisted(() => ({ failNextRecordBalance: false }));
 const generationsMock = vi.hoisted(() => ({ failNextRecordGeneration: false }));
-
-vi.mock('$lib/server/billing', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/billing')>();
-	return {
-		...actual,
-		recordBalance: vi.fn((...args: Parameters<typeof actual.recordBalance>) => {
-			if (billingMock.failNextRecordBalance) {
-				billingMock.failNextRecordBalance = false;
-				return Promise.reject(new Error('simulated D1 failure'));
-			}
-			return actual.recordBalance(...args);
-		})
-	};
-});
 
 vi.mock('$lib/server/generations', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/generations')>();
@@ -62,12 +48,6 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 // The admin's manual approval step (migrations/0005) — no auto-provisioning
 // exists anymore, so every test that expects an upscale to succeed must grant
 // access first.
-function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
-		.bind(userId, balance, Date.now(), enabled)
-		.run();
-}
-
 type UpscaleEvent = Parameters<typeof POST>[0];
 
 function call(
@@ -97,7 +77,7 @@ describe('POST /api/upscale — billing', () => {
 	it('rejects an image value that is not a URL', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
 			image: 'not-a-url'
@@ -108,7 +88,7 @@ describe('POST /api/upscale — billing', () => {
 	it('upscales the given image and returns a URL', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
@@ -116,36 +96,42 @@ describe('POST /api/upscale — billing', () => {
 		expect(result.outputUrl).toMatch(/^https:\/\//);
 	});
 
-	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
+	it('debits the global token ledger without exposing the provider balance', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { balance: number; cost: number };
 
-		// The archAI mock reports balance 43 — that must land in the ops-only
-		// mirror, never in the response the client sees.
 		const balanceRow = await db
-			.prepare('SELECT balance FROM balances WHERE user_id = ?')
-			.bind('user-1')
+			.prepare(
+				'SELECT balance.balance FROM ledger_accounts account ' +
+					'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+					"WHERE account.asset = 'archai_token' AND account.user_id IS NULL"
+			)
 			.first<{ balance: number }>();
-		expect(balanceRow?.balance).toBe(43);
+		expect(balanceRow?.balance).toBe(-toLedgerAmountUnits(result.cost));
 		expect(result.balance).toBe(12 - result.cost);
 	});
 
 	it('records the upscaled image and source against the authenticated profile', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { outputUrl: string };
 
 		const row = await db
-			.prepare('SELECT user_id, url, source_url, kind FROM generations WHERE user_id = ?')
+			.prepare(
+				'SELECT generation.user_id, detail.output_url AS url, detail.input_url AS source_url, ' +
+					'generation.kind FROM generations generation ' +
+					'JOIN image_generation_details detail ON detail.generation_id = generation.id ' +
+					'WHERE generation.user_id = ?'
+			)
 			.bind('user-1')
 			.first<{ user_id: string; url: string; source_url: string; kind: string }>();
 		expect(row).toEqual({
@@ -159,7 +145,7 @@ describe('POST /api/upscale — billing', () => {
 	it('still returns the completed, already-charged upscale if recordGeneration fails', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 		generationsMock.failNextRecordGeneration = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -182,23 +168,10 @@ describe('POST /api/upscale — billing', () => {
 		}
 	});
 
-	it('still returns the completed, already-charged upscale if recording the balance fails', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
-		billingMock.failNextRecordBalance = true;
-
-		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-
-		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
-		expect(result.outputUrl).toMatch(/^https:\/\//);
-	});
-
 	it('rate-limits repeated upscales from the same account (anti-cost-abuse)', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 1000);
+		grantGenerationAccess(db, 'user-1', 1000);
 		const platform = { env: { DB: db } } as App.Platform;
 
 		const responses = [];
@@ -214,8 +187,8 @@ describe('POST /api/upscale — billing', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		seedUser(db, 'user-2', 'b'.repeat(64));
-		grantAccess(db, 'user-1', 1000);
-		grantAccess(db, 'user-2', 1000);
+		grantGenerationAccess(db, 'user-1', 1000);
+		grantGenerationAccess(db, 'user-2', 1000);
 		const platform = { env: { DB: db } } as App.Platform;
 
 		for (let i = 0; i < 10; i += 1) {
@@ -241,7 +214,7 @@ describe('POST /api/upscale — billing', () => {
 	});
 
 	describe('generation access control', () => {
-		it('blocks an account with no credits row at all', async () => {
+		it('blocks an account with no generation access', async () => {
 			const db = makeD1();
 			seedUser(db, 'user-1', pubkey);
 
@@ -254,7 +227,7 @@ describe('POST /api/upscale — billing', () => {
 		it('blocks an account the admin disabled, even with balance remaining', async () => {
 			const db = makeD1();
 			seedUser(db, 'user-1', pubkey);
-			grantAccess(db, 'user-1', 5, 0);
+			grantGenerationAccess(db, 'user-1', 5, 0);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(403);
@@ -265,23 +238,27 @@ describe('POST /api/upscale — billing', () => {
 		it('allows and deducts the real archAI cost for an approved, enabled account', async () => {
 			const db = makeD1();
 			seedUser(db, 'user-1', pubkey);
-			grantAccess(db, 'user-1', 12);
+			grantGenerationAccess(db, 'user-1', 12);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(200);
 			const result = (await response.json()) as { cost: number };
 
 			const creditRow = await db
-				.prepare('SELECT balance FROM credits WHERE user_id = ?')
+				.prepare(
+					'SELECT balance.balance FROM ledger_accounts account ' +
+						'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+						"WHERE account.user_id = ? AND account.asset = 'app_credit'"
+				)
 				.bind('user-1')
 				.first<{ balance: number }>();
-			expect(creditRow?.balance).toBe(12 - result.cost);
+			expect(creditRow?.balance).toBe(toLedgerAmountUnits(12 - result.cost));
 		});
 
 		it('blocks upscaling once an approved account exhausts its balance', async () => {
 			const db = makeD1();
 			seedUser(db, 'user-1', pubkey);
-			grantAccess(db, 'user-1', 0);
+			grantGenerationAccess(db, 'user-1', 0);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(402);
@@ -289,10 +266,10 @@ describe('POST /api/upscale — billing', () => {
 			expect(result.error.code).toBe('insufficient_credit');
 		});
 
-		it('returns a clean 500 instead of crashing if the credits table is missing (unapplied migration)', async () => {
+		it('returns a clean 500 instead of crashing if the ledger schema is missing', async () => {
 			const db = makeD1();
 			seedUser(db, 'user-1', pubkey);
-			db.prepare('DROP TABLE credits').run();
+			db.prepare('DROP TABLE generation_access').run();
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(500);

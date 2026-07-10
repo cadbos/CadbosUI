@@ -159,18 +159,9 @@ export interface NostrProfile {
 	relays: RelayInfo[];
 }
 
-// Real per-account balance as reported by archAI after the user's last
-// generation (Module 6) — mirrored server-side for ops visibility only
-// (billing.ts's `balances` table). Never sent to the client: it reflects the
-// one shared ARCHAI_API_KEY account, not anything personal to a given user.
-export interface Balance {
-	balance: number;
-	updatedAt: number;
-}
-
-// A single deduction from an approved account's own limit (see CreditInfo
-// below). `amount` is the real cost archAI charged. `id` is a stable identifier
-// for list rendering — createdAt alone can collide across concurrent calls.
+// A generation deduction from an approved account's app-credit ledger.
+// `amount` is the real cost archAI charged. `id` is a stable identifier for
+// list rendering — createdAt alone can collide across concurrent calls.
 export interface CreditTransaction {
 	id: string;
 	amount: number;
@@ -182,7 +173,7 @@ export interface CreditTransaction {
 // An account's own generation limit, set by an admin (billing.ts) — the only
 // balance a user is ever shown, both in their profile and after a render/edit
 // (see RenderResponse.balance). Present only once an admin has approved the
-// account (a `credits` row).
+// account (an enabled `generation_access` row with an app-credit ledger account).
 export interface CreditInfo {
 	balance: number;
 	updatedAt: number;

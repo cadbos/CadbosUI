@@ -20,6 +20,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import type { D1Database } from '@cloudflare/workers-types';
+import { toLedgerAmountUnits } from '$lib/server/ledger-units';
 
 const MIGRATIONS_DIR = new URL('../../../../migrations/', import.meta.url);
 // Mirrors `wrangler d1 migrations apply`: every *.sql file in the migrations
@@ -74,4 +75,62 @@ export function makeD1(): D1Database {
 			}
 		}
 	} as unknown as D1Database;
+}
+
+export function grantGenerationAccess(
+	db: D1Database,
+	userId: string,
+	balance: number,
+	enabled: 0 | 1 = 1,
+	occurredAt = Date.now()
+): void {
+	const accountId = `app-credit:${userId}`;
+	db.prepare('INSERT INTO ledger_accounts (id, asset, user_id, created_at) VALUES (?, ?, ?, ?)')
+		.bind(accountId, 'app_credit', userId, occurredAt)
+		.run();
+
+	if (balance !== 0) {
+		const transactionId = `opening:${accountId}`;
+		db.prepare('INSERT INTO ledger_transactions (id, occurred_at) VALUES (?, ?)')
+			.bind(transactionId, occurredAt)
+			.run();
+		db.prepare('INSERT INTO ledger_entries (transaction_id, account_id, amount) VALUES (?, ?, ?)')
+			.bind(transactionId, accountId, toLedgerAmountUnits(balance))
+			.run();
+		db.prepare('INSERT INTO ledger_openings (account_id, transaction_id) VALUES (?, ?)')
+			.bind(accountId, transactionId)
+			.run();
+		db.prepare('UPDATE ledger_transactions SET finalized = 1 WHERE id = ?')
+			.bind(transactionId)
+			.run();
+	}
+
+	db.prepare('INSERT INTO generation_access (user_id, enabled) VALUES (?, ?)')
+		.bind(userId, enabled)
+		.run();
+}
+
+export function seedGeneratedImage(
+	db: D1Database,
+	id: string,
+	userId: string,
+	createdAt: number,
+	url = `https://cdn.example.test/${id}.webp`
+): void {
+	const transactionId = `generation:${id}`;
+	db.prepare('INSERT INTO ledger_transactions (id, occurred_at) VALUES (?, ?)')
+		.bind(transactionId, createdAt)
+		.run();
+	db.prepare(
+		'INSERT INTO generations ' +
+			'(id, user_id, prompt, kind, ledger_transaction_id, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+	)
+		.bind(id, userId, 'cozy', 'render', transactionId, createdAt)
+		.run();
+	db.prepare(
+		'INSERT INTO image_generation_details (generation_id, output_url, input_url) VALUES (?, ?, ?)'
+	)
+		.bind(id, url, 'https://cdn.example.test/source.jpg')
+		.run();
+	db.prepare('UPDATE ledger_transactions SET finalized = 1 WHERE id = ?').bind(transactionId).run();
 }

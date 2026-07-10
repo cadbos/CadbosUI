@@ -19,12 +19,7 @@ import type { RenderResponse } from '$lib/api/contract';
 import { apiError, parseBody, upscaleRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
-import {
-	assertGenerationAllowed,
-	getCredit,
-	getUserIdByPubkey,
-	recordBalance
-} from '$lib/server/billing';
+import { assertGenerationAllowed, getCredit, getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { upscale4k } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
@@ -34,8 +29,8 @@ import { recordGeneration } from '$lib/server/generations';
 const UPSCALE_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
 
 // Session is enforced centrally in hooks.server.ts (guardedPaths). Upscaling
-// itself is restricted further, by design: only accounts an admin has manually
-// approved (a `credits` row, billing.ts) may upscale at all — a fresh Nostr
+// itself is restricted further, by design: only accounts an admin has enabled
+// in `generation_access` may upscale at all — a fresh Nostr
 // login alone is not enough (mirrors /api/render and /api/edit).
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
@@ -95,17 +90,9 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	}
 
 	// The upscale already succeeded and archAI already charged for it — a failure to
-	// cache the resulting balance/deduction is a bookkeeping gap, not a reason to
+	// record the ledger transaction is a bookkeeping gap, not a reason to
 	// make the user think a completed, paid upscale failed.
 	if (db && userId) {
-		// recordBalance mirrors archAI's own (shared) account balance for ops
-		// visibility only — it must never reach the client, so read it before
-		// overwriting `result.balance` with the caller's own remaining limit.
-		try {
-			await recordBalance(db, userId, result.balance);
-		} catch (err) {
-			console.error('recordBalance failed after a successful upscale:', err);
-		}
 		try {
 			const credit = await recordGeneration(db, userId, {
 				url: result.outputUrl,
