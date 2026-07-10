@@ -14,33 +14,18 @@
 
 import { beforeEach, describe, it, expect } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
-import { makeD1 } from './testing/d1-shim';
+import { grantGenerationAccess, makeD1 } from './testing/d1-shim';
 import {
 	getCredit,
 	getUserIdByPubkey,
 	hasGenerationAccess,
 	hasSufficientCredit,
-	recordBalance,
 	type CreditAccess
 } from './billing';
-
-async function readBalanceRow(db: D1Database, userId: string): Promise<{ balance: number } | null> {
-	return db
-		.prepare('SELECT balance FROM balances WHERE user_id = ?')
-		.bind(userId)
-		.first<{ balance: number }>();
-}
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
-		.run();
-}
-
-// The admin's manual approval step — no auto-provisioning exists anymore.
-function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
-		.bind(userId, balance, Date.now(), enabled)
 		.run();
 }
 
@@ -61,32 +46,6 @@ describe('getUserIdByPubkey', () => {
 	});
 });
 
-describe('recordBalance', () => {
-	it('creates a row on first generation', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		const balance = await recordBalance(db, 'user-1', 25);
-		expect(balance.balance).toBe(25);
-	});
-
-	it('overwrites the previous balance rather than accumulating it', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		await recordBalance(db, 'user-1', 25);
-		await recordBalance(db, 'user-1', 24.97);
-
-		await expect(readBalanceRow(db, 'user-1')).resolves.toEqual({ balance: 24.97 });
-	});
-
-	it('isolates balances per user', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
-		await recordBalance(db, 'user-1', 25);
-		await recordBalance(db, 'user-2', 10);
-
-		await expect(readBalanceRow(db, 'user-1')).resolves.toEqual({ balance: 25 });
-		await expect(readBalanceRow(db, 'user-2')).resolves.toEqual({ balance: 10 });
-	});
-});
-
 describe('getCredit', () => {
 	it('is null when no admin has approved this account', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
@@ -95,7 +54,7 @@ describe('getCredit', () => {
 
 	it('returns the admin-chosen balance and enabled flag for an approved account', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12, 1);
+		grantGenerationAccess(db, 'user-1', 12, 1);
 
 		const credit = await getCredit(db, 'user-1');
 		expect(credit).toEqual(expect.objectContaining({ balance: 12, enabled: true }));
@@ -103,7 +62,7 @@ describe('getCredit', () => {
 
 	it('reflects an account the admin disabled', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12, 0);
+		grantGenerationAccess(db, 'user-1', 12, 0);
 
 		const credit = await getCredit(db, 'user-1');
 		expect(credit?.enabled).toBe(false);

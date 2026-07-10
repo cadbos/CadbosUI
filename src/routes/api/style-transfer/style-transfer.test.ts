@@ -16,19 +16,14 @@ import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { toLedgerAmountUnits } from '$lib/server/ledger-units';
+import { grantGenerationAccess, makeD1 } from '$lib/server/testing/d1-shim';
 
 const { POST } = await import('./+server');
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
-		.run();
-}
-
-function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
-		.bind(userId, balance, Date.now(), enabled)
 		.run();
 }
 
@@ -68,7 +63,7 @@ describe('POST /api/style-transfer — billing', () => {
 	it('rejects an image value that is not a URL', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
 			...body,
@@ -80,7 +75,7 @@ describe('POST /api/style-transfer — billing', () => {
 	it('rejects non-http image URLs', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 		const platform = { env: { DB: db } } as App.Platform;
 		const dataUrl = 'data:image/png;base64,aW1hZ2U=';
 
@@ -100,7 +95,7 @@ describe('POST /api/style-transfer — billing', () => {
 	it('rejects a style transfer strength outside the provider range', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
 			...body,
@@ -109,34 +104,42 @@ describe('POST /api/style-transfer — billing', () => {
 		expect(response.status).toBe(400);
 	});
 
-	it('mirrors the real archAI balance server-side without exposing it to the client', async () => {
+	it('debits the global token ledger without exposing the provider balance', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { balance: number; cost: number };
 
 		const balanceRow = await db
-			.prepare('SELECT balance FROM balances WHERE user_id = ?')
-			.bind('user-1')
+			.prepare(
+				'SELECT balance.balance FROM ledger_accounts account ' +
+					'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+					"WHERE account.asset = 'archai_token' AND account.user_id IS NULL"
+			)
 			.first<{ balance: number }>();
-		expect(balanceRow?.balance).toBe(44);
+		expect(balanceRow?.balance).toBe(-toLedgerAmountUnits(result.cost));
 		expect(result.balance).toBe(12 - result.cost);
 	});
 
 	it('records the styled image, source and prompt against the authenticated profile', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { outputUrl: string };
 
 		const row = await db
-			.prepare('SELECT user_id, url, source_url, prompt, kind FROM generations WHERE user_id = ?')
+			.prepare(
+				'SELECT generation.user_id, detail.output_url AS url, detail.input_url AS source_url, ' +
+					'generation.prompt, generation.kind FROM generations generation ' +
+					'JOIN image_generation_details detail ON detail.generation_id = generation.id ' +
+					'WHERE generation.user_id = ?'
+			)
 			.bind('user-1')
 			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
 		expect(row).toEqual({
@@ -151,7 +154,7 @@ describe('POST /api/style-transfer — billing', () => {
 	it('rate-limits repeated style transfers from the same account', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 1000);
+		grantGenerationAccess(db, 'user-1', 1000);
 		const platform = { env: { DB: db } } as App.Platform;
 
 		const responses = [];
@@ -166,7 +169,7 @@ describe('POST /api/style-transfer — billing', () => {
 	it('uses the approved-account balance for the dev-only demo session', async () => {
 		const db = makeD1();
 		seedUser(db, 'demo-user', DEMO_PUBKEY);
-		grantAccess(db, 'demo-user', 12);
+		grantGenerationAccess(db, 'demo-user', 12);
 
 		const response = await call({ pubkey: DEMO_PUBKEY }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
@@ -176,7 +179,7 @@ describe('POST /api/style-transfer — billing', () => {
 		expect(result.balance).toBe(12 - result.cost);
 	});
 
-	it('blocks an account with no credits row at all', async () => {
+	it('blocks an account with no generation access', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 
@@ -189,7 +192,7 @@ describe('POST /api/style-transfer — billing', () => {
 	it('blocks style transfer once an approved account exhausts its balance', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 0);
+		grantGenerationAccess(db, 'user-1', 0);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(402);

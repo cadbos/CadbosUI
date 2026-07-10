@@ -18,19 +18,14 @@ import type { RequestHandler } from './$types';
 import type { RenderResponse } from '$lib/api/contract';
 import { apiError, parseBody, renderRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
-import {
-	assertGenerationAllowed,
-	getCredit,
-	getUserIdByPubkey,
-	recordBalance
-} from '$lib/server/billing';
+import { assertGenerationAllowed, getCredit, getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { renderInterior } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
 
 // Session is enforced centrally in hooks.server.ts (guardedPaths). Generation
 // itself is restricted further, by design: only accounts an admin has
-// manually approved (a `credits` row, billing.ts) may render at all — a
+// enabled in `generation_access` may render at all — a
 // fresh Nostr login alone is not enough.
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
@@ -79,17 +74,9 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	}
 
 	// The render already succeeded and archAI already charged for it — a failure to
-	// cache the resulting balance/deduction is a bookkeeping gap, not a reason to
+	// record the ledger transaction is a bookkeeping gap, not a reason to
 	// make the user think a completed, paid render failed.
 	if (db && userId) {
-		// recordBalance mirrors archAI's own (shared) account balance for ops
-		// visibility only — it must never reach the client, so read it before
-		// overwriting `result.balance` with the caller's own remaining limit.
-		try {
-			await recordBalance(db, userId, result.balance);
-		} catch (err) {
-			console.error('recordBalance failed after a successful render:', err);
-		}
 		try {
 			const credit = await recordGeneration(db, userId, {
 				url: result.outputUrl,
