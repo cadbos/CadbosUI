@@ -87,6 +87,25 @@ export interface GeneratedImagesResponse {
 	};
 }
 
+export interface UserUsageRecord {
+	pubkey: string;
+	balance: number;
+	totalDeposit: number;
+	lastDepositAt: number | null;
+	generationCount: number;
+	totalSpend: number;
+	latestSpendAt: number | null;
+}
+
+export interface UserUsageResponse {
+	users: UserUsageRecord[];
+	pagination: {
+		offset: number;
+		size: number;
+		hasMore: boolean;
+	};
+}
+
 // Auth (Appendix B). The signed NIP-98 event travels in
 // `Authorization: Nostr <base64>`.
 export interface ChallengeRequest {
