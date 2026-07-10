@@ -143,7 +143,6 @@ export const ru = {
 	'render.insufficientCredit': 'Тестовый баланс исчерпан.',
 	'render.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
 	'styleTransfer.sourceImage': 'Исходное изображение',
-	'styleTransfer.sourceRoomPhoto': 'Фото комнаты',
 	'styleTransfer.sourceCurrentResult': 'Текущий результат',
 	'styleTransfer.referenceImage': 'Референс стиля',
 	'styleTransfer.referenceChange': 'Изменить референс',

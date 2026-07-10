@@ -281,7 +281,7 @@ before the Change Date. See LICENSE for complete terms.
 					</section>
 				{/if}
 
-				<section class="step">
+				<section class="step-card">
 					<div class="step-header">
 						<span class="step-num" aria-hidden="true">
 							{request.currentRender ? '①' : '②'}
@@ -452,12 +452,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	.mode-panel[hidden] {
 		display: none;
-	}
-
-	.step {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
 	}
 
 	.scene-type-toggle {
