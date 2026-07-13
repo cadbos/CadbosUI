@@ -47,6 +47,10 @@
 	]
 	// Secrets set via `wrangler secret put <NAME>` — never committed to source:
 	// ARCHAI_API_KEY
+	// NWC_CONNECTION_STRING — nostr+walletconnect:// URI for the single wallet
+	// Cadbos holds (an Alby Hub instance, docs/payments-lightning-sats.md §3),
+	// parsed by src/lib/server/lightning.ts. Never logged: it embeds the
+	// client's own Nostr private key.
 	//
 	// Generation access itself is controlled in D1, not an env var. Provision the
 	// user's immutable `app_credit` ledger account and opening transaction before

@@ -41,6 +41,9 @@ declare global {
 				METERED_DESIGNER_PUBKEYS?: string;
 				ADMIN_PUBKEYS?: string;
 				PUBKEY_VIEWER?: string;
+				// nostr+walletconnect:// URI for the single wallet Cadbos holds (see
+				// wrangler.jsonc) — parsed by lightning.ts's parseNwcConnectionString.
+				NWC_CONNECTION_STRING?: string;
 			};
 		}
 	}
