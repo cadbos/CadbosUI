@@ -81,6 +81,10 @@ export const profileUpdateRequestSchema = z.object({
 	lastName: profileName
 });
 
+export const createDepositRequestSchema = z.object({
+	packageId: z.string().trim().min(1)
+});
+
 export async function parseBody<S extends z.ZodType>(
 	request: Request,
 	schema: S

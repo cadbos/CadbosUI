@@ -185,3 +185,39 @@ export interface MeResponse {
 	user: SessionUser;
 	credit?: CreditInfo;
 }
+
+// GET /api/packages — purchasable app-credit top-ups, paid in sats via
+// Lightning (docs/payments-lightning-sats.md). `creditsAwarded` is the only
+// number shown to the buyer; how much of the shared archAI pool a package
+// replenishes is a server-internal accounting detail (payments.ts), not part
+// of this contract.
+export interface PackageRecord {
+	id: string;
+	usdAmount: number;
+	creditsAwarded: number;
+}
+
+export interface PackagesResponse {
+	packages: PackageRecord[];
+}
+
+// POST /api/deposits — locks a package's price in sats and requests an
+// invoice for it.
+export interface CreateDepositRequest {
+	packageId: string;
+}
+
+export type DepositStatus = 'pending' | 'paid' | 'expired' | 'failed';
+
+// GET /api/deposits/[id] — polled by the client until status leaves
+// 'pending'. `balance` (the fresh app-credit balance, same meaning as
+// RenderResponse.balance) is only present once status is 'paid'.
+export interface DepositResponse {
+	id: string;
+	status: DepositStatus;
+	bolt11: string;
+	satsAmount: number;
+	usdAmount: number;
+	expiresAt: number;
+	balance?: number;
+}
