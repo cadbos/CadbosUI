@@ -86,6 +86,7 @@ before the Change Date. See LICENSE for complete terms.
 		setActiveIndex: (index) => {
 			const nextTab = REFERENCE_TABS[index].id;
 			if (nextTab !== referenceTab) clearReferenceSelection();
+			if (nextTab !== 'custom') request.setIsObjectReplacement(false);
 			referenceTab = nextTab;
 		},
 		focusTab: (index) => referenceTabButtons[index]?.focus()
@@ -267,6 +268,15 @@ before the Change Date. See LICENSE for complete terms.
 				tabindex="0"
 			>
 				{#if referenceTab === 'custom'}
+					<label class="object-replacement-toggle">
+						<input
+							type="checkbox"
+							checked={request.isObjectReplacement}
+							onchange={(event) => request.setIsObjectReplacement(event.currentTarget.checked)}
+						/>
+						{t('styleTransfer.objectReplacement.label')}
+					</label>
+					<p class="hint">{t('styleTransfer.objectReplacement.hint')}</p>
 					<ImageUpload target="styleReference" />
 				{:else if currentPresets.length === 0}
 					<p class="presets-empty">{t('styleTransfer.presetsEmpty')}</p>
@@ -518,6 +528,21 @@ before the Change Date. See LICENSE for complete terms.
 
 	.presets-hint,
 	.presets-empty {
+		margin: 0;
+		font-size: 0.75rem;
+		color: var(--color-muted);
+	}
+
+	.object-replacement-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--color-text);
+	}
+
+	.hint {
 		margin: 0;
 		font-size: 0.75rem;
 		color: var(--color-muted);

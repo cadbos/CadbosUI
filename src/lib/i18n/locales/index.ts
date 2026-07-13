@@ -163,6 +163,8 @@ export interface Dictionary {
 	'styleTransfer.referenceTabPhotorealistic': string;
 	'styleTransfer.referenceTabConceptual': string;
 	'styleTransfer.referenceTabCustom': string;
+	'styleTransfer.objectReplacement.label': string;
+	'styleTransfer.objectReplacement.hint': string;
 	'styleTransfer.presetsGridLabel': string;
 	'styleTransfer.presetsEmpty': string;
 	'styleTransfer.guidance': string;

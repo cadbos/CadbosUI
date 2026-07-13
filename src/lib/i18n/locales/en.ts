@@ -168,6 +168,9 @@ export const en = {
 	'styleTransfer.referenceTabPhotorealistic': 'Photorealistic',
 	'styleTransfer.referenceTabConceptual': 'Conceptual',
 	'styleTransfer.referenceTabCustom': 'Custom',
+	'styleTransfer.objectReplacement.label': 'This is an object to swap in, not a style reference',
+	'styleTransfer.objectReplacement.hint':
+		'Replaces the matching object in the source photo with the one shown here, instead of transferring its style.',
 	'styleTransfer.presetsGridLabel': 'Choose a style preset',
 	'styleTransfer.presetsEmpty':
 		'No presets yet for this scene type — upload your own reference in Custom.',

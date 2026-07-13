@@ -468,6 +468,59 @@ describe('toStyleTransferRequest', () => {
 	});
 });
 
+describe('isObjectReplacement', () => {
+	it('defaults to false', () => {
+		expect(request.isObjectReplacement).toBe(false);
+	});
+
+	it('reset() reverts to false', () => {
+		request.setIsObjectReplacement(true);
+		request.reset();
+		expect(request.isObjectReplacement).toBe(false);
+	});
+
+	it('round-trips through toJSON/fromJSON', () => {
+		applyAc9Fixture();
+		request.setIsObjectReplacement(true);
+		const snapshot = request.toJSON();
+		request.reset();
+		request.fromJSON(snapshot);
+		expect(request.isObjectReplacement).toBe(true);
+	});
+
+	it('defaults to false when restoring JSON saved before this field existed', () => {
+		const legacySnapshot = buildAc9RequestJSON() as Partial<ReturnType<typeof buildAc9RequestJSON>>;
+		delete legacySnapshot.isObjectReplacement;
+		request.fromJSON(legacySnapshot);
+		expect(request.isObjectReplacement).toBe(false);
+	});
+
+	it('prepends object-replacement instructions to the style transfer prompt', () => {
+		applyAc9Fixture();
+		request.setIsObjectReplacement(true);
+
+		const body = request.toStyleTransferRequest(AC9_PROMPT);
+		expect(body?.prompt).not.toBe(AC9_PROMPT);
+		expect(body?.prompt?.endsWith(AC9_PROMPT)).toBe(true);
+		expect(body?.prompt?.toLowerCase()).toContain('replace');
+		expect(body).toEqual({ ...AC9_STYLE_TRANSFER_REQUEST, prompt: body?.prompt });
+	});
+
+	it('still injects the instruction when guidance is empty', () => {
+		applyAc9Fixture();
+		request.setIsObjectReplacement(true);
+
+		const body = request.toStyleTransferRequest('   ');
+		expect(body?.prompt).toBeTruthy();
+		expect(body?.prompt?.toLowerCase()).toContain('replace');
+	});
+
+	it('leaves the style transfer prompt unchanged when off', () => {
+		applyAc9Fixture();
+		expect(request.toStyleTransferRequest(AC9_PROMPT)).toEqual(AC9_STYLE_TRANSFER_REQUEST);
+	});
+});
+
 describe('edit lifecycle (FR-К4/К6)', () => {
 	function render(id: string): RenderResult {
 		return { id, outputUrls: [`https://example.test/${id}.jpg`], cost: 1, balance: 24, ts: 0 };

@@ -175,6 +175,110 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 	);
 });
 
+test('enabling the object replacement toggle in the custom reference tab adds a fixed instruction to the prompt', async ({
+	page
+}) => {
+	await authenticate(page);
+	let capturedBody:
+		| {
+				image: string;
+				referenceImage: string;
+				outputFormat: string;
+				prompt?: string;
+				negativePrompt?: string;
+				styleTransferStrength: number;
+		  }
+		| undefined;
+	await page.route('**/api/uploads', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				url: styleTransferUploadUrl(route),
+				mime: 'image/webp',
+				size: 1024,
+				dimensions: [800, 600]
+			})
+		});
+	});
+	await page.route('**/api/style-transfer', async (route) => {
+		capturedBody = route.request().postDataJSON() as typeof capturedBody;
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/styled.webp',
+				cost: 4,
+				balance: 96
+			})
+		});
+	});
+
+	await page.goto('/');
+
+	const panel = page.locator('#mode-panel-styleTransfer');
+	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+
+	const sourceUpload = panel.getByRole('region', { name: 'Исходное изображение' });
+	await sourceUpload.locator('input[type="file"]').setInputFiles({
+		name: 'room.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from('room')
+	});
+
+	await panel.getByRole('tab', { name: 'Свои' }).click();
+
+	const objectReplacementToggle = panel.getByRole('checkbox', {
+		name: 'Это предмет для замены, а не референс стиля'
+	});
+	await objectReplacementToggle.check();
+	await expect(objectReplacementToggle).toBeChecked();
+
+	const referenceUpload = panel.getByRole('region', { name: 'Референс стиля' });
+	await referenceUpload.locator('input[type="file"]').setInputFiles({
+		name: 'reference.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from('reference')
+	});
+	await panel
+		.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…')
+		.fill('white oak dining chair');
+
+	await panel.getByRole('button', { name: 'Перенести стиль' }).click();
+
+	expect(capturedBody?.image).toBe('https://cdn.example.test/source.webp');
+	expect(capturedBody?.referenceImage).toBe('https://cdn.example.test/reference.webp');
+	// The instruction is only added to the outbound request, on top of (not
+	// instead of) whatever guidance the user typed.
+	expect(capturedBody?.prompt).not.toBe('white oak dining chair');
+	expect(capturedBody?.prompt?.endsWith('white oak dining chair')).toBe(true);
+	expect(capturedBody?.prompt?.toLowerCase()).toContain('replace');
+});
+
+test('switching from the custom reference tab back to a preset tab clears the object replacement toggle', async ({
+	page
+}) => {
+	await authenticate(page);
+	await page.goto('/');
+
+	const panel = page.locator('#mode-panel-styleTransfer');
+	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await panel.getByRole('tab', { name: 'Свои' }).click();
+
+	const toggle = panel.getByRole('checkbox', {
+		name: 'Это предмет для замены, а не референс стиля'
+	});
+	await toggle.check();
+	await expect(toggle).toBeChecked();
+
+	await panel.getByRole('tab', { name: 'Реалистичные' }).click();
+	await panel.getByRole('tab', { name: 'Свои' }).click();
+
+	await expect(
+		panel.getByRole('checkbox', { name: 'Это предмет для замены, а не референс стиля' })
+	).not.toBeChecked();
+});
+
 test('render prompt and style transfer guidance stay isolated across tab switches', async ({
 	page
 }) => {

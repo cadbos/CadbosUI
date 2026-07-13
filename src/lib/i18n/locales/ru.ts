@@ -169,6 +169,9 @@ export const ru = {
 	'styleTransfer.referenceTabPhotorealistic': 'Реалистичные',
 	'styleTransfer.referenceTabConceptual': 'Концептуальные',
 	'styleTransfer.referenceTabCustom': 'Свои',
+	'styleTransfer.objectReplacement.label': 'Это предмет для замены, а не референс стиля',
+	'styleTransfer.objectReplacement.hint':
+		'Заменяет соответствующий предмет на исходном фото на показанный здесь, вместо переноса его стиля.',
 	'styleTransfer.presetsGridLabel': 'Выберите пресет стиля',
 	'styleTransfer.presetsEmpty':
 		'Для этого типа сцены пресетов пока нет — загрузите свой референс во вкладке «Свои».',

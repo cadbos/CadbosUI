@@ -38,6 +38,15 @@ const FLOOR_PLAN_PROMPT_PREFIX =
 	'from eye level inside the room. Do not invent rooms, walls, or openings that are not present in the ' +
 	'plan, and do not alter the layout or proportions.';
 
+// Sent only in the archAI request body (toStyleTransferRequest), never shown in the
+// UI — the archAI style-transfer API has no object-replacement parameter, so this
+// is the only lever available to redirect it from style transfer to object swap.
+const OBJECT_REPLACEMENT_PROMPT_PREFIX =
+	'The reference image shows a single furniture or decor item, not a room or a style board. ' +
+	'Identify the corresponding object in the source image and replace it with the exact object shown in ' +
+	'the reference image, matching its shape, materials, and colors as closely as possible. Keep everything ' +
+	'else in the source image — the room, layout, lighting, and other objects — unchanged.';
+
 export interface ImageInput {
 	url: string;
 	mime?: string;
@@ -102,6 +111,7 @@ export interface RequestJSON {
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
 	styleSourceMode: StyleSourceMode;
+	isObjectReplacement: boolean;
 	promptOverride: string | null;
 	currentRender?: RenderResult;
 	status: RequestStatus;
@@ -117,6 +127,7 @@ export interface NormalizedRequest {
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
 	styleSourceMode: StyleSourceMode;
+	isObjectReplacement: boolean;
 	prompt: string;
 }
 
@@ -168,6 +179,7 @@ const requestJsonSchema = z
 		styleTransferStrength: styleTransferStrengthSchema.default(0.7),
 		styleNegativePrompt: z.string().default(''),
 		styleSourceMode: styleSourceModeSchema.default('current-result'),
+		isObjectReplacement: z.boolean().default(false),
 		promptOverride: z.string().nullable(),
 		currentRender: renderResultSchema.optional(),
 		status: z.enum(['idle', 'rendering', 'error'])
@@ -364,6 +376,7 @@ class RequestState {
 	styleTransferStrength = $state(0.7);
 	styleNegativePrompt = $state('');
 	styleSourceMode = $state<StyleSourceMode>('current-result');
+	isObjectReplacement = $state(false);
 	promptOverride = $state<string | null>(null);
 	currentRender = $state<RenderResult | undefined>(undefined);
 	// Single-step undo/redo for the last edit (FR-К6) — in-session only, deliberately
@@ -477,6 +490,10 @@ class RequestState {
 		this.styleSourceMode = styleSourceModeSchema.parse(mode);
 	}
 
+	setIsObjectReplacement(value: boolean): void {
+		this.isObjectReplacement = value;
+	}
+
 	setPromptOverride(text: string): void {
 		this.promptOverride = text;
 	}
@@ -562,7 +579,10 @@ class RequestState {
 		const validation = this.validateStyleTransfer();
 		const image = this.styleTransferSourceUrl();
 		if (!validation.valid || !image || !this.styleReferenceImage) return null;
-		const prompt = guidance.trim();
+		const userGuidance = guidance.trim();
+		const prompt = this.isObjectReplacement
+			? [OBJECT_REPLACEMENT_PROMPT_PREFIX, userGuidance].filter(Boolean).join('\n\n')
+			: userGuidance;
 		const negativePrompt = this.styleNegativePrompt.trim();
 		return {
 			image,
@@ -586,6 +606,7 @@ class RequestState {
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
 			styleSourceMode: this.styleSourceMode,
+			isObjectReplacement: this.isObjectReplacement,
 			promptOverride: this.promptOverride,
 			currentRender: cloneRenderResult(this.currentRender),
 			status: this.status
@@ -604,6 +625,7 @@ class RequestState {
 		this.styleTransferStrength = parsed.styleTransferStrength;
 		this.styleNegativePrompt = parsed.styleNegativePrompt;
 		this.styleSourceMode = parsed.styleSourceMode;
+		this.isObjectReplacement = parsed.isObjectReplacement;
 		this.promptOverride = parsed.promptOverride;
 		this.currentRender = cloneRenderResult(parsed.currentRender);
 		this.status = parsed.status;
@@ -622,6 +644,7 @@ class RequestState {
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
 			styleSourceMode: this.styleSourceMode,
+			isObjectReplacement: this.isObjectReplacement,
 			prompt: this.prompt
 		};
 	}
@@ -637,6 +660,7 @@ class RequestState {
 		this.styleTransferStrength = 0.7;
 		this.styleNegativePrompt = '';
 		this.styleSourceMode = 'current-result';
+		this.isObjectReplacement = false;
 		this.promptOverride = null;
 		this.currentRender = undefined;
 		this.previousRender = undefined;

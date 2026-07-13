@@ -83,6 +83,7 @@ export function buildAc9RequestJSON(): RequestJSON {
 		styleTransferStrength: 0.7,
 		styleNegativePrompt: '',
 		styleSourceMode: 'current-result',
+		isObjectReplacement: false,
 		promptOverride: null,
 		status: 'idle'
 	};
