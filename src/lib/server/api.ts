@@ -22,6 +22,7 @@ export function apiError(status: number, code: string, message: string): Respons
 
 const outputFormat = z.enum(['webp', 'jpg', 'png', 'avif']);
 const httpImageUrl = z.url({ protocol: /^https?$/ }).trim();
+const httpsImageUrl = z.url({ protocol: /^https$/ }).trim();
 const optionalText = z
 	.string()
 	.trim()
@@ -32,6 +33,10 @@ export const renderRequestSchema = z.object({
 	image: z.string().trim().min(1),
 	prompt: z.string().trim().default(''),
 	outputFormat
+});
+
+export const remoteImageUploadRequestSchema = z.object({
+	url: httpsImageUrl
 });
 
 // Unlike render, edit-by-prompt has no "enhance" fallback for an empty prompt —

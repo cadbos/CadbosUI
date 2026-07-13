@@ -97,6 +97,42 @@ test('the Edit tab lets you upload an image directly, without generating a rende
 	).toBeVisible();
 });
 
+test('the shared image picker imports an HTTPS image URL through the upload endpoint', async ({
+	page
+}) => {
+	let uploadBody: unknown;
+	await page.route('**/api/uploads', async (route) => {
+		uploadBody = route.request().postDataJSON();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				url: 'https://cdn.example.test/imported.webp',
+				mime: 'image/webp',
+				size: 1024,
+				dimensions: [800, 600]
+			})
+		});
+	});
+
+	await page.goto('/');
+	const renderPanel = page.locator('#mode-panel-render');
+	await renderPanel
+		.getByLabel('Ссылка на изображение')
+		.fill('https://images.example.com/room.webp');
+	await renderPanel.getByRole('button', { name: 'Импортировать' }).click();
+
+	await expect(renderPanel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	expect(uploadBody).toEqual({ url: 'https://images.example.com/room.webp' });
+
+	await renderPanel.getByLabel('Ссылка на изображение').fill('http://images.example.com/room.webp');
+	await renderPanel.getByRole('button', { name: 'Импортировать' }).click();
+	await expect(
+		renderPanel.getByText('Введите корректную HTTPS-ссылку на изображение.')
+	).toBeVisible();
+	expect(uploadBody).toEqual({ url: 'https://images.example.com/room.webp' });
+});
+
 test('the Style transfer tab uploads a reference and submits transfer settings', async ({
 	page
 }) => {

@@ -33,6 +33,10 @@ export interface UploadResult {
 	dimensions?: [number, number];
 }
 
+export interface RemoteImageUploadRequest {
+	url: string;
+}
+
 // POST /api/render or /api/render/exterior — create a render.
 export interface RenderRequest {
 	image: string;
