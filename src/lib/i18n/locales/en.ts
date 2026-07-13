@@ -100,6 +100,9 @@ export const en = {
 	'render.sceneType.label': 'Scene type',
 	'render.sceneType.interior': 'Interior',
 	'render.sceneType.exterior': 'Exterior',
+	'render.floorPlan.label': 'This is a floor plan, not a photo',
+	'render.floorPlan.hint':
+		'Adds render instructions tuned for 2D floor plans/blueprints instead of photos.',
 	'render.generate': 'Generate',
 	'render.generating': 'Generating…',
 	'render.optional': 'optional',

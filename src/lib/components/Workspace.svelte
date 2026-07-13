@@ -191,6 +191,16 @@ before the Change Date. See LICENSE for complete terms.
 							</button>
 						{/each}
 					</div>
+
+					<label class="floor-plan-toggle">
+						<input
+							type="checkbox"
+							checked={request.isFloorPlan}
+							onchange={(event) => request.setIsFloorPlan(event.currentTarget.checked)}
+						/>
+						{t('render.floorPlan.label')}
+					</label>
+					<p class="hint">{t('render.floorPlan.hint')}</p>
 				</section>
 
 				<section class="step-card">
@@ -482,6 +492,21 @@ before the Change Date. See LICENSE for complete terms.
 		background: var(--color-surface);
 		color: var(--color-text);
 		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+	}
+
+	.floor-plan-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--color-text);
+	}
+
+	.hint {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--color-muted);
 	}
 
 	.result-wrap {

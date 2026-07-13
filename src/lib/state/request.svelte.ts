@@ -28,6 +28,16 @@ export const SCENE_TYPES = ['interior', 'exterior'] as const;
 
 export type SceneType = (typeof SCENE_TYPES)[number];
 
+// Sent only in the archAI request body (toRenderRequest), never shown in the UI —
+// the archAI API has no floor-plan parameter, so this is the only lever available
+// to stop it hallucinating a photograph interpretation from a 2D plan.
+const FLOOR_PLAN_PROMPT_PREFIX =
+	'The uploaded image is a 2D architectural floor plan (a top-down line drawing), not a photograph. ' +
+	'Interpret it literally: follow the exact wall placement, room boundaries, and door/window openings ' +
+	'shown in the plan. Generate a single photorealistic interior render of the space as drawn, viewed ' +
+	'from eye level inside the room. Do not invent rooms, walls, or openings that are not present in the ' +
+	'plan, and do not alter the layout or proportions.';
+
 export interface ImageInput {
 	url: string;
 	mime?: string;
@@ -88,6 +98,7 @@ export interface RequestJSON {
 	promptFragments: PromptFragment[];
 	outputFormat: OutputFormat;
 	sceneType: SceneType;
+	isFloorPlan: boolean;
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
 	styleSourceMode: StyleSourceMode;
@@ -102,6 +113,7 @@ export interface NormalizedRequest {
 	promptFragments: PromptFragment[];
 	outputFormat: OutputFormat;
 	sceneType: SceneType;
+	isFloorPlan: boolean;
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
 	styleSourceMode: StyleSourceMode;
@@ -152,6 +164,7 @@ const requestJsonSchema = z
 		outputFormat: outputFormatSchema,
 		// Defaults to interior for persisted requests saved before this field existed.
 		sceneType: sceneTypeSchema.default('interior'),
+		isFloorPlan: z.boolean().default(false),
 		styleTransferStrength: styleTransferStrengthSchema.default(0.7),
 		styleNegativePrompt: z.string().default(''),
 		styleSourceMode: styleSourceModeSchema.default('current-result'),
@@ -347,6 +360,7 @@ class RequestState {
 	promptFragments = $state<PromptFragment[]>([]);
 	outputFormat = $state<OutputFormat>('webp');
 	sceneType = $state<SceneType>('interior');
+	isFloorPlan = $state(false);
 	styleTransferStrength = $state(0.7);
 	styleNegativePrompt = $state('');
 	styleSourceMode = $state<StyleSourceMode>('current-result');
@@ -447,6 +461,10 @@ class RequestState {
 		this.sceneType = sceneTypeSchema.parse(type);
 	}
 
+	setIsFloorPlan(value: boolean): void {
+		this.isFloorPlan = value;
+	}
+
 	setStyleTransferStrength(strength: number): void {
 		this.styleTransferStrength = styleTransferStrengthSchema.parse(strength);
 	}
@@ -530,9 +548,12 @@ class RequestState {
 	toRenderRequest(): RenderRequest | null {
 		const validation = this.validate();
 		if (!validation.valid || !this.image) return null;
+		const prompt = this.isFloorPlan
+			? [FLOOR_PLAN_PROMPT_PREFIX, this.prompt].filter(Boolean).join('\n\n')
+			: this.prompt;
 		return {
 			image: this.image.url,
-			prompt: this.prompt,
+			prompt,
 			outputFormat: this.outputFormat
 		};
 	}
@@ -561,6 +582,7 @@ class RequestState {
 			promptFragments: cloneFragments(this.promptFragments),
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
+			isFloorPlan: this.isFloorPlan,
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
 			styleSourceMode: this.styleSourceMode,
@@ -578,6 +600,7 @@ class RequestState {
 		this.promptFragments = cloneFragments(parsed.promptFragments);
 		this.outputFormat = parsed.outputFormat;
 		this.sceneType = parsed.sceneType;
+		this.isFloorPlan = parsed.isFloorPlan;
 		this.styleTransferStrength = parsed.styleTransferStrength;
 		this.styleNegativePrompt = parsed.styleNegativePrompt;
 		this.styleSourceMode = parsed.styleSourceMode;
@@ -595,6 +618,7 @@ class RequestState {
 			promptFragments: cloneFragments(this.promptFragments),
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
+			isFloorPlan: this.isFloorPlan,
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
 			styleSourceMode: this.styleSourceMode,
@@ -609,6 +633,7 @@ class RequestState {
 		this.promptFragments = [];
 		this.outputFormat = 'webp';
 		this.sceneType = 'interior';
+		this.isFloorPlan = false;
 		this.styleTransferStrength = 0.7;
 		this.styleNegativePrompt = '';
 		this.styleSourceMode = 'current-result';

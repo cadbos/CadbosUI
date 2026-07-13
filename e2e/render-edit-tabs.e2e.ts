@@ -261,6 +261,60 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 	});
 });
 
+test('enabling the floor plan toggle adds render instructions to the submitted prompt only', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockUpload(page);
+	let renderBody: { image: string; prompt: string; outputFormat: string } | undefined;
+	await page.route('**/api/render', async (route) => {
+		renderBody = route.request().postDataJSON() as {
+			image: string;
+			prompt: string;
+			outputFormat: string;
+		};
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/render.webp',
+				cost: 5,
+				balance: 95
+			})
+		});
+	});
+
+	await page.goto('/');
+
+	const renderPanel = page.locator('#mode-panel-render');
+	await renderPanel
+		.locator('input[type="file"]')
+		.setInputFiles({ name: 'plan.png', mimeType: 'image/png', buffer: Buffer.from('plan') });
+
+	const floorPlanToggle = renderPanel.getByRole('checkbox', {
+		name: 'Это план помещения, а не фото'
+	});
+	await floorPlanToggle.check();
+	await expect(floorPlanToggle).toBeChecked();
+
+	const chatPrompt = renderPanel.getByPlaceholder(
+		'Скандинавский стиль, тёплые тона, натуральный свет…'
+	);
+	await chatPrompt.fill('уютная гостиная');
+	await expect(chatPrompt).toHaveValue('уютная гостиная');
+
+	await renderPanel.getByRole('button', { name: 'Сгенерировать' }).click();
+
+	expect(renderBody?.image).toBe('https://cdn.example.test/uploaded.webp');
+	expect(renderBody?.outputFormat).toBe('webp');
+	// The floor-plan instruction is only added to the outbound request, never to
+	// the chat textarea itself (request.prompt), which stays exactly what the
+	// user typed.
+	expect(renderBody?.prompt).not.toBe('уютная гостиная');
+	expect(renderBody?.prompt.endsWith('уютная гостиная')).toBe(true);
+	expect(renderBody?.prompt.toLowerCase()).toContain('floor plan');
+});
+
 test('the Style transfer tab lets you pick a ready-made photorealistic preset as the reference', async ({
 	page
 }) => {

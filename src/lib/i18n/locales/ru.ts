@@ -100,6 +100,9 @@ export const ru = {
 	'render.sceneType.label': 'Тип сцены',
 	'render.sceneType.interior': 'Интерьер',
 	'render.sceneType.exterior': 'Экстерьер',
+	'render.floorPlan.label': 'Это план помещения, а не фото',
+	'render.floorPlan.hint':
+		'Добавляет к рендеру инструкции, настроенные под 2D-планы/чертежи, а не под фотографии.',
 	'render.generate': 'Сгенерировать',
 	'render.generating': 'Генерация…',
 	'render.optional': 'необязательно',

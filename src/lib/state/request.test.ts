@@ -310,6 +310,52 @@ describe('sceneType', () => {
 	});
 });
 
+describe('isFloorPlan', () => {
+	it('defaults to false', () => {
+		expect(request.isFloorPlan).toBe(false);
+	});
+
+	it('reset() reverts to false', () => {
+		request.setIsFloorPlan(true);
+		request.reset();
+		expect(request.isFloorPlan).toBe(false);
+	});
+
+	it('round-trips through toJSON/fromJSON', () => {
+		applyAc9Fixture();
+		request.setIsFloorPlan(true);
+		const snapshot = request.toJSON();
+		request.reset();
+		request.fromJSON(snapshot);
+		expect(request.isFloorPlan).toBe(true);
+	});
+
+	it('defaults to false when restoring JSON saved before this field existed', () => {
+		const legacySnapshot = buildAc9RequestJSON() as Partial<ReturnType<typeof buildAc9RequestJSON>>;
+		delete legacySnapshot.isFloorPlan;
+		request.fromJSON(legacySnapshot);
+		expect(request.isFloorPlan).toBe(false);
+	});
+
+	it('prepends floor-plan instructions to the render body without altering request.prompt', () => {
+		applyAc9Fixture();
+		request.setIsFloorPlan(true);
+
+		expect(request.prompt).toBe(AC9_PROMPT);
+
+		const body = request.toRenderRequest();
+		expect(body?.prompt).not.toBe(AC9_PROMPT);
+		expect(body?.prompt.endsWith(AC9_PROMPT)).toBe(true);
+		expect(body?.prompt.toLowerCase()).toContain('floor plan');
+		expect(body).toEqual({ ...AC9_RENDER_REQUEST, prompt: body?.prompt });
+	});
+
+	it('leaves the render body unchanged when off', () => {
+		applyAc9Fixture();
+		expect(request.toRenderRequest()).toEqual(AC9_RENDER_REQUEST);
+	});
+});
+
 describe('toRenderRequest', () => {
 	it('returns the wire body for a valid AC-9 fixture', () => {
 		applyAc9Fixture();

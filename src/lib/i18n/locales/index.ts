@@ -96,6 +96,8 @@ export interface Dictionary {
 	'render.sceneType.label': string;
 	'render.sceneType.interior': string;
 	'render.sceneType.exterior': string;
+	'render.floorPlan.label': string;
+	'render.floorPlan.hint': string;
 	'render.generate': string;
 	'render.generating': string;
 	'render.optional': string;

@@ -79,6 +79,7 @@ export function buildAc9RequestJSON(): RequestJSON {
 		})),
 		outputFormat: 'webp',
 		sceneType: 'interior',
+		isFloorPlan: false,
 		styleTransferStrength: 0.7,
 		styleNegativePrompt: '',
 		styleSourceMode: 'current-result',
