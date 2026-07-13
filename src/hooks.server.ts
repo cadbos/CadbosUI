@@ -37,7 +37,9 @@ const guardedPaths = [
 	'/api/uploads',
 	'/api/download',
 	'/api/object-replacement',
-	'/api/texture-replacement'
+	'/api/texture-replacement',
+	'/api/packages',
+	'/api/deposits'
 ];
 
 export const handle: Handle = async ({ event, resolve }) => {
