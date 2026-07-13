@@ -20,6 +20,7 @@ before the Change Date. See LICENSE for complete terms.
 	import type { CreditTransaction } from '$lib/api/contract';
 	import { formatCredit } from '$lib/utils';
 	import QrCode from './QrCode.svelte';
+	import TopUpDialog from './TopUpDialog.svelte';
 
 	const errorKeys: Record<AuthError, TranslationKey> = {
 		extension_missing: 'auth.error.extensionMissing',
@@ -39,6 +40,7 @@ before the Change Date. See LICENSE for complete terms.
 		return `${npub.slice(0, 12)}…${npub.slice(-6)}`;
 	});
 
+	let topUpOpen = $state(false);
 	let menuOpen = $state(false);
 	// 'auto' = open iff missingCadbosName; 'open'/'closed' = user overrode.
 	let profileState = $state<'auto' | 'open' | 'closed'>('auto');
@@ -104,7 +106,11 @@ before the Change Date. See LICENSE for complete terms.
 	function dismissable(isOpen: () => boolean, close: () => void, triggerSelector: string) {
 		return (node: HTMLElement) => {
 			const onPointer = (event: PointerEvent) => {
-				if (isOpen() && !node.contains(event.target as Node)) close();
+				const target = event.target as Node;
+				// A click inside an unrelated modal (e.g. TopUpDialog, rendered outside
+				// `.profile`) must not read as "outside" and dismiss this panel behind it.
+				const insideDialog = target instanceof Element && target.closest('dialog');
+				if (isOpen() && !node.contains(target) && !insideDialog) close();
 			};
 			const onKey = (event: KeyboardEvent) => {
 				if (!isOpen() || event.key !== 'Escape') return;
@@ -159,6 +165,9 @@ before the Change Date. See LICENSE for complete terms.
 						<span class="balance">
 							{ti('auth.credit.balance', { balance: formatCredit(auth.credit.balance) })}
 						</span>
+						<button type="button" class="top-up-trigger" onclick={() => (topUpOpen = true)}>
+							{t('deposit.trigger')}
+						</button>
 						<details class="credit-history">
 							<summary>{t('auth.credit.history')}</summary>
 							{#if auth.credit.history.length === 0}
@@ -258,6 +267,10 @@ before the Change Date. See LICENSE for complete terms.
 		{/if}
 	{/if}
 </div>
+
+{#if topUpOpen}
+	<TopUpDialog onClose={() => (topUpOpen = false)} />
+{/if}
 
 <style>
 	.auth {
@@ -523,6 +536,15 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 0.8rem;
 		color: var(--color-text);
 		font-weight: 500;
+	}
+
+	.top-up-trigger {
+		justify-self: start;
+		padding: 0.2rem 0.6rem;
+		font-size: 0.78rem;
+		color: var(--color-accent);
+		background: transparent;
+		border-color: var(--color-accent);
 	}
 
 	.credit-history {
