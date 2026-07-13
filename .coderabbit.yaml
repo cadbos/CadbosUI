@@ -29,7 +29,7 @@ reviews:
   request_changes_workflow: true
   high_level_summary: true
   high_level_summary_in_walkthrough: false
-  auto_title_placeholder: "@coderabbitai"
+  auto_title_placeholder: '@coderabbitai'
   review_status: true
   commit_status: true
   poem: false
@@ -46,22 +46,22 @@ reviews:
 
   # Skip generated / vendored / non-source content from review noise.
   path_filters:
-    - "!**/pnpm-lock.yaml"
-    - "!**/package-lock.json"
-    - "!**/.svelte-kit/**"
-    - "!**/build/**"
-    - "!**/dist/**"
-    - "!**/node_modules/**"
-    - "!**/coverage/**"
-    - "!**/*.min.js"
-    - "!**/*.min.css"
-    - "!**/playwright-report/**"
-    - "!**/test-results/**"
+    - '!**/pnpm-lock.yaml'
+    - '!**/package-lock.json'
+    - '!**/.svelte-kit/**'
+    - '!**/build/**'
+    - '!**/dist/**'
+    - '!**/node_modules/**'
+    - '!**/coverage/**'
+    - '!**/*.min.js'
+    - '!**/*.min.css'
+    - '!**/playwright-report/**'
+    - '!**/test-results/**'
     # ai-context is a read-only, git-ignored knowledge base — not part of the repo.
-    - "!ai-context/**"
+    - '!ai-context/**'
 
   path_instructions:
-    - path: "**/*.svelte"
+    - path: '**/*.svelte'
       instructions: >
         Svelte 5 runes ONLY. Flag any Svelte 4 syntax as a blocking issue:
         on:click (use onclick), export let (use $props()), <slot>
@@ -83,7 +83,7 @@ reviews:
         Components must be a11y-correct (keyboard, ARIA roles/labels, contrast;
         WCAG 2.1 AA target). Every .svelte is expected to pass svelte-autofixer
         with zero findings.
-    - path: "**/*.svelte.ts"
+    - path: '**/*.svelte.ts'
       instructions: >
         Reactive store modules. src/lib/state/*.svelte.ts is the SINGLE source
         of truth for the request model. Flag duplicated/shadow state in views.
@@ -94,7 +94,7 @@ reviews:
         must serialize to a byte-identical prompt and an identical request
         payload (the three-UI identity guarantee).
         Comments policy: same as **/*.ts below.
-    - path: "src/lib/server/**"
+    - path: 'src/lib/server/**'
       instructions: >
         SERVER-ONLY code. Provider secrets (render-service x-api-key, the upload
         token) MUST NOT be importable from, or leak into, the client bundle,
@@ -105,7 +105,7 @@ reviews:
         validation alone. Authenticate the session before any mutation and
         authorize at the data layer (quota keyed by pubkey). Map external errors
         to generic client messages; log detail server-side without secrets/PII.
-    - path: "src/lib/server/generation.ts"
+    - path: 'src/lib/server/generation.ts'
       instructions: >
         Render-service proxy (interior render + edit-by-prompt). The API key is
         injected server-side only. Synchronous call with a configurable timeout
@@ -115,7 +115,7 @@ reviews:
         render endpoint (use output[0]), string for edit-by-prompt. image
         must be a public URL (base64 unsupported). Never forward provider secrets
         or raw provider errors to the client.
-    - path: "src/lib/server/auth.ts"
+    - path: 'src/lib/server/auth.ts'
       instructions: >
         Nostr authentication — NO passwords, NO nsec import. Verify a single-use,
         short-TTL challenge signed as a NIP-98 event (kind 27235): check kind,
@@ -126,25 +126,25 @@ reviews:
         Secure, SameSite=Lax|Strict cookie — never localStorage. Rate-limit
         auth endpoints. Flag any code path that accepts or stores a password or
         private key.
-    - path: "src/lib/server/billing.ts"
+    - path: 'src/lib/server/billing.ts'
       instructions: >
         Cost/limit accounting. A charge must be tied to a CONFIRMED
         generation/edit and protected against double-charge. Reconcile with the
         provider cost. Quota/limits are keyed to the authenticated account
         (pubkey) and must BLOCK generation/edit when exhausted.
-    - path: "src/routes/api/**/+server.ts"
+    - path: 'src/routes/api/**/+server.ts'
       instructions: >
         SvelteKit server endpoints (render proxy, upload route, auth, limits).
         External services are reached ONLY through these endpoints — the client
         never holds provider keys. Authenticate before any mutating action; keep
         SvelteKit csrf.checkOrigin on. Validate input server-side. For the
         upload route, enforce type image, max 8 MB, count 1.
-    - path: "src/lib/i18n/**"
+    - path: 'src/lib/i18n/**'
       instructions: >
         Russian is the primary language; the architecture must stay
         English-ready. Flag missing keys referenced by components and hardcoded
         strings that bypass this layer.
-    - path: "**/*.ts"
+    - path: '**/*.ts'
       instructions: >
         TypeScript strict. Flag any, non-null assertions hiding real
         nullability, and missing explicit return types on exported/public APIs.
@@ -159,13 +159,13 @@ reviews:
         (b) contain stale or misleading information, or (c) are bare
         TODO/FIXME/HACK without a referenced issue number. Never flag comments
         whose purpose is to orient an AI agent navigating the file.
-    - path: "**/*.{test,spec}.ts"
+    - path: '**/*.{test,spec}.ts'
       instructions: >
         Tests must mock the provider boundary — never call real external services.
         Use Vitest only for narrow pure logic (derived prompt concatenation, model
         serialization/normalization, graph↔key-value mapping); user-visible flows
         belong in Playwright e2e. The three-UI identity scenario must stay covered.
-    - path: "**/*.{yml,yaml}"
+    - path: '**/*.{yml,yaml}'
       instructions: >
         Validate CI/workflow and config YAML. Flag secrets committed in plaintext
         and over-broad permissions.
@@ -175,11 +175,11 @@ reviews:
     auto_incremental_review: true
     drafts: false
     ignore_title_keywords:
-      - "wip"
-      - "[skip ci]"
+      - 'wip'
+      - '[skip ci]'
     base_branches:
-      - "main"
-      - "master"
+      - 'main'
+      - 'master'
 
   finishing_touches:
     docstrings:
@@ -249,7 +249,7 @@ knowledge_base:
   code_guidelines:
     enabled: true
     filePatterns:
-      - "AGENTS.md"
-      - "CLAUDE.md"
-      - ".claude/skills/cadbos-*/**"
-      - "docs/ai-development/**"
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - '.claude/skills/cadbos-*/**'
+      - 'docs/ai-development/**'

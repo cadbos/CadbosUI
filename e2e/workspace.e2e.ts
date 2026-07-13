@@ -232,7 +232,7 @@ test('keeps the prompt byte-identical when switching from chat to graph', async 
 	await page.goto('/');
 	const prompt = 'Scandinavian style, warm natural light';
 
-	await page.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…').fill(prompt);
+	await page.getByRole('textbox', { name: 'Промпт чата' }).fill(prompt);
 
 	await page.getByRole('tab', { name: 'Граф' }).click();
 	await expect(page.getByRole('tab', { name: 'Граф' })).toHaveAttribute('aria-selected', 'true');
