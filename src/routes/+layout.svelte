@@ -13,7 +13,8 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { onMount, type Snippet } from 'svelte';
+	import { onMount } from 'svelte';
+	import Featurebase from 'featurebase-js';
 	import '../app.css';
 	import { page } from '$app/state';
 	import favicon from '$lib/assets/favicon.svg';
@@ -22,12 +23,13 @@ before the Change Date. See LICENSE for complete terms.
 	import { t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { isWorkspaceRoute } from '$lib/state/url-state';
+	import type { LayoutProps } from './$types';
 
 	// children() renders whichever leaf +page.svelte matched the URL — those are
 	// intentionally empty (see src/routes/create/[scene=scene]/+page.svelte): the
 	// workspace itself lives here, in the layout, so it stays mounted (and its
 	// UI state intact) while the user navigates between mode/scene routes.
-	let { children }: { children: Snippet } = $props();
+	let { children, data }: LayoutProps = $props();
 
 	// Standalone pages outside the three-tab workspace (e.g. '/usage') must not
 	// mount it: Workspace derives its mode from the route id, defaulting to
@@ -36,6 +38,7 @@ before the Change Date. See LICENSE for complete terms.
 	const showWorkspace = $derived(isWorkspaceRoute(page.route.id));
 
 	onMount(() => {
+		if (data.featurebaseAppId) Featurebase({ appId: data.featurebaseAppId });
 		auth.loadSession();
 	});
 </script>

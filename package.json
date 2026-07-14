@@ -55,6 +55,7 @@
 		"@xyflow/svelte": "^1.6.1",
 		"bits-ui": "^2.18.1",
 		"clsx": "^2.1.1",
+		"featurebase-js": "^1.0.3",
 		"nostr-tools": "^2.23.8",
 		"tailwind-merge": "^3.6.0",
 		"uqr": "^0.1.3",

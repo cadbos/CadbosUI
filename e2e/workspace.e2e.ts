@@ -389,10 +389,17 @@ test('generating with the exterior scene type calls the exterior render route', 
 test('serves security headers and a content security policy', async ({ request }) => {
 	const response = await request.get('/');
 	const headers = response.headers();
+	const contentSecurityPolicy = headers['content-security-policy'] ?? '';
 
 	expect(headers['x-content-type-options']).toBe('nosniff');
 	expect(headers['x-frame-options']).toBe('DENY');
 	expect(headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
 	expect(headers['permissions-policy']).toContain('geolocation=()');
-	expect(headers['content-security-policy']).toContain("default-src 'self'");
+	expect(contentSecurityPolicy).toContain("default-src 'self'");
+	expect(contentSecurityPolicy).toContain('https://do.featurebase.app');
+	expect(contentSecurityPolicy).toContain('https://*.featurebase.app');
+	expect(contentSecurityPolicy).toContain('wss://*.featurebase.app');
+	expect(contentSecurityPolicy).toContain('https://fonts.googleapis.com');
+	expect(contentSecurityPolicy).toContain('https://fonts.gstatic.com');
+	expect(contentSecurityPolicy).toContain('https://*.featurebase-attachments.com');
 });

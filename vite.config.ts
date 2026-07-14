@@ -42,17 +42,24 @@ export default defineConfig({
 				mode: 'auto',
 				directives: {
 					'default-src': ['self'],
-					'script-src': ['self'],
-					'style-src': ['self'],
+					'script-src': ['self', 'https://do.featurebase.app'],
+					'style-src': ['self', 'https://do.featurebase.app', 'https://fonts.googleapis.com'],
 					// SvelteKit applies inline `style="…"` attributes at runtime (the
 					// `display:contents` wrapper and the router's screen-reader announcer).
 					// Nonces/hashes can't cover style *attributes*, so scope a relaxation to
 					// them only — `style-src` stays strict for <style>/<link> stylesheets.
 					'style-src-attr': ['unsafe-inline'],
 					'img-src': ['self', 'blob:', 'data:', 'https:'],
-					'font-src': ['self'],
+					'font-src': ['self', 'https://fonts.gstatic.com'],
 					// `self` for our own endpoints; the NIP-46 rendezvous relays (wss://).
-					'connect-src': ['self', ...NOSTR_CONNECT_RELAYS],
+					'connect-src': [
+						'self',
+						...NOSTR_CONNECT_RELAYS,
+						'https://*.featurebase.app',
+						'wss://*.featurebase.app'
+					],
+					'frame-src': ['https://*.featurebase.app'],
+					'media-src': ['https://*.featurebase.app', 'https://*.featurebase-attachments.com'],
 					'object-src': ['none'],
 					'base-uri': ['self'],
 					'frame-ancestors': ['none'],
