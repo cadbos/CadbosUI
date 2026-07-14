@@ -89,8 +89,14 @@ export interface Dictionary {
 	'upload.dropTitle': string;
 	'upload.dropSubtitle': string;
 	'upload.uploading': string;
+	'upload.urlLabel': string;
+	'upload.urlPlaceholder': string;
+	'upload.import': string;
+	'upload.importing': string;
 	'upload.errorType': string;
 	'upload.errorSize': string;
+	'upload.errorUrl': string;
+	'upload.errorRemote': string;
 	'upload.errorUpload': string;
 	'upload.change': string;
 	'render.sceneType.label': string;

@@ -16,7 +16,7 @@
 	"name": "cadbos-ui",
 	"main": ".svelte-kit/cloudflare/_worker.js",
 	"compatibility_date": "2026-06-26",
-	"compatibility_flags": ["nodejs_als", "nodejs_compat"],
+	"compatibility_flags": ["nodejs_als", "nodejs_compat", "global_fetch_strictly_public"],
 	"keep_vars": true,
 	"observability": {
 		"enabled": true,

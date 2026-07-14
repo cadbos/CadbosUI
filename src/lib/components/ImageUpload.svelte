@@ -33,6 +33,7 @@ before the Change Date. See LICENSE for complete terms.
 	let inputEl = $state<HTMLInputElement | null>(null);
 	let previewUrl = $state<string | null>(null);
 	let dragOver = $state(false);
+	let remoteUrl = $state('');
 
 	function attachInput(node: HTMLInputElement): void {
 		inputEl = node;
@@ -65,6 +66,45 @@ before the Change Date. See LICENSE for complete terms.
 		request.setImage(next);
 	}
 
+	function errorMessageForCode(code: string | null): string {
+		switch (code) {
+			case 'invalid_url':
+				return t('upload.errorUrl');
+			case 'unsupported_image_type':
+				return t('upload.errorType');
+			case 'image_too_large':
+				return t('upload.errorSize');
+			case 'remote_fetch_failed':
+				return t('upload.errorRemote');
+			default:
+				return t('upload.errorUpload');
+		}
+	}
+
+	async function responseErrorMessage(response: Response): Promise<string> {
+		const body: unknown = await response.json().catch(() => null);
+		if (
+			typeof body === 'object' &&
+			body !== null &&
+			'error' in body &&
+			typeof body.error === 'object' &&
+			body.error !== null &&
+			'code' in body.error &&
+			typeof body.error.code === 'string'
+		) {
+			return errorMessageForCode(body.error.code);
+		}
+		return t('upload.errorUpload');
+	}
+
+	function isHttpsUrl(value: string): boolean {
+		try {
+			return new URL(value).protocol === 'https:';
+		} catch {
+			return false;
+		}
+	}
+
 	async function handleFile(file: File): Promise<void> {
 		error = null;
 		if (!file.type.startsWith('image/')) {
@@ -84,8 +124,7 @@ before the Change Date. See LICENSE for complete terms.
 			formData.append('file', file);
 			const response = await fetch('/api/uploads', { method: 'POST', body: formData });
 			if (!response.ok) {
-				const body = await response.json().catch(() => null);
-				error = body?.error?.message ?? t('upload.errorUpload');
+				error = await responseErrorMessage(response);
 				return;
 			}
 			const result = (await response.json()) as UploadResult;
@@ -100,6 +139,47 @@ before the Change Date. See LICENSE for complete terms.
 		} finally {
 			uploading = false;
 		}
+	}
+
+	async function importRemoteUrl(): Promise<void> {
+		const value = remoteUrl.trim();
+		error = null;
+		if (!isHttpsUrl(value)) {
+			error = t('upload.errorUrl');
+			return;
+		}
+
+		uploading = true;
+		try {
+			const response = await fetch('/api/uploads', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ url: value })
+			});
+			if (!response.ok) {
+				error = await responseErrorMessage(response);
+				return;
+			}
+			const result = (await response.json()) as UploadResult;
+			if (previewUrl) URL.revokeObjectURL(previewUrl);
+			previewUrl = null;
+			remoteUrl = '';
+			setUploadedImage({
+				url: result.url,
+				mime: result.mime,
+				size: result.size,
+				dimensions: result.dimensions
+			});
+		} catch {
+			error = t('upload.errorRemote');
+		} finally {
+			uploading = false;
+		}
+	}
+
+	function onRemoteUrlSubmit(event: SubmitEvent): void {
+		event.preventDefault();
+		void importRemoteUrl();
 	}
 
 	function onInput(event: Event): void {
@@ -196,6 +276,23 @@ before the Change Date. See LICENSE for complete terms.
 		class="file-input"
 		oninput={onInput}
 	/>
+	<form class="url-form" novalidate onsubmit={onRemoteUrlSubmit}>
+		<label class="url-label">
+			<span>{t('upload.urlLabel')}</span>
+			<input
+				type="url"
+				bind:value={remoteUrl}
+				placeholder={t('upload.urlPlaceholder')}
+				autocomplete="url"
+				inputmode="url"
+				disabled={uploading}
+				oninput={() => (error = null)}
+			/>
+		</label>
+		<button type="submit" disabled={uploading || remoteUrl.trim().length === 0}>
+			{uploading ? t('upload.importing') : t('upload.import')}
+		</button>
+	</form>
 	{#if error}
 		<p class="error" role="alert">{error}</p>
 	{/if}
@@ -322,6 +419,49 @@ before the Change Date. See LICENSE for complete terms.
 
 	.file-input {
 		display: none;
+	}
+
+	.url-form {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.url-label {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		gap: 0.25rem;
+		min-width: 0;
+		font-size: 0.8125rem;
+		color: var(--color-muted);
+	}
+
+	.url-label input {
+		width: 100%;
+		box-sizing: border-box;
+		padding: 0.5rem 0.625rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font: inherit;
+	}
+
+	.url-form button {
+		align-self: end;
+		padding: 0.5rem 0.875rem;
+		border: 1px solid var(--color-accent);
+		border-radius: var(--radius);
+		background: var(--color-accent);
+		color: #fff;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.url-form button:disabled,
+	.url-label input:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
 	}
 
 	.error {
