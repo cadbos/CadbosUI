@@ -56,6 +56,7 @@
 		"bits-ui": "^2.18.1",
 		"clsx": "^2.1.1",
 		"drizzle-orm": "1.0.0-rc.4",
+		"featurebase-js": "^1.0.3",
 		"nostr-tools": "^2.23.8",
 		"s3mini": "^1.0.0",
 		"svelte-awesome-color-picker": "4.1.0",

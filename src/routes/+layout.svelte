@@ -14,8 +14,9 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { ArrowUpRight } from '@lucide/svelte';
-	import { onMount, type Snippet } from 'svelte';
+	import { onMount } from 'svelte';
 	import { scrollY } from 'svelte/reactivity/window';
+	import Featurebase from 'featurebase-js';
 	import '../app.css';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -33,12 +34,13 @@ before the Change Date. See LICENSE for complete terms.
 	import { isWorkspaceRoute } from '$lib/state/url-state';
 	import { restorePersistedTabs } from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError } from '$lib/utils';
+	import type { LayoutProps } from './$types';
 
 	// children() renders whichever leaf +page.svelte matched the URL — those are
 	// intentionally empty (see src/routes/create/[scene=scene]/+page.svelte): the
 	// workspace itself lives here, in the layout, so it stays mounted (and its
 	// UI state intact) while the user navigates between mode/scene routes.
-	let { children }: { children: Snippet } = $props();
+	let { children, data }: LayoutProps = $props();
 
 	// Standalone pages outside the workspace (e.g. '/usage') must not mount it.
 	// The root route is the landing, with no mode selected; a mode route is
@@ -75,6 +77,7 @@ before the Change Date. See LICENSE for complete terms.
 	$effect(publishAppChromeHeight);
 
 	onMount(() => {
+		if (data.featurebaseAppId) Featurebase({ appId: data.featurebaseAppId });
 		auth.loadSession();
 		void status.checkOnce();
 		hydrateLocale();
