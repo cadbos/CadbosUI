@@ -23,6 +23,7 @@ import { parseAuthorizationHeader, verifyLoginEvent } from '$lib/server/auth/nip
 import { randomToken, setSessionCookie } from '$lib/server/auth/session';
 import { logAuthFailure } from '$lib/server/auth/events';
 import { getDb } from '$lib/server/db';
+import { createFeaturebaseJwt } from '$lib/server/featurebase';
 
 export const POST: RequestHandler = async ({
 	request,
@@ -77,5 +78,8 @@ export const POST: RequestHandler = async ({
 		...(user.first_name ? { firstName: user.first_name } : {}),
 		...(user.last_name ? { lastName: user.last_name } : {})
 	};
-	return json({ user: sessionUser });
+	return json({
+		user: sessionUser,
+		featurebaseJwt: createFeaturebaseJwt(sessionUser, platform?.env.FEATUREBASE_JWT_SECRET)
+	});
 };
