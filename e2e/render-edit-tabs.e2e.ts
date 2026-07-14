@@ -24,6 +24,12 @@ import {
 	mockProjectSessionRoutes
 } from './helpers/project-session-routes';
 
+import { mockFeaturebase } from './featurebase';
+
+test.beforeEach(async ({ page }) => {
+	await mockFeaturebase(page);
+});
+
 async function authenticate(page: Page): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
 		await route.fulfill({
