@@ -97,6 +97,7 @@ export default defineConfig(({ mode }) => {
 				// Deployed to Cloudflare Workers (Static Assets); see wrangler.jsonc.
 				adapter: adapter({
 					platformProxy: {
+						envFiles: process.env.PLAYWRIGHT_TEST === '1' ? ['.env', '.env.test'] : undefined,
 						persist: process.env.PLAYWRIGHT_TEST === '1' ? false : undefined,
 						remoteBindings: process.env.PLAYWRIGHT_TEST === '1' ? false : undefined
 					}

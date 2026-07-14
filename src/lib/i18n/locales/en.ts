@@ -28,6 +28,7 @@ export const en = {
 	'scene.panHint': 'Pan using arrow keys, the middle mouse button, or Space and drag.',
 	'app.title': 'AI Design',
 	'app.subtitle': 'Create and edit interiors and exteriors from a photo and description.',
+	'feedback.open': 'Feedback',
 	'home.landing': 'Home',
 	'language.switcher.label': 'Interface language',
 	'language.ru': 'Русский',
