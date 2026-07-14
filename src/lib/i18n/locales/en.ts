@@ -17,6 +17,7 @@ import type { Dictionary } from '$lib/i18n/locales';
 export const en = {
 	'app.title': 'AI Design',
 	'app.subtitle': 'Create and edit interiors and exteriors from a photo and description.',
+	'feedback.open': 'Feedback',
 	'mode.switcher.label': 'Workflow',
 	'mode.render': 'Create',
 	'mode.edit': 'Edit',

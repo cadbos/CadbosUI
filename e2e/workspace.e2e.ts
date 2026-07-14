@@ -14,6 +14,12 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import { mockFeaturebase } from './featurebase';
+
+test.beforeEach(async ({ page }) => {
+	await mockFeaturebase(page);
+});
+
 function promptPreview(page: Page): Locator {
 	return page.getByLabel('Итоговый промпт').filter({ visible: true });
 }
@@ -49,6 +55,48 @@ test('renders the workspace and switches views', async ({ page }) => {
 	await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
 	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('opens the localized feedback widget from the floating action', async ({ page }) => {
+	await page.goto('/');
+
+	const trigger = page.getByRole('button', { name: 'Обратная связь' });
+	await expect(trigger).toBeVisible();
+	await expect(trigger).toHaveAttribute('data-featurebase-feedback', '');
+	await expect(trigger).toHaveCSS('position', 'fixed');
+	await expect(trigger).toHaveCSS('right', '24px');
+	await expect(trigger).toHaveCSS('bottom', '24px');
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (
+					window as Window & { __featurebaseCalls?: [string, Record<string, unknown>][] }
+				).__featurebaseCalls;
+				const config = calls?.find(([action]) => action === 'initialize_feedback_widget')?.[1];
+				if (!config) return null;
+				return {
+					locale: config.locale,
+					organization: config.organization,
+					placement: config.placement ?? null,
+					theme: config.theme
+				};
+			})
+		)
+		.toEqual({
+			locale: 'ru',
+			organization: 'cadbos-test',
+			placement: null,
+			theme: 'light'
+		});
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	await expect(trigger.locator('span')).toBeHidden();
+	await expect(trigger).toHaveCSS('right', '16px');
+	await expect(trigger).toHaveCSS('bottom', '16px');
+
+	await trigger.click();
+	await expect(page.locator('html')).toHaveAttribute('data-featurebase-feedback-opened', 'true');
 });
 
 test('hides generated image sidebar for anonymous users', async ({ page }) => {

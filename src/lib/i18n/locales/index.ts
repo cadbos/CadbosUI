@@ -15,6 +15,7 @@
 export interface Dictionary {
 	'app.title': string;
 	'app.subtitle': string;
+	'feedback.open': string;
 	'mode.switcher.label': string;
 	'mode.render': string;
 	'mode.edit': string;

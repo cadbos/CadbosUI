@@ -13,14 +13,15 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { MessageSquareText } from '@lucide/svelte';
 	import { onMount } from 'svelte';
-	import Featurebase from 'featurebase-js';
+	import Featurebase, { destroyFeedback, initFeedback } from 'featurebase-js';
 	import '../app.css';
 	import { page } from '$app/state';
 	import favicon from '$lib/assets/favicon.svg';
 	import AuthBar from '$lib/components/AuthBar.svelte';
 	import Workspace from '$lib/components/Workspace.svelte';
-	import { t } from '$lib/i18n/index.svelte';
+	import { getLocale, t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { isWorkspaceRoute } from '$lib/state/url-state';
 	import type { LayoutProps } from './$types';
@@ -38,8 +39,13 @@ before the Change Date. See LICENSE for complete terms.
 	const showWorkspace = $derived(isWorkspaceRoute(page.route.id));
 
 	onMount(() => {
-		if (data.featurebaseAppId) Featurebase({ appId: data.featurebaseAppId });
 		auth.loadSession();
+		if (!data.featurebaseAppId) return;
+
+		Featurebase({ appId: data.featurebaseAppId });
+		initFeedback({ theme: 'light', locale: getLocale() });
+
+		return destroyFeedback;
 	});
 </script>
 
@@ -67,6 +73,18 @@ before the Change Date. See LICENSE for complete terms.
 {/if}
 
 {@render children()}
+
+{#if data.featurebaseAppId}
+	<button
+		type="button"
+		class="feedback-trigger"
+		data-featurebase-feedback
+		aria-label={t('feedback.open')}
+	>
+		<MessageSquareText size={20} aria-hidden="true" />
+		<span>{t('feedback.open')}</span>
+	</button>
+{/if}
 
 <style>
 	.app-header {
@@ -127,6 +145,61 @@ before the Change Date. See LICENSE for complete terms.
 		.app-header {
 			align-items: flex-start;
 			flex-direction: column;
+		}
+	}
+
+	.feedback-trigger {
+		position: fixed;
+		right: var(--space-3);
+		bottom: var(--space-3);
+		z-index: 10;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-1);
+		min-height: 3rem;
+		padding: 0.75rem var(--space-2);
+		font: inherit;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--color-accent-contrast);
+		background: var(--color-accent);
+		border: 1px solid var(--color-accent);
+		border-radius: var(--radius-xl);
+		box-shadow: var(--shadow-lg);
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			transform 0.1s,
+			box-shadow 0.15s;
+	}
+
+	.feedback-trigger:hover {
+		background: var(--color-accent-hover);
+		box-shadow: var(--shadow-md);
+		transform: translateY(-1px);
+	}
+
+	.feedback-trigger:active {
+		transform: translateY(0);
+	}
+
+	@media (max-width: 640px) {
+		.feedback-trigger {
+			right: var(--space-2);
+			bottom: var(--space-2);
+			width: 3rem;
+			padding: 0;
+		}
+
+		.feedback-trigger span {
+			display: none;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.feedback-trigger {
+			transition: none;
 		}
 	}
 </style>
