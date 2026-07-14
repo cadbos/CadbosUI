@@ -17,10 +17,11 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { SESSION_COOKIE } from '$lib/server/auth/config';
 import { DEMO_SESSION_ID, DEMO_USER } from '$lib/server/demo';
+import { createFeaturebaseJwt } from '$lib/server/featurebase';
 
 // Demo-only login — available only in development builds (demo/showcase branch).
 // Sets a fixed session cookie that hooks.server.ts recognises without D1.
-export const POST: RequestHandler = ({ cookies }) => {
+export const POST: RequestHandler = ({ cookies, platform }) => {
 	if (!dev) return new Response(null, { status: 404 });
 
 	cookies.set(SESSION_COOKIE, DEMO_SESSION_ID, {
@@ -30,5 +31,8 @@ export const POST: RequestHandler = ({ cookies }) => {
 		sameSite: 'lax'
 	});
 
-	return json({ user: DEMO_USER });
+	return json({
+		user: DEMO_USER,
+		featurebaseJwt: createFeaturebaseJwt(DEMO_USER, platform?.env.FEATUREBASE_JWT_SECRET)
+	});
 };

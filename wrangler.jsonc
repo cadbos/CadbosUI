@@ -48,6 +48,7 @@
 	// Secrets set via `wrangler secret put <NAME>` — never committed to source:
 	// ARCHAI_API_KEY
 	// FEATUREBASE_APP_ID
+	// FEATUREBASE_JWT_SECRET
 	//
 	// Generation access itself is controlled in D1, not an env var: an account
 	// can render/edit only once an admin inserts a row for it into the `credits`

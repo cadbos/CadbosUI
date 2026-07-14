@@ -13,6 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import jwt from 'jsonwebtoken';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { MeResponse, SessionUser } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
@@ -40,6 +41,7 @@ function call(user: SessionUser | null, platform: App.Platform): ReturnType<type
 }
 
 const pubkey = 'a'.repeat(64);
+const featurebaseJwtSecret = 'featurebase-test-secret';
 
 describe('GET /auth/me — generation access control', () => {
 	it('rejects unauthenticated requests', async () => {
@@ -54,6 +56,22 @@ describe('GET /auth/me — generation access control', () => {
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
 		const result = (await response.json()) as MeResponse;
 		expect(result.credit).toBeUndefined();
+	});
+
+	it('returns a Featurebase JWT for the authenticated account', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', pubkey);
+		const platform = {
+			env: { DB: db, FEATUREBASE_JWT_SECRET: featurebaseJwtSecret }
+		} as App.Platform;
+
+		const response = await call({ pubkey }, platform);
+		const result = (await response.json()) as MeResponse;
+
+		expect(jwt.verify(result.featurebaseJwt!, featurebaseJwtSecret)).toEqual({
+			userId: pubkey,
+			iat: expect.any(Number)
+		});
 	});
 
 	it('returns the admin-chosen balance for an approved account', async () => {

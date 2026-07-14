@@ -99,6 +99,50 @@ test('opens the localized feedback widget from the floating action', async ({ pa
 	await expect(page.locator('html')).toHaveAttribute('data-featurebase-feedback-opened', 'true');
 });
 
+test('updates Featurebase identity when the user signs in and out', async ({ page }) => {
+	const featurebaseJwt = 'signed-featurebase-jwt';
+	await page.route('**/auth/me', (route) =>
+		route.fulfill({
+			contentType: 'application/json',
+			body: JSON.stringify({
+				user: { pubkey: 'a'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt
+			})
+		})
+	);
+	await page.goto('/');
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (
+					window as Window & { __featurebaseCalls?: [string, Record<string, unknown>?][] }
+				).__featurebaseCalls;
+				return calls?.filter(([action]) => action === 'initialize_feedback_widget').at(-1)?.[1]
+					?.featurebaseJwt;
+			})
+		)
+		.toBe(featurebaseJwt);
+
+	await page.locator('.profile-toggle').click();
+	await page.getByRole('button', { name: 'Выйти' }).click();
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (
+					window as Window & { __featurebaseCalls?: [string, Record<string, unknown>?][] }
+				).__featurebaseCalls;
+				const feedbackCalls = calls?.filter(([action]) => action === 'initialize_feedback_widget');
+				return {
+					destroyed: calls?.some(([action]) => action === 'destroy_feedback_widget'),
+					featurebaseJwt: feedbackCalls?.at(-1)?.[1]?.featurebaseJwt ?? null
+				};
+			})
+		)
+		.toEqual({ destroyed: true, featurebaseJwt: null });
+});
+
 test('hides generated image sidebar for anonymous users', async ({ page }) => {
 	await openCreate(page);
 

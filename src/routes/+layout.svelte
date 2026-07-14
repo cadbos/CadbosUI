@@ -15,7 +15,12 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { MessageSquareText } from '@lucide/svelte';
 	import { onMount } from 'svelte';
-	import Featurebase, { destroyFeedback, initFeedback } from 'featurebase-js';
+	import Featurebase, {
+		clearConfig,
+		destroyFeedback,
+		initFeedback,
+		shutdown
+	} from 'featurebase-js';
 	import '../app.css';
 	import { page } from '$app/state';
 	import favicon from '$lib/assets/favicon.svg';
@@ -31,6 +36,8 @@ before the Change Date. See LICENSE for complete terms.
 	// workspace itself lives here, in the layout, so it stays mounted (and its
 	// UI state intact) while the user navigates between mode/scene routes.
 	let { children, data }: LayoutProps = $props();
+	let featurebaseReady = $state(false);
+	let configuredJwt: string | null = null;
 
 	// Standalone pages outside the three-tab workspace (e.g. '/usage') must not
 	// mount it: Workspace derives its mode from the route id, defaulting to
@@ -38,14 +45,46 @@ before the Change Date. See LICENSE for complete terms.
 	// then "correct" that unrecognized address back to /render/*.
 	const showWorkspace = $derived(isWorkspaceRoute(page.route.id));
 
-	onMount(() => {
-		auth.loadSession();
+	function initializeFeaturebase(featurebaseJwt: string | null, clearIdentity = false): void {
 		if (!data.featurebaseAppId) return;
 
-		Featurebase({ appId: data.featurebaseAppId });
-		initFeedback({ theme: 'light', locale: getLocale() });
+		destroyFeedback();
+		if (clearIdentity) {
+			shutdown();
+			clearConfig();
+		}
 
-		return destroyFeedback;
+		Featurebase({
+			appId: data.featurebaseAppId,
+			...(featurebaseJwt === null ? {} : { featurebaseJwt })
+		});
+		initFeedback({ theme: 'light', locale: getLocale() });
+		configuredJwt = featurebaseJwt;
+	}
+
+	$effect(() => {
+		const featurebaseJwt = auth.featurebaseJwt;
+		if (!featurebaseReady || featurebaseJwt === configuredJwt) return;
+		initializeFeaturebase(featurebaseJwt, featurebaseJwt === null);
+	});
+
+	onMount(() => {
+		let disposed = false;
+
+		void auth.loadSession().then(() => {
+			if (disposed || !data.featurebaseAppId) return;
+			initializeFeaturebase(auth.featurebaseJwt);
+			featurebaseReady = true;
+		});
+
+		return () => {
+			disposed = true;
+			featurebaseReady = false;
+			if (!data.featurebaseAppId) return;
+			destroyFeedback();
+			shutdown();
+			clearConfig();
+		};
 	});
 </script>
 
