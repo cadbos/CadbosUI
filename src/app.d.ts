@@ -42,6 +42,7 @@ declare global {
 				ARCHAI_API_KEY: string;
 				ARCHAI_API_URL: string;
 				FEATUREBASE_APP_ID?: string;
+				FEATUREBASE_JWT_SECRET?: string;
 				CLOUDFLARE_ACCOUNT_ID?: string;
 				CLOUDFLARE_ANALYTICS_API_TOKEN?: string;
 				CLOUDFLARE_GRAPHQL_URL?: string;

@@ -78,12 +78,14 @@ const creditSchema = z.object({
 	updatedAt: z.number(),
 	history: z.array(creditTransactionSchema)
 });
-const meResponseSchema = z.object({
+const authResponseSchema = z.object({
 	user: sessionUserSchema,
+	featurebaseJwt: z.string().nullable()
+});
+const meResponseSchema = authResponseSchema.extend({
 	credit: creditSchema.optional()
 });
 const challengeResponseSchema = z.object({ challenge: hex32 });
-const verifyResponseSchema = z.object({ user: sessionUserSchema });
 const profileResponseSchema = z.object({ user: sessionUserSchema });
 const PROFILE_NAME_MAX_LENGTH = 80;
 const nostrProfileSchema = z.object({
@@ -129,6 +131,7 @@ class AuthFlowError extends Error {
 class AuthState {
 	status = $state<AuthStatus>('restoring');
 	user = $state<SessionUser | null>(null);
+	featurebaseJwt = $state<string | null>(null);
 	credit = $state<CreditInfo | null>(null);
 	nostrProfile = $state<NostrProfile | null>(null);
 	profileDraft = $state({ firstName: '', lastName: '' });
@@ -182,7 +185,7 @@ class AuthState {
 
 				const data = await parseJsonOrFail(response, meResponseSchema);
 				if (controller.signal.aborted) return;
-				this.#authenticate(data.user, data.credit ?? null);
+				this.#authenticate(data.user, data.featurebaseJwt, data.credit ?? null);
 				return;
 			}
 		} catch (error) {
@@ -290,7 +293,8 @@ class AuthState {
 		const challenge = await this.#requestChallenge(pubkey);
 		const header = await this.#signLogin(signer, challenge);
 		if (signal?.aborted) throw signal.reason;
-		this.#authenticate(await this.#verify(header));
+		const data = await this.#verify(header);
+		this.#authenticate(data.user, data.featurebaseJwt);
 	}
 
 	async logout(): Promise<void> {
@@ -325,8 +329,8 @@ class AuthState {
 		this.status = 'connecting';
 		try {
 			const response = await fetchOrFail('/auth/demo', { method: 'POST' });
-			const data = await parseJsonOrFail(response, verifyResponseSchema);
-			this.#authenticate(data.user);
+			const data = await parseJsonOrFail(response, authResponseSchema);
+			this.#authenticate(data.user, data.featurebaseJwt);
 		} catch {
 			this.#fail('failed');
 		}
@@ -344,7 +348,10 @@ class AuthState {
 			const data = await parseJsonOrFail(response, meResponseSchema);
 			// A logout or account switch mid-request must not write this response's
 			// credit onto whatever session is now active — same guard as refreshNostrProfile.
-			if (this.user?.pubkey === pubkey) this.credit = data.credit ?? null;
+			if (this.user?.pubkey === pubkey) {
+				this.featurebaseJwt = data.featurebaseJwt;
+				this.credit = data.credit ?? null;
+			}
 		} catch (err) {
 			// Network hiccup or malformed response — keep the last-known balance/history
 			// rather than clearing it, but don't let the failure disappear silently.
@@ -406,12 +413,12 @@ class AuthState {
 		return `Nostr ${base64(JSON.stringify(signed))}`;
 	}
 
-	async #verify(header: string): Promise<SessionUser> {
+	async #verify(header: string): Promise<z.infer<typeof authResponseSchema>> {
 		const response = await fetchOrFail('/auth/verify', {
 			method: 'POST',
 			headers: { authorization: header }
 		});
-		return (await parseJsonOrFail(response, verifyResponseSchema)).user;
+		return parseJsonOrFail(response, authResponseSchema);
 	}
 
 	#fail(error: AuthError): void {
@@ -422,6 +429,7 @@ class AuthState {
 	#setAnonymous(): void {
 		mediaAccess.clear();
 		this.user = null;
+		this.featurebaseJwt = null;
 		this.credit = null;
 		this.nostrProfile = null;
 		this.#resetProfileDraft(null);
@@ -434,10 +442,14 @@ class AuthState {
 	}
 
 	// `credit` is passed when the caller already has it from the same response
-	// (loadSession's /auth/me) — otherwise (a fresh NIP-07/NIP-46/demo login,
-	// which only get `user` back) it's fetched separately via refreshCredit().
-	#authenticate(user: SessionUser, credit?: CreditInfo | null): void {
+	// (loadSession's /auth/me); fresh logins fetch it separately via refreshCredit().
+	#authenticate(
+		user: SessionUser,
+		featurebaseJwt: string | null,
+		credit?: CreditInfo | null
+	): void {
 		this.user = user;
+		this.featurebaseJwt = featurebaseJwt;
 		this.nostrProfile = null;
 		this.#resetProfileDraft(user);
 		this.status = 'authenticated';

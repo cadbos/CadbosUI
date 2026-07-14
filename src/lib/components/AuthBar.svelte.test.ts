@@ -98,7 +98,10 @@ function mockFetch(
 				if (init?.method !== 'PATCH') return Promise.resolve(new Response(null, { status: 405 }));
 				return Promise.resolve(
 					profile?.(init) ??
-						Response.json({ user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' } })
+						Response.json({
+							featurebaseJwt: null,
+							user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' }
+						})
 				);
 			}
 			if (input.endsWith('/auth/logout'))
@@ -111,6 +114,7 @@ function mockFetch(
 beforeEach(() => {
 	auth.status = 'anonymous';
 	auth.user = null;
+	auth.featurebaseJwt = null;
 	auth.credit = null;
 	auth.nostrProfile = null;
 	auth.profileDraft.firstName = '';
@@ -130,7 +134,7 @@ it('signs in via NIP-07 (sends a Nostr authorization) and signs out', async () =
 	let sentAuthHeader: string | null = null;
 	mockFetch((init) => {
 		sentAuthHeader = new Headers(init?.headers).get('authorization');
-		return Response.json({ user: { pubkey: pk } });
+		return Response.json({ featurebaseJwt: null, user: { pubkey: pk } });
 	});
 
 	const screen = render(AuthBar);
@@ -148,10 +152,10 @@ it('signs in via NIP-07 (sends a Nostr authorization) and signs out', async () =
 it('autosaves a profile field on blur, with no save button to click', async () => {
 	let profileRequest: unknown = null;
 	mockFetch(
-		() => Response.json({ user: { pubkey: pk } }),
+		() => Response.json({ featurebaseJwt: null, user: { pubkey: pk } }),
 		(init) => {
 			profileRequest = init;
-			return Response.json({ user: { pubkey: pk, firstName: 'Ada' } });
+			return Response.json({ featurebaseJwt: null, user: { pubkey: pk, firstName: 'Ada' } });
 		}
 	);
 
@@ -184,7 +188,7 @@ it('hides the completion hint once both name fields have been autosaved', async 
 	let saveCount = 0;
 	let lastSavedBody: { firstName?: string | null; lastName?: string | null } = {};
 	mockFetch(
-		() => Response.json({ user: { pubkey: pk } }),
+		() => Response.json({ featurebaseJwt: null, user: { pubkey: pk } }),
 		(init) => {
 			saveCount += 1;
 			lastSavedBody = JSON.parse(String(init?.body ?? '{}'));
@@ -222,7 +226,7 @@ it('hides the completion hint once both name fields have been autosaved', async 
 });
 
 it('shows an error when no Nostr extension is present', async () => {
-	mockFetch(() => Response.json({ user: { pubkey: pk } }));
+	mockFetch(() => Response.json({ featurebaseJwt: null, user: { pubkey: pk } }));
 	delete window.nostr;
 
 	const screen = render(AuthBar);
@@ -238,7 +242,7 @@ it('signs in via NIP-46: shows the QR, then completes when the signer connects',
 	let sentAuthHeader: string | null = null;
 	mockFetch((init) => {
 		sentAuthHeader = new Headers(init?.headers).get('authorization');
-		return Response.json({ user: { pubkey: pk } });
+		return Response.json({ featurebaseJwt: null, user: { pubkey: pk } });
 	});
 
 	const screen = render(AuthBar);
@@ -259,7 +263,7 @@ it('signs in via NIP-46: shows the QR, then completes when the signer connects',
 });
 
 it('returns to anonymous when the NIP-46 connection is cancelled', async () => {
-	mockFetch(() => Response.json({ user: { pubkey: pk } }));
+	mockFetch(() => Response.json({ featurebaseJwt: null, user: { pubkey: pk } }));
 
 	const screen = render(AuthBar);
 	await screen.getByRole('button', { name: 'Гость' }).click();
@@ -298,9 +302,9 @@ it('loads approved-account credit after sign-in', async () => {
 		]
 	};
 	mockFetch(
-		() => Response.json({ user: { pubkey: pk } }),
+		() => Response.json({ featurebaseJwt: null, user: { pubkey: pk } }),
 		undefined,
-		() => Response.json({ user: { pubkey: pk }, credit })
+		() => Response.json({ featurebaseJwt: null, user: { pubkey: pk }, credit })
 	);
 
 	await auth.loginNip07();
@@ -314,6 +318,7 @@ it('restores a texture-replacement entry in credit state', async () => {
 		undefined,
 		() =>
 			Response.json({
+				featurebaseJwt: null,
 				user: { pubkey: pk },
 				credit: {
 					balance: 10,
@@ -361,7 +366,7 @@ it('ignores a stale session response after a newer restoration succeeds', async 
 						resolveFirst = resolve;
 					});
 				}
-				return Promise.resolve(Response.json({ user: { pubkey: pk } }));
+				return Promise.resolve(Response.json({ featurebaseJwt: null, user: { pubkey: pk } }));
 			}
 			if (input.endsWith('/auth/nostr-profile')) {
 				return Promise.resolve(Response.json({ profile: { relays: [] } }));
@@ -375,7 +380,7 @@ it('ignores a stale session response after a newer restoration succeeds', async 
 	const secondRestoration = auth.loadSession();
 	await secondRestoration;
 
-	resolveFirst(Response.json({ user: { pubkey: '1'.repeat(64) } }));
+	resolveFirst(Response.json({ featurebaseJwt: null, user: { pubkey: '1'.repeat(64) } }));
 	await firstRestoration;
 
 	expect(auth.status).toBe('authenticated');
@@ -385,7 +390,12 @@ it('ignores a stale session response after a newer restoration succeeds', async 
 it('closes the auth panel on an outside click, and on Escape returns focus to the trigger', async () => {
 	// firstName/lastName present so the panel starts closed (no missingCadbosName
 	// auto-open) — the dismiss/reopen cycle below needs a real closed→open transition.
-	mockFetch(() => Response.json({ user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' } }));
+	mockFetch(() =>
+		Response.json({
+			featurebaseJwt: null,
+			user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' }
+		})
+	);
 
 	const screen = render(AuthBar);
 	// Clicking the trigger to reach the sign-in buttons also opens the panel (it's
@@ -444,7 +454,7 @@ it('cancelling after the signer connects but before verification stays anonymous
 	let verifyCalled = false;
 	mockFetch(() => {
 		verifyCalled = true;
-		return Response.json({ user: { pubkey: pk } });
+		return Response.json({ featurebaseJwt: null, user: { pubkey: pk } });
 	});
 
 	// A signer that connects but holds its signature pending until we release it,
