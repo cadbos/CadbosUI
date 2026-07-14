@@ -13,6 +13,8 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import type { OutputFormat, RenderResponse } from '$lib/api/contract';
 	import {
@@ -27,9 +29,8 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import { stylePresetsFor, type StylePreset } from '$lib/style-presets';
+	import { buildShareUrl, slugToReference, type ReferenceTab } from '$lib/state/url-state';
 	import { createTabController } from '$lib/utils';
-
-	type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
 
 	const REFERENCE_TABS: { id: ReferenceTab; label: TranslationKey }[] = [
 		{ id: 'photorealistic', label: 'styleTransfer.referenceTabPhotorealistic' },
@@ -45,7 +46,11 @@ before the Change Date. See LICENSE for complete terms.
 	let guidance = $state('');
 	let applying = $state(false);
 	let error = $state<string | null>(null);
-	let referenceTab = $state<ReferenceTab>('photorealistic');
+	// Only ever rendered in style transfer mode (see Workspace.svelte), so the
+	// URL's `reference` query param is this component's tab state.
+	const referenceTab = $derived(
+		slugToReference(page.url.searchParams.get('reference') ?? undefined)
+	);
 	let referenceTabButtons = $state<HTMLElement[]>([]);
 	let presetButtons = $state<HTMLElement[]>([]);
 	let sceneTypeButtons = $state<HTMLElement[]>([]);
@@ -86,7 +91,11 @@ before the Change Date. See LICENSE for complete terms.
 		setActiveIndex: (index) => {
 			const nextTab = REFERENCE_TABS[index].id;
 			if (nextTab !== referenceTab) clearReferenceSelection();
-			referenceTab = nextTab;
+			void goto(buildShareUrl('styleTransfer', request, { reference: nextTab }), {
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true
+			});
 		},
 		focusTab: (index) => referenceTabButtons[index]?.focus()
 	});

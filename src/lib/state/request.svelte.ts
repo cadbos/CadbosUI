@@ -340,7 +340,7 @@ export function creditErrorKey(keys: CreditErrorKeys, err: unknown): Translation
 	return keys.failed;
 }
 
-class RequestState {
+export class RequestState {
 	id = $state<string>(crypto.randomUUID());
 	image = $state<ImageInput | undefined>(undefined);
 	styleReferenceImage = $state<ImageInput | undefined>(undefined);
@@ -417,6 +417,17 @@ class RequestState {
 		);
 	}
 
+	// Wholesale replacement of the fragment list — used when restoring a shared
+	// request from a URL, where the caller only has label/text pairs, not ids.
+	setFragments(fragments: { label?: string; text: string }[]): void {
+		this.promptFragments = fragments.map((fragment, order) => ({
+			id: crypto.randomUUID(),
+			...(fragment.label !== undefined ? { label: fragment.label } : {}),
+			text: fragment.text,
+			order
+		}));
+	}
+
 	reorder(orderedIds: string[]): void {
 		if (orderedIds.length !== this.promptFragments.length) {
 			throw new RequestReorderError('orderedIds must include every fragment exactly once');
@@ -424,11 +435,12 @@ class RequestState {
 		if (orderedIds.some((id, index) => orderedIds.indexOf(id) !== index)) {
 			throw new RequestReorderError('orderedIds must include every fragment exactly once');
 		}
-		const byId = new Map(this.promptFragments.map((fragment) => [fragment.id, fragment]));
-		if (orderedIds.some((id) => !byId.has(id))) {
+		const byId: Record<string, PromptFragment> = {};
+		for (const fragment of this.promptFragments) byId[fragment.id] = fragment;
+		if (orderedIds.some((id) => !(id in byId))) {
 			throw new RequestReorderError('orderedIds contains unknown fragment id');
 		}
-		this.promptFragments = orderedIds.map((id, order) => ({ ...byId.get(id)!, order }));
+		this.promptFragments = orderedIds.map((id, order) => ({ ...byId[id], order }));
 	}
 
 	setImage(image: ImageInput | undefined): void {

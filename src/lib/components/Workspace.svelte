@@ -13,6 +13,9 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { browser } from '$app/environment';
+	import { afterNavigate, goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import RenderResult from '$lib/components/RenderResult.svelte';
@@ -29,9 +32,14 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
+	import {
+		applyShareParams,
+		buildShareUrl,
+		routeIdToMode,
+		subTabFromSearch,
+		type Mode
+	} from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
-
-	type Mode = 'render' | 'edit' | 'styleTransfer';
 
 	const modes: { id: Mode; label: TranslationKey }[] = [
 		{ id: 'render', label: 'mode.render' },
@@ -46,15 +54,24 @@ before the Change Date. See LICENSE for complete terms.
 
 	let submitting = $state(false);
 	let submitError = $state<string | null>(null);
-	let mode = $state<Mode>('render');
 	let modeTabs = $state<HTMLElement[]>([]);
 	let sceneTypeTabs = $state<HTMLElement[]>([]);
+
+	// The URL is the source of truth for which mode is open — not local $state —
+	// so a shared link or a page reload always opens on the right tab.
+	const mode = $derived(routeIdToMode(page.route.id));
 
 	const modeTabController = createTabController({
 		itemCount: () => modes.length,
 		getActiveIndex: () => modes.findIndex((m) => m.id === mode),
 		setActiveIndex: (index) => {
-			mode = modes[index].id;
+			// No sub-tab passed: switching modes has no "current" sub-tab to carry
+			// over from a different mode, so each mode opens on its own default.
+			void goto(buildShareUrl(modes[index].id, request), {
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true
+			});
 		},
 		focusTab: (index) => modeTabs[index]?.focus()
 	});
@@ -78,6 +95,78 @@ before the Change Date. See LICENSE for complete terms.
 	$effect(() => {
 		if (auth.canLoadGeneratedImages) void generatedImages.load();
 		else generatedImages.clear();
+	});
+
+	// True once the request store has been hydrated from the URL at least once.
+	// Gates the write-sync effect so it can't fire — and overwrite the shared
+	// link's query string with defaults — before that initial hydration has run.
+	let hydrated = $state(false);
+
+	// The very first hydration runs synchronously here, at component
+	// initialization, rather than inside afterNavigate's 'enter' case: this
+	// component is mounted once in the root layout and never destroyed (see
+	// +layout.svelte), so this runs exactly once, before its markup ever
+	// becomes interactive. afterNavigate's 'enter' event, by contrast, only
+	// fires *after* mount, once the DOM already has live event listeners
+	// attached — under enough load a user could start interacting in that gap,
+	// and the 'enter' handler would then clobber whatever they'd already done
+	// with the stale pre-hydration URL. Reading `page.params`/`page.url` here
+	// instead closes that gap entirely. Guarded by `browser` since `request` is
+	// a module-level singleton shared across SSR requests — it must only be
+	// mutated client-side, same as before.
+	if (browser) {
+		// A plain call, not a read of the `mode` rune: this only ever needs
+		// today's initial route once, synchronously, not a reactive binding.
+		applyShareParams(
+			routeIdToMode(page.route.id),
+			page.params.scene,
+			page.url.searchParams,
+			request
+		);
+		hydrated = true;
+	}
+
+	// Browser back/forward or landing via an in-app link also re-parse the URL
+	// into `request`; the initial load is handled above, so 'enter' is excluded
+	// here. 'goto' is deliberately excluded too: that's the type of the
+	// navigations *we* trigger below and in the tab controllers, where
+	// `request` is already the source of truth and re-parsing the URL would be
+	// redundant.
+	afterNavigate(({ type }) => {
+		if (type === 'popstate' || type === 'link') {
+			applyShareParams(mode, page.params.scene, page.url.searchParams, request);
+		}
+		hydrated = true;
+	});
+
+	// Keeps the URL in sync with the current mode/request so the address bar is
+	// always a shareable link for what's on screen. Debounced so typing in a
+	// prompt fragment doesn't rewrite the URL on every keystroke.
+	//
+	// The synchronous `buildShareUrl(mode, request)` call below (result
+	// discarded) exists purely so this effect *tracks* mode/request as
+	// dependencies and re-schedules the timer whenever they change — that's
+	// what makes the debounce reactive at all. The URL actually used to
+	// navigate is rebuilt fresh *inside* the timeout instead of reusing that
+	// value, for two reasons: the sub-tab (view/tool/reference) has no backing
+	// store field, so it can only be read off the current query string (a
+	// plain DOM read, not a reactive `page` read, so it can't turn this effect
+	// into a feedback loop with the `goto()` call below); and reusing a value
+	// computed up front would go stale if the user changes the sub-tab (e.g.
+	// clicks the Graph tab) while a request-field debounce from a moment
+	// earlier is still pending — the timer would then fire with the *old*
+	// sub-tab and clobber the switch by navigating back to it.
+	$effect(() => {
+		if (!hydrated) return;
+		buildShareUrl(mode, request);
+		const timer = setTimeout(() => {
+			const currentSearch = new URLSearchParams(window.location.search);
+			const url = buildShareUrl(mode, request, subTabFromSearch(mode, currentSearch));
+			if (`${window.location.pathname}${window.location.search}` !== url) {
+				void goto(url, { replaceState: true, keepFocus: true, noScroll: true });
+			}
+		}, 400);
+		return () => clearTimeout(timer);
 	});
 
 	async function generate(): Promise<void> {

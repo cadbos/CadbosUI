@@ -14,6 +14,8 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { Eraser, Pencil, Plus, Sun } from '@lucide/svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import {
 		creditErrorKey,
@@ -24,12 +26,12 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
+	import { buildShareUrl, slugToTool, type ToolId } from '$lib/state/url-state';
 	import { createTabController, formatCredit } from '$lib/utils';
 	import EditAddObjectTool from '$lib/components/EditAddObjectTool.svelte';
 	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
 	import EditAtmosphereTool from '$lib/components/EditAtmosphereTool.svelte';
 
-	type ToolId = 'freeform' | 'add-object' | 'remove-object' | 'atmosphere';
 	type LucideIcon = typeof Pencil;
 
 	const TOOLS: { id: ToolId; label: TranslationKey; Icon: LucideIcon }[] = [
@@ -39,7 +41,9 @@ before the Change Date. See LICENSE for complete terms.
 		{ id: 'atmosphere', label: 'edit.tool.atmosphere', Icon: Sun }
 	];
 
-	let activeTool = $state<ToolId>('freeform');
+	// Only ever rendered in edit mode (see Workspace.svelte), so the URL's
+	// `tool` query param is this component's tab state.
+	const activeTool = $derived(slugToTool(page.url.searchParams.get('tool') ?? undefined));
 	let toolTabButtons = $state<HTMLElement[]>([]);
 	let instruction = $state('');
 	let applying = $state(false);
@@ -49,7 +53,11 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => TOOLS.length,
 		getActiveIndex: () => TOOLS.findIndex((tool) => tool.id === activeTool),
 		setActiveIndex: (index) => {
-			activeTool = TOOLS[index].id;
+			void goto(buildShareUrl('edit', request, { tool: TOOLS[index].id }), {
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true
+			});
 		},
 		focusTab: (index) => toolTabButtons[index]?.focus()
 	});

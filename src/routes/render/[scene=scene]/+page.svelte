@@ -13,6 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <!--
-	Intentionally empty: +page.ts redirects '/' to '/render/chat' before this
-	ever renders. The actual UI is <Workspace /> in the root +layout.svelte.
+	Intentionally empty: this route only exists to register the URL. The actual
+	UI is <Workspace /> in the root +layout.svelte, which stays mounted across
+	mode/scene navigation instead of remounting.
 -->
