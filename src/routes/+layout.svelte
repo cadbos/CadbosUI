@@ -35,6 +35,8 @@ before the Change Date. See LICENSE for complete terms.
 <svelte:head>
 	<title>{t('app.title')}</title>
 	<link rel="icon" href={favicon} />
+	<link rel="manifest" href="/manifest.webmanifest" />
+	<meta name="theme-color" content="#ff3e00" />
 </svelte:head>
 
 <header class="app-header">

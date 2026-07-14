@@ -1,0 +1,18 @@
+{
+	"name": "Cadbos Interior Design AI",
+	"short_name": "Cadbos",
+	"description": "Generate interior and exterior visuals from a room photo and a free-text prompt.",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"background_color": "#ffffff",
+	"theme_color": "#ff3e00",
+	"lang": "ru",
+	"icons": [
+		{
+			"src": "/favicon.svg",
+			"sizes": "any",
+			"type": "image/svg+xml"
+		}
+	]
+}
