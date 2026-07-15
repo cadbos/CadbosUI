@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 
 async function authenticate(page: Page): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
@@ -40,6 +40,10 @@ async function authenticate(page: Page): Promise<void> {
 	});
 }
 
+async function openCreate(page: Page): Promise<void> {
+	await page.goto('/create/interior?view=chat&format=webp');
+}
+
 async function mockUpload(page: Page): Promise<void> {
 	await page.route('**/api/uploads', async (route) => {
 		await route.fulfill({
@@ -55,6 +59,17 @@ async function mockUpload(page: Page): Promise<void> {
 	});
 }
 
+async function uploadImageFile(
+	page: Page,
+	input: Locator,
+	file: { name: string; mimeType: string; buffer: Buffer }
+): Promise<void> {
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		input.setInputFiles(file)
+	]);
+}
+
 function styleTransferUploadUrl(route: Route): string {
 	const body = route.request().postDataBuffer();
 	if (body === null) throw new Error('Upload request body is missing');
@@ -68,9 +83,9 @@ test('the Edit tab lets you upload an image directly, without generating a rende
 }) => {
 	await mockUpload(page);
 
-	await page.goto('/');
+	await openCreate(page);
 
-	const renderTab = page.getByRole('tab', { name: 'Рендер' });
+	const renderTab = page.getByRole('tab', { name: 'Создание' });
 	const editTab = page.getByRole('tab', { name: 'Редактирование' });
 	const editPanel = page.locator('#mode-panel-edit');
 
@@ -115,7 +130,7 @@ test('the shared image picker imports an HTTPS image URL through the upload endp
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 	const renderPanel = page.locator('#mode-panel-render');
 	await renderPanel
 		.getByLabel('Ссылка на изображение')
@@ -163,7 +178,7 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 
 	const panel = page.locator('#mode-panel-styleTransfer');
 	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
@@ -254,12 +269,15 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 
 	const renderPanel = page.locator('#mode-panel-render');
-	await renderPanel
-		.locator('input[type="file"]')
-		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('room') });
+	await uploadImageFile(page, renderPanel.locator('input[type="file"]'), {
+		name: 'room.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from('room')
+	});
+	await expect(renderPanel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
 	await renderPanel
 		.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…')
 		.fill('render prompt for paid generation');
@@ -274,6 +292,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		mimeType: 'image/png',
 		buffer: Buffer.from('reference')
 	});
+	await expect(referenceUpload.getByRole('button', { name: 'Изменить референс' })).toBeVisible();
 	await stylePanel
 		.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…')
 		.fill('style transfer guidance only');
@@ -287,7 +306,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		styleTransferStrength: 0.7
 	});
 
-	await page.getByRole('tab', { name: 'Рендер' }).click();
+	await page.getByRole('tab', { name: 'Создание' }).click();
 	await renderPanel.getByRole('button', { name: 'Сгенерировать' }).click();
 
 	expect(renderBody).toEqual({
@@ -316,7 +335,7 @@ test('the Style transfer tab lets you pick a ready-made photorealistic preset as
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 
 	const panel = page.locator('#mode-panel-styleTransfer');
 	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
@@ -348,7 +367,7 @@ test('switching scene type clears a selected conceptual preset instead of keepin
 	await authenticate(page);
 	await mockUpload(page);
 
-	await page.goto('/');
+	await openCreate(page);
 
 	const panel = page.locator('#mode-panel-styleTransfer');
 	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
@@ -405,7 +424,7 @@ test('switching from a custom reference upload back to a preset tab clears the u
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 
 	const panel = page.locator('#mode-panel-styleTransfer');
 	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
@@ -458,7 +477,7 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page
@@ -490,7 +509,7 @@ test('a failed edit request surfaces the error in the Edit tab instead of a resu
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page
@@ -523,14 +542,17 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 
-	await page
-		.locator('#mode-panel-render input[type="file"]')
-		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
-	await expect(
-		page.locator('#mode-panel-render').getByRole('button', { name: 'Изменить фото' })
-	).toBeVisible();
+	const renderPanel = page.locator('#mode-panel-render');
+	const roomInput = renderPanel.locator('input[type="file"]');
+	await expect(renderPanel.getByRole('button', { name: 'Выбрать файл' })).toBeVisible();
+	await uploadImageFile(page, roomInput, {
+		name: 'room.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from('fake-image')
+	});
+	await expect(renderPanel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
 
 	await page.getByRole('button', { name: 'Сгенерировать' }).click();
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toBeVisible();
@@ -541,7 +563,7 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 	await expect(page.getByLabel('Инструкция для правки')).toBeVisible();
 	await expect(page.locator('#mode-panel-edit input[type="file"]')).toHaveCount(0);
 
-	const renderTab = page.getByRole('tab', { name: 'Рендер' });
+	const renderTab = page.getByRole('tab', { name: 'Создание' });
 	await renderTab.click();
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toBeVisible();
 
@@ -588,11 +610,14 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 
-	await page
-		.locator('#mode-panel-render input[type="file"]')
-		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+	await uploadImageFile(page, page.locator('#mode-panel-render input[type="file"]'), {
+		name: 'room.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from('fake-image')
+	});
+	await expect(page.getByRole('button', { name: 'Сгенерировать' })).toBeEnabled();
 	await page.getByRole('button', { name: 'Сгенерировать' }).click();
 
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
@@ -651,7 +676,7 @@ test('the Add Object tool applies a selected preset to the current image', async
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page
 		.locator('#mode-panel-edit input[type="file"]')
@@ -692,7 +717,7 @@ test('the Remove Object tool builds a removal prompt from the described object',
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page
 		.locator('#mode-panel-edit input[type="file"]')
@@ -728,7 +753,7 @@ test('the Atmosphere tool applies the exterior variant of a lighting preset', as
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page
 		.locator('#mode-panel-edit input[type="file"]')
