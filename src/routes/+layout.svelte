@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, type Snippet } from 'svelte';
 	import '../app.css';
 	import { page } from '$app/state';
 	import favicon from '$lib/assets/favicon.svg';
@@ -27,7 +27,7 @@ before the Change Date. See LICENSE for complete terms.
 	// intentionally empty (see src/routes/create/[scene=scene]/+page.svelte): the
 	// workspace itself lives here, in the layout, so it stays mounted (and its
 	// UI state intact) while the user navigates between mode/scene routes.
-	let { children } = $props();
+	let { children }: { children: Snippet } = $props();
 
 	// Standalone pages outside the three-tab workspace (e.g. '/usage') must not
 	// mount it: Workspace derives its mode from the route id, defaulting to
