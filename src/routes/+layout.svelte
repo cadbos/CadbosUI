@@ -15,17 +15,25 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import '../app.css';
+	import { page } from '$app/state';
 	import favicon from '$lib/assets/favicon.svg';
 	import AuthBar from '$lib/components/AuthBar.svelte';
 	import Workspace from '$lib/components/Workspace.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
+	import { isWorkspaceRoute } from '$lib/state/url-state';
 
 	// children() renders whichever leaf +page.svelte matched the URL — those are
 	// intentionally empty (see src/routes/render/[scene=scene]/+page.svelte): the
 	// workspace itself lives here, in the layout, so it stays mounted (and its
 	// UI state intact) while the user navigates between mode/scene routes.
 	let { children } = $props();
+
+	// Standalone pages outside the three-tab workspace (e.g. '/usage') must not
+	// mount it: Workspace derives its mode from the route id, defaulting to
+	// 'render' for anything it doesn't recognize, and its URL-sync effect would
+	// then "correct" that unrecognized address back to /render/*.
+	const showWorkspace = $derived(isWorkspaceRoute(page.route.id));
 
 	onMount(() => {
 		auth.loadSession();
@@ -43,7 +51,9 @@ before the Change Date. See LICENSE for complete terms.
 	<AuthBar />
 </header>
 
-<Workspace />
+{#if showWorkspace}
+	<Workspace />
+{/if}
 
 {@render children()}
 

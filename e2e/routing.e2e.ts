@@ -295,3 +295,17 @@ test('a crafted image/styleImage query param is ignored, not accepted as an unva
 	const styleTransferPanel = page.locator('#mode-panel-styleTransfer');
 	await expect(styleTransferPanel.locator('.upload .preview')).toHaveCount(0);
 });
+
+test('direct navigation to /usage stays on /usage instead of bouncing to the render tab', async ({
+	page
+}) => {
+	await page.goto('/usage');
+	await expect(page).toHaveURL(/\/usage$/);
+
+	// Regression guard for the workspace's debounced URL-sync effect: it used to
+	// mount unconditionally, default an unrecognized route id to 'render', and
+	// rewrite the address bar to /render/* after its 400ms debounce fired.
+	await page.waitForTimeout(500);
+	await expect(page).toHaveURL(/\/usage$/);
+	await expect(page.getByRole('tab', { name: 'Рендер' })).toHaveCount(0);
+});
