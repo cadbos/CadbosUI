@@ -127,6 +127,27 @@ test('switching mode tabs opens each mode default, carrying scene but not sub-ta
 	await expect(page).toHaveURL(/\/render\/exterior\?view=chat&format=webp$/);
 });
 
+test('browser Back steps through mode tabs instead of leaving the app', async ({ page }) => {
+	await page.goto('/render/exterior');
+
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
+	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+
+	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await expect(page).toHaveURL(/\/style-transfer\/exterior\?/);
+
+	await page.goBack();
+	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+	await expect(page.getByRole('tab', { name: 'Редактирование' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+
+	await page.goBack();
+	await expect(page).toHaveURL(/\/render\/exterior\?view=chat&format=webp$/);
+	await expect(page.getByRole('tab', { name: 'Рендер' })).toHaveAttribute('aria-selected', 'true');
+});
+
 test('switching view tabs updates only the view query param', async ({ page }) => {
 	await page.goto('/render/interior?view=chat');
 

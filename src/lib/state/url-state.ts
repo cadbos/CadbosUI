@@ -59,7 +59,7 @@ const SLUG_VIEWS: Record<string, ViewId> = {
 const TOOL_IDS: readonly ToolId[] = ['freeform', 'add-object', 'remove-object', 'atmosphere'];
 const REFERENCE_TABS: readonly ReferenceTab[] = ['photorealistic', 'conceptual', 'custom'];
 
-export function viewToSlug(view: ViewId): string {
+function viewToSlug(view: ViewId): string {
 	return VIEW_SLUGS[view];
 }
 

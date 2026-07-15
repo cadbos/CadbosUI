@@ -13,7 +13,6 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { browser } from '$app/environment';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -67,14 +66,21 @@ before the Change Date. See LICENSE for complete terms.
 		setActiveIndex: (index) => {
 			// No sub-tab passed: switching modes has no "current" sub-tab to carry
 			// over from a different mode, so each mode opens on its own default.
+			// Pushes a history entry (unlike the sub-tab/settings navigations
+			// below) so Back/Forward actually steps through Render/Edit/Style
+			// transfer, matching what a dedicated URL per mode implies.
 			goto(buildShareUrl(modes[index].id, request), {
-				replaceState: true,
+				replaceState: false,
 				keepFocus: true,
 				noScroll: true
 			}).catch((error: unknown) => logBoundaryError('workspace.modeNavigation', error));
 		},
 		focusTab: (index) => modeTabs[index]?.focus()
 	});
+
+	function activateMode(id: Mode): void {
+		modeTabController.activate(modes.findIndex((m) => m.id === id));
+	}
 
 	const sceneTypeTabController = createTabController({
 		itemCount: () => sceneTypes.length,
@@ -97,43 +103,23 @@ before the Change Date. See LICENSE for complete terms.
 		else generatedImages.clear();
 	});
 
-	// True once the request store has been hydrated from the URL at least once.
-	// Gates the write-sync effect so it can't fire — and overwrite the shared
-	// link's query string with defaults — before that initial hydration has run.
+	// True once the request store has been hydrated from the URL at least once
+	// (see afterNavigate below). Gates the write-sync effect so it can't fire —
+	// and overwrite the shared link's query string with defaults — before that
+	// initial hydration has run.
 	let hydrated = $state(false);
 
-	// The very first hydration runs synchronously here, at component
-	// initialization, rather than inside afterNavigate's 'enter' case: this
-	// component is mounted once in the root layout and never destroyed (see
-	// +layout.svelte), so this runs exactly once, before its markup ever
-	// becomes interactive. afterNavigate's 'enter' event, by contrast, only
-	// fires *after* mount, once the DOM already has live event listeners
-	// attached — under enough load a user could start interacting in that gap,
-	// and the 'enter' handler would then clobber whatever they'd already done
-	// with the stale pre-hydration URL. Reading `page.params`/`page.url` here
-	// instead closes that gap entirely. Guarded by `browser` since `request` is
-	// a module-level singleton shared across SSR requests — it must only be
-	// mutated client-side, same as before.
-	if (browser) {
-		// A plain call, not a read of the `mode` rune: this only ever needs
-		// today's initial route once, synchronously, not a reactive binding.
-		applyShareParams(
-			routeIdToMode(page.route.id),
-			page.params.scene,
-			page.url.searchParams,
-			request
-		);
-		hydrated = true;
-	}
-
-	// Browser back/forward or landing via an in-app link also re-parse the URL
-	// into `request`; the initial load is handled above, so 'enter' is excluded
-	// here. 'goto' is deliberately excluded too: that's the type of the
-	// navigations *we* trigger below and in the tab controllers, where
-	// `request` is already the source of truth and re-parsing the URL would be
-	// redundant.
+	// afterNavigate also runs once when this component mounts (type 'enter'), so
+	// it covers both the initial load of a shared link and later browser
+	// back/forward or external-link navigation. It only ever fires client-side,
+	// after hydration has already reconciled against the server-rendered HTML —
+	// unlike a synchronous call in the component body, applying URL state here
+	// can't cause a hydration mismatch. 'goto' is deliberately excluded: that's
+	// the type of the navigations *we* trigger below and in the tab controllers,
+	// where `request` is already the source of truth and re-parsing the URL
+	// would be redundant.
 	afterNavigate(({ type }) => {
-		if (type === 'popstate' || type === 'link') {
+		if (type === 'enter' || type === 'popstate' || type === 'link') {
 			applyShareParams(mode, page.params.scene, page.url.searchParams, request);
 		}
 		hydrated = true;
@@ -343,7 +329,7 @@ before the Change Date. See LICENSE for complete terms.
 					<svelte:boundary
 						onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
 					>
-						<RenderResult onEditRequest={() => modeTabController.activate(1)} />
+						<RenderResult onEditRequest={() => activateMode('edit')} />
 						{#snippet failed(_error: unknown, reset: () => void)}
 							<p class="boundary-failed">{t('boundary.failed')}</p>
 							<button type="button" class="boundary-retry" onclick={reset}>
