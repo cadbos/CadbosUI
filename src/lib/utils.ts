@@ -63,7 +63,7 @@ export interface TabControllerOptions {
 	itemCount: () => number;
 	isDisabled?: (index: number) => boolean;
 	getActiveIndex: () => number;
-	setActiveIndex: (index: number) => void;
+	setActiveIndex: (index: number) => Promise<void> | void;
 	focusTab: (index: number) => void;
 }
 
@@ -72,8 +72,7 @@ export function createTabController(options: TabControllerOptions): TabControlle
 
 	function activate(index: number): void {
 		if (isDisabled(index)) return;
-		setActiveIndex(index);
-		focusTab(index);
+		void Promise.resolve(setActiveIndex(index)).then(() => focusTab(index));
 	}
 
 	function onKeydown(event: KeyboardEvent): void {

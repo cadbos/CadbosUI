@@ -55,7 +55,7 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => views.length,
 		getActiveIndex: () => activeIndex,
 		setActiveIndex: (index) => {
-			goto(buildShareUrl('render', request, { view: views[index].id }), {
+			return goto(buildShareUrl('render', request, { view: views[index].id }), {
 				replaceState: true,
 				keepFocus: true,
 				noScroll: true

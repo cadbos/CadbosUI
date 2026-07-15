@@ -69,7 +69,7 @@ before the Change Date. See LICENSE for complete terms.
 			// Pushes a history entry (unlike the sub-tab/settings navigations
 			// below) so Back/Forward actually steps through Create/Edit/Style
 			// transfer, matching what a dedicated URL per mode implies.
-			goto(buildShareUrl(modes[index].id, request), {
+			return goto(buildShareUrl(modes[index].id, request), {
 				replaceState: false,
 				keepFocus: true,
 				noScroll: true

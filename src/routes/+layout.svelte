@@ -52,7 +52,7 @@ before the Change Date. See LICENSE for complete terms.
 	<div class="brand">
 		<img class="brand-mark" src={favicon} alt="" />
 		<div class="brand-copy">
-			<p class="brand-title">{t('app.title')}</p>
+			<h1 class="brand-title">{t('app.title')}</h1>
 			<p class="brand-subtitle">{t('app.subtitle')}</p>
 		</div>
 	</div>
