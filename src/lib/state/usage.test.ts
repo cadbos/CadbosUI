@@ -16,6 +16,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserUsageRecord, UserUsageResponse } from '$lib/api/contract';
 import { usage } from './usage.svelte';
 
+const PUBKEY_ONE = '1'.repeat(64);
+const PUBKEY_TWO = '2'.repeat(64);
+
 function user(pubkey: string): UserUsageRecord {
 	return {
 		pubkey,
@@ -59,7 +62,7 @@ describe('usage pagination', () => {
 	it('loads the first usage page and exposes remaining records for loadMore', async () => {
 		const fetchMock = vi.fn<typeof fetch>();
 		vi.stubGlobal('fetch', fetchMock);
-		fetchMock.mockResolvedValueOnce(jsonResponse(page([user('pubkey-1')], 0, true)));
+		fetchMock.mockResolvedValueOnce(jsonResponse(page([user(PUBKEY_ONE)], 0, true)));
 
 		await usage.load();
 
@@ -68,7 +71,7 @@ describe('usage pagination', () => {
 			signal: expect.any(AbortSignal)
 		});
 		expect(usage.status).toBe('ready');
-		expect(usage.users.map((record) => record.pubkey)).toEqual(['pubkey-1']);
+		expect(usage.users.map((record) => record.pubkey)).toEqual([PUBKEY_ONE]);
 		expect(usage.hasMore).toBe(true);
 	});
 
@@ -76,8 +79,8 @@ describe('usage pagination', () => {
 		const fetchMock = vi.fn<typeof fetch>();
 		vi.stubGlobal('fetch', fetchMock);
 		fetchMock
-			.mockResolvedValueOnce(jsonResponse(page([user('pubkey-1')], 0, true)))
-			.mockResolvedValueOnce(jsonResponse(page([user('pubkey-2')], 1, false)));
+			.mockResolvedValueOnce(jsonResponse(page([user(PUBKEY_ONE)], 0, true)))
+			.mockResolvedValueOnce(jsonResponse(page([user(PUBKEY_TWO)], 1, false)));
 
 		await usage.load();
 		await usage.loadMore();
@@ -87,7 +90,7 @@ describe('usage pagination', () => {
 			signal: expect.any(AbortSignal)
 		});
 		expect(usage.status).toBe('ready');
-		expect(usage.users.map((record) => record.pubkey)).toEqual(['pubkey-1', 'pubkey-2']);
+		expect(usage.users.map((record) => record.pubkey)).toEqual([PUBKEY_ONE, PUBKEY_TWO]);
 		expect(usage.hasMore).toBe(false);
 		expect(usage.loadingMore).toBe(false);
 	});
@@ -101,6 +104,18 @@ describe('usage pagination', () => {
 				headers: { 'content-type': 'application/json' }
 			})
 		);
+
+		await usage.load();
+
+		expect(usage.status).toBe('error');
+		expect(usage.users).toEqual([]);
+		expect(usage.error).toBe('UsageLoadError');
+	});
+
+	it('rejects usage records with non-hex pubkeys', async () => {
+		const fetchMock = vi.fn<typeof fetch>();
+		vi.stubGlobal('fetch', fetchMock);
+		fetchMock.mockResolvedValueOnce(jsonResponse(page([user('not-a-pubkey')], 0, false)));
 
 		await usage.load();
 

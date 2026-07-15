@@ -14,10 +14,16 @@
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { npubEncode } from 'nostr-tools/nip19';
 import type { UserUsageRecord, UserUsageResponse } from '$lib/api/contract';
 import { setLocale, type Locale } from '$lib/i18n/index.svelte';
 import { usage } from '$lib/state/usage.svelte';
 import UsagePage from './+page.svelte';
+import type { PageProps } from './$types';
+
+const PUBKEY_VIEWER = 'https://explorer.example/p/{}';
+const PUBKEY_ONE = '1'.repeat(64);
+const PUBKEY_TWO = '2'.repeat(64);
 
 function user(
 	pubkey: string,
@@ -52,6 +58,10 @@ function jsonResponse(body: UserUsageResponse): Response {
 	});
 }
 
+function pageProps(pubkeyViewer = PUBKEY_VIEWER): PageProps {
+	return { data: { pubkeyViewer }, form: undefined, params: {} };
+}
+
 function localDateTimeLabel(locale: Locale, timestamp: number): string {
 	return new Intl.DateTimeFormat(locale, {
 		day: 'numeric',
@@ -79,9 +89,9 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	const fetchMock = vi.fn<typeof fetch>();
 	vi.stubGlobal('fetch', fetchMock);
 	setLocale(locale);
-	fetchMock.mockResolvedValueOnce(jsonResponse(page([user('pubkey-1', latestSpendAt)], 0, false)));
+	fetchMock.mockResolvedValueOnce(jsonResponse(page([user(PUBKEY_ONE, latestSpendAt)], 0, false)));
 
-	const screen = render(UsagePage);
+	const screen = render(UsagePage, pageProps());
 
 	await expect
 		.element(screen.getByRole('heading', { name: locale === 'ru' ? 'Использование' : 'Usage' }))
@@ -119,12 +129,14 @@ it('loads the next usage page when the infinite-scroll sentinel intersects', asy
 	vi.stubGlobal('IntersectionObserver', IntersectionObserverMock);
 	vi.stubGlobal('fetch', fetchMock);
 	fetchMock
-		.mockResolvedValueOnce(jsonResponse(page([user('pubkey-1')], 0, true)))
-		.mockResolvedValueOnce(jsonResponse(page([user('pubkey-2')], 1, false)));
+		.mockResolvedValueOnce(jsonResponse(page([user(PUBKEY_ONE)], 0, true)))
+		.mockResolvedValueOnce(jsonResponse(page([user(PUBKEY_TWO)], 1, false)));
 
-	const screen = render(UsagePage);
+	const screen = render(UsagePage, pageProps());
 
-	await expect.element(screen.getByRole('rowheader', { name: 'pubkey-1' })).toBeVisible();
+	await expect
+		.element(screen.getByRole('rowheader', { name: npubEncode(PUBKEY_ONE) }))
+		.toBeVisible();
 	await vi.waitFor(() => expect(observe).toHaveBeenCalled());
 
 	observerCallbacks[0]?.(
@@ -132,7 +144,9 @@ it('loads the next usage page when the infinite-scroll sentinel intersects', asy
 		{} as IntersectionObserver
 	);
 
-	await expect.element(screen.getByRole('rowheader', { name: 'pubkey-2' })).toBeVisible();
+	await expect
+		.element(screen.getByRole('rowheader', { name: npubEncode(PUBKEY_TWO) }))
+		.toBeVisible();
 	expect(observerOptions?.root).toBeNull();
 	expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/usage?offset=1&size=20', {
 		signal: expect.any(AbortSignal)
@@ -144,7 +158,23 @@ it('renders an error state when usage cannot be loaded', async () => {
 	vi.stubGlobal('fetch', fetchMock);
 	fetchMock.mockResolvedValueOnce(new Response(null, { status: 403 }));
 
-	const screen = render(UsagePage);
+	const screen = render(UsagePage, pageProps());
 
 	await expect.element(screen.getByRole('alert')).toHaveTextContent('Could not load usage.');
+});
+
+it('renders each pubkey as an npub explorer link that opens in a new tab', async () => {
+	const pubkey = 'a'.repeat(64);
+	const npub = npubEncode(pubkey);
+	const fetchMock = vi.fn<typeof fetch>();
+	vi.stubGlobal('fetch', fetchMock);
+	fetchMock.mockResolvedValueOnce(jsonResponse(page([user(pubkey)], 0, false)));
+
+	const screen = render(UsagePage, pageProps());
+	const link = screen.getByRole('link', { name: npub });
+
+	await expect.element(link).toBeVisible();
+	await expect.element(link).toHaveAttribute('href', `https://explorer.example/p/${npub}`);
+	await expect.element(link).toHaveAttribute('target', '_blank');
+	await expect.element(link).toHaveAttribute('rel', 'noopener noreferrer');
 });

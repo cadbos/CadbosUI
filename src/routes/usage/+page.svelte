@@ -13,9 +13,13 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { npubEncode } from 'nostr-tools/nip19';
+	import type { PageProps } from './$types';
 	import { getLocale, t } from '$lib/i18n/index.svelte';
 	import { usage } from '$lib/state/usage.svelte';
 	import { formatCredit } from '$lib/utils';
+
+	let { data }: PageProps = $props();
 
 	let loadMoreSentinel = $state<HTMLElement | null>(null);
 
@@ -85,8 +89,15 @@ before the Change Date. See LICENSE for complete terms.
 					</thead>
 					<tbody>
 						{#each usage.users as user (user.pubkey)}
+							{@const npub = npubEncode(user.pubkey)}
 							<tr>
-								<th scope="row" class="pubkey" title={user.pubkey}>{user.pubkey}</th>
+								<th scope="row" class="pubkey" title={npub}
+									><a
+										href={data.pubkeyViewer.replaceAll('{}', npub)}
+										target="_blank"
+										rel="noopener noreferrer">{npub}</a
+									></th
+								>
 								<td>{formatCredit(user.balance)}</td>
 								<td>{formatCredit(user.totalDeposit)}</td>
 								<td>{formatTimestamp(user.lastDepositAt)}</td>
@@ -211,6 +222,16 @@ before the Change Date. See LICENSE for complete terms.
 
 	.pubkey {
 		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	}
+
+	.pubkey a {
+		color: var(--color-accent);
+		text-decoration: underline;
+		text-underline-offset: 0.15em;
+	}
+
+	.pubkey a:hover {
+		color: var(--color-accent-hover);
 	}
 
 	.load-more-sentinel {

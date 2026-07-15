@@ -20,7 +20,7 @@ export type UsageStatus = 'idle' | 'loading' | 'ready' | 'error';
 const PAGE_SIZE = 20;
 
 const userUsageRecordSchema = z.object({
-	pubkey: z.string().min(1),
+	pubkey: z.string().regex(/^[0-9a-f]{64}$/),
 	balance: z.number(),
 	totalDeposit: z.number(),
 	lastDepositAt: z.number().int().min(0).nullable(),
