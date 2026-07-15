@@ -234,3 +234,20 @@ test('a style preset round-trips as a preset id, not a raw image URL', async ({ 
 		'true'
 	);
 });
+
+test('a crafted image/styleImage query param is ignored, not accepted as an unvalidated URL', async ({
+	page
+}) => {
+	await page.goto('/render/interior?view=chat&format=webp&image=https://evil.example.com/x.jpg');
+
+	// The only trusted way to populate the room photo is the /api/uploads
+	// pipeline (see url-state.ts) — a raw `image` param must never pre-fill it.
+	await expect(page.getByRole('button', { name: 'Выбрать файл' })).toBeVisible();
+	await expect(page.locator('.upload .preview')).toHaveCount(0);
+
+	await page.goto(
+		'/style-transfer/interior?reference=custom&format=webp&source=current-result&strength=0.7&styleImage=https://evil.example.com/x.jpg'
+	);
+	const styleTransferPanel = page.locator('#mode-panel-styleTransfer');
+	await expect(styleTransferPanel.locator('.upload .preview')).toHaveCount(0);
+});

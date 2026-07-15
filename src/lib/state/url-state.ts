@@ -132,10 +132,11 @@ function parseFragments(raw: string): ParsedFragment[] {
 // rather than a query param). The query string encodes the current sub-tab
 // (always present — it's always showing *something*) plus every other setting
 // that's visibly selected on screen right now — format, style transfer
-// controls — so the URL never silently hides the current default. Only
-// free-form/optional content (uploaded photo, style preset, negative prompt,
-// prompt/fragments) is left out of the query string when empty, since there's
-// nothing to show for those.
+// controls — so the URL never silently hides the current default. Free-form
+// content (style preset, negative prompt, prompt/fragments) is left out of the
+// query string when empty, since there's nothing to show for those. The
+// uploaded room photo and a custom (non-preset) style reference are never
+// included at all — see applyShareParams for why.
 export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab = {}): string {
 	const path =
 		mode === 'render'
@@ -145,11 +146,6 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 				: `${MODE_PATHS.styleTransfer}/${request.sceneType}`;
 
 	const params = new URLSearchParams();
-
-	// The uploaded room photo is the one piece of state every screen shares —
-	// render and edit always work off it, and style transfer's "room photo"
-	// source option is the same image.
-	if (request.image?.url) params.set('image', request.image.url);
 
 	if (mode === 'render') {
 		params.set('view', viewToSlug(subTab.view ?? 'chat'));
@@ -178,12 +174,15 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 		params.set('source', request.styleSourceMode);
 		params.set('strength', String(request.styleTransferStrength));
 
+		// Only a known, safe preset id is shareable — it's just a lookup into our
+		// own static preset list. A custom-uploaded reference image is never
+		// included (its raw URL isn't in the query string at all).
 		const styleImageUrl = request.styleReferenceImage?.url;
-		if (styleImageUrl) {
-			const preset = STYLE_PRESETS.find((candidate) => candidate.src === styleImageUrl);
-			if (preset) params.set('preset', preset.id);
-			else params.set('styleImage', styleImageUrl);
-		}
+		const preset = styleImageUrl
+			? STYLE_PRESETS.find((candidate) => candidate.src === styleImageUrl)
+			: undefined;
+		if (preset) params.set('preset', preset.id);
+
 		if (request.styleNegativePrompt.trim() !== '') {
 			params.set('negative', request.styleNegativePrompt);
 		}
@@ -199,6 +198,17 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 // for render/style transfer routes); the sub-tab (view/tool/reference) has no
 // backing store field, so it isn't applied here — components read it straight
 // off `page.params`/`page.url.searchParams` themselves.
+//
+// The room photo and a custom (non-preset) style reference are deliberately
+// left untouched here — they're never read from `searchParams` at all. Every
+// other way to populate `request.image`/`styleReferenceImage` (drag-drop, file
+// picker, "import from URL") goes through the server-side `/api/uploads`
+// pipeline, which validates (https, content-type, size) and re-hosts the file
+// before the client ever sees a URL. Trusting a raw `image`/`styleImage` query
+// param would skip all of that: a crafted link could silently swap in an
+// unvalidated URL ahead of a paid render/style-transfer call. A preset id is
+// safe to restore since it's just a lookup into our own static preset list,
+// never an arbitrary URL.
 export function applyShareParams(
 	mode: Mode,
 	sceneParam: string | undefined,
@@ -212,24 +222,10 @@ export function applyShareParams(
 		(OUTPUT_FORMATS as readonly string[]).includes(format ?? '') ? (format as OutputFormat) : 'webp'
 	);
 
-	const image = searchParams.get('image');
-	try {
-		request.setImage(image ? { url: image } : undefined);
-	} catch {
-		request.setImage(undefined);
-	}
-
 	const presetId = searchParams.get('preset');
-	const styleImage = searchParams.get('styleImage');
-	try {
-		if (presetId) {
-			const preset = STYLE_PRESETS.find((candidate) => candidate.id === presetId);
-			request.setStyleReferenceImage(preset ? { url: preset.src, mime: preset.mime } : undefined);
-		} else {
-			request.setStyleReferenceImage(styleImage ? { url: styleImage } : undefined);
-		}
-	} catch {
-		request.setStyleReferenceImage(undefined);
+	if (presetId !== null) {
+		const preset = STYLE_PRESETS.find((candidate) => candidate.id === presetId);
+		request.setStyleReferenceImage(preset ? { url: preset.src, mime: preset.mime } : undefined);
 	}
 
 	const strengthParam = searchParams.get('strength');
