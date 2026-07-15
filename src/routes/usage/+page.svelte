@@ -23,6 +23,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	let loadMoreSentinel = $state<HTMLElement | null>(null);
 	let failedPicturePubkeys = $state<string[]>([]);
+	let timeZone = $derived('UTC');
+	$effect(() => {
+		timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	});
+	let timeZoneAbbreviation = $derived(formatTimeZoneName('short'));
+	let timeZoneFullName = $derived(formatTimeZoneName('long'));
 
 	$effect(() => {
 		void usage.load();
@@ -54,6 +60,14 @@ before the Change Date. See LICENSE for complete terms.
 			minute: '2-digit',
 			hourCycle: 'h23'
 		}).format(new Date(timestamp));
+	}
+
+	function formatTimeZoneName(timeZoneName: Intl.DateTimeFormatOptions['timeZoneName']): string {
+		const formatter = new Intl.DateTimeFormat(getLocale(), { timeZone, timeZoneName });
+		return (
+			formatter.formatToParts(new Date()).find((part) => part.type === 'timeZoneName')?.value ??
+			timeZone
+		);
 	}
 
 	function markPictureFailed(pubkey: string): void {
@@ -90,7 +104,9 @@ before the Change Date. See LICENSE for complete terms.
 							<th scope="col">{t('usage.column.lastDepositAt')}</th>
 							<th scope="col">{t('usage.column.generationCount')}</th>
 							<th scope="col">{t('usage.column.totalSpend')}</th>
-							<th scope="col">{t('usage.column.latestSpendAt')}</th>
+							<th scope="col" title={timeZoneFullName}
+								>{t('usage.column.latestSpendAt')}, {timeZoneAbbreviation}</th
+							>
 						</tr>
 					</thead>
 					<tbody>

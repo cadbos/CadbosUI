@@ -87,6 +87,18 @@ function localDateTimeLabel(locale: Locale, timestamp: number): string {
 	}).format(new Date(timestamp));
 }
 
+function localTimeZoneName(
+	locale: Locale,
+	timeZoneName: Intl.DateTimeFormatOptions['timeZoneName']
+): string {
+	const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	const formatter = new Intl.DateTimeFormat(locale, { timeZone, timeZoneName });
+	return (
+		formatter.formatToParts(new Date()).find((part) => part.type === 'timeZoneName')?.value ??
+		timeZone
+	);
+}
+
 beforeEach(() => {
 	usage.clear();
 	setLocale('en');
@@ -117,6 +129,13 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	await expect
 		.element(screen.getByRole('columnheader', { name: locale === 'ru' ? 'Пользователь' : 'User' }))
 		.toBeVisible();
+	const latestSpendHeader = screen.getByRole('columnheader', {
+		name: `${locale === 'ru' ? 'Последняя трата' : 'Latest spend'}, ${localTimeZoneName(locale, 'short')}`
+	});
+	await expect.element(latestSpendHeader).toBeVisible();
+	await expect
+		.element(latestSpendHeader)
+		.toHaveAttribute('title', localTimeZoneName(locale, 'long'));
 });
 
 it('loads the next usage page when the infinite-scroll sentinel intersects', async () => {
