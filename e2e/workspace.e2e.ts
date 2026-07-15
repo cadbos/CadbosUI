@@ -487,4 +487,9 @@ test('serves security headers and a content security policy', async ({ request }
 	expect(contentSecurityPolicy).toContain('https://fonts.googleapis.com');
 	expect(contentSecurityPolicy).toContain('https://fonts.gstatic.com');
 	expect(contentSecurityPolicy).toContain('https://*.featurebase-attachments.com');
+	// The Featurebase SDK injects <style> elements with per-session computed
+	// CSS it can't hash-pin — without this, the widget renders unstyled in
+	// production (regression: https://do.featurebase.app/js/sdk.js style-src
+	// violations reported against a build missing style-src-elem).
+	expect(contentSecurityPolicy).toMatch(/style-src-elem[^;]*'unsafe-inline'/);
 });
