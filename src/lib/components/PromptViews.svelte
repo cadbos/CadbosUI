@@ -55,11 +55,11 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => views.length,
 		getActiveIndex: () => activeIndex,
 		setActiveIndex: (index) => {
-			void goto(buildShareUrl('render', request, { view: views[index].id }), {
+			goto(buildShareUrl('render', request, { view: views[index].id }), {
 				replaceState: true,
 				keepFocus: true,
 				noScroll: true
-			});
+			}).catch((error: unknown) => logBoundaryError('promptViews.viewNavigation', error));
 		},
 		focusTab: (index) => tabs[index]?.focus()
 	});

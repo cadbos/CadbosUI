@@ -67,11 +67,11 @@ before the Change Date. See LICENSE for complete terms.
 		setActiveIndex: (index) => {
 			// No sub-tab passed: switching modes has no "current" sub-tab to carry
 			// over from a different mode, so each mode opens on its own default.
-			void goto(buildShareUrl(modes[index].id, request), {
+			goto(buildShareUrl(modes[index].id, request), {
 				replaceState: true,
 				keepFocus: true,
 				noScroll: true
-			});
+			}).catch((error: unknown) => logBoundaryError('workspace.modeNavigation', error));
 		},
 		focusTab: (index) => modeTabs[index]?.focus()
 	});
@@ -163,7 +163,9 @@ before the Change Date. See LICENSE for complete terms.
 			const currentSearch = new URLSearchParams(window.location.search);
 			const url = buildShareUrl(mode, request, subTabFromSearch(mode, currentSearch));
 			if (`${window.location.pathname}${window.location.search}` !== url) {
-				void goto(url, { replaceState: true, keepFocus: true, noScroll: true });
+				goto(url, { replaceState: true, keepFocus: true, noScroll: true }).catch((error: unknown) =>
+					logBoundaryError('workspace.urlSync', error)
+				);
 			}
 		}, 400);
 		return () => clearTimeout(timer);

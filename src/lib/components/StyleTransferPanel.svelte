@@ -30,7 +30,7 @@ before the Change Date. See LICENSE for complete terms.
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import { stylePresetsFor, type StylePreset } from '$lib/style-presets';
 	import { buildShareUrl, slugToReference, type ReferenceTab } from '$lib/state/url-state';
-	import { createTabController } from '$lib/utils';
+	import { createTabController, logBoundaryError } from '$lib/utils';
 
 	const REFERENCE_TABS: { id: ReferenceTab; label: TranslationKey }[] = [
 		{ id: 'photorealistic', label: 'styleTransfer.referenceTabPhotorealistic' },
@@ -91,11 +91,11 @@ before the Change Date. See LICENSE for complete terms.
 		setActiveIndex: (index) => {
 			const nextTab = REFERENCE_TABS[index].id;
 			if (nextTab !== referenceTab) clearReferenceSelection();
-			void goto(buildShareUrl('styleTransfer', request, { reference: nextTab }), {
+			goto(buildShareUrl('styleTransfer', request, { reference: nextTab }), {
 				replaceState: true,
 				keepFocus: true,
 				noScroll: true
-			});
+			}).catch((err: unknown) => logBoundaryError('styleTransferPanel.referenceNavigation', err));
 		},
 		focusTab: (index) => referenceTabButtons[index]?.focus()
 	});
