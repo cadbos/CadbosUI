@@ -13,14 +13,14 @@
  */
 
 import { z } from 'zod';
-import type { UserUsageRecord } from '$lib/api/contract';
+import type { UsageProfile, UserUsageRecord } from '$lib/api/contract';
 
 export type UsageStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 const PAGE_SIZE = 20;
 
 const userUsageRecordSchema = z.object({
-	pubkey: z.string().min(1),
+	pubkey: z.string().regex(/^[0-9a-f]{64}$/),
 	balance: z.number(),
 	totalDeposit: z.number(),
 	lastDepositAt: z.number().int().min(0).nullable(),
@@ -38,6 +38,15 @@ const userUsageResponseSchema = z.object({
 	})
 });
 
+const usageProfileSchema = z.object({
+	name: z.string().optional(),
+	picture: z.url({ protocol: /^https?$/ }).optional()
+});
+
+const usageProfilesResponseSchema = z.object({
+	profiles: z.record(z.string().regex(/^[0-9a-f]{64}$/), usageProfileSchema)
+});
+
 class UsageLoadError extends Error {
 	constructor(message: string) {
 		super(message);
@@ -47,15 +56,18 @@ class UsageLoadError extends Error {
 
 class UsageState {
 	users = $state.raw<UserUsageRecord[]>([]);
+	profiles = $state.raw<Record<string, UsageProfile>>({});
 	status = $state<UsageStatus>('idle');
 	error = $state<string | null>(null);
 	hasMore = $state(false);
 	loadingMore = $state(false);
 	#abort: AbortController | null = null;
+	#profileAborts = new Set<AbortController>();
 	#nextOffset: number | null = null;
 
 	async load(): Promise<void> {
 		this.#abort?.abort();
+		this.#abortProfiles();
 		const controller = new AbortController();
 		this.#abort = controller;
 		this.status = 'loading';
@@ -63,6 +75,7 @@ class UsageState {
 		this.hasMore = false;
 		this.loadingMore = false;
 		this.#nextOffset = null;
+		this.profiles = {};
 
 		try {
 			const page = await this.#fetchPage(0, controller.signal);
@@ -70,6 +83,7 @@ class UsageState {
 			this.users = page.users;
 			this.#setNextPage(page);
 			this.status = 'ready';
+			void this.#loadProfiles(page.users);
 		} catch (error) {
 			if (controller.signal.aborted) return;
 			this.users = [];
@@ -98,6 +112,7 @@ class UsageState {
 			this.users = [...this.users, ...page.users];
 			this.#setNextPage(page);
 			this.status = 'ready';
+			void this.#loadProfiles(page.users);
 		} catch (error) {
 			if (controller.signal.aborted) return;
 			this.status = 'error';
@@ -111,8 +126,10 @@ class UsageState {
 
 	clear(): void {
 		this.#abort?.abort();
+		this.#abortProfiles();
 		this.#abort = null;
 		this.users = [];
+		this.profiles = {};
 		this.status = 'idle';
 		this.error = null;
 		this.hasMore = false;
@@ -132,6 +149,41 @@ class UsageState {
 		return parsed.data;
 	}
 
+	async #loadProfiles(users: UserUsageRecord[]): Promise<void> {
+		if (users.length === 0) return;
+
+		const controller = new AbortController();
+		this.#profileAborts.add(controller);
+		try {
+			const profiles = await this.#fetchProfiles(
+				users.map((user) => user.pubkey),
+				controller.signal
+			);
+			if (!controller.signal.aborted) this.profiles = { ...this.profiles, ...profiles };
+		} catch (error) {
+			if (!controller.signal.aborted) console.error('Usage profile load failed:', error);
+		} finally {
+			this.#profileAborts.delete(controller);
+		}
+	}
+
+	async #fetchProfiles(
+		pubkeys: string[],
+		signal: AbortSignal
+	): Promise<Record<string, UsageProfile>> {
+		const response = await fetch('/api/usage/profiles', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ pubkeys }),
+			signal
+		});
+		if (!response.ok) throw new UsageLoadError('usage profile request failed');
+
+		const parsed = usageProfilesResponseSchema.safeParse(await response.json().catch(() => null));
+		if (!parsed.success) throw new UsageLoadError('usage profile response invalid');
+		return parsed.data.profiles;
+	}
+
 	#setNextPage(page: z.infer<typeof userUsageResponseSchema>): void {
 		if (page.pagination.hasMore && page.users.length === 0) {
 			throw new UsageLoadError('usage pagination did not advance');
@@ -139,6 +191,11 @@ class UsageState {
 
 		this.#nextOffset = page.pagination.hasMore ? page.pagination.offset + page.users.length : null;
 		this.hasMore = this.#nextOffset !== null;
+	}
+
+	#abortProfiles(): void {
+		for (const controller of this.#profileAborts) controller.abort();
+		this.#profileAborts.clear();
 	}
 }
 

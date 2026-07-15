@@ -13,11 +13,22 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { npubEncode } from 'nostr-tools/nip19';
+	import type { PageProps } from './$types';
 	import { getLocale, t } from '$lib/i18n/index.svelte';
 	import { usage } from '$lib/state/usage.svelte';
 	import { formatCredit } from '$lib/utils';
 
+	let { data }: PageProps = $props();
+
 	let loadMoreSentinel = $state<HTMLElement | null>(null);
+	let failedPicturePubkeys = $state<string[]>([]);
+	let timeZone = $derived('UTC');
+	$effect(() => {
+		timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	});
+	let timeZoneAbbreviation = $derived(formatTimeZoneName('short'));
+	let timeZoneFullName = $derived(formatTimeZoneName('long'));
 
 	$effect(() => {
 		void usage.load();
@@ -50,6 +61,19 @@ before the Change Date. See LICENSE for complete terms.
 			hourCycle: 'h23'
 		}).format(new Date(timestamp));
 	}
+
+	function formatTimeZoneName(timeZoneName: Intl.DateTimeFormatOptions['timeZoneName']): string {
+		const formatter = new Intl.DateTimeFormat(getLocale(), { timeZone, timeZoneName });
+		return (
+			formatter.formatToParts(new Date()).find((part) => part.type === 'timeZoneName')?.value ??
+			timeZone
+		);
+	}
+
+	function markPictureFailed(pubkey: string): void {
+		if (!failedPicturePubkeys.includes(pubkey))
+			failedPicturePubkeys = [...failedPicturePubkeys, pubkey];
+	}
 </script>
 
 <svelte:head>
@@ -74,19 +98,42 @@ before the Change Date. See LICENSE for complete terms.
 				<table>
 					<thead>
 						<tr>
-							<th scope="col">{t('usage.column.pubkey')}</th>
-							<th scope="col">{t('usage.column.balance')}</th>
+							<th scope="col">{t('usage.column.user')}</th>
+							<th scope="col">{t('usage.column.balance')}, $</th>
 							<th scope="col">{t('usage.column.totalDeposit')}</th>
 							<th scope="col">{t('usage.column.lastDepositAt')}</th>
 							<th scope="col">{t('usage.column.generationCount')}</th>
-							<th scope="col">{t('usage.column.totalSpend')}</th>
-							<th scope="col">{t('usage.column.latestSpendAt')}</th>
+							<th scope="col">{t('usage.column.totalSpend')}, $</th>
+							<th scope="col" title={timeZoneFullName}
+								>{t('usage.column.latestSpendAt')}, {timeZoneAbbreviation}</th
+							>
 						</tr>
 					</thead>
 					<tbody>
 						{#each usage.users as user (user.pubkey)}
+							{@const npub = npubEncode(user.pubkey)}
+							{@const profile = usage.profiles[user.pubkey]}
+							{@const picture = failedPicturePubkeys.includes(user.pubkey)
+								? undefined
+								: profile?.picture}
+							{@const avatarLabel = profile?.name ?? npub}
 							<tr>
-								<th scope="row" class="pubkey" title={user.pubkey}>{user.pubkey}</th>
+								<th scope="row" class="pubkey" title={npub}>
+									<span class="user-identity">
+										{#if picture}
+											<img src={picture} alt="" onerror={() => markPictureFailed(user.pubkey)} />
+										{:else}
+											<span class="avatar" aria-hidden="true"
+												>{[...avatarLabel][0]?.toUpperCase()}</span
+											>
+										{/if}
+										<a
+											href={data.pubkeyViewer.replaceAll('{}', npub)}
+											target="_blank"
+											rel="noopener noreferrer">{npub}</a
+										>
+									</span>
+								</th>
 								<td>{formatCredit(user.balance)}</td>
 								<td>{formatCredit(user.totalDeposit)}</td>
 								<td>{formatTimestamp(user.lastDepositAt)}</td>
@@ -211,6 +258,45 @@ before the Change Date. See LICENSE for complete terms.
 
 	.pubkey {
 		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		vertical-align: middle;
+	}
+
+	.user-identity {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		white-space: nowrap;
+	}
+
+	.user-identity img,
+	.avatar {
+		width: 2rem;
+		height: 2rem;
+		border-radius: 50%;
+		flex: 0 0 auto;
+	}
+
+	.user-identity img {
+		object-fit: cover;
+	}
+
+	.avatar {
+		display: grid;
+		place-items: center;
+		color: var(--color-accent-contrast);
+		background: var(--color-accent);
+		font-family: inherit;
+		font-weight: 700;
+	}
+
+	.pubkey a {
+		color: var(--color-accent);
+		text-decoration: underline;
+		text-underline-offset: 0.15em;
+	}
+
+	.pubkey a:hover {
+		color: var(--color-accent-hover);
 	}
 
 	.load-more-sentinel {
