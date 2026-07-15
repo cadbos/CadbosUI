@@ -21,6 +21,7 @@
 
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import { getExchangeRate, type ExchangeRateProvider } from '$lib/server/exchange-rate';
+import { toLedgerAmountUnits } from '$lib/server/ledger-units';
 import { createInvoice, type NwcConnection, type NwcRequestOptions } from '$lib/server/lightning';
 
 // Placeholder pending the client's final answer on deposit lifetime
@@ -254,12 +255,12 @@ export async function markDepositPaid(
 				'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
 					"VALUES (?, (SELECT id FROM ledger_accounts WHERE user_id = ? AND asset = 'app_credit'), ?)"
 			)
-			.bind(transactionId, existing.user_id, existing.credits_awarded),
+			.bind(transactionId, existing.user_id, toLedgerAmountUnits(existing.credits_awarded)),
 		db
 			.prepare(
 				"INSERT INTO ledger_entries (transaction_id, account_id, amount) VALUES (?, 'archai-token', ?)"
 			)
-			.bind(transactionId, existing.archai_tokens_awarded),
+			.bind(transactionId, toLedgerAmountUnits(existing.archai_tokens_awarded)),
 		db
 			.prepare(
 				"UPDATE deposits SET status = 'paid', paid_at = ?, ledger_transaction_id = ? " +
