@@ -93,6 +93,20 @@ export function routeIdToMode(routeId: string | null): Mode {
 	return 'render';
 }
 
+// Whether the given route id belongs to the three-tab workspace at all (as
+// opposed to a standalone page, e.g. '/usage', that sits outside it). Callers
+// use this to decide whether the workspace shell — and its URL-sync effect,
+// which otherwise treats any unrecognized route as the default render mode
+// and rewrites the address bar to it — should be mounted for the current
+// route.
+export function isWorkspaceRoute(routeId: string | null): boolean {
+	return (
+		routeId?.startsWith('/render') === true ||
+		routeId?.startsWith('/edit') === true ||
+		routeId?.startsWith('/style-transfer') === true
+	);
+}
+
 // The sub-tab currently selected, read straight off the *current* query string
 // (there's no backing store for it — see SubTab above). Used by the write-sync
 // effect so rebuilding the URL for an unrelated request change doesn't drop
