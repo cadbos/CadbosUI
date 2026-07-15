@@ -101,7 +101,7 @@ export function routeIdToMode(routeId: string | null): Mode {
 // route.
 export function isWorkspaceRoute(routeId: string | null): boolean {
 	return (
-		routeId?.startsWith('/render') === true ||
+		routeId?.startsWith('/create') === true ||
 		routeId?.startsWith('/edit') === true ||
 		routeId?.startsWith('/style-transfer') === true
 	);
