@@ -62,15 +62,11 @@ test('renders the workspace and switches views', async ({ page }) => {
 	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('opens the localized feedback widget from the floating action', async ({ page }) => {
+test('opens the localized Featurebase feedback widget', async ({ page }) => {
 	await page.goto('/');
 
-	const trigger = page.getByRole('button', { name: 'Обратная связь' });
+	const trigger = page.locator('.fb-feedback-widget-feedback-button');
 	await expect(trigger).toBeVisible();
-	await expect(trigger).toHaveAttribute('data-featurebase-feedback', '');
-	await expect(trigger).toHaveCSS('position', 'fixed');
-	await expect(trigger).toHaveCSS('right', '24px');
-	await expect(trigger).toHaveCSS('bottom', '24px');
 
 	await expect
 		.poll(() =>
@@ -94,11 +90,6 @@ test('opens the localized feedback widget from the floating action', async ({ pa
 			placement: null,
 			theme: 'light'
 		});
-
-	await page.setViewportSize({ width: 390, height: 844 });
-	await expect(trigger.locator('span')).toBeHidden();
-	await expect(trigger).toHaveCSS('right', '16px');
-	await expect(trigger).toHaveCSS('bottom', '16px');
 
 	await trigger.click();
 	await expect(page.locator('html')).toHaveAttribute('data-featurebase-feedback-opened', 'true');
@@ -165,7 +156,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null
 			})
 		});
 	});
@@ -452,7 +444,8 @@ test('generating with the exterior scene type calls the exterior render route', 
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null
 			})
 		});
 	});
