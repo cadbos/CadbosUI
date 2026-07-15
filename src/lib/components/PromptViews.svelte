@@ -55,7 +55,7 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => views.length,
 		getActiveIndex: () => activeIndex,
 		setActiveIndex: (index) => {
-			goto(buildShareUrl('render', request, { view: views[index].id }), {
+			return goto(buildShareUrl('render', request, { view: views[index].id }), {
 				replaceState: true,
 				keepFocus: true,
 				noScroll: true
@@ -164,6 +164,11 @@ before the Change Date. See LICENSE for complete terms.
 			background 0.15s,
 			color 0.15s;
 		text-align: center;
+	}
+
+	.tab-item button:hover:not(.active) {
+		background: var(--color-surface-hover);
+		color: var(--color-text);
 	}
 
 	.tab-item button.active {

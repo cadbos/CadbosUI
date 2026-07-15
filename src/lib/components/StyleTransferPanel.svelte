@@ -90,7 +90,7 @@ before the Change Date. See LICENSE for complete terms.
 		setActiveIndex: (index) => {
 			const nextTab = REFERENCE_TABS[index].id;
 			if (nextTab !== referenceTab) clearReferenceSelection();
-			goto(buildShareUrl('styleTransfer', request, { reference: nextTab }), {
+			return goto(buildShareUrl('styleTransfer', request, { reference: nextTab }), {
 				replaceState: true,
 				keepFocus: true,
 				noScroll: true

@@ -15,10 +15,10 @@
 import type { Dictionary } from '$lib/i18n/locales';
 
 export const en = {
-	'app.title': 'AI Interior Design',
-	'app.subtitle': 'Upload a room photo and build a prompt in the interface you prefer.',
+	'app.title': 'AI Design',
+	'app.subtitle': 'Create and edit interiors and exteriors from a photo and description.',
 	'mode.switcher.label': 'Workflow',
-	'mode.render': 'Render',
+	'mode.render': 'Create',
 	'mode.edit': 'Edit',
 	'mode.styleTransfer': 'Style transfer',
 	'view.switcher.label': 'Input method',
@@ -82,7 +82,7 @@ export const en = {
 	'auth.credit.balance': 'Balance: {balance}',
 	'auth.credit.history': 'Spending history',
 	'auth.credit.historyEmpty': 'No transactions yet',
-	'auth.credit.entryRender': 'Render · {date}: −{amount} → {balance}',
+	'auth.credit.entryRender': 'Create · {date}: −{amount} → {balance}',
 	'auth.credit.entryEdit': 'Edit · {date}: −{amount} → {balance}',
 	'auth.credit.entryStyleTransfer': 'Style transfer · {date}: −{amount} → {balance}',
 	'auth.credit.entryUpscale': 'Upscale · {date}: −{amount} → {balance}',
@@ -115,7 +115,7 @@ export const en = {
 	'render.balance': 'Balance: {balance}',
 	'render.download': 'Download',
 	'render.edit': 'Edit render',
-	'render.result': 'Render result',
+	'render.result': 'Created result',
 	'render.validationImage': 'Upload a room photo',
 	'render.validationPrompt': 'Enter a prompt',
 	'render.failed': 'Generation failed. Please try again.',

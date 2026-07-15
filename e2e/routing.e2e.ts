@@ -40,11 +40,11 @@ async function authenticate(page: Page): Promise<void> {
 	});
 }
 
-test('root redirects to /render/interior with the current scene/view/format always explicit', async ({
+test('root redirects to /create/interior with the current scene/view/format always explicit', async ({
 	page
 }) => {
 	await page.goto('/');
-	await expect(page).toHaveURL(/\/render\/interior\?view=chat&format=webp$/);
+	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
 	await expect(page.getByRole('tab', { name: 'Интерьер' })).toHaveAttribute(
 		'aria-selected',
 		'true'
@@ -52,16 +52,16 @@ test('root redirects to /render/interior with the current scene/view/format alwa
 	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('direct navigation to /render/exterior opens the exterior scene', async ({ page }) => {
-	await page.goto('/render/exterior');
+test('direct navigation to /create/exterior opens the exterior scene', async ({ page }) => {
+	await page.goto('/create/exterior');
 	await expect(page.getByRole('tab', { name: 'Экстерьер' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
 });
 
-test('direct navigation to /render/interior?view=graph opens the graph tab', async ({ page }) => {
-	await page.goto('/render/interior?view=graph');
+test('direct navigation to /create/interior?view=graph opens the graph tab', async ({ page }) => {
+	await page.goto('/create/interior?view=graph');
 	await expect(page.getByRole('tab', { name: 'Граф' })).toHaveAttribute('aria-selected', 'true');
 });
 
@@ -102,15 +102,15 @@ test('direct navigation to /style-transfer redirects to the interior scene with 
 test('clicking the scene toggle changes the path, keeping the current view/format', async ({
 	page
 }) => {
-	await page.goto('/render/interior?view=key-value');
+	await page.goto('/create/interior?view=key-value');
 	await page.getByRole('tab', { name: 'Экстерьер' }).click();
-	await expect(page).toHaveURL(/\/render\/exterior\?view=key-value&format=webp$/);
+	await expect(page).toHaveURL(/\/create\/exterior\?view=key-value&format=webp$/);
 });
 
 test('switching mode tabs opens each mode default, carrying scene but not sub-tabs across', async ({
 	page
 }) => {
-	await page.goto('/render/exterior');
+	await page.goto('/create/exterior');
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	// Edit has no scene concept, so it isn't in the path.
@@ -123,12 +123,12 @@ test('switching mode tabs opens each mode default, carrying scene but not sub-ta
 		/\/style-transfer\/exterior\?reference=photorealistic&format=webp&source=current-result&strength=0\.7$/
 	);
 
-	await page.getByRole('tab', { name: 'Рендер' }).click();
-	await expect(page).toHaveURL(/\/render\/exterior\?view=chat&format=webp$/);
+	await page.getByRole('tab', { name: 'Создание' }).click();
+	await expect(page).toHaveURL(/\/create\/exterior\?view=chat&format=webp$/);
 });
 
 test('browser Back steps through mode tabs instead of leaving the app', async ({ page }) => {
-	await page.goto('/render/exterior');
+	await page.goto('/create/exterior');
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
@@ -144,18 +144,21 @@ test('browser Back steps through mode tabs instead of leaving the app', async ({
 	);
 
 	await page.goBack();
-	await expect(page).toHaveURL(/\/render\/exterior\?view=chat&format=webp$/);
-	await expect(page.getByRole('tab', { name: 'Рендер' })).toHaveAttribute('aria-selected', 'true');
+	await expect(page).toHaveURL(/\/create\/exterior\?view=chat&format=webp$/);
+	await expect(page.getByRole('tab', { name: 'Создание' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
 });
 
 test('switching view tabs updates only the view query param', async ({ page }) => {
-	await page.goto('/render/interior?view=chat');
+	await page.goto('/create/interior?view=chat');
 
 	await page.getByRole('tab', { name: 'Граф' }).click();
-	await expect(page).toHaveURL(/\/render\/interior\?view=graph&format=webp$/);
+	await expect(page).toHaveURL(/\/create\/interior\?view=graph&format=webp$/);
 
 	await page.getByRole('tab', { name: 'Ключ-значение' }).click();
-	await expect(page).toHaveURL(/\/render\/interior\?view=key-value&format=webp$/);
+	await expect(page).toHaveURL(/\/create\/interior\?view=key-value&format=webp$/);
 });
 
 test('switching edit tool tabs updates only the tool query param', async ({ page }) => {
@@ -183,7 +186,7 @@ test('switching style transfer reference tabs updates only the reference query p
 test('render-only content (prompt/fragments) never appears on edit or style transfer URLs', async ({
 	page
 }) => {
-	await page.goto('/render/interior?view=key-value');
+	await page.goto('/create/interior?view=key-value');
 	await page.getByRole('button', { name: 'Добавить фрагмент' }).click();
 	await page.getByLabel('Текст 1').fill('warm natural light');
 	await expect(page).toHaveURL(/fragments=/);
@@ -214,7 +217,7 @@ test('edit and style transfer prompts round-trip through their own query params'
 		.poll(() => new URL(page.url()).searchParams.get('prompt'))
 		.toBe('use soft plaster texture');
 
-	await page.getByRole('tab', { name: 'Рендер' }).click();
+	await page.getByRole('tab', { name: 'Создание' }).click();
 	await expect.poll(() => new URL(page.url()).searchParams.get('prompt')).toBeNull();
 });
 
@@ -225,7 +228,7 @@ test('style transfer settings never appear on render or edit URLs', async ({ pag
 	await page.getByRole('slider', { name: 'Сила переноса' }).fill('0.35');
 	await expect(page).toHaveURL(/strength=0\.35/);
 
-	await page.getByRole('tab', { name: 'Рендер' }).click();
+	await page.getByRole('tab', { name: 'Создание' }).click();
 	await expect(page).not.toHaveURL(/strength=/);
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
@@ -235,7 +238,7 @@ test('style transfer settings never appear on render or edit URLs', async ({ pag
 test('scene, format and key-value fragments survive a fresh load of the shared URL', async ({
 	page
 }) => {
-	await page.goto('/render/interior?view=key-value');
+	await page.goto('/create/interior?view=key-value');
 
 	const renderPanel = page.locator('#mode-panel-render');
 	await page.getByRole('tab', { name: 'Экстерьер' }).click();
@@ -243,7 +246,7 @@ test('scene, format and key-value fragments survive a fresh load of the shared U
 	await page.getByRole('button', { name: 'Добавить фрагмент' }).click();
 	await page.getByLabel('Текст 1').fill('warm natural light');
 
-	await expect(page).toHaveURL(/\/render\/exterior\?/);
+	await expect(page).toHaveURL(/\/create\/exterior\?/);
 	await expect(page).toHaveURL(/format=jpg/);
 	await expect(page).toHaveURL(/fragments=/);
 
@@ -282,7 +285,7 @@ test('a style preset round-trips as a preset id, not a raw image URL', async ({ 
 test('a crafted image/styleImage query param is ignored, not accepted as an unvalidated URL', async ({
 	page
 }) => {
-	await page.goto('/render/interior?view=chat&format=webp&image=https://evil.example.com/x.jpg');
+	await page.goto('/create/interior?view=chat&format=webp&image=https://evil.example.com/x.jpg');
 
 	// The only trusted way to populate the room photo is the /api/uploads
 	// pipeline (see url-state.ts) — a raw `image` param must never pre-fill it.

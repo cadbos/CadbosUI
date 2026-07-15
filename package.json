@@ -50,13 +50,6 @@
 		"vitest-browser-svelte": "^2.1.1",
 		"wrangler": "^4.105.0"
 	},
-	"pnpm": {
-		"onlyBuiltDependencies": [
-			"esbuild",
-			"sharp",
-			"workerd"
-		]
-	},
 	"dependencies": {
 		"@lucide/svelte": "^1.23.0",
 		"@xyflow/svelte": "^1.6.1",

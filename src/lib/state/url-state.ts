@@ -39,7 +39,7 @@ export interface SubTab {
 }
 
 const MODE_PATHS: Record<Mode, string> = {
-	render: '/render',
+	render: '/create',
 	edit: '/edit',
 	styleTransfer: '/style-transfer'
 };
@@ -84,7 +84,7 @@ function slugToScene(param: string | undefined): SceneType {
 		: 'interior';
 }
 
-// SvelteKit route ids for our leaf pages are '/render/[scene]', '/edit' and
+// SvelteKit route ids for our leaf pages are '/create/[scene]', '/edit' and
 // '/style-transfer/[scene]' — anything else (including the transient '/'
 // before its redirect resolves) falls back to the default mode.
 export function routeIdToMode(routeId: string | null): Mode {
@@ -101,7 +101,7 @@ export function routeIdToMode(routeId: string | null): Mode {
 // route.
 export function isWorkspaceRoute(routeId: string | null): boolean {
 	return (
-		routeId?.startsWith('/render') === true ||
+		routeId?.startsWith('/create') === true ||
 		routeId?.startsWith('/edit') === true ||
 		routeId?.startsWith('/style-transfer') === true
 	);

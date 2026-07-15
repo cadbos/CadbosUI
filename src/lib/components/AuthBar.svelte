@@ -417,10 +417,11 @@ before the Change Date. See LICENSE for complete terms.
 		position: absolute;
 		right: 0;
 		top: calc(100% + var(--space-1));
-		z-index: 1;
+		z-index: 20;
 		display: flex;
 		flex-direction: column;
 		min-width: 12rem;
+		max-width: calc(100vw - var(--space-4));
 		padding: var(--space-1);
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
@@ -443,6 +444,14 @@ before the Change Date. See LICENSE for complete terms.
 	.menu button:hover,
 	.menu button:focus-visible {
 		background: var(--color-bg);
+	}
+
+	@media (max-width: 480px) {
+		.menu {
+			left: 0;
+			right: auto;
+			width: min(18rem, calc(100vw - var(--space-4)));
+		}
 	}
 
 	.connect {

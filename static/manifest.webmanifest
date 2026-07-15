@@ -1,18 +1,28 @@
 {
-	"name": "Cadbos Interior Design AI",
-	"short_name": "Cadbos",
-	"description": "Generate interior and exterior visuals from a room photo and a free-text prompt.",
+	"name": "ИИ – дизайн",
+	"short_name": "ИИ-дизайн",
+	"description": "Создавайте и редактируйте интерьеры и экстерьеры по фото и описанию.",
 	"start_url": "/",
 	"scope": "/",
 	"display": "standalone",
 	"background_color": "#ffffff",
-	"theme_color": "#ff3e00",
+	"theme_color": "#2f6f4f",
 	"lang": "ru",
 	"icons": [
 		{
 			"src": "/favicon.svg",
 			"sizes": "any",
 			"type": "image/svg+xml"
+		},
+		{
+			"src": "/icon-192.png",
+			"sizes": "192x192",
+			"type": "image/png"
+		},
+		{
+			"src": "/icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png"
 		}
 	]
 }

@@ -15,10 +15,10 @@
 import type { Dictionary } from '$lib/i18n/locales';
 
 export const ru = {
-	'app.title': 'ИИ-дизайн интерьера',
-	'app.subtitle': 'Загрузите фото комнаты и соберите промпт в удобном вам интерфейсе.',
+	'app.title': 'ИИ – дизайн',
+	'app.subtitle': 'Создавайте и редактируйте интерьеры и экстерьеры по фото и описанию.',
 	'mode.switcher.label': 'Режим',
-	'mode.render': 'Рендер',
+	'mode.render': 'Создание',
 	'mode.edit': 'Редактирование',
 	'mode.styleTransfer': 'Перенос стиля',
 	'view.switcher.label': 'Способ ввода',
@@ -82,7 +82,7 @@ export const ru = {
 	'auth.credit.balance': 'Баланс: {balance}',
 	'auth.credit.history': 'История трат',
 	'auth.credit.historyEmpty': 'Пока нет операций',
-	'auth.credit.entryRender': 'Рендер · {date}: −{amount} → {balance}',
+	'auth.credit.entryRender': 'Создание · {date}: −{amount} → {balance}',
 	'auth.credit.entryEdit': 'Правка · {date}: −{amount} → {balance}',
 	'auth.credit.entryStyleTransfer': 'Перенос стиля · {date}: −{amount} → {balance}',
 	'auth.credit.entryUpscale': 'Апскейл · {date}: −{amount} → {balance}',
@@ -115,7 +115,7 @@ export const ru = {
 	'render.balance': 'Баланс: {balance}',
 	'render.download': 'Скачать',
 	'render.edit': 'Редактировать',
-	'render.result': 'Результат рендера',
+	'render.result': 'Результат создания',
 	'render.validationImage': 'Загрузите фото комнаты',
 	'render.validationPrompt': 'Введите промпт',
 	'render.failed': 'Не удалось сгенерировать. Попробуйте ещё раз.',

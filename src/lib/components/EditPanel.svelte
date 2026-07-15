@@ -52,7 +52,7 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => TOOLS.length,
 		getActiveIndex: () => TOOLS.findIndex((tool) => tool.id === activeTool),
 		setActiveIndex: (index) => {
-			goto(buildShareUrl('edit', request, { tool: TOOLS[index].id }), {
+			return goto(buildShareUrl('edit', request, { tool: TOOLS[index].id }), {
 				replaceState: true,
 				keepFocus: true,
 				noScroll: true
@@ -273,6 +273,11 @@ before the Change Date. See LICENSE for complete terms.
 		transition:
 			background 0.15s,
 			color 0.15s;
+	}
+
+	.tool-tabs button:hover:not(.active) {
+		background: var(--color-surface-hover);
+		color: var(--color-text);
 	}
 
 	.tool-tabs button.active {

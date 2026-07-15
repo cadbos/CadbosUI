@@ -18,6 +18,10 @@ function promptPreview(page: Page): Locator {
 	return page.getByLabel('Итоговый промпт').filter({ visible: true });
 }
 
+async function openCreate(page: Page): Promise<void> {
+	await page.goto('/create/interior?view=chat&format=webp');
+}
+
 function localDateLabel(createdAt: number): string {
 	const parts = new Intl.DateTimeFormat('ru', {
 		day: 'numeric',
@@ -41,14 +45,14 @@ function localTimeLabel(createdAt: number): string {
 }
 
 test('renders the workspace and switches views', async ({ page }) => {
-	await page.goto('/');
+	await openCreate(page);
 	await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
 	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('hides generated image sidebar for anonymous users', async ({ page }) => {
-	await page.goto('/');
+	await openCreate(page);
 
 	await expect(page.getByRole('heading', { name: 'Сгенерированные изображения' })).toHaveCount(0);
 });
@@ -128,7 +132,7 @@ test('shows authenticated generated images newest first', async ({ page }) => {
 			body: 'image-bytes'
 		});
 	});
-	await page.goto('/');
+	await openCreate(page);
 
 	await expect(page.getByRole('heading', { name: 'Сгенерированные изображения' })).toBeVisible();
 	const images = page.getByRole('img', { name: /Сгенерированное изображение/ });
@@ -192,7 +196,7 @@ test('switches to the graph view and edits fragment nodes reflected in key-value
 	page
 }) => {
 	await page.setViewportSize({ width: 1024, height: 768 });
-	await page.goto('/');
+	await openCreate(page);
 
 	const graphTab = page.getByRole('tab', { name: 'Граф' });
 	await graphTab.click();
@@ -215,7 +219,7 @@ test('switches to the graph view and edits fragment nodes reflected in key-value
 
 test('the graph view stays usable on a narrow (phone-sized) screen', async ({ page }) => {
 	await page.setViewportSize({ width: 375, height: 800 });
-	await page.goto('/');
+	await openCreate(page);
 
 	const graphTab = page.getByRole('tab', { name: 'Граф' });
 	await graphTab.click();
@@ -229,10 +233,13 @@ test('the graph view stays usable on a narrow (phone-sized) screen', async ({ pa
 
 test('keeps the prompt byte-identical when switching from chat to graph', async ({ page }) => {
 	await page.setViewportSize({ width: 1024, height: 768 });
-	await page.goto('/');
+	await openCreate(page);
+	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
 	const prompt = 'Scandinavian style, warm natural light';
 
-	await page.getByRole('textbox', { name: 'Промпт чата' }).fill(prompt);
+	const chatPrompt = page.getByRole('textbox', { name: 'Промпт чата' });
+	await chatPrompt.fill(prompt);
+	await expect(chatPrompt).toHaveValue(prompt);
 
 	await page.getByRole('tab', { name: 'Граф' }).click();
 	await expect(page.getByRole('tab', { name: 'Граф' })).toHaveAttribute('aria-selected', 'true');
@@ -241,7 +248,7 @@ test('keeps the prompt byte-identical when switching from chat to graph', async 
 });
 
 test('key-value edits survive a round trip through the chat tab', async ({ page }) => {
-	await page.goto('/');
+	await openCreate(page);
 
 	await page.getByRole('tab', { name: 'Ключ-значение' }).click();
 	await page.getByRole('button', { name: 'Добавить фрагмент' }).click();
@@ -254,25 +261,25 @@ test('key-value edits survive a round trip through the chat tab', async ({ page 
 });
 
 test('navigates tabs with the keyboard', async ({ page }) => {
-	await page.goto('/');
-	const chat = page.getByRole('tab', { name: 'Чат' });
-	const keyValue = page.getByRole('tab', { name: 'Ключ-значение' });
+	await openCreate(page);
+	const promptTabs = page.getByRole('tablist', { name: 'Способ ввода' });
+	const chat = promptTabs.getByRole('tab', { name: 'Чат' });
+	const keyValue = promptTabs.getByRole('tab', { name: 'Ключ-значение' });
 
-	await chat.focus();
-	await page.keyboard.press('ArrowRight');
+	await expect(chat).toHaveAttribute('aria-selected', 'true');
+	await chat.press('ArrowRight');
 	await expect(keyValue).toBeFocused();
 	await expect(keyValue).toHaveAttribute('aria-selected', 'true');
 	await page.getByRole('button', { name: 'Добавить фрагмент' }).click();
 	await expect(page.getByLabel('Метка 1')).toBeVisible();
 
-	await keyValue.focus();
-	await page.keyboard.press('Home');
+	await keyValue.press('Home');
 	await expect(chat).toBeFocused();
 	await expect(chat).toHaveAttribute('aria-selected', 'true');
 });
 
 test('the Scene Type toggle switches to exterior and relabels the photo step', async ({ page }) => {
-	await page.goto('/');
+	await openCreate(page);
 
 	const interiorTab = page.getByRole('tab', { name: 'Интерьер' });
 	const exteriorTab = page.getByRole('tab', { name: 'Экстерьер' });
@@ -287,9 +294,11 @@ test('the Scene Type toggle switches to exterior and relabels the photo step', a
 });
 
 test('navigates the Scene Type toggle with the keyboard', async ({ page }) => {
-	await page.goto('/');
-	const interiorTab = page.getByRole('tab', { name: 'Интерьер' });
-	const exteriorTab = page.getByRole('tab', { name: 'Экстерьер' });
+	await openCreate(page);
+	const sceneTypeTabs = page.getByRole('tablist', { name: 'Тип сцены' });
+	await expect(sceneTypeTabs).toBeVisible();
+	const interiorTab = sceneTypeTabs.getByRole('tab', { name: 'Интерьер' });
+	const exteriorTab = sceneTypeTabs.getByRole('tab', { name: 'Экстерьер' });
 
 	await interiorTab.focus();
 	await page.keyboard.press('ArrowRight');
@@ -362,7 +371,7 @@ test('generating with the exterior scene type calls the exterior render route', 
 		});
 	});
 
-	await page.goto('/');
+	await openCreate(page);
 	await page.getByRole('tab', { name: 'Экстерьер' }).click();
 	await page
 		.locator('#mode-panel-render input[type="file"]')
