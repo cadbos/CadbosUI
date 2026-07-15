@@ -99,11 +99,11 @@ before the Change Date. See LICENSE for complete terms.
 					<thead>
 						<tr>
 							<th scope="col">{t('usage.column.user')}</th>
-							<th scope="col">{t('usage.column.balance')}</th>
+							<th scope="col">{t('usage.column.balance')}, $</th>
 							<th scope="col">{t('usage.column.totalDeposit')}</th>
 							<th scope="col">{t('usage.column.lastDepositAt')}</th>
 							<th scope="col">{t('usage.column.generationCount')}</th>
-							<th scope="col">{t('usage.column.totalSpend')}</th>
+							<th scope="col">{t('usage.column.totalSpend')}, $</th>
 							<th scope="col" title={timeZoneFullName}
 								>{t('usage.column.latestSpendAt')}, {timeZoneAbbreviation}</th
 							>
