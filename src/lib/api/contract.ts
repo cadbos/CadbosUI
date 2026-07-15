@@ -110,6 +110,19 @@ export interface UserUsageResponse {
 	};
 }
 
+export interface UsageProfile {
+	name?: string;
+	picture?: string;
+}
+
+export interface UsageProfilesRequest {
+	pubkeys: string[];
+}
+
+export interface UsageProfilesResponse {
+	profiles: Record<string, UsageProfile>;
+}
+
 // Auth (Appendix B). The signed NIP-98 event travels in
 // `Authorization: Nostr <base64>`.
 export interface ChallengeRequest {

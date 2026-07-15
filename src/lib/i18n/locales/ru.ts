@@ -153,7 +153,7 @@ export const ru = {
 	'usage.failed': 'Не удалось загрузить использование.',
 	'usage.loadingMore': 'Загружаем ещё…',
 	'usage.emptyValue': '—',
-	'usage.column.pubkey': 'Pubkey',
+	'usage.column.user': 'Пользователь',
 	'usage.column.balance': 'Баланс',
 	'usage.column.totalDeposit': 'Всего пополнено',
 	'usage.column.lastDepositAt': 'Последнее пополнение',

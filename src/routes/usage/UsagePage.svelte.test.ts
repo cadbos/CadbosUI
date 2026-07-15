@@ -15,7 +15,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { npubEncode } from 'nostr-tools/nip19';
-import type { UserUsageRecord, UserUsageResponse } from '$lib/api/contract';
+import type { UsageProfilesResponse, UserUsageRecord, UserUsageResponse } from '$lib/api/contract';
 import { setLocale, type Locale } from '$lib/i18n/index.svelte';
 import { usage } from '$lib/state/usage.svelte';
 import UsagePage from './+page.svelte';
@@ -58,6 +58,20 @@ function jsonResponse(body: UserUsageResponse): Response {
 	});
 }
 
+function mockUsageFetch(
+	pages: UserUsageResponse[],
+	profiles: UsageProfilesResponse['profiles'] = {}
+) {
+	let pageIndex = 0;
+	return vi.fn<typeof fetch>((input, init) => {
+		const url = String(input);
+		if (url.startsWith('/api/usage?')) return Promise.resolve(jsonResponse(pages[pageIndex++]!));
+		if (url === '/api/usage/profiles' && init?.method === 'POST')
+			return Promise.resolve(Response.json({ profiles }));
+		return Promise.resolve(new Response(null, { status: 404 }));
+	});
+}
+
 function pageProps(pubkeyViewer = PUBKEY_VIEWER): PageProps {
 	return { data: { pubkeyViewer }, form: undefined, params: {} };
 }
@@ -86,10 +100,9 @@ afterEach(() => {
 
 it.each(['ru', 'en'] as const)('renders localized usage table data for %s', async (locale) => {
 	const latestSpendAt = Date.UTC(2026, 0, 3, 12, 34);
-	const fetchMock = vi.fn<typeof fetch>();
+	const fetchMock = mockUsageFetch([page([user(PUBKEY_ONE, latestSpendAt)], 0, false)]);
 	vi.stubGlobal('fetch', fetchMock);
 	setLocale(locale);
-	fetchMock.mockResolvedValueOnce(jsonResponse(page([user(PUBKEY_ONE, latestSpendAt)], 0, false)));
 
 	const screen = render(UsagePage, pageProps());
 
@@ -101,13 +114,19 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	await expect
 		.element(screen.getByRole('cell', { name: localDateTimeLabel(locale, latestSpendAt) }))
 		.toBeVisible();
+	await expect
+		.element(screen.getByRole('columnheader', { name: locale === 'ru' ? 'Пользователь' : 'User' }))
+		.toBeVisible();
 });
 
 it('loads the next usage page when the infinite-scroll sentinel intersects', async () => {
 	const observerCallbacks: IntersectionObserverCallback[] = [];
 	let observerOptions: IntersectionObserverInit | undefined;
 	const observe = vi.fn();
-	const fetchMock = vi.fn<typeof fetch>();
+	const fetchMock = mockUsageFetch([
+		page([user(PUBKEY_ONE)], 0, true),
+		page([user(PUBKEY_TWO)], 1, false)
+	]);
 	const IntersectionObserverMock = vi.fn(function (
 		callback: IntersectionObserverCallback,
 		options?: IntersectionObserverInit
@@ -128,9 +147,6 @@ it('loads the next usage page when the infinite-scroll sentinel intersects', asy
 
 	vi.stubGlobal('IntersectionObserver', IntersectionObserverMock);
 	vi.stubGlobal('fetch', fetchMock);
-	fetchMock
-		.mockResolvedValueOnce(jsonResponse(page([user(PUBKEY_ONE)], 0, true)))
-		.mockResolvedValueOnce(jsonResponse(page([user(PUBKEY_TWO)], 1, false)));
 
 	const screen = render(UsagePage, pageProps());
 
@@ -148,7 +164,7 @@ it('loads the next usage page when the infinite-scroll sentinel intersects', asy
 		.element(screen.getByRole('rowheader', { name: npubEncode(PUBKEY_TWO) }))
 		.toBeVisible();
 	expect(observerOptions?.root).toBeNull();
-	expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/usage?offset=1&size=20', {
+	expect(fetchMock).toHaveBeenCalledWith('/api/usage?offset=1&size=20', {
 		signal: expect.any(AbortSignal)
 	});
 });
@@ -166,9 +182,10 @@ it('renders an error state when usage cannot be loaded', async () => {
 it('renders each pubkey as an npub explorer link that opens in a new tab', async () => {
 	const pubkey = 'a'.repeat(64);
 	const npub = npubEncode(pubkey);
-	const fetchMock = vi.fn<typeof fetch>();
+	const fetchMock = mockUsageFetch([page([user(pubkey)], 0, false)], {
+		[pubkey]: { name: 'Alice', picture: 'https://avatar.example/alice.png' }
+	});
 	vi.stubGlobal('fetch', fetchMock);
-	fetchMock.mockResolvedValueOnce(jsonResponse(page([user(pubkey)], 0, false)));
 
 	const screen = render(UsagePage, pageProps());
 	const link = screen.getByRole('link', { name: npub });
@@ -177,4 +194,13 @@ it('renders each pubkey as an npub explorer link that opens in a new tab', async
 	await expect.element(link).toHaveAttribute('href', `https://explorer.example/p/${npub}`);
 	await expect.element(link).toHaveAttribute('target', '_blank');
 	await expect.element(link).toHaveAttribute('rel', 'noopener noreferrer');
+	await vi.waitFor(() => {
+		expect(
+			screen
+				.getByRole('rowheader', { name: npub })
+				.element()
+				.querySelector('img')
+				?.getAttribute('src')
+		).toBe('https://avatar.example/alice.png');
+	});
 });

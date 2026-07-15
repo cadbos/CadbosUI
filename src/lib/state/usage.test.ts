@@ -13,7 +13,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { UserUsageRecord, UserUsageResponse } from '$lib/api/contract';
+import type { UsageProfilesResponse, UserUsageRecord, UserUsageResponse } from '$lib/api/contract';
 import { usage } from './usage.svelte';
 
 const PUBKEY_ONE = '1'.repeat(64);
@@ -49,6 +49,26 @@ function jsonResponse(body: UserUsageResponse): Response {
 	});
 }
 
+function profilesResponse(profiles: UsageProfilesResponse['profiles'] = {}): Response {
+	return new Response(JSON.stringify({ profiles } satisfies UsageProfilesResponse), {
+		status: 200,
+		headers: { 'content-type': 'application/json' }
+	});
+}
+
+function mockUsageFetch(
+	pages: UserUsageResponse[],
+	profiles: UsageProfilesResponse['profiles'] = {}
+) {
+	let pageIndex = 0;
+	return vi.fn<typeof fetch>((input) => {
+		const url = String(input);
+		if (url.startsWith('/api/usage?')) return Promise.resolve(jsonResponse(pages[pageIndex++]!));
+		if (url === '/api/usage/profiles') return Promise.resolve(profilesResponse(profiles));
+		return Promise.resolve(new Response(null, { status: 404 }));
+	});
+}
+
 beforeEach(() => {
 	usage.clear();
 });
@@ -60,33 +80,46 @@ afterEach(() => {
 
 describe('usage pagination', () => {
 	it('loads the first usage page and exposes remaining records for loadMore', async () => {
-		const fetchMock = vi.fn<typeof fetch>();
+		const fetchMock = mockUsageFetch([page([user(PUBKEY_ONE)], 0, true)], {
+			[PUBKEY_ONE]: { name: 'One', picture: 'https://avatar.example/one.png' }
+		});
 		vi.stubGlobal('fetch', fetchMock);
-		fetchMock.mockResolvedValueOnce(jsonResponse(page([user(PUBKEY_ONE)], 0, true)));
 
 		await usage.load();
 
-		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 		expect(fetchMock).toHaveBeenCalledWith('/api/usage?offset=0&size=20', {
+			signal: expect.any(AbortSignal)
+		});
+		expect(fetchMock).toHaveBeenCalledWith('/api/usage/profiles', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ pubkeys: [PUBKEY_ONE] }),
 			signal: expect.any(AbortSignal)
 		});
 		expect(usage.status).toBe('ready');
 		expect(usage.users.map((record) => record.pubkey)).toEqual([PUBKEY_ONE]);
+		await vi.waitFor(() => {
+			expect(usage.profiles[PUBKEY_ONE]).toEqual({
+				name: 'One',
+				picture: 'https://avatar.example/one.png'
+			});
+		});
 		expect(usage.hasMore).toBe(true);
 	});
 
 	it('loads the next usage page on demand', async () => {
-		const fetchMock = vi.fn<typeof fetch>();
+		const fetchMock = mockUsageFetch([
+			page([user(PUBKEY_ONE)], 0, true),
+			page([user(PUBKEY_TWO)], 1, false)
+		]);
 		vi.stubGlobal('fetch', fetchMock);
-		fetchMock
-			.mockResolvedValueOnce(jsonResponse(page([user(PUBKEY_ONE)], 0, true)))
-			.mockResolvedValueOnce(jsonResponse(page([user(PUBKEY_TWO)], 1, false)));
 
 		await usage.load();
 		await usage.loadMore();
 
-		expect(fetchMock).toHaveBeenCalledTimes(2);
-		expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/usage?offset=1&size=20', {
+		expect(fetchMock).toHaveBeenCalledTimes(4);
+		expect(fetchMock).toHaveBeenCalledWith('/api/usage?offset=1&size=20', {
 			signal: expect.any(AbortSignal)
 		});
 		expect(usage.status).toBe('ready');

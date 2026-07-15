@@ -148,7 +148,7 @@ export interface Dictionary {
 	'usage.failed': string;
 	'usage.loadingMore': string;
 	'usage.emptyValue': string;
-	'usage.column.pubkey': string;
+	'usage.column.user': string;
 	'usage.column.balance': string;
 	'usage.column.totalDeposit': string;
 	'usage.column.lastDepositAt': string;

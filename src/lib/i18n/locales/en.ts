@@ -152,7 +152,7 @@ export const en = {
 	'usage.failed': 'Could not load usage.',
 	'usage.loadingMore': 'Loading more…',
 	'usage.emptyValue': '—',
-	'usage.column.pubkey': 'Pubkey',
+	'usage.column.user': 'User',
 	'usage.column.balance': 'Balance',
 	'usage.column.totalDeposit': 'Total deposit',
 	'usage.column.lastDepositAt': 'Last deposit',
