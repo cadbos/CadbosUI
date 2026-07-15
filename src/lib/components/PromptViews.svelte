@@ -166,6 +166,11 @@ before the Change Date. See LICENSE for complete terms.
 		text-align: center;
 	}
 
+	.tab-item button:hover:not(.active) {
+		background: var(--color-surface-hover);
+		color: var(--color-text);
+	}
+
 	.tab-item button.active {
 		background: var(--color-surface);
 		color: var(--color-text);

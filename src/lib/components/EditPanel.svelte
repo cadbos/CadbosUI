@@ -275,6 +275,11 @@ before the Change Date. See LICENSE for complete terms.
 			color 0.15s;
 	}
 
+	.tool-tabs button:hover:not(.active) {
+		background: var(--color-surface-hover);
+		color: var(--color-text);
+	}
+
 	.tool-tabs button.active {
 		background: var(--color-surface);
 		color: var(--color-text);

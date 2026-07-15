@@ -184,10 +184,11 @@ before the Change Date. See LICENSE for complete terms.
 		padding: 0.25rem;
 		background: var(--color-background);
 		border-radius: 10px;
-		align-self: flex-start;
+		width: 100%;
 	}
 
 	.scene-toggle button {
+		flex: 1;
 		padding: 0.4rem 0.875rem;
 		font: inherit;
 		font-size: 0.8125rem;
@@ -200,6 +201,11 @@ before the Change Date. See LICENSE for complete terms.
 		transition:
 			background 0.15s,
 			color 0.15s;
+	}
+
+	.scene-toggle button:hover:not(.active, :disabled) {
+		background: var(--color-surface-hover);
+		color: var(--color-text);
 	}
 
 	.scene-toggle button.active {

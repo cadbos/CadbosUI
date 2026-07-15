@@ -13,6 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { ChevronDown, ChevronUp, X } from '@lucide/svelte';
 	import { tick } from 'svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { request } from '$lib/state/request.svelte';
@@ -108,27 +109,30 @@ before the Change Date. See LICENSE for complete terms.
 				<div class="fragment-actions">
 					<button
 						type="button"
+						class="icon-button"
 						aria-label={ti('view.keyValue.moveUp', { order: index + 1 })}
-						aria-disabled={index === 0 ? 'true' : undefined}
+						disabled={index === 0}
 						onclick={() => reorderFragment(index, -1)}
 					>
-						<span aria-hidden="true">↑</span>
+						<ChevronUp size={16} strokeWidth={2} aria-hidden="true" />
 					</button>
 					<button
 						type="button"
+						class="icon-button"
 						aria-label={ti('view.keyValue.moveDown', { order: index + 1 })}
-						aria-disabled={index === fragments.length - 1 ? 'true' : undefined}
+						disabled={index === fragments.length - 1}
 						onclick={() => reorderFragment(index, 1)}
 					>
-						<span aria-hidden="true">↓</span>
+						<ChevronDown size={16} strokeWidth={2} aria-hidden="true" />
 					</button>
 					<button
 						type="button"
+						class="icon-button"
 						aria-label={ti('view.keyValue.removeFragment', { order: index + 1 })}
 						{@attach captureRemoveButton(index)}
 						onclick={() => removeFragment(index, fragment.id)}
 					>
-						{t('view.keyValue.remove')}
+						<X size={16} strokeWidth={2} aria-hidden="true" />
 					</button>
 				</div>
 			</li>
@@ -149,7 +153,8 @@ before the Change Date. See LICENSE for complete terms.
 
 <style>
 	.entry {
-		width: min(100%, 34rem);
+		width: 100%;
+		max-width: 52rem;
 		display: grid;
 		gap: var(--space-2);
 	}
@@ -169,12 +174,14 @@ before the Change Date. See LICENSE for complete terms.
 
 	.fragment {
 		display: grid;
-		grid-template-columns: minmax(0, 12rem) minmax(0, 1fr) auto;
+		grid-template-columns: minmax(10rem, 1fr) minmax(14rem, 1.25fr) auto;
 		align-items: end;
 		gap: var(--space-2);
 	}
 
 	.fragment input {
+		width: 100%;
+		min-width: 0;
 		padding: var(--space-1);
 		border: 1.5px solid var(--color-border);
 		border-radius: var(--radius);
@@ -185,22 +192,60 @@ before the Change Date. See LICENSE for complete terms.
 	.fragment-actions {
 		display: flex;
 		gap: var(--space-1);
+		align-items: center;
 	}
 
-	.fragment-actions button:disabled,
-	.fragment-actions button[aria-disabled='true'] {
+	.icon-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		padding: 0;
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			color 0.15s;
+	}
+
+	.icon-button:hover:not(:disabled) {
+		color: var(--color-accent);
+		background: var(--color-surface-hover);
+		border-color: var(--color-muted);
+	}
+
+	.icon-button:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
 	}
 
-	@media (max-width: 640px) {
+	@media (max-width: 760px) {
+		.fragment {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.fragment-actions {
+			grid-column: 1 / -1;
+		}
+	}
+
+	@media (max-width: 520px) {
 		.fragment {
 			grid-template-columns: 1fr;
 		}
 
-		.fragment-actions button {
-			flex: 1;
-			min-height: 2.75rem;
+		.fragment-actions {
+			grid-column: auto;
+		}
+
+		.icon-button {
+			width: 2.75rem;
+			height: 2.75rem;
 		}
 	}
 

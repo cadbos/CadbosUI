@@ -67,7 +67,7 @@ before the Change Date. See LICENSE for complete terms.
 			// No sub-tab passed: switching modes has no "current" sub-tab to carry
 			// over from a different mode, so each mode opens on its own default.
 			// Pushes a history entry (unlike the sub-tab/settings navigations
-			// below) so Back/Forward actually steps through Render/Edit/Style
+			// below) so Back/Forward actually steps through Create/Edit/Style
 			// transfer, matching what a dedicated URL per mode implies.
 			goto(buildShareUrl(modes[index].id, request), {
 				replaceState: false,
@@ -208,12 +208,7 @@ before the Change Date. See LICENSE for complete terms.
 <main class="page">
 	<div class="workspace-shell">
 		<div class="workspace-main">
-			<div class="card">
-				<header class="intro">
-					<h1>{t('app.title')}</h1>
-					<p>{t('app.subtitle')}</p>
-				</header>
-
+			<nav class="mode-nav" aria-label={t('mode.switcher.label')}>
 				<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
 					{#each modes as modeOption, index (modeOption.id)}
 						<button
@@ -234,7 +229,7 @@ before the Change Date. See LICENSE for complete terms.
 						</button>
 					{/each}
 				</div>
-			</div>
+			</nav>
 
 			<div
 				class="mode-panel"
@@ -441,43 +436,17 @@ before the Change Date. See LICENSE for complete terms.
 		min-width: 0;
 	}
 
-	.card {
+	.mode-nav {
 		width: 100%;
-		background: var(--color-surface);
-		border-radius: 20px;
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.06),
-			0 8px 32px rgb(0 0 0 / 0.08);
-		padding: 2rem;
-		display: flex;
-		flex-direction: column;
-		gap: 2rem;
-	}
-
-	.intro {
-		text-align: center;
-	}
-
-	.intro h1 {
-		margin: 0 0 0.4rem;
-		font-size: 1.75rem;
-		font-weight: 700;
-		letter-spacing: -0.02em;
-		color: var(--color-text);
-	}
-
-	.intro p {
-		margin: 0;
-		color: var(--color-muted);
-		font-size: 1rem;
+		padding: 0.25rem;
+		background: #e9ece9;
+		border: 1px solid #d8ded8;
+		border-radius: 14px;
 	}
 
 	.mode-tabs {
 		display: flex;
 		gap: 0.5rem;
-		padding: 0.3rem;
-		background: var(--color-background);
-		border-radius: 14px;
 	}
 
 	.mode-tabs button {
@@ -489,22 +458,26 @@ before the Change Date. See LICENSE for complete terms.
 		font-weight: 600;
 		line-height: 1.2;
 		text-align: center;
-		/* var(--color-muted) falls below the 4.5:1 AA contrast ratio against
-		   var(--color-background) at this weight/size; this is the primary
-		   top-level nav, so it gets a darker tone than the nested view tabs. */
-		color: #5f5f66;
+		color: #3f4d43;
 		background: transparent;
 		border: none;
-		border-radius: 11px;
+		border-radius: 10px;
 		cursor: pointer;
 		transition:
 			background 0.15s,
-			color 0.15s;
+			color 0.15s,
+			box-shadow 0.15s;
+	}
+
+	.mode-tabs button:hover:not(.active) {
+		color: var(--color-accent);
+		background: rgb(255 255 255 / 0.7);
 	}
 
 	.mode-tabs button.active {
 		color: var(--color-accent-contrast);
-		background: var(--color-accent);
+		background: var(--color-text);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.mode-tabs button.active:focus-visible {
@@ -516,13 +489,11 @@ before the Change Date. See LICENSE for complete terms.
 
 	.mode-panel {
 		/* .workspace-main uses align-items: center, so a flex child needs an
-		   explicit width to stretch — .card gets this "for free" for its own
-		   subtree via the default align-items: stretch, but .mode-panel is a
-		   sibling of .card now, not a descendant. */
+		   explicit width to stretch across the available content area. */
 		width: 100%;
 		display: flex;
 		flex-direction: column;
-		/* Matches .result-wrap's gap on the Edit tab — the render steps are now
+		/* Matches .result-wrap's gap on the Edit tab — the create steps are now
 		   separate cards too, stacked the same way. */
 		gap: 1.5rem;
 	}
@@ -555,6 +526,11 @@ before the Change Date. See LICENSE for complete terms.
 			color 0.15s;
 	}
 
+	.scene-type-toggle button:hover:not(.active) {
+		background: var(--color-surface-hover);
+		color: var(--color-text);
+	}
+
 	.scene-type-toggle button.active {
 		background: var(--color-surface);
 		color: var(--color-text);
@@ -584,10 +560,6 @@ before the Change Date. See LICENSE for complete terms.
 		.page {
 			--content-width: 100%;
 			padding: 1.5rem 1rem 3rem;
-		}
-
-		.card {
-			padding: 1.5rem;
 		}
 
 		.mode-tabs button {
