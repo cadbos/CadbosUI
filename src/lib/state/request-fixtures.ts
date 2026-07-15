@@ -77,8 +77,10 @@ export function buildAc9RequestJSON(): RequestJSON {
 			text: fragment.text,
 			order: fragment.order
 		})),
+		editPrompt: '',
 		outputFormat: 'webp',
 		sceneType: 'interior',
+		styleTransferPrompt: AC9_PROMPT,
 		styleTransferStrength: 0.7,
 		styleNegativePrompt: '',
 		styleSourceMode: 'current-result',

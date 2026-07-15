@@ -86,8 +86,10 @@ export interface RequestJSON {
 	image?: ImageInput;
 	styleReferenceImage?: ImageInput;
 	promptFragments: PromptFragment[];
+	editPrompt: string;
 	outputFormat: OutputFormat;
 	sceneType: SceneType;
+	styleTransferPrompt: string;
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
 	styleSourceMode: StyleSourceMode;
@@ -105,6 +107,8 @@ export interface NormalizedRequest {
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
 	styleSourceMode: StyleSourceMode;
+	editPrompt: string;
+	styleTransferPrompt: string;
 	prompt: string;
 }
 
@@ -149,9 +153,11 @@ const requestJsonSchema = z
 		image: optionalImageInputSchema,
 		styleReferenceImage: optionalImageInputSchema,
 		promptFragments: z.array(promptFragmentSchema),
+		editPrompt: z.string().default(''),
 		outputFormat: outputFormatSchema,
 		// Defaults to interior for persisted requests saved before this field existed.
 		sceneType: sceneTypeSchema.default('interior'),
+		styleTransferPrompt: z.string().default(''),
 		styleTransferStrength: styleTransferStrengthSchema.default(0.7),
 		styleNegativePrompt: z.string().default(''),
 		styleSourceMode: styleSourceModeSchema.default('current-result'),
@@ -345,8 +351,10 @@ export class RequestState {
 	image = $state<ImageInput | undefined>(undefined);
 	styleReferenceImage = $state<ImageInput | undefined>(undefined);
 	promptFragments = $state<PromptFragment[]>([]);
+	editPrompt = $state('');
 	outputFormat = $state<OutputFormat>('webp');
 	sceneType = $state<SceneType>('interior');
+	styleTransferPrompt = $state('');
 	styleTransferStrength = $state(0.7);
 	styleNegativePrompt = $state('');
 	styleSourceMode = $state<StyleSourceMode>('current-result');
@@ -428,6 +436,10 @@ export class RequestState {
 		}));
 	}
 
+	setEditPrompt(prompt: string): void {
+		this.editPrompt = prompt;
+	}
+
 	reorder(orderedIds: string[]): void {
 		if (orderedIds.length !== this.promptFragments.length) {
 			throw new RequestReorderError('orderedIds must include every fragment exactly once');
@@ -449,6 +461,10 @@ export class RequestState {
 
 	setStyleReferenceImage(image: ImageInput | undefined): void {
 		this.styleReferenceImage = cloneImage(optionalImageInputSchema.parse(image));
+	}
+
+	setStyleTransferPrompt(prompt: string): void {
+		this.styleTransferPrompt = prompt;
 	}
 
 	setOutputFormat(format: OutputFormat): void {
@@ -549,11 +565,11 @@ export class RequestState {
 		};
 	}
 
-	toStyleTransferRequest(guidance: string): StyleTransferRequest | null {
+	toStyleTransferRequest(): StyleTransferRequest | null {
 		const validation = this.validateStyleTransfer();
 		const image = this.styleTransferSourceUrl();
 		if (!validation.valid || !image || !this.styleReferenceImage) return null;
-		const prompt = guidance.trim();
+		const prompt = this.styleTransferPrompt.trim();
 		const negativePrompt = this.styleNegativePrompt.trim();
 		return {
 			image,
@@ -571,8 +587,10 @@ export class RequestState {
 			image: cloneImage(this.image),
 			styleReferenceImage: cloneImage(this.styleReferenceImage),
 			promptFragments: cloneFragments(this.promptFragments),
+			editPrompt: this.editPrompt,
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
+			styleTransferPrompt: this.styleTransferPrompt,
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
 			styleSourceMode: this.styleSourceMode,
@@ -588,8 +606,10 @@ export class RequestState {
 		this.image = cloneImage(parsed.image);
 		this.styleReferenceImage = cloneImage(parsed.styleReferenceImage);
 		this.promptFragments = cloneFragments(parsed.promptFragments);
+		this.editPrompt = parsed.editPrompt;
 		this.outputFormat = parsed.outputFormat;
 		this.sceneType = parsed.sceneType;
+		this.styleTransferPrompt = parsed.styleTransferPrompt;
 		this.styleTransferStrength = parsed.styleTransferStrength;
 		this.styleNegativePrompt = parsed.styleNegativePrompt;
 		this.styleSourceMode = parsed.styleSourceMode;
@@ -610,6 +630,8 @@ export class RequestState {
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
 			styleSourceMode: this.styleSourceMode,
+			editPrompt: this.editPrompt,
+			styleTransferPrompt: this.styleTransferPrompt,
 			prompt: this.prompt
 		};
 	}
@@ -619,8 +641,10 @@ export class RequestState {
 		this.image = undefined;
 		this.styleReferenceImage = undefined;
 		this.promptFragments = [];
+		this.editPrompt = '';
 		this.outputFormat = 'webp';
 		this.sceneType = 'interior';
+		this.styleTransferPrompt = '';
 		this.styleTransferStrength = 0.7;
 		this.styleNegativePrompt = '';
 		this.styleSourceMode = 'current-result';

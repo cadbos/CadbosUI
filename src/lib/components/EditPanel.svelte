@@ -45,7 +45,6 @@ before the Change Date. See LICENSE for complete terms.
 	// `tool` query param is this component's tab state.
 	const activeTool = $derived(slugToTool(page.url.searchParams.get('tool') ?? undefined));
 	let toolTabButtons = $state<HTMLElement[]>([]);
-	let instruction = $state('');
 	let applying = $state(false);
 	let error = $state<string | null>(null);
 
@@ -71,7 +70,7 @@ before the Change Date. See LICENSE for complete terms.
 	const toolDisabled = $derived(applying || !isAuthenticated);
 
 	function applyTemplate(fill: string): void {
-		instruction = fill;
+		request.setEditPrompt(fill);
 	}
 
 	async function submit(prompt: string, type: EditOperationType): Promise<void> {
@@ -96,7 +95,7 @@ before the Change Date. See LICENSE for complete terms.
 			});
 			request.applyEditResult(newRender);
 			void auth.refreshCredit();
-			if (type === 'freeform') instruction = '';
+			if (type === 'freeform') request.setEditPrompt('');
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 		} catch (err) {
 			error = t(editErrorKey(err));
@@ -122,7 +121,9 @@ before the Change Date. See LICENSE for complete terms.
 		{#each TOOLS as tool, index (tool.id)}
 			{@const Icon = tool.Icon}
 			<button
-				bind:this={toolTabButtons[index]}
+				{@attach (node) => {
+					toolTabButtons[index] = node as HTMLElement;
+				}}
 				type="button"
 				role="tab"
 				id={`edit-tool-tab-${tool.id}`}
@@ -167,7 +168,8 @@ before the Change Date. See LICENSE for complete terms.
 			<label class="field">
 				<span class="field-label">{t('edit.instruction')}</span>
 				<textarea
-					bind:value={instruction}
+					value={request.editPrompt}
+					oninput={(event) => request.setEditPrompt(event.currentTarget.value)}
 					rows="3"
 					disabled={applying}
 					placeholder={t('edit.templateReplaceFill')}></textarea>
@@ -177,8 +179,8 @@ before the Change Date. See LICENSE for complete terms.
 				<button
 					type="button"
 					class="btn-apply"
-					disabled={!instruction.trim() || toolDisabled || !targetImageUrl}
-					onclick={() => void submit(instruction, 'freeform')}
+					disabled={!request.editPrompt.trim() || toolDisabled || !targetImageUrl}
+					onclick={() => void submit(request.editPrompt, 'freeform')}
 				>
 					{#if applying}
 						<span class="spinner" aria-hidden="true"></span>

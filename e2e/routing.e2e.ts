@@ -195,6 +195,29 @@ test('render-only content (prompt/fragments) never appears on edit or style tran
 	await expect(page).not.toHaveURL(/fragments=/);
 });
 
+test('edit and style transfer prompts round-trip through their own query params', async ({
+	page
+}) => {
+	await page.goto('/edit?tool=freeform&prompt=brighten%20the%20sofa');
+	await expect(page.getByLabel('Инструкция для правки')).toHaveValue('brighten the sofa');
+
+	await page.getByLabel('Инструкция для правки').fill('replace the chair');
+	await expect.poll(() => new URL(page.url()).searchParams.get('prompt')).toBe('replace the chair');
+
+	await page.goto(
+		'/style-transfer/interior?reference=custom&format=webp&source=current-result&strength=0.7&prompt=keep%20warm%20materials'
+	);
+	await expect(page.getByLabel('Уточнение стиля')).toHaveValue('keep warm materials');
+
+	await page.getByLabel('Уточнение стиля').fill('use soft plaster texture');
+	await expect
+		.poll(() => new URL(page.url()).searchParams.get('prompt'))
+		.toBe('use soft plaster texture');
+
+	await page.getByRole('tab', { name: 'Рендер' }).click();
+	await expect.poll(() => new URL(page.url()).searchParams.get('prompt')).toBeNull();
+});
+
 test('style transfer settings never appear on render or edit URLs', async ({ page }) => {
 	await authenticate(page);
 	await page.goto('/style-transfer/interior');

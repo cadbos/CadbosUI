@@ -43,7 +43,6 @@ before the Change Date. See LICENSE for complete terms.
 		{ id: 'exterior', label: 'render.sceneType.exterior' }
 	];
 
-	let guidance = $state('');
 	let applying = $state(false);
 	let error = $state<string | null>(null);
 	// Only ever rendered in style transfer mode (see Workspace.svelte), so the
@@ -146,7 +145,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function submit(): Promise<void> {
 		if (!canApply || !isAuthenticated) return;
-		const body = request.toStyleTransferRequest(guidance);
+		const body = request.toStyleTransferRequest();
 		if (!body) return;
 		applying = true;
 		error = null;
@@ -234,7 +233,9 @@ before the Change Date. See LICENSE for complete terms.
 			<div class="scene-type-toggle" role="tablist" aria-label={t('render.sceneType.label')}>
 				{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
 					<button
-						bind:this={sceneTypeButtons[index]}
+						{@attach (node) => {
+							sceneTypeButtons[index] = node as HTMLElement;
+						}}
 						type="button"
 						role="tab"
 						id={`style-scene-tab-${sceneTypeOption.id}`}
@@ -253,7 +254,9 @@ before the Change Date. See LICENSE for complete terms.
 			<div class="reference-tabs" role="tablist" aria-label={t('styleTransfer.referenceTabsLabel')}>
 				{#each REFERENCE_TABS as tab, index (tab.id)}
 					<button
-						bind:this={referenceTabButtons[index]}
+						{@attach (node) => {
+							referenceTabButtons[index] = node as HTMLElement;
+						}}
 						type="button"
 						role="tab"
 						id={`style-reference-tab-${tab.id}`}
@@ -284,7 +287,9 @@ before the Change Date. See LICENSE for complete terms.
 					<div class="preset-grid" role="radiogroup" aria-labelledby="style-presets-hint">
 						{#each currentPresets as preset, index (preset.id)}
 							<button
-								bind:this={presetButtons[index]}
+								{@attach (node) => {
+									presetButtons[index] = node as HTMLElement;
+								}}
 								type="button"
 								role="radio"
 								class="preset"
@@ -313,7 +318,8 @@ before the Change Date. See LICENSE for complete terms.
 	</div>
 
 	<textarea
-		bind:value={guidance}
+		value={request.styleTransferPrompt}
+		oninput={(event) => request.setStyleTransferPrompt(event.currentTarget.value)}
 		rows="4"
 		aria-label={t('styleTransfer.guidance')}
 		disabled={applying}

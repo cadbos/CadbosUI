@@ -133,8 +133,8 @@ function parseFragments(raw: string): ParsedFragment[] {
 // (always present — it's always showing *something*) plus every other setting
 // that's visibly selected on screen right now — format, style transfer
 // controls — so the URL never silently hides the current default. Free-form
-// content (style preset, negative prompt, prompt/fragments) is left out of the
-// query string when empty, since there's nothing to show for those. The
+// content (style preset, negative prompt, mode prompts/fragments) is left out
+// of the query string when empty, since there's nothing to show for those. The
 // uploaded room photo and a custom (non-preset) style reference are never
 // included at all — see applyShareParams for why.
 export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab = {}): string {
@@ -166,6 +166,9 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 
 	if (mode === 'edit') {
 		params.set('tool', subTab.tool ?? 'freeform');
+		if (request.editPrompt.trim() !== '') {
+			params.set('prompt', request.editPrompt);
+		}
 	}
 
 	if (mode === 'styleTransfer') {
@@ -185,6 +188,9 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 
 		if (request.styleNegativePrompt.trim() !== '') {
 			params.set('negative', request.styleNegativePrompt);
+		}
+		if (request.styleTransferPrompt.trim() !== '') {
+			params.set('prompt', request.styleTransferPrompt);
 		}
 	}
 
@@ -243,13 +249,19 @@ export function applyShareParams(
 			: 'current-result'
 	);
 
-	const prompt = searchParams.get('prompt');
-	if (prompt !== null) {
-		request.setPromptOverride(prompt);
-		return;
-	}
+	if (mode === 'render') {
+		const prompt = searchParams.get('prompt');
+		if (prompt !== null) {
+			request.setPromptOverride(prompt);
+			return;
+		}
 
-	request.clearPromptOverride();
-	const fragmentsRaw = searchParams.get('fragments');
-	request.setFragments(fragmentsRaw ? parseFragments(fragmentsRaw) : []);
+		request.clearPromptOverride();
+		const fragmentsRaw = searchParams.get('fragments');
+		request.setFragments(fragmentsRaw ? parseFragments(fragmentsRaw) : []);
+	} else if (mode === 'edit') {
+		request.setEditPrompt(searchParams.get('prompt') ?? '');
+	} else {
+		request.setStyleTransferPrompt(searchParams.get('prompt') ?? '');
+	}
 }
