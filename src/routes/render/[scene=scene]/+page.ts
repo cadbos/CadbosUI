@@ -15,9 +15,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
 
-// The workspace has no content of its own at '/' — the create/interior tab is
-// the canonical default, so every visit to the root is redirected there
-// (keeping query params, e.g. a shared link opened without a mode segment).
-export const load: PageLoad = ({ url }) => {
-	redirect(307, `/create/interior${url.search}`);
+export const load: PageLoad = ({ params, url }) => {
+	redirect(307, `/create/${params.scene}${url.search}`);
 };

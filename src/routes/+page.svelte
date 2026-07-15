@@ -13,6 +13,6 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <!--
-	Intentionally empty: +page.ts redirects '/' to '/render/interior' before this
+	Intentionally empty: +page.ts redirects '/' to '/create/interior' before this
 	ever renders. The actual UI is <Workspace /> in the root +layout.svelte.
 -->
