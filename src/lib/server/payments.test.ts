@@ -14,6 +14,7 @@
 
 import type { D1Database } from '@cloudflare/workers-types';
 import { describe, expect, it, vi } from 'vitest';
+import { toLedgerAmountUnits } from './ledger-units';
 import { grantGenerationAccess, makeD1 } from './testing/d1-shim';
 
 const lightning = vi.hoisted(() => ({
@@ -170,8 +171,8 @@ describe('markDepositPaid', () => {
 			creditsAwarded: 3,
 			archaiTokensAwarded: 5
 		});
-		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBe(3);
-		expect(await readLedgerBalance(db, 'archai_token', null)).toBe(5);
+		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBe(toLedgerAmountUnits(3));
+		expect(await readLedgerBalance(db, 'archai_token', null)).toBe(toLedgerAmountUnits(5));
 	});
 
 	it('is idempotent when called again for an already-paid deposit', async () => {
@@ -182,7 +183,7 @@ describe('markDepositPaid', () => {
 		const second = await markDepositPaid(db, 'hash-1', 9000);
 
 		expect(second).toMatchObject({ status: 'paid', paidAt: 5000 });
-		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBe(3);
+		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBe(toLedgerAmountUnits(3));
 	});
 
 	it('returns null for an unknown payment hash', async () => {
