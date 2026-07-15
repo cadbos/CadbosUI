@@ -13,6 +13,8 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { afterNavigate, goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import RenderResult from '$lib/components/RenderResult.svelte';
@@ -29,9 +31,14 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
+	import {
+		applyShareParams,
+		buildShareUrl,
+		routeIdToMode,
+		subTabFromSearch,
+		type Mode
+	} from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
-
-	type Mode = 'render' | 'edit' | 'styleTransfer';
 
 	const modes: { id: Mode; label: TranslationKey }[] = [
 		{ id: 'render', label: 'mode.render' },
@@ -46,18 +53,34 @@ before the Change Date. See LICENSE for complete terms.
 
 	let submitting = $state(false);
 	let submitError = $state<string | null>(null);
-	let mode = $state<Mode>('render');
 	let modeTabs = $state<HTMLElement[]>([]);
 	let sceneTypeTabs = $state<HTMLElement[]>([]);
+
+	// The URL is the source of truth for which mode is open — not local $state —
+	// so a shared link or a page reload always opens on the right tab.
+	const mode = $derived(routeIdToMode(page.route.id));
 
 	const modeTabController = createTabController({
 		itemCount: () => modes.length,
 		getActiveIndex: () => modes.findIndex((m) => m.id === mode),
 		setActiveIndex: (index) => {
-			mode = modes[index].id;
+			// No sub-tab passed: switching modes has no "current" sub-tab to carry
+			// over from a different mode, so each mode opens on its own default.
+			// Pushes a history entry (unlike the sub-tab/settings navigations
+			// below) so Back/Forward actually steps through Render/Edit/Style
+			// transfer, matching what a dedicated URL per mode implies.
+			goto(buildShareUrl(modes[index].id, request), {
+				replaceState: false,
+				keepFocus: true,
+				noScroll: true
+			}).catch((error: unknown) => logBoundaryError('workspace.modeNavigation', error));
 		},
 		focusTab: (index) => modeTabs[index]?.focus()
 	});
+
+	function activateMode(id: Mode): void {
+		modeTabController.activate(modes.findIndex((m) => m.id === id));
+	}
 
 	const sceneTypeTabController = createTabController({
 		itemCount: () => sceneTypes.length,
@@ -78,6 +101,60 @@ before the Change Date. See LICENSE for complete terms.
 	$effect(() => {
 		if (auth.canLoadGeneratedImages) void generatedImages.load();
 		else generatedImages.clear();
+	});
+
+	// True once the request store has been hydrated from the URL at least once
+	// (see afterNavigate below). Gates the write-sync effect so it can't fire —
+	// and overwrite the shared link's query string with defaults — before that
+	// initial hydration has run.
+	let hydrated = $state(false);
+
+	// afterNavigate also runs once when this component mounts (type 'enter'), so
+	// it covers both the initial load of a shared link and later browser
+	// back/forward or external-link navigation. It only ever fires client-side,
+	// after hydration has already reconciled against the server-rendered HTML —
+	// unlike a synchronous call in the component body, applying URL state here
+	// can't cause a hydration mismatch. 'goto' is deliberately excluded: that's
+	// the type of the navigations *we* trigger below and in the tab controllers,
+	// where `request` is already the source of truth and re-parsing the URL
+	// would be redundant.
+	afterNavigate(({ type }) => {
+		if (type === 'enter' || type === 'popstate' || type === 'link') {
+			applyShareParams(mode, page.params.scene, page.url.searchParams, request);
+		}
+		hydrated = true;
+	});
+
+	// Keeps the URL in sync with the current mode/request so the address bar is
+	// always a shareable link for what's on screen. Debounced so typing in a
+	// prompt fragment doesn't rewrite the URL on every keystroke.
+	//
+	// The synchronous `buildShareUrl(mode, request)` call below (result
+	// discarded) exists purely so this effect *tracks* mode/request as
+	// dependencies and re-schedules the timer whenever they change — that's
+	// what makes the debounce reactive at all. The URL actually used to
+	// navigate is rebuilt fresh *inside* the timeout instead of reusing that
+	// value, for two reasons: the sub-tab (view/tool/reference) has no backing
+	// store field, so it can only be read off the current query string (a
+	// plain DOM read, not a reactive `page` read, so it can't turn this effect
+	// into a feedback loop with the `goto()` call below); and reusing a value
+	// computed up front would go stale if the user changes the sub-tab (e.g.
+	// clicks the Graph tab) while a request-field debounce from a moment
+	// earlier is still pending — the timer would then fire with the *old*
+	// sub-tab and clobber the switch by navigating back to it.
+	$effect(() => {
+		if (!hydrated) return;
+		buildShareUrl(mode, request);
+		const timer = setTimeout(() => {
+			const currentSearch = new URLSearchParams(window.location.search);
+			const url = buildShareUrl(mode, request, subTabFromSearch(mode, currentSearch));
+			if (`${window.location.pathname}${window.location.search}` !== url) {
+				goto(url, { replaceState: true, keepFocus: true, noScroll: true }).catch((error: unknown) =>
+					logBoundaryError('workspace.urlSync', error)
+				);
+			}
+		}, 400);
+		return () => clearTimeout(timer);
 	});
 
 	async function generate(): Promise<void> {
@@ -252,7 +329,7 @@ before the Change Date. See LICENSE for complete terms.
 					<svelte:boundary
 						onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
 					>
-						<RenderResult onEditRequest={() => modeTabController.activate(1)} />
+						<RenderResult onEditRequest={() => activateMode('edit')} />
 						{#snippet failed(_error: unknown, reset: () => void)}
 							<p class="boundary-failed">{t('boundary.failed')}</p>
 							<button type="button" class="boundary-retry" onclick={reset}>

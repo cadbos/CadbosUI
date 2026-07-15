@@ -13,6 +13,8 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import type { OutputFormat, RenderResponse } from '$lib/api/contract';
 	import {
@@ -27,9 +29,8 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import { stylePresetsFor, type StylePreset } from '$lib/style-presets';
-	import { createTabController } from '$lib/utils';
-
-	type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
+	import { buildShareUrl, slugToReference, type ReferenceTab } from '$lib/state/url-state';
+	import { createTabController, logBoundaryError } from '$lib/utils';
 
 	const REFERENCE_TABS: { id: ReferenceTab; label: TranslationKey }[] = [
 		{ id: 'photorealistic', label: 'styleTransfer.referenceTabPhotorealistic' },
@@ -42,10 +43,13 @@ before the Change Date. See LICENSE for complete terms.
 		{ id: 'exterior', label: 'render.sceneType.exterior' }
 	];
 
-	let guidance = $state('');
 	let applying = $state(false);
 	let error = $state<string | null>(null);
-	let referenceTab = $state<ReferenceTab>('photorealistic');
+	// Only ever rendered in style transfer mode (see Workspace.svelte), so the
+	// URL's `reference` query param is this component's tab state.
+	const referenceTab = $derived(
+		slugToReference(page.url.searchParams.get('reference') ?? undefined)
+	);
 	let referenceTabButtons = $state<HTMLElement[]>([]);
 	let presetButtons = $state<HTMLElement[]>([]);
 	let sceneTypeButtons = $state<HTMLElement[]>([]);
@@ -86,7 +90,11 @@ before the Change Date. See LICENSE for complete terms.
 		setActiveIndex: (index) => {
 			const nextTab = REFERENCE_TABS[index].id;
 			if (nextTab !== referenceTab) clearReferenceSelection();
-			referenceTab = nextTab;
+			goto(buildShareUrl('styleTransfer', request, { reference: nextTab }), {
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true
+			}).catch((err: unknown) => logBoundaryError('styleTransferPanel.referenceNavigation', err));
 		},
 		focusTab: (index) => referenceTabButtons[index]?.focus()
 	});
@@ -137,7 +145,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function submit(): Promise<void> {
 		if (!canApply || !isAuthenticated) return;
-		const body = request.toStyleTransferRequest(guidance);
+		const body = request.toStyleTransferRequest();
 		if (!body) return;
 		applying = true;
 		error = null;
@@ -225,7 +233,9 @@ before the Change Date. See LICENSE for complete terms.
 			<div class="scene-type-toggle" role="tablist" aria-label={t('render.sceneType.label')}>
 				{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
 					<button
-						bind:this={sceneTypeButtons[index]}
+						{@attach (node) => {
+							sceneTypeButtons[index] = node as HTMLElement;
+						}}
 						type="button"
 						role="tab"
 						id={`style-scene-tab-${sceneTypeOption.id}`}
@@ -244,7 +254,9 @@ before the Change Date. See LICENSE for complete terms.
 			<div class="reference-tabs" role="tablist" aria-label={t('styleTransfer.referenceTabsLabel')}>
 				{#each REFERENCE_TABS as tab, index (tab.id)}
 					<button
-						bind:this={referenceTabButtons[index]}
+						{@attach (node) => {
+							referenceTabButtons[index] = node as HTMLElement;
+						}}
 						type="button"
 						role="tab"
 						id={`style-reference-tab-${tab.id}`}
@@ -275,7 +287,9 @@ before the Change Date. See LICENSE for complete terms.
 					<div class="preset-grid" role="radiogroup" aria-labelledby="style-presets-hint">
 						{#each currentPresets as preset, index (preset.id)}
 							<button
-								bind:this={presetButtons[index]}
+								{@attach (node) => {
+									presetButtons[index] = node as HTMLElement;
+								}}
 								type="button"
 								role="radio"
 								class="preset"
@@ -304,7 +318,8 @@ before the Change Date. See LICENSE for complete terms.
 	</div>
 
 	<textarea
-		bind:value={guidance}
+		value={request.styleTransferPrompt}
+		oninput={(event) => request.setStyleTransferPrompt(event.currentTarget.value)}
 		rows="4"
 		aria-label={t('styleTransfer.guidance')}
 		disabled={applying}

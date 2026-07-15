@@ -161,7 +161,9 @@ describe('serialization', () => {
 
 	it('loads snapshots created before style-transfer settings existed', () => {
 		const snapshot = buildAc9RequestJSON() as unknown as Record<string, unknown>;
+		delete snapshot.editPrompt;
 		delete snapshot.styleReferenceImage;
+		delete snapshot.styleTransferPrompt;
 		delete snapshot.styleTransferStrength;
 		delete snapshot.styleNegativePrompt;
 		delete snapshot.styleSourceMode;
@@ -170,7 +172,9 @@ describe('serialization', () => {
 
 		expect(request.toJSON()).toEqual({
 			...snapshot,
+			editPrompt: '',
 			styleReferenceImage: undefined,
+			styleTransferPrompt: '',
 			styleTransferStrength: 0.7,
 			styleNegativePrompt: '',
 			styleSourceMode: 'current-result'
@@ -341,7 +345,7 @@ describe('toStyleTransferRequest', () => {
 	it('builds the wire body from the room photo and reference image', () => {
 		applyAc9Fixture();
 		request.setStyleSourceMode('room-photo');
-		expect(request.toStyleTransferRequest(AC9_PROMPT)).toEqual(AC9_STYLE_TRANSFER_REQUEST);
+		expect(request.toStyleTransferRequest()).toEqual(AC9_STYLE_TRANSFER_REQUEST);
 	});
 
 	it('uses the current result as the source when selected and available', () => {
@@ -354,7 +358,7 @@ describe('toStyleTransferRequest', () => {
 			ts: 0
 		});
 
-		expect(request.toStyleTransferRequest(AC9_PROMPT)).toEqual({
+		expect(request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
 			image: 'https://example.test/current-result.webp'
 		});
@@ -362,15 +366,16 @@ describe('toStyleTransferRequest', () => {
 
 	it('falls back to the room photo when current-result is selected before a result exists', () => {
 		applyAc9Fixture();
-		expect(request.toStyleTransferRequest(AC9_PROMPT)?.image).toBe(AC9_IMAGE.url);
+		expect(request.toStyleTransferRequest()?.image).toBe(AC9_IMAGE.url);
 	});
 
 	it('omits optional prompt fields when they are empty', () => {
 		request.setImage(AC9_IMAGE);
 		request.setStyleReferenceImage(AC9_REFERENCE_IMAGE);
+		request.setStyleTransferPrompt('   ');
 		request.setStyleNegativePrompt('   ');
 
-		expect(request.toStyleTransferRequest('   ')).toEqual({
+		expect(request.toStyleTransferRequest()).toEqual({
 			image: AC9_IMAGE.url,
 			referenceImage: AC9_REFERENCE_IMAGE.url,
 			outputFormat: 'webp',
@@ -382,7 +387,7 @@ describe('toStyleTransferRequest', () => {
 		applyAc9Fixture();
 		request.setStyleNegativePrompt('  no people  ');
 
-		expect(request.toStyleTransferRequest(AC9_PROMPT)).toEqual({
+		expect(request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
 			negativePrompt: 'no people'
 		});
@@ -391,8 +396,9 @@ describe('toStyleTransferRequest', () => {
 	it('uses explicit style guidance instead of the render prompt', () => {
 		applyAc9Fixture();
 		request.setPromptOverride('render prompt that must stay isolated');
+		request.setStyleTransferPrompt('  style transfer guidance  ');
 
-		expect(request.toStyleTransferRequest('  style transfer guidance  ')).toEqual({
+		expect(request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
 			prompt: 'style transfer guidance'
 		});
@@ -406,6 +412,7 @@ describe('toStyleTransferRequest', () => {
 	it('round-trips style transfer settings through JSON', () => {
 		applyAc9Fixture();
 		request.setStyleTransferStrength(0.35);
+		request.setStyleTransferPrompt('style guidance');
 		request.setStyleNegativePrompt('no people');
 		request.setStyleSourceMode('room-photo');
 		const snapshot = request.toJSON();
@@ -414,8 +421,9 @@ describe('toStyleTransferRequest', () => {
 		request.fromJSON(snapshot);
 
 		expect(request.toJSON()).toEqual(snapshot);
-		expect(request.toStyleTransferRequest(AC9_PROMPT)).toEqual({
+		expect(request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
+			prompt: 'style guidance',
 			styleTransferStrength: 0.35,
 			negativePrompt: 'no people'
 		});

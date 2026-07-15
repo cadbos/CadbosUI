@@ -17,9 +17,14 @@ before the Change Date. See LICENSE for complete terms.
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import AuthBar from '$lib/components/AuthBar.svelte';
+	import Workspace from '$lib/components/Workspace.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 
+	// children() renders whichever leaf +page.svelte matched the URL — those are
+	// intentionally empty (see src/routes/render/[scene=scene]/+page.svelte): the
+	// workspace itself lives here, in the layout, so it stays mounted (and its
+	// UI state intact) while the user navigates between mode/scene routes.
 	let { children } = $props();
 
 	onMount(() => {
@@ -30,11 +35,15 @@ before the Change Date. See LICENSE for complete terms.
 <svelte:head>
 	<title>{t('app.title')}</title>
 	<link rel="icon" href={favicon} />
+	<link rel="manifest" href="/manifest.webmanifest" />
+	<meta name="theme-color" content="#ff3e00" />
 </svelte:head>
 
 <header class="app-header">
 	<AuthBar />
 </header>
+
+<Workspace />
 
 {@render children()}
 

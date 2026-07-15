@@ -14,13 +14,15 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import type { Component } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import ChatView from '$lib/components/ChatView.svelte';
 	import KeyValueView from '$lib/components/KeyValueView.svelte';
 	import GraphView from '$lib/components/GraphView.svelte';
+	import { request } from '$lib/state/request.svelte';
+	import { buildShareUrl, slugToView, type ViewId } from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
-
-	type ViewId = 'chat' | 'keyValue' | 'graph';
 
 	interface Props {
 		stepLabel: string;
@@ -40,14 +42,24 @@ before the Change Date. See LICENSE for complete terms.
 		{ id: 'graph', label: 'view.graph', component: GraphView }
 	];
 
-	let activeIndex = $state(0);
+	// Only ever rendered in render mode (see Workspace.svelte), so the URL's
+	// `view` query param is this component's tab state.
+	const activeIndex = $derived(
+		views.findIndex(
+			(view) => view.id === slugToView(page.url.searchParams.get('view') ?? undefined)
+		)
+	);
 	let tabs = $state<HTMLElement[]>([]);
 
 	const viewTabs = createTabController({
 		itemCount: () => views.length,
 		getActiveIndex: () => activeIndex,
 		setActiveIndex: (index) => {
-			activeIndex = index;
+			goto(buildShareUrl('render', request, { view: views[index].id }), {
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true
+			}).catch((error: unknown) => logBoundaryError('promptViews.viewNavigation', error));
 		},
 		focusTab: (index) => tabs[index]?.focus()
 	});
