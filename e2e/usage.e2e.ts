@@ -40,6 +40,12 @@ async function mockAuthenticatedSession(page: Page): Promise<void> {
 	});
 }
 
+import { mockFeaturebase } from './featurebase';
+
+test.beforeEach(async ({ page }) => {
+	await mockFeaturebase(page);
+});
+
 test('links usage pubkeys to Primal in a new tab by default', async ({ page }) => {
 	await mockAuthenticatedSession(page);
 	await page.route('**/api/exchange-rate', async (route) => {
