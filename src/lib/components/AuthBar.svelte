@@ -307,6 +307,7 @@ before the Change Date. See LICENSE for complete terms.
 					<button
 						type="button"
 						class="logout-button"
+						data-testid="logout-button"
 						title={t('auth.logout')}
 						onclick={() => auth.logout()}
 					>

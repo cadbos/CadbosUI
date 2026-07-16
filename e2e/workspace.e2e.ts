@@ -161,8 +161,8 @@ test('updates Featurebase identity when the user signs in and out', async ({ pag
 		)
 		.toBe(featurebaseJwt);
 
-	await page.locator('.profile-toggle').click();
-	await page.getByRole('button', { name: 'Выйти' }).click();
+	await page.locator('.auth-trigger').click();
+	await page.getByTestId('logout-button').click();
 
 	await expect
 		.poll(() =>
