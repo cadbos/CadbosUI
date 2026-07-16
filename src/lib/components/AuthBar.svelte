@@ -189,7 +189,12 @@ before the Change Date. See LICENSE for complete terms.
 						<button type="submit" disabled={savingProfile}>
 							{savingProfile ? t('auth.profile.saving') : t('auth.profile.save')}
 						</button>
-						<button type="button" class="secondary" onclick={() => auth.logout()}>
+						<button
+							type="button"
+							class="secondary"
+							data-testid="logout-button"
+							onclick={() => auth.logout()}
+						>
 							{t('auth.logout')}
 						</button>
 					</div>
