@@ -15,6 +15,12 @@
 import { expect, test } from '@playwright/test';
 import { npubEncode } from 'nostr-tools/nip19';
 
+import { mockFeaturebase } from './featurebase';
+
+test.beforeEach(async ({ page }) => {
+	await mockFeaturebase(page);
+});
+
 test('links usage pubkeys to Primal in a new tab by default', async ({ page }) => {
 	const pubkey = 'a'.repeat(64);
 	const pubkeyWithoutPicture = 'b'.repeat(64);
