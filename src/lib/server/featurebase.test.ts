@@ -25,9 +25,11 @@ afterEach(() => {
 describe('createFeaturebaseJwt', () => {
 	it('signs the Nostr pubkey as the Featurebase user ID with HS256', () => {
 		const token = createFeaturebaseJwt({ pubkey }, 'featurebase-secret');
-		expect(token).not.toBeNull();
+		if (token === null) {
+			throw new Error('expected createFeaturebaseJwt to return a token');
+		}
 
-		const decoded = jwt.verify(token!, 'featurebase-secret', {
+		const decoded = jwt.verify(token, 'featurebase-secret', {
 			algorithms: ['HS256'],
 			complete: true
 		});
