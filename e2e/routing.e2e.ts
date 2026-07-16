@@ -17,6 +17,12 @@ import type { Page } from '@playwright/test';
 import { ru } from '$lib/i18n/locales/ru';
 import { expect, test } from './fixtures';
 
+import { mockFeaturebase } from './featurebase';
+
+test.beforeEach(async ({ page }) => {
+	await mockFeaturebase(page);
+});
+
 async function authenticate(page: Page): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
 		await route.fulfill({
