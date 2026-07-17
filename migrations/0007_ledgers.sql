@@ -102,6 +102,77 @@ CREATE TABLE deposits (
 CREATE INDEX deposits_user_created_at ON deposits (user_id, created_at DESC);
 CREATE INDEX deposits_pending ON deposits (expires_at) WHERE status = 'pending';
 
+CREATE TABLE generation_operations (
+	id TEXT PRIMARY KEY
+		CHECK (
+			length(id) = 36
+			AND substr(id, 9, 1) = '-'
+			AND substr(id, 14, 1) = '-'
+			AND substr(id, 19, 1) = '-'
+			AND substr(id, 24, 1) = '-'
+			AND id NOT GLOB '*[^0-9a-f-]*'
+		),
+	user_id TEXT NOT NULL REFERENCES users (id),
+	input_url TEXT NOT NULL CHECK (input_url LIKE 'http://%' OR input_url LIKE 'https://%'),
+	prompt TEXT NOT NULL,
+	kind TEXT NOT NULL CHECK (length(kind) > 0),
+	cost_units INTEGER CHECK (
+		cost_units IS NULL OR (typeof(cost_units) = 'integer' AND cost_units >= 0)
+	),
+	output_url TEXT CHECK (
+		output_url IS NULL OR output_url LIKE 'http://%' OR output_url LIKE 'https://%'
+	),
+	balance_after_units INTEGER CHECK (
+		balance_after_units IS NULL OR typeof(balance_after_units) = 'integer'
+	),
+	status TEXT NOT NULL CHECK (status IN ('pending', 'confirmed', 'completed', 'failed')),
+	created_at INTEGER NOT NULL CHECK (created_at > 0),
+	confirmed_at INTEGER,
+	completed_at INTEGER,
+	failed_at INTEGER,
+	CHECK (
+		(
+			status = 'pending'
+			AND cost_units IS NULL
+			AND output_url IS NULL
+			AND balance_after_units IS NULL
+			AND confirmed_at IS NULL
+			AND completed_at IS NULL
+			AND failed_at IS NULL
+		)
+		OR (
+			status = 'confirmed'
+			AND cost_units IS NOT NULL
+			AND output_url IS NOT NULL
+			AND balance_after_units IS NULL
+			AND confirmed_at IS NOT NULL
+			AND completed_at IS NULL
+			AND failed_at IS NULL
+		)
+		OR (
+			status = 'completed'
+			AND cost_units IS NOT NULL
+			AND output_url IS NOT NULL
+			AND balance_after_units IS NOT NULL
+			AND confirmed_at IS NOT NULL
+			AND completed_at IS NOT NULL
+			AND failed_at IS NULL
+		)
+		OR (
+			status = 'failed'
+			AND cost_units IS NULL
+			AND output_url IS NULL
+			AND balance_after_units IS NULL
+			AND confirmed_at IS NULL
+			AND completed_at IS NULL
+			AND failed_at IS NOT NULL
+		)
+	)
+);
+
+CREATE INDEX generation_operations_user_status
+	ON generation_operations (user_id, status, created_at);
+
 CREATE TABLE generations (
 	id TEXT PRIMARY KEY,
 	user_id TEXT NOT NULL REFERENCES users (id),
@@ -356,6 +427,43 @@ BEFORE DELETE ON deposits
 WHEN OLD.status = 'paid'
 BEGIN
 	SELECT RAISE(ABORT, 'paid deposits are immutable');
+END;
+
+CREATE TRIGGER generation_operations_enforce_transition
+BEFORE UPDATE ON generation_operations
+WHEN NOT (
+	(
+		OLD.status = 'pending'
+		AND NEW.status IN ('confirmed', 'failed')
+		AND OLD.id IS NEW.id
+		AND OLD.user_id IS NEW.user_id
+		AND OLD.input_url IS NEW.input_url
+		AND OLD.prompt IS NEW.prompt
+		AND OLD.kind IS NEW.kind
+		AND OLD.created_at IS NEW.created_at
+	)
+	OR (
+		OLD.status = 'confirmed'
+		AND NEW.status = 'completed'
+		AND OLD.id IS NEW.id
+		AND OLD.user_id IS NEW.user_id
+		AND OLD.input_url IS NEW.input_url
+		AND OLD.prompt IS NEW.prompt
+		AND OLD.kind IS NEW.kind
+		AND OLD.cost_units IS NEW.cost_units
+		AND OLD.output_url IS NEW.output_url
+		AND OLD.created_at IS NEW.created_at
+		AND OLD.confirmed_at IS NEW.confirmed_at
+	)
+)
+BEGIN
+	SELECT RAISE(ABORT, 'invalid generation operation transition');
+END;
+
+CREATE TRIGGER generation_operations_prevent_delete
+BEFORE DELETE ON generation_operations
+BEGIN
+	SELECT RAISE(ABORT, 'generation operations are immutable');
 END;
 
 CREATE TRIGGER generations_prevent_delete
