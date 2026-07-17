@@ -12,15 +12,16 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RenderResponse } from '$lib/api/contract';
 import { apiError, parseBody, styleTransferRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
-import { assertGenerationAllowed, getCredit, getUserIdByPubkey } from '$lib/server/billing';
+import { getUserIdByPubkey } from '$lib/server/billing';
+import { DEMO_PUBKEY } from '$lib/server/demo';
 import { styleTransferInterior } from '$lib/server/generation';
-import { recordGeneration } from '$lib/server/generations';
+import { runPaidGeneration } from '$lib/server/paid-generation';
 
 const STYLE_TRANSFER_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
 
@@ -30,7 +31,8 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	const parsed = await parseBody(request, styleTransferRequestSchema);
 	if (!parsed.ok) return parsed.response;
 
-	const db = getDb(platform);
+	const demoUser = dev && locals.user.pubkey === DEMO_PUBKEY;
+	const db = demoUser ? null : getDb(platform);
 	const userId = db ? await getUserIdByPubkey(db, locals.user.pubkey) : null;
 
 	if (db && !userId) return apiError(500, 'account_error', 'Account record not found');
@@ -45,52 +47,28 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		if (limited) return apiError(429, 'rate_limited', 'Too many requests');
 	}
 
-	let precheckBalance: number | undefined;
-	if (db && userId) {
-		try {
-			const check = await assertGenerationAllowed(db, userId);
-			if (!check.allowed) {
-				return check.reason === 'not_approved'
+	try {
+		if (db && userId) {
+			const result = await runPaidGeneration(
+				db,
+				userId,
+				{
+					sourceUrl: parsed.data.image,
+					prompt: parsed.data.prompt ?? '',
+					kind: 'style-transfer'
+				},
+				() => styleTransferInterior(platform, parsed.data)
+			);
+			if (!result.allowed) {
+				return result.reason === 'not_approved'
 					? apiError(403, 'generation_restricted', 'Generation is limited to approved accounts')
 					: apiError(402, 'insufficient_credit', 'Test balance exhausted');
 			}
-			precheckBalance = check.balance;
-		} catch (err) {
-			console.error('credit pre-check failed:', err);
-			return apiError(500, 'style_transfer_failed', 'Style transfer failed');
+			return json(result.response);
 		}
-	}
-
-	let result: RenderResponse;
-	try {
-		result = await styleTransferInterior(platform, parsed.data);
+		return json(await styleTransferInterior(platform, parsed.data));
 	} catch (err) {
-		console.error(err);
+		console.error('style transfer operation failed:', err);
 		return apiError(500, 'style_transfer_failed', 'Style transfer failed');
 	}
-
-	if (db && userId) {
-		try {
-			const credit = await recordGeneration(db, userId, {
-				url: result.outputUrl,
-				sourceUrl: parsed.data.image,
-				prompt: parsed.data.prompt ?? '',
-				kind: 'style-transfer',
-				amount: result.cost
-			});
-			result = { ...result, balance: credit.balance };
-		} catch (err) {
-			console.error('recordGeneration failed after a successful style transfer:', err);
-			const fallback = await getCredit(db, userId).catch((fallbackErr) => {
-				console.error(
-					'balance fallback lookup failed after recordGeneration failure:',
-					fallbackErr
-				);
-				return null;
-			});
-			result = { ...result, balance: fallback?.balance ?? precheckBalance ?? 0 };
-		}
-	}
-
-	return json(result);
 };

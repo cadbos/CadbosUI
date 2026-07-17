@@ -166,17 +166,9 @@ describe('POST /api/style-transfer — billing', () => {
 		expect(responses[10].status).toBe(429);
 	});
 
-	it('uses the approved-account balance for the dev-only demo session', async () => {
-		const db = makeD1();
-		seedUser(db, 'demo-user', DEMO_PUBKEY);
-		grantGenerationAccess(db, 'demo-user', 12);
-
-		const response = await call({ pubkey: DEMO_PUBKEY }, { env: { DB: db } } as App.Platform, body);
+	it('bypasses D1 entirely for the dev-only demo session', async () => {
+		const response = await call({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { balance: number; cost: number };
-
-		expect(result.balance).not.toBe(44);
-		expect(result.balance).toBe(12 - result.cost);
 	});
 
 	it('blocks an account with no generation access', async () => {

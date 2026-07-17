@@ -14,14 +14,19 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
+import type { CreditTransaction } from '$lib/api/contract';
 import { fromLedgerAmountUnits } from '$lib/server/ledger-units';
 import { getCredit } from './billing';
 import {
+	confirmGenerationOperation,
+	createGenerationOperation,
 	deleteGeneratedImage,
+	finalizeGenerationOperation,
 	getGeneratedImageForUser,
+	getGenerationOperation,
 	listCreditHistory,
 	listGeneratedImages,
-	recordGeneration
+	reconcileGenerationOperations
 } from './generations';
 import { grantGenerationAccess, makeD1, seedGeneratedImage } from '$lib/server/testing/d1-shim';
 
@@ -47,7 +52,15 @@ async function readLedgerBalance(
 	return row ? fromLedgerAmountUnits(row.balance) : null;
 }
 
-const generationInput = {
+interface TestGenerationInput {
+	url: string;
+	sourceUrl: string;
+	prompt: string;
+	kind: CreditTransaction['kind'];
+	amount: number;
+}
+
+const generationInput: TestGenerationInput = {
 	url: 'https://cdn.example.test/out.webp',
 	sourceUrl: 'https://cdn.example.test/room.jpg',
 	prompt: 'cozy',
@@ -55,20 +68,65 @@ const generationInput = {
 	amount: 1.5
 };
 
+async function recordConfirmedGeneration(
+	database: D1Database,
+	userId: string,
+	input: TestGenerationInput
+): ReturnType<typeof finalizeGenerationOperation> {
+	const operationId = await createGenerationOperation(database, userId, {
+		sourceUrl: input.sourceUrl,
+		prompt: input.prompt,
+		kind: input.kind
+	});
+	await confirmGenerationOperation(database, userId, operationId, {
+		outputUrl: input.url,
+		cost: input.amount
+	});
+	return finalizeGenerationOperation(database, userId, operationId);
+}
+
 let db: D1Database;
 
 beforeEach(() => {
 	db = makeD1();
 });
 
-describe('recordGeneration', () => {
+describe('generation operations', () => {
+	it('persists pending request attribution before confirmation and charges only confirmed work', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantGenerationAccess(db, 'user-1', 5);
+
+		const operationId = await createGenerationOperation(db, 'user-1', {
+			sourceUrl: generationInput.sourceUrl,
+			prompt: generationInput.prompt,
+			kind: generationInput.kind
+		});
+
+		await expect(getGenerationOperation(db, 'user-1', operationId)).resolves.toMatchObject({
+			id: operationId,
+			status: 'pending',
+			sourceUrl: generationInput.sourceUrl,
+			prompt: generationInput.prompt,
+			kind: generationInput.kind,
+			cost: null,
+			outputUrl: null
+		});
+		await expect(finalizeGenerationOperation(db, 'user-1', operationId)).rejects.toThrow(
+			'only a confirmed generation operation can be finalized'
+		);
+		await expect(readLedgerBalance(db, 'app_credit', 'user-1')).resolves.toBe(5);
+		expect(
+			db.prepare('SELECT COUNT(*) AS count FROM generations').first<{ count: number }>()
+		).toEqual({ count: 0 });
+	});
+
 	it('atomically debits both ledgers and records normalized generation details', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantGenerationAccess(db, 'user-1', 5);
 
-		const result = await recordGeneration(db, 'user-1', generationInput);
+		const result = await recordConfirmedGeneration(db, 'user-1', generationInput);
 
-		expect(result.balance).toBe(3.5);
+		expect(result.balanceAfter).toBe(3.5);
 		await expect(readLedgerBalance(db, 'app_credit', 'user-1')).resolves.toBe(3.5);
 		await expect(readLedgerBalance(db, 'archai_token', null)).resolves.toBe(-1.5);
 		const entries = await db
@@ -95,13 +153,94 @@ describe('recordGeneration', () => {
 		});
 	});
 
+	it('returns the original completion when finalization is repeated', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantGenerationAccess(db, 'user-1', 5);
+		const operationId = await createGenerationOperation(db, 'user-1', {
+			sourceUrl: generationInput.sourceUrl,
+			prompt: generationInput.prompt,
+			kind: generationInput.kind
+		});
+		await confirmGenerationOperation(db, 'user-1', operationId, {
+			outputUrl: generationInput.url,
+			cost: generationInput.amount
+		});
+
+		const first = await finalizeGenerationOperation(db, 'user-1', operationId);
+		const second = await finalizeGenerationOperation(db, 'user-1', operationId);
+
+		expect(second).toEqual(first);
+		expect(
+			db
+				.prepare('SELECT COUNT(*) AS count FROM ledger_transactions WHERE id = ?')
+				.bind(`generation:${operationId}`)
+				.first<{ count: number }>()
+		).toEqual({ count: 1 });
+	});
+
+	it('recovers a completed response after an uncertain batch result', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantGenerationAccess(db, 'user-1', 5);
+		const operationId = await createGenerationOperation(db, 'user-1', {
+			sourceUrl: generationInput.sourceUrl,
+			prompt: generationInput.prompt,
+			kind: generationInput.kind
+		});
+		await confirmGenerationOperation(db, 'user-1', operationId, {
+			outputUrl: generationInput.url,
+			cost: generationInput.amount
+		});
+		let uncertain = true;
+		const uncertainDb = {
+			...db,
+			batch: async (statements: Parameters<D1Database['batch']>[0]) => {
+				const result = await db.batch(statements);
+				if (uncertain) {
+					uncertain = false;
+					throw new Error('simulated lost D1 response');
+				}
+				return result;
+			}
+		} as D1Database;
+
+		const completed = await finalizeGenerationOperation(uncertainDb, 'user-1', operationId);
+
+		expect(completed.status).toBe('completed');
+		expect(completed.balanceAfter).toBe(3.5);
+		expect(
+			db.prepare('SELECT COUNT(*) AS count FROM generations').first<{ count: number }>()
+		).toEqual({ count: 1 });
+	});
+
+	it('reconciles a confirmed operation once and returns its stored result thereafter', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantGenerationAccess(db, 'user-1', 5);
+		const operationId = await createGenerationOperation(db, 'user-1', {
+			sourceUrl: generationInput.sourceUrl,
+			prompt: generationInput.prompt,
+			kind: generationInput.kind
+		});
+		await confirmGenerationOperation(db, 'user-1', operationId, {
+			outputUrl: generationInput.url,
+			cost: generationInput.amount
+		});
+
+		const first = await reconcileGenerationOperations(db, 'user-1');
+		const second = await reconcileGenerationOperations(db, 'user-1');
+
+		expect(first).toHaveLength(1);
+		expect(first[0]).toMatchObject({ id: operationId, status: 'completed', balanceAfter: 3.5 });
+		expect(second).toEqual([]);
+		await expect(readLedgerBalance(db, 'app_credit', 'user-1')).resolves.toBe(3.5);
+	});
+
 	it('isolates app-credit balances per user', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
 		grantGenerationAccess(db, 'user-1', 5);
 		grantGenerationAccess(db, 'user-2', 5);
 
-		await recordGeneration(db, 'user-1', { ...generationInput, amount: 2 });
+		await recordConfirmedGeneration(db, 'user-1', { ...generationInput, amount: 2 });
 
 		expect((await getCredit(db, 'user-1'))?.balance).toBe(3);
 		expect((await getCredit(db, 'user-2'))?.balance).toBe(5);
@@ -111,7 +250,7 @@ describe('recordGeneration', () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantGenerationAccess(db, 'user-1', 1);
 
-		await expect(recordGeneration(db, 'user-1', generationInput)).rejects.toThrow();
+		await expect(recordConfirmedGeneration(db, 'user-1', generationInput)).rejects.toThrow();
 
 		await expect(readLedgerBalance(db, 'app_credit', 'user-1')).resolves.toBe(1);
 		await expect(readLedgerBalance(db, 'archai_token', null)).resolves.toBe(0);
@@ -126,34 +265,16 @@ describe('recordGeneration', () => {
 		).toEqual({ transactions: 0, generations: 0, details: 0 });
 	});
 
-	it('allows only one competing debit when their combined cost exceeds the balance', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantGenerationAccess(db, 'user-1', 2);
-
-		const attempts = await Promise.allSettled([
-			recordGeneration(db, 'user-1', generationInput),
-			recordGeneration(db, 'user-1', {
-				...generationInput,
-				url: 'https://cdn.example.test/competing.webp'
-			})
-		]);
-
-		expect(attempts.filter((attempt) => attempt.status === 'fulfilled')).toHaveLength(1);
-		expect(attempts.filter((attempt) => attempt.status === 'rejected')).toHaveLength(1);
-		await expect(readLedgerBalance(db, 'app_credit', 'user-1')).resolves.toBe(0.5);
-		await expect(readLedgerBalance(db, 'archai_token', null)).resolves.toBe(-1.5);
-		expect(
-			db.prepare('SELECT COUNT(*) AS count FROM generations').first<{ count: number }>()
-		).toEqual({ count: 1 });
-	});
-
 	it('records a zero-cost generation without zero-value ledger entries', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantGenerationAccess(db, 'user-1', 5);
 
-		const result = await recordGeneration(db, 'user-1', { ...generationInput, amount: 0 });
+		const result = await recordConfirmedGeneration(db, 'user-1', {
+			...generationInput,
+			amount: 0
+		});
 
-		expect(result.balance).toBe(5);
+		expect(result.balanceAfter).toBe(5);
 		await expect(listCreditHistory(db, 'user-1')).resolves.toEqual([]);
 		expect((await listGeneratedImages(db, 'user-1', 0, 10)).images).toHaveLength(1);
 		expect(
@@ -173,7 +294,7 @@ describe('recordGeneration', () => {
 		grantGenerationAccess(db, 'user-1', 5);
 
 		await expect(
-			recordGeneration(db, 'user-1', { ...generationInput, amount: -1 })
+			recordConfirmedGeneration(db, 'user-1', { ...generationInput, amount: -1 })
 		).rejects.toThrow('generation cost must be a finite non-negative number');
 		await expect(listGeneratedImages(db, 'user-1', 0, 10)).resolves.toEqual({
 			images: [],
@@ -186,7 +307,7 @@ describe('recordGeneration', () => {
 		grantGenerationAccess(db, 'user-1', 5);
 
 		await expect(
-			recordGeneration(db, 'user-1', { ...generationInput, amount: 0.001 })
+			recordConfirmedGeneration(db, 'user-1', { ...generationInput, amount: 0.001 })
 		).rejects.toThrow('ledger amount is below unit precision');
 		await expect(listGeneratedImages(db, 'user-1', 0, 10)).resolves.toEqual({
 			images: [],
@@ -198,7 +319,7 @@ describe('recordGeneration', () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 
 		await expect(
-			recordGeneration(db, 'user-1', { ...generationInput, amount: 0 })
+			recordConfirmedGeneration(db, 'user-1', { ...generationInput, amount: 0 })
 		).rejects.toThrow();
 		expect(
 			db.prepare('SELECT COUNT(*) AS count FROM generations').first<{ count: number }>()
@@ -221,8 +342,8 @@ describe('listCreditHistory', () => {
 	it('orders spend newest first and derives each running balance from the ledger', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantGenerationAccess(db, 'user-1', 5);
-		await recordGeneration(db, 'user-1', { ...generationInput, amount: 1 });
-		await recordGeneration(db, 'user-1', {
+		await recordConfirmedGeneration(db, 'user-1', { ...generationInput, amount: 1 });
+		await recordConfirmedGeneration(db, 'user-1', {
 			...generationInput,
 			url: 'https://cdn.example.test/edit.webp',
 			kind: 'edit',

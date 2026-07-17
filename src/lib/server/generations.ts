@@ -49,41 +49,215 @@ function toGeneratedImage(row: GenerationRow): GeneratedImage {
 	};
 }
 
-interface AccountBalanceRow {
-	balance: number;
-	updated_at: number;
-}
-
-export interface AccountBalance {
-	balance: number;
-	updatedAt: number;
-}
-
-function toAccountBalance(row: AccountBalanceRow): AccountBalance {
-	return { balance: fromLedgerAmountUnits(row.balance), updatedAt: row.updated_at };
-}
-
-export interface RecordGenerationInput {
-	url: string;
+export interface CreateGenerationOperationInput {
 	sourceUrl: string;
 	prompt: string;
 	kind: CreditTransaction['kind'];
-	amount: number;
 }
 
-export async function recordGeneration(
+interface GenerationOperationRow {
+	id: string;
+	user_id: string;
+	input_url: string;
+	prompt: string;
+	kind: CreditTransaction['kind'];
+	cost_units: number | null;
+	output_url: string | null;
+	balance_after_units: number | null;
+	status: 'pending' | 'confirmed' | 'completed' | 'failed';
+	created_at: number;
+	confirmed_at: number | null;
+	completed_at: number | null;
+	failed_at: number | null;
+}
+
+export interface GenerationOperation {
+	id: string;
+	userId: string;
+	sourceUrl: string;
+	prompt: string;
+	kind: CreditTransaction['kind'];
+	cost: number | null;
+	outputUrl: string | null;
+	balanceAfter: number | null;
+	status: GenerationOperationRow['status'];
+	createdAt: number;
+	confirmedAt: number | null;
+	completedAt: number | null;
+	failedAt: number | null;
+}
+
+export interface CompletedGenerationOperation extends GenerationOperation {
+	cost: number;
+	outputUrl: string;
+	balanceAfter: number;
+	status: 'completed';
+	confirmedAt: number;
+	completedAt: number;
+}
+
+function toGenerationOperation(row: GenerationOperationRow): GenerationOperation {
+	return {
+		id: row.id,
+		userId: row.user_id,
+		sourceUrl: row.input_url,
+		prompt: row.prompt,
+		kind: row.kind,
+		cost: row.cost_units === null ? null : fromLedgerAmountUnits(row.cost_units),
+		outputUrl: row.output_url,
+		balanceAfter:
+			row.balance_after_units === null ? null : fromLedgerAmountUnits(row.balance_after_units),
+		status: row.status,
+		createdAt: row.created_at,
+		confirmedAt: row.confirmed_at,
+		completedAt: row.completed_at,
+		failedAt: row.failed_at
+	};
+}
+
+function toCompletedGenerationOperation(
+	row: GenerationOperationRow
+): CompletedGenerationOperation | null {
+	const operation = toGenerationOperation(row);
+	if (
+		operation.status !== 'completed' ||
+		operation.cost === null ||
+		operation.outputUrl === null ||
+		operation.balanceAfter === null ||
+		operation.confirmedAt === null ||
+		operation.completedAt === null
+	) {
+		return null;
+	}
+	return operation as CompletedGenerationOperation;
+}
+
+async function readGenerationOperationRow(
 	db: D1Database,
 	userId: string,
-	input: RecordGenerationInput
-): Promise<AccountBalance> {
-	if (!Number.isFinite(input.amount) || input.amount < 0) {
+	operationId: string
+): Promise<GenerationOperationRow | null> {
+	return db
+		.prepare('SELECT * FROM generation_operations WHERE id = ? AND user_id = ?')
+		.bind(operationId, userId)
+		.first<GenerationOperationRow>();
+}
+
+export async function getGenerationOperation(
+	db: D1Database,
+	userId: string,
+	operationId: string
+): Promise<GenerationOperation | null> {
+	const row = await readGenerationOperationRow(db, userId, operationId);
+	return row ? toGenerationOperation(row) : null;
+}
+
+export async function createGenerationOperation(
+	db: D1Database,
+	userId: string,
+	input: CreateGenerationOperationInput
+): Promise<string> {
+	const operationId = crypto.randomUUID();
+	const createdAt = Date.now();
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		try {
+			await db
+				.prepare(
+					'INSERT INTO generation_operations ' +
+						'(id, user_id, input_url, prompt, kind, status, created_at) ' +
+						"VALUES (?, ?, ?, ?, ?, 'pending', ?)"
+				)
+				.bind(operationId, userId, input.sourceUrl, input.prompt, input.kind, createdAt)
+				.run();
+			return operationId;
+		} catch (error) {
+			const stored = await readGenerationOperationRow(db, userId, operationId).catch(() => null);
+			if (stored?.status === 'pending') return operationId;
+			if (attempt === 1) throw error;
+		}
+	}
+	throw new Error('generation operation could not be created');
+}
+
+export async function failGenerationOperation(
+	db: D1Database,
+	userId: string,
+	operationId: string
+): Promise<void> {
+	await db
+		.prepare(
+			"UPDATE generation_operations SET status = 'failed', failed_at = ? " +
+				"WHERE id = ? AND user_id = ? AND status = 'pending'"
+		)
+		.bind(Date.now(), operationId, userId)
+		.run();
+	const stored = await readGenerationOperationRow(db, userId, operationId);
+	if (stored?.status !== 'failed') {
+		throw new Error('generation operation could not be marked failed');
+	}
+}
+
+export async function confirmGenerationOperation(
+	db: D1Database,
+	userId: string,
+	operationId: string,
+	result: { outputUrl: string; cost: number }
+): Promise<void> {
+	if (!Number.isFinite(result.cost) || result.cost < 0) {
 		throw new Error('generation cost must be a finite non-negative number');
 	}
-	const amountUnits = toLedgerAmountUnits(input.amount);
+	const costUnits = toLedgerAmountUnits(result.cost);
+	const confirmedAt = Date.now();
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		try {
+			await db
+				.prepare(
+					"UPDATE generation_operations SET status = 'confirmed', cost_units = ?, " +
+						'output_url = ?, confirmed_at = ? ' +
+						"WHERE id = ? AND user_id = ? AND status = 'pending'"
+				)
+				.bind(costUnits, result.outputUrl, confirmedAt, operationId, userId)
+				.run();
+		} catch (error) {
+			const stored = await readGenerationOperationRow(db, userId, operationId).catch(() => null);
+			if (
+				(stored?.status === 'confirmed' || stored?.status === 'completed') &&
+				stored.cost_units === costUnits &&
+				stored.output_url === result.outputUrl
+			) {
+				return;
+			}
+			if (attempt === 1) throw error;
+			continue;
+		}
 
-	const generationId = crypto.randomUUID();
-	const transactionId = `generation:${generationId}`;
-	const now = Date.now();
+		const stored = await readGenerationOperationRow(db, userId, operationId);
+		if (
+			(stored?.status === 'confirmed' || stored?.status === 'completed') &&
+			stored.cost_units === costUnits &&
+			stored.output_url === result.outputUrl
+		) {
+			return;
+		}
+		throw new Error('generation operation confirmation was not persisted');
+	}
+}
+
+async function finalizeGenerationOperationOnce(
+	db: D1Database,
+	row: GenerationOperationRow
+): Promise<CompletedGenerationOperation> {
+	if (
+		row.status !== 'confirmed' ||
+		row.cost_units === null ||
+		row.output_url === null ||
+		row.confirmed_at === null
+	) {
+		throw new Error('only a confirmed generation operation can be finalized');
+	}
+
+	const transactionId = `generation:${row.id}`;
+	const completedAt = Date.now();
 	const statements: D1PreparedStatement[] = [
 		db
 			.prepare(
@@ -91,10 +265,10 @@ export async function recordGeneration(
 					"WHERE EXISTS (SELECT 1 FROM ledger_accounts WHERE user_id = ? AND asset = 'app_credit') " +
 					"AND EXISTS (SELECT 1 FROM ledger_accounts WHERE user_id IS NULL AND asset = 'archai_token')"
 			)
-			.bind(transactionId, now, userId)
+			.bind(transactionId, row.confirmed_at, row.user_id)
 	];
 
-	if (amountUnits > 0) {
+	if (row.cost_units > 0) {
 		statements.push(
 			db
 				.prepare(
@@ -104,13 +278,13 @@ export async function recordGeneration(
 						"WHERE account.user_id = ? AND account.asset = 'app_credit' " +
 						'AND balance.balance >= ?), ?)'
 				)
-				.bind(transactionId, userId, amountUnits, -amountUnits),
+				.bind(transactionId, row.user_id, row.cost_units, -row.cost_units),
 			db
 				.prepare(
 					'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
 						"VALUES (?, (SELECT id FROM ledger_accounts WHERE user_id IS NULL AND asset = 'archai_token'), ?)"
 				)
-				.bind(transactionId, -amountUnits)
+				.bind(transactionId, -row.cost_units)
 		);
 	}
 
@@ -122,26 +296,76 @@ export async function recordGeneration(
 					'(id, user_id, prompt, kind, ledger_transaction_id, created_at) ' +
 					'VALUES (?, ?, ?, ?, ?, ?)'
 			)
-			.bind(generationId, userId, input.prompt, input.kind, transactionId, now),
+			.bind(row.id, row.user_id, row.prompt, row.kind, transactionId, row.created_at),
 		db
 			.prepare(
 				'INSERT INTO image_generation_details (generation_id, output_url, input_url) ' +
 					'VALUES (?, ?, ?)'
 			)
-			.bind(generationId, input.url, input.sourceUrl),
+			.bind(row.id, row.output_url, row.input_url),
 		db
 			.prepare(
-				'SELECT balance.balance, balance.updated_at FROM ledger_accounts account ' +
+				"UPDATE generation_operations SET status = 'completed', completed_at = ?, " +
+					'balance_after_units = (SELECT balance.balance FROM ledger_accounts account ' +
 					'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
-					"WHERE account.user_id = ? AND account.asset = 'app_credit'"
+					"WHERE account.user_id = ? AND account.asset = 'app_credit') " +
+					"WHERE id = ? AND user_id = ? AND status = 'confirmed'"
 			)
-			.bind(userId)
+			.bind(completedAt, row.user_id, row.id, row.user_id),
+		db
+			.prepare('SELECT * FROM generation_operations WHERE id = ? AND user_id = ?')
+			.bind(row.id, row.user_id)
 	);
 
-	const results = await db.batch<AccountBalanceRow>(statements);
-	const row = results.at(-1)?.results[0];
-	if (!row) throw new Error('credit deduction failed: no app credit ledger account for user');
-	return toAccountBalance(row);
+	const results = await db.batch<GenerationOperationRow>(statements);
+	const completed = results.at(-1)?.results[0];
+	const operation = completed ? toCompletedGenerationOperation(completed) : null;
+	if (!operation) throw new Error('generation operation finalization did not complete');
+	return operation;
+}
+
+export async function finalizeGenerationOperation(
+	db: D1Database,
+	userId: string,
+	operationId: string
+): Promise<CompletedGenerationOperation> {
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		const row = await readGenerationOperationRow(db, userId, operationId);
+		if (!row) throw new Error('generation operation not found');
+		const completed = toCompletedGenerationOperation(row);
+		if (completed) return completed;
+		if (row.status !== 'confirmed') {
+			throw new Error('only a confirmed generation operation can be finalized');
+		}
+
+		try {
+			return await finalizeGenerationOperationOnce(db, row);
+		} catch (error) {
+			const stored = await readGenerationOperationRow(db, userId, operationId).catch(() => null);
+			const recovered = stored ? toCompletedGenerationOperation(stored) : null;
+			if (recovered) return recovered;
+			if (attempt === 1 || stored?.status !== 'confirmed') throw error;
+		}
+	}
+	throw new Error('generation operation finalization failed');
+}
+
+export async function reconcileGenerationOperations(
+	db: D1Database,
+	userId: string
+): Promise<CompletedGenerationOperation[]> {
+	const result = await db
+		.prepare(
+			"SELECT id FROM generation_operations WHERE user_id = ? AND status = 'confirmed' " +
+				'ORDER BY confirmed_at, id'
+		)
+		.bind(userId)
+		.all<{ id: string }>();
+	const completed: CompletedGenerationOperation[] = [];
+	for (const row of result.results ?? []) {
+		completed.push(await finalizeGenerationOperation(db, userId, row.id));
+	}
+	return completed;
 }
 
 export async function getGeneratedImageForUser(
@@ -213,7 +437,7 @@ function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
 	return {
 		pubkey: row.pubkey,
 		balance: fromLedgerAmountUnits(row.balance),
-		totalDeposit: row.total_deposit,
+		totalDeposit: fromLedgerAmountUnits(row.total_deposit),
 		lastDepositAt: row.last_deposit_at,
 		generationCount: row.generation_count,
 		totalSpend: fromLedgerAmountUnits(row.total_spend),
@@ -242,8 +466,12 @@ export async function listUserUsage(
 				"AND entry.account_id = (SELECT id FROM ledger_accounts WHERE asset = 'archai_token' AND user_id IS NULL) " +
 				'GROUP BY generation.user_id' +
 				'), deposit_usage AS (' +
-				'SELECT user_id, SUM(credits_awarded) AS total_deposit, MAX(paid_at) AS last_deposit_at ' +
-				"FROM deposits WHERE status = 'paid' GROUP BY user_id" +
+				'SELECT deposit.user_id, SUM(entry.amount) AS total_deposit, ' +
+				'MAX(deposit.paid_at) AS last_deposit_at FROM deposits deposit ' +
+				'JOIN ledger_entries entry ON entry.transaction_id = deposit.ledger_transaction_id ' +
+				'JOIN ledger_accounts account ON account.id = entry.account_id ' +
+				"AND account.asset = 'app_credit' AND account.user_id = deposit.user_id " +
+				"WHERE deposit.status = 'paid' GROUP BY deposit.user_id" +
 				') SELECT user.pubkey, COALESCE(account.balance, 0) AS balance, ' +
 				'COALESCE(deposit.total_deposit, 0) AS total_deposit, deposit.last_deposit_at, ' +
 				'COALESCE(generation.generation_count, 0) AS generation_count, ' +

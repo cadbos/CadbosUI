@@ -15,7 +15,11 @@
 import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { MeResponse, SessionUser } from '$lib/api/contract';
-import { recordGeneration } from '$lib/server/generations';
+import {
+	confirmGenerationOperation,
+	createGenerationOperation,
+	finalizeGenerationOperation
+} from '$lib/server/generations';
 import { grantGenerationAccess, makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { GET } from './+server';
@@ -74,13 +78,16 @@ describe('GET /auth/me — generation access control', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		grantGenerationAccess(db, 'user-1', 5);
-		await recordGeneration(db, 'user-1', {
-			url: 'https://cdn.example.test/out.webp',
+		const operationId = await createGenerationOperation(db, 'user-1', {
 			sourceUrl: 'https://cdn.example.test/room.jpg',
 			prompt: 'cozy',
-			kind: 'render',
-			amount: 2
+			kind: 'render'
 		});
+		await confirmGenerationOperation(db, 'user-1', operationId, {
+			outputUrl: 'https://cdn.example.test/out.webp',
+			cost: 2
+		});
+		await finalizeGenerationOperation(db, 'user-1', operationId);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
 		const result = (await response.json()) as MeResponse;

@@ -19,36 +19,20 @@ import { toLedgerAmountUnits } from '$lib/server/ledger-units';
 import { grantGenerationAccess, makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
-// Lets a single test force recordGeneration and/or the getCredit fallback to
-// reject, to prove the response never falls back to archAI's raw (shared) balance.
-const billingMock = vi.hoisted(() => ({ failNextGetCredit: false }));
-const generationsMock = vi.hoisted(() => ({ failNextRecordGeneration: false }));
-
-vi.mock('$lib/server/billing', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/billing')>();
-	return {
-		...actual,
-		getCredit: vi.fn((...args: Parameters<typeof actual.getCredit>) => {
-			if (billingMock.failNextGetCredit) {
-				billingMock.failNextGetCredit = false;
-				return Promise.reject(new Error('simulated D1 failure'));
-			}
-			return actual.getCredit(...args);
-		})
-	};
-});
+const generationsMock = vi.hoisted(() => ({ failFinalization: false }));
 
 vi.mock('$lib/server/generations', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/generations')>();
 	return {
 		...actual,
-		recordGeneration: vi.fn((...args: Parameters<typeof actual.recordGeneration>) => {
-			if (generationsMock.failNextRecordGeneration) {
-				generationsMock.failNextRecordGeneration = false;
-				return Promise.reject(new Error('simulated D1 failure'));
+		finalizeGenerationOperation: vi.fn(
+			(...args: Parameters<typeof actual.finalizeGenerationOperation>) => {
+				if (generationsMock.failFinalization) {
+					return Promise.reject(new Error('simulated D1 failure'));
+				}
+				return actual.finalizeGenerationOperation(...args);
 			}
-			return actual.recordGeneration(...args);
-		})
+		)
 	};
 });
 
@@ -151,11 +135,11 @@ describe('POST /api/render/exterior — billing', () => {
 		});
 	});
 
-	it('still returns the completed, already-charged render if recordGeneration fails', async () => {
+	it('returns 500 and retains a confirmed operation when finalization keeps failing', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantGenerationAccess(db, 'user-1', 12);
-		generationsMock.failNextRecordGeneration = true;
+		generationsMock.failFinalization = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 		try {
@@ -165,29 +149,21 @@ describe('POST /api/render/exterior — billing', () => {
 				body
 			);
 
-			expect(response.status).toBe(200);
-			const result = (await response.json()) as { outputUrl: string };
-			expect(result.outputUrl).toMatch(/^https:\/\//);
+			expect(response.status).toBe(500);
 			expect(consoleError).toHaveBeenCalledWith(
-				'recordGeneration failed after a successful exterior render:',
+				'exterior render operation failed:',
 				expect.any(Error)
 			);
+			expect(
+				db
+					.prepare('SELECT status FROM generation_operations WHERE user_id = ?')
+					.bind('user-1')
+					.first<{ status: string }>()
+			).toEqual({ status: 'confirmed' });
 		} finally {
+			generationsMock.failFinalization = false;
 			consoleError.mockRestore();
 		}
-	});
-
-	it('never falls back to the raw archAI balance if recordGeneration and the getCredit fallback both fail', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantGenerationAccess(db, 'user-1', 12);
-		generationsMock.failNextRecordGeneration = true;
-		billingMock.failNextGetCredit = true;
-
-		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(200);
-		const result = (await response.json()) as { balance: number };
-		expect(result.balance).toBe(12);
 	});
 
 	it('bypasses balance recording entirely for the dev-only demo session', async () => {

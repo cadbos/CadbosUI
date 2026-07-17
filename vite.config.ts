@@ -35,7 +35,15 @@ export default defineConfig({
 
 			// Deployed to Cloudflare Workers (Static Assets); see wrangler.jsonc.
 			adapter: adapter({
-				platformProxy: { persist: process.env.PLAYWRIGHT_TEST === '1' ? false : undefined }
+				platformProxy: {
+					persist:
+						process.env.PLAYWRIGHT_PAID_FLOW === '1'
+							? { path: '/tmp/cadbos-paid-flow-d1/v3' }
+							: process.env.PLAYWRIGHT_TEST === '1'
+								? false
+								: undefined,
+					remoteBindings: process.env.PLAYWRIGHT_PAID_FLOW === '1' ? false : undefined
+				}
 			}),
 
 			csp: {

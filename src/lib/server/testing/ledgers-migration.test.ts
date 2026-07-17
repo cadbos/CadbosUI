@@ -266,4 +266,71 @@ describe('0007_ledgers migration', () => {
 				.get('legacy-user')
 		).toEqual({ enabled: 1, balance: 1200 });
 	});
+
+	it('enforces generation operation identities, states, transitions, and immutability', () => {
+		const db = new DatabaseSync(':memory:');
+		db.exec('PRAGMA foreign_keys = ON');
+		for (let index = 1; index <= 7; index += 1) {
+			const name = `${String(index).padStart(4, '0')}_${['auth', 'balance', 'generated_images', 'credits', 'generation_access', 'generations', 'ledgers'][index - 1]}.sql`;
+			db.exec(readMigration(name));
+		}
+		db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)').run(
+			'user-1',
+			'pubkey-1',
+			1000
+		);
+
+		expect(() =>
+			db
+				.prepare(
+					'INSERT INTO generation_operations ' +
+						'(id, user_id, input_url, prompt, kind, status, created_at) ' +
+						"VALUES ('not-a-uuid', 'user-1', 'https://example.test/in.jpg', 'cozy', 'render', 'pending', 2000)"
+				)
+				.run()
+		).toThrow();
+
+		const operationId = '00000000-0000-4000-8000-000000000001';
+		db.prepare(
+			'INSERT INTO generation_operations ' +
+				'(id, user_id, input_url, prompt, kind, status, created_at) ' +
+				"VALUES (?, 'user-1', 'https://example.test/in.jpg', 'cozy', 'render', 'pending', 2000)"
+		).run(operationId);
+
+		expect(() =>
+			db
+				.prepare(
+					"UPDATE generation_operations SET status = 'completed', cost_units = 100, " +
+						"output_url = 'https://example.test/out.webp', confirmed_at = 3000, " +
+						'balance_after_units = 400, completed_at = 3001 WHERE id = ?'
+				)
+				.run(operationId)
+		).toThrow('invalid generation operation transition');
+
+		db.prepare(
+			"UPDATE generation_operations SET status = 'confirmed', cost_units = 100, " +
+				"output_url = 'https://example.test/out.webp', confirmed_at = 3000 WHERE id = ?"
+		).run(operationId);
+		expect(() =>
+			db
+				.prepare(
+					"UPDATE generation_operations SET status = 'failed', cost_units = NULL, " +
+						'output_url = NULL, confirmed_at = NULL, failed_at = 3001 WHERE id = ?'
+				)
+				.run(operationId)
+		).toThrow('invalid generation operation transition');
+
+		db.prepare(
+			"UPDATE generation_operations SET status = 'completed', balance_after_units = 400, " +
+				'completed_at = 4000 WHERE id = ?'
+		).run(operationId);
+		expect(() =>
+			db
+				.prepare("UPDATE generation_operations SET prompt = 'changed' WHERE id = ?")
+				.run(operationId)
+		).toThrow('invalid generation operation transition');
+		expect(() =>
+			db.prepare('DELETE FROM generation_operations WHERE id = ?').run(operationId)
+		).toThrow('generation operations are immutable');
+	});
 });

@@ -15,13 +15,12 @@
 import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RenderResponse } from '$lib/api/contract';
 import { apiError, parseBody, renderRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
-import { assertGenerationAllowed, getCredit, getUserIdByPubkey } from '$lib/server/billing';
+import { getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { renderExterior } from '$lib/server/generation';
-import { recordGeneration } from '$lib/server/generations';
+import { runPaidGeneration } from '$lib/server/paid-generation';
 
 // Session is enforced centrally in hooks.server.ts (guardedPaths). Generation
 // itself is restricted further, by design: only accounts an admin has
@@ -43,62 +42,28 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	// a normal case — fail closed rather than charge a call we can't attribute.
 	if (db && !userId) return apiError(500, 'account_error', 'Account record not found');
 
-	// The account's own balance right before this call — kept as the final,
-	// definitely-safe fallback if both recordGeneration and its own getCredit
-	// fallback fail below, so the response never falls through to
-	// renderExterior's raw (shared) archAI balance.
-	let precheckBalance: number | undefined;
-	if (db && userId) {
-		try {
-			const check = await assertGenerationAllowed(db, userId);
-			if (!check.allowed) {
-				return check.reason === 'not_approved'
+	try {
+		if (db && userId) {
+			const result = await runPaidGeneration(
+				db,
+				userId,
+				{
+					sourceUrl: parsed.data.image,
+					prompt: parsed.data.prompt,
+					kind: 'render'
+				},
+				() => renderExterior(platform, parsed.data)
+			);
+			if (!result.allowed) {
+				return result.reason === 'not_approved'
 					? apiError(403, 'generation_restricted', 'Generation is limited to approved accounts')
 					: apiError(402, 'insufficient_credit', 'Test balance exhausted');
 			}
-			precheckBalance = check.balance;
-		} catch (err) {
-			console.error('credit pre-check failed:', err);
-			return apiError(500, 'render_failed', 'Render failed');
+			return json(result.response);
 		}
-	}
-
-	let result: RenderResponse;
-	try {
-		result = await renderExterior(platform, parsed.data);
+		return json(await renderExterior(platform, parsed.data));
 	} catch (err) {
-		// generation.ts already sanitizes/logs the detail; this route is the last
-		// line of defense (NFR-6/8) — never forward err.message to the client.
-		console.error(err);
+		console.error('exterior render operation failed:', err);
 		return apiError(500, 'render_failed', 'Render failed');
 	}
-
-	// The render already succeeded and archAI already charged for it — a failure to
-	// record the ledger transaction is a bookkeeping gap, not a reason to
-	// make the user think a completed, paid render failed.
-	if (db && userId) {
-		try {
-			const credit = await recordGeneration(db, userId, {
-				url: result.outputUrl,
-				sourceUrl: parsed.data.image,
-				prompt: parsed.data.prompt,
-				kind: 'render',
-				amount: result.cost
-			});
-			result = { ...result, balance: credit.balance };
-		} catch (err) {
-			console.error('recordGeneration failed after a successful exterior render:', err);
-			// Even on failure, never fall through to archAI's raw (shared) balance.
-			// Prefer a fresh read; if that also fails, fall back to the balance we
-			// already had from the precheck — still an approved-account balance,
-			// never the shared one.
-			const fallback = await getCredit(db, userId).catch((err) => {
-				console.error('getCredit fallback failed after a successful exterior render:', err);
-				return null;
-			});
-			result = { ...result, balance: fallback?.balance ?? precheckBalance ?? 0 };
-		}
-	}
-
-	return json(result);
 };

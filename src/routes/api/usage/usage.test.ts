@@ -67,7 +67,8 @@ function seedDeposit(
 	userId: string,
 	creditsAwarded: number,
 	createdAt: number,
-	status: 'pending' | 'paid'
+	status: 'pending' | 'paid',
+	ledgerCredits = creditsAwarded
 ): void {
 	const packageId = `package:${id}`;
 	const transactionId = `deposit:${id}`;
@@ -86,7 +87,7 @@ function seedDeposit(
 			'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
 				"VALUES (?, (SELECT id FROM ledger_accounts WHERE user_id = ? AND asset = 'app_credit'), ?)"
 		)
-			.bind(transactionId, userId, toLedgerAmountUnits(creditsAwarded))
+			.bind(transactionId, userId, toLedgerAmountUnits(ledgerCredits))
 			.run();
 		db.prepare(
 			'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
@@ -224,7 +225,7 @@ describe('GET /api/usage', () => {
 		seedUser(db, 'user-1', 'pubkey-1', 2000);
 		seedUser(db, 'user-2', 'pubkey-2', 1000);
 		grantGenerationAccess(db, 'user-1', 8.5, 1, 4000);
-		seedDeposit(db, 'deposit-1', 'user-1', 3, 4500, 'paid');
+		seedDeposit(db, 'deposit-1', 'user-1', 3, 4500, 'paid', 4.25);
 		seedDeposit(db, 'deposit-2', 'user-1', 99, 4700, 'pending');
 		seedGeneration(db, 'generation-1', 'user-1', 1.25, 5000);
 		seedGeneration(db, 'generation-2', 'user-1', 2.75, 6000);
@@ -248,8 +249,8 @@ describe('GET /api/usage', () => {
 			},
 			{
 				pubkey: 'pubkey-1',
-				balance: 7.5,
-				totalDeposit: 3,
+				balance: 8.75,
+				totalDeposit: 4.25,
 				lastDepositAt: 4500,
 				generationCount: 3,
 				totalSpend: 4,

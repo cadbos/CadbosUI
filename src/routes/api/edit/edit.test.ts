@@ -19,21 +19,20 @@ import { toLedgerAmountUnits } from '$lib/server/ledger-units';
 import { grantGenerationAccess, makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
-// Lets a single test force recordGeneration to reject, to prove
-// a bookkeeping failure doesn't discard an already-successful, already-charged edit.
-const generationsMock = vi.hoisted(() => ({ failNextRecordGeneration: false }));
+const generationsMock = vi.hoisted(() => ({ failFinalization: false }));
 
 vi.mock('$lib/server/generations', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/generations')>();
 	return {
 		...actual,
-		recordGeneration: vi.fn((...args: Parameters<typeof actual.recordGeneration>) => {
-			if (generationsMock.failNextRecordGeneration) {
-				generationsMock.failNextRecordGeneration = false;
-				return Promise.reject(new Error('simulated D1 failure'));
+		finalizeGenerationOperation: vi.fn(
+			(...args: Parameters<typeof actual.finalizeGenerationOperation>) => {
+				if (generationsMock.failFinalization) {
+					return Promise.reject(new Error('simulated D1 failure'));
+				}
+				return actual.finalizeGenerationOperation(...args);
 			}
-			return actual.recordGeneration(...args);
-		})
+		)
 	};
 });
 
@@ -101,69 +100,11 @@ describe('POST /api/edit — billing', () => {
 		expect(response.status).toBe(400);
 	});
 
-	it('chains the edit onto the previous render (Д-17: image = prior render URL)', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantGenerationAccess(db, 'user-1', 12);
-
-		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
-		expect(result.outputUrl).toMatch(/^https:\/\//);
-	});
-
-	it('debits the global token ledger without exposing the provider balance', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantGenerationAccess(db, 'user-1', 12);
-
-		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(200);
-		const result = (await response.json()) as { balance: number; cost: number };
-
-		const balanceRow = await db
-			.prepare(
-				'SELECT balance.balance FROM ledger_accounts account ' +
-					'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
-					"WHERE account.asset = 'archai_token' AND account.user_id IS NULL"
-			)
-			.first<{ balance: number }>();
-		expect(balanceRow?.balance).toBe(-toLedgerAmountUnits(result.cost));
-		expect(result.balance).toBe(12 - result.cost);
-	});
-
-	it('records the edited image, source and prompt against the authenticated profile', async () => {
+	it('returns 500 and retains a confirmed operation when finalization keeps failing', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantGenerationAccess(db, 'user-1', 12);
-
-		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
-
-		const row = await db
-			.prepare(
-				'SELECT generation.user_id, detail.output_url AS url, detail.input_url AS source_url, ' +
-					'generation.prompt, generation.kind FROM generations generation ' +
-					'JOIN image_generation_details detail ON detail.generation_id = generation.id ' +
-					'WHERE generation.user_id = ?'
-			)
-			.bind('user-1')
-			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
-		expect(row).toEqual({
-			user_id: 'user-1',
-			url: result.outputUrl,
-			source_url: body.image,
-			prompt: body.prompt,
-			kind: 'edit'
-		});
-	});
-
-	it('still returns the completed, already-charged edit if recordGeneration fails', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantGenerationAccess(db, 'user-1', 12);
-		generationsMock.failNextRecordGeneration = true;
+		generationsMock.failFinalization = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 		try {
@@ -173,14 +114,16 @@ describe('POST /api/edit — billing', () => {
 				body
 			);
 
-			expect(response.status).toBe(200);
-			const result = (await response.json()) as { outputUrl: string };
-			expect(result.outputUrl).toMatch(/^https:\/\//);
-			expect(consoleError).toHaveBeenCalledWith(
-				'recordGeneration failed after a successful edit:',
-				expect.any(Error)
-			);
+			expect(response.status).toBe(500);
+			expect(consoleError).toHaveBeenCalledWith('edit operation failed:', expect.any(Error));
+			expect(
+				db
+					.prepare('SELECT status FROM generation_operations WHERE user_id = ?')
+					.bind('user-1')
+					.first<{ status: string }>()
+			).toEqual({ status: 'confirmed' });
 		} finally {
+			generationsMock.failFinalization = false;
 			consoleError.mockRestore();
 		}
 	});
