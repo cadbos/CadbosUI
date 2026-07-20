@@ -35,7 +35,10 @@ export {
 	type ComfyWorkflowNode
 } from '$lib/server/comfyui/types';
 export {
+	getObjectReplacementResult,
+	queueObjectReplacement,
 	runObjectReplacement,
 	type ObjectReplacementImage,
-	type ObjectReplacementRequest
+	type ObjectReplacementRequest,
+	type QueueObjectReplacementRequest
 } from '$lib/server/comfyui/object-replacement';

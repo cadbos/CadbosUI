@@ -85,6 +85,7 @@ export const en = {
 	'auth.credit.entryRender': 'Create · {date}: −{amount} → {balance}',
 	'auth.credit.entryEdit': 'Edit · {date}: −{amount} → {balance}',
 	'auth.credit.entryStyleTransfer': 'Style transfer · {date}: −{amount} → {balance}',
+	'auth.credit.entryObjectReplacement': 'Object replacement · {date}: −{amount} → {balance}',
 	'auth.credit.entryUpscale': 'Upscale · {date}: −{amount} → {balance}',
 	'upload.label': 'Room photo',
 	'upload.labelExterior': 'Building photo',

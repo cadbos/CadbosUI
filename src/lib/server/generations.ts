@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-// One row per paid render/edit (migrations/0006): the resulting image, the
+// One row per paid generation (migrations/0006): the resulting image, the
 // source image and prompt it was generated from, and the credit ledger entry
 // for that call — all written atomically, so there's no way for the image
 // record and the deduction to fall out of sync with each other.

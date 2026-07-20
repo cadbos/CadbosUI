@@ -32,6 +32,8 @@ declare global {
 				DB: D1Database;
 				ARCHAI_API_KEY: string;
 				ARCHAI_API_URL: string;
+				COMFYUI_BASE_URL?: string;
+				OBJECT_REPLACEMENT_COST?: string;
 				UPLOADS_BUCKET: R2Bucket;
 				UPLOADS_PUBLIC_URL?: string;
 				// Comma-separated Nostr pubkeys (hex) subject to the local metered

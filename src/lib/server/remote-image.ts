@@ -38,6 +38,11 @@ export class RemoteImageImportError extends Error {
 	}
 }
 
+export interface DownloadedRemoteImage {
+	bytes: ArrayBuffer;
+	mime: ImageMime;
+}
+
 function isIpLiteral(hostname: string): boolean {
 	return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) || hostname.includes(':');
 }
@@ -189,6 +194,15 @@ export async function importRemoteImage(
 	applicationOrigin: string,
 	fetcher: typeof fetch = globalThis.fetch
 ): Promise<{ url: string; mime: ImageMime; size: number; dimensions?: [number, number] }> {
+	const { bytes, mime } = await downloadRemoteImage(value, applicationOrigin, fetcher);
+	return uploadImageBytes(platform, bytes, mime);
+}
+
+export async function downloadRemoteImage(
+	value: string,
+	applicationOrigin: string,
+	fetcher: typeof fetch = globalThis.fetch
+): Promise<DownloadedRemoteImage> {
 	const url = validateRemoteImageUrl(value, applicationOrigin);
 	const response = await fetchRemoteImage(url, applicationOrigin, fetcher);
 	const mime = normalizeImageContentType(response.headers.get('content-type'));
@@ -198,5 +212,5 @@ export async function importRemoteImage(
 	}
 
 	const bytes = await readImageBody(response);
-	return uploadImageBytes(platform, bytes, mime);
+	return { bytes, mime };
 }

@@ -54,7 +54,7 @@ const creditTransactionSchema = z.object({
 	id: z.string(),
 	amount: z.number(),
 	balanceAfter: z.number(),
-	kind: z.enum(['render', 'edit', 'style-transfer', 'upscale']),
+	kind: z.enum(['render', 'edit', 'style-transfer', 'object-replacement', 'upscale']),
 	createdAt: z.number()
 });
 const creditSchema = z.object({

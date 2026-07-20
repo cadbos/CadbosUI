@@ -21,7 +21,11 @@ import type {
 	ComfyUiClient,
 	ComfyWorkflow
 } from '$lib/server/comfyui/types';
-import { runObjectReplacement } from '$lib/server/comfyui/object-replacement';
+import {
+	getObjectReplacementResult,
+	queueObjectReplacement,
+	runObjectReplacement
+} from '$lib/server/comfyui/object-replacement';
 
 const sceneUpload: ComfyImageDescriptor = {
 	filename: 'scene (1).png',
@@ -194,5 +198,57 @@ describe('runObjectReplacement', () => {
 			operation: 'workflow'
 		});
 		expect(client.uploadImage).not.toHaveBeenCalled();
+	});
+});
+
+describe('object replacement polling', () => {
+	it('returns null while ComfyUI has no completed history entry', async () => {
+		const client = mockClient();
+		vi.mocked(client.getHistory).mockResolvedValue(null);
+
+		await expect(getObjectReplacementResult(client, 'prompt-1')).resolves.toBeNull();
+		expect(client.downloadImage).not.toHaveBeenCalled();
+	});
+
+	it('downloads only the final output after a successful poll', async () => {
+		const client = mockClient();
+		vi.mocked(client.getHistory).mockResolvedValue(
+			history({
+				'25': { images: [{ filename: 'intermediate.png', subfolder: '', type: 'output' }] },
+				'29': { images: [finalOutput] }
+			})
+		);
+		vi.mocked(client.downloadImage).mockResolvedValue(downloadedImage);
+
+		await expect(getObjectReplacementResult(client, 'prompt-1')).resolves.toBe(downloadedImage);
+		expect(client.downloadImage).toHaveBeenCalledWith(finalOutput, { signal: undefined });
+	});
+
+	it('surfaces terminal execution failures without downloading', async () => {
+		const client = mockClient();
+		vi.mocked(client.getHistory).mockResolvedValue({
+			...history({}),
+			status: { completed: true, status: 'error' }
+		});
+
+		await expect(getObjectReplacementResult(client, 'prompt-1')).rejects.toMatchObject({
+			code: 'execution_failed',
+			operation: 'workflow'
+		});
+		expect(client.downloadImage).not.toHaveBeenCalled();
+	});
+
+	it('can submit without waiting for completion', async () => {
+		const client = mockClient();
+		vi.mocked(client.uploadImage)
+			.mockResolvedValueOnce(sceneUpload)
+			.mockResolvedValueOnce(referenceUpload);
+		vi.mocked(client.queueWorkflow).mockResolvedValue({ promptId: 'prompt-1', queueNumber: 2 });
+
+		await expect(queueObjectReplacement(client, request())).resolves.toEqual({
+			promptId: 'prompt-1',
+			queueNumber: 2
+		});
+		expect(client.waitForCompletion).not.toHaveBeenCalled();
 	});
 });

@@ -1,0 +1,101 @@
+/*
+ * Copyright (c) 2026 Cadbos company. All rights reserved.
+ *
+ * SPDX-License-Identifier: LicenseRef-Cadbos-BSL-1.1
+ *
+ * Cadbos Interior Design AI is licensed under the Business Source License 1.1.
+ * Access is limited to automated analysis tools for analysis of this repository.
+ * This code is not open for contribution or usage except under a separate
+ * written agreement with Cadbos company.
+ *
+ * Commercial use in Interior Design & AEC Generative AI Services is prohibited
+ * before the Change Date. See LICENSE for complete terms.
+ */
+
+import { describe, expect, it, vi } from 'vitest';
+import {
+	objectReplacementCost,
+	pollObjectReplacement,
+	submitObjectReplacement
+} from '$lib/server/object-replacement';
+
+function platform(env: Partial<App.Platform['env']>): App.Platform {
+	return { env } as App.Platform;
+}
+
+describe('object replacement integration', () => {
+	it('uses the default or configured positive tariff', () => {
+		expect(objectReplacementCost(platform({}))).toBe(2);
+		expect(objectReplacementCost(platform({ OBJECT_REPLACEMENT_COST: '3.5' }))).toBe(3.5);
+		expect(() => objectReplacementCost(platform({ OBJECT_REPLACEMENT_COST: 'free' }))).toThrow(
+			'Invalid object replacement cost'
+		);
+	});
+
+	it('requires the private ComfyUI base URL before fetching inputs', async () => {
+		const fetcher = vi.spyOn(globalThis, 'fetch');
+
+		await expect(
+			submitObjectReplacement(
+				platform({}),
+				{
+					image: 'https://images.example.test/scene.png',
+					referenceImage: 'https://images.example.test/reference.png',
+					replacementObject: 'sofa'
+				},
+				'https://cadbos.example',
+				'job-1'
+			)
+		).rejects.toMatchObject({ code: 'invalid_configuration' });
+		expect(fetcher).not.toHaveBeenCalled();
+	});
+
+	it('fetches validated inputs and submits to unauthenticated ComfyUI', async () => {
+		let uploadCount = 0;
+		const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+			const url = new URL(input.toString());
+			if (url.hostname === 'images.example.test') {
+				return new Response('image-bytes', { headers: { 'content-type': 'image/png' } });
+			}
+			if (url.pathname === '/upload/image') {
+				uploadCount += 1;
+				return new Response(
+					JSON.stringify({
+						name: uploadCount === 1 ? 'scene.png' : 'reference.png',
+						subfolder: '',
+						type: 'input'
+					}),
+					{ headers: { 'content-type': 'application/json' } }
+				);
+			}
+			if (url.pathname === '/prompt') {
+				expect(new Headers(init?.headers).has('authorization')).toBe(false);
+				expect(new Headers(init?.headers).has('x-api-key')).toBe(false);
+				return new Response(JSON.stringify({ prompt_id: 'prompt-1', number: 1 }), {
+					headers: { 'content-type': 'application/json' }
+				});
+			}
+			throw new Error(`Unexpected URL: ${url}`);
+		});
+
+		await expect(
+			submitObjectReplacement(
+				platform({ COMFYUI_BASE_URL: 'http://comfy.internal:8188' }),
+				{
+					image: 'https://images.example.test/scene.png',
+					referenceImage: 'https://images.example.test/reference.png',
+					replacementObject: 'sofa'
+				},
+				'https://cadbos.example',
+				'job-1'
+			)
+		).resolves.toBe('prompt-1');
+		expect(fetcher).toHaveBeenCalledTimes(5);
+	});
+
+	it('requires configuration when polling', async () => {
+		await expect(pollObjectReplacement(platform({}), 'prompt-1')).rejects.toMatchObject({
+			code: 'invalid_configuration'
+		});
+	});
+});

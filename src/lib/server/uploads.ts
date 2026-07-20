@@ -25,7 +25,8 @@ type StoredImage = { url: string; mime: ImageMime; size: number; dimensions?: [n
 async function storeImage(
 	platform: App.Platform | undefined,
 	bytes: ArrayBuffer,
-	mime: string
+	mime: string,
+	storageKey?: string
 ): Promise<StoredImage> {
 	const bucket = platform?.env?.UPLOADS_BUCKET;
 	const publicUrl = platform?.env?.UPLOADS_PUBLIC_URL;
@@ -47,7 +48,7 @@ async function storeImage(
 	if (normalizedMime === null) throw new Error(`Unsupported image type: ${mime}`);
 
 	const extension = imageExtensionFromMime(normalizedMime);
-	const key = `${crypto.randomUUID()}.${extension}`;
+	const key = storageKey ?? `${crypto.randomUUID()}.${extension}`;
 	await bucket.put(key, bytes, {
 		httpMetadata: { contentType: normalizedMime }
 	});
@@ -73,7 +74,8 @@ export async function uploadImage(
 export async function uploadImageBytes(
 	platform: App.Platform | undefined,
 	bytes: ArrayBuffer,
-	mime: string
+	mime: string,
+	storageKey?: string
 ): Promise<StoredImage> {
-	return storeImage(platform, bytes, mime);
+	return storeImage(platform, bytes, mime, storageKey);
 }
