@@ -1,0 +1,465 @@
+{
+	"1": {
+		"inputs": {
+			"unet_name": "qwen_image_edit_25511_bf16.safetensors",
+			"weight_dtype": "default"
+		},
+		"class_type": "UNETLoader",
+		"_meta": {
+			"title": "Загрузить модель диффузии"
+		}
+	},
+	"2": {
+		"inputs": {
+			"clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+			"type": "qwen_image",
+			"device": "default"
+		},
+		"class_type": "CLIPLoader",
+		"_meta": {
+			"title": "Загрузить CLIP"
+		}
+	},
+	"3": {
+		"inputs": {
+			"vae_name": "qwen_image_vae.safetensors"
+		},
+		"class_type": "VAELoader",
+		"_meta": {
+			"title": "Загрузить VAE"
+		}
+	},
+	"4": {
+		"inputs": {
+			"image": "scene.png"
+		},
+		"class_type": "LoadImage",
+		"_meta": {
+			"title": "SCENE — исходный интерьер (Image 1)"
+		}
+	},
+	"5": {
+		"inputs": {
+			"image": ["4", 0]
+		},
+		"class_type": "FluxKontextImageScale",
+		"_meta": {
+			"title": "Снэп к валидному разрешению (~1MP, кратно 16)"
+		}
+	},
+	"6": {
+		"inputs": {
+			"lora_name": "Qwen-Image-Edit-2511-Object-Remover.safetensors",
+			"strength_model": 1,
+			"model": ["1", 0]
+		},
+		"class_type": "LoraLoaderModelOnly",
+		"_meta": {
+			"title": "LoRA: Object REMOVER"
+		}
+	},
+	"7": {
+		"inputs": {
+			"lora_name": "Qwen-Image-Edit-Lightning-8steps-V1.0-bf16.safetensors",
+			"strength_model": 1,
+			"model": ["6", 0]
+		},
+		"class_type": "LoraLoaderModelOnly",
+		"_meta": {
+			"title": "LoRA: Lightning 8-step (stage 1) — bypass если без него"
+		}
+	},
+	"8": {
+		"inputs": {
+			"shift": 3.1,
+			"model": ["7", 0]
+		},
+		"class_type": "ModelSamplingAuraFlow",
+		"_meta": {
+			"title": "Выборка модели AuraFlow"
+		}
+	},
+	"9": {
+		"inputs": {
+			"prompt": ["32", 0],
+			"clip": ["2", 0],
+			"vae": ["3", 0],
+			"image1": ["5", 0]
+		},
+		"class_type": "TextEncodeQwenImageEditPlus",
+		"_meta": {
+			"title": "POSITIVE Stage 1 — авто: Remove the <объект> ..."
+		}
+	},
+	"10": {
+		"inputs": {
+			"prompt": "",
+			"clip": ["2", 0],
+			"vae": ["3", 0],
+			"image1": ["5", 0]
+		},
+		"class_type": "TextEncodeQwenImageEditPlus",
+		"_meta": {
+			"title": "NEGATIVE — Stage 1 (пусто)"
+		}
+	},
+	"11": {
+		"inputs": {
+			"pixels": ["5", 0],
+			"vae": ["3", 0]
+		},
+		"class_type": "VAEEncode",
+		"_meta": {
+			"title": "Кодировать VAE"
+		}
+	},
+	"12": {
+		"inputs": {
+			"seed": 42,
+			"steps": 12,
+			"cfg": 1,
+			"sampler_name": "euler",
+			"scheduler": "simple",
+			"denoise": 1,
+			"model": ["39", 0],
+			"positive": ["35", 0],
+			"negative": ["36", 0],
+			"latent_image": ["11", 0]
+		},
+		"class_type": "KSampler",
+		"_meta": {
+			"title": "KSampler — Stage 1 REMOVE"
+		}
+	},
+	"13": {
+		"inputs": {
+			"samples": ["12", 0],
+			"vae": ["3", 0]
+		},
+		"class_type": "VAEDecode",
+		"_meta": {
+			"title": "Декодировать VAE"
+		}
+	},
+	"14": {
+		"inputs": {
+			"filename_prefix": "stage1_removed",
+			"images": ["13", 0]
+		},
+		"class_type": "SaveImage",
+		"_meta": {
+			"title": "Промежуточный результат: объект удалён"
+		}
+	},
+	"15": {
+		"inputs": {
+			"image": "reference_object.png"
+		},
+		"class_type": "LoadImage",
+		"_meta": {
+			"title": "REFERENCE — новый объект (Image 2)"
+		}
+	},
+	"16": {
+		"inputs": {
+			"upscale_method": "lanczos",
+			"megapixels": 1,
+			"resolution_steps": 1,
+			"image": ["15", 0]
+		},
+		"class_type": "ImageScaleToTotalPixels",
+		"_meta": {
+			"title": "Масштабировать изображение до общего количества пикселей"
+		}
+	},
+	"17": {
+		"inputs": {
+			"lora_name": "Qwen-Image-Edit-2511-Object-Adder.safetensors",
+			"strength_model": ["42", 0],
+			"model": ["1", 0]
+		},
+		"class_type": "LoraLoaderModelOnly",
+		"_meta": {
+			"title": "LoRA: Object ADDER"
+		}
+	},
+	"18": {
+		"inputs": {
+			"lora_name": "Qwen-Image-Edit-Lightning-8steps-V1.0-bf16.safetensors",
+			"strength_model": ["43", 0],
+			"model": ["17", 0]
+		},
+		"class_type": "LoraLoaderModelOnly",
+		"_meta": {
+			"title": "LoRA: Lightning 8-step (stage 2) — bypass если без него"
+		}
+	},
+	"19": {
+		"inputs": {
+			"shift": 2.5,
+			"model": ["18", 0]
+		},
+		"class_type": "ModelSamplingAuraFlow",
+		"_meta": {
+			"title": "ModelSamplingAuraFlow — Stage 2 (shift 2.5: приоритет текстур)"
+		}
+	},
+	"20": {
+		"inputs": {
+			"prompt": ["34", 0],
+			"clip": ["2", 0],
+			"vae": ["3", 0],
+			"image1": ["13", 0],
+			"image2": ["16", 0]
+		},
+		"class_type": "TextEncodeQwenImageEditPlus",
+		"_meta": {
+			"title": "POSITIVE Stage 2 — авто: Add the <объект> shown in Picture 2 ..."
+		}
+	},
+	"21": {
+		"inputs": {
+			"prompt": "",
+			"clip": ["2", 0],
+			"vae": ["3", 0],
+			"image1": ["13", 0],
+			"image2": ["16", 0]
+		},
+		"class_type": "TextEncodeQwenImageEditPlus",
+		"_meta": {
+			"title": "NEGATIVE — Stage 2 (пусто)"
+		}
+	},
+	"22": {
+		"inputs": {
+			"pixels": ["13", 0],
+			"vae": ["3", 0]
+		},
+		"class_type": "VAEEncode",
+		"_meta": {
+			"title": "Кодировать VAE"
+		}
+	},
+	"23": {
+		"inputs": {
+			"seed": 42,
+			"steps": 10,
+			"cfg": 1,
+			"sampler_name": "euler",
+			"scheduler": "simple",
+			"denoise": 1,
+			"model": ["40", 0],
+			"positive": ["37", 0],
+			"negative": ["38", 0],
+			"latent_image": ["22", 0]
+		},
+		"class_type": "KSampler",
+		"_meta": {
+			"title": "KSampler — Stage 2 ADD"
+		}
+	},
+	"24": {
+		"inputs": {
+			"samples": ["23", 0],
+			"vae": ["3", 0]
+		},
+		"class_type": "VAEDecode",
+		"_meta": {
+			"title": "Декодировать VAE"
+		}
+	},
+	"25": {
+		"inputs": {
+			"filename_prefix": "stage2_replaced",
+			"images": ["24", 0]
+		},
+		"class_type": "SaveImage",
+		"_meta": {
+			"title": "Финальный результат: объект заменён"
+		}
+	},
+	"26": {
+		"inputs": {
+			"model_name": "4xNomos2_hq_dat2.safetensors"
+		},
+		"class_type": "UpscaleModelLoader",
+		"_meta": {
+			"title": "Upscale: 4xNomos2_hq_dat2 (DAT2, fidelity, non-degraded input)"
+		}
+	},
+	"27": {
+		"inputs": {
+			"upscale_model": ["26", 0],
+			"image": ["24", 0]
+		},
+		"class_type": "ImageUpscaleWithModel",
+		"_meta": {
+			"title": "Апскейл изображения (с использованием модели)"
+		}
+	},
+	"28": {
+		"inputs": {
+			"upscale_method": "lanczos",
+			"width": ["41", 0],
+			"height": ["41", 1],
+			"crop": "disabled",
+			"image": ["27", 0]
+		},
+		"class_type": "ImageScale",
+		"_meta": {
+			"title": "Ресайз к исходному разрешению входа"
+		}
+	},
+	"29": {
+		"inputs": {
+			"filename_prefix": "stage3_upscaled",
+			"images": ["28", 0]
+		},
+		"class_type": "SaveImage",
+		"_meta": {
+			"title": "ФИНАЛ: объект заменён, разрешение = входному"
+		}
+	},
+	"30": {
+		"inputs": {
+			"value": "sofa"
+		},
+		"class_type": "PrimitiveString",
+		"_meta": {
+			"title": "ОБЪЕКТ ЗАМЕНЫ — одно слово/фраза (EN), напр. sofa"
+		}
+	},
+	"31": {
+		"inputs": {
+			"string_a": "Remove the",
+			"string_b": ["30", 0],
+			"delimiter": " "
+		},
+		"class_type": "StringConcatenate",
+		"_meta": {
+			"title": "Объединить"
+		}
+	},
+	"32": {
+		"inputs": {
+			"string_a": ["31", 0],
+			"string_b": "from the image while preserving the background and remaining elements, maintaining realism and original details.",
+			"delimiter": " "
+		},
+		"class_type": "StringConcatenate",
+		"_meta": {
+			"title": "Объединить"
+		}
+	},
+	"33": {
+		"inputs": {
+			"string_a": "Add the",
+			"string_b": ["30", 0],
+			"delimiter": " "
+		},
+		"class_type": "StringConcatenate",
+		"_meta": {
+			"title": "Объединить"
+		}
+	},
+	"34": {
+		"inputs": {
+			"string_a": ["33", 0],
+			"string_b": "shown in Picture 2 into Picture 1, placing it in the position where the previous one was, matching the perspective, scale and lighting of the room, keeping the exact fabric texture, material, pattern and color of the object from Picture 2, do not invent new textures or patterns, while preserving the background lighting and surrounding elements, maintaining realism and original details.",
+			"delimiter": " "
+		},
+		"class_type": "StringConcatenate",
+		"_meta": {
+			"title": "Объединить"
+		}
+	},
+	"35": {
+		"inputs": {
+			"reference_latents_method": "index_timestep_zero",
+			"conditioning": ["9", 0]
+		},
+		"class_type": "FluxKontextMultiReferenceLatentMethod",
+		"_meta": {
+			"title": "FluxKontextMultiReferenceLatentMethod"
+		}
+	},
+	"36": {
+		"inputs": {
+			"reference_latents_method": "index_timestep_zero",
+			"conditioning": ["10", 0]
+		},
+		"class_type": "FluxKontextMultiReferenceLatentMethod",
+		"_meta": {
+			"title": "FluxKontextMultiReferenceLatentMethod"
+		}
+	},
+	"37": {
+		"inputs": {
+			"reference_latents_method": "index_timestep_zero",
+			"conditioning": ["20", 0]
+		},
+		"class_type": "FluxKontextMultiReferenceLatentMethod",
+		"_meta": {
+			"title": "FluxKontextMultiReferenceLatentMethod"
+		}
+	},
+	"38": {
+		"inputs": {
+			"reference_latents_method": "index_timestep_zero",
+			"conditioning": ["21", 0]
+		},
+		"class_type": "FluxKontextMultiReferenceLatentMethod",
+		"_meta": {
+			"title": "FluxKontextMultiReferenceLatentMethod"
+		}
+	},
+	"39": {
+		"inputs": {
+			"strength": 1,
+			"pre_cfg": false,
+			"model": ["8", 0]
+		},
+		"class_type": "CFGNorm",
+		"_meta": {
+			"title": "CFGNorm"
+		}
+	},
+	"40": {
+		"inputs": {
+			"strength": 1,
+			"pre_cfg": false,
+			"model": ["19", 0]
+		},
+		"class_type": "CFGNorm",
+		"_meta": {
+			"title": "CFGNorm"
+		}
+	},
+	"41": {
+		"inputs": {
+			"image": ["4", 0]
+		},
+		"class_type": "GetImageSize",
+		"_meta": {
+			"title": "Размер исходного изображения"
+		}
+	},
+	"42": {
+		"inputs": {
+			"value": 0.8
+		},
+		"class_type": "PrimitiveFloat",
+		"_meta": {
+			"title": "Strength: Adder LoRA (0.7–1.0)"
+		}
+	},
+	"43": {
+		"inputs": {
+			"value": 0.9
+		},
+		"class_type": "PrimitiveFloat",
+		"_meta": {
+			"title": "Strength: Lightning LoRA St.2 (0.85–1.0)"
+		}
+	}
+}

@@ -99,6 +99,20 @@ test('direct navigation to /style-transfer redirects to the interior scene with 
 	);
 });
 
+test('direct navigation to /object-replacement opens the alpha tab with explicit defaults', async ({
+	page
+}) => {
+	await page.goto('/object-replacement');
+	await expect(page).toHaveURL(/\/object-replacement\?source=current-result$/);
+	await expect(page.getByRole('tab', { name: /Замена объекта.*Альфа/ })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await expect(
+		page.getByText('Замена объектов находится на раннем этапе', { exact: false })
+	).toBeVisible();
+});
+
 test('clicking the scene toggle changes the path, keeping the current view/format', async ({
 	page
 }) => {
@@ -123,8 +137,34 @@ test('switching mode tabs opens each mode default, carrying scene but not sub-ta
 		/\/style-transfer\/exterior\?reference=photorealistic&format=webp&source=current-result&strength=0\.7$/
 	);
 
+	await page.getByRole('tab', { name: /Замена объекта/ }).click();
+	await expect(page).toHaveURL(/\/object-replacement\?source=current-result$/);
+
 	await page.getByRole('tab', { name: 'Создание' }).click();
 	await expect(page).toHaveURL(/\/create\/exterior\?view=chat&format=webp$/);
+});
+
+test('object replacement source and scene-object text round-trip without image URLs', async ({
+	page
+}) => {
+	await page.goto(
+		'/object-replacement?source=room-photo&object=gray%20sofa&image=https://evil.example.com/scene.jpg&referenceImage=https://evil.example.com/chair.jpg'
+	);
+
+	await expect(page.getByLabel(/Точно опишите существующий объект/)).toHaveValue('gray sofa');
+	await expect(page).toHaveURL(/source=room-photo/);
+	await expect(page).toHaveURL(/object=gray(?:%20|\+)sofa/);
+	await expect(page).not.toHaveURL(/image=/);
+	await expect(page).not.toHaveURL(/referenceImage=/);
+
+	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await expect(page).toHaveURL(/source=current-result/);
+	await page.getByRole('tab', { name: /Замена объекта/ }).click();
+	await expect(page).toHaveURL(/source=room-photo/);
+
+	const sharedUrl = page.url();
+	await page.goto(sharedUrl);
+	await expect(page.getByLabel(/Точно опишите существующий объект/)).toHaveValue('gray sofa');
 });
 
 test('browser Back steps through mode tabs instead of leaving the app', async ({ page }) => {

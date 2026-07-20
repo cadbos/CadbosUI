@@ -23,7 +23,7 @@ before the Change Date. See LICENSE for complete terms.
 		renderResultFromResponse,
 		request,
 		type SceneType,
-		type StyleSourceMode
+		type ImageSourceMode
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
@@ -139,7 +139,7 @@ before the Change Date. See LICENSE for complete terms.
 		return event.currentTarget instanceof HTMLTextAreaElement ? event.currentTarget.value : '';
 	}
 
-	function setSourceMode(mode: StyleSourceMode): void {
+	function setSourceMode(mode: ImageSourceMode): void {
 		request.setStyleSourceMode(mode);
 	}
 
