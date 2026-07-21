@@ -18,6 +18,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
+	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import { formatCredit } from '$lib/utils';
 
 	interface Props {
@@ -55,6 +56,7 @@ before the Change Date. See LICENSE for complete terms.
 		const sourceRender = render;
 		upscaling = true;
 		upscaleError = null;
+		generationOverlay.start('generationOverlay.upscale');
 		try {
 			const response = await fetch('/api/upscale', {
 				method: 'POST',
@@ -77,6 +79,7 @@ before the Change Date. See LICENSE for complete terms.
 			upscaleError = t('toolbar.upscaleFailed');
 		} finally {
 			upscaling = false;
+			generationOverlay.stop();
 		}
 	}
 </script>

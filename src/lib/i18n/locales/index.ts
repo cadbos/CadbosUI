@@ -53,6 +53,12 @@ export interface Dictionary {
 	'view.graph.validation.unknownNode': string;
 	'boundary.failed': string;
 	'boundary.retry': string;
+	'generationOverlay.render': string;
+	'generationOverlay.edit': string;
+	'generationOverlay.styleTransfer': string;
+	'generationOverlay.objectReplacement': string;
+	'generationOverlay.objectReplacementDetail': string;
+	'generationOverlay.upscale': string;
 	'auth.signIn': string;
 	'auth.login.nip07': string;
 	'auth.login.nip46': string;

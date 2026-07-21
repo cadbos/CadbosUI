@@ -31,6 +31,7 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
+	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
 	import {
 		applyShareParams,
@@ -164,6 +165,7 @@ before the Change Date. See LICENSE for complete terms.
 		submitting = true;
 		submitError = null;
 		request.setStatus('rendering');
+		generationOverlay.start('generationOverlay.render');
 		try {
 			const body = request.toRenderRequest();
 			const endpoint = request.sceneType === 'exterior' ? '/api/render/exterior' : '/api/render';
@@ -192,6 +194,7 @@ before the Change Date. See LICENSE for complete terms.
 			submitError = t(renderErrorKey(err));
 		} finally {
 			submitting = false;
+			generationOverlay.stop();
 		}
 	}
 

@@ -27,6 +27,7 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
+	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import { stylePresetsFor, type StylePreset } from '$lib/style-presets';
 	import { buildShareUrl, slugToReference, type ReferenceTab } from '$lib/state/url-state';
@@ -150,6 +151,7 @@ before the Change Date. See LICENSE for complete terms.
 		applying = true;
 		error = null;
 		request.setStatus('rendering');
+		generationOverlay.start('generationOverlay.styleTransfer');
 		try {
 			const response = await fetch('/api/style-transfer', {
 				method: 'POST',
@@ -169,6 +171,7 @@ before the Change Date. See LICENSE for complete terms.
 			error = t(styleTransferErrorKey(err));
 		} finally {
 			applying = false;
+			generationOverlay.stop();
 		}
 	}
 

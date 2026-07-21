@@ -24,6 +24,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
+	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import { extractApiErrorCode, request, type ImageSourceMode } from '$lib/state/request.svelte';
 	import { buildShareUrl } from '$lib/state/url-state';
 	import { logBoundaryError } from '$lib/utils';
@@ -98,6 +99,18 @@ before the Change Date. See LICENSE for complete terms.
 		const controller = new AbortController();
 		void pollJob(id, controller.signal, run);
 		return () => controller.abort();
+	});
+
+	// The full-screen overlay tracks this flow's own in-flight state (not just
+	// the button's `submitting`) since the wait spans the async job queue +
+	// poll cycle, not a single fetch.
+	$effect(() => {
+		if (!(submitting || isPolling)) return;
+		generationOverlay.start(
+			'generationOverlay.objectReplacement',
+			'generationOverlay.objectReplacementDetail'
+		);
+		return () => generationOverlay.stop();
 	});
 
 	beforeNavigate(({ to }) => {
