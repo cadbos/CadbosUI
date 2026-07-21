@@ -66,6 +66,7 @@ export async function submitObjectReplacement(
 	]);
 	const signal = AbortSignal.timeout(COMFYUI_REQUEST_TIMEOUT_MS);
 	const queued = await queueObjectReplacement(client, {
+		clientId: jobId,
 		reference: {
 			data: new Blob([reference.bytes], { type: reference.mime }),
 			filename: `${jobId}-reference.${imageExtensionFromMime(reference.mime)}`

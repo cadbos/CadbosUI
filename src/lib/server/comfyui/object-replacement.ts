@@ -29,6 +29,7 @@ export interface ObjectReplacementImage {
 }
 
 export interface ObjectReplacementRequest {
+	clientId?: string | undefined;
 	reference: ObjectReplacementImage;
 	replacementObject: string;
 	scene: ObjectReplacementImage;
@@ -135,7 +136,7 @@ export async function queueObjectReplacement(
 		{ signal: request.signal }
 	);
 	const workflow = objectReplacementWorkflow(scene, reference, replacementObject);
-	return client.queueWorkflow(workflow, { signal: request.signal });
+	return client.queueWorkflow(workflow, { clientId: request.clientId, signal: request.signal });
 }
 
 export async function getObjectReplacementResult(
