@@ -172,6 +172,8 @@ before the Change Date. See LICENSE for complete terms.
 				return;
 			}
 			const result = (await response.json()) as UploadResult;
+			if (previewUrl) URL.revokeObjectURL(previewUrl);
+			previewUrl = null;
 			setUploadedImage({
 				url: result.url,
 				mime: result.mime,
