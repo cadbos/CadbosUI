@@ -39,10 +39,15 @@
 		}
 	],
 	// Provisioned with `wrangler r2 bucket create cadbos-uploads`.
+	// `remote: true` makes local dev (`platformProxy`, remote bindings on by
+	// default) read/write the real bucket instead of the local emulation, so
+	// UPLOADS_PUBLIC_URL (which points at the production CDN) resolves to
+	// files that actually exist.
 	"r2_buckets": [
 		{
 			"binding": "UPLOADS_BUCKET",
-			"bucket_name": "cadbos-uploads"
+			"bucket_name": "cadbos-uploads",
+			"remote": true
 		}
 	]
 	// Secrets set via `wrangler secret put <NAME>` — never committed to source:
