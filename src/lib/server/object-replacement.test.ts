@@ -25,7 +25,7 @@ function platform(env: Partial<App.Platform['env']>): App.Platform {
 
 describe('object replacement integration', () => {
 	it('uses the default or configured positive tariff', () => {
-		expect(objectReplacementCost(platform({}))).toBe(2);
+		expect(objectReplacementCost(platform({}))).toBe(0.03);
 		expect(objectReplacementCost(platform({ OBJECT_REPLACEMENT_COST: '3.5' }))).toBe(3.5);
 		expect(() => objectReplacementCost(platform({ OBJECT_REPLACEMENT_COST: 'free' }))).toThrow(
 			'Invalid object replacement cost'

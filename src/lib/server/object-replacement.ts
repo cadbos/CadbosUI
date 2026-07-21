@@ -23,7 +23,7 @@ import {
 import { imageExtensionFromMime } from '$lib/server/image-utils';
 import { downloadRemoteImage } from '$lib/server/remote-image';
 
-const DEFAULT_OBJECT_REPLACEMENT_COST = 2;
+const DEFAULT_OBJECT_REPLACEMENT_COST = 0.03;
 const COMFYUI_REQUEST_TIMEOUT_MS = 120_000;
 export const OBJECT_REPLACEMENT_TIMEOUT_MS = 10 * 60_000;
 
