@@ -31,20 +31,11 @@
 	},
 	"4": {
 		"inputs": {
-			"image": "scene.png"
+			"image": "004 - Before (Workflow 10).jpg"
 		},
 		"class_type": "LoadImage",
 		"_meta": {
 			"title": "SCENE — исходный интерьер (Image 1)"
-		}
-	},
-	"5": {
-		"inputs": {
-			"image": ["4", 0]
-		},
-		"class_type": "FluxKontextImageScale",
-		"_meta": {
-			"title": "Снэп к валидному разрешению (~1MP, кратно 16)"
 		}
 	},
 	"6": {
@@ -72,7 +63,7 @@
 	"8": {
 		"inputs": {
 			"shift": 3.1,
-			"model": ["7", 0]
+			"model": ["46", 0]
 		},
 		"class_type": "ModelSamplingAuraFlow",
 		"_meta": {
@@ -82,49 +73,32 @@
 	"9": {
 		"inputs": {
 			"prompt": ["32", 0],
+			"target_size": 1344,
+			"target_vl_size": 384,
+			"upscale_method": "lanczos",
+			"crop_method": "disabled",
+			"instruction": "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.",
 			"clip": ["2", 0],
 			"vae": ["3", 0],
-			"image1": ["5", 0]
+			"vl_resize_image1": ["4", 0]
 		},
-		"class_type": "TextEncodeQwenImageEditPlus",
+		"class_type": "TextEncodeQwenImageEditPlusAdvance_lrzjason",
 		"_meta": {
-			"title": "POSITIVE Stage 1 — авто: Remove the <объект> ..."
-		}
-	},
-	"10": {
-		"inputs": {
-			"prompt": "",
-			"clip": ["2", 0],
-			"vae": ["3", 0],
-			"image1": ["5", 0]
-		},
-		"class_type": "TextEncodeQwenImageEditPlus",
-		"_meta": {
-			"title": "NEGATIVE — Stage 1 (пусто)"
-		}
-	},
-	"11": {
-		"inputs": {
-			"pixels": ["5", 0],
-			"vae": ["3", 0]
-		},
-		"class_type": "VAEEncode",
-		"_meta": {
-			"title": "Кодировать VAE"
+			"title": "POSITIVE Stage 1 — Advance (латент из энкодера)"
 		}
 	},
 	"12": {
 		"inputs": {
 			"seed": 42,
-			"steps": 12,
-			"cfg": 1,
+			"steps": ["48", 0],
+			"cfg": ["53", 0],
 			"sampler_name": "euler",
 			"scheduler": "simple",
 			"denoise": 1,
 			"model": ["39", 0],
 			"positive": ["35", 0],
 			"negative": ["36", 0],
-			"latent_image": ["11", 0]
+			"latent_image": ["9", 1]
 		},
 		"class_type": "KSampler",
 		"_meta": {
@@ -153,23 +127,11 @@
 	},
 	"15": {
 		"inputs": {
-			"image": "reference_object.png"
+			"image": "004 - Reference (Workflow 10).webp"
 		},
 		"class_type": "LoadImage",
 		"_meta": {
 			"title": "REFERENCE — новый объект (Image 2)"
-		}
-	},
-	"16": {
-		"inputs": {
-			"upscale_method": "lanczos",
-			"megapixels": 1,
-			"resolution_steps": 1,
-			"image": ["15", 0]
-		},
-		"class_type": "ImageScaleToTotalPixels",
-		"_meta": {
-			"title": "Масштабировать изображение до общего количества пикселей"
 		}
 	},
 	"17": {
@@ -197,7 +159,7 @@
 	"19": {
 		"inputs": {
 			"shift": 2.5,
-			"model": ["18", 0]
+			"model": ["47", 0]
 		},
 		"class_type": "ModelSamplingAuraFlow",
 		"_meta": {
@@ -207,51 +169,33 @@
 	"20": {
 		"inputs": {
 			"prompt": ["34", 0],
+			"target_size": 1344,
+			"target_vl_size": 384,
+			"upscale_method": "lanczos",
+			"crop_method": "disabled",
+			"instruction": "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate.",
 			"clip": ["2", 0],
 			"vae": ["3", 0],
-			"image1": ["13", 0],
-			"image2": ["16", 0]
+			"vl_resize_image1": ["13", 0],
+			"vl_resize_image2": ["15", 0]
 		},
-		"class_type": "TextEncodeQwenImageEditPlus",
+		"class_type": "TextEncodeQwenImageEditPlusAdvance_lrzjason",
 		"_meta": {
-			"title": "POSITIVE Stage 2 — авто: Add the <объект> shown in Picture 2 ..."
-		}
-	},
-	"21": {
-		"inputs": {
-			"prompt": "",
-			"clip": ["2", 0],
-			"vae": ["3", 0],
-			"image1": ["13", 0],
-			"image2": ["16", 0]
-		},
-		"class_type": "TextEncodeQwenImageEditPlus",
-		"_meta": {
-			"title": "NEGATIVE — Stage 2 (пусто)"
-		}
-	},
-	"22": {
-		"inputs": {
-			"pixels": ["13", 0],
-			"vae": ["3", 0]
-		},
-		"class_type": "VAEEncode",
-		"_meta": {
-			"title": "Кодировать VAE"
+			"title": "POSITIVE Stage 2 — Advance (латент из энкодера)"
 		}
 	},
 	"23": {
 		"inputs": {
 			"seed": 42,
-			"steps": 10,
-			"cfg": 1,
+			"steps": ["49", 0],
+			"cfg": ["53", 0],
 			"sampler_name": "euler",
 			"scheduler": "simple",
 			"denoise": 1,
 			"model": ["40", 0],
 			"positive": ["37", 0],
 			"negative": ["38", 0],
-			"latent_image": ["22", 0]
+			"latent_image": ["20", 1]
 		},
 		"class_type": "KSampler",
 		"_meta": {
@@ -322,7 +266,7 @@
 	},
 	"30": {
 		"inputs": {
-			"value": "sofa"
+			"value": "computer chair"
 		},
 		"class_type": "PrimitiveString",
 		"_meta": {
@@ -386,7 +330,7 @@
 	"36": {
 		"inputs": {
 			"reference_latents_method": "index_timestep_zero",
-			"conditioning": ["10", 0]
+			"conditioning": ["62", 0]
 		},
 		"class_type": "FluxKontextMultiReferenceLatentMethod",
 		"_meta": {
@@ -406,7 +350,7 @@
 	"38": {
 		"inputs": {
 			"reference_latents_method": "index_timestep_zero",
-			"conditioning": ["21", 0]
+			"conditioning": ["63", 0]
 		},
 		"class_type": "FluxKontextMultiReferenceLatentMethod",
 		"_meta": {
@@ -460,6 +404,153 @@
 		"class_type": "PrimitiveFloat",
 		"_meta": {
 			"title": "Strength: Lightning LoRA St.2 (0.85–1.0)"
+		}
+	},
+	"45": {
+		"inputs": {
+			"value": true
+		},
+		"class_type": "PrimitiveBoolean",
+		"_meta": {
+			"title": "РЕЖИМ: true = Lightning (быстро), false = Quality (без дистилляции)"
+		}
+	},
+	"46": {
+		"inputs": {
+			"switch": ["45", 0],
+			"on_false": ["6", 0],
+			"on_true": ["7", 0]
+		},
+		"class_type": "ComfySwitchNode",
+		"_meta": {
+			"title": "Модель St.1: false=без Lightning"
+		}
+	},
+	"47": {
+		"inputs": {
+			"switch": ["45", 0],
+			"on_false": ["17", 0],
+			"on_true": ["18", 0]
+		},
+		"class_type": "ComfySwitchNode",
+		"_meta": {
+			"title": "Модель St.2: false=без Lightning"
+		}
+	},
+	"48": {
+		"inputs": {
+			"switch": ["45", 0],
+			"on_false": ["50", 0],
+			"on_true": ["51", 0]
+		},
+		"class_type": "ComfySwitchNode",
+		"_meta": {
+			"title": "Steps St.1: 12 / 26"
+		}
+	},
+	"49": {
+		"inputs": {
+			"switch": ["45", 0],
+			"on_false": ["50", 0],
+			"on_true": ["52", 0]
+		},
+		"class_type": "ComfySwitchNode",
+		"_meta": {
+			"title": "Steps St.2: 10 / 26"
+		}
+	},
+	"50": {
+		"inputs": {
+			"value": 26
+		},
+		"class_type": "PrimitiveInt",
+		"_meta": {
+			"title": "Steps Quality (26)"
+		}
+	},
+	"51": {
+		"inputs": {
+			"value": 12
+		},
+		"class_type": "PrimitiveInt",
+		"_meta": {
+			"title": "Steps Fast St.1 (12)"
+		}
+	},
+	"52": {
+		"inputs": {
+			"value": 10
+		},
+		"class_type": "PrimitiveInt",
+		"_meta": {
+			"title": "Steps Fast St.2 (10)"
+		}
+	},
+	"53": {
+		"inputs": {
+			"switch": ["45", 0],
+			"on_false": ["54", 0],
+			"on_true": ["55", 0]
+		},
+		"class_type": "ComfySwitchNode",
+		"_meta": {
+			"title": "CFG: 1.0 / 2.75"
+		}
+	},
+	"54": {
+		"inputs": {
+			"value": 2.75
+		},
+		"class_type": "PrimitiveFloat",
+		"_meta": {
+			"title": "CFG Quality (2.75)"
+		}
+	},
+	"55": {
+		"inputs": {
+			"value": 1
+		},
+		"class_type": "PrimitiveFloat",
+		"_meta": {
+			"title": "CFG Fast (1.0)"
+		}
+	},
+	"62": {
+		"inputs": {
+			"conditioning": ["9", 0]
+		},
+		"class_type": "ConditioningZeroOut",
+		"_meta": {
+			"title": "Негатив = ZeroOut(позитив)"
+		}
+	},
+	"63": {
+		"inputs": {
+			"conditioning": ["20", 0]
+		},
+		"class_type": "ConditioningZeroOut",
+		"_meta": {
+			"title": "Негатив = ZeroOut(позитив)"
+		}
+	},
+	"64": {
+		"inputs": {
+			"seed": 606395503849997,
+			"strength": 0.02,
+			"image": ["29", 0]
+		},
+		"class_type": "ImageAddNoise",
+		"_meta": {
+			"title": "ImageAddNoise"
+		}
+	},
+	"65": {
+		"inputs": {
+			"images": ["64", 0]
+		},
+		"class_type": "PreviewImage",
+		"_meta": {
+			"title": "Предварительный просмотр изображения"
 		}
 	}
 }

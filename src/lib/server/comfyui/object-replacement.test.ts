@@ -84,7 +84,7 @@ function request(replacementObject = '  sofa  ') {
 }
 
 describe('runObjectReplacement', () => {
-	it('uploads both inputs, clones the template, and downloads only node 29', async () => {
+	it('uploads both inputs, clones the template, and downloads only node 65', async () => {
 		const client = mockClient();
 		vi.mocked(client.uploadImage)
 			.mockResolvedValueOnce(sceneUpload)
@@ -94,7 +94,8 @@ describe('runObjectReplacement', () => {
 			history({
 				'14': { images: [{ filename: 'removed.png', subfolder: '', type: 'output' }] },
 				'25': { images: [{ filename: 'replaced.png', subfolder: '', type: 'output' }] },
-				'29': { images: [finalOutput] }
+				'29': { images: [{ filename: 'upscaled.png', subfolder: '', type: 'output' }] },
+				'65': { images: [finalOutput] }
 			})
 		);
 		vi.mocked(client.downloadImage).mockResolvedValue(downloadedImage);
@@ -128,9 +129,9 @@ describe('runObjectReplacement', () => {
 		expectedWorkflow['15'].inputs.image = 'reference.png';
 		expectedWorkflow['30'].inputs.value = 'sofa';
 		expect(queuedWorkflow).toEqual(expectedWorkflow);
-		expect(workflowTemplate['4'].inputs.image).toBe('scene.png');
-		expect(workflowTemplate['15'].inputs.image).toBe('reference_object.png');
-		expect(workflowTemplate['30'].inputs.value).toBe('sofa');
+		expect(workflowTemplate['4'].inputs.image).toBe('004 - Before (Workflow 10).jpg');
+		expect(workflowTemplate['15'].inputs.image).toBe('004 - Reference (Workflow 10).webp');
+		expect(workflowTemplate['30'].inputs.value).toBe('computer chair');
 		expect(client.waitForCompletion).toHaveBeenCalledWith('prompt-1', {
 			pollIntervalMs: 25,
 			signal: undefined,
@@ -151,9 +152,9 @@ describe('runObjectReplacement', () => {
 			.mockResolvedValueOnce({ promptId: 'prompt-1', queueNumber: 0 })
 			.mockResolvedValueOnce({ promptId: 'prompt-2', queueNumber: 0 });
 		vi.mocked(client.waitForCompletion)
-			.mockResolvedValueOnce(history({ '29': { images: [finalOutput] } }))
+			.mockResolvedValueOnce(history({ '65': { images: [finalOutput] } }))
 			.mockResolvedValueOnce({
-				...history({ '29': { images: [finalOutput] } }),
+				...history({ '65': { images: [finalOutput] } }),
 				promptId: 'prompt-2'
 			});
 		vi.mocked(client.downloadImage).mockResolvedValue(downloadedImage);
@@ -171,7 +172,7 @@ describe('runObjectReplacement', () => {
 		expect(secondWorkflow?.['30'].inputs.value).toBe('armchair');
 	});
 
-	it('fails when the completed workflow has no final node 29 image', async () => {
+	it('fails when the completed workflow has no final node 65 image', async () => {
 		const client = mockClient();
 		vi.mocked(client.uploadImage)
 			.mockResolvedValueOnce(sceneUpload)
@@ -179,7 +180,7 @@ describe('runObjectReplacement', () => {
 		vi.mocked(client.queueWorkflow).mockResolvedValue({ promptId: 'prompt-1', queueNumber: 0 });
 		vi.mocked(client.waitForCompletion).mockResolvedValue(
 			history({
-				'25': { images: [{ filename: 'intermediate.png', subfolder: '', type: 'output' }] }
+				'29': { images: [{ filename: 'intermediate.png', subfolder: '', type: 'output' }] }
 			})
 		);
 
@@ -214,8 +215,8 @@ describe('object replacement polling', () => {
 		const client = mockClient();
 		vi.mocked(client.getHistory).mockResolvedValue(
 			history({
-				'25': { images: [{ filename: 'intermediate.png', subfolder: '', type: 'output' }] },
-				'29': { images: [finalOutput] }
+				'29': { images: [{ filename: 'intermediate.png', subfolder: '', type: 'output' }] },
+				'65': { images: [finalOutput] }
 			})
 		);
 		vi.mocked(client.downloadImage).mockResolvedValue(downloadedImage);

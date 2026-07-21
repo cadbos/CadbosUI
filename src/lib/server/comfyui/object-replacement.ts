@@ -42,7 +42,7 @@ export type QueueObjectReplacementRequest = Omit<
 	'pollIntervalMs' | 'timeoutMs'
 >;
 
-const FINAL_OUTPUT_NODE_ID = '29';
+const FINAL_OUTPUT_NODE_ID = '65';
 
 function uploadedImagePath(image: ComfyImageDescriptor): string {
 	const subfolder = image.subfolder.replace(/^\/+|\/+$/g, '');
@@ -77,7 +77,7 @@ function objectReplacementWorkflow(
 	setWorkflowInput(workflow, '15', 'LoadImage', 'image', uploadedImagePath(reference));
 	setWorkflowInput(workflow, '30', 'PrimitiveString', 'value', replacementObject);
 	const outputNode = workflow[FINAL_OUTPUT_NODE_ID];
-	if (!outputNode || outputNode.class_type !== 'SaveImage') {
+	if (!outputNode || outputNode.class_type !== 'PreviewImage') {
 		throw new ComfyUiError(
 			'invalid_configuration',
 			'workflow',
