@@ -322,9 +322,15 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function clearJob(): Promise<void> {
 		request.setActiveObjectReplacementJobId(undefined);
+		request.setObjectReferenceImage(undefined);
+		request.setObjectReplacementObject('');
+		request.setObjectReplacementSourceMode('current-result');
+		request.setImage(undefined);
+		request.setCurrentRender(undefined);
 		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
+		window.scrollTo({ top: 0, behavior: 'smooth' });
 		await goto(buildShareUrl('objectReplacement', request), {
 			replaceState: true,
 			keepFocus: true,
