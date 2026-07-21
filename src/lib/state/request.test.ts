@@ -170,6 +170,9 @@ describe('serialization', () => {
 		delete snapshot.objectReferenceImage;
 		delete snapshot.objectReplacementObject;
 		delete snapshot.objectReplacementSourceMode;
+		delete snapshot.textureReferenceImage;
+		delete snapshot.textureReplacementSurface;
+		delete snapshot.textureReplacementSourceMode;
 
 		request.fromJSON(snapshot);
 
@@ -178,12 +181,15 @@ describe('serialization', () => {
 			editPrompt: '',
 			styleReferenceImage: undefined,
 			objectReferenceImage: undefined,
+			textureReferenceImage: undefined,
 			styleTransferPrompt: '',
 			styleTransferStrength: 0.7,
 			styleNegativePrompt: '',
 			styleSourceMode: 'current-result',
 			objectReplacementObject: '',
 			objectReplacementSourceMode: 'current-result',
+			textureReplacementSurface: '',
+			textureReplacementSourceMode: 'current-result',
 			currentRender: undefined
 		});
 	});

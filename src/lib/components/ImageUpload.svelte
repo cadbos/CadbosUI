@@ -19,7 +19,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	const MAX_SIZE = 8 * 1024 * 1024;
 
-	type UploadTarget = 'room' | 'styleReference' | 'objectReference';
+	type UploadTarget = 'room' | 'styleReference' | 'objectReference' | 'textureReference';
 
 	interface Props {
 		target?: UploadTarget;
@@ -51,7 +51,9 @@ before the Change Date. See LICENSE for complete terms.
 			? request.styleReferenceImage
 			: target === 'objectReference'
 				? request.objectReferenceImage
-				: request.image
+				: target === 'textureReference'
+					? request.textureReferenceImage
+					: request.image
 	);
 	const ariaLabelKey = $derived<TranslationKey>(
 		label ??
@@ -59,7 +61,9 @@ before the Change Date. See LICENSE for complete terms.
 				? 'styleTransfer.referenceImage'
 				: target === 'objectReference'
 					? 'objectReplacement.referenceImage'
-					: 'upload.label')
+					: target === 'textureReference'
+						? 'textureReplacement.referenceImage'
+						: 'upload.label')
 	);
 	const buttonLabelKey = $derived<TranslationKey>(
 		label ??
@@ -67,28 +71,36 @@ before the Change Date. See LICENSE for complete terms.
 				? 'styleTransfer.referenceImage'
 				: target === 'objectReference'
 					? 'objectReplacement.referenceImage'
-					: 'upload.button')
+					: target === 'textureReference'
+						? 'textureReplacement.referenceImage'
+						: 'upload.button')
 	);
 	const changeKey = $derived<TranslationKey>(
 		target === 'styleReference'
 			? 'styleTransfer.referenceChange'
 			: target === 'objectReference'
 				? 'objectReplacement.referenceChange'
-				: 'upload.change'
+				: target === 'textureReference'
+					? 'textureReplacement.referenceChange'
+					: 'upload.change'
 	);
 	const dropTitleKey = $derived<TranslationKey>(
 		target === 'styleReference'
 			? 'styleTransfer.referenceDropTitle'
 			: target === 'objectReference'
 				? 'objectReplacement.referenceDropTitle'
-				: 'upload.dropTitle'
+				: target === 'textureReference'
+					? 'textureReplacement.referenceDropTitle'
+					: 'upload.dropTitle'
 	);
 	const dropSubtitleKey = $derived<TranslationKey>(
 		target === 'styleReference'
 			? 'styleTransfer.referenceDropSubtitle'
 			: target === 'objectReference'
 				? 'objectReplacement.referenceDropSubtitle'
-				: 'upload.dropSubtitle'
+				: target === 'textureReference'
+					? 'textureReplacement.referenceDropSubtitle'
+					: 'upload.dropSubtitle'
 	);
 	const imageUrl = $derived(image?.url ?? null);
 	const hasImage = $derived(imageUrl !== null || previewUrl !== null);
@@ -104,6 +116,10 @@ before the Change Date. See LICENSE for complete terms.
 		}
 		if (target === 'objectReference') {
 			request.setObjectReferenceImage(next);
+			return;
+		}
+		if (target === 'textureReference') {
+			request.setTextureReferenceImage(next);
 			return;
 		}
 		request.setImage(next);

@@ -96,6 +96,36 @@ export type ObjectReplacementJobResponse =
 	| ObjectReplacementCompletedResponse
 	| ObjectReplacementFailedResponse;
 
+export interface TextureReplacementRequest {
+	image: string;
+	referenceImage: string;
+	replacementSurface: string;
+}
+
+export interface TextureReplacementProcessingResponse {
+	id: string;
+	status: 'processing';
+}
+
+export interface TextureReplacementCompletedResponse {
+	id: string;
+	status: 'completed';
+	outputUrl: string;
+	cost: number;
+	balance: number;
+}
+
+export interface TextureReplacementFailedResponse {
+	id: string;
+	status: 'failed';
+	error: { code: string; message: string };
+}
+
+export type TextureReplacementJobResponse =
+	| TextureReplacementProcessingResponse
+	| TextureReplacementCompletedResponse
+	| TextureReplacementFailedResponse;
+
 // Normalized response for image-generation endpoints. Provider array/string
 // outputs are normalized to a single URL. `balance` is the caller's own
 // remaining approved-account balance after this call — never archAI's raw

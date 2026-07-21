@@ -22,6 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 	import PromptViews from '$lib/components/PromptViews.svelte';
 	import StyleTransferPanel from '$lib/components/StyleTransferPanel.svelte';
 	import ObjectReplacementPanel from '$lib/components/ObjectReplacementPanel.svelte';
+	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
 	import GeneratedImagesSidebar from '$lib/components/GeneratedImagesSidebar.svelte';
 	import {
 		creditErrorKey,
@@ -46,7 +47,8 @@ before the Change Date. See LICENSE for complete terms.
 		{ id: 'render', label: 'mode.render' },
 		{ id: 'edit', label: 'mode.edit' },
 		{ id: 'styleTransfer', label: 'mode.styleTransfer' },
-		{ id: 'objectReplacement', label: 'mode.objectReplacement', alpha: true }
+		{ id: 'objectReplacement', label: 'mode.objectReplacement', alpha: true },
+		{ id: 'textureReplacement', label: 'mode.textureReplacement', alpha: true }
 	];
 
 	const sceneTypes: { id: SceneType; label: TranslationKey }[] = [
@@ -415,6 +417,27 @@ before the Change Date. See LICENSE for complete terms.
 					onerror={(error: unknown) => logBoundaryError('workspace.objectReplacement', error)}
 				>
 					<ObjectReplacementPanel />
+					{#snippet failed(_error: unknown, reset: () => void)}
+						<p class="boundary-failed">{t('boundary.failed')}</p>
+						<button type="button" class="boundary-retry" onclick={reset}>
+							{t('boundary.retry')}
+						</button>
+					{/snippet}
+				</svelte:boundary>
+			</div>
+
+			<div
+				class="mode-panel"
+				role="tabpanel"
+				id="mode-panel-textureReplacement"
+				aria-labelledby="mode-tab-textureReplacement"
+				tabindex="0"
+				hidden={mode !== 'textureReplacement'}
+			>
+				<svelte:boundary
+					onerror={(error: unknown) => logBoundaryError('workspace.textureReplacement', error)}
+				>
+					<TextureReplacementPanel />
 					{#snippet failed(_error: unknown, reset: () => void)}
 						<p class="boundary-failed">{t('boundary.failed')}</p>
 						<button type="button" class="boundary-retry" onclick={reset}>

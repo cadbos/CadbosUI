@@ -23,7 +23,7 @@ import {
 } from '$lib/state/request.svelte';
 import { STYLE_PRESETS } from '$lib/style-presets';
 
-export type Mode = 'render' | 'edit' | 'styleTransfer' | 'objectReplacement';
+export type Mode = 'render' | 'edit' | 'styleTransfer' | 'objectReplacement' | 'textureReplacement';
 export type ViewId = 'chat' | 'keyValue' | 'graph';
 export type ToolId = 'freeform' | 'add-object' | 'remove-object' | 'atmosphere';
 export type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
@@ -44,7 +44,8 @@ const MODE_PATHS: Record<Mode, string> = {
 	render: '/create',
 	edit: '/edit',
 	styleTransfer: '/style-transfer',
-	objectReplacement: '/object-replacement'
+	objectReplacement: '/object-replacement',
+	textureReplacement: '/texture-replacement'
 };
 
 const VIEW_SLUGS: Record<ViewId, string> = {
@@ -93,6 +94,7 @@ export function routeIdToMode(routeId: string | null): Mode {
 	if (routeId?.startsWith('/edit')) return 'edit';
 	if (routeId?.startsWith('/style-transfer')) return 'styleTransfer';
 	if (routeId?.startsWith('/object-replacement')) return 'objectReplacement';
+	if (routeId?.startsWith('/texture-replacement')) return 'textureReplacement';
 	return 'render';
 }
 
@@ -107,7 +109,8 @@ export function isWorkspaceRoute(routeId: string | null): boolean {
 		routeId?.startsWith('/create') === true ||
 		routeId?.startsWith('/edit') === true ||
 		routeId?.startsWith('/style-transfer') === true ||
-		routeId?.startsWith('/object-replacement') === true
+		routeId?.startsWith('/object-replacement') === true ||
+		routeId?.startsWith('/texture-replacement') === true
 	);
 }
 
@@ -122,10 +125,12 @@ export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): Sub
 		return { reference: slugToReference(searchParams.get('reference') ?? undefined) };
 	}
 	const job = searchParams.get('job');
-	return isObjectReplacementJobId(job) ? { job } : {};
+	return isJobId(job) ? { job } : {};
 }
 
-export function isObjectReplacementJobId(value: unknown): value is string {
+// A plain UUID check — shared by every async-job mode (object replacement,
+// texture replacement) that carries its job id in the `job` query param.
+export function isJobId(value: unknown): value is string {
 	return objectReplacementJobIdSchema.safeParse(value).success;
 }
 
@@ -171,7 +176,9 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 				? MODE_PATHS.edit
 				: mode === 'styleTransfer'
 					? `${MODE_PATHS.styleTransfer}/${request.sceneType}`
-					: MODE_PATHS.objectReplacement;
+					: mode === 'objectReplacement'
+						? MODE_PATHS.objectReplacement
+						: MODE_PATHS.textureReplacement;
 
 	const params = new URLSearchParams();
 
@@ -228,7 +235,16 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 			params.set('object', request.objectReplacementObject);
 		}
 		const job = subTab.job ?? request.activeObjectReplacementJobId;
-		if (isObjectReplacementJobId(job)) params.set('job', job);
+		if (isJobId(job)) params.set('job', job);
+	}
+
+	if (mode === 'textureReplacement') {
+		params.set('source', request.textureReplacementSourceMode);
+		if (request.textureReplacementSurface.trim() !== '') {
+			params.set('surface', request.textureReplacementSurface);
+		}
+		const job = subTab.job ?? request.activeTextureReplacementJobId;
+		if (isJobId(job)) params.set('job', job);
 	}
 
 	const query = params.toString();
@@ -297,7 +313,7 @@ export function applyShareParams(
 				: 'current-result'
 		);
 		request.setStyleTransferPrompt(searchParams.get('prompt') ?? '');
-	} else {
+	} else if (mode === 'objectReplacement') {
 		const source = searchParams.get('source');
 		request.setObjectReplacementSourceMode(
 			(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
@@ -306,6 +322,16 @@ export function applyShareParams(
 		);
 		request.setObjectReplacementObject((searchParams.get('object') ?? '').slice(0, 200));
 		const job = searchParams.get('job');
-		request.setActiveObjectReplacementJobId(isObjectReplacementJobId(job) ? job : undefined);
+		request.setActiveObjectReplacementJobId(isJobId(job) ? job : undefined);
+	} else {
+		const source = searchParams.get('source');
+		request.setTextureReplacementSourceMode(
+			(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
+				? (source as ImageSourceMode)
+				: 'current-result'
+		);
+		request.setTextureReplacementSurface((searchParams.get('surface') ?? '').slice(0, 200));
+		const job = searchParams.get('job');
+		request.setActiveTextureReplacementJobId(isJobId(job) ? job : undefined);
 	}
 }
