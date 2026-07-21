@@ -66,6 +66,12 @@ export const objectReplacementRequestSchema = z.strictObject({
 	replacementObject: z.string().trim().min(1).max(200)
 });
 
+export const textureReplacementRequestSchema = z.strictObject({
+	image: httpsImageUrl,
+	referenceImage: httpsImageUrl,
+	replacementSurface: z.string().trim().min(1).max(200)
+});
+
 // Nostr pubkey: 32-byte lowercase hex (x-only schnorr public key).
 export const challengeRequestSchema = z.object({
 	pubkey: z

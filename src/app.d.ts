@@ -37,6 +37,7 @@ declare global {
 				// wrangler.jsonc `vpc_services`.
 				COMFYUI_BASE_URL: Fetcher;
 				OBJECT_REPLACEMENT_COST?: string;
+				TEXTURE_REPLACEMENT_COST?: string;
 				UPLOADS_BUCKET: R2Bucket;
 				UPLOADS_PUBLIC_URL?: string;
 				// Comma-separated Nostr pubkeys (hex) subject to the local metered

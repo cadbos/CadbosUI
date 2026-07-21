@@ -42,3 +42,11 @@ export {
 	type ObjectReplacementRequest,
 	type QueueObjectReplacementRequest
 } from '$lib/server/comfyui/object-replacement';
+export {
+	getTextureReplacementResult,
+	queueTextureReplacement,
+	runTextureReplacement,
+	type TextureReplacementImage,
+	type TextureReplacementRequest,
+	type QueueTextureReplacementRequest
+} from '$lib/server/comfyui/texture-replacement';
