@@ -32,6 +32,7 @@ const { editInterior, renderInterior, styleTransferInterior } = await import('./
 
 const withoutKey = { env: {} } as App.Platform;
 const publicUploadsUrl = 'https://uploads.cadbos.example';
+const archaiApiUrl = 'https://archai.example.test/v1';
 
 function mockBucket(): { put: ReturnType<typeof vi.fn> } {
 	return { put: vi.fn(async () => undefined) };
@@ -41,6 +42,7 @@ function withKey(bucket: ReturnType<typeof mockBucket> = mockBucket()): App.Plat
 	return {
 		env: {
 			ARCHAI_API_KEY: 'test-key',
+			ARCHAI_API_URL: archaiApiUrl,
 			UPLOADS_BUCKET: bucket,
 			UPLOADS_PUBLIC_URL: publicUploadsUrl
 		}
@@ -94,6 +96,9 @@ describe('renderInterior', () => {
 			outputFormat: 'webp'
 		});
 
+		expect(archai.postRenderInterior.mock.calls[0][0].client.getConfig().baseUrl).toBe(
+			archaiApiUrl
+		);
 		expect(fetch).toHaveBeenCalledWith(
 			'https://example.test/a.jpg',
 			expect.objectContaining({ signal: expect.any(AbortSignal) })
@@ -144,6 +149,29 @@ describe('renderInterior', () => {
 				outputFormat: 'webp'
 			})
 		).rejects.toThrow('Render failed');
+	});
+
+	it('fails safely in production when the API URL is not configured', async () => {
+		appEnvironment.dev = false;
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const platform = { env: { ARCHAI_API_KEY: 'test-key' } } as App.Platform;
+
+		try {
+			const render = renderInterior(platform, {
+				image: 'https://example.test/room.jpg',
+				prompt: 'cozy',
+				outputFormat: 'webp'
+			});
+
+			await expect(render).rejects.toThrow(/^Render failed$/);
+			await expect(render).rejects.not.toThrow('ARCHAI_API_URL not configured');
+			expect(consoleError).toHaveBeenCalledWith(
+				'archAI render/interior failed:',
+				'ARCHAI_API_URL not configured'
+			);
+		} finally {
+			consoleError.mockRestore();
+		}
 	});
 
 	it('returns the charged provider result when downloading the mirror image fails', async () => {

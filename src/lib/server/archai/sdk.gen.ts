@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { PostAnimateData, PostAnimateErrors, PostAnimateResponses, PostAutoPromptData, PostAutoPromptErrors, PostAutoPromptResponses, PostEditByPromptData, PostEditByPromptErrors, PostEditByPromptResponses, PostRenderExteriorData, PostRenderExteriorErrors, PostRenderExteriorResponses, PostRenderInteriorData, PostRenderInteriorErrors, PostRenderInteriorResponses, PostStyleTransferData, PostStyleTransferErrors, PostStyleTransferResponses, PostTextToImageData, PostTextToImageErrors, PostTextToImageResponses, PostUpscale4kData, PostUpscale4kErrors, PostUpscale4kResponses } from './types.gen';
+import type { PostAnimateData, PostAnimateErrors, PostAnimateResponses, PostAutoPromptData, PostAutoPromptErrors, PostAutoPromptResponses, PostBalanceData, PostBalanceErrors, PostBalanceResponses, PostChangeTexturesData, PostChangeTexturesErrors, PostChangeTexturesResponses, PostEditByPromptData, PostEditByPromptErrors, PostEditByPromptResponses, PostRenderExteriorData, PostRenderExteriorErrors, PostRenderExteriorResponses, PostRenderInteriorData, PostRenderInteriorErrors, PostRenderInteriorResponses, PostStyleTransferData, PostStyleTransferErrors, PostStyleTransferResponses, PostTextToImageData, PostTextToImageErrors, PostTextToImageResponses, PostUpscale4kData, PostUpscale4kErrors, PostUpscale4kResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -79,6 +79,21 @@ export const postEditByPrompt = <ThrowOnError extends boolean = false>(options: 
 });
 
 /**
+ * Change Textures
+ *
+ * Change the surface textures and materials of the masked area of an image while keeping its geometry and layout. Requires a `mask` marking the surfaces to retexture (white = change, black = keep; URL or base64). Choose exactly one of two modes: pass a `referenceImage` of the desired texture, or describe the texture with a `prompt` — providing both is rejected. Returns the resulting image URL as the only element of the output array.
+ */
+export const postChangeTextures = <ThrowOnError extends boolean = false>(options: Options<PostChangeTexturesData, ThrowOnError>): RequestResult<PostChangeTexturesResponses, PostChangeTexturesErrors, ThrowOnError> => (options.client ?? client).post<PostChangeTexturesResponses, PostChangeTexturesErrors, ThrowOnError>({
+    security: [{ name: 'x-api-key', type: 'apiKey' }],
+    url: '/change-textures',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * Style Transfer
  *
  * Transfer the visual style of a reference image onto a source architectural image. Control the strength of the effect with the styleTransferStrength parameter.
@@ -136,4 +151,15 @@ export const postTextToImage = <ThrowOnError extends boolean = false>(options: O
         'Content-Type': 'application/json',
         ...options.headers
     }
+});
+
+/**
+ * Check Balance
+ *
+ * Return the current account balance for the API key. Use this to check your remaining balance without running — and paying for — a generation. Takes no request body.
+ */
+export const postBalance = <ThrowOnError extends boolean = false>(options?: Options<PostBalanceData, ThrowOnError>): RequestResult<PostBalanceResponses, PostBalanceErrors, ThrowOnError> => (options?.client ?? client).post<PostBalanceResponses, PostBalanceErrors, ThrowOnError>({
+    security: [{ name: 'x-api-key', type: 'apiKey' }],
+    url: '/balance',
+    ...options
 });

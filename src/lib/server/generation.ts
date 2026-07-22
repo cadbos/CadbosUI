@@ -46,10 +46,10 @@ function generationFailed(operation: string, clientMessage: string, detail: unkn
 	throw new Error(clientMessage);
 }
 
-function requestClientFor(apiKey: string): ReturnType<typeof createClient> {
+function requestClientFor(apiKey: string, apiUrl: string): ReturnType<typeof createClient> {
 	// Per-request client — setting headers on the singleton is not safe in Workers.
 	return createClient({
-		baseUrl: 'https://api.myarchitectai.com/v1',
+		baseUrl: apiUrl,
 		headers: { 'x-api-key': apiKey }
 	});
 }
@@ -171,15 +171,20 @@ export async function renderInterior(
 	params: { image: string; prompt: string; outputFormat: OutputFormat }
 ): Promise<RenderResponse> {
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
+	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
-	if (!apiKey) {
+	if (!apiKey || !apiUrl) {
 		if (dev) return mockRender();
-		generationFailed('render/interior', 'Render failed', 'ARCHAI_API_KEY not configured');
+		generationFailed(
+			'render/interior',
+			'Render failed',
+			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
+		);
 	}
 
 	return processRenderResult('render/interior', 'Render failed', platform, () =>
 		postRenderInterior({
-			client: requestClientFor(apiKey),
+			client: requestClientFor(apiKey, apiUrl),
 			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
 			body: {
 				image: params.image,
@@ -199,15 +204,20 @@ export async function renderExterior(
 	params: { image: string; prompt: string; outputFormat: OutputFormat }
 ): Promise<RenderResponse> {
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
+	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
-	if (!apiKey) {
+	if (!apiKey || !apiUrl) {
 		if (dev) return mockRenderExterior();
-		generationFailed('render/exterior', 'Render failed', 'ARCHAI_API_KEY not configured');
+		generationFailed(
+			'render/exterior',
+			'Render failed',
+			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
+		);
 	}
 
 	return processRenderResult('render/exterior', 'Render failed', platform, () =>
 		postRenderExterior({
-			client: requestClientFor(apiKey),
+			client: requestClientFor(apiKey, apiUrl),
 			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
 			body: {
 				image: params.image,
@@ -226,16 +236,21 @@ export async function editInterior(
 	params: { image: string; prompt: string }
 ): Promise<RenderResponse> {
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
+	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
-	if (!apiKey) {
+	if (!apiKey || !apiUrl) {
 		if (dev) return mockEdit();
-		generationFailed('edit-by-prompt', 'Edit failed', 'ARCHAI_API_KEY not configured');
+		generationFailed(
+			'edit-by-prompt',
+			'Edit failed',
+			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
+		);
 	}
 
 	let result: Awaited<ReturnType<typeof postEditByPrompt>>;
 	try {
 		result = await postEditByPrompt({
-			client: requestClientFor(apiKey),
+			client: requestClientFor(apiKey, apiUrl),
 			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
 			body: { image: params.image, prompt: params.prompt }
 		});
@@ -279,16 +294,21 @@ export async function styleTransferInterior(
 	}
 ): Promise<RenderResponse> {
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
+	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
-	if (!apiKey) {
+	if (!apiKey || !apiUrl) {
 		if (dev) return mockStyleTransfer();
-		generationFailed('style-transfer', 'Style transfer failed', 'ARCHAI_API_KEY not configured');
+		generationFailed(
+			'style-transfer',
+			'Style transfer failed',
+			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
+		);
 	}
 
 	let result: Awaited<ReturnType<typeof postStyleTransfer>>;
 	try {
 		result = await postStyleTransfer({
-			client: requestClientFor(apiKey),
+			client: requestClientFor(apiKey, apiUrl),
 			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
 			body: {
 				image: params.image,
@@ -339,15 +359,20 @@ export async function upscale4k(
 	params: { image: string; outputFormat?: OutputFormat }
 ): Promise<RenderResponse> {
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
+	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
-	if (!apiKey) {
+	if (!apiKey || !apiUrl) {
 		if (dev) return mockUpscale();
-		generationFailed('upscale-4k', 'Upscale failed', 'ARCHAI_API_KEY not configured');
+		generationFailed(
+			'upscale-4k',
+			'Upscale failed',
+			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
+		);
 	}
 
 	return processRenderResult('upscale-4k', 'Upscale failed', platform, () =>
 		postUpscale4K({
-			client: requestClientFor(apiKey),
+			client: requestClientFor(apiKey, apiUrl),
 			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
 			body: {
 				image: params.image,
