@@ -16,25 +16,48 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { ObjectReplacementJobResponse, SessionUser } from '$lib/api/contract';
 import { ComfyUiError, type ComfyDownloadedImage } from '$lib/server/comfyui';
+import { DEMO_PUBKEY } from '$lib/server/demo';
 import {
 	createObjectReplacementJob,
 	getObjectReplacementJob
 } from '$lib/server/object-replacement-jobs';
+import { RemoteImageImportError } from '$lib/server/remote-image';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 
 const integration = vi.hoisted(() => ({
 	cost: 2,
+	costError: null as Error | null,
 	poll: vi.fn(),
 	submit: vi.fn()
 }));
+const jobStore = vi.hoisted(() => ({ failNextCreate: false }));
 
 vi.mock('$lib/server/object-replacement', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/object-replacement')>();
 	return {
 		...actual,
-		objectReplacementCost: vi.fn(() => integration.cost),
+		objectReplacementCost: vi.fn(() => {
+			if (integration.costError) throw integration.costError;
+			return integration.cost;
+		}),
 		pollObjectReplacement: integration.poll,
 		submitObjectReplacement: integration.submit
+	};
+});
+
+vi.mock('$lib/server/object-replacement-jobs', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/object-replacement-jobs')>();
+	return {
+		...actual,
+		createObjectReplacementJob: vi.fn(
+			(...args: Parameters<typeof actual.createObjectReplacementJob>) => {
+				if (jobStore.failNextCreate) {
+					jobStore.failNextCreate = false;
+					return Promise.reject(new Error('private persistence detail'));
+				}
+				return actual.createObjectReplacementJob(...args);
+			}
+		)
 	};
 });
 
@@ -53,6 +76,37 @@ const completedImage: ComfyDownloadedImage = {
 	bytes: new TextEncoder().encode('result-image').buffer,
 	contentType: 'image/png'
 };
+
+function rejectionLog(status: number, reason: string): Record<string, unknown> {
+	return {
+		level: 'warn',
+		area: 'object-replacement',
+		event: 'request_rejected',
+		status,
+		reason
+	};
+}
+
+function failureLog(
+	status: number,
+	reason: string,
+	operation: string,
+	detail: Record<string, unknown> = {}
+): Record<string, unknown> {
+	return {
+		level: 'error',
+		area: 'object-replacement',
+		event: 'request_failed',
+		status,
+		reason,
+		operation,
+		...detail
+	};
+}
+
+function expectSingleLog(messages: unknown[], expected: Record<string, unknown>): void {
+	expect(messages).toEqual([JSON.stringify(expected)]);
+}
 
 function seedUser(db: D1Database, balance?: number): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -129,8 +183,10 @@ async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
 
 beforeEach(() => {
 	integration.cost = 2;
+	integration.costError = null;
 	integration.poll.mockReset().mockResolvedValue(null);
 	integration.submit.mockReset().mockResolvedValue('prompt-1');
+	jobStore.failNextCreate = false;
 });
 
 afterEach(() => {
@@ -140,9 +196,15 @@ afterEach(() => {
 describe('POST /api/object-replacement', () => {
 	it('requires authentication and a strict request body', async () => {
 		const db = makeD1();
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
 		const unauthenticated = await callPost(null, platform(db));
 		expect(unauthenticated.status).toBe(401);
+		expect(await unauthenticated.json()).toEqual({
+			error: { code: 'unauthorized', message: 'Authentication required' }
+		});
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(401, 'unauthorized'));
+		consoleWarn.mockClear();
 
 		seedUser(db, 12);
 		const invalid = await callPost({ pubkey: 'pubkey-1' }, platform(db), {
@@ -152,18 +214,69 @@ describe('POST /api/object-replacement', () => {
 		});
 		expect(invalid.status).toBe(400);
 		expect(integration.submit).not.toHaveBeenCalled();
+		expect(consoleWarn).not.toHaveBeenCalled();
+	});
+
+	it('logs account lookup failures without user identifiers', async () => {
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const expectedLog = failureLog(500, 'account_error', 'account_lookup');
+
+		const missingAccount = await callPost({ pubkey: 'missing-pubkey' }, platform(makeD1()));
+		expect(missingAccount.status).toBe(500);
+		expect(await missingAccount.json()).toEqual({
+			error: { code: 'account_error', message: 'Account record not found' }
+		});
+		expectSingleLog(consoleError.mock.calls.flat(), expectedLog);
+		expect(JSON.stringify(expectedLog)).not.toContain('missing-pubkey');
+		consoleError.mockClear();
+
+		const demoAccount = await callPost({ pubkey: DEMO_PUBKEY }, platform(makeD1()));
+		expect(demoAccount.status).toBe(500);
+		expectSingleLog(consoleError.mock.calls.flat(), expectedLog);
+		expect(JSON.stringify(expectedLog)).not.toContain(DEMO_PUBKEY);
 	});
 
 	it('requires an approved account with enough credit for the snapshotted tariff', async () => {
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		const unapprovedDb = makeD1();
 		seedUser(unapprovedDb);
 		const unapproved = await callPost({ pubkey: 'pubkey-1' }, platform(unapprovedDb));
 		expect(unapproved.status).toBe(403);
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(403, 'generation_restricted'));
+		consoleWarn.mockClear();
+
+		const exhaustedDb = makeD1();
+		seedUser(exhaustedDb, 0);
+		const exhausted = await callPost({ pubkey: 'pubkey-1' }, platform(exhaustedDb));
+		expect(exhausted.status).toBe(402);
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(402, 'insufficient_credit'));
+		consoleWarn.mockClear();
 
 		const underfundedDb = makeD1();
 		seedUser(underfundedDb, 1.5);
 		const underfunded = await callPost({ pubkey: 'pubkey-1' }, platform(underfundedDb));
 		expect(underfunded.status).toBe(402);
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(402, 'insufficient_credit'));
+		expect(integration.submit).not.toHaveBeenCalled();
+	});
+
+	it('logs billing pre-check failures without exception details', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		integration.costError = new Error('private billing detail');
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db));
+
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({
+			error: { code: 'object_replacement_failed', message: 'Object replacement failed' }
+		});
+		expectSingleLog(
+			consoleError.mock.calls.flat(),
+			failureLog(500, 'object_replacement_failed', 'billing_precheck')
+		);
+		expect(consoleError.mock.calls.flat().join(' ')).not.toContain('private billing detail');
 		expect(integration.submit).not.toHaveBeenCalled();
 	});
 
@@ -195,21 +308,35 @@ describe('POST /api/object-replacement', () => {
 	});
 
 	it.each([
-		['network_error', 502],
-		['invalid_configuration', 500]
+		['network_error', 502, 503],
+		['invalid_configuration', 500, undefined]
 	] as const)(
 		'maps %s submission failures without creating or charging a job',
-		async (code, expectedStatus) => {
+		async (code, expectedStatus, providerStatus) => {
 			const db = makeD1();
 			seedUser(db, 12);
 			integration.submit.mockRejectedValue(
-				new ComfyUiError(code, 'queue_workflow', 'private provider detail')
+				new ComfyUiError(code, 'queue_workflow', 'private provider detail', {
+					status: providerStatus
+				})
 			);
-			vi.spyOn(console, 'error').mockImplementation(() => undefined);
+			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 			const response = await callPost({ pubkey: 'pubkey-1' }, platform(db));
 
 			expect(response.status).toBe(expectedStatus);
+			expect(await response.json()).toEqual({
+				error: { code: 'object_replacement_failed', message: 'Object replacement failed' }
+			});
+			expectSingleLog(
+				consoleError.mock.calls.flat(),
+				failureLog(expectedStatus, 'object_replacement_failed', 'provider_submission', {
+					providerCode: code,
+					providerOperation: 'queue_workflow',
+					...(providerStatus === undefined ? {} : { providerStatus })
+				})
+			);
+			expect(consoleError.mock.calls.flat().join(' ')).not.toContain('private provider detail');
 			const count = await db
 				.prepare('SELECT COUNT(*) AS count FROM object_replacement_jobs')
 				.first<{ count: number }>();
@@ -222,9 +349,67 @@ describe('POST /api/object-replacement', () => {
 		}
 	);
 
+	it('logs remote-image fetch failures at the route boundary', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		integration.submit.mockRejectedValue(new RemoteImageImportError('remote_fetch_failed'));
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db));
+
+		expect(response.status).toBe(502);
+		expect(await response.json()).toEqual({
+			error: { code: 'remote_fetch_failed', message: 'Failed to fetch image' }
+		});
+		expectSingleLog(
+			consoleError.mock.calls.flat(),
+			failureLog(502, 'remote_fetch_failed', 'remote_image_import')
+		);
+	});
+
+	it('logs unknown submission failures without exception details', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		integration.submit.mockRejectedValue(new Error('private submission detail'));
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db));
+
+		expect(response.status).toBe(502);
+		expectSingleLog(
+			consoleError.mock.calls.flat(),
+			failureLog(502, 'object_replacement_failed', 'provider_submission')
+		);
+		expect(consoleError.mock.calls.flat().join(' ')).not.toContain('private submission detail');
+	});
+
+	it('logs job persistence failures without stored request data', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		jobStore.failNextCreate = true;
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db));
+
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({
+			error: { code: 'object_replacement_failed', message: 'Object replacement failed' }
+		});
+		expectSingleLog(
+			consoleError.mock.calls.flat(),
+			failureLog(500, 'object_replacement_failed', 'job_persistence')
+		);
+		const logged = consoleError.mock.calls.flat().join(' ');
+		expect(logged).not.toContain(requestBody.image);
+		expect(logged).not.toContain(requestBody.referenceImage);
+		expect(logged).not.toContain(requestBody.replacementObject);
+		expect(logged).not.toContain('private persistence detail');
+	});
+
 	it('rate-limits repeated paid submissions for one account', async () => {
 		const db = makeD1();
 		seedUser(db, 100);
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		integration.submit.mockImplementation(
 			async () => `prompt-${integration.submit.mock.calls.length}`
 		);
@@ -235,6 +420,7 @@ describe('POST /api/object-replacement', () => {
 		}
 		const limited = await callPost({ pubkey: 'pubkey-1' }, platform(db));
 		expect(limited.status).toBe(429);
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(429, 'rate_limited'));
 		expect(integration.submit).toHaveBeenCalledTimes(10);
 	});
 });
