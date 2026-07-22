@@ -50,6 +50,11 @@ interface ObjectReplacementJobRow {
 	completed_at: number | null;
 }
 
+interface ObjectReplacementDeductionSnapshotRow {
+	available_balance: number;
+	cost: number;
+}
+
 function toObjectReplacementJob(row: ObjectReplacementJobRow): ObjectReplacementJob {
 	return {
 		id: row.id,
@@ -143,14 +148,21 @@ export async function completeObjectReplacementJob(
 	outputUrl: string,
 	completedAt: number
 ): Promise<ObjectReplacementJob> {
-	const results = await db.batch<ObjectReplacementJobRow>([
+	const results = await db.batch<ObjectReplacementDeductionSnapshotRow | ObjectReplacementJobRow>([
 		db
 			.prepare(
-				'UPDATE credits SET balance = balance - ' +
+				'SELECT c.balance AS available_balance, j.cost FROM credits c ' +
+					'JOIN object_replacement_jobs j ON j.user_id = c.user_id ' +
+					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
+			)
+			.bind(id, userId),
+		db
+			.prepare(
+				'UPDATE credits SET balance = MAX(balance - ' +
 					"(SELECT cost FROM object_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing'), " +
+					'0), ' +
 					'updated_at = ? WHERE user_id = ? AND EXISTS ' +
-					"(SELECT 1 FROM object_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing') " +
-					'RETURNING balance'
+					"(SELECT 1 FROM object_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing')"
 			)
 			.bind(id, userId, completedAt, userId, id, userId),
 		db
@@ -171,8 +183,14 @@ export async function completeObjectReplacementJob(
 			)
 			.bind(outputUrl, userId, completedAt, completedAt, id, userId, userId)
 	]);
-	const row = results[2]?.results[0];
-	if (row) return toObjectReplacementJob(row);
+	const snapshot = results[0]?.results[0];
+	if (snapshot && 'available_balance' in snapshot && snapshot.available_balance < snapshot.cost) {
+		console.warn('Object replacement credit deduction exceeded available balance:', {
+			jobId: id
+		});
+	}
+	const row = results[3]?.results[0];
+	if (row && 'id' in row) return toObjectReplacementJob(row);
 	const existing = await getObjectReplacementJob(db, userId, id);
 	if (!existing) throw new Error('object replacement job not found');
 	if (existing.status === 'processing') throw new Error('object replacement job completion failed');

@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import {
 	completeObjectReplacementJob,
@@ -115,6 +115,59 @@ describe('object replacement jobs', () => {
 			.first<{ count: number }>();
 		expect(credit?.balance).toBe(10);
 		expect(count?.count).toBe(1);
+	});
+
+	it('clamps concurrent completion spending at zero and warns once', async () => {
+		const db = makeD1();
+		seedAccount(db, 3);
+		await seedJob(db, 'job-1');
+		await seedJob(db, 'job-2');
+		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+		const jobs = await Promise.all([
+			completeObjectReplacementJob(
+				db,
+				'user-1',
+				'job-1',
+				'https://cdn.example.test/result-1.png',
+				20
+			),
+			completeObjectReplacementJob(
+				db,
+				'user-1',
+				'job-2',
+				'https://cdn.example.test/result-2.png',
+				21
+			)
+		]);
+		await completeObjectReplacementJob(
+			db,
+			'user-1',
+			'job-2',
+			'https://cdn.example.test/result-2.png',
+			22
+		);
+
+		expect(jobs.map((job) => job.balanceAfter).sort()).toEqual([0, 1]);
+		const credit = await db
+			.prepare('SELECT balance FROM credits WHERE user_id = ?')
+			.bind('user-1')
+			.first<{ balance: number }>();
+		const generations = await db
+			.prepare('SELECT id, amount, balance_after FROM generations WHERE user_id = ? ORDER BY id')
+			.bind('user-1')
+			.all<{ id: string; amount: number; balance_after: number }>();
+		expect(credit?.balance).toBe(0);
+		expect(generations.results).toEqual([
+			{ id: 'job-1', amount: 2, balance_after: 1 },
+			{ id: 'job-2', amount: 2, balance_after: 0 }
+		]);
+		expect(warning).toHaveBeenCalledOnce();
+		expect(warning).toHaveBeenCalledWith(
+			'Object replacement credit deduction exceeded available balance:',
+			{ jobId: 'job-2' }
+		);
+		warning.mockRestore();
 	});
 
 	it('marks a provider failure without deducting credit', async () => {
