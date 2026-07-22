@@ -57,7 +57,7 @@
 	"vpc_services": [
 		{
 			"binding": "COMFYUI_BASE_URL",
-			"service_id": "019f88db-a4cb-77c1-8a60-1393dfbf47a5",
+			"service_id": "019f8921-fb99-7ca1-af8b-be63288ae38b",
 			"remote": true
 		}
 	]
