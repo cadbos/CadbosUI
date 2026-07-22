@@ -1,20 +1,14 @@
 {
   "openapi": "3.0.1",
   "info": {
-    "title": "MyArchitectAI API",
-    "description": "AI rendering API for architecture and interior design. Create photorealistic renderings, transfer styles between images, edit images with natural language, upscale images up to 8K, turn static renders into animations, and more. Rendering images in 13s, editing images in 1-3s, animating renders in 60-90s. Best practices [here](https://www.myarchitectai.com/rendering-tutorials).",
+    "title": "ArchAI API",
+    "description": "AI rendering API for architecture and interior design. Create photorealistic renderings, transfer styles between images, edit images with natural language, upscale images up to 8K, turn static renders into animations, and more. Rendering images in 13s, editing images in 1-3s, animating renders in 60-90s. \n\n## Rate limits\n\nEach API key is limited to **5 requests per second** with a burst allowance of **20 requests**. Requests over the limit are rejected with HTTP `429` and the body `{\"message\":\"Too Many Requests\"}`. Rejected requests are never charged.\n\nBuild a fallback into your integration: on a `429`, retry with exponential backoff and jitter (e.g. wait 1s, then 2s, 4s, up to a few attempts) instead of failing or retrying immediately.",
     "version": "1.0.0",
     "contact": {
-      "name": "MyArchitectAI",
-      "url": "https://www.myarchitectai.com"
-    },
-    "termsOfService": "https://www.myarchitectai.com/terms-and-conditions"
-  },
-  "servers": [
-    {
-      "url": "https://api.myarchitectai.com/v1"
+      "name": "ArchAI"
     }
-  ],
+  },
+  "servers": [],
   "paths": {
     "/render/interior": {
       "post": {
@@ -42,34 +36,16 @@
             }
           },
           "400": {
-            "description": "Generation failed due to invalid input or processing error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/BadRequest"
           },
           "403": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
@@ -105,34 +81,16 @@
             }
           },
           "400": {
-            "description": "Generation failed due to invalid input or processing error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/BadRequest"
           },
           "403": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
@@ -168,34 +126,16 @@
             }
           },
           "400": {
-            "description": "Generation failed due to invalid input or processing error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/BadRequest"
           },
           "403": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
@@ -231,34 +171,61 @@
             }
           },
           "400": {
-            "description": "Generation failed due to invalid input or processing error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/BadRequest"
           },
           "403": {
-            "description": "Missing or invalid API key",
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/change-textures": {
+      "post": {
+        "summary": "Change Textures",
+        "description": "Change the surface textures and materials of the masked area of an image while keeping its geometry and layout. Requires a `mask` marking the surfaces to retexture (white = change, black = keep; URL or base64). Choose exactly one of two modes: pass a `referenceImage` of the desired texture, or describe the texture with a `prompt` — providing both is rejected. Returns the resulting image URL as the only element of the output array.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeTexturesInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful generation",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
+                  "$ref": "#/components/schemas/ArrayGenerationResponse"
                 }
               }
             }
           },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
           "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
@@ -294,34 +261,16 @@
             }
           },
           "400": {
-            "description": "Generation failed due to invalid input or processing error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/BadRequest"
           },
           "403": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
@@ -357,34 +306,16 @@
             }
           },
           "400": {
-            "description": "Generation failed due to invalid input or processing error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/BadRequest"
           },
           "403": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
@@ -420,34 +351,16 @@
             }
           },
           "400": {
-            "description": "Generation failed due to invalid input or processing error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/BadRequest"
           },
           "403": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
@@ -483,34 +396,48 @@
             }
           },
           "400": {
-            "description": "Generation failed due to invalid input or processing error",
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/balance": {
+      "post": {
+        "summary": "Check Balance",
+        "description": "Return the current account balance for the API key. Use this to check your remaining balance without running — and paying for — a generation. Takes no request body.",
+        "responses": {
+          "200": {
+            "description": "Current account balance",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/BalanceResponse"
                 }
               }
             }
           },
           "403": {
-            "description": "Missing or invalid API key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
           },
           "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GatewayErrorResponse"
-                }
-              }
-            }
+            "$ref": "#/components/responses/InternalError"
           }
         },
         "security": [
@@ -559,7 +486,7 @@
         "properties": {
           "message": {
             "type": "string",
-            "description": "Error message returned by the API gateway"
+            "description": "Error message returned by the API"
           }
         }
       },
@@ -786,6 +713,59 @@
           }
         }
       },
+      "ChangeTexturesInput": {
+        "oneOf": [
+          {
+            "title": "Reference image mode",
+            "type": "object",
+            "required": [
+              "image",
+              "mask",
+              "referenceImage"
+            ],
+            "properties": {
+              "image": {
+                "type": "string",
+                "format": "uri",
+                "description": "URL of the source image whose textures to change"
+              },
+              "mask": {
+                "type": "string",
+                "description": "Mask marking the surfaces to retexture (white = change, black = keep). URL or base64-encoded image."
+              },
+              "referenceImage": {
+                "type": "string",
+                "format": "uri",
+                "description": "URL of a reference image showing the desired texture. Mutually exclusive with prompt."
+              }
+            }
+          },
+          {
+            "title": "Prompt mode",
+            "type": "object",
+            "required": [
+              "image",
+              "mask",
+              "prompt"
+            ],
+            "properties": {
+              "image": {
+                "type": "string",
+                "format": "uri",
+                "description": "URL of the source image whose textures to change"
+              },
+              "mask": {
+                "type": "string",
+                "description": "Mask marking the surfaces to retexture (white = change, black = keep). URL or base64-encoded image."
+              },
+              "prompt": {
+                "type": "string",
+                "description": "Natural-language description of the desired texture. Mutually exclusive with referenceImage."
+              }
+            }
+          }
+        ]
+      },
       "AnimateInput": {
         "required": [
           "startFrameUrl",
@@ -843,6 +823,18 @@
             "description": "Cost charged for this request"
           }
         }
+      },
+      "BalanceResponse": {
+        "type": "object",
+        "required": [
+          "balance"
+        ],
+        "properties": {
+          "balance": {
+            "type": "number",
+            "description": "Current account balance in USD"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -850,6 +842,48 @@
         "type": "apiKey",
         "name": "x-api-key",
         "in": "header"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Generation failed due to invalid input or processing error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Missing or invalid API key",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GatewayErrorResponse"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Rate limit exceeded — more than 5 requests/second (burst 20) from this API key. Retry with exponential backoff; rejected requests are not charged.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GatewayErrorResponse"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Internal server error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/GatewayErrorResponse"
+            }
+          }
+        }
       }
     }
   }
