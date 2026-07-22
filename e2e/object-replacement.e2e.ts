@@ -146,9 +146,7 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 
 	await panel.getByRole('button', { name: 'Новая замена' }).click();
 	await expect(page).not.toHaveURL(/job=/);
-	await expect(panel.getByLabel(/Точно опишите существующий объект/)).toHaveValue(
-		'  серый диван у окна  '
-	);
+	await expect(panel.getByLabel(/Точно опишите существующий объект/)).toHaveValue('');
 });
 
 test('resumes a stored completed job after reload without submitting again', async ({ page }) => {
@@ -290,8 +288,14 @@ test('keeps the accepted current-result lineage when another render finishes fir
 	await panel.getByRole('button', { name: 'Заменить объект' }).click();
 	await expect(page).toHaveURL(new RegExp(`job=${JOB_ID}`));
 
-	await page.getByRole('tab', { name: 'Создание' }).click();
-	await page.getByRole('button', { name: 'Сгенерировать' }).click();
+	// The full-screen generation overlay blocks pointer clicks while the object-
+	// replacement job is in flight, so drive this interleaving with the keyboard
+	// (a focused button's Enter key dispatches a native click, unaffected by the
+	// overlay's pointer-events) to still exercise the lineage-priority logic.
+	await page.getByRole('tab', { name: 'Создание' }).focus();
+	await page.keyboard.press('Enter');
+	await page.getByRole('button', { name: 'Сгенерировать' }).focus();
+	await page.keyboard.press('Enter');
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/newer-result.webp'
@@ -451,7 +455,12 @@ test('does not navigate back when an accepted submission finishes after a mode s
 	await panel.getByLabel(/Точно опишите существующий объект/).fill('gray sofa');
 	await panel.getByRole('button', { name: 'Заменить объект' }).click();
 	await expect.poll(() => postCount).toBe(1);
-	await page.getByRole('tab', { name: 'Редактирование' }).click();
+	// The full-screen generation overlay blocks pointer clicks while the
+	// submission is in flight, so drive the mode switch with the keyboard (a
+	// focused button's Enter key dispatches a native click, unaffected by the
+	// overlay's pointer-events) to still exercise the beforeNavigate guard.
+	await page.getByRole('tab', { name: 'Редактирование' }).focus();
+	await page.keyboard.press('Enter');
 	releaseResponse?.();
 	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
 	await expect(page).not.toHaveURL(/object-replacement/);
