@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Fetcher } from '@cloudflare/workers-types';
 import {
 	objectReplacementCost,
@@ -29,6 +29,10 @@ function vpcService(fetchImpl: typeof fetch): Fetcher {
 }
 
 describe('object replacement integration', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it('uses the default or configured positive tariff', () => {
 		expect(objectReplacementCost(platform({}))).toBe(0.03);
 		expect(objectReplacementCost(platform({ OBJECT_REPLACEMENT_COST: '3.5' }))).toBe(3.5);
