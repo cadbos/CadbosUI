@@ -49,6 +49,17 @@
 			"bucket_name": "cadbos-uploads",
 			"remote": true
 		}
+	],
+	// ComfyUI runs on a private VPS, reachable only through this VPC Service
+	// (Cloudflare Tunnel `comfyui-equuleus` -> localhost:8188), never over the
+	// public internet — it has no built-in auth. `remote: true` routes local
+	// dev through the real tunnel too, same as UPLOADS_BUCKET above.
+	"vpc_services": [
+		{
+			"binding": "COMFYUI_BASE_URL",
+			"service_id": "019f88db-a4cb-77c1-8a60-1393dfbf47a5",
+			"remote": true
+		}
 	]
 	// Secrets set via `wrangler secret put <NAME>` — never committed to source:
 	// ARCHAI_API_KEY

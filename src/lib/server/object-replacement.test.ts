@@ -13,6 +13,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+import type { Fetcher } from '@cloudflare/workers-types';
 import {
 	objectReplacementCost,
 	pollObjectReplacement,
@@ -21,6 +22,10 @@ import {
 
 function platform(env: Partial<App.Platform['env']>): App.Platform {
 	return { env } as App.Platform;
+}
+
+function vpcService(fetchImpl: typeof fetch): Fetcher {
+	return { fetch: fetchImpl } as unknown as Fetcher;
 }
 
 describe('object replacement integration', () => {
@@ -50,13 +55,14 @@ describe('object replacement integration', () => {
 		expect(fetcher).not.toHaveBeenCalled();
 	});
 
-	it('fetches validated inputs and submits to unauthenticated ComfyUI', async () => {
+	it('fetches validated inputs and submits over the ComfyUI VPC service, unauthenticated', async () => {
+		const imageFetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+			return new Response('image-bytes', { headers: { 'content-type': 'image/png' } });
+		});
+
 		let uploadCount = 0;
-		const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+		const vpcFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 			const url = new URL(input.toString());
-			if (url.hostname === 'images.example.test') {
-				return new Response('image-bytes', { headers: { 'content-type': 'image/png' } });
-			}
 			if (url.pathname === '/upload/image') {
 				uploadCount += 1;
 				return new Response(
@@ -80,7 +86,7 @@ describe('object replacement integration', () => {
 
 		await expect(
 			submitObjectReplacement(
-				platform({ COMFYUI_BASE_URL: 'http://comfy.internal:8188' }),
+				platform({ COMFYUI_BASE_URL: vpcService(vpcFetch) }),
 				{
 					image: 'https://images.example.test/scene.png',
 					referenceImage: 'https://images.example.test/reference.png',
@@ -90,7 +96,8 @@ describe('object replacement integration', () => {
 				'job-1'
 			)
 		).resolves.toBe('prompt-1');
-		expect(fetcher).toHaveBeenCalledTimes(5);
+		expect(imageFetcher).toHaveBeenCalledTimes(2);
+		expect(vpcFetch).toHaveBeenCalledTimes(3);
 	});
 
 	it('requires configuration when polling', async () => {
