@@ -27,16 +27,26 @@ const DEFAULT_TEXTURE_REPLACEMENT_COST = 0.03;
 const COMFYUI_REQUEST_TIMEOUT_MS = 120_000;
 export const TEXTURE_REPLACEMENT_TIMEOUT_MS = 10 * 60_000;
 
+// Target of the COMFYUI_BASE_URL VPC Service binding (wrangler.jsonc), which
+// routes to ComfyUI's actual localhost:8188 on the VPS over the private tunnel.
+const COMFYUI_VPC_TARGET_URL = 'http://localhost:8188/';
+
 function createClient(platform: App.Platform | undefined) {
-	const baseUrl = platform?.env?.COMFYUI_BASE_URL?.trim();
-	if (!baseUrl) {
+	const vpcService = platform?.env?.COMFYUI_BASE_URL;
+	if (!vpcService) {
 		throw new ComfyUiError(
 			'invalid_configuration',
 			'configuration',
-			'ComfyUI base URL not configured'
+			'ComfyUI VPC service not configured'
 		);
 	}
-	return createComfyUiClient({ baseUrl });
+	return createComfyUiClient({
+		baseUrl: COMFYUI_VPC_TARGET_URL,
+		// Fetcher.fetch is structurally identical to the DOM fetch signature at
+		// runtime; only its Request/RequestInfo types (from workers-types, with
+		// added `cf`/`fetcher` properties) are nominally distinct from DOM's.
+		fetch: vpcService.fetch.bind(vpcService) as unknown as typeof fetch
+	});
 }
 
 export function textureReplacementCost(platform: App.Platform | undefined): number {
