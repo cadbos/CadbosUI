@@ -66,7 +66,7 @@ function mockClient(): ComfyUiClient {
 	};
 }
 
-function request(replacementObject = '  sofa  ') {
+function request(replacementObject = '  компьютерный стул  ') {
 	return {
 		pollIntervalMs: 25,
 		reference: {
@@ -127,11 +127,14 @@ describe('runObjectReplacement', () => {
 		const expectedWorkflow = structuredClone(workflowTemplate) as ComfyWorkflow;
 		expectedWorkflow['4'].inputs.image = 'cadbos/jobs/scene (1).png';
 		expectedWorkflow['15'].inputs.image = 'reference.png';
-		expectedWorkflow['30'].inputs.value = 'sofa';
+		expectedWorkflow['30'].inputs.value = 'компьютерный стул';
 		expect(queuedWorkflow).toEqual(expectedWorkflow);
 		expect(workflowTemplate['4'].inputs.image).toBe('004 - Before (Workflow 10).jpg');
 		expect(workflowTemplate['15'].inputs.image).toBe('004 - Reference (Workflow 10).webp');
-		expect(workflowTemplate['30'].inputs.value).toBe('computer chair');
+		expect(workflowTemplate['30'].inputs.value).toBe('компьютерный стул');
+		expect(queuedWorkflow?.['75'].inputs.prompt).toEqual(['30', 0]);
+		expect(queuedWorkflow?.['31'].inputs.string_b).toEqual(['75', 0]);
+		expect(queuedWorkflow?.['33'].inputs.string_b).toEqual(['75', 0]);
 		expect(client.waitForCompletion).toHaveBeenCalledWith('prompt-1', {
 			pollIntervalMs: 25,
 			signal: undefined,

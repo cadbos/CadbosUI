@@ -266,17 +266,17 @@
 	},
 	"30": {
 		"inputs": {
-			"value": "computer chair"
+			"value": "компьютерный стул"
 		},
 		"class_type": "PrimitiveString",
 		"_meta": {
-			"title": "ОБЪЕКТ ЗАМЕНЫ — одно слово/фраза (EN), напр. sofa"
+			"title": "ОБЪЕКТ ЗАМЕНЫ — одно слово/фраза (любой язык)"
 		}
 	},
 	"31": {
 		"inputs": {
 			"string_a": "Remove the",
-			"string_b": ["30", 0],
+			"string_b": ["75", 0],
 			"delimiter": " "
 		},
 		"class_type": "StringConcatenate",
@@ -298,7 +298,7 @@
 	"33": {
 		"inputs": {
 			"string_a": "Add the",
-			"string_b": ["30", 0],
+			"string_b": ["75", 0],
 			"delimiter": " "
 		},
 		"class_type": "StringConcatenate",
@@ -535,7 +535,7 @@
 	},
 	"64": {
 		"inputs": {
-			"seed": 606395503849997,
+			"seed": 204756227029976,
 			"strength": 0.02,
 			"image": ["29", 0]
 		},
@@ -551,6 +551,29 @@
 		"class_type": "PreviewImage",
 		"_meta": {
 			"title": "Предварительный просмотр изображения"
+		}
+	},
+	"75": {
+		"inputs": {
+			"prompt": ["30", 0],
+			"target_language": "English",
+			"auto_release": true,
+			"llama_model": ["76", 0]
+		},
+		"class_type": "PromptTranslatorNode",
+		"_meta": {
+			"title": "Prompt Translator (GGUF)"
+		}
+	},
+	"76": {
+		"inputs": {
+			"model": "Hy-MT2-1.8B-Q6_K.gguf",
+			"device": "cuda",
+			"n_gpu_layers": -1
+		},
+		"class_type": "GGUFLoader",
+		"_meta": {
+			"title": "GGUFLoader"
 		}
 	}
 }
