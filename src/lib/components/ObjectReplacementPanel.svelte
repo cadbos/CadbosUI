@@ -34,19 +34,19 @@ before the Change Date. See LICENSE for complete terms.
 	const MAX_POLL_DELAY_MS = 30_000;
 
 	const jobResponseSchema = z.discriminatedUnion('status', [
-		z.object({ id: z.string().uuid(), status: z.literal('processing') }).strict(),
+		z.object({ id: z.uuid(), status: z.literal('processing') }).strict(),
 		z
 			.object({
-				id: z.string().uuid(),
+				id: z.uuid(),
 				status: z.literal('completed'),
-				outputUrl: z.string().url(),
+				outputUrl: z.url(),
 				cost: z.number().nonnegative(),
 				balance: z.number()
 			})
 			.strict(),
 		z
 			.object({
-				id: z.string().uuid(),
+				id: z.uuid(),
 				status: z.literal('failed'),
 				error: z.object({ code: z.string(), message: z.string() }).strict()
 			})

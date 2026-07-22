@@ -130,7 +130,7 @@ const sceneTypeSchema = z.enum(SCENE_TYPES);
 const imageSourceModeSchema = z.enum(IMAGE_SOURCE_MODES);
 const styleTransferStrengthSchema = z.number().min(0).max(1);
 const replacementObjectSchema = z.string().max(200);
-const objectReplacementJobIdSchema = z.string().uuid();
+export const objectReplacementJobIdSchema = z.uuid();
 
 const imageInputSchema = z.object({
 	url: z.string().trim().url(),
