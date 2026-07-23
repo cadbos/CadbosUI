@@ -16,7 +16,8 @@ import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser, UserUsageResponse } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { toLedgerAmountUnits } from '$lib/server/ledger-units';
+import { grantGenerationAccess, makeD1, seedGeneratedImage } from '$lib/server/testing/d1-shim';
 import { GET } from './+server';
 
 const ADMIN_PUBKEY = 'admin-pubkey';
@@ -27,12 +28,6 @@ function seedUser(db: D1Database, id: string, pubkey: string, createdAt: number)
 		.run();
 }
 
-function grantAccess(db: D1Database, userId: string, balance: number, updatedAt: number): void {
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-		.bind(userId, balance, updatedAt)
-		.run();
-}
-
 function seedGeneration(
 	db: D1Database,
 	id: string,
@@ -40,12 +35,91 @@ function seedGeneration(
 	amount: number,
 	createdAt: number
 ): void {
+	const transactionId = `generation:${id}`;
+	db.prepare('INSERT INTO ledger_transactions (id, occurred_at) VALUES (?, ?)')
+		.bind(transactionId, createdAt)
+		.run();
+	db.prepare(
+		'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
+			"SELECT ?, id, ? FROM ledger_accounts WHERE user_id = ? AND asset = 'app_credit'"
+	)
+		.bind(transactionId, -toLedgerAmountUnits(amount), userId)
+		.run();
+	db.prepare(
+		'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
+			"VALUES (?, (SELECT id FROM ledger_accounts WHERE user_id IS NULL AND asset = 'archai_token'), ?)"
+	)
+		.bind(transactionId, -toLedgerAmountUnits(amount))
+		.run();
 	db.prepare(
 		'INSERT INTO generations ' +
-			'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-			"VALUES (?, ?, ?, 'https://cdn.example.test/source.jpg', 'cozy', 'render', ?, 10, ?)"
+			'(id, user_id, prompt, kind, ledger_transaction_id, created_at) ' +
+			"VALUES (?, ?, 'cozy', 'render', ?, ?)"
 	)
-		.bind(id, userId, `https://cdn.example.test/${id}.webp`, amount, createdAt)
+		.bind(id, userId, transactionId, createdAt)
+		.run();
+	db.prepare('UPDATE ledger_transactions SET finalized = 1 WHERE id = ?').bind(transactionId).run();
+}
+
+function seedDeposit(
+	db: D1Database,
+	id: string,
+	userId: string,
+	creditsAwarded: number,
+	createdAt: number,
+	status: 'pending' | 'paid',
+	ledgerCredits = creditsAwarded
+): void {
+	const packageId = `package:${id}`;
+	const transactionId = `deposit:${id}`;
+	db.prepare(
+		'INSERT INTO packages ' +
+			'(id, usd_amount, credits_awarded, archai_tokens_awarded, enabled, created_at) ' +
+			'VALUES (?, 10, ?, 100, 1, ?)'
+	)
+		.bind(packageId, creditsAwarded, createdAt)
+		.run();
+	if (status === 'paid') {
+		db.prepare('INSERT INTO ledger_transactions (id, occurred_at) VALUES (?, ?)')
+			.bind(transactionId, createdAt)
+			.run();
+		db.prepare(
+			'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
+				"VALUES (?, (SELECT id FROM ledger_accounts WHERE user_id = ? AND asset = 'app_credit'), ?)"
+		)
+			.bind(transactionId, userId, toLedgerAmountUnits(ledgerCredits))
+			.run();
+		db.prepare(
+			'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
+				"VALUES (?, (SELECT id FROM ledger_accounts WHERE user_id IS NULL AND asset = 'archai_token'), ?)"
+		)
+			.bind(transactionId, toLedgerAmountUnits(100))
+			.run();
+		db.prepare('UPDATE ledger_transactions SET finalized = 1 WHERE id = ?')
+			.bind(transactionId)
+			.run();
+	}
+	db.prepare(
+		'INSERT INTO deposits ' +
+			'(id, user_id, package_id, provider, provider_invoice_id, payment_hash, sats_amount, ' +
+			'usd_amount, sats_per_usd_rate, credits_awarded, archai_tokens_awarded, status, ' +
+			'created_at, expires_at, paid_at, ledger_transaction_id) ' +
+			'VALUES (?, ?, ?, ?, ?, ?, 1000, 10, 100, ?, 100, ?, ?, ?, ?, ?)'
+	)
+		.bind(
+			id,
+			userId,
+			packageId,
+			'test',
+			`invoice:${id}`,
+			`hash:${id}`,
+			creditsAwarded,
+			status,
+			createdAt,
+			createdAt + 60_000,
+			status === 'paid' ? createdAt : null,
+			status === 'paid' ? transactionId : null
+		)
 		.run();
 }
 
@@ -150,9 +224,14 @@ describe('GET /api/usage', () => {
 		seedUser(db, 'admin', ADMIN_PUBKEY, 3000);
 		seedUser(db, 'user-1', 'pubkey-1', 2000);
 		seedUser(db, 'user-2', 'pubkey-2', 1000);
-		grantAccess(db, 'user-1', 7.5, 4000);
+		grantGenerationAccess(db, 'user-1', 8.5, 1, 4000);
+		seedDeposit(db, 'deposit-1', 'user-1', 3, 4500, 'paid', 4.25);
+		seedDeposit(db, 'deposit-2', 'user-1', 99, 4700, 'pending');
 		seedGeneration(db, 'generation-1', 'user-1', 1.25, 5000);
 		seedGeneration(db, 'generation-2', 'user-1', 2.75, 6000);
+		seedGeneratedImage(db, 'generation-free', 'user-1', 7000);
+		grantGenerationAccess(db, 'user-2', 1.5, 1, 5000);
+		seedGeneration(db, 'generation-3', 'user-2', 1.5, 5500);
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db), '?size=10');
 		const result = (await response.json()) as UserUsageResponse;
@@ -170,10 +249,10 @@ describe('GET /api/usage', () => {
 			},
 			{
 				pubkey: 'pubkey-1',
-				balance: 7.5,
-				totalDeposit: 0,
-				lastDepositAt: null,
-				generationCount: 2,
+				balance: 8.75,
+				totalDeposit: 4.25,
+				lastDepositAt: 4500,
+				generationCount: 3,
 				totalSpend: 4,
 				latestSpendAt: 6000
 			},
@@ -182,9 +261,9 @@ describe('GET /api/usage', () => {
 				balance: 0,
 				totalDeposit: 0,
 				lastDepositAt: null,
-				generationCount: 0,
-				totalSpend: 0,
-				latestSpendAt: null
+				generationCount: 1,
+				totalSpend: 1.5,
+				latestSpendAt: 5500
 			}
 		]);
 	});

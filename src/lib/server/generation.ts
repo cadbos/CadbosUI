@@ -13,6 +13,7 @@
  */
 
 import { dev } from '$app/environment';
+import { env } from '$env/dynamic/private';
 import { createClient } from '$lib/server/archai/client';
 import {
 	postEditByPrompt,
@@ -41,9 +42,28 @@ const GENERATED_IMAGE_FETCH_TIMEOUT_MS = 60_000;
 // (NFR-6/8) — log them here and surface only a generic, operation-appropriate
 // message to the caller, which the route handler passes straight through to the
 // client.
-function generationFailed(operation: string, clientMessage: string, detail: unknown): never {
+export class GenerationProviderError extends Error {
+	readonly outcome: 'explicit_failure' | 'ambiguous';
+
+	constructor(message: string, outcome: 'explicit_failure' | 'ambiguous') {
+		super(message);
+		this.name = 'GenerationProviderError';
+		this.outcome = outcome;
+	}
+}
+
+export function isExplicitGenerationFailure(error: unknown): boolean {
+	return error instanceof GenerationProviderError && error.outcome === 'explicit_failure';
+}
+
+function generationFailed(
+	operation: string,
+	clientMessage: string,
+	detail: unknown,
+	outcome: GenerationProviderError['outcome']
+): never {
 	console.error(`archAI ${operation} failed:`, detail);
-	throw new Error(clientMessage);
+	throw new GenerationProviderError(clientMessage, outcome);
 }
 
 function requestClientFor(apiKey: string, apiUrl: string): ReturnType<typeof createClient> {
@@ -140,14 +160,19 @@ async function processRenderResult(
 	try {
 		result = await call();
 	} catch (err) {
-		generationFailed(operation, clientMessage, err);
+		generationFailed(operation, clientMessage, err, 'ambiguous');
 	}
 
-	if (result.error) generationFailed(operation, clientMessage, result.error);
+	if (result.error) generationFailed(operation, clientMessage, result.error, 'explicit_failure');
 
 	const data = result.data;
 	if (!data) {
-		generationFailed(operation, clientMessage, 'empty response from generation service');
+		generationFailed(
+			operation,
+			clientMessage,
+			'empty response from generation service',
+			'explicit_failure'
+		);
 	}
 
 	const outputUrl = Array.isArray(data.output) ? data.output[0] : data.output;
@@ -155,7 +180,8 @@ async function processRenderResult(
 		generationFailed(
 			operation,
 			clientMessage,
-			`no image URL in output: ${JSON.stringify(data.output)}`
+			`no image URL in output: ${JSON.stringify(data.output)}`,
+			'explicit_failure'
 		);
 	}
 
@@ -170,6 +196,7 @@ export async function renderInterior(
 	platform: App.Platform | undefined,
 	params: { image: string; prompt: string; outputFormat: OutputFormat }
 ): Promise<RenderResponse> {
+	if (dev && env.PLAYWRIGHT_PAID_FLOW === '1') return mockRender();
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
@@ -178,7 +205,8 @@ export async function renderInterior(
 		generationFailed(
 			'render/interior',
 			'Render failed',
-			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
+			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`,
+			'explicit_failure'
 		);
 	}
 
@@ -203,6 +231,7 @@ export async function renderExterior(
 	platform: App.Platform | undefined,
 	params: { image: string; prompt: string; outputFormat: OutputFormat }
 ): Promise<RenderResponse> {
+	if (dev && env.PLAYWRIGHT_PAID_FLOW === '1') return mockRenderExterior();
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
@@ -211,7 +240,8 @@ export async function renderExterior(
 		generationFailed(
 			'render/exterior',
 			'Render failed',
-			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
+			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`,
+			'explicit_failure'
 		);
 	}
 
@@ -235,6 +265,7 @@ export async function editInterior(
 	platform: App.Platform | undefined,
 	params: { image: string; prompt: string }
 ): Promise<RenderResponse> {
+	if (dev && env.PLAYWRIGHT_PAID_FLOW === '1') return mockEdit();
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
@@ -243,7 +274,8 @@ export async function editInterior(
 		generationFailed(
 			'edit-by-prompt',
 			'Edit failed',
-			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
+			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`,
+			'explicit_failure'
 		);
 	}
 
@@ -255,14 +287,21 @@ export async function editInterior(
 			body: { image: params.image, prompt: params.prompt }
 		});
 	} catch (err) {
-		generationFailed('edit-by-prompt', 'Edit failed', err);
+		generationFailed('edit-by-prompt', 'Edit failed', err, 'ambiguous');
 	}
 
-	if (result.error) generationFailed('edit-by-prompt', 'Edit failed', result.error);
+	if (result.error) {
+		generationFailed('edit-by-prompt', 'Edit failed', result.error, 'explicit_failure');
+	}
 
 	const data = result.data;
 	if (!data) {
-		generationFailed('edit-by-prompt', 'Edit failed', 'empty response from edit service');
+		generationFailed(
+			'edit-by-prompt',
+			'Edit failed',
+			'empty response from edit service',
+			'explicit_failure'
+		);
 	}
 
 	// И-MA-ED2: output is always a single URL string, unlike render/interior's
@@ -271,7 +310,8 @@ export async function editInterior(
 		generationFailed(
 			'edit-by-prompt',
 			'Edit failed',
-			`no image URL in output: ${JSON.stringify(data.output)}`
+			`no image URL in output: ${JSON.stringify(data.output)}`,
+			'explicit_failure'
 		);
 	}
 
@@ -293,6 +333,7 @@ export async function styleTransferInterior(
 		styleTransferStrength?: number | undefined;
 	}
 ): Promise<RenderResponse> {
+	if (dev && env.PLAYWRIGHT_PAID_FLOW === '1') return mockStyleTransfer();
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
@@ -301,7 +342,8 @@ export async function styleTransferInterior(
 		generationFailed(
 			'style-transfer',
 			'Style transfer failed',
-			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
+			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`,
+			'explicit_failure'
 		);
 	}
 
@@ -322,17 +364,20 @@ export async function styleTransferInterior(
 			}
 		});
 	} catch (err) {
-		generationFailed('style-transfer', 'Style transfer failed', err);
+		generationFailed('style-transfer', 'Style transfer failed', err, 'ambiguous');
 	}
 
-	if (result.error) generationFailed('style-transfer', 'Style transfer failed', result.error);
+	if (result.error) {
+		generationFailed('style-transfer', 'Style transfer failed', result.error, 'explicit_failure');
+	}
 
 	const data = result.data;
 	if (!data) {
 		generationFailed(
 			'style-transfer',
 			'Style transfer failed',
-			'empty response from style service'
+			'empty response from style service',
+			'explicit_failure'
 		);
 	}
 
@@ -341,7 +386,8 @@ export async function styleTransferInterior(
 		generationFailed(
 			'style-transfer',
 			'Style transfer failed',
-			`no image URL in output: ${JSON.stringify(data.output)}`
+			`no image URL in output: ${JSON.stringify(data.output)}`,
+			'explicit_failure'
 		);
 	}
 
@@ -358,6 +404,7 @@ export async function upscale4k(
 	platform: App.Platform | undefined,
 	params: { image: string; outputFormat?: OutputFormat }
 ): Promise<RenderResponse> {
+	if (dev && env.PLAYWRIGHT_PAID_FLOW === '1') return mockUpscale();
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
@@ -366,7 +413,8 @@ export async function upscale4k(
 		generationFailed(
 			'upscale-4k',
 			'Upscale failed',
-			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
+			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`,
+			'explicit_failure'
 		);
 	}
 

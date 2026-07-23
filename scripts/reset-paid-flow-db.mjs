@@ -12,21 +12,6 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { defineConfig } from '@playwright/test';
+import { rm } from 'node:fs/promises';
 
-export default defineConfig({
-	webServer: {
-		command: 'pnpm run preview --host 127.0.0.1 --port 4174',
-		port: 4174,
-		timeout: 180_000
-	},
-	use: { baseURL: 'http://127.0.0.1:4174' },
-	testDir: 'e2e',
-	projects: [
-		{
-			name: 'ui',
-			testMatch: '**/*.e2e.{ts,js}',
-			testIgnore: '**/*.paid.e2e.{ts,js}'
-		}
-	]
-});
+await rm('/tmp/cadbos-paid-flow-d1', { recursive: true, force: true });

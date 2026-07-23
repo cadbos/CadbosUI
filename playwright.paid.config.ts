@@ -15,18 +15,8 @@
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
-	webServer: {
-		command: 'pnpm run preview --host 127.0.0.1 --port 4174',
-		port: 4174,
-		timeout: 180_000
-	},
-	use: { baseURL: 'http://127.0.0.1:4174' },
+	webServer: { command: 'pnpm run e2e:server', port: 4175, timeout: 180_000 },
+	use: { baseURL: 'http://127.0.0.1:4175' },
 	testDir: 'e2e',
-	projects: [
-		{
-			name: 'ui',
-			testMatch: '**/*.e2e.{ts,js}',
-			testIgnore: '**/*.paid.e2e.{ts,js}'
-		}
-	]
+	projects: [{ name: 'paid-flow', testMatch: '**/*.paid.e2e.{ts,js}', workers: 1 }]
 });
