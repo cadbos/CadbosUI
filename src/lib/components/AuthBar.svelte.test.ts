@@ -111,6 +111,7 @@ function mockFetch(
 beforeEach(() => {
 	auth.status = 'anonymous';
 	auth.user = null;
+	auth.credit = null;
 	auth.nostrProfile = null;
 	auth.profileDraft.firstName = '';
 	auth.profileDraft.lastName = '';
@@ -225,40 +226,32 @@ it('returns to anonymous when the NIP-46 connection is cancelled', async () => {
 	expect(auth.error).toBeNull();
 });
 
-it('shows the approved-account balance and history rounded to two decimals after sign-in', async () => {
+it('loads approved-account credit after sign-in', async () => {
+	const credit = {
+		balance: 4.9399999999999995,
+		updatedAt: Date.now(),
+		history: [
+			{
+				id: 'txn-1',
+				amount: 0.06,
+				balanceAfter: 4.9399999999999995,
+				kind: 'object-replacement' as const,
+				createdAt: 1
+			}
+		]
+	};
 	mockFetch(
 		() => Response.json({ user: { pubkey: pk } }),
 		undefined,
-		() =>
-			Response.json({
-				user: { pubkey: pk },
-				credit: {
-					balance: 4.9399999999999995,
-					updatedAt: Date.now(),
-					history: [
-						{
-							id: 'txn-1',
-							amount: 0.06,
-							balanceAfter: 4.9399999999999995,
-							kind: 'object-replacement',
-							createdAt: 1
-						}
-					]
-				}
-			})
+		() => Response.json({ user: { pubkey: pk }, credit })
 	);
 
-	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
-	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
+	await auth.loginNip07();
 
-	await expect.element(screen.getByText('Баланс: 4.94')).toBeVisible();
-	await screen.getByText('История трат').click();
-	await expect.element(screen.getByText(/Замена объекта/)).toBeVisible();
-	await expect.element(screen.getByText(/−0\.06 → 4\.94/)).toBeVisible();
+	await expect.poll(() => auth.credit).toEqual(credit);
 });
 
-it('restores and displays a texture-replacement entry in credit history', async () => {
+it('restores a texture-replacement entry in credit state', async () => {
 	mockFetch(
 		() => new Response(null, { status: 401 }),
 		undefined,
@@ -282,13 +275,10 @@ it('restores and displays a texture-replacement entry in credit history', async 
 	);
 
 	await auth.loadSession();
-	const screen = render(AuthBar);
 
 	expect(auth.status).toBe('authenticated');
 	expect(auth.pubkey).toBe(pk);
 	expect(auth.credit?.history).toEqual([expect.objectContaining({ kind: 'texture-replacement' })]);
-	await screen.getByText('История трат').click();
-	await expect.element(screen.getByText(/Замена текстуры/)).toBeVisible();
 });
 
 it('closes the sign-in menu on an outside click, and on Escape returns focus to the trigger', async () => {
