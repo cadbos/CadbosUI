@@ -12,26 +12,29 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { untrack } from 'svelte';
 import type { TranslationKey } from '$lib/i18n/index.svelte';
 
-// Single source of truth for the full-screen "generation in progress" overlay
-// (GenerationOverlay.svelte, mounted once in +layout.svelte). Every submit flow
-// (create, edit, style transfer, object replacement, upscale) calls start()/stop()
-// around its own request instead of rendering its own loading UI.
 class GenerationOverlayState {
 	messageKey = $state<TranslationKey | null>(null);
 	detailKey = $state<TranslationKey | null>(null);
+	#activeFlows = $state(0);
 
 	get active(): boolean {
-		return this.messageKey !== null;
+		return this.#activeFlows > 0;
 	}
 
 	start(messageKey: TranslationKey, detailKey?: TranslationKey): void {
+		this.#activeFlows = untrack(() => this.#activeFlows) + 1;
 		this.messageKey = messageKey;
 		this.detailKey = detailKey ?? null;
 	}
 
 	stop(): void {
+		const activeFlows = Math.max(0, untrack(() => this.#activeFlows) - 1);
+		this.#activeFlows = activeFlows;
+		if (activeFlows > 0) return;
+
 		this.messageKey = null;
 		this.detailKey = null;
 	}
