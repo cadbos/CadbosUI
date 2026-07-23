@@ -14,6 +14,12 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import { mockFeaturebase } from './featurebase';
+
+test.beforeEach(async ({ page }) => {
+	await mockFeaturebase(page);
+});
+
 function promptPreview(page: Page): Locator {
 	return page.getByLabel('Итоговый промпт').filter({ visible: true });
 }
@@ -51,6 +57,83 @@ test('renders the workspace and switches views', async ({ page }) => {
 	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
 });
 
+test('opens the localized Featurebase feedback widget', async ({ page }) => {
+	await page.goto('/');
+
+	const trigger = page.locator('.fb-feedback-widget-feedback-button');
+	await expect(trigger).toBeVisible();
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (
+					window as Window & { __featurebaseCalls?: [string, Record<string, unknown>][] }
+				).__featurebaseCalls;
+				const config = calls?.find(([action]) => action === 'initialize_feedback_widget')?.[1];
+				if (!config) return null;
+				return {
+					locale: config.locale,
+					organization: config.organization,
+					placement: config.placement ?? null,
+					theme: config.theme
+				};
+			})
+		)
+		.toEqual({
+			locale: 'ru',
+			organization: 'cadbos-test',
+			placement: null,
+			theme: 'light'
+		});
+
+	await trigger.click();
+	await expect(page.locator('html')).toHaveAttribute('data-featurebase-feedback-opened', 'true');
+});
+
+test('updates Featurebase identity when the user signs in and out', async ({ page }) => {
+	const featurebaseJwt = 'signed-featurebase-jwt';
+	await page.route('**/auth/me', (route) =>
+		route.fulfill({
+			contentType: 'application/json',
+			body: JSON.stringify({
+				user: { pubkey: 'a'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt
+			})
+		})
+	);
+	await page.goto('/');
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (
+					window as Window & { __featurebaseCalls?: [string, Record<string, unknown>?][] }
+				).__featurebaseCalls;
+				return calls?.filter(([action]) => action === 'initialize_feedback_widget').at(-1)?.[1]
+					?.featurebaseJwt;
+			})
+		)
+		.toBe(featurebaseJwt);
+
+	await page.locator('.profile-toggle').click();
+	await page.getByTestId('logout-button').click();
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (
+					window as Window & { __featurebaseCalls?: [string, Record<string, unknown>?][] }
+				).__featurebaseCalls;
+				const feedbackCalls = calls?.filter(([action]) => action === 'initialize_feedback_widget');
+				return {
+					destroyed: calls?.some(([action]) => action === 'destroy_feedback_widget'),
+					featurebaseJwt: feedbackCalls?.at(-1)?.[1]?.featurebaseJwt ?? null
+				};
+			})
+		)
+		.toEqual({ destroyed: true, featurebaseJwt: null });
+});
+
 test('hides generated image sidebar for anonymous users', async ({ page }) => {
 	await openCreate(page);
 
@@ -68,7 +151,8 @@ test('shows authenticated generated images newest first', async ({ page }) => {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null
 			})
 		});
 	});
@@ -318,7 +402,8 @@ test('generating with the exterior scene type calls the exterior render route', 
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null
 			})
 		});
 	});
@@ -389,10 +474,22 @@ test('generating with the exterior scene type calls the exterior render route', 
 test('serves security headers and a content security policy', async ({ request }) => {
 	const response = await request.get('/');
 	const headers = response.headers();
+	const contentSecurityPolicy = headers['content-security-policy'] ?? '';
 
 	expect(headers['x-content-type-options']).toBe('nosniff');
 	expect(headers['x-frame-options']).toBe('DENY');
 	expect(headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
 	expect(headers['permissions-policy']).toContain('geolocation=()');
-	expect(headers['content-security-policy']).toContain("default-src 'self'");
+	expect(contentSecurityPolicy).toContain("default-src 'self'");
+	expect(contentSecurityPolicy).toContain('https://do.featurebase.app');
+	expect(contentSecurityPolicy).toContain('https://*.featurebase.app');
+	expect(contentSecurityPolicy).toContain('wss://*.featurebase.app');
+	expect(contentSecurityPolicy).toContain('https://fonts.googleapis.com');
+	expect(contentSecurityPolicy).toContain('https://fonts.gstatic.com');
+	expect(contentSecurityPolicy).toContain('https://*.featurebase-attachments.com');
+	// The Featurebase SDK injects <style> elements with per-session computed
+	// CSS it can't hash-pin — without this, the widget renders unstyled in
+	// production (regression: https://do.featurebase.app/js/sdk.js style-src
+	// violations reported against a build missing style-src-elem).
+	expect(contentSecurityPolicy).toMatch(/style-src-elem[^;]*'unsafe-inline'/);
 });

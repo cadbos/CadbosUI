@@ -98,7 +98,10 @@ function mockFetch(
 				if (init?.method !== 'PATCH') return Promise.resolve(new Response(null, { status: 405 }));
 				return Promise.resolve(
 					profile?.(init) ??
-						Response.json({ user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' } })
+						Response.json({
+							featurebaseJwt: null,
+							user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' }
+						})
 				);
 			}
 			if (input.endsWith('/auth/logout'))
@@ -129,7 +132,7 @@ it('signs in via NIP-07 (sends a Nostr authorization) and signs out', async () =
 	let sentAuthHeader: string | null = null;
 	mockFetch((init) => {
 		sentAuthHeader = new Headers(init?.headers).get('authorization');
-		return Response.json({ user: { pubkey: pk } });
+		return Response.json({ featurebaseJwt: null, user: { pubkey: pk } });
 	});
 
 	const screen = render(AuthBar);
@@ -147,10 +150,10 @@ it('signs in via NIP-07 (sends a Nostr authorization) and signs out', async () =
 it('offers to complete Cadbos profile fields after sign-in', async () => {
 	let profileRequest: unknown = null;
 	mockFetch(
-		() => Response.json({ user: { pubkey: pk } }),
+		() => Response.json({ featurebaseJwt: null, user: { pubkey: pk } }),
 		(init) => {
 			profileRequest = init;
-			return Response.json({ user: { pubkey: pk, firstName: 'Ada' } });
+			return Response.json({ featurebaseJwt: null, user: { pubkey: pk, firstName: 'Ada' } });
 		}
 	);
 
@@ -174,7 +177,7 @@ it('offers to complete Cadbos profile fields after sign-in', async () => {
 });
 
 it('shows an error when no Nostr extension is present', async () => {
-	mockFetch(() => Response.json({ user: { pubkey: pk } }));
+	mockFetch(() => Response.json({ featurebaseJwt: null, user: { pubkey: pk } }));
 	delete window.nostr;
 
 	const screen = render(AuthBar);
@@ -190,7 +193,7 @@ it('signs in via NIP-46: shows the QR, then completes when the signer connects',
 	let sentAuthHeader: string | null = null;
 	mockFetch((init) => {
 		sentAuthHeader = new Headers(init?.headers).get('authorization');
-		return Response.json({ user: { pubkey: pk } });
+		return Response.json({ featurebaseJwt: null, user: { pubkey: pk } });
 	});
 
 	const screen = render(AuthBar);
@@ -211,7 +214,7 @@ it('signs in via NIP-46: shows the QR, then completes when the signer connects',
 });
 
 it('returns to anonymous when the NIP-46 connection is cancelled', async () => {
-	mockFetch(() => Response.json({ user: { pubkey: pk } }));
+	mockFetch(() => Response.json({ featurebaseJwt: null, user: { pubkey: pk } }));
 
 	const screen = render(AuthBar);
 	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
@@ -227,10 +230,11 @@ it('returns to anonymous when the NIP-46 connection is cancelled', async () => {
 
 it('shows the approved-account balance and history rounded to two decimals after sign-in', async () => {
 	mockFetch(
-		() => Response.json({ user: { pubkey: pk } }),
+		() => Response.json({ featurebaseJwt: null, user: { pubkey: pk } }),
 		undefined,
 		() =>
 			Response.json({
+				featurebaseJwt: null,
 				user: { pubkey: pk },
 				credit: {
 					balance: 4.9399999999999995,
@@ -263,6 +267,7 @@ it('restores an authenticated session on load, including an upscale entry in cre
 		undefined,
 		() =>
 			Response.json({
+				featurebaseJwt: null,
 				user: { pubkey: pk },
 				credit: {
 					balance: 10,
@@ -280,7 +285,7 @@ it('restores an authenticated session on load, including an upscale entry in cre
 });
 
 it('closes the sign-in menu on an outside click, and on Escape returns focus to the trigger', async () => {
-	mockFetch(() => Response.json({ user: { pubkey: pk } }));
+	mockFetch(() => Response.json({ featurebaseJwt: null, user: { pubkey: pk } }));
 
 	const screen = render(AuthBar);
 	const trigger = screen.getByRole('button', { name: 'Войти', exact: true });
@@ -318,7 +323,12 @@ it('closes the sign-in menu on an outside click, and on Escape returns focus to 
 it('closes the profile panel on an outside click, and on Escape returns focus to the toggle', async () => {
 	// firstName/lastName present so the panel starts closed (no missingCadbosName
 	// auto-open) — the dismiss/reopen cycle below needs a real closed→open transition.
-	mockFetch(() => Response.json({ user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' } }));
+	mockFetch(() =>
+		Response.json({
+			featurebaseJwt: null,
+			user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' }
+		})
+	);
 
 	const screen = render(AuthBar);
 	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
@@ -361,7 +371,7 @@ it('cancelling after the signer connects but before verification stays anonymous
 	let verifyCalled = false;
 	mockFetch(() => {
 		verifyCalled = true;
-		return Response.json({ user: { pubkey: pk } });
+		return Response.json({ featurebaseJwt: null, user: { pubkey: pk } });
 	});
 
 	// A signer that connects but holds its signature pending until we release it,

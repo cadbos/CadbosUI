@@ -12,15 +12,14 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { defineConfig } from '@playwright/test';
+import type { LayoutServerLoad } from './$types';
 
-export default defineConfig({
-	webServer: {
-		command: 'pnpm run build && pnpm run preview',
-		env: { PLAYWRIGHT_TEST: '1' },
-		port: 4173
-	},
-	use: { baseURL: 'http://localhost:4173' },
-	testDir: 'e2e',
-	testMatch: '**/*.e2e.{ts,js}'
-});
+export const load: LayoutServerLoad = ({ platform }) => {
+	const featurebaseAppId = platform?.env.FEATUREBASE_APP_ID?.trim() || null;
+
+	if (!featurebaseAppId) {
+		console.error('Featurebase SDK disabled: FEATUREBASE_APP_ID is not configured');
+	}
+
+	return { featurebaseAppId };
+};

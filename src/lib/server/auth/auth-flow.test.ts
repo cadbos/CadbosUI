@@ -13,6 +13,7 @@
  */
 
 import { beforeEach, describe, it, expect } from 'vitest';
+import jwt from 'jsonwebtoken';
 import { finalizeEvent, generateSecretKey, getPublicKey, type Event } from 'nostr-tools/pure';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Cookies, RequestEvent } from '@sveltejs/kit';
@@ -26,6 +27,7 @@ import { POST as logoutPOST } from '../../../routes/auth/logout/+server';
 import { PATCH as profilePATCH } from '../../../routes/auth/profile/+server';
 
 const VERIFY_URL = 'https://cadbos.example/auth/verify';
+const FEATUREBASE_JWT_SECRET = 'featurebase-test-secret';
 
 type SetOptions = Parameters<Cookies['set']>[2];
 type DeleteOptions = Parameters<Cookies['delete']>[1];
@@ -76,7 +78,8 @@ function signLogin(secretKey: Uint8Array, challenge: string): Event {
 	);
 }
 
-const platform = (db: D1Database) => ({ env: { DB: db } }) as unknown as App.Platform;
+const platform = (db: D1Database) =>
+	({ env: { DB: db, FEATUREBASE_JWT_SECRET } }) as unknown as App.Platform;
 
 // Invoke an endpoint with a partial RequestEvent. The handler's own signature
 // drives the types, so strict mode still validates the fake event's shape.
@@ -126,7 +129,12 @@ describe('auth flow', () => {
 
 		const response = await verify(db, cookies, signLogin(sk, challenge));
 		expect(response.status).toBe(200);
-		expect((await response.json()).user).toEqual({ pubkey });
+		const body = await response.json();
+		expect(body.user).toEqual({ pubkey });
+		expect(jwt.verify(body.featurebaseJwt, FEATUREBASE_JWT_SECRET)).toEqual({
+			userId: pubkey,
+			iat: expect.any(Number)
+		});
 
 		const sessionId = requireSessionId(cookies);
 		expect(await findValidSession(db, sessionId, Date.now())).toEqual({ pubkey });

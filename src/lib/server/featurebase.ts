@@ -12,15 +12,16 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { defineConfig } from '@playwright/test';
+import jwt from 'jsonwebtoken';
+import type { SessionUser } from '$lib/api/contract';
 
-export default defineConfig({
-	webServer: {
-		command: 'pnpm run build && pnpm run preview',
-		env: { PLAYWRIGHT_TEST: '1' },
-		port: 4173
-	},
-	use: { baseURL: 'http://localhost:4173' },
-	testDir: 'e2e',
-	testMatch: '**/*.e2e.{ts,js}'
-});
+export function createFeaturebaseJwt(user: SessionUser, secret?: string): string | null {
+	if (!secret?.trim()) {
+		console.error(
+			'Featurebase user identification disabled: FEATUREBASE_JWT_SECRET is not configured'
+		);
+		return null;
+	}
+
+	return jwt.sign({ userId: user.pubkey }, secret, { algorithm: 'HS256' });
+}

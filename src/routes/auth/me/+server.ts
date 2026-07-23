@@ -20,15 +20,17 @@ import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { getCredit, getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+import { createFeaturebaseJwt } from '$lib/server/featurebase';
 import { listCreditHistory } from '$lib/server/generations';
 
 export const GET: RequestHandler = async ({ locals, platform }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	const featurebaseJwt = createFeaturebaseJwt(locals.user, platform?.env.FEATUREBASE_JWT_SECRET);
 
 	// The demo session bypasses D1 entirely (hooks.server.ts) — no approved-account
 	// balance to show; real sessions are always backed by a D1 user row.
 	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
-		return json({ user: locals.user } satisfies MeResponse);
+		return json({ user: locals.user, featurebaseJwt } satisfies MeResponse);
 	}
 
 	const db = getDb(platform);
@@ -47,5 +49,5 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 		}
 	}
 
-	return json({ user: locals.user, credit } satisfies MeResponse);
+	return json({ user: locals.user, featurebaseJwt, credit } satisfies MeResponse);
 };

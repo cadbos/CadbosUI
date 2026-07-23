@@ -35,24 +35,43 @@ export default defineConfig({
 
 			// Deployed to Cloudflare Workers (Static Assets); see wrangler.jsonc.
 			adapter: adapter({
-				platformProxy: { persist: process.env.PLAYWRIGHT_TEST === '1' ? false : undefined }
+				platformProxy: {
+					envFiles: process.env.PLAYWRIGHT_TEST === '1' ? ['.env', '.env.test'] : undefined,
+					persist: process.env.PLAYWRIGHT_TEST === '1' ? false : undefined
+				}
 			}),
 
 			csp: {
 				mode: 'auto',
 				directives: {
 					'default-src': ['self'],
-					'script-src': ['self'],
-					'style-src': ['self'],
+					'script-src': ['self', 'https://do.featurebase.app'],
+					'style-src': ['self', 'https://do.featurebase.app', 'https://fonts.googleapis.com'],
 					// SvelteKit applies inline `style="…"` attributes at runtime (the
 					// `display:contents` wrapper and the router's screen-reader announcer).
 					// Nonces/hashes can't cover style *attributes*, so scope a relaxation to
-					// them only — `style-src` stays strict for <style>/<link> stylesheets.
+					// them only — `style-src` stays strict for <link>-sourced stylesheets.
 					'style-src-attr': ['unsafe-inline'],
+					// The Featurebase SDK injects <style> elements with per-session computed
+					// CSS (positioning, org branding colors) that can't be hash-pinned —
+					// relax element-level inline styles only, same reasoning as style-src-attr.
+					'style-src-elem': [
+						'self',
+						'https://do.featurebase.app',
+						'https://fonts.googleapis.com',
+						'unsafe-inline'
+					],
 					'img-src': ['self', 'blob:', 'data:', 'https:'],
-					'font-src': ['self'],
+					'font-src': ['self', 'https://fonts.gstatic.com'],
 					// `self` for our own endpoints; the NIP-46 rendezvous relays (wss://).
-					'connect-src': ['self', ...NOSTR_CONNECT_RELAYS],
+					'connect-src': [
+						'self',
+						...NOSTR_CONNECT_RELAYS,
+						'https://*.featurebase.app',
+						'wss://*.featurebase.app'
+					],
+					'frame-src': ['https://*.featurebase.app'],
+					'media-src': ['https://*.featurebase.app', 'https://*.featurebase-attachments.com'],
 					'object-src': ['none'],
 					'base-uri': ['self'],
 					'frame-ancestors': ['none'],
