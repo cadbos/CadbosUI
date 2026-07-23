@@ -50,6 +50,11 @@ interface TextureReplacementJobRow {
 	completed_at: number | null;
 }
 
+interface TextureReplacementDeductionSnapshotRow {
+	available_balance: number;
+	cost: number;
+}
+
 function toTextureReplacementJob(row: TextureReplacementJobRow): TextureReplacementJob {
 	return {
 		id: row.id,
@@ -143,36 +148,51 @@ export async function completeTextureReplacementJob(
 	outputUrl: string,
 	completedAt: number
 ): Promise<TextureReplacementJob> {
-	const results = await db.batch<TextureReplacementJobRow>([
-		db
-			.prepare(
-				'UPDATE credits SET balance = balance - ' +
-					"(SELECT cost FROM texture_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing'), " +
-					'updated_at = ? WHERE user_id = ? AND EXISTS ' +
-					"(SELECT 1 FROM texture_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing') " +
-					'RETURNING balance'
-			)
-			.bind(id, userId, completedAt, userId, id, userId),
-		db
-			.prepare(
-				'INSERT INTO generations ' +
-					'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-					"SELECT j.id, j.user_id, ?, j.scene_url, j.replacement_surface, 'texture-replacement', j.cost, c.balance, ? " +
-					'FROM texture_replacement_jobs j JOIN credits c ON c.user_id = j.user_id ' +
-					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
-			)
-			.bind(outputUrl, completedAt, id, userId),
-		db
-			.prepare(
-				"UPDATE texture_replacement_jobs SET status = 'completed', output_url = ?, " +
-					'balance_after = (SELECT balance FROM credits WHERE user_id = ?), updated_at = ?, completed_at = ? ' +
-					"WHERE id = ? AND user_id = ? AND status = 'processing' " +
-					'AND EXISTS (SELECT 1 FROM credits WHERE user_id = ?) RETURNING *'
-			)
-			.bind(outputUrl, userId, completedAt, completedAt, id, userId, userId)
-	]);
-	const row = results[2]?.results[0];
-	if (row) return toTextureReplacementJob(row);
+	const results = await db.batch<TextureReplacementDeductionSnapshotRow | TextureReplacementJobRow>(
+		[
+			db
+				.prepare(
+					'SELECT c.balance AS available_balance, j.cost FROM credits c ' +
+						'JOIN texture_replacement_jobs j ON j.user_id = c.user_id ' +
+						"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
+				)
+				.bind(id, userId),
+			db
+				.prepare(
+					'UPDATE credits SET balance = MAX(balance - ' +
+						"(SELECT cost FROM texture_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing'), " +
+						'0), ' +
+						'updated_at = ? WHERE user_id = ? AND EXISTS ' +
+						"(SELECT 1 FROM texture_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing')"
+				)
+				.bind(id, userId, completedAt, userId, id, userId),
+			db
+				.prepare(
+					'INSERT INTO generations ' +
+						'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
+						"SELECT j.id, j.user_id, ?, j.scene_url, j.replacement_surface, 'texture-replacement', j.cost, c.balance, ? " +
+						'FROM texture_replacement_jobs j JOIN credits c ON c.user_id = j.user_id ' +
+						"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
+				)
+				.bind(outputUrl, completedAt, id, userId),
+			db
+				.prepare(
+					"UPDATE texture_replacement_jobs SET status = 'completed', output_url = ?, " +
+						'balance_after = (SELECT balance FROM credits WHERE user_id = ?), updated_at = ?, completed_at = ? ' +
+						"WHERE id = ? AND user_id = ? AND status = 'processing' " +
+						'AND EXISTS (SELECT 1 FROM credits WHERE user_id = ?) RETURNING *'
+				)
+				.bind(outputUrl, userId, completedAt, completedAt, id, userId, userId)
+		]
+	);
+	const snapshot = results[0]?.results[0];
+	if (snapshot && 'available_balance' in snapshot && snapshot.available_balance < snapshot.cost) {
+		console.warn('Texture replacement credit deduction exceeded available balance:', {
+			jobId: id
+		});
+	}
+	const row = results[3]?.results[0];
+	if (row && 'id' in row) return toTextureReplacementJob(row);
 	const existing = await getTextureReplacementJob(db, userId, id);
 	if (!existing) throw new Error('texture replacement job not found');
 	if (existing.status === 'processing') {
