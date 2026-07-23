@@ -31,6 +31,7 @@ before the Change Date. See LICENSE for complete terms.
 		edit: 'auth.credit.entryEdit',
 		'style-transfer': 'auth.credit.entryStyleTransfer',
 		'object-replacement': 'auth.credit.entryObjectReplacement',
+		'texture-replacement': 'auth.credit.entryTextureReplacement',
 		upscale: 'auth.credit.entryUpscale'
 	};
 

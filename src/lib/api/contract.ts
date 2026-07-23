@@ -235,7 +235,13 @@ export interface CreditTransaction {
 	id: string;
 	amount: number;
 	balanceAfter: number;
-	kind: 'render' | 'edit' | 'style-transfer' | 'upscale' | 'object-replacement';
+	kind:
+		| 'render'
+		| 'edit'
+		| 'style-transfer'
+		| 'upscale'
+		| 'object-replacement'
+		| 'texture-replacement';
 	createdAt: number;
 }
 

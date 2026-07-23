@@ -91,6 +91,7 @@ export interface Dictionary {
 	'auth.credit.entryEdit': string;
 	'auth.credit.entryStyleTransfer': string;
 	'auth.credit.entryObjectReplacement': string;
+	'auth.credit.entryTextureReplacement': string;
 	'auth.credit.entryUpscale': string;
 	'upload.label': string;
 	'upload.labelExterior': string;

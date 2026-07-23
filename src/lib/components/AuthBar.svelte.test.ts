@@ -258,7 +258,7 @@ it('shows the approved-account balance and history rounded to two decimals after
 	await expect.element(screen.getByText(/−0\.06 → 4\.94/)).toBeVisible();
 });
 
-it('restores an authenticated session on load, including an upscale entry in credit history', async () => {
+it('restores and displays a texture-replacement entry in credit history', async () => {
 	mockFetch(
 		() => new Response(null, { status: 401 }),
 		undefined,
@@ -268,16 +268,27 @@ it('restores an authenticated session on load, including an upscale entry in cre
 				credit: {
 					balance: 10,
 					updatedAt: Date.now(),
-					history: [{ id: 'txn-2', amount: 1.2, balanceAfter: 10, kind: 'upscale', createdAt: 2 }]
+					history: [
+						{
+							id: 'txn-2',
+							amount: 1.2,
+							balanceAfter: 10,
+							kind: 'texture-replacement',
+							createdAt: 2
+						}
+					]
 				}
 			})
 	);
 
 	await auth.loadSession();
+	const screen = render(AuthBar);
 
 	expect(auth.status).toBe('authenticated');
 	expect(auth.pubkey).toBe(pk);
-	expect(auth.credit?.history).toEqual([expect.objectContaining({ kind: 'upscale' })]);
+	expect(auth.credit?.history).toEqual([expect.objectContaining({ kind: 'texture-replacement' })]);
+	await screen.getByText('История трат').click();
+	await expect.element(screen.getByText(/Замена текстуры/)).toBeVisible();
 });
 
 it('closes the sign-in menu on an outside click, and on Escape returns focus to the trigger', async () => {

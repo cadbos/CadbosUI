@@ -95,6 +95,7 @@ export const ru = {
 	'auth.credit.entryEdit': 'Правка · {date}: −{amount} → {balance}',
 	'auth.credit.entryStyleTransfer': 'Перенос стиля · {date}: −{amount} → {balance}',
 	'auth.credit.entryObjectReplacement': 'Замена объекта · {date}: −{amount} → {balance}',
+	'auth.credit.entryTextureReplacement': 'Замена текстуры · {date}: −{amount} → {balance}',
 	'auth.credit.entryUpscale': 'Апскейл · {date}: −{amount} → {balance}',
 	'upload.label': 'Фото комнаты',
 	'upload.labelExterior': 'Фото здания',
