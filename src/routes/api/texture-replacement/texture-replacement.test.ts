@@ -46,13 +46,34 @@ const requestBody = {
 	replacementSurface: 'floor'
 };
 
-function seedUser(db: D1Database, id = 'user-1', pubkey = 'pubkey-1'): void {
+function rejectionLog(status: number, reason: string): Record<string, unknown> {
+	return {
+		level: 'warn',
+		area: 'texture-replacement',
+		event: 'request_rejected',
+		status,
+		reason
+	};
+}
+
+function expectSingleLog(messages: unknown[], expected: Record<string, unknown>): void {
+	expect(messages).toEqual([JSON.stringify(expected)]);
+}
+
+function seedUser(
+	db: D1Database,
+	id = 'user-1',
+	pubkey = 'pubkey-1',
+	balance: number | null = 12
+): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
 		.run();
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-		.bind(id, 12, Date.now())
-		.run();
+	if (balance !== null) {
+		db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
+			.bind(id, balance, Date.now())
+			.run();
+	}
 }
 
 function platform(db: D1Database): App.Platform {
@@ -61,14 +82,17 @@ function platform(db: D1Database): App.Platform {
 
 type PostEvent = Parameters<typeof POST>[0];
 
-function callPost(requestPlatform: App.Platform, pubkey = 'pubkey-1'): ReturnType<typeof POST> {
+function callPost(
+	requestPlatform: App.Platform,
+	pubkey: string | null = 'pubkey-1'
+): ReturnType<typeof POST> {
 	return POST({
 		request: new Request('https://cadbos.example/api/texture-replacement', {
 			method: 'POST',
 			body: JSON.stringify(requestBody)
 		}),
 		platform: requestPlatform,
-		locals: { user: { pubkey } },
+		locals: { user: pubkey === null ? null : { pubkey } },
 		url: new URL('https://cadbos.example/api/texture-replacement')
 	} as PostEvent);
 }
@@ -84,6 +108,73 @@ afterEach(() => {
 });
 
 describe('POST /api/texture-replacement', () => {
+	it('logs authentication rejection without changing the API error', async () => {
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+		const response = await callPost(platform(makeD1()), null);
+
+		expect(response.status).toBe(401);
+		expect(await response.json()).toEqual({
+			error: { code: 'unauthorized', message: 'Authentication required' }
+		});
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(401, 'unauthorized'));
+	});
+
+	it('logs quota rejections without changing their API errors', async () => {
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const unapprovedDb = makeD1();
+		seedUser(unapprovedDb, 'user-1', 'pubkey-1', null);
+
+		const unapproved = await callPost(platform(unapprovedDb));
+		expect(unapproved.status).toBe(403);
+		expect(await unapproved.json()).toEqual({
+			error: {
+				code: 'generation_restricted',
+				message: 'Generation is limited to approved accounts'
+			}
+		});
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(403, 'generation_restricted'));
+		consoleWarn.mockClear();
+
+		const exhaustedDb = makeD1();
+		seedUser(exhaustedDb, 'user-1', 'pubkey-1', 0);
+		const exhausted = await callPost(platform(exhaustedDb));
+		expect(exhausted.status).toBe(402);
+		expect(await exhausted.json()).toEqual({
+			error: { code: 'insufficient_credit', message: 'Test balance exhausted' }
+		});
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(402, 'insufficient_credit'));
+		consoleWarn.mockClear();
+
+		const underfundedDb = makeD1();
+		seedUser(underfundedDb, 'user-1', 'pubkey-1', 1);
+		const underfunded = await callPost(platform(underfundedDb));
+		expect(underfunded.status).toBe(402);
+		expect(await underfunded.json()).toEqual({
+			error: { code: 'insufficient_credit', message: 'Test balance exhausted' }
+		});
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(402, 'insufficient_credit'));
+		expect(integration.submit).not.toHaveBeenCalled();
+	});
+
+	it('logs rate-limit rejection without changing the API error', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1', 100);
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+		for (let attempt = 0; attempt < 10; attempt += 1) {
+			expect((await callPost(platform(db))).status).toBe(202);
+		}
+		const limited = await callPost(platform(db));
+
+		expect(limited.status).toBe(429);
+		expect(await limited.json()).toEqual({
+			error: { code: 'rate_limited', message: 'Too many requests' }
+		});
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(429, 'rate_limited'));
+		expect(integration.submit).toHaveBeenCalledTimes(10);
+	});
+
 	it('rejects a concurrent submission for the same account and isolates the guard by pubkey', async () => {
 		const db = makeD1();
 		seedUser(db);

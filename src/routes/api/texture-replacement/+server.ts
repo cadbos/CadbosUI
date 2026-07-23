@@ -33,6 +33,18 @@ import { createTextureReplacementJob } from '$lib/server/texture-replacement-job
 const TEXTURE_REPLACEMENT_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
 const textureReplacementInFlight = new Set<string>();
 
+function logRejection(status: number, reason: string): void {
+	console.warn(
+		JSON.stringify({
+			level: 'warn',
+			area: 'texture-replacement',
+			event: 'request_rejected',
+			status,
+			reason
+		})
+	);
+}
+
 function remoteImageError(error: RemoteImageImportError): Response {
 	switch (error.code) {
 		case 'invalid_url':
@@ -47,7 +59,10 @@ function remoteImageError(error: RemoteImageImportError): Response {
 }
 
 export const POST: RequestHandler = async ({ request, platform, locals, url }) => {
-	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!locals.user) {
+		logRejection(401, 'unauthorized');
+		return apiError(401, 'unauthorized', 'Authentication required');
+	}
 	const parsed = await parseBody(request, textureReplacementRequestSchema);
 	if (!parsed.ok) return parsed.response;
 	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
@@ -70,18 +85,29 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			Date.now(),
 			TEXTURE_REPLACEMENT_RATE_LIMIT
 		);
-		if (limited) return apiError(429, 'rate_limited', 'Too many requests');
+		if (limited) {
+			logRejection(429, 'rate_limited');
+			return apiError(429, 'rate_limited', 'Too many requests');
+		}
 
 		let cost: number;
 		try {
 			cost = textureReplacementCost(platform);
 			const check = await assertGenerationAllowed(db, userId);
 			if (!check.allowed) {
-				return check.reason === 'not_approved'
-					? apiError(403, 'generation_restricted', 'Generation is limited to approved accounts')
-					: apiError(402, 'insufficient_credit', 'Test balance exhausted');
+				if (check.reason === 'not_approved') {
+					logRejection(403, 'generation_restricted');
+					return apiError(
+						403,
+						'generation_restricted',
+						'Generation is limited to approved accounts'
+					);
+				}
+				logRejection(402, 'insufficient_credit');
+				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
 			}
 			if (check.balance < cost) {
+				logRejection(402, 'insufficient_credit');
 				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
 			}
 		} catch (error) {
