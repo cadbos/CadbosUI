@@ -46,12 +46,12 @@ const requestBody = {
 	replacementSurface: 'floor'
 };
 
-function seedUser(db: D1Database): void {
+function seedUser(db: D1Database, id = 'user-1', pubkey = 'pubkey-1'): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind('user-1', 'pubkey-1', Date.now())
+		.bind(id, pubkey, Date.now())
 		.run();
 	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-		.bind('user-1', 12, Date.now())
+		.bind(id, 12, Date.now())
 		.run();
 }
 
@@ -61,14 +61,14 @@ function platform(db: D1Database): App.Platform {
 
 type PostEvent = Parameters<typeof POST>[0];
 
-function callPost(requestPlatform: App.Platform): ReturnType<typeof POST> {
+function callPost(requestPlatform: App.Platform, pubkey = 'pubkey-1'): ReturnType<typeof POST> {
 	return POST({
 		request: new Request('https://cadbos.example/api/texture-replacement', {
 			method: 'POST',
 			body: JSON.stringify(requestBody)
 		}),
 		platform: requestPlatform,
-		locals: { user: { pubkey: 'pubkey-1' } },
+		locals: { user: { pubkey } },
 		url: new URL('https://cadbos.example/api/texture-replacement')
 	} as PostEvent);
 }
@@ -84,6 +84,67 @@ afterEach(() => {
 });
 
 describe('POST /api/texture-replacement', () => {
+	it('rejects a concurrent submission for the same account and isolates the guard by pubkey', async () => {
+		const db = makeD1();
+		seedUser(db);
+		seedUser(db, 'user-2', 'pubkey-2');
+		let resolveSubmission!: (promptId: string) => void;
+		integration.submit.mockImplementationOnce(
+			() =>
+				new Promise<string>((resolve) => {
+					resolveSubmission = resolve;
+				})
+		);
+		const requestPlatform = platform(db);
+
+		const first = callPost(requestPlatform);
+		await vi.waitFor(() => expect(integration.submit).toHaveBeenCalledTimes(1));
+
+		const duplicate = await callPost(requestPlatform);
+		expect(duplicate.status).toBe(409);
+		expect(await duplicate.json()).toEqual({
+			error: {
+				code: 'request_in_progress',
+				message: 'Texture replacement request already in progress'
+			}
+		});
+		expect(integration.submit).toHaveBeenCalledTimes(1);
+		const rateLimit = await db
+			.prepare('SELECT count FROM rate_limits WHERE bucket = ?')
+			.bind('texture-replacement:pubkey-1')
+			.first<{ count: number }>();
+		expect(rateLimit?.count).toBe(1);
+
+		const otherAccount = await callPost(requestPlatform, 'pubkey-2');
+		expect(otherAccount.status).toBe(202);
+
+		resolveSubmission('prompt-1');
+		expect((await first).status).toBe(202);
+		expect((await callPost(requestPlatform)).status).toBe(202);
+	});
+
+	it('releases the in-flight guard when submission fails', async () => {
+		const db = makeD1();
+		seedUser(db);
+		let rejectSubmission!: (error: Error) => void;
+		integration.submit.mockImplementationOnce(
+			() =>
+				new Promise<string>((_resolve, reject) => {
+					rejectSubmission = reject;
+				})
+		);
+		vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const requestPlatform = platform(db);
+
+		const first = callPost(requestPlatform);
+		await vi.waitFor(() => expect(integration.submit).toHaveBeenCalledTimes(1));
+		expect((await callPost(requestPlatform)).status).toBe(409);
+
+		rejectSubmission(new Error('private submission detail'));
+		expect((await first).status).toBe(502);
+		expect((await callPost(requestPlatform)).status).toBe(202);
+	});
+
 	it('preserves the accepted response without cancelling a persisted prompt', async () => {
 		const db = makeD1();
 		seedUser(db);

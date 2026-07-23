@@ -31,6 +31,7 @@ import {
 import { createTextureReplacementJob } from '$lib/server/texture-replacement-jobs';
 
 const TEXTURE_REPLACEMENT_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
+const textureReplacementInFlight = new Set<string>();
 
 function remoteImageError(error: RemoteImageImportError): Response {
 	switch (error.code) {
@@ -53,89 +54,99 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		return apiError(500, 'account_error', 'Account record not found');
 	}
 
-	const db = getDb(platform);
-	const userId = await getUserIdByPubkey(db, locals.user.pubkey);
-	if (!userId) return apiError(500, 'account_error', 'Account record not found');
-	const limited = await touchRateLimit(
-		db,
-		`texture-replacement:${locals.user.pubkey}`,
-		Date.now(),
-		TEXTURE_REPLACEMENT_RATE_LIMIT
-	);
-	if (limited) return apiError(429, 'rate_limited', 'Too many requests');
-
-	let cost: number;
-	try {
-		cost = textureReplacementCost(platform);
-		const check = await assertGenerationAllowed(db, userId);
-		if (!check.allowed) {
-			return check.reason === 'not_approved'
-				? apiError(403, 'generation_restricted', 'Generation is limited to approved accounts')
-				: apiError(402, 'insufficient_credit', 'Test balance exhausted');
-		}
-		if (check.balance < cost) {
-			return apiError(402, 'insufficient_credit', 'Test balance exhausted');
-		}
-	} catch (error) {
-		console.error('Texture replacement pre-check failed:', error);
-		return apiError(500, 'texture_replacement_failed', 'Texture replacement failed');
+	const pubkey = locals.user.pubkey;
+	if (textureReplacementInFlight.has(pubkey)) {
+		return apiError(409, 'request_in_progress', 'Texture replacement request already in progress');
 	}
-
-	const id = crypto.randomUUID();
-	let comfyPromptId: string;
-	try {
-		comfyPromptId = await submitTextureReplacement(platform, parsed.data, url.origin, id);
-	} catch (error) {
-		if (error instanceof RemoteImageImportError) return remoteImageError(error);
-		if (error instanceof ComfyUiError) {
-			console.error('ComfyUI texture replacement submission failed:', {
-				code: error.code,
-				operation: error.operation,
-				status: error.status
-			});
-			if (error.code === 'invalid_configuration') {
-				return apiError(500, 'texture_replacement_failed', 'Texture replacement failed');
-			}
-		} else {
-			console.error('Texture replacement submission failed:', error);
-		}
-		return apiError(502, 'texture_replacement_failed', 'Texture replacement failed');
-	}
+	textureReplacementInFlight.add(pubkey);
 
 	try {
-		await createTextureReplacementJob(db, {
-			id,
-			userId,
-			comfyPromptId,
-			sceneUrl: parsed.data.image,
-			referenceUrl: parsed.data.referenceImage,
-			replacementSurface: parsed.data.replacementSurface,
-			cost,
-			createdAt: Date.now()
-		});
-	} catch {
-		console.error('Texture replacement job persistence failed');
+		const db = getDb(platform);
+		const userId = await getUserIdByPubkey(db, pubkey);
+		if (!userId) return apiError(500, 'account_error', 'Account record not found');
+		const limited = await touchRateLimit(
+			db,
+			`texture-replacement:${pubkey}`,
+			Date.now(),
+			TEXTURE_REPLACEMENT_RATE_LIMIT
+		);
+		if (limited) return apiError(429, 'rate_limited', 'Too many requests');
+
+		let cost: number;
 		try {
-			await cancelTextureReplacement(platform, comfyPromptId);
-		} catch (cleanupError) {
-			if (cleanupError instanceof ComfyUiError) {
-				console.error('ComfyUI texture replacement cleanup failed:', {
-					code: cleanupError.code,
-					operation: cleanupError.operation,
-					status: cleanupError.status
-				});
-			} else {
-				console.error('Texture replacement cleanup failed');
+			cost = textureReplacementCost(platform);
+			const check = await assertGenerationAllowed(db, userId);
+			if (!check.allowed) {
+				return check.reason === 'not_approved'
+					? apiError(403, 'generation_restricted', 'Generation is limited to approved accounts')
+					: apiError(402, 'insufficient_credit', 'Test balance exhausted');
 			}
+			if (check.balance < cost) {
+				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
+			}
+		} catch (error) {
+			console.error('Texture replacement pre-check failed:', error);
+			return apiError(500, 'texture_replacement_failed', 'Texture replacement failed');
 		}
-		return apiError(500, 'texture_replacement_failed', 'Texture replacement failed');
-	}
 
-	return json({ id, status: 'processing' } satisfies TextureReplacementJobResponse, {
-		status: 202,
-		headers: {
-			'cache-control': 'no-store',
-			location: `/api/texture-replacement/${id}`
+		const id = crypto.randomUUID();
+		let comfyPromptId: string;
+		try {
+			comfyPromptId = await submitTextureReplacement(platform, parsed.data, url.origin, id);
+		} catch (error) {
+			if (error instanceof RemoteImageImportError) return remoteImageError(error);
+			if (error instanceof ComfyUiError) {
+				console.error('ComfyUI texture replacement submission failed:', {
+					code: error.code,
+					operation: error.operation,
+					status: error.status
+				});
+				if (error.code === 'invalid_configuration') {
+					return apiError(500, 'texture_replacement_failed', 'Texture replacement failed');
+				}
+			} else {
+				console.error('Texture replacement submission failed:', error);
+			}
+			return apiError(502, 'texture_replacement_failed', 'Texture replacement failed');
 		}
-	});
+
+		try {
+			await createTextureReplacementJob(db, {
+				id,
+				userId,
+				comfyPromptId,
+				sceneUrl: parsed.data.image,
+				referenceUrl: parsed.data.referenceImage,
+				replacementSurface: parsed.data.replacementSurface,
+				cost,
+				createdAt: Date.now()
+			});
+		} catch {
+			console.error('Texture replacement job persistence failed');
+			try {
+				await cancelTextureReplacement(platform, comfyPromptId);
+			} catch (cleanupError) {
+				if (cleanupError instanceof ComfyUiError) {
+					console.error('ComfyUI texture replacement cleanup failed:', {
+						code: cleanupError.code,
+						operation: cleanupError.operation,
+						status: cleanupError.status
+					});
+				} else {
+					console.error('Texture replacement cleanup failed');
+				}
+			}
+			return apiError(500, 'texture_replacement_failed', 'Texture replacement failed');
+		}
+
+		return json({ id, status: 'processing' } satisfies TextureReplacementJobResponse, {
+			status: 202,
+			headers: {
+				'cache-control': 'no-store',
+				location: `/api/texture-replacement/${id}`
+			}
+		});
+	} finally {
+		textureReplacementInFlight.delete(pubkey);
+	}
 };
