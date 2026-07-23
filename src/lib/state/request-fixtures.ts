@@ -71,6 +71,7 @@ export function buildAc9RequestJSON(): RequestJSON {
 			size: AC9_REFERENCE_IMAGE.size,
 			...(AC9_REFERENCE_IMAGE.dimensions ? { dimensions: [...AC9_REFERENCE_IMAGE.dimensions] } : {})
 		},
+		objectReferenceImage: undefined,
 		promptFragments: AC9_FRAGMENTS.map((fragment) => ({
 			id: fragment.id,
 			...(fragment.label !== undefined ? { label: fragment.label } : {}),
@@ -84,6 +85,8 @@ export function buildAc9RequestJSON(): RequestJSON {
 		styleTransferStrength: 0.7,
 		styleNegativePrompt: '',
 		styleSourceMode: 'current-result',
+		objectReplacementObject: '',
+		objectReplacementSourceMode: 'current-result',
 		promptOverride: null,
 		status: 'idle'
 	};

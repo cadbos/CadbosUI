@@ -66,6 +66,66 @@ export interface UpscaleRequest {
 	outputFormat?: OutputFormat;
 }
 
+export interface ObjectReplacementRequest {
+	image: string;
+	referenceImage: string;
+	replacementObject: string;
+}
+
+export interface ObjectReplacementProcessingResponse {
+	id: string;
+	status: 'processing';
+}
+
+export interface ObjectReplacementCompletedResponse {
+	id: string;
+	status: 'completed';
+	outputUrl: string;
+	cost: number;
+	balance: number;
+}
+
+export interface ObjectReplacementFailedResponse {
+	id: string;
+	status: 'failed';
+	error: { code: string; message: string };
+}
+
+export type ObjectReplacementJobResponse =
+	| ObjectReplacementProcessingResponse
+	| ObjectReplacementCompletedResponse
+	| ObjectReplacementFailedResponse;
+
+export interface TextureReplacementRequest {
+	image: string;
+	referenceImage: string;
+	replacementSurface: string;
+}
+
+export interface TextureReplacementProcessingResponse {
+	id: string;
+	status: 'processing';
+}
+
+export interface TextureReplacementCompletedResponse {
+	id: string;
+	status: 'completed';
+	outputUrl: string;
+	cost: number;
+	balance: number;
+}
+
+export interface TextureReplacementFailedResponse {
+	id: string;
+	status: 'failed';
+	error: { code: string; message: string };
+}
+
+export type TextureReplacementJobResponse =
+	| TextureReplacementProcessingResponse
+	| TextureReplacementCompletedResponse
+	| TextureReplacementFailedResponse;
+
 // Normalized response for image-generation endpoints. Provider array/string
 // outputs are normalized to a single URL. `balance` is the caller's own
 // remaining approved-account balance after this call — never archAI's raw
@@ -169,13 +229,19 @@ export interface Balance {
 }
 
 // A single deduction from an approved account's own limit (see CreditInfo
-// below). `amount` is the real cost archAI charged. `id` is a stable identifier
-// for list rendering — createdAt alone can collide across concurrent calls.
+// below). `amount` is the operation's provider-reported or configured charge.
+// `id` is stable for list rendering — createdAt can collide across concurrent calls.
 export interface CreditTransaction {
 	id: string;
 	amount: number;
 	balanceAfter: number;
-	kind: 'render' | 'edit' | 'style-transfer' | 'upscale';
+	kind:
+		| 'render'
+		| 'edit'
+		| 'style-transfer'
+		| 'upscale'
+		| 'object-replacement'
+		| 'texture-replacement';
 	createdAt: number;
 }
 

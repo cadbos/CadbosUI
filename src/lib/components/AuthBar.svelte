@@ -30,6 +30,8 @@ before the Change Date. See LICENSE for complete terms.
 		render: 'auth.credit.entryRender',
 		edit: 'auth.credit.entryEdit',
 		'style-transfer': 'auth.credit.entryStyleTransfer',
+		'object-replacement': 'auth.credit.entryObjectReplacement',
+		'texture-replacement': 'auth.credit.entryTextureReplacement',
 		upscale: 'auth.credit.entryUpscale'
 	};
 
@@ -204,7 +206,7 @@ before the Change Date. See LICENSE for complete terms.
 			<p class="hint">{t('auth.connect.scan')}</p>
 			<QrCode data={auth.connectUri} label={t('auth.connect.qrAlt')} />
 			{#if auth.authUrl}
-				<a class="approve" href={auth.authUrl} target="_blank" rel="noopener noreferrer">
+				<a class="approve" href={auth.authUrl} target="_blank" rel="external noopener noreferrer">
 					{t('auth.connect.approve')}
 				</a>
 			{/if}

@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
+import type { D1Database, Fetcher, R2Bucket } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 
 // See https://svelte.dev/docs/kit/types#app.d.ts
@@ -32,6 +32,12 @@ declare global {
 				DB: D1Database;
 				ARCHAI_API_KEY: string;
 				ARCHAI_API_URL: string;
+				// VPC Service binding to the ComfyUI VPS (Cloudflare Tunnel
+				// `comfyui-equuleus` -> localhost:8188). Not a URL string — see
+				// wrangler.jsonc `vpc_services`.
+				COMFYUI_BASE_URL: Fetcher;
+				OBJECT_REPLACEMENT_COST?: string;
+				TEXTURE_REPLACEMENT_COST?: string;
 				UPLOADS_BUCKET: R2Bucket;
 				UPLOADS_PUBLIC_URL?: string;
 				// Comma-separated Nostr pubkeys (hex) subject to the local metered

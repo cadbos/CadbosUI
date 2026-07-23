@@ -15,10 +15,12 @@
 import { z } from 'zod';
 import {
 	OUTPUT_FORMATS,
+	type ObjectReplacementRequest,
 	type OutputFormat,
 	type RenderRequest,
 	type RenderResponse,
-	type StyleTransferRequest
+	type StyleTransferRequest,
+	type TextureReplacementRequest
 } from '$lib/api/contract';
 import type { TranslationKey } from '$lib/i18n/index.svelte';
 
@@ -69,12 +71,29 @@ export interface RenderResult {
 	ts: number;
 }
 
+export interface ActiveObjectReplacementJob {
+	id: string;
+	instruction: string;
+	sourceRender?: RenderResult;
+}
+
+export interface ActiveTextureReplacementJob {
+	id: string;
+	instruction: string;
+	sourceRender?: RenderResult;
+}
+
 export type RequestStatus = 'idle' | 'rendering' | 'error';
 
-export const STYLE_SOURCE_MODES = ['room-photo', 'current-result'] as const;
-export type StyleSourceMode = (typeof STYLE_SOURCE_MODES)[number];
+export const IMAGE_SOURCE_MODES = ['room-photo', 'current-result'] as const;
+export type ImageSourceMode = (typeof IMAGE_SOURCE_MODES)[number];
 
-export type ValidationField = 'prompt' | 'image' | 'referenceImage';
+export type ValidationField =
+	| 'prompt'
+	| 'image'
+	| 'referenceImage'
+	| 'replacementObject'
+	| 'replacementSurface';
 
 export interface ValidationResult {
 	valid: boolean;
@@ -85,6 +104,8 @@ export interface RequestJSON {
 	id: string;
 	image?: ImageInput;
 	styleReferenceImage?: ImageInput;
+	objectReferenceImage?: ImageInput;
+	textureReferenceImage?: ImageInput;
 	promptFragments: PromptFragment[];
 	editPrompt: string;
 	outputFormat: OutputFormat;
@@ -92,7 +113,11 @@ export interface RequestJSON {
 	styleTransferPrompt: string;
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
-	styleSourceMode: StyleSourceMode;
+	styleSourceMode: ImageSourceMode;
+	objectReplacementObject?: string;
+	objectReplacementSourceMode?: ImageSourceMode;
+	textureReplacementSurface?: string;
+	textureReplacementSourceMode?: ImageSourceMode;
 	promptOverride: string | null;
 	currentRender?: RenderResult;
 	status: RequestStatus;
@@ -101,12 +126,18 @@ export interface RequestJSON {
 export interface NormalizedRequest {
 	image?: ImageInput;
 	styleReferenceImage?: ImageInput;
+	objectReferenceImage?: ImageInput;
+	textureReferenceImage?: ImageInput;
 	promptFragments: PromptFragment[];
 	outputFormat: OutputFormat;
 	sceneType: SceneType;
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
-	styleSourceMode: StyleSourceMode;
+	styleSourceMode: ImageSourceMode;
+	objectReplacementObject: string;
+	objectReplacementSourceMode: ImageSourceMode;
+	textureReplacementSurface: string;
+	textureReplacementSourceMode: ImageSourceMode;
 	editPrompt: string;
 	styleTransferPrompt: string;
 	prompt: string;
@@ -114,8 +145,12 @@ export interface NormalizedRequest {
 
 const outputFormatSchema = z.enum(OUTPUT_FORMATS);
 const sceneTypeSchema = z.enum(SCENE_TYPES);
-const styleSourceModeSchema = z.enum(STYLE_SOURCE_MODES);
+const imageSourceModeSchema = z.enum(IMAGE_SOURCE_MODES);
 const styleTransferStrengthSchema = z.number().min(0).max(1);
+const replacementObjectSchema = z.string().max(200);
+export const objectReplacementJobIdSchema = z.uuid();
+const replacementSurfaceSchema = z.string().max(200);
+const textureReplacementJobIdSchema = z.uuid();
 
 const imageInputSchema = z.object({
 	url: z.string().trim().url(),
@@ -152,6 +187,8 @@ const requestJsonSchema = z
 		id: z.string().min(1),
 		image: optionalImageInputSchema,
 		styleReferenceImage: optionalImageInputSchema,
+		objectReferenceImage: optionalImageInputSchema,
+		textureReferenceImage: optionalImageInputSchema,
 		promptFragments: z.array(promptFragmentSchema),
 		editPrompt: z.string().default(''),
 		outputFormat: outputFormatSchema,
@@ -160,7 +197,11 @@ const requestJsonSchema = z
 		styleTransferPrompt: z.string().default(''),
 		styleTransferStrength: styleTransferStrengthSchema.default(0.7),
 		styleNegativePrompt: z.string().default(''),
-		styleSourceMode: styleSourceModeSchema.default('current-result'),
+		styleSourceMode: imageSourceModeSchema.default('current-result'),
+		objectReplacementObject: replacementObjectSchema.default(''),
+		objectReplacementSourceMode: imageSourceModeSchema.default('current-result'),
+		textureReplacementSurface: replacementSurfaceSchema.default(''),
+		textureReplacementSourceMode: imageSourceModeSchema.default('current-result'),
 		promptOverride: z.string().nullable(),
 		currentRender: renderResultSchema.optional(),
 		status: z.enum(['idle', 'rendering', 'error'])
@@ -350,6 +391,8 @@ export class RequestState {
 	id = $state<string>(crypto.randomUUID());
 	image = $state<ImageInput | undefined>(undefined);
 	styleReferenceImage = $state<ImageInput | undefined>(undefined);
+	objectReferenceImage = $state<ImageInput | undefined>(undefined);
+	textureReferenceImage = $state<ImageInput | undefined>(undefined);
 	promptFragments = $state<PromptFragment[]>([]);
 	editPrompt = $state('');
 	outputFormat = $state<OutputFormat>('webp');
@@ -357,7 +400,13 @@ export class RequestState {
 	styleTransferPrompt = $state('');
 	styleTransferStrength = $state(0.7);
 	styleNegativePrompt = $state('');
-	styleSourceMode = $state<StyleSourceMode>('current-result');
+	styleSourceMode = $state<ImageSourceMode>('current-result');
+	objectReplacementObject = $state('');
+	objectReplacementSourceMode = $state<ImageSourceMode>('current-result');
+	activeObjectReplacementJob = $state<ActiveObjectReplacementJob | undefined>(undefined);
+	textureReplacementSurface = $state('');
+	textureReplacementSourceMode = $state<ImageSourceMode>('current-result');
+	activeTextureReplacementJob = $state<ActiveTextureReplacementJob | undefined>(undefined);
 	promptOverride = $state<string | null>(null);
 	currentRender = $state<RenderResult | undefined>(undefined);
 	// Single-step undo/redo for the last edit (FR-К6) — in-session only, deliberately
@@ -380,6 +429,14 @@ export class RequestState {
 
 	get canRedoEdit(): boolean {
 		return this.undoneRender !== undefined;
+	}
+
+	get activeObjectReplacementJobId(): string | undefined {
+		return this.activeObjectReplacementJob?.id;
+	}
+
+	get activeTextureReplacementJobId(): string | undefined {
+		return this.activeTextureReplacementJob?.id;
 	}
 
 	addFragment(input: AddFragmentInput): string {
@@ -463,6 +520,14 @@ export class RequestState {
 		this.styleReferenceImage = cloneImage(optionalImageInputSchema.parse(image));
 	}
 
+	setObjectReferenceImage(image: ImageInput | undefined): void {
+		this.objectReferenceImage = cloneImage(optionalImageInputSchema.parse(image));
+	}
+
+	setTextureReferenceImage(image: ImageInput | undefined): void {
+		this.textureReferenceImage = cloneImage(optionalImageInputSchema.parse(image));
+	}
+
 	setStyleTransferPrompt(prompt: string): void {
 		this.styleTransferPrompt = prompt;
 	}
@@ -483,8 +548,64 @@ export class RequestState {
 		this.styleNegativePrompt = prompt;
 	}
 
-	setStyleSourceMode(mode: StyleSourceMode): void {
-		this.styleSourceMode = styleSourceModeSchema.parse(mode);
+	setStyleSourceMode(mode: ImageSourceMode): void {
+		this.styleSourceMode = imageSourceModeSchema.parse(mode);
+	}
+
+	setObjectReplacementObject(object: string): void {
+		this.objectReplacementObject = replacementObjectSchema.parse(object);
+	}
+
+	setObjectReplacementSourceMode(mode: ImageSourceMode): void {
+		this.objectReplacementSourceMode = imageSourceModeSchema.parse(mode);
+	}
+
+	setActiveObjectReplacementJobId(id: string | undefined): void {
+		const parsed = objectReplacementJobIdSchema.optional().parse(id);
+		if (parsed === this.activeObjectReplacementJob?.id) return;
+		this.activeObjectReplacementJob = parsed
+			? { id: parsed, instruction: this.objectReplacementObject.trim() }
+			: undefined;
+	}
+
+	setActiveObjectReplacementJob(
+		id: string,
+		sourceRender: RenderResult | undefined,
+		instruction: string
+	): void {
+		this.activeObjectReplacementJob = {
+			id: objectReplacementJobIdSchema.parse(id),
+			instruction: replacementObjectSchema.parse(instruction).trim(),
+			sourceRender: cloneRenderResult(sourceRender)
+		};
+	}
+
+	setTextureReplacementSurface(surface: string): void {
+		this.textureReplacementSurface = replacementSurfaceSchema.parse(surface);
+	}
+
+	setTextureReplacementSourceMode(mode: ImageSourceMode): void {
+		this.textureReplacementSourceMode = imageSourceModeSchema.parse(mode);
+	}
+
+	setActiveTextureReplacementJobId(id: string | undefined): void {
+		const parsed = textureReplacementJobIdSchema.optional().parse(id);
+		if (parsed === this.activeTextureReplacementJob?.id) return;
+		this.activeTextureReplacementJob = parsed
+			? { id: parsed, instruction: this.textureReplacementSurface.trim() }
+			: undefined;
+	}
+
+	setActiveTextureReplacementJob(
+		id: string,
+		sourceRender: RenderResult | undefined,
+		instruction: string
+	): void {
+		this.activeTextureReplacementJob = {
+			id: textureReplacementJobIdSchema.parse(id),
+			instruction: replacementSurfaceSchema.parse(instruction).trim(),
+			sourceRender: cloneRenderResult(sourceRender)
+		};
 	}
 
 	setPromptOverride(text: string): void {
@@ -507,8 +628,11 @@ export class RequestState {
 	// one-step undo target (FR-К6), and the edit result becomes current. A new
 	// edit invalidates any pending redo — it's a new branch, not a continuation
 	// of whatever was just undone.
-	applyEditResult(render: RenderResult): void {
-		this.previousRender = cloneRenderResult(this.currentRender);
+	applyEditResult(
+		render: RenderResult,
+		sourceRender: RenderResult | undefined = this.currentRender
+	): void {
+		this.previousRender = cloneRenderResult(sourceRender);
 		this.currentRender = cloneRenderResult(render);
 		this.undoneRender = undefined;
 	}
@@ -548,8 +672,38 @@ export class RequestState {
 		return { valid: missing.length === 0, missing };
 	}
 
+	validateObjectReplacement(): ValidationResult {
+		const missing: ValidationField[] = [];
+		if (!this.objectReplacementSourceUrl()) missing.push('image');
+		if (!this.objectReferenceImage?.url) missing.push('referenceImage');
+		if (!this.objectReplacementObject.trim()) missing.push('replacementObject');
+		return { valid: missing.length === 0, missing };
+	}
+
+	validateTextureReplacement(): ValidationResult {
+		const missing: ValidationField[] = [];
+		if (!this.textureReplacementSourceUrl()) missing.push('image');
+		if (!this.textureReferenceImage?.url) missing.push('referenceImage');
+		if (!this.textureReplacementSurface.trim()) missing.push('replacementSurface');
+		return { valid: missing.length === 0, missing };
+	}
+
 	styleTransferSourceUrl(): string | undefined {
 		if (this.styleSourceMode === 'current-result') {
+			return this.currentRender?.outputUrls[0] ?? this.image?.url;
+		}
+		return this.image?.url;
+	}
+
+	objectReplacementSourceUrl(): string | undefined {
+		if (this.objectReplacementSourceMode === 'current-result') {
+			return this.currentRender?.outputUrls[0] ?? this.image?.url;
+		}
+		return this.image?.url;
+	}
+
+	textureReplacementSourceUrl(): string | undefined {
+		if (this.textureReplacementSourceMode === 'current-result') {
 			return this.currentRender?.outputUrls[0] ?? this.image?.url;
 		}
 		return this.image?.url;
@@ -581,11 +735,35 @@ export class RequestState {
 		};
 	}
 
+	toObjectReplacementRequest(): ObjectReplacementRequest | null {
+		const validation = this.validateObjectReplacement();
+		const image = this.objectReplacementSourceUrl();
+		if (!validation.valid || !image || !this.objectReferenceImage) return null;
+		return {
+			image,
+			referenceImage: this.objectReferenceImage.url,
+			replacementObject: this.objectReplacementObject.trim()
+		};
+	}
+
+	toTextureReplacementRequest(): TextureReplacementRequest | null {
+		const validation = this.validateTextureReplacement();
+		const image = this.textureReplacementSourceUrl();
+		if (!validation.valid || !image || !this.textureReferenceImage) return null;
+		return {
+			image,
+			referenceImage: this.textureReferenceImage.url,
+			replacementSurface: this.textureReplacementSurface.trim()
+		};
+	}
+
 	toJSON(): RequestJSON {
 		return {
 			id: this.id,
 			image: cloneImage(this.image),
 			styleReferenceImage: cloneImage(this.styleReferenceImage),
+			objectReferenceImage: cloneImage(this.objectReferenceImage),
+			textureReferenceImage: cloneImage(this.textureReferenceImage),
 			promptFragments: cloneFragments(this.promptFragments),
 			editPrompt: this.editPrompt,
 			outputFormat: this.outputFormat,
@@ -594,6 +772,10 @@ export class RequestState {
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
 			styleSourceMode: this.styleSourceMode,
+			objectReplacementObject: this.objectReplacementObject,
+			objectReplacementSourceMode: this.objectReplacementSourceMode,
+			textureReplacementSurface: this.textureReplacementSurface,
+			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			promptOverride: this.promptOverride,
 			currentRender: cloneRenderResult(this.currentRender),
 			status: this.status
@@ -605,6 +787,8 @@ export class RequestState {
 		this.id = parsed.id;
 		this.image = cloneImage(parsed.image);
 		this.styleReferenceImage = cloneImage(parsed.styleReferenceImage);
+		this.objectReferenceImage = cloneImage(parsed.objectReferenceImage);
+		this.textureReferenceImage = cloneImage(parsed.textureReferenceImage);
 		this.promptFragments = cloneFragments(parsed.promptFragments);
 		this.editPrompt = parsed.editPrompt;
 		this.outputFormat = parsed.outputFormat;
@@ -613,6 +797,12 @@ export class RequestState {
 		this.styleTransferStrength = parsed.styleTransferStrength;
 		this.styleNegativePrompt = parsed.styleNegativePrompt;
 		this.styleSourceMode = parsed.styleSourceMode;
+		this.objectReplacementObject = parsed.objectReplacementObject;
+		this.objectReplacementSourceMode = parsed.objectReplacementSourceMode;
+		this.activeObjectReplacementJob = undefined;
+		this.textureReplacementSurface = parsed.textureReplacementSurface;
+		this.textureReplacementSourceMode = parsed.textureReplacementSourceMode;
+		this.activeTextureReplacementJob = undefined;
 		this.promptOverride = parsed.promptOverride;
 		this.currentRender = cloneRenderResult(parsed.currentRender);
 		this.status = parsed.status;
@@ -624,12 +814,18 @@ export class RequestState {
 		return {
 			image: cloneImage(this.image),
 			styleReferenceImage: cloneImage(this.styleReferenceImage),
+			objectReferenceImage: cloneImage(this.objectReferenceImage),
+			textureReferenceImage: cloneImage(this.textureReferenceImage),
 			promptFragments: cloneFragments(this.promptFragments),
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
 			styleSourceMode: this.styleSourceMode,
+			objectReplacementObject: this.objectReplacementObject,
+			objectReplacementSourceMode: this.objectReplacementSourceMode,
+			textureReplacementSurface: this.textureReplacementSurface,
+			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			editPrompt: this.editPrompt,
 			styleTransferPrompt: this.styleTransferPrompt,
 			prompt: this.prompt
@@ -640,6 +836,8 @@ export class RequestState {
 		this.id = crypto.randomUUID();
 		this.image = undefined;
 		this.styleReferenceImage = undefined;
+		this.objectReferenceImage = undefined;
+		this.textureReferenceImage = undefined;
 		this.promptFragments = [];
 		this.editPrompt = '';
 		this.outputFormat = 'webp';
@@ -648,6 +846,12 @@ export class RequestState {
 		this.styleTransferStrength = 0.7;
 		this.styleNegativePrompt = '';
 		this.styleSourceMode = 'current-result';
+		this.objectReplacementObject = '';
+		this.objectReplacementSourceMode = 'current-result';
+		this.activeObjectReplacementJob = undefined;
+		this.textureReplacementSurface = '';
+		this.textureReplacementSourceMode = 'current-result';
+		this.activeTextureReplacementJob = undefined;
 		this.promptOverride = null;
 		this.currentRender = undefined;
 		this.previousRender = undefined;
