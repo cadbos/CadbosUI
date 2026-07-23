@@ -31,6 +31,7 @@ declare global {
 			env: {
 				DB: D1Database;
 				ARCHAI_API_KEY: string;
+				ARCHAI_API_URL: string;
 				UPLOADS_BUCKET: R2Bucket;
 				UPLOADS_PUBLIC_URL?: string;
 				// Comma-separated Nostr pubkeys (hex) subject to the local metered
