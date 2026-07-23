@@ -231,6 +231,37 @@ export function createComfyUiClient(options: ComfyUiClientOptions): ComfyUiClien
 		return descriptor;
 	}
 
+	async function cancelWorkflow(
+		promptId: string,
+		requestOptions: ComfyRequestOptions = {}
+	): Promise<boolean> {
+		const normalizedPromptId = validateNonEmpty(promptId, 'cancel_workflow', 'prompt ID');
+		const response = await request(
+			'cancel_workflow',
+			endpoint(`api/jobs/${encodeURIComponent(normalizedPromptId)}/cancel`),
+			{
+				headers: requestHeaders(defaultHeaders, false),
+				method: 'POST',
+				signal: requestOptions.signal
+			}
+		);
+		if (!response.ok) {
+			throw new ComfyUiError('http_error', 'cancel_workflow', 'Could not cancel ComfyUI workflow', {
+				status: response.status
+			});
+		}
+		const body = await responseJson(response, 'cancel_workflow');
+		if (!isRecord(body) || typeof body.cancelled !== 'boolean') {
+			throw new ComfyUiError(
+				'invalid_response',
+				'cancel_workflow',
+				'Invalid response from ComfyUI',
+				{ status: response.status }
+			);
+		}
+		return body.cancelled;
+	}
+
 	async function queueWorkflow(
 		workflow: ComfyWorkflow,
 		queueOptions: ComfyQueueOptions = {}
@@ -421,5 +452,12 @@ export function createComfyUiClient(options: ComfyUiClientOptions): ComfyUiClien
 		return { ...image, bytes, contentType };
 	}
 
-	return { downloadImage, getHistory, queueWorkflow, uploadImage, waitForCompletion };
+	return {
+		cancelWorkflow,
+		downloadImage,
+		getHistory,
+		queueWorkflow,
+		uploadImage,
+		waitForCompletion
+	};
 }

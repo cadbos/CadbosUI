@@ -23,7 +23,11 @@ import { assertGenerationAllowed, getUserIdByPubkey } from '$lib/server/billing'
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { RemoteImageImportError } from '$lib/server/remote-image';
-import { submitTextureReplacement, textureReplacementCost } from '$lib/server/texture-replacement';
+import {
+	cancelTextureReplacement,
+	submitTextureReplacement,
+	textureReplacementCost
+} from '$lib/server/texture-replacement';
 import { createTextureReplacementJob } from '$lib/server/texture-replacement-jobs';
 
 const TEXTURE_REPLACEMENT_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
@@ -109,8 +113,21 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			cost,
 			createdAt: Date.now()
 		});
-	} catch (error) {
-		console.error('Texture replacement job persistence failed:', error);
+	} catch {
+		console.error('Texture replacement job persistence failed');
+		try {
+			await cancelTextureReplacement(platform, comfyPromptId);
+		} catch (cleanupError) {
+			if (cleanupError instanceof ComfyUiError) {
+				console.error('ComfyUI texture replacement cleanup failed:', {
+					code: cleanupError.code,
+					operation: cleanupError.operation,
+					status: cleanupError.status
+				});
+			} else {
+				console.error('Texture replacement cleanup failed');
+			}
+		}
 		return apiError(500, 'texture_replacement_failed', 'Texture replacement failed');
 	}
 

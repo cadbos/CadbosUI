@@ -114,6 +114,17 @@ describe('createComfyUiClient', () => {
 		});
 	});
 
+	it('cancels one accepted workflow by its encoded prompt ID', async () => {
+		const fetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ cancelled: true }));
+		const client = createComfyUiClient({ baseUrl: 'http://127.0.0.1:8188', fetch: fetcher });
+
+		await expect(client.cancelWorkflow('prompt/1')).resolves.toBe(true);
+
+		const [url, init] = fetcher.mock.calls[0] ?? [];
+		expect(url?.toString()).toBe('http://127.0.0.1:8188/api/jobs/prompt%2F1/cancel');
+		expect(init?.method).toBe('POST');
+	});
+
 	it('classifies a rejected workflow without exposing the response body', async () => {
 		const fetcher = vi
 			.fn<typeof fetch>()

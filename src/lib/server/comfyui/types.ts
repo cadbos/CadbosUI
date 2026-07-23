@@ -70,6 +70,7 @@ export interface ComfyHistoryEntry {
 }
 
 export type ComfyUiOperation =
+	| 'cancel_workflow'
 	| 'configuration'
 	| 'download_image'
 	| 'get_history'
@@ -130,6 +131,7 @@ export interface ComfyWaitOptions extends ComfyRequestOptions {
 }
 
 export interface ComfyUiClient {
+	cancelWorkflow(promptId: string, options?: ComfyRequestOptions): Promise<boolean>;
 	downloadImage(
 		image: ComfyImageDescriptor,
 		options?: ComfyRequestOptions

@@ -63,6 +63,15 @@ export function textureReplacementCost(platform: App.Platform | undefined): numb
 	return cost;
 }
 
+export async function cancelTextureReplacement(
+	platform: App.Platform | undefined,
+	promptId: string
+): Promise<void> {
+	await createClient(platform).cancelWorkflow(promptId, {
+		signal: AbortSignal.timeout(COMFYUI_REQUEST_TIMEOUT_MS)
+	});
+}
+
 export async function submitTextureReplacement(
 	platform: App.Platform | undefined,
 	request: TextureReplacementRequest,
