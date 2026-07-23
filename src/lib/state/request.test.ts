@@ -167,6 +167,9 @@ describe('serialization', () => {
 		delete snapshot.styleTransferStrength;
 		delete snapshot.styleNegativePrompt;
 		delete snapshot.styleSourceMode;
+		delete snapshot.objectReferenceImage;
+		delete snapshot.objectReplacementObject;
+		delete snapshot.objectReplacementSourceMode;
 
 		request.fromJSON(snapshot);
 
@@ -174,11 +177,26 @@ describe('serialization', () => {
 			...snapshot,
 			editPrompt: '',
 			styleReferenceImage: undefined,
+			objectReferenceImage: undefined,
 			styleTransferPrompt: '',
 			styleTransferStrength: 0.7,
 			styleNegativePrompt: '',
-			styleSourceMode: 'current-result'
+			styleSourceMode: 'current-result',
+			objectReplacementObject: '',
+			objectReplacementSourceMode: 'current-result',
+			currentRender: undefined
 		});
+	});
+
+	it('does not serialize or restore an active object replacement job', () => {
+		applyAc9Fixture();
+		request.setActiveObjectReplacementJobId('123e4567-e89b-42d3-a456-426614174000');
+		const snapshot = request.toJSON();
+		expect(snapshot).not.toHaveProperty('activeObjectReplacementJobId');
+
+		request.fromJSON(snapshot);
+
+		expect(request.activeObjectReplacementJobId).toBeUndefined();
 	});
 
 	it('invalidates any pending undo/redo chain when loading a snapshot', () => {
@@ -426,6 +444,91 @@ describe('toStyleTransferRequest', () => {
 			prompt: 'style guidance',
 			styleTransferStrength: 0.35,
 			negativePrompt: 'no people'
+		});
+	});
+});
+
+describe('toObjectReplacementRequest', () => {
+	const objectReference = {
+		url: 'https://example.test/reference-chair.webp',
+		mime: 'image/webp'
+	};
+
+	it('reports every required field when the form is empty', () => {
+		expect(request.validateObjectReplacement()).toEqual({
+			valid: false,
+			missing: ['image', 'referenceImage', 'replacementObject']
+		});
+		expect(request.toObjectReplacementRequest()).toBeNull();
+	});
+
+	it('builds the exact request with trimmed scene-object text', () => {
+		request.setImage(AC9_IMAGE);
+		request.setObjectReferenceImage(objectReference);
+		request.setObjectReplacementSourceMode('room-photo');
+		request.setObjectReplacementObject('  gray sofa by the window  ');
+
+		expect(request.toObjectReplacementRequest()).toEqual({
+			image: AC9_IMAGE.url,
+			referenceImage: objectReference.url,
+			replacementObject: 'gray sofa by the window'
+		});
+	});
+
+	it('uses the current result when selected and falls back to the room photo', () => {
+		request.setImage(AC9_IMAGE);
+		request.setObjectReferenceImage(objectReference);
+		request.setObjectReplacementObject('sofa');
+		expect(request.toObjectReplacementRequest()?.image).toBe(AC9_IMAGE.url);
+
+		request.setCurrentRender({
+			id: 'render-1',
+			outputUrls: ['https://example.test/current-result.webp'],
+			cost: 2,
+			balance: 18,
+			ts: 0
+		});
+
+		expect(request.toObjectReplacementRequest()?.image).toBe(
+			'https://example.test/current-result.webp'
+		);
+	});
+
+	it('enforces the endpoint text limit and job-id shape', () => {
+		expect(() => request.setObjectReplacementObject('x'.repeat(201))).toThrow();
+		expect(() => request.setActiveObjectReplacementJobId('not-a-job-id')).toThrow();
+		request.setObjectReplacementObject('x'.repeat(200));
+		request.setActiveObjectReplacementJobId('123e4567-e89b-42d3-a456-426614174000');
+		expect(request.objectReplacementObject).toHaveLength(200);
+		expect(request.activeObjectReplacementJobId).toBe('123e4567-e89b-42d3-a456-426614174000');
+	});
+
+	it('retains an immutable source snapshot and instruction for the accepted job', () => {
+		const source: RenderResult = {
+			id: 'source-render',
+			outputUrls: ['https://example.test/source.webp'],
+			cost: 1,
+			balance: 19,
+			ts: 1
+		};
+		request.setActiveObjectReplacementJob(
+			'123e4567-e89b-42d3-a456-426614174000',
+			source,
+			'gray sofa'
+		);
+		source.outputUrls[0] = 'https://example.test/mutated.webp';
+		request.setObjectReplacementObject('changed after submission');
+
+		expect(request.activeObjectReplacementJob).toEqual({
+			id: '123e4567-e89b-42d3-a456-426614174000',
+			instruction: 'gray sofa',
+			sourceRender: {
+				id: 'source-render',
+				outputUrls: ['https://example.test/source.webp'],
+				cost: 1,
+				balance: 19,
+				ts: 1
+			}
 		});
 	});
 });

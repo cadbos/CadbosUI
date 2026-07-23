@@ -103,7 +103,7 @@
 }
 
 .step-card .auth-hint {
-	color: var(--color-muted);
+	color: var(--color-muted-strong);
 }
 
 .step-card .submit-error {

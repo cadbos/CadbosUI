@@ -26,6 +26,7 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
+	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import { buildShareUrl, slugToTool, type ToolId } from '$lib/state/url-state';
 	import { createTabController, formatCredit, logBoundaryError } from '$lib/utils';
 	import EditAddObjectTool from '$lib/components/EditAddObjectTool.svelte';
@@ -78,6 +79,7 @@ before the Change Date. See LICENSE for complete terms.
 		if (!targetImageUrl || !trimmed || applying || !isAuthenticated) return;
 		applying = true;
 		error = null;
+		generationOverlay.start('generationOverlay.edit');
 
 		try {
 			const response = await fetch('/api/edit', {
@@ -101,6 +103,7 @@ before the Change Date. See LICENSE for complete terms.
 			error = t(editErrorKey(err));
 		} finally {
 			applying = false;
+			generationOverlay.stop();
 		}
 	}
 

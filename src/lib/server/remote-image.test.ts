@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	MAX_IMAGE_UPLOAD_SIZE,
 	RemoteImageImportError,
+	downloadRemoteImage,
 	importRemoteImage,
 	validateRemoteImageUrl
 } from './remote-image';
@@ -64,6 +65,19 @@ describe('remote image import', () => {
 			mime: 'image/png',
 			size: 11
 		});
+	});
+
+	it('returns validated image bytes without writing another R2 object', async () => {
+		const fetcher = vi.fn(async () => imageResponse('image/webp', 'image-bytes'));
+
+		const result = await downloadRemoteImage(
+			'https://images.example.com/reference.webp',
+			'https://cadbos.example',
+			fetcher as typeof fetch
+		);
+
+		expect(result.mime).toBe('image/webp');
+		expect(new TextDecoder().decode(result.bytes)).toBe('image-bytes');
 	});
 
 	it('revalidates every redirect destination', async () => {

@@ -21,6 +21,7 @@ before the Change Date. See LICENSE for complete terms.
 	import EditPanel from '$lib/components/EditPanel.svelte';
 	import PromptViews from '$lib/components/PromptViews.svelte';
 	import StyleTransferPanel from '$lib/components/StyleTransferPanel.svelte';
+	import ObjectReplacementPanel from '$lib/components/ObjectReplacementPanel.svelte';
 	import GeneratedImagesSidebar from '$lib/components/GeneratedImagesSidebar.svelte';
 	import {
 		creditErrorKey,
@@ -30,6 +31,7 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
+	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
 	import {
 		applyShareParams,
@@ -40,10 +42,11 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
-	const modes: { id: Mode; label: TranslationKey }[] = [
+	const modes: { id: Mode; label: TranslationKey; alpha?: boolean }[] = [
 		{ id: 'render', label: 'mode.render' },
 		{ id: 'edit', label: 'mode.edit' },
-		{ id: 'styleTransfer', label: 'mode.styleTransfer' }
+		{ id: 'styleTransfer', label: 'mode.styleTransfer' },
+		{ id: 'objectReplacement', label: 'mode.objectReplacement', alpha: true }
 	];
 
 	const sceneTypes: { id: SceneType; label: TranslationKey }[] = [
@@ -68,7 +71,7 @@ before the Change Date. See LICENSE for complete terms.
 			// over from a different mode, so each mode opens on its own default.
 			// Pushes a history entry (unlike the sub-tab/settings navigations
 			// below) so Back/Forward actually steps through Create/Edit/Style
-			// transfer, matching what a dedicated URL per mode implies.
+			// transfer/Object replacement, matching what a dedicated URL per mode implies.
 			return goto(buildShareUrl(modes[index].id, request), {
 				replaceState: false,
 				keepFocus: true,
@@ -162,6 +165,7 @@ before the Change Date. See LICENSE for complete terms.
 		submitting = true;
 		submitError = null;
 		request.setStatus('rendering');
+		generationOverlay.start('generationOverlay.render');
 		try {
 			const body = request.toRenderRequest();
 			const endpoint = request.sceneType === 'exterior' ? '/api/render/exterior' : '/api/render';
@@ -190,6 +194,7 @@ before the Change Date. See LICENSE for complete terms.
 			submitError = t(renderErrorKey(err));
 		} finally {
 			submitting = false;
+			generationOverlay.stop();
 		}
 	}
 
@@ -225,7 +230,10 @@ before the Change Date. See LICENSE for complete terms.
 							onclick={() => modeTabController.activate(index)}
 							onkeydown={modeTabController.onKeydown}
 						>
-							{t(modeOption.label)}
+							<span>{t(modeOption.label)}</span>
+							{#if modeOption.alpha}
+								<span class="mode-alpha">{t('objectReplacement.alpha')}</span>
+							{/if}
 						</button>
 					{/each}
 				</div>
@@ -394,6 +402,27 @@ before the Change Date. See LICENSE for complete terms.
 					{/snippet}
 				</svelte:boundary>
 			</div>
+
+			<div
+				class="mode-panel"
+				role="tabpanel"
+				id="mode-panel-objectReplacement"
+				aria-labelledby="mode-tab-objectReplacement"
+				tabindex="0"
+				hidden={mode !== 'objectReplacement'}
+			>
+				<svelte:boundary
+					onerror={(error: unknown) => logBoundaryError('workspace.objectReplacement', error)}
+				>
+					<ObjectReplacementPanel />
+					{#snippet failed(_error: unknown, reset: () => void)}
+						<p class="boundary-failed">{t('boundary.failed')}</p>
+						<button type="button" class="boundary-retry" onclick={reset}>
+							{t('boundary.retry')}
+						</button>
+					{/snippet}
+				</svelte:boundary>
+			</div>
 		</div>
 
 		{#if isAuthenticated}
@@ -469,6 +498,24 @@ before the Change Date. See LICENSE for complete terms.
 			box-shadow 0.15s;
 	}
 
+	.mode-tabs button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
+	}
+
+	.mode-alpha {
+		padding: 0.1rem 0.35rem;
+		border: 1px solid currentColor;
+		border-radius: 100px;
+		font-size: 0.5625rem;
+		font-weight: 700;
+		line-height: 1.2;
+		letter-spacing: 0.03em;
+		text-transform: uppercase;
+	}
+
 	.mode-tabs button:hover:not(.active) {
 		color: var(--color-accent);
 		background: rgb(255 255 255 / 0.7);
@@ -481,10 +528,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.mode-tabs button.active:focus-visible {
-		/* The default focus outline is the same green as this button's own
-		   active background — switch to the light contrast color so the ring
-		   stays visible regardless of browser outline rendering/zoom level. */
-		outline-color: var(--color-accent-contrast);
+		outline-color: var(--color-text);
 	}
 
 	.mode-panel {
@@ -572,10 +616,6 @@ before the Change Date. See LICENSE for complete terms.
 		.mode-tabs {
 			display: grid;
 			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
-
-		.mode-tabs button:last-child {
-			grid-column: 1 / -1;
 		}
 	}
 </style>

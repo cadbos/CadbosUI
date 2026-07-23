@@ -240,7 +240,7 @@ it('shows the approved-account balance and history rounded to two decimals after
 							id: 'txn-1',
 							amount: 0.06,
 							balanceAfter: 4.9399999999999995,
-							kind: 'render',
+							kind: 'object-replacement',
 							createdAt: 1
 						}
 					]
@@ -254,6 +254,7 @@ it('shows the approved-account balance and history rounded to two decimals after
 
 	await expect.element(screen.getByText('Баланс: 4.94')).toBeVisible();
 	await screen.getByText('История трат').click();
+	await expect.element(screen.getByText(/Замена объекта/)).toBeVisible();
 	await expect.element(screen.getByText(/−0\.06 → 4\.94/)).toBeVisible();
 });
 
