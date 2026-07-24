@@ -64,16 +64,22 @@ async function uploadInputs(page: Page): Promise<void> {
 
 	const panel = page.locator('#mode-panel-objectReplacement');
 	const inputs = panel.locator('input[type="file"]');
-	await inputs.nth(0).setInputFiles({
-		name: 'scene.webp',
-		mimeType: 'image/webp',
-		buffer: Buffer.from('scene')
-	});
-	await inputs.nth(1).setInputFiles({
-		name: 'chair.webp',
-		mimeType: 'image/webp',
-		buffer: Buffer.from('chair')
-	});
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		inputs.nth(0).setInputFiles({
+			name: 'scene.webp',
+			mimeType: 'image/webp',
+			buffer: Buffer.from('scene')
+		})
+	]);
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		inputs.nth(1).setInputFiles({
+			name: 'chair.webp',
+			mimeType: 'image/webp',
+			buffer: Buffer.from('chair')
+		})
+	]);
 }
 
 test('submits two uploaded images, polls the job, and promotes the completed result', async ({
