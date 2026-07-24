@@ -36,6 +36,15 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 			return;
 		}
 
+		if (new URL(route.request().url()).pathname === '/api/usage/balance') {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ balance: 250 })
+			});
+			return;
+		}
+
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -79,9 +88,35 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	const userWithoutPicture = page.getByRole('rowheader', { name: npubWithoutPicture });
 
 	await expect(page.getByRole('columnheader', { name: 'Пользователь' })).toBeVisible();
+	await expect(page.getByText('Баланс кошелька: 250.00 $')).toBeVisible();
 	await expect(user.locator('img')).toHaveAttribute('src', 'https://avatar.example/alice.svg');
 	await expect(userWithoutPicture.locator('.avatar')).toHaveText('B');
 	await expect(link).toHaveAttribute('href', `https://primal.net/p/${npub}`);
 	await expect(link).toHaveAttribute('target', '_blank');
 	await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+});
+
+test('shows an error message when the wallet balance cannot be loaded', async ({ page }) => {
+	await page.route('**/api/usage**', async (route) => {
+		const pathname = new URL(route.request().url()).pathname;
+
+		if (pathname === '/api/usage/balance') {
+			await route.fulfill({ status: 502 });
+			return;
+		}
+
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify(
+				pathname === '/api/usage/profiles'
+					? { profiles: {} }
+					: { users: [], pagination: { offset: 0, size: 20, hasMore: false } }
+			)
+		});
+	});
+
+	await page.goto('/usage');
+
+	await expect(page.getByText('Не удалось загрузить баланс кошелька.')).toBeVisible();
 });
