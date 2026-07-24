@@ -95,3 +95,28 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	await expect(link).toHaveAttribute('target', '_blank');
 	await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
 });
+
+test('shows an error message when the wallet balance cannot be loaded', async ({ page }) => {
+	await page.route('**/api/usage**', async (route) => {
+		const pathname = new URL(route.request().url()).pathname;
+
+		if (pathname === '/api/usage/balance') {
+			await route.fulfill({ status: 502 });
+			return;
+		}
+
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify(
+				pathname === '/api/usage/profiles'
+					? { profiles: {} }
+					: { users: [], pagination: { offset: 0, size: 20, hasMore: false } }
+			)
+		});
+	});
+
+	await page.goto('/usage');
+
+	await expect(page.getByText('Не удалось загрузить баланс кошелька.')).toBeVisible();
+});

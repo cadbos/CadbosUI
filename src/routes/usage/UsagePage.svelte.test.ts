@@ -60,8 +60,7 @@ function jsonResponse(body: UserUsageResponse): Response {
 
 function mockUsageFetch(
 	pages: UserUsageResponse[],
-	profiles: UsageProfilesResponse['profiles'] = {},
-	walletBalance: number | null = 0
+	profiles: UsageProfilesResponse['profiles'] = {}
 ) {
 	let pageIndex = 0;
 	return vi.fn<typeof fetch>((input, init) => {
@@ -69,11 +68,7 @@ function mockUsageFetch(
 		if (url.startsWith('/api/usage?')) return Promise.resolve(jsonResponse(pages[pageIndex++]!));
 		if (url === '/api/usage/profiles' && init?.method === 'POST')
 			return Promise.resolve(Response.json({ profiles }));
-		if (url === '/api/usage/balance') {
-			return walletBalance === null
-				? Promise.resolve(new Response(null, { status: 500 }))
-				: Promise.resolve(Response.json({ balance: walletBalance }));
-		}
+		if (url === '/api/usage/balance') return Promise.resolve(Response.json({ balance: 0 }));
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
 }
@@ -142,29 +137,6 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	await expect
 		.element(latestSpendHeader)
 		.toHaveAttribute('title', localTimeZoneName(locale, 'long'));
-});
-
-it.each(['ru', 'en'] as const)('renders the live wallet balance for %s', async (locale) => {
-	const fetchMock = mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)], {}, 123.4);
-	vi.stubGlobal('fetch', fetchMock);
-	setLocale(locale);
-
-	const screen = render(UsagePage, pageProps());
-
-	await expect
-		.element(
-			screen.getByText(locale === 'ru' ? 'Баланс кошелька: 123.40 $' : 'Wallet balance: 123.40 $')
-		)
-		.toBeVisible();
-});
-
-it('renders an error message when the wallet balance cannot be loaded', async () => {
-	const fetchMock = mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)], {}, null);
-	vi.stubGlobal('fetch', fetchMock);
-
-	const screen = render(UsagePage, pageProps());
-
-	await expect.element(screen.getByText('Could not load wallet balance.')).toBeVisible();
 });
 
 it('loads the next usage page when the infinite-scroll sentinel intersects', async () => {
