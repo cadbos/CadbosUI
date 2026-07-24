@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Eraser, Pencil, Plus, Replace, Sun } from '@lucide/svelte';
+	import { Eraser, PaintRoller, Pencil, Plus, Replace, Sun } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -33,15 +33,32 @@ before the Change Date. See LICENSE for complete terms.
 	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
 	import EditAtmosphereTool from '$lib/components/EditAtmosphereTool.svelte';
 	import ObjectReplacementPanel from '$lib/components/ObjectReplacementPanel.svelte';
+	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
 
 	type LucideIcon = typeof Pencil;
 
-	const TOOLS: { id: ToolId; label: TranslationKey; Icon: LucideIcon; alpha?: boolean }[] = [
+	const TOOLS: {
+		id: ToolId;
+		label: TranslationKey;
+		Icon: LucideIcon;
+		alphaLabel?: TranslationKey;
+	}[] = [
 		{ id: 'freeform', label: 'edit.tool.freeform', Icon: Pencil },
 		{ id: 'add-object', label: 'edit.tool.addObject', Icon: Plus },
 		{ id: 'remove-object', label: 'edit.tool.removeObject', Icon: Eraser },
 		{ id: 'atmosphere', label: 'edit.tool.atmosphere', Icon: Sun },
-		{ id: 'object-replacement', label: 'mode.objectReplacement', Icon: Replace, alpha: true }
+		{
+			id: 'object-replacement',
+			label: 'mode.objectReplacement',
+			Icon: Replace,
+			alphaLabel: 'objectReplacement.alpha'
+		},
+		{
+			id: 'texture-replacement',
+			label: 'mode.textureReplacement',
+			Icon: PaintRoller,
+			alphaLabel: 'textureReplacement.alpha'
+		}
 	];
 
 	// Only ever rendered in edit mode (see Workspace.svelte), so the URL's
@@ -51,9 +68,11 @@ before the Change Date. See LICENSE for complete terms.
 	let applying = $state(false);
 	let error = $state<string | null>(null);
 	let objectReplacementOpened = $state(false);
+	let textureReplacementOpened = $state(false);
 
 	$effect(() => {
 		if (activeTool === 'object-replacement') objectReplacementOpened = true;
+		if (activeTool === 'texture-replacement') textureReplacementOpened = true;
 	});
 
 	const toolTabs = createTabController({
@@ -146,14 +165,14 @@ before the Change Date. See LICENSE for complete terms.
 			>
 				<Icon size={16} strokeWidth={1.8} aria-hidden="true" />
 				<span>{t(tool.label)}</span>
-				{#if tool.alpha}
-					<span class="tool-alpha">{t('objectReplacement.alpha')}</span>
+				{#if tool.alphaLabel}
+					<span class="tool-alpha">{t(tool.alphaLabel)}</span>
 				{/if}
 			</button>
 		{/each}
 	</div>
 
-	{#if activeTool !== 'object-replacement'}
+	{#if activeTool !== 'object-replacement' && activeTool !== 'texture-replacement'}
 		<div
 			class="tool-panel"
 			role="tabpanel"
@@ -247,7 +266,30 @@ before the Change Date. See LICENSE for complete terms.
 		</div>
 	{/if}
 
-	{#if !isAuthenticated && activeTool !== 'object-replacement'}
+	{#if textureReplacementOpened}
+		<div
+			class="tool-panel"
+			role="tabpanel"
+			id="edit-tool-panel-texture-replacement"
+			aria-labelledby="edit-tool-tab-texture-replacement"
+			tabindex="0"
+			hidden={activeTool !== 'texture-replacement'}
+		>
+			<svelte:boundary
+				onerror={(err: unknown) => logBoundaryError('editPanel.textureReplacement', err)}
+			>
+				<TextureReplacementPanel />
+				{#snippet failed(_error: unknown, reset: () => void)}
+					<p class="error">{t('boundary.failed')}</p>
+					<button type="button" class="btn-apply" onclick={reset}>
+						{t('boundary.retry')}
+					</button>
+				{/snippet}
+			</svelte:boundary>
+		</div>
+	{/if}
+
+	{#if !isAuthenticated && activeTool !== 'object-replacement' && activeTool !== 'texture-replacement'}
 		<p class="auth-hint">{t('edit.signInToApply')}</p>
 	{/if}
 

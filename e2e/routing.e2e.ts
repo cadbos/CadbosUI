@@ -123,6 +123,32 @@ test('the removed standalone object replacement route returns 404', async ({ pag
 	expect(response?.status()).toBe(404);
 });
 
+test('direct navigation opens texture replacement inside edit with explicit defaults', async ({
+	page
+}) => {
+	await page.goto('/edit?tool=texture-replacement');
+	await expect(page).toHaveURL(/\/edit\?tool=texture-replacement&source=current-result$/);
+	await expect(page.getByRole('tab', { name: 'Редактирование' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	const replacementTab = page.getByRole('tab', { name: /Замена текстуры.*Альфа/ });
+	await expect(replacementTab).toHaveAttribute('aria-selected', 'true');
+	await expect(replacementTab.locator('svg')).toHaveCount(1);
+
+	const panel = page.locator('#edit-tool-panel-texture-replacement');
+	await expect(
+		panel.getByText('Замена текстур находится на раннем этапе', { exact: false })
+	).toBeVisible();
+	await expect(panel.getByRole('region', { name: /Референс новой текстуры/ })).toBeVisible();
+	await expect(panel.getByLabel(/Укажите поверхность или материал/)).toBeVisible();
+});
+
+test('the removed standalone texture replacement route returns 404', async ({ page }) => {
+	const response = await page.goto('/texture-replacement');
+	expect(response?.status()).toBe(404);
+});
+
 test('clicking the scene toggle changes the path, keeping the current view/format', async ({
 	page
 }) => {
@@ -224,6 +250,33 @@ test('switching edit tool tabs updates only the tool query param', async ({ page
 
 	await page.getByRole('tab', { name: /Замена объекта.*Альфа/ }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=object-replacement&source=current-result$/);
+
+	await page.getByRole('tab', { name: /Замена текстуры.*Альфа/ }).click();
+	await expect(page).toHaveURL(/\/edit\?tool=texture-replacement&source=current-result$/);
+});
+
+test('texture replacement source and surface text round-trip without image URLs', async ({
+	page
+}) => {
+	await page.goto(
+		'/edit?tool=texture-replacement&source=room-photo&surface=sofa%20upholstery&image=https://evil.example.com/scene.jpg&referenceImage=https://evil.example.com/fabric.jpg'
+	);
+
+	await expect(page.getByLabel(/Укажите поверхность или материал/)).toHaveValue('sofa upholstery');
+	await expect(page).toHaveURL(/source=room-photo/);
+	await expect(page).toHaveURL(/surface=sofa(?:%20|\+)upholstery/);
+	await expect(page).not.toHaveURL(/image=/);
+	await expect(page).not.toHaveURL(/referenceImage=/);
+
+	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await expect(page).toHaveURL(/source=current-result/);
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
+	await page.getByRole('tab', { name: /Замена текстуры/ }).click();
+	await expect(page).toHaveURL(/source=room-photo/);
+
+	const sharedUrl = page.url();
+	await page.goto(sharedUrl);
+	await expect(page.getByLabel(/Укажите поверхность или материал/)).toHaveValue('sofa upholstery');
 });
 
 test('switching style transfer reference tabs updates only the reference query param', async ({
