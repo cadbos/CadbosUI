@@ -99,18 +99,28 @@ test('direct navigation to /style-transfer redirects to the interior scene with 
 	);
 });
 
-test('direct navigation to /object-replacement opens the alpha tab with explicit defaults', async ({
+test('direct navigation opens object replacement inside edit with explicit defaults', async ({
 	page
 }) => {
-	await page.goto('/object-replacement');
-	await expect(page).toHaveURL(/\/object-replacement\?source=current-result$/);
-	await expect(page.getByRole('tab', { name: /Замена объекта.*Альфа/ })).toHaveAttribute(
+	await page.goto('/edit?tool=object-replacement');
+	await expect(page).toHaveURL(/\/edit\?tool=object-replacement&source=current-result$/);
+	await expect(page.getByRole('tab', { name: 'Редактирование' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
+	const replacementTab = page.getByRole('tab', { name: /Замена объекта.*Альфа/ });
+	await expect(replacementTab).toHaveAttribute('aria-selected', 'true');
+	await expect(replacementTab.locator('svg')).toHaveCount(1);
+
+	const panel = page.locator('#edit-tool-panel-object-replacement');
 	await expect(
-		page.getByText('Замена объектов находится на раннем этапе', { exact: false })
+		panel.getByText('Замена объектов находится на раннем этапе', { exact: false })
 	).toBeVisible();
+});
+
+test('the removed standalone object replacement route returns 404', async ({ page }) => {
+	const response = await page.goto('/object-replacement');
+	expect(response?.status()).toBe(404);
 });
 
 test('clicking the scene toggle changes the path, keeping the current view/format', async ({
@@ -137,8 +147,9 @@ test('switching mode tabs opens each mode default, carrying scene but not sub-ta
 		/\/style-transfer\/exterior\?reference=photorealistic&format=webp&source=current-result&strength=0\.7$/
 	);
 
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page.getByRole('tab', { name: /Замена объекта/ }).click();
-	await expect(page).toHaveURL(/\/object-replacement\?source=current-result$/);
+	await expect(page).toHaveURL(/\/edit\?tool=object-replacement&source=current-result$/);
 
 	await page.getByRole('tab', { name: 'Создание' }).click();
 	await expect(page).toHaveURL(/\/create\/exterior\?view=chat&format=webp$/);
@@ -148,7 +159,7 @@ test('object replacement source and scene-object text round-trip without image U
 	page
 }) => {
 	await page.goto(
-		'/object-replacement?source=room-photo&object=gray%20sofa&image=https://evil.example.com/scene.jpg&referenceImage=https://evil.example.com/chair.jpg'
+		'/edit?tool=object-replacement&source=room-photo&object=gray%20sofa&image=https://evil.example.com/scene.jpg&referenceImage=https://evil.example.com/chair.jpg'
 	);
 
 	await expect(page.getByLabel(/Точно опишите существующий объект/)).toHaveValue('gray sofa');
@@ -159,6 +170,7 @@ test('object replacement source and scene-object text round-trip without image U
 
 	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
 	await expect(page).toHaveURL(/source=current-result/);
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page.getByRole('tab', { name: /Замена объекта/ }).click();
 	await expect(page).toHaveURL(/source=room-photo/);
 
@@ -209,6 +221,9 @@ test('switching edit tool tabs updates only the tool query param', async ({ page
 
 	await page.getByRole('tab', { name: /Атмосфера/ }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=atmosphere$/);
+
+	await page.getByRole('tab', { name: /Замена объекта.*Альфа/ }).click();
+	await expect(page).toHaveURL(/\/edit\?tool=object-replacement&source=current-result$/);
 });
 
 test('switching style transfer reference tabs updates only the reference query param', async ({
