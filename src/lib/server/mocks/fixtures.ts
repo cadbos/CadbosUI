@@ -74,3 +74,7 @@ export function mockUpscale(): RenderResponse {
 		balance: 43
 	};
 }
+
+export function mockWalletBalance(): number {
+	return 500;
+}

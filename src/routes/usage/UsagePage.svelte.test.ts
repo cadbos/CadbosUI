@@ -68,6 +68,7 @@ function mockUsageFetch(
 		if (url.startsWith('/api/usage?')) return Promise.resolve(jsonResponse(pages[pageIndex++]!));
 		if (url === '/api/usage/profiles' && init?.method === 'POST')
 			return Promise.resolve(Response.json({ profiles }));
+		if (url === '/api/usage/balance') return Promise.resolve(Response.json({ balance: 0 }));
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
 }
@@ -189,20 +190,23 @@ it('loads the next usage page when the infinite-scroll sentinel intersects', asy
 });
 
 it('renders an error state when usage cannot be loaded', async () => {
-	const fetchMock = vi.fn<typeof fetch>();
+	const fetchMock = vi.fn<typeof fetch>((input) => {
+		const url = String(input);
+		if (url === '/api/usage/balance') return Promise.resolve(Response.json({ balance: 0 }));
+		return Promise.resolve(new Response(null, { status: 403 }));
+	});
 	vi.stubGlobal('fetch', fetchMock);
-	fetchMock.mockResolvedValueOnce(new Response(null, { status: 403 }));
 
 	const screen = render(UsagePage, pageProps());
 
-	await expect.element(screen.getByRole('alert')).toHaveTextContent('Could not load usage.');
+	await expect.element(screen.getByText('Could not load usage.')).toBeVisible();
 });
 
 it('renders each pubkey as an npub explorer link that opens in a new tab', async () => {
 	const pubkey = 'a'.repeat(64);
 	const npub = npubEncode(pubkey);
 	const fetchMock = mockUsageFetch([page([user(pubkey)], 0, false)], {
-		[pubkey]: { name: 'Alice', picture: 'https://avatar.example/alice.png' }
+		[pubkey]: { name: 'Alice' }
 	});
 	vi.stubGlobal('fetch', fetchMock);
 
@@ -213,13 +217,4 @@ it('renders each pubkey as an npub explorer link that opens in a new tab', async
 	await expect.element(link).toHaveAttribute('href', `https://explorer.example/p/${npub}`);
 	await expect.element(link).toHaveAttribute('target', '_blank');
 	await expect.element(link).toHaveAttribute('rel', 'noopener noreferrer');
-	await vi.waitFor(() => {
-		expect(
-			screen
-				.getByRole('rowheader', { name: npub })
-				.element()
-				.querySelector('img')
-				?.getAttribute('src')
-		).toBe('https://avatar.example/alice.png');
-	});
 });

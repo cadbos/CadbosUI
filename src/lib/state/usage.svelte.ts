@@ -47,6 +47,12 @@ const usageProfilesResponseSchema = z.object({
 	profiles: z.record(z.string().regex(/^[0-9a-f]{64}$/), usageProfileSchema)
 });
 
+const walletBalanceResponseSchema = z.object({
+	balance: z.number()
+});
+
+export type WalletBalanceStatus = 'idle' | 'loading' | 'ready' | 'error';
+
 class UsageLoadError extends Error {
 	constructor(message: string) {
 		super(message);
@@ -61,13 +67,17 @@ class UsageState {
 	error = $state<string | null>(null);
 	hasMore = $state(false);
 	loadingMore = $state(false);
+	walletBalance = $state<number | null>(null);
+	walletBalanceStatus = $state<WalletBalanceStatus>('idle');
 	#abort: AbortController | null = null;
 	#profileAborts = new Set<AbortController>();
+	#walletBalanceAbort: AbortController | null = null;
 	#nextOffset: number | null = null;
 
 	async load(): Promise<void> {
 		this.#abort?.abort();
 		this.#abortProfiles();
+		this.#walletBalanceAbort?.abort();
 		const controller = new AbortController();
 		this.#abort = controller;
 		this.status = 'loading';
@@ -76,6 +86,10 @@ class UsageState {
 		this.loadingMore = false;
 		this.#nextOffset = null;
 		this.profiles = {};
+		this.walletBalance = null;
+		this.walletBalanceStatus = 'idle';
+
+		void this.#loadWalletBalance();
 
 		try {
 			const page = await this.#fetchPage(0, controller.signal);
@@ -127,7 +141,9 @@ class UsageState {
 	clear(): void {
 		this.#abort?.abort();
 		this.#abortProfiles();
+		this.#walletBalanceAbort?.abort();
 		this.#abort = null;
+		this.#walletBalanceAbort = null;
 		this.users = [];
 		this.profiles = {};
 		this.status = 'idle';
@@ -135,6 +151,8 @@ class UsageState {
 		this.hasMore = false;
 		this.loadingMore = false;
 		this.#nextOffset = null;
+		this.walletBalance = null;
+		this.walletBalanceStatus = 'idle';
 	}
 
 	async #fetchPage(
@@ -182,6 +200,31 @@ class UsageState {
 		const parsed = usageProfilesResponseSchema.safeParse(await response.json().catch(() => null));
 		if (!parsed.success) throw new UsageLoadError('usage profile response invalid');
 		return parsed.data.profiles;
+	}
+
+	async #loadWalletBalance(): Promise<void> {
+		const controller = new AbortController();
+		this.#walletBalanceAbort = controller;
+		this.walletBalanceStatus = 'loading';
+
+		try {
+			const response = await fetch('/api/usage/balance', { signal: controller.signal });
+			if (!response.ok) throw new UsageLoadError('wallet balance request failed');
+
+			const parsed = walletBalanceResponseSchema.safeParse(await response.json().catch(() => null));
+			if (!parsed.success) throw new UsageLoadError('wallet balance response invalid');
+
+			if (this.#walletBalanceAbort !== controller) return;
+			this.walletBalance = parsed.data.balance;
+			this.walletBalanceStatus = 'ready';
+		} catch (error) {
+			if (controller.signal.aborted) return;
+			this.walletBalance = null;
+			this.walletBalanceStatus = 'error';
+			console.error('Wallet balance load failed:', error);
+		} finally {
+			if (this.#walletBalanceAbort === controller) this.#walletBalanceAbort = null;
+		}
 	}
 
 	#setNextPage(page: z.infer<typeof userUsageResponseSchema>): void {

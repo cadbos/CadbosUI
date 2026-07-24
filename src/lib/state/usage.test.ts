@@ -56,6 +56,13 @@ function profilesResponse(profiles: UsageProfilesResponse['profiles'] = {}): Res
 	});
 }
 
+function walletBalanceResponse(balance = 0): Response {
+	return new Response(JSON.stringify({ balance }), {
+		status: 200,
+		headers: { 'content-type': 'application/json' }
+	});
+}
+
 function mockUsageFetch(
 	pages: UserUsageResponse[],
 	profiles: UsageProfilesResponse['profiles'] = {}
@@ -65,6 +72,7 @@ function mockUsageFetch(
 		const url = String(input);
 		if (url.startsWith('/api/usage?')) return Promise.resolve(jsonResponse(pages[pageIndex++]!));
 		if (url === '/api/usage/profiles') return Promise.resolve(profilesResponse(profiles));
+		if (url === '/api/usage/balance') return Promise.resolve(walletBalanceResponse());
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
 }
@@ -87,7 +95,7 @@ describe('usage pagination', () => {
 
 		await usage.load();
 
-		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
 		expect(fetchMock).toHaveBeenCalledWith('/api/usage?offset=0&size=20', {
 			signal: expect.any(AbortSignal)
 		});
@@ -95,6 +103,9 @@ describe('usage pagination', () => {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ pubkeys: [PUBKEY_ONE] }),
+			signal: expect.any(AbortSignal)
+		});
+		expect(fetchMock).toHaveBeenCalledWith('/api/usage/balance', {
 			signal: expect.any(AbortSignal)
 		});
 		expect(usage.status).toBe('ready');
@@ -106,6 +117,7 @@ describe('usage pagination', () => {
 			});
 		});
 		expect(usage.hasMore).toBe(true);
+		await vi.waitFor(() => expect(usage.walletBalanceStatus).toBe('ready'));
 	});
 
 	it('loads the next usage page on demand', async () => {
@@ -118,7 +130,7 @@ describe('usage pagination', () => {
 		await usage.load();
 		await usage.loadMore();
 
-		expect(fetchMock).toHaveBeenCalledTimes(4);
+		expect(fetchMock).toHaveBeenCalledTimes(5);
 		expect(fetchMock).toHaveBeenCalledWith('/api/usage?offset=1&size=20', {
 			signal: expect.any(AbortSignal)
 		});
@@ -129,14 +141,16 @@ describe('usage pagination', () => {
 	});
 
 	it('surfaces invalid usage responses as load errors', async () => {
-		const fetchMock = vi.fn<typeof fetch>();
+		const fetchMock = vi.fn<typeof fetch>((input) => {
+			if (String(input) === '/api/usage/balance') return Promise.resolve(walletBalanceResponse());
+			return Promise.resolve(
+				new Response(JSON.stringify({ users: [{ pubkey: '' }] }), {
+					status: 200,
+					headers: { 'content-type': 'application/json' }
+				})
+			);
+		});
 		vi.stubGlobal('fetch', fetchMock);
-		fetchMock.mockResolvedValueOnce(
-			new Response(JSON.stringify({ users: [{ pubkey: '' }] }), {
-				status: 200,
-				headers: { 'content-type': 'application/json' }
-			})
-		);
 
 		await usage.load();
 
@@ -146,14 +160,31 @@ describe('usage pagination', () => {
 	});
 
 	it('rejects usage records with non-hex pubkeys', async () => {
-		const fetchMock = vi.fn<typeof fetch>();
+		const fetchMock = vi.fn<typeof fetch>((input) => {
+			if (String(input) === '/api/usage/balance') return Promise.resolve(walletBalanceResponse());
+			return Promise.resolve(jsonResponse(page([user('not-a-pubkey')], 0, false)));
+		});
 		vi.stubGlobal('fetch', fetchMock);
-		fetchMock.mockResolvedValueOnce(jsonResponse(page([user('not-a-pubkey')], 0, false)));
 
 		await usage.load();
 
 		expect(usage.status).toBe('error');
 		expect(usage.users).toEqual([]);
 		expect(usage.error).toBe('UsageLoadError');
+	});
+
+	it('surfaces a wallet balance load failure independently of the table load', async () => {
+		const fetchMock = vi.fn<typeof fetch>((input) => {
+			if (String(input) === '/api/usage/balance')
+				return Promise.resolve(new Response(null, { status: 500 }));
+			return Promise.resolve(jsonResponse(page([user(PUBKEY_ONE)], 0, false)));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await usage.load();
+
+		expect(usage.status).toBe('ready');
+		expect(usage.walletBalanceStatus).toBe('error');
+		expect(usage.walletBalance).toBeNull();
 	});
 });
