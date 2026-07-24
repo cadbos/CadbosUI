@@ -688,25 +688,23 @@ export class RequestState {
 		return { valid: missing.length === 0, missing };
 	}
 
-	styleTransferSourceUrl(): string | undefined {
-		if (this.styleSourceMode === 'current-result') {
+	#sourceUrlFor(mode: ImageSourceMode): string | undefined {
+		if (mode === 'current-result') {
 			return this.currentRender?.outputUrls[0] ?? this.image?.url;
 		}
 		return this.image?.url;
+	}
+
+	styleTransferSourceUrl(): string | undefined {
+		return this.#sourceUrlFor(this.styleSourceMode);
 	}
 
 	objectReplacementSourceUrl(): string | undefined {
-		if (this.objectReplacementSourceMode === 'current-result') {
-			return this.currentRender?.outputUrls[0] ?? this.image?.url;
-		}
-		return this.image?.url;
+		return this.#sourceUrlFor(this.objectReplacementSourceMode);
 	}
 
 	textureReplacementSourceUrl(): string | undefined {
-		if (this.textureReplacementSourceMode === 'current-result') {
-			return this.currentRender?.outputUrls[0] ?? this.image?.url;
-		}
-		return this.image?.url;
+		return this.#sourceUrlFor(this.textureReplacementSourceMode);
 	}
 
 	toRenderRequest(): RenderRequest | null {
