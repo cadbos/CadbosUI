@@ -15,28 +15,44 @@
 import { untrack } from 'svelte';
 import type { TranslationKey } from '$lib/i18n/index.svelte';
 
+// Opaque handle returned by start() and required by stop() — lets concurrent
+// flows (e.g. a render kicked off while an object-replacement job is still
+// polling) each remove only their own entry, so the label shown always
+// reflects the most recently started flow that's still actually active,
+// never a stale one left behind by an unrelated flow finishing first.
+export type GenerationOverlayFlow = number;
+
+interface OverlayFlow {
+	id: GenerationOverlayFlow;
+	messageKey: TranslationKey;
+	detailKey: TranslationKey | null;
+}
+
 class GenerationOverlayState {
 	messageKey = $state<TranslationKey | null>(null);
 	detailKey = $state<TranslationKey | null>(null);
-	#activeFlows = $state(0);
+	#flows: OverlayFlow[] = $state.raw([]);
+	#nextId = 0;
 
 	get active(): boolean {
-		return this.#activeFlows > 0;
+		return this.#flows.length > 0;
 	}
 
-	start(messageKey: TranslationKey, detailKey?: TranslationKey): void {
-		this.#activeFlows = untrack(() => this.#activeFlows) + 1;
-		this.messageKey = messageKey;
-		this.detailKey = detailKey ?? null;
+	start(messageKey: TranslationKey, detailKey?: TranslationKey): GenerationOverlayFlow {
+		const id = untrack(() => this.#nextId++);
+		const flow: OverlayFlow = { id, messageKey, detailKey: detailKey ?? null };
+		this.#flows = [...untrack(() => this.#flows), flow];
+		this.messageKey = flow.messageKey;
+		this.detailKey = flow.detailKey;
+		return id;
 	}
 
-	stop(): void {
-		const activeFlows = Math.max(0, untrack(() => this.#activeFlows) - 1);
-		this.#activeFlows = activeFlows;
-		if (activeFlows > 0) return;
-
-		this.messageKey = null;
-		this.detailKey = null;
+	stop(id: GenerationOverlayFlow): void {
+		const flows = untrack(() => this.#flows).filter((flow) => flow.id !== id);
+		this.#flows = flows;
+		const top = flows.at(-1) ?? null;
+		this.messageKey = top?.messageKey ?? null;
+		this.detailKey = top?.detailKey ?? null;
 	}
 }
 

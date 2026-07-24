@@ -106,8 +106,8 @@ before the Change Date. See LICENSE for complete terms.
 	// poll cycle, not a single fetch.
 	$effect(() => {
 		if (!(submitting || isPolling)) return;
-		generationOverlay.start('generationOverlay.textureReplacement');
-		return () => generationOverlay.stop();
+		const overlayId = generationOverlay.start('generationOverlay.textureReplacement');
+		return () => generationOverlay.stop(overlayId);
 	});
 
 	beforeNavigate(({ to }) => {

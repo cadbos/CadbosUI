@@ -56,7 +56,7 @@ before the Change Date. See LICENSE for complete terms.
 		const sourceRender = render;
 		upscaling = true;
 		upscaleError = null;
-		generationOverlay.start('generationOverlay.upscale');
+		const overlayId = generationOverlay.start('generationOverlay.upscale');
 		try {
 			const response = await fetch('/api/upscale', {
 				method: 'POST',
@@ -79,7 +79,7 @@ before the Change Date. See LICENSE for complete terms.
 			upscaleError = t('toolbar.upscaleFailed');
 		} finally {
 			upscaling = false;
-			generationOverlay.stop();
+			generationOverlay.stop(overlayId);
 		}
 	}
 </script>

@@ -79,7 +79,7 @@ before the Change Date. See LICENSE for complete terms.
 		if (!targetImageUrl || !trimmed || applying || !isAuthenticated) return;
 		applying = true;
 		error = null;
-		generationOverlay.start('generationOverlay.edit');
+		const overlayId = generationOverlay.start('generationOverlay.edit');
 
 		try {
 			const response = await fetch('/api/edit', {
@@ -103,7 +103,7 @@ before the Change Date. See LICENSE for complete terms.
 			error = t(editErrorKey(err));
 		} finally {
 			applying = false;
-			generationOverlay.stop();
+			generationOverlay.stop(overlayId);
 		}
 	}
 

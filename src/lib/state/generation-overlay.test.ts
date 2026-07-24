@@ -12,17 +12,13 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { generationOverlay } from './generation-overlay.svelte';
-
-afterEach(() => {
-	generationOverlay.stop();
-});
 
 describe('generation overlay', () => {
 	it('stays active until every generation flow stops', () => {
-		generationOverlay.start('generationOverlay.render');
-		generationOverlay.start(
+		const renderFlow = generationOverlay.start('generationOverlay.render');
+		const objectReplacementFlow = generationOverlay.start(
 			'generationOverlay.objectReplacement',
 			'generationOverlay.objectReplacementDetail'
 		);
@@ -31,16 +27,36 @@ describe('generation overlay', () => {
 		expect(generationOverlay.messageKey).toBe('generationOverlay.objectReplacement');
 		expect(generationOverlay.detailKey).toBe('generationOverlay.objectReplacementDetail');
 
-		generationOverlay.stop();
+		generationOverlay.stop(objectReplacementFlow);
+
+		expect(generationOverlay.active).toBe(true);
+		expect(generationOverlay.messageKey).toBe('generationOverlay.render');
+		expect(generationOverlay.detailKey).toBeNull();
+
+		generationOverlay.stop(renderFlow);
+
+		expect(generationOverlay.active).toBe(false);
+		expect(generationOverlay.messageKey).toBeNull();
+		expect(generationOverlay.detailKey).toBeNull();
+	});
+
+	it('restores the still-active flow label when a more recently started flow finishes first', () => {
+		const objectReplacementFlow = generationOverlay.start(
+			'generationOverlay.objectReplacement',
+			'generationOverlay.objectReplacementDetail'
+		);
+		const renderFlow = generationOverlay.start('generationOverlay.render');
+
+		expect(generationOverlay.messageKey).toBe('generationOverlay.render');
+
+		generationOverlay.stop(renderFlow);
 
 		expect(generationOverlay.active).toBe(true);
 		expect(generationOverlay.messageKey).toBe('generationOverlay.objectReplacement');
 		expect(generationOverlay.detailKey).toBe('generationOverlay.objectReplacementDetail');
 
-		generationOverlay.stop();
+		generationOverlay.stop(objectReplacementFlow);
 
 		expect(generationOverlay.active).toBe(false);
-		expect(generationOverlay.messageKey).toBeNull();
-		expect(generationOverlay.detailKey).toBeNull();
 	});
 });

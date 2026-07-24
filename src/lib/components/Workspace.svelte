@@ -167,7 +167,7 @@ before the Change Date. See LICENSE for complete terms.
 		submitting = true;
 		submitError = null;
 		request.setStatus('rendering');
-		generationOverlay.start('generationOverlay.render');
+		const overlayId = generationOverlay.start('generationOverlay.render');
 		try {
 			const body = request.toRenderRequest();
 			const endpoint = request.sceneType === 'exterior' ? '/api/render/exterior' : '/api/render';
@@ -196,7 +196,7 @@ before the Change Date. See LICENSE for complete terms.
 			submitError = t(renderErrorKey(err));
 		} finally {
 			submitting = false;
-			generationOverlay.stop();
+			generationOverlay.stop(overlayId);
 		}
 	}
 

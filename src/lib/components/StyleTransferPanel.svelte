@@ -151,7 +151,7 @@ before the Change Date. See LICENSE for complete terms.
 		applying = true;
 		error = null;
 		request.setStatus('rendering');
-		generationOverlay.start('generationOverlay.styleTransfer');
+		const overlayId = generationOverlay.start('generationOverlay.styleTransfer');
 		try {
 			const response = await fetch('/api/style-transfer', {
 				method: 'POST',
@@ -171,7 +171,7 @@ before the Change Date. See LICENSE for complete terms.
 			error = t(styleTransferErrorKey(err));
 		} finally {
 			applying = false;
-			generationOverlay.stop();
+			generationOverlay.stop(overlayId);
 		}
 	}
 
