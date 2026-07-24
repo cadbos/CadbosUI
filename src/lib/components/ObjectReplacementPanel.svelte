@@ -32,6 +32,10 @@ before the Change Date. See LICENSE for complete terms.
 	const MAX_TRANSIENT_FAILURES = 5;
 	const DEFAULT_POLL_DELAY_MS = 2_000;
 	const MAX_POLL_DELAY_MS = 30_000;
+	// Generous enough to outlast the server's own ComfyUI wait (2min) plus
+	// upload/finalize time, but finite so a stalled connection is retried
+	// instead of leaving pollJob awaiting a response that never arrives.
+	const POLL_REQUEST_TIMEOUT_MS = 150_000;
 
 	const jobResponseSchema = z.discriminatedUnion('status', [
 		z.object({ id: z.uuid(), status: z.literal('processing') }).strict(),
@@ -218,7 +222,9 @@ before the Change Date. See LICENSE for complete terms.
 		while (!signal.aborted && run === pollRun) {
 			let response: Response;
 			try {
-				response = await fetch(`/api/object-replacement/${encodeURIComponent(id)}`, { signal });
+				response = await fetch(`/api/object-replacement/${encodeURIComponent(id)}`, {
+					signal: AbortSignal.any([signal, AbortSignal.timeout(POLL_REQUEST_TIMEOUT_MS)])
+				});
 			} catch (error) {
 				if (signal.aborted || run !== pollRun) return;
 				failures += 1;
