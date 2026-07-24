@@ -60,7 +60,8 @@ function jsonResponse(body: UserUsageResponse): Response {
 
 function mockUsageFetch(
 	pages: UserUsageResponse[],
-	profiles: UsageProfilesResponse['profiles'] = {}
+	profiles: UsageProfilesResponse['profiles'] = {},
+	walletBalance: number | null = 0
 ) {
 	let pageIndex = 0;
 	return vi.fn<typeof fetch>((input, init) => {
@@ -68,6 +69,11 @@ function mockUsageFetch(
 		if (url.startsWith('/api/usage?')) return Promise.resolve(jsonResponse(pages[pageIndex++]!));
 		if (url === '/api/usage/profiles' && init?.method === 'POST')
 			return Promise.resolve(Response.json({ profiles }));
+		if (url === '/api/usage/balance') {
+			return walletBalance === null
+				? Promise.resolve(new Response(null, { status: 500 }))
+				: Promise.resolve(Response.json({ balance: walletBalance }));
+		}
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
 }
@@ -138,6 +144,29 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 		.toHaveAttribute('title', localTimeZoneName(locale, 'long'));
 });
 
+it.each(['ru', 'en'] as const)('renders the live wallet balance for %s', async (locale) => {
+	const fetchMock = mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)], {}, 123.4);
+	vi.stubGlobal('fetch', fetchMock);
+	setLocale(locale);
+
+	const screen = render(UsagePage, pageProps());
+
+	await expect
+		.element(
+			screen.getByText(locale === 'ru' ? 'Баланс кошелька: 123.40 $' : 'Wallet balance: 123.40 $')
+		)
+		.toBeVisible();
+});
+
+it('renders an error message when the wallet balance cannot be loaded', async () => {
+	const fetchMock = mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)], {}, null);
+	vi.stubGlobal('fetch', fetchMock);
+
+	const screen = render(UsagePage, pageProps());
+
+	await expect.element(screen.getByText('Could not load wallet balance.')).toBeVisible();
+});
+
 it('loads the next usage page when the infinite-scroll sentinel intersects', async () => {
 	const observerCallbacks: IntersectionObserverCallback[] = [];
 	let observerOptions: IntersectionObserverInit | undefined;
@@ -189,13 +218,16 @@ it('loads the next usage page when the infinite-scroll sentinel intersects', asy
 });
 
 it('renders an error state when usage cannot be loaded', async () => {
-	const fetchMock = vi.fn<typeof fetch>();
+	const fetchMock = vi.fn<typeof fetch>((input) => {
+		const url = String(input);
+		if (url === '/api/usage/balance') return Promise.resolve(Response.json({ balance: 0 }));
+		return Promise.resolve(new Response(null, { status: 403 }));
+	});
 	vi.stubGlobal('fetch', fetchMock);
-	fetchMock.mockResolvedValueOnce(new Response(null, { status: 403 }));
 
 	const screen = render(UsagePage, pageProps());
 
-	await expect.element(screen.getByRole('alert')).toHaveTextContent('Could not load usage.');
+	await expect.element(screen.getByText('Could not load usage.')).toBeVisible();
 });
 
 it('renders each pubkey as an npub explorer link that opens in a new tab', async () => {

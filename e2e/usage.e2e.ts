@@ -36,6 +36,15 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 			return;
 		}
 
+		if (new URL(route.request().url()).pathname === '/api/usage/balance') {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ balance: 250 })
+			});
+			return;
+		}
+
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -79,6 +88,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	const userWithoutPicture = page.getByRole('rowheader', { name: npubWithoutPicture });
 
 	await expect(page.getByRole('columnheader', { name: 'Пользователь' })).toBeVisible();
+	await expect(page.getByText('Баланс кошелька: 250.00 $')).toBeVisible();
 	await expect(user.locator('img')).toHaveAttribute('src', 'https://avatar.example/alice.svg');
 	await expect(userWithoutPicture.locator('.avatar')).toHaveText('B');
 	await expect(link).toHaveAttribute('href', `https://primal.net/p/${npub}`);

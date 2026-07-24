@@ -143,6 +143,9 @@ export interface Dictionary {
 	'generatedImages.confirmDeleteDeleting': string;
 	'usage.title': string;
 	'usage.subtitle': string;
+	'usage.walletBalance': string;
+	'usage.walletBalanceLoading': string;
+	'usage.walletBalanceFailed': string;
 	'usage.loading': string;
 	'usage.empty': string;
 	'usage.failed': string;

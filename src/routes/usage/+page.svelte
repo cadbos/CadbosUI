@@ -15,7 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { npubEncode } from 'nostr-tools/nip19';
 	import type { PageProps } from './$types';
-	import { getLocale, t } from '$lib/i18n/index.svelte';
+	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 	import { usage } from '$lib/state/usage.svelte';
 	import { formatCredit } from '$lib/utils';
 
@@ -85,6 +85,17 @@ before the Change Date. See LICENSE for complete terms.
 		<header class="usage-header">
 			<h1 id="usage-title">{t('usage.title')}</h1>
 			<p>{t('usage.subtitle')}</p>
+			{#if usage.walletBalanceStatus === 'loading'}
+				<p class="wallet-balance status">{t('usage.walletBalanceLoading')}</p>
+			{:else if usage.walletBalanceStatus === 'error'}
+				<p class="wallet-balance status error" role="alert">{t('usage.walletBalanceFailed')}</p>
+			{:else if usage.walletBalanceStatus === 'ready' && usage.walletBalance !== null}
+				<p class="wallet-balance">
+					<strong
+						>{ti('usage.walletBalance', { balance: formatCredit(usage.walletBalance) })}</strong
+					>
+				</p>
+			{/if}
 		</header>
 
 		{#if usage.status === 'loading'}
@@ -206,6 +217,11 @@ before the Change Date. See LICENSE for complete terms.
 
 	.error {
 		color: var(--color-danger);
+	}
+
+	.wallet-balance strong {
+		color: var(--color-text);
+		font-weight: 700;
 	}
 
 	.table-wrap {

@@ -168,6 +168,14 @@ export interface Balance {
 	updatedAt: number;
 }
 
+// GET /api/usage/balance — the shared ARCHAI_API_KEY account's live balance,
+// fetched from archAI's own Check Balance endpoint (unlike `Balance` above,
+// which is a D1-cached mirror). Admin-only, shown on /usage (see
+// authorizeUsageViewer).
+export interface WalletBalanceResponse {
+	balance: number;
+}
+
 // A single deduction from an approved account's own limit (see CreditInfo
 // below). `amount` is the real cost archAI charged. `id` is a stable identifier
 // for list rendering — createdAt alone can collide across concurrent calls.
