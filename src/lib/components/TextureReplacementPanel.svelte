@@ -26,7 +26,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import { extractApiErrorCode, request, type ImageSourceMode } from '$lib/state/request.svelte';
-	import { buildShareUrl } from '$lib/state/url-state';
+	import { buildShareUrl, isEditToolRoute } from '$lib/state/url-state';
 	import { logBoundaryError } from '$lib/utils';
 
 	const MAX_TRANSIENT_FAILURES = 5;
@@ -111,7 +111,10 @@ before the Change Date. See LICENSE for complete terms.
 	});
 
 	beforeNavigate(({ to }) => {
-		if (submitting && !to?.route.id?.startsWith('/texture-replacement')) {
+		if (
+			submitting &&
+			(to === null || !isEditToolRoute(to.route.id, to.url.searchParams, 'texture-replacement'))
+		) {
 			navigatedAwayWhileSubmitting = true;
 		}
 	});
@@ -294,11 +297,14 @@ before the Change Date. See LICENSE for complete terms.
 			const result = await parseJobResponse(response);
 			if (result.status !== 'processing') throw new Error('invalid_response');
 			request.setActiveTextureReplacementJob(result.id, sourceRender, instruction);
-			if (navigatedAwayWhileSubmitting || !page.route.id?.startsWith('/texture-replacement')) {
+			if (
+				navigatedAwayWhileSubmitting ||
+				!isEditToolRoute(page.route.id, page.url.searchParams, 'texture-replacement')
+			) {
 				return;
 			}
 			try {
-				await goto(buildShareUrl('textureReplacement', request), {
+				await goto(buildShareUrl('edit', request, { tool: 'texture-replacement' }), {
 					replaceState: true,
 					keepFocus: true,
 					noScroll: true
@@ -328,7 +334,7 @@ before the Change Date. See LICENSE for complete terms.
 		terminalError = null;
 		pollFailure = null;
 		window.scrollTo({ top: 0, behavior: 'smooth' });
-		await goto(buildShareUrl('textureReplacement', request), {
+		await goto(buildShareUrl('edit', request, { tool: 'texture-replacement' }), {
 			replaceState: true,
 			keepFocus: true,
 			noScroll: true
@@ -341,18 +347,14 @@ before the Change Date. See LICENSE for complete terms.
 	<p>{t('textureReplacement.alphaNotice')}</p>
 </aside>
 
-<section class="step-card">
-	<div class="step-header">
-		<span class="step-num" aria-hidden="true">①</span>
-		<h2>{t('textureReplacement.images')}</h2>
-	</div>
-
-	<div class="image-grid">
-		<div class="image-column">
-			<div class="column-header">
-				<h3>{t('textureReplacement.sourceImage')}</h3>
-				<span class="required-badge">{t('textureReplacement.required')}</span>
-				{#if currentResultUrl}
+<section class="replacement-section">
+	<h3>{t('textureReplacement.images')}</h3>
+	<div class:single-column={!currentResultUrl} class="image-grid">
+		{#if currentResultUrl}
+			<div class="image-column">
+				<div class="column-header">
+					<h4>{t('textureReplacement.sourceImage')}</h4>
+					<span class="required-badge">{t('textureReplacement.required')}</span>
 					<div class="source-tabs" role="group" aria-label={t('textureReplacement.sourceImage')}>
 						<button
 							type="button"
@@ -373,25 +375,25 @@ before the Change Date. See LICENSE for complete terms.
 							{t('textureReplacement.sourceCurrentResult')}
 						</button>
 					</div>
+				</div>
+
+				{#if usesCurrentResult}
+					<div class="source-preview">
+						<img src={currentResultUrl} alt={t('textureReplacement.sourceCurrentResult')} />
+					</div>
+				{:else}
+					<ImageUpload
+						label="textureReplacement.sourceImage"
+						requiredLabel="textureReplacement.required"
+						disabled={formLocked}
+					/>
 				{/if}
 			</div>
-
-			{#if usesCurrentResult}
-				<div class="source-preview">
-					<img src={currentResultUrl} alt={t('textureReplacement.sourceCurrentResult')} />
-				</div>
-			{:else}
-				<ImageUpload
-					label="textureReplacement.sourceImage"
-					requiredLabel="textureReplacement.required"
-					disabled={formLocked}
-				/>
-			{/if}
-		</div>
+		{/if}
 
 		<div class="image-column">
 			<div class="column-header">
-				<h3>{t('textureReplacement.referenceImage')}</h3>
+				<h4>{t('textureReplacement.referenceImage')}</h4>
 				<span class="required-badge">{t('textureReplacement.required')}</span>
 			</div>
 			<ImageUpload
@@ -403,10 +405,9 @@ before the Change Date. See LICENSE for complete terms.
 	</div>
 </section>
 
-<section class="step-card">
-	<div class="step-header">
-		<span class="step-num" aria-hidden="true">②</span>
-		<h2>{t('textureReplacement.surfaceLabel')}</h2>
+<section class="replacement-section">
+	<div class="section-header">
+		<h3>{t('textureReplacement.surfaceLabel')}</h3>
 		<span class="required-badge">{t('textureReplacement.required')}</span>
 	</div>
 	<label class="surface-field">
@@ -423,11 +424,8 @@ before the Change Date. See LICENSE for complete terms.
 	</label>
 </section>
 
-<section class="step-card generate-section">
-	<div class="step-header">
-		<span class="step-num" aria-hidden="true">③</span>
-		<h2>{t('textureReplacement.controls')}</h2>
-	</div>
+<section class="replacement-section generate-section">
+	<h3>{t('textureReplacement.controls')}</h3>
 
 	{#if !isAuthenticated}
 		<p class="auth-hint">{t('textureReplacement.signInToApply')}</p>
@@ -492,7 +490,8 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.alpha-notice p,
-	.column-header h3,
+	.column-header h4,
+	.replacement-section h3,
 	.job-status,
 	.job-success,
 	.validation-hint {
@@ -517,10 +516,33 @@ before the Change Date. See LICENSE for complete terms.
 		text-transform: uppercase;
 	}
 
+	.replacement-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.875rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--color-border);
+	}
+
+	.replacement-section h3 {
+		font-size: 1rem;
+		font-weight: 600;
+	}
+
+	.section-header {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
 	.image-grid {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 1rem;
+	}
+
+	.image-grid.single-column {
+		grid-template-columns: minmax(0, 1fr);
 	}
 
 	.image-column {
@@ -537,7 +559,8 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 0.75rem;
 	}
 
-	.column-header h3 {
+	.column-header h4 {
+		margin: 0;
 		font-size: 0.875rem;
 		font-weight: 600;
 	}

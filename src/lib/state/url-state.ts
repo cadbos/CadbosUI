@@ -23,14 +23,15 @@ import {
 } from '$lib/state/request.svelte';
 import { STYLE_PRESETS } from '$lib/style-presets';
 
-export type Mode = 'render' | 'edit' | 'styleTransfer' | 'textureReplacement';
+export type Mode = 'render' | 'edit' | 'styleTransfer';
 export type ViewId = 'chat' | 'keyValue' | 'graph';
 export type ToolId =
 	| 'freeform'
 	| 'add-object'
 	| 'remove-object'
 	| 'atmosphere'
-	| 'object-replacement';
+	| 'object-replacement'
+	| 'texture-replacement';
 export type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
 
 // The sub-tab shown within the current mode — at most one of these applies,
@@ -48,8 +49,7 @@ export interface SubTab {
 const MODE_PATHS: Record<Mode, string> = {
 	render: '/create',
 	edit: '/edit',
-	styleTransfer: '/style-transfer',
-	textureReplacement: '/texture-replacement'
+	styleTransfer: '/style-transfer'
 };
 
 const VIEW_SLUGS: Record<ViewId, string> = {
@@ -69,7 +69,8 @@ const TOOL_IDS: readonly ToolId[] = [
 	'add-object',
 	'remove-object',
 	'atmosphere',
-	'object-replacement'
+	'object-replacement',
+	'texture-replacement'
 ];
 const REFERENCE_TABS: readonly ReferenceTab[] = ['photorealistic', 'conceptual', 'custom'];
 
@@ -114,7 +115,6 @@ function slugToScene(param: string | undefined): SceneType {
 export function routeIdToMode(routeId: string | null): Mode {
 	if (routeId?.startsWith('/edit')) return 'edit';
 	if (routeId?.startsWith('/style-transfer')) return 'styleTransfer';
-	if (routeId?.startsWith('/texture-replacement')) return 'textureReplacement';
 	return 'render';
 }
 
@@ -128,8 +128,7 @@ export function isWorkspaceRoute(routeId: string | null): boolean {
 	return (
 		routeId?.startsWith('/create') === true ||
 		routeId?.startsWith('/edit') === true ||
-		routeId?.startsWith('/style-transfer') === true ||
-		routeId?.startsWith('/texture-replacement') === true
+		routeId?.startsWith('/style-transfer') === true
 	);
 }
 
@@ -142,17 +141,18 @@ export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): Sub
 	if (mode === 'edit') {
 		const tool = slugToTool(searchParams.get('tool') ?? undefined);
 		const job = searchParams.get('job');
-		return tool === 'object-replacement' && isJobId(job) ? { tool, job } : { tool };
+		return (tool === 'object-replacement' || tool === 'texture-replacement') && isJobId(job)
+			? { tool, job }
+			: { tool };
 	}
 	if (mode === 'styleTransfer') {
 		return { reference: slugToReference(searchParams.get('reference') ?? undefined) };
 	}
-	const job = searchParams.get('job');
-	return isJobId(job) ? { job } : {};
+	return {};
 }
 
-// A plain UUID check — shared by every async-job mode (object replacement,
-// texture replacement) that carries its job id in the `job` query param.
+// A plain UUID check — shared by every async-job tool that carries its job id
+// in the `job` query param.
 export function isJobId(value: unknown): value is string {
 	return objectReplacementJobIdSchema.safeParse(value).success;
 }
@@ -197,9 +197,7 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 			? `${MODE_PATHS.render}/${request.sceneType}`
 			: mode === 'edit'
 				? MODE_PATHS.edit
-				: mode === 'styleTransfer'
-					? `${MODE_PATHS.styleTransfer}/${request.sceneType}`
-					: MODE_PATHS.textureReplacement;
+				: `${MODE_PATHS.styleTransfer}/${request.sceneType}`;
 
 	const params = new URLSearchParams();
 
@@ -230,6 +228,13 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 			}
 			const job = subTab.job ?? request.activeObjectReplacementJobId;
 			if (isJobId(job)) params.set('job', job);
+		} else if (tool === 'texture-replacement') {
+			params.set('source', request.textureReplacementSourceMode);
+			if (request.textureReplacementSurface.trim() !== '') {
+				params.set('surface', request.textureReplacementSurface);
+			}
+			const job = subTab.job ?? request.activeTextureReplacementJobId;
+			if (isJobId(job)) params.set('job', job);
 		} else if (tool === 'freeform' && request.editPrompt.trim() !== '') {
 			params.set('prompt', request.editPrompt);
 		}
@@ -256,15 +261,6 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 		if (request.styleTransferPrompt.trim() !== '') {
 			params.set('prompt', request.styleTransferPrompt);
 		}
-	}
-
-	if (mode === 'textureReplacement') {
-		params.set('source', request.textureReplacementSourceMode);
-		if (request.textureReplacementSurface.trim() !== '') {
-			params.set('surface', request.textureReplacementSurface);
-		}
-		const job = subTab.job ?? request.activeTextureReplacementJobId;
-		if (isJobId(job)) params.set('job', job);
 	}
 
 	const query = params.toString();
@@ -323,6 +319,16 @@ export function applyShareParams(
 			request.setObjectReplacementObject((searchParams.get('object') ?? '').slice(0, 200));
 			const job = searchParams.get('job');
 			request.setActiveObjectReplacementJobId(isJobId(job) ? job : undefined);
+		} else if (tool === 'texture-replacement') {
+			const source = searchParams.get('source');
+			request.setTextureReplacementSourceMode(
+				(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
+					? (source as ImageSourceMode)
+					: 'current-result'
+			);
+			request.setTextureReplacementSurface((searchParams.get('surface') ?? '').slice(0, 200));
+			const job = searchParams.get('job');
+			request.setActiveTextureReplacementJobId(isJobId(job) ? job : undefined);
 		} else if (tool === 'freeform') {
 			request.setEditPrompt(searchParams.get('prompt') ?? '');
 		}
@@ -346,15 +352,5 @@ export function applyShareParams(
 				: 'current-result'
 		);
 		request.setStyleTransferPrompt(searchParams.get('prompt') ?? '');
-	} else {
-		const source = searchParams.get('source');
-		request.setTextureReplacementSourceMode(
-			(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
-				? (source as ImageSourceMode)
-				: 'current-result'
-		);
-		request.setTextureReplacementSurface((searchParams.get('surface') ?? '').slice(0, 200));
-		const job = searchParams.get('job');
-		request.setActiveTextureReplacementJobId(isJobId(job) ? job : undefined);
 	}
 }

@@ -21,7 +21,6 @@ before the Change Date. See LICENSE for complete terms.
 	import EditPanel from '$lib/components/EditPanel.svelte';
 	import PromptViews from '$lib/components/PromptViews.svelte';
 	import StyleTransferPanel from '$lib/components/StyleTransferPanel.svelte';
-	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
 	import GeneratedImagesSidebar from '$lib/components/GeneratedImagesSidebar.svelte';
 	import {
 		creditErrorKey,
@@ -42,11 +41,10 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
-	const modes: { id: Mode; label: TranslationKey; alpha?: boolean }[] = [
+	const modes: { id: Mode; label: TranslationKey }[] = [
 		{ id: 'render', label: 'mode.render' },
 		{ id: 'edit', label: 'mode.edit' },
-		{ id: 'styleTransfer', label: 'mode.styleTransfer' },
-		{ id: 'textureReplacement', label: 'mode.textureReplacement', alpha: true }
+		{ id: 'styleTransfer', label: 'mode.styleTransfer' }
 	];
 
 	const sceneTypes: { id: SceneType; label: TranslationKey }[] = [
@@ -231,9 +229,6 @@ before the Change Date. See LICENSE for complete terms.
 							onkeydown={modeTabController.onKeydown}
 						>
 							<span>{t(modeOption.label)}</span>
-							{#if modeOption.alpha}
-								<span class="mode-alpha">{t('objectReplacement.alpha')}</span>
-							{/if}
 						</button>
 					{/each}
 				</div>
@@ -402,27 +397,6 @@ before the Change Date. See LICENSE for complete terms.
 					{/snippet}
 				</svelte:boundary>
 			</div>
-
-			<div
-				class="mode-panel"
-				role="tabpanel"
-				id="mode-panel-textureReplacement"
-				aria-labelledby="mode-tab-textureReplacement"
-				tabindex="0"
-				hidden={mode !== 'textureReplacement'}
-			>
-				<svelte:boundary
-					onerror={(error: unknown) => logBoundaryError('workspace.textureReplacement', error)}
-				>
-					<TextureReplacementPanel />
-					{#snippet failed(_error: unknown, reset: () => void)}
-						<p class="boundary-failed">{t('boundary.failed')}</p>
-						<button type="button" class="boundary-retry" onclick={reset}>
-							{t('boundary.retry')}
-						</button>
-					{/snippet}
-				</svelte:boundary>
-			</div>
 		</div>
 
 		{#if isAuthenticated}
@@ -503,17 +477,6 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		justify-content: center;
 		gap: 0.4rem;
-	}
-
-	.mode-alpha {
-		padding: 0.1rem 0.35rem;
-		border: 1px solid currentColor;
-		border-radius: 100px;
-		font-size: 0.5625rem;
-		font-weight: 700;
-		line-height: 1.2;
-		letter-spacing: 0.03em;
-		text-transform: uppercase;
 	}
 
 	.mode-tabs button:hover:not(.active) {
@@ -609,13 +572,6 @@ before the Change Date. See LICENSE for complete terms.
 		.mode-tabs button {
 			padding: 0.7rem 0.75rem;
 			font-size: 0.875rem;
-		}
-	}
-
-	@media (max-width: 420px) {
-		.mode-tabs {
-			display: grid;
-			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 	}
 </style>

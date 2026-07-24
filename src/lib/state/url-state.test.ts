@@ -82,3 +82,51 @@ describe('object replacement edit URL state', () => {
 		expect(isWorkspaceRoute('/object-replacement')).toBe(false);
 	});
 });
+
+describe('texture replacement edit URL state', () => {
+	it('serializes replacement fields under the edit tool without edit prompt leakage', () => {
+		const state = new RequestState();
+		state.setEditPrompt('brighten the room');
+		state.setTextureReplacementSourceMode('room-photo');
+		state.setTextureReplacementSurface('sofa upholstery');
+		state.setActiveTextureReplacementJobId(JOB_ID);
+
+		expect(buildShareUrl('edit', state, { tool: 'texture-replacement' })).toBe(
+			`/edit?tool=texture-replacement&source=room-photo&surface=sofa+upholstery&job=${JOB_ID}`
+		);
+	});
+
+	it('hydrates replacement fields and ignores image URLs', () => {
+		const state = new RequestState();
+		const params = new URLSearchParams({
+			tool: 'texture-replacement',
+			source: 'room-photo',
+			surface: 'sofa upholstery',
+			job: JOB_ID,
+			image: 'https://evil.example.com/scene.jpg',
+			referenceImage: 'https://evil.example.com/fabric.jpg'
+		});
+
+		applyShareParams('edit', undefined, params, state);
+
+		expect(state.textureReplacementSourceMode).toBe('room-photo');
+		expect(state.textureReplacementSurface).toBe('sofa upholstery');
+		expect(state.activeTextureReplacementJobId).toBe(JOB_ID);
+		expect(state.image).toBeUndefined();
+		expect(state.textureReferenceImage).toBeUndefined();
+	});
+
+	it('keeps only validated job ids on the replacement sub-tab', () => {
+		expect(
+			subTabFromSearch('edit', new URLSearchParams({ tool: 'texture-replacement', job: JOB_ID }))
+		).toEqual({ tool: 'texture-replacement', job: JOB_ID });
+		expect(
+			subTabFromSearch('edit', new URLSearchParams({ tool: 'texture-replacement', job: 'invalid' }))
+		).toEqual({ tool: 'texture-replacement' });
+	});
+
+	it('recognizes the nested tool and removes the standalone workspace route', () => {
+		expect(slugToTool('texture-replacement')).toBe('texture-replacement');
+		expect(isWorkspaceRoute('/texture-replacement')).toBe(false);
+	});
+});
