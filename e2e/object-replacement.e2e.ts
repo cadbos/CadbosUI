@@ -266,11 +266,14 @@ test('keeps the accepted current-result lineage when another render finishes fir
 	});
 
 	await page.goto('/create/interior');
-	await page.locator('#mode-panel-render input[type="file"]').setInputFiles({
-		name: 'room.webp',
-		mimeType: 'image/webp',
-		buffer: Buffer.from('room')
-	});
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		page.locator('#mode-panel-render input[type="file"]').setInputFiles({
+			name: 'room.webp',
+			mimeType: 'image/webp',
+			buffer: Buffer.from('room')
+		})
+	]);
 	await page.getByRole('button', { name: 'Сгенерировать' }).click();
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
@@ -279,11 +282,14 @@ test('keeps the accepted current-result lineage when another render finishes fir
 
 	await page.getByRole('tab', { name: /Замена объекта/ }).click();
 	const panel = page.locator('#mode-panel-objectReplacement');
-	await panel.locator('input[type="file"]').setInputFiles({
-		name: 'reference.webp',
-		mimeType: 'image/webp',
-		buffer: Buffer.from('reference')
-	});
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		panel.locator('input[type="file"]').setInputFiles({
+			name: 'reference.webp',
+			mimeType: 'image/webp',
+			buffer: Buffer.from('reference')
+		})
+	]);
 	await panel.getByLabel(/Точно опишите существующий объект/).fill('gray sofa');
 	await panel.getByRole('button', { name: 'Заменить объект' }).click();
 	await expect(page).toHaveURL(new RegExp(`job=${JOB_ID}`));
