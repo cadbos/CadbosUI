@@ -221,9 +221,10 @@ before the Change Date. See LICENSE for complete terms.
 		let failures = 0;
 		while (!signal.aborted && run === pollRun) {
 			let response: Response;
+			const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(POLL_REQUEST_TIMEOUT_MS)]);
 			try {
 				response = await fetch(`/api/object-replacement/${encodeURIComponent(id)}`, {
-					signal: AbortSignal.any([signal, AbortSignal.timeout(POLL_REQUEST_TIMEOUT_MS)])
+					signal: requestSignal
 				});
 			} catch (error) {
 				if (signal.aborted || run !== pollRun) return;
@@ -262,6 +263,15 @@ before the Change Date. See LICENSE for complete terms.
 				result = await parseJobResponse(response, id);
 			} catch {
 				if (signal.aborted || run !== pollRun) return;
+				if (requestSignal.aborted) {
+					failures += 1;
+					if (failures > MAX_TRANSIENT_FAILURES) {
+						pollFailure = { jobId: id, key: 'objectReplacement.pollFailed' };
+						return;
+					}
+					await waitFor(transientDelay(failures), signal);
+					continue;
+				}
 				pollFailure = { jobId: id, key: 'objectReplacement.pollFailed' };
 				return;
 			}
