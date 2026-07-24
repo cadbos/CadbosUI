@@ -21,7 +21,6 @@ before the Change Date. See LICENSE for complete terms.
 	import EditPanel from '$lib/components/EditPanel.svelte';
 	import PromptViews from '$lib/components/PromptViews.svelte';
 	import StyleTransferPanel from '$lib/components/StyleTransferPanel.svelte';
-	import ObjectReplacementPanel from '$lib/components/ObjectReplacementPanel.svelte';
 	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
 	import GeneratedImagesSidebar from '$lib/components/GeneratedImagesSidebar.svelte';
 	import {
@@ -47,7 +46,6 @@ before the Change Date. See LICENSE for complete terms.
 		{ id: 'render', label: 'mode.render' },
 		{ id: 'edit', label: 'mode.edit' },
 		{ id: 'styleTransfer', label: 'mode.styleTransfer' },
-		{ id: 'objectReplacement', label: 'mode.objectReplacement', alpha: true },
 		{ id: 'textureReplacement', label: 'mode.textureReplacement', alpha: true }
 	];
 
@@ -396,27 +394,6 @@ before the Change Date. See LICENSE for complete terms.
 					onerror={(error: unknown) => logBoundaryError('workspace.styleTransfer', error)}
 				>
 					<StyleTransferPanel />
-					{#snippet failed(_error: unknown, reset: () => void)}
-						<p class="boundary-failed">{t('boundary.failed')}</p>
-						<button type="button" class="boundary-retry" onclick={reset}>
-							{t('boundary.retry')}
-						</button>
-					{/snippet}
-				</svelte:boundary>
-			</div>
-
-			<div
-				class="mode-panel"
-				role="tabpanel"
-				id="mode-panel-objectReplacement"
-				aria-labelledby="mode-tab-objectReplacement"
-				tabindex="0"
-				hidden={mode !== 'objectReplacement'}
-			>
-				<svelte:boundary
-					onerror={(error: unknown) => logBoundaryError('workspace.objectReplacement', error)}
-				>
-					<ObjectReplacementPanel />
 					{#snippet failed(_error: unknown, reset: () => void)}
 						<p class="boundary-failed">{t('boundary.failed')}</p>
 						<button type="button" class="boundary-retry" onclick={reset}>

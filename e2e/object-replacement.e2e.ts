@@ -62,8 +62,7 @@ async function uploadInputs(page: Page): Promise<void> {
 		});
 	});
 
-	const panel = page.locator('#mode-panel-objectReplacement');
-	const inputs = panel.locator('input[type="file"]');
+	const inputs = page.locator('#mode-panel-edit input[type="file"]');
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
 		inputs.nth(0).setInputFiles({
@@ -86,7 +85,7 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 	page
 }) => {
 	await authenticate(page);
-	await page.goto('/object-replacement');
+	await page.goto('/edit?tool=object-replacement');
 	await uploadInputs(page);
 
 	let submittedBody: unknown;
@@ -124,7 +123,7 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 		});
 	});
 
-	const panel = page.locator('#mode-panel-objectReplacement');
+	const panel = page.locator('#edit-tool-panel-object-replacement');
 	await panel.getByLabel(/Точно опишите существующий объект/).fill('  серый диван у окна  ');
 	await panel.getByRole('button', { name: 'Заменить объект' }).click();
 
@@ -188,7 +187,7 @@ test('resumes a stored completed job after reload without submitting again', asy
 		});
 	});
 
-	await page.goto(`/object-replacement?source=room-photo&object=sofa&job=${JOB_ID}`);
+	await page.goto(`/edit?tool=object-replacement&source=room-photo&object=sofa&job=${JOB_ID}`);
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/recovered.webp'
@@ -286,8 +285,9 @@ test('keeps the accepted current-result lineage when another render finishes fir
 		'https://cdn.example.test/original-result.webp'
 	);
 
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page.getByRole('tab', { name: /Замена объекта/ }).click();
-	const panel = page.locator('#mode-panel-objectReplacement');
+	const panel = page.locator('#edit-tool-panel-object-replacement');
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
 		panel.locator('input[type="file"]').setInputFiles({
@@ -327,7 +327,7 @@ test('keeps the accepted current-result lineage when another render finishes fir
 
 test('surfaces submission credit errors and prevents duplicate starts', async ({ page }) => {
 	await authenticate(page);
-	await page.goto('/object-replacement');
+	await page.goto('/edit?tool=object-replacement');
 	await uploadInputs(page);
 	let postCount = 0;
 	await page.route('**/api/object-replacement', async (route) => {
@@ -341,7 +341,7 @@ test('surfaces submission credit errors and prevents duplicate starts', async ({
 		});
 	});
 
-	const panel = page.locator('#mode-panel-objectReplacement');
+	const panel = page.locator('#edit-tool-panel-object-replacement');
 	await panel.getByLabel(/Точно опишите существующий объект/).fill('gray sofa');
 	await panel.getByRole('button', { name: 'Заменить объект' }).dblclick();
 	await expect(panel.getByRole('alert')).toContainText('Тестовый баланс исчерпан');
@@ -356,9 +356,9 @@ test('requires authentication before starting a replacement', async ({ page }) =
 			body: JSON.stringify({ error: { code: 'unauthorized', message: 'Authentication required' } })
 		});
 	});
-	await page.goto('/object-replacement');
+	await page.goto('/edit?tool=object-replacement');
 
-	const panel = page.locator('#mode-panel-objectReplacement');
+	const panel = page.locator('#edit-tool-panel-object-replacement');
 	await expect(panel.getByText('Войдите, чтобы заменить объект')).toBeVisible();
 	await expect(panel.getByRole('button', { name: 'Заменить объект' })).toBeDisabled();
 });
@@ -377,7 +377,7 @@ for (const responseCase of [
 ]) {
 	test(`maps submission status ${responseCase.status} to a localized error`, async ({ page }) => {
 		await authenticate(page);
-		await page.goto('/object-replacement');
+		await page.goto('/edit?tool=object-replacement');
 		await uploadInputs(page);
 		await page.route('**/api/object-replacement', async (route) => {
 			await route.fulfill({
@@ -389,7 +389,7 @@ for (const responseCase of [
 			});
 		});
 
-		const panel = page.locator('#mode-panel-objectReplacement');
+		const panel = page.locator('#edit-tool-panel-object-replacement');
 		await panel.getByLabel(/Точно опишите существующий объект/).fill('gray sofa');
 		await panel.getByRole('button', { name: 'Заменить объект' }).click();
 		await expect(panel.getByRole('alert')).toContainText(responseCase.message);
@@ -408,10 +408,10 @@ test('surfaces a missing restored job', async ({ page }) => {
 		});
 	});
 
-	await page.goto(`/object-replacement?job=${JOB_ID}`);
-	await expect(page.locator('#mode-panel-objectReplacement').getByRole('alert')).toContainText(
-		'Не удалось найти эту задачу замены объекта'
-	);
+	await page.goto(`/edit?tool=object-replacement&job=${JOB_ID}`);
+	await expect(
+		page.locator('#edit-tool-panel-object-replacement').getByRole('alert')
+	).toContainText('Не удалось найти эту задачу замены объекта');
 });
 
 test('surfaces a generic terminal job failure', async ({ page }) => {
@@ -428,17 +428,17 @@ test('surfaces a generic terminal job failure', async ({ page }) => {
 		});
 	});
 
-	await page.goto(`/object-replacement?job=${JOB_ID}`);
-	await expect(page.locator('#mode-panel-objectReplacement').getByRole('alert')).toContainText(
-		'Не удалось заменить объект'
-	);
+	await page.goto(`/edit?tool=object-replacement&job=${JOB_ID}`);
+	await expect(
+		page.locator('#edit-tool-panel-object-replacement').getByRole('alert')
+	).toContainText('Не удалось заменить объект');
 });
 
 test('does not navigate back when an accepted submission finishes after a mode switch', async ({
 	page
 }) => {
 	await authenticate(page);
-	await page.goto('/object-replacement');
+	await page.goto('/edit?tool=object-replacement');
 	await uploadInputs(page);
 	let releaseResponse: (() => void) | undefined;
 	const responseGate = new Promise<void>((resolve) => {
@@ -463,7 +463,7 @@ test('does not navigate back when an accepted submission finishes after a mode s
 		});
 	});
 
-	const panel = page.locator('#mode-panel-objectReplacement');
+	const panel = page.locator('#edit-tool-panel-object-replacement');
 	await panel.getByLabel(/Точно опишите существующий объект/).fill('gray sofa');
 	await panel.getByRole('button', { name: 'Заменить объект' }).click();
 	await expect.poll(() => postCount).toBe(1);
@@ -475,7 +475,7 @@ test('does not navigate back when an accepted submission finishes after a mode s
 	await page.keyboard.press('Enter');
 	releaseResponse?.();
 	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
-	await expect(page).not.toHaveURL(/object-replacement/);
+	await expect(page).not.toHaveURL(/tool=object-replacement/);
 });
 
 test('surfaces a terminal timeout and unlocks the retained form for retry', async ({ page }) => {
@@ -495,8 +495,8 @@ test('surfaces a terminal timeout and unlocks the retained form for retry', asyn
 		});
 	});
 
-	await page.goto(`/object-replacement?source=room-photo&object=sofa&job=${JOB_ID}`);
-	const panel = page.locator('#mode-panel-objectReplacement');
+	await page.goto(`/edit?tool=object-replacement&source=room-photo&object=sofa&job=${JOB_ID}`);
+	const panel = page.locator('#edit-tool-panel-object-replacement');
 	await expect(panel.getByRole('alert')).toContainText('Время ожидания замены истекло');
 	await panel.getByRole('button', { name: 'Попробовать снова' }).click();
 	await expect(page).not.toHaveURL(/job=/);

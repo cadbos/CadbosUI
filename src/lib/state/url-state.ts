@@ -23,9 +23,14 @@ import {
 } from '$lib/state/request.svelte';
 import { STYLE_PRESETS } from '$lib/style-presets';
 
-export type Mode = 'render' | 'edit' | 'styleTransfer' | 'objectReplacement' | 'textureReplacement';
+export type Mode = 'render' | 'edit' | 'styleTransfer' | 'textureReplacement';
 export type ViewId = 'chat' | 'keyValue' | 'graph';
-export type ToolId = 'freeform' | 'add-object' | 'remove-object' | 'atmosphere';
+export type ToolId =
+	| 'freeform'
+	| 'add-object'
+	| 'remove-object'
+	| 'atmosphere'
+	| 'object-replacement';
 export type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
 
 // The sub-tab shown within the current mode — at most one of these applies,
@@ -44,7 +49,6 @@ const MODE_PATHS: Record<Mode, string> = {
 	render: '/create',
 	edit: '/edit',
 	styleTransfer: '/style-transfer',
-	objectReplacement: '/object-replacement',
 	textureReplacement: '/texture-replacement'
 };
 
@@ -60,7 +64,13 @@ const SLUG_VIEWS: Record<string, ViewId> = {
 	graph: 'graph'
 };
 
-const TOOL_IDS: readonly ToolId[] = ['freeform', 'add-object', 'remove-object', 'atmosphere'];
+const TOOL_IDS: readonly ToolId[] = [
+	'freeform',
+	'add-object',
+	'remove-object',
+	'atmosphere',
+	'object-replacement'
+];
 const REFERENCE_TABS: readonly ReferenceTab[] = ['photorealistic', 'conceptual', 'custom'];
 
 function viewToSlug(view: ViewId): string {
@@ -74,6 +84,17 @@ export function slugToView(param: string | undefined): ViewId {
 // Tool/reference ids double as their own query values (already kebab-case).
 export function slugToTool(param: string | undefined): ToolId {
 	return (TOOL_IDS as readonly string[]).includes(param ?? '') ? (param as ToolId) : 'freeform';
+}
+
+export function isEditToolRoute(
+	routeId: string | null,
+	searchParams: URLSearchParams,
+	tool: ToolId
+): boolean {
+	return (
+		routeId?.startsWith('/edit') === true &&
+		slugToTool(searchParams.get('tool') ?? undefined) === tool
+	);
 }
 
 export function slugToReference(param: string | undefined): ReferenceTab {
@@ -93,7 +114,6 @@ function slugToScene(param: string | undefined): SceneType {
 export function routeIdToMode(routeId: string | null): Mode {
 	if (routeId?.startsWith('/edit')) return 'edit';
 	if (routeId?.startsWith('/style-transfer')) return 'styleTransfer';
-	if (routeId?.startsWith('/object-replacement')) return 'objectReplacement';
 	if (routeId?.startsWith('/texture-replacement')) return 'textureReplacement';
 	return 'render';
 }
@@ -109,7 +129,6 @@ export function isWorkspaceRoute(routeId: string | null): boolean {
 		routeId?.startsWith('/create') === true ||
 		routeId?.startsWith('/edit') === true ||
 		routeId?.startsWith('/style-transfer') === true ||
-		routeId?.startsWith('/object-replacement') === true ||
 		routeId?.startsWith('/texture-replacement') === true
 	);
 }
@@ -120,7 +139,11 @@ export function isWorkspaceRoute(routeId: string | null): boolean {
 // whichever sub-tab is showing.
 export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): SubTab {
 	if (mode === 'render') return { view: slugToView(searchParams.get('view') ?? undefined) };
-	if (mode === 'edit') return { tool: slugToTool(searchParams.get('tool') ?? undefined) };
+	if (mode === 'edit') {
+		const tool = slugToTool(searchParams.get('tool') ?? undefined);
+		const job = searchParams.get('job');
+		return tool === 'object-replacement' && isJobId(job) ? { tool, job } : { tool };
+	}
 	if (mode === 'styleTransfer') {
 		return { reference: slugToReference(searchParams.get('reference') ?? undefined) };
 	}
@@ -176,9 +199,7 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 				? MODE_PATHS.edit
 				: mode === 'styleTransfer'
 					? `${MODE_PATHS.styleTransfer}/${request.sceneType}`
-					: mode === 'objectReplacement'
-						? MODE_PATHS.objectReplacement
-						: MODE_PATHS.textureReplacement;
+					: MODE_PATHS.textureReplacement;
 
 	const params = new URLSearchParams();
 
@@ -200,8 +221,16 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 	}
 
 	if (mode === 'edit') {
-		params.set('tool', subTab.tool ?? 'freeform');
-		if (request.editPrompt.trim() !== '') {
+		const tool = subTab.tool ?? 'freeform';
+		params.set('tool', tool);
+		if (tool === 'object-replacement') {
+			params.set('source', request.objectReplacementSourceMode);
+			if (request.objectReplacementObject.trim() !== '') {
+				params.set('object', request.objectReplacementObject);
+			}
+			const job = subTab.job ?? request.activeObjectReplacementJobId;
+			if (isJobId(job)) params.set('job', job);
+		} else if (tool === 'freeform' && request.editPrompt.trim() !== '') {
 			params.set('prompt', request.editPrompt);
 		}
 	}
@@ -227,15 +256,6 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 		if (request.styleTransferPrompt.trim() !== '') {
 			params.set('prompt', request.styleTransferPrompt);
 		}
-	}
-
-	if (mode === 'objectReplacement') {
-		params.set('source', request.objectReplacementSourceMode);
-		if (request.objectReplacementObject.trim() !== '') {
-			params.set('object', request.objectReplacementObject);
-		}
-		const job = subTab.job ?? request.activeObjectReplacementJobId;
-		if (isJobId(job)) params.set('job', job);
 	}
 
 	if (mode === 'textureReplacement') {
@@ -292,7 +312,20 @@ export function applyShareParams(
 		const fragmentsRaw = searchParams.get('fragments');
 		request.setFragments(fragmentsRaw ? parseFragments(fragmentsRaw) : []);
 	} else if (mode === 'edit') {
-		request.setEditPrompt(searchParams.get('prompt') ?? '');
+		const tool = slugToTool(searchParams.get('tool') ?? undefined);
+		if (tool === 'object-replacement') {
+			const source = searchParams.get('source');
+			request.setObjectReplacementSourceMode(
+				(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
+					? (source as ImageSourceMode)
+					: 'current-result'
+			);
+			request.setObjectReplacementObject((searchParams.get('object') ?? '').slice(0, 200));
+			const job = searchParams.get('job');
+			request.setActiveObjectReplacementJobId(isJobId(job) ? job : undefined);
+		} else if (tool === 'freeform') {
+			request.setEditPrompt(searchParams.get('prompt') ?? '');
+		}
 	} else if (mode === 'styleTransfer') {
 		const presetId = searchParams.get('preset');
 		if (presetId !== null) {
@@ -313,16 +346,6 @@ export function applyShareParams(
 				: 'current-result'
 		);
 		request.setStyleTransferPrompt(searchParams.get('prompt') ?? '');
-	} else if (mode === 'objectReplacement') {
-		const source = searchParams.get('source');
-		request.setObjectReplacementSourceMode(
-			(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
-				? (source as ImageSourceMode)
-				: 'current-result'
-		);
-		request.setObjectReplacementObject((searchParams.get('object') ?? '').slice(0, 200));
-		const job = searchParams.get('job');
-		request.setActiveObjectReplacementJobId(isJobId(job) ? job : undefined);
 	} else {
 		const source = searchParams.get('source');
 		request.setTextureReplacementSourceMode(
