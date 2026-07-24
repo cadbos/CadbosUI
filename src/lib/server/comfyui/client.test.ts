@@ -125,6 +125,38 @@ describe('createComfyUiClient', () => {
 		expect(init?.method).toBe('POST');
 	});
 
+	it('classifies a failed or malformed cancel response without leaking its body', async () => {
+		const rejectedFetcher = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(jsonResponse({ error: 'private node trace and token' }, 404));
+		const rejectedClient = createComfyUiClient({
+			baseUrl: 'http://127.0.0.1:8188',
+			fetch: rejectedFetcher
+		});
+
+		const httpError = await rejectedClient
+			.cancelWorkflow('prompt-1')
+			.catch((cause: unknown) => cause);
+
+		expect(httpError).toMatchObject({
+			code: 'http_error',
+			operation: 'cancel_workflow',
+			status: 404
+		});
+		expect((httpError as Error).message).not.toContain('private node trace');
+
+		const malformedFetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({}));
+		const malformedClient = createComfyUiClient({
+			baseUrl: 'http://127.0.0.1:8188',
+			fetch: malformedFetcher
+		});
+
+		await expect(malformedClient.cancelWorkflow('prompt-1')).rejects.toMatchObject({
+			code: 'invalid_response',
+			operation: 'cancel_workflow'
+		});
+	});
+
 	it('classifies a rejected workflow without exposing the response body', async () => {
 		const fetcher = vi
 			.fn<typeof fetch>()
