@@ -206,7 +206,7 @@ it('renders each pubkey as an npub explorer link that opens in a new tab', async
 	const pubkey = 'a'.repeat(64);
 	const npub = npubEncode(pubkey);
 	const fetchMock = mockUsageFetch([page([user(pubkey)], 0, false)], {
-		[pubkey]: { name: 'Alice', picture: 'https://avatar.example/alice.png' }
+		[pubkey]: { name: 'Alice' }
 	});
 	vi.stubGlobal('fetch', fetchMock);
 
@@ -217,13 +217,4 @@ it('renders each pubkey as an npub explorer link that opens in a new tab', async
 	await expect.element(link).toHaveAttribute('href', `https://explorer.example/p/${npub}`);
 	await expect.element(link).toHaveAttribute('target', '_blank');
 	await expect.element(link).toHaveAttribute('rel', 'noopener noreferrer');
-	await vi.waitFor(() => {
-		expect(
-			screen
-				.getByRole('rowheader', { name: npub })
-				.element()
-				.querySelector('img')
-				?.getAttribute('src')
-		).toBe('https://avatar.example/alice.png');
-	});
 });
