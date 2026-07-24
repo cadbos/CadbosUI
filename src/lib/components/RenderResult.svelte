@@ -48,6 +48,54 @@ before the Change Date. See LICENSE for complete terms.
 			: undefined
 	);
 
+	// The archAI CDN occasionally stalls mid-transfer: the connection never
+	// errors and never completes, so the <img> just hangs with no onload and
+	// no onerror. This watchdog force-reloads via a cache-busted URL if load
+	// hasn't fired within STALL_TIMEOUT_MS, capped at MAX_STALL_RETRIES.
+	const STALL_TIMEOUT_MS = 20_000;
+	const MAX_STALL_RETRIES = 2;
+
+	function withRetryParam(url: string, attempt: number): string {
+		const separator = url.includes('?') ? '&' : '?';
+		return `${url}${separator}retry=${attempt}`;
+	}
+
+	function createStallWatchdog(getUrl: () => string | undefined) {
+		let src = $state<string | undefined>(undefined);
+		let clearTimer = () => {};
+
+		$effect(() => {
+			const url = getUrl();
+			src = url;
+			clearTimer = () => {};
+			if (!url) return;
+
+			let attempt = 0;
+			let timer: ReturnType<typeof setTimeout>;
+			const arm = () => {
+				timer = setTimeout(() => {
+					attempt += 1;
+					src = withRetryParam(url, attempt);
+					if (attempt < MAX_STALL_RETRIES) arm();
+				}, STALL_TIMEOUT_MS);
+			};
+			arm();
+			clearTimer = () => clearTimeout(timer);
+
+			return () => clearTimeout(timer);
+		});
+
+		return {
+			get src() {
+				return src;
+			},
+			onload: () => clearTimer()
+		};
+	}
+
+	const imageWatchdog = createStallWatchdog(() => imageUrl);
+	const previousImageWatchdog = createStallWatchdog(() => previousImageUrl);
+
 	async function upscale(): Promise<void> {
 		if (!render || upscaling || !isAuthenticated) return;
 		// Snapshot the render being upscaled — request.currentRender can move on
@@ -91,15 +139,30 @@ before the Change Date. See LICENSE for complete terms.
 				<div class="compare">
 					<div class="compare-half">
 						<span class="compare-label">{t('toolbar.before')}</span>
-						<img src={previousImageUrl} alt={t('toolbar.before')} class="output" />
+						<img
+							src={previousImageWatchdog.src}
+							alt={t('toolbar.before')}
+							class="output"
+							onload={previousImageWatchdog.onload}
+						/>
 					</div>
 					<div class="compare-half">
 						<span class="compare-label">{t('toolbar.after')}</span>
-						<img src={imageUrl} alt={t('toolbar.after')} class="output" />
+						<img
+							src={imageWatchdog.src}
+							alt={t('toolbar.after')}
+							class="output"
+							onload={imageWatchdog.onload}
+						/>
 					</div>
 				</div>
 			{:else}
-				<img src={imageUrl} alt={t('render.generate')} class="output" />
+				<img
+					src={imageWatchdog.src}
+					alt={t('render.generate')}
+					class="output"
+					onload={imageWatchdog.onload}
+				/>
 			{/if}
 		</div>
 
