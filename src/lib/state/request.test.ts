@@ -301,6 +301,34 @@ describe('normalizeForComparison', () => {
 		request.fromJSON(buildAc9RequestJSON());
 		expect(request.normalizeForComparison()).toEqual(first);
 	});
+
+	it('distinguishes current-result source mode by the actual render selected', () => {
+		// objectReplacementSourceMode defaults to 'current-result', so the
+		// effective source is currentRender.outputUrls[0], not `image` — two
+		// states with the same `image` but different current renders submit
+		// different request bodies and must not normalize as equal.
+		request.setCurrentRender({
+			id: 'gen-1',
+			outputUrls: ['https://example.test/gen-1.jpg'],
+			cost: 1,
+			balance: 24,
+			ts: 0
+		});
+		const first = request.normalizeForComparison();
+
+		request.setCurrentRender({
+			id: 'gen-2',
+			outputUrls: ['https://example.test/gen-2.jpg'],
+			cost: 1,
+			balance: 24,
+			ts: 1
+		});
+		const second = request.normalizeForComparison();
+
+		expect(first.objectReplacementSourceUrl).toBe('https://example.test/gen-1.jpg');
+		expect(second.objectReplacementSourceUrl).toBe('https://example.test/gen-2.jpg');
+		expect(second).not.toEqual(first);
+	});
 });
 
 describe('sceneType', () => {

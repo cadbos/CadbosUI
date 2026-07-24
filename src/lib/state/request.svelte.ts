@@ -134,10 +134,18 @@ export interface NormalizedRequest {
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
 	styleSourceMode: ImageSourceMode;
+	// The URL request builders actually send (image?.url, or — in
+	// current-result mode — currentRender's own output). Comparing raw
+	// `image` alone can't tell two states with different current renders
+	// apart when both use current-result mode, even though they'd submit
+	// different request bodies.
+	styleTransferSourceUrl: string | undefined;
 	objectReplacementObject: string;
 	objectReplacementSourceMode: ImageSourceMode;
+	objectReplacementSourceUrl: string | undefined;
 	textureReplacementSurface: string;
 	textureReplacementSourceMode: ImageSourceMode;
+	textureReplacementSourceUrl: string | undefined;
 	editPrompt: string;
 	styleTransferPrompt: string;
 	prompt: string;
@@ -820,10 +828,13 @@ export class RequestState {
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
 			styleSourceMode: this.styleSourceMode,
+			styleTransferSourceUrl: this.styleTransferSourceUrl(),
 			objectReplacementObject: this.objectReplacementObject,
 			objectReplacementSourceMode: this.objectReplacementSourceMode,
+			objectReplacementSourceUrl: this.objectReplacementSourceUrl(),
 			textureReplacementSurface: this.textureReplacementSurface,
 			textureReplacementSourceMode: this.textureReplacementSourceMode,
+			textureReplacementSourceUrl: this.textureReplacementSourceUrl(),
 			editPrompt: this.editPrompt,
 			styleTransferPrompt: this.styleTransferPrompt,
 			prompt: this.prompt
