@@ -19,14 +19,21 @@ before the Change Date. See LICENSE for complete terms.
 
 	const MAX_SIZE = 8 * 1024 * 1024;
 
-	type UploadTarget = 'room' | 'styleReference';
+	type UploadTarget = 'room' | 'styleReference' | 'objectReference' | 'textureReference';
 
 	interface Props {
 		target?: UploadTarget;
 		label?: TranslationKey;
+		requiredLabel?: TranslationKey;
+		disabled?: boolean;
 	}
 
-	let { target = 'room', label = undefined }: Props = $props();
+	let {
+		target = 'room',
+		label = undefined,
+		requiredLabel = undefined,
+		disabled = false
+	}: Props = $props();
 
 	let uploading = $state(false);
 	let error = $state<string | null>(null);
@@ -39,28 +46,80 @@ before the Change Date. See LICENSE for complete terms.
 		inputEl = node;
 	}
 
-	const image = $derived(target === 'styleReference' ? request.styleReferenceImage : request.image);
+	const image = $derived(
+		target === 'styleReference'
+			? request.styleReferenceImage
+			: target === 'objectReference'
+				? request.objectReferenceImage
+				: target === 'textureReference'
+					? request.textureReferenceImage
+					: request.image
+	);
 	const ariaLabelKey = $derived<TranslationKey>(
-		label ?? (target === 'styleReference' ? 'styleTransfer.referenceImage' : 'upload.label')
+		label ??
+			(target === 'styleReference'
+				? 'styleTransfer.referenceImage'
+				: target === 'objectReference'
+					? 'objectReplacement.referenceImage'
+					: target === 'textureReference'
+						? 'textureReplacement.referenceImage'
+						: 'upload.label')
 	);
 	const buttonLabelKey = $derived<TranslationKey>(
-		label ?? (target === 'styleReference' ? 'styleTransfer.referenceImage' : 'upload.button')
+		label ??
+			(target === 'styleReference'
+				? 'styleTransfer.referenceImage'
+				: target === 'objectReference'
+					? 'objectReplacement.referenceImage'
+					: target === 'textureReference'
+						? 'textureReplacement.referenceImage'
+						: 'upload.button')
 	);
 	const changeKey = $derived<TranslationKey>(
-		target === 'styleReference' ? 'styleTransfer.referenceChange' : 'upload.change'
+		target === 'styleReference'
+			? 'styleTransfer.referenceChange'
+			: target === 'objectReference'
+				? 'objectReplacement.referenceChange'
+				: target === 'textureReference'
+					? 'textureReplacement.referenceChange'
+					: 'upload.change'
 	);
 	const dropTitleKey = $derived<TranslationKey>(
-		target === 'styleReference' ? 'styleTransfer.referenceDropTitle' : 'upload.dropTitle'
+		target === 'styleReference'
+			? 'styleTransfer.referenceDropTitle'
+			: target === 'objectReference'
+				? 'objectReplacement.referenceDropTitle'
+				: target === 'textureReference'
+					? 'textureReplacement.referenceDropTitle'
+					: 'upload.dropTitle'
 	);
 	const dropSubtitleKey = $derived<TranslationKey>(
-		target === 'styleReference' ? 'styleTransfer.referenceDropSubtitle' : 'upload.dropSubtitle'
+		target === 'styleReference'
+			? 'styleTransfer.referenceDropSubtitle'
+			: target === 'objectReference'
+				? 'objectReplacement.referenceDropSubtitle'
+				: target === 'textureReference'
+					? 'textureReplacement.referenceDropSubtitle'
+					: 'upload.dropSubtitle'
 	);
 	const imageUrl = $derived(image?.url ?? null);
 	const hasImage = $derived(imageUrl !== null || previewUrl !== null);
+	const controlLabel = $derived(
+		requiredLabel ? `${t(ariaLabelKey)} — ${t(requiredLabel)}` : t(ariaLabelKey)
+	);
+	const dropButtonLabel = $derived(requiredLabel ? controlLabel : t(buttonLabelKey));
 
 	function setUploadedImage(next: ImageInput): void {
 		if (target === 'styleReference') {
 			request.setStyleReferenceImage(next);
+			return;
+		}
+		if (target === 'objectReference') {
+			request.setObjectReferenceImage(next);
+			return;
+		}
+		if (target === 'textureReference') {
+			request.setTextureReferenceImage(next);
 			return;
 		}
 		request.setImage(next);
@@ -106,6 +165,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	async function handleFile(file: File): Promise<void> {
+		if (disabled) return;
 		error = null;
 		if (!file.type.startsWith('image/')) {
 			error = t('upload.errorType');
@@ -128,6 +188,8 @@ before the Change Date. See LICENSE for complete terms.
 				return;
 			}
 			const result = (await response.json()) as UploadResult;
+			if (previewUrl) URL.revokeObjectURL(previewUrl);
+			previewUrl = null;
 			setUploadedImage({
 				url: result.url,
 				mime: result.mime,
@@ -142,6 +204,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	async function importRemoteUrl(): Promise<void> {
+		if (disabled) return;
 		const value = remoteUrl.trim();
 		error = null;
 		if (!isHttpsUrl(value)) {
@@ -190,12 +253,14 @@ before the Change Date. See LICENSE for complete terms.
 	function onDrop(event: DragEvent): void {
 		event.preventDefault();
 		dragOver = false;
+		if (disabled) return;
 		const file = event.dataTransfer?.files[0];
 		if (file) void handleFile(file);
 	}
 
 	function onDragOver(event: DragEvent): void {
 		event.preventDefault();
+		if (disabled) return;
 		dragOver = true;
 	}
 
@@ -213,7 +278,7 @@ before the Change Date. See LICENSE for complete terms.
 	ondragleave={onDragLeave}
 	ondrop={onDrop}
 	role="region"
-	aria-label={t(ariaLabelKey)}
+	aria-label={controlLabel}
 >
 	{#if hasImage}
 		<div class="image-wrapper">
@@ -223,7 +288,7 @@ before the Change Date. See LICENSE for complete terms.
 					type="button"
 					class="change-btn"
 					onclick={() => inputEl?.click()}
-					disabled={uploading}
+					disabled={uploading || disabled}
 				>
 					{uploading ? t('upload.uploading') : t(changeKey)}
 				</button>
@@ -234,8 +299,8 @@ before the Change Date. See LICENSE for complete terms.
 			type="button"
 			class="drop-zone"
 			onclick={() => inputEl?.click()}
-			disabled={uploading}
-			aria-label={t(buttonLabelKey)}
+			disabled={uploading || disabled}
+			aria-label={dropButtonLabel}
 		>
 			{#if uploading}
 				<span class="uploading-text">{t('upload.uploading')}</span>
@@ -272,7 +337,9 @@ before the Change Date. See LICENSE for complete terms.
 		{@attach attachInput}
 		type="file"
 		accept="image/*"
-		aria-label={t(ariaLabelKey)}
+		{disabled}
+		required={requiredLabel !== undefined}
+		aria-label={controlLabel}
 		class="file-input"
 		oninput={onInput}
 	/>
@@ -282,14 +349,19 @@ before the Change Date. See LICENSE for complete terms.
 			<input
 				type="url"
 				bind:value={remoteUrl}
+				aria-label={`${controlLabel}: ${t('upload.urlLabel')}`}
 				placeholder={t('upload.urlPlaceholder')}
 				autocomplete="url"
 				inputmode="url"
-				disabled={uploading}
+				disabled={uploading || disabled}
 				oninput={() => (error = null)}
 			/>
 		</label>
-		<button type="submit" disabled={uploading || remoteUrl.trim().length === 0}>
+		<button
+			type="submit"
+			aria-label={`${t('upload.import')}: ${controlLabel}`}
+			disabled={uploading || disabled || remoteUrl.trim().length === 0}
+		>
 			{uploading ? t('upload.importing') : t('upload.import')}
 		</button>
 	</form>
@@ -316,7 +388,7 @@ before the Change Date. See LICENSE for complete terms.
 		background: var(--color-surface);
 		border: 2px dashed var(--color-border);
 		border-radius: var(--radius-lg);
-		color: var(--color-muted);
+		color: var(--color-muted-strong);
 		font: inherit;
 		cursor: pointer;
 		text-align: center;
@@ -357,12 +429,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	.drop-subtitle {
 		font-size: 0.8125rem;
-		color: var(--color-muted);
+		color: var(--color-muted-strong);
 	}
 
 	.uploading-text {
 		font-size: 0.9375rem;
-		color: var(--color-muted);
+		color: var(--color-muted-strong);
 	}
 
 	.image-wrapper {
@@ -390,7 +462,8 @@ before the Change Date. See LICENSE for complete terms.
 		transition: opacity 0.2s;
 	}
 
-	.image-wrapper:hover .image-overlay {
+	.image-wrapper:hover .image-overlay,
+	.image-wrapper:focus-within .image-overlay {
 		opacity: 1;
 	}
 
@@ -433,14 +506,14 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 0.25rem;
 		min-width: 0;
 		font-size: 0.8125rem;
-		color: var(--color-muted);
+		color: var(--color-muted-strong);
 	}
 
 	.url-label input {
 		width: 100%;
 		box-sizing: border-box;
 		padding: 0.5rem 0.625rem;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--color-muted-strong);
 		border-radius: var(--radius);
 		background: var(--color-surface);
 		color: var(--color-text);

@@ -39,10 +39,26 @@
 		}
 	],
 	// Provisioned with `wrangler r2 bucket create cadbos-uploads`.
+	// `remote: true` makes local dev (`platformProxy`, remote bindings on by
+	// default) read/write the real bucket instead of the local emulation, so
+	// UPLOADS_PUBLIC_URL (which points at the production CDN) resolves to
+	// files that actually exist.
 	"r2_buckets": [
 		{
 			"binding": "UPLOADS_BUCKET",
-			"bucket_name": "cadbos-uploads"
+			"bucket_name": "cadbos-uploads",
+			"remote": true
+		}
+	],
+	// ComfyUI runs on a private VPS, reachable only through this VPC Service
+	// (Cloudflare Tunnel `comfyui-equuleus` -> localhost:8188), never over the
+	// public internet — it has no built-in auth. `remote: true` routes local
+	// dev through the real tunnel too, same as UPLOADS_BUCKET above.
+	"vpc_services": [
+		{
+			"binding": "COMFYUI_BASE_URL",
+			"service_id": "019f8921-fb99-7ca1-af8b-be63288ae38b",
+			"remote": true
 		}
 	]
 	// Secrets set via `wrangler secret put <NAME>` — never committed to source:

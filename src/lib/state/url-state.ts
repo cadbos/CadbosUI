@@ -15,14 +15,15 @@
 import { OUTPUT_FORMATS, type OutputFormat } from '$lib/api/contract';
 import {
 	SCENE_TYPES,
-	STYLE_SOURCE_MODES,
+	IMAGE_SOURCE_MODES,
+	objectReplacementJobIdSchema,
+	type ImageSourceMode,
 	type RequestState,
-	type SceneType,
-	type StyleSourceMode
+	type SceneType
 } from '$lib/state/request.svelte';
 import { STYLE_PRESETS } from '$lib/style-presets';
 
-export type Mode = 'render' | 'edit' | 'styleTransfer';
+export type Mode = 'render' | 'edit' | 'styleTransfer' | 'objectReplacement' | 'textureReplacement';
 export type ViewId = 'chat' | 'keyValue' | 'graph';
 export type ToolId = 'freeform' | 'add-object' | 'remove-object' | 'atmosphere';
 export type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
@@ -36,12 +37,15 @@ export interface SubTab {
 	view?: ViewId;
 	tool?: ToolId;
 	reference?: ReferenceTab;
+	job?: string;
 }
 
 const MODE_PATHS: Record<Mode, string> = {
 	render: '/create',
 	edit: '/edit',
-	styleTransfer: '/style-transfer'
+	styleTransfer: '/style-transfer',
+	objectReplacement: '/object-replacement',
+	textureReplacement: '/texture-replacement'
 };
 
 const VIEW_SLUGS: Record<ViewId, string> = {
@@ -84,16 +88,17 @@ function slugToScene(param: string | undefined): SceneType {
 		: 'interior';
 }
 
-// SvelteKit route ids for our leaf pages are '/create/[scene]', '/edit' and
-// '/style-transfer/[scene]' — anything else (including the transient '/'
-// before its redirect resolves) falls back to the default mode.
+// SvelteKit route ids identify the workspace leaf pages; anything else falls
+// back to the default mode.
 export function routeIdToMode(routeId: string | null): Mode {
 	if (routeId?.startsWith('/edit')) return 'edit';
 	if (routeId?.startsWith('/style-transfer')) return 'styleTransfer';
+	if (routeId?.startsWith('/object-replacement')) return 'objectReplacement';
+	if (routeId?.startsWith('/texture-replacement')) return 'textureReplacement';
 	return 'render';
 }
 
-// Whether the given route id belongs to the three-tab workspace at all (as
+// Whether the given route id belongs to the workspace at all (as
 // opposed to a standalone page, e.g. '/usage', that sits outside it). Callers
 // use this to decide whether the workspace shell — and its URL-sync effect,
 // which otherwise treats any unrecognized route as the default render mode
@@ -103,7 +108,9 @@ export function isWorkspaceRoute(routeId: string | null): boolean {
 	return (
 		routeId?.startsWith('/create') === true ||
 		routeId?.startsWith('/edit') === true ||
-		routeId?.startsWith('/style-transfer') === true
+		routeId?.startsWith('/style-transfer') === true ||
+		routeId?.startsWith('/object-replacement') === true ||
+		routeId?.startsWith('/texture-replacement') === true
 	);
 }
 
@@ -114,7 +121,17 @@ export function isWorkspaceRoute(routeId: string | null): boolean {
 export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): SubTab {
 	if (mode === 'render') return { view: slugToView(searchParams.get('view') ?? undefined) };
 	if (mode === 'edit') return { tool: slugToTool(searchParams.get('tool') ?? undefined) };
-	return { reference: slugToReference(searchParams.get('reference') ?? undefined) };
+	if (mode === 'styleTransfer') {
+		return { reference: slugToReference(searchParams.get('reference') ?? undefined) };
+	}
+	const job = searchParams.get('job');
+	return isJobId(job) ? { job } : {};
+}
+
+// A plain UUID check — shared by every async-job mode (object replacement,
+// texture replacement) that carries its job id in the `job` query param.
+export function isJobId(value: unknown): value is string {
+	return objectReplacementJobIdSchema.safeParse(value).success;
 }
 
 interface ParsedFragment {
@@ -157,7 +174,11 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 			? `${MODE_PATHS.render}/${request.sceneType}`
 			: mode === 'edit'
 				? MODE_PATHS.edit
-				: `${MODE_PATHS.styleTransfer}/${request.sceneType}`;
+				: mode === 'styleTransfer'
+					? `${MODE_PATHS.styleTransfer}/${request.sceneType}`
+					: mode === 'objectReplacement'
+						? MODE_PATHS.objectReplacement
+						: MODE_PATHS.textureReplacement;
 
 	const params = new URLSearchParams();
 
@@ -208,6 +229,24 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 		}
 	}
 
+	if (mode === 'objectReplacement') {
+		params.set('source', request.objectReplacementSourceMode);
+		if (request.objectReplacementObject.trim() !== '') {
+			params.set('object', request.objectReplacementObject);
+		}
+		const job = subTab.job ?? request.activeObjectReplacementJobId;
+		if (isJobId(job)) params.set('job', job);
+	}
+
+	if (mode === 'textureReplacement') {
+		params.set('source', request.textureReplacementSourceMode);
+		if (request.textureReplacementSurface.trim() !== '') {
+			params.set('surface', request.textureReplacementSurface);
+		}
+		const job = subTab.job ?? request.activeTextureReplacementJobId;
+		if (isJobId(job)) params.set('job', job);
+	}
+
 	const query = params.toString();
 	return query ? `${path}?${query}` : path;
 }
@@ -242,27 +281,6 @@ export function applyShareParams(
 		(OUTPUT_FORMATS as readonly string[]).includes(format ?? '') ? (format as OutputFormat) : 'webp'
 	);
 
-	const presetId = searchParams.get('preset');
-	if (presetId !== null) {
-		const preset = STYLE_PRESETS.find((candidate) => candidate.id === presetId);
-		request.setStyleReferenceImage(preset ? { url: preset.src, mime: preset.mime } : undefined);
-	}
-
-	const strengthParam = searchParams.get('strength');
-	const strength = strengthParam !== null ? Number(strengthParam) : NaN;
-	request.setStyleTransferStrength(
-		Number.isFinite(strength) && strength >= 0 && strength <= 1 ? strength : 0.7
-	);
-
-	request.setStyleNegativePrompt(searchParams.get('negative') ?? '');
-
-	const source = searchParams.get('source');
-	request.setStyleSourceMode(
-		(STYLE_SOURCE_MODES as readonly string[]).includes(source ?? '')
-			? (source as StyleSourceMode)
-			: 'current-result'
-	);
-
 	if (mode === 'render') {
 		const prompt = searchParams.get('prompt');
 		if (prompt !== null) {
@@ -275,7 +293,45 @@ export function applyShareParams(
 		request.setFragments(fragmentsRaw ? parseFragments(fragmentsRaw) : []);
 	} else if (mode === 'edit') {
 		request.setEditPrompt(searchParams.get('prompt') ?? '');
-	} else {
+	} else if (mode === 'styleTransfer') {
+		const presetId = searchParams.get('preset');
+		if (presetId !== null) {
+			const preset = STYLE_PRESETS.find((candidate) => candidate.id === presetId);
+			request.setStyleReferenceImage(preset ? { url: preset.src, mime: preset.mime } : undefined);
+		}
+
+		const strengthParam = searchParams.get('strength');
+		const strength = strengthParam !== null ? Number(strengthParam) : NaN;
+		request.setStyleTransferStrength(
+			Number.isFinite(strength) && strength >= 0 && strength <= 1 ? strength : 0.7
+		);
+		request.setStyleNegativePrompt(searchParams.get('negative') ?? '');
+		const source = searchParams.get('source');
+		request.setStyleSourceMode(
+			(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
+				? (source as ImageSourceMode)
+				: 'current-result'
+		);
 		request.setStyleTransferPrompt(searchParams.get('prompt') ?? '');
+	} else if (mode === 'objectReplacement') {
+		const source = searchParams.get('source');
+		request.setObjectReplacementSourceMode(
+			(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
+				? (source as ImageSourceMode)
+				: 'current-result'
+		);
+		request.setObjectReplacementObject((searchParams.get('object') ?? '').slice(0, 200));
+		const job = searchParams.get('job');
+		request.setActiveObjectReplacementJobId(isJobId(job) ? job : undefined);
+	} else {
+		const source = searchParams.get('source');
+		request.setTextureReplacementSourceMode(
+			(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
+				? (source as ImageSourceMode)
+				: 'current-result'
+		);
+		request.setTextureReplacementSurface((searchParams.get('surface') ?? '').slice(0, 200));
+		const job = searchParams.get('job');
+		request.setActiveTextureReplacementJobId(isJobId(job) ? job : undefined);
 	}
 }

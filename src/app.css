@@ -23,6 +23,7 @@
 	--color-border-focus: #2f6f4f;
 	--color-text: #1d1d1f;
 	--color-muted: #86868b;
+	--color-muted-strong: #5f6368;
 	--color-accent: #2f6f4f;
 	--color-accent-hover: #256041;
 	--color-accent-contrast: #ffffff;
@@ -50,6 +51,12 @@
 	--space-3: 1.5rem;
 	--space-4: 2rem;
 	--radius: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.spinner {
+		animation: none;
+	}
 }
 
 * {

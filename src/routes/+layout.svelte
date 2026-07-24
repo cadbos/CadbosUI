@@ -18,6 +18,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { page } from '$app/state';
 	import favicon from '$lib/assets/favicon.svg';
 	import AuthBar from '$lib/components/AuthBar.svelte';
+	import GenerationOverlay from '$lib/components/GenerationOverlay.svelte';
 	import Workspace from '$lib/components/Workspace.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
@@ -64,6 +65,8 @@ before the Change Date. See LICENSE for complete terms.
 {/if}
 
 {@render children()}
+
+<GenerationOverlay />
 
 <style>
 	.app-header {
