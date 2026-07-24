@@ -259,4 +259,27 @@ before the Change Date. See LICENSE for complete terms.
 			transform: translateY(0) scale(1);
 		}
 	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.overlay {
+			animation: none;
+			opacity: 1;
+		}
+
+		.card {
+			animation: none;
+			opacity: 1;
+			transform: none;
+		}
+
+		.strokePath {
+			animation: none;
+			stroke-dashoffset: 0 !important;
+		}
+
+		.fillPath {
+			animation: none;
+			opacity: 1;
+		}
+	}
 </style>
