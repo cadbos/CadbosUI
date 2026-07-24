@@ -63,6 +63,15 @@ export function objectReplacementCost(platform: App.Platform | undefined): numbe
 	return cost;
 }
 
+export async function cancelObjectReplacement(
+	platform: App.Platform | undefined,
+	promptId: string
+): Promise<void> {
+	await createClient(platform).cancelWorkflow(promptId, {
+		signal: AbortSignal.timeout(COMFYUI_REQUEST_TIMEOUT_MS)
+	});
+}
+
 export async function submitObjectReplacement(
 	platform: App.Platform | undefined,
 	request: ObjectReplacementRequest,

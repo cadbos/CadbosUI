@@ -22,11 +22,16 @@ import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import { assertGenerationAllowed, getUserIdByPubkey } from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { objectReplacementCost, submitObjectReplacement } from '$lib/server/object-replacement';
+import {
+	cancelObjectReplacement,
+	objectReplacementCost,
+	submitObjectReplacement
+} from '$lib/server/object-replacement';
 import { createObjectReplacementJob } from '$lib/server/object-replacement-jobs';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 
 const OBJECT_REPLACEMENT_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
+const objectReplacementInFlight = new Set<string>();
 
 function logRejection(status: number, reason: string): void {
 	console.warn(
@@ -86,89 +91,125 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		return apiError(500, 'account_error', 'Account record not found');
 	}
 
-	const db = getDb(platform);
-	const userId = await getUserIdByPubkey(db, locals.user.pubkey);
-	if (!userId) {
-		logFailure(500, 'account_error', { operation: 'account_lookup' });
-		return apiError(500, 'account_error', 'Account record not found');
+	// Concurrent submissions from the same account could both pass the balance
+	// check before either job is persisted; a per-pubkey in-flight guard closes
+	// that window (mirrors texture-replacement's guard).
+	const pubkey = locals.user.pubkey;
+	if (objectReplacementInFlight.has(pubkey)) {
+		logRejection(409, 'request_in_progress');
+		return apiError(409, 'request_in_progress', 'Object replacement request already in progress');
 	}
-	const limited = await touchRateLimit(
-		db,
-		`object-replacement:${locals.user.pubkey}`,
-		Date.now(),
-		OBJECT_REPLACEMENT_RATE_LIMIT
-	);
-	if (limited) {
-		logRejection(429, 'rate_limited');
-		return apiError(429, 'rate_limited', 'Too many requests');
-	}
+	objectReplacementInFlight.add(pubkey);
 
-	let cost: number;
 	try {
-		cost = objectReplacementCost(platform);
-		const check = await assertGenerationAllowed(db, userId);
-		if (!check.allowed) {
-			if (check.reason === 'not_approved') {
-				logRejection(403, 'generation_restricted');
-				return apiError(403, 'generation_restricted', 'Generation is limited to approved accounts');
+		const db = getDb(platform);
+		const userId = await getUserIdByPubkey(db, pubkey);
+		if (!userId) {
+			logFailure(500, 'account_error', { operation: 'account_lookup' });
+			return apiError(500, 'account_error', 'Account record not found');
+		}
+		const limited = await touchRateLimit(
+			db,
+			`object-replacement:${pubkey}`,
+			Date.now(),
+			OBJECT_REPLACEMENT_RATE_LIMIT
+		);
+		if (limited) {
+			logRejection(429, 'rate_limited');
+			return apiError(429, 'rate_limited', 'Too many requests');
+		}
+
+		let cost: number;
+		try {
+			cost = objectReplacementCost(platform);
+			const check = await assertGenerationAllowed(db, userId);
+			if (!check.allowed) {
+				if (check.reason === 'not_approved') {
+					logRejection(403, 'generation_restricted');
+					return apiError(
+						403,
+						'generation_restricted',
+						'Generation is limited to approved accounts'
+					);
+				}
+				logRejection(402, 'insufficient_credit');
+				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
 			}
-			logRejection(402, 'insufficient_credit');
-			return apiError(402, 'insufficient_credit', 'Test balance exhausted');
-		}
-		if (check.balance < cost) {
-			logRejection(402, 'insufficient_credit');
-			return apiError(402, 'insufficient_credit', 'Test balance exhausted');
-		}
-	} catch {
-		logFailure(500, 'object_replacement_failed', { operation: 'billing_precheck' });
-		return apiError(500, 'object_replacement_failed', 'Object replacement failed');
-	}
-
-	const id = crypto.randomUUID();
-	let comfyPromptId: string;
-	try {
-		comfyPromptId = await submitObjectReplacement(platform, parsed.data, url.origin, id);
-	} catch (error) {
-		if (error instanceof RemoteImageImportError) return remoteImageError(error);
-		if (error instanceof ComfyUiError) {
-			const detail: FailureDetail = {
-				operation: 'provider_submission',
-				providerCode: error.code,
-				providerOperation: error.operation,
-				...(error.status === undefined ? {} : { providerStatus: error.status })
-			};
-			if (error.code === 'invalid_configuration') {
-				logFailure(500, 'object_replacement_failed', detail);
-				return apiError(500, 'object_replacement_failed', 'Object replacement failed');
+			if (check.balance < cost) {
+				logRejection(402, 'insufficient_credit');
+				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
 			}
-			logFailure(502, 'object_replacement_failed', detail);
-		} else {
-			logFailure(502, 'object_replacement_failed', { operation: 'provider_submission' });
+		} catch {
+			logFailure(500, 'object_replacement_failed', { operation: 'billing_precheck' });
+			return apiError(500, 'object_replacement_failed', 'Object replacement failed');
 		}
-		return apiError(502, 'object_replacement_failed', 'Object replacement failed');
-	}
 
-	try {
-		await createObjectReplacementJob(db, {
-			id,
-			userId,
-			comfyPromptId,
-			sceneUrl: parsed.data.image,
-			referenceUrl: parsed.data.referenceImage,
-			replacementObject: parsed.data.replacementObject,
-			cost,
-			createdAt: Date.now()
+		const id = crypto.randomUUID();
+		let comfyPromptId: string;
+		try {
+			comfyPromptId = await submitObjectReplacement(platform, parsed.data, url.origin, id);
+		} catch (error) {
+			if (error instanceof RemoteImageImportError) return remoteImageError(error);
+			if (error instanceof ComfyUiError) {
+				const detail: FailureDetail = {
+					operation: 'provider_submission',
+					providerCode: error.code,
+					providerOperation: error.operation,
+					...(error.status === undefined ? {} : { providerStatus: error.status })
+				};
+				if (error.code === 'invalid_configuration') {
+					logFailure(500, 'object_replacement_failed', detail);
+					return apiError(500, 'object_replacement_failed', 'Object replacement failed');
+				}
+				logFailure(502, 'object_replacement_failed', detail);
+			} else {
+				logFailure(502, 'object_replacement_failed', { operation: 'provider_submission' });
+			}
+			return apiError(502, 'object_replacement_failed', 'Object replacement failed');
+		}
+
+		try {
+			await createObjectReplacementJob(db, {
+				id,
+				userId,
+				comfyPromptId,
+				sceneUrl: parsed.data.image,
+				referenceUrl: parsed.data.referenceImage,
+				replacementObject: parsed.data.replacementObject,
+				cost,
+				createdAt: Date.now()
+			});
+		} catch {
+			logFailure(500, 'object_replacement_failed', { operation: 'job_persistence' });
+			try {
+				await cancelObjectReplacement(platform, comfyPromptId);
+			} catch (cleanupError) {
+				logFailure(
+					500,
+					'object_replacement_failed',
+					cleanupError instanceof ComfyUiError
+						? {
+								operation: 'job_persistence_cleanup',
+								providerCode: cleanupError.code,
+								providerOperation: cleanupError.operation,
+								...(cleanupError.status === undefined
+									? {}
+									: { providerStatus: cleanupError.status })
+							}
+						: { operation: 'job_persistence_cleanup' }
+				);
+			}
+			return apiError(500, 'object_replacement_failed', 'Object replacement failed');
+		}
+
+		return json({ id, status: 'processing' } satisfies ObjectReplacementJobResponse, {
+			status: 202,
+			headers: {
+				'cache-control': 'no-store',
+				location: `/api/object-replacement/${id}`
+			}
 		});
-	} catch {
-		logFailure(500, 'object_replacement_failed', { operation: 'job_persistence' });
-		return apiError(500, 'object_replacement_failed', 'Object replacement failed');
+	} finally {
+		objectReplacementInFlight.delete(pubkey);
 	}
-
-	return json({ id, status: 'processing' } satisfies ObjectReplacementJobResponse, {
-		status: 202,
-		headers: {
-			'cache-control': 'no-store',
-			location: `/api/object-replacement/${id}`
-		}
-	});
 };

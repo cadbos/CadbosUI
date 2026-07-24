@@ -25,6 +25,7 @@ import { RemoteImageImportError } from '$lib/server/remote-image';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 
 const integration = vi.hoisted(() => ({
+	cancel: vi.fn(),
 	cost: 2,
 	costError: null as Error | null,
 	poll: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock('$lib/server/object-replacement', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/object-replacement')>();
 	return {
 		...actual,
+		cancelObjectReplacement: integration.cancel,
 		objectReplacementCost: vi.fn(() => {
 			if (integration.costError) throw integration.costError;
 			return integration.cost;
@@ -108,13 +110,13 @@ function expectSingleLog(messages: unknown[], expected: Record<string, unknown>)
 	expect(messages).toEqual([JSON.stringify(expected)]);
 }
 
-function seedUser(db: D1Database, balance?: number): void {
+function seedUser(db: D1Database, balance?: number, userId = 'user-1', pubkey = 'pubkey-1'): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind('user-1', 'pubkey-1', Date.now())
+		.bind(userId, pubkey, Date.now())
 		.run();
 	if (balance !== undefined) {
 		db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-			.bind('user-1', balance, Date.now())
+			.bind(userId, balance, Date.now())
 			.run();
 	}
 }
@@ -182,6 +184,7 @@ async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
 }
 
 beforeEach(() => {
+	integration.cancel.mockReset().mockResolvedValue(undefined);
 	integration.cost = 2;
 	integration.costError = null;
 	integration.poll.mockReset().mockResolvedValue(null);
@@ -383,18 +386,20 @@ describe('POST /api/object-replacement', () => {
 		expect(consoleError.mock.calls.flat().join(' ')).not.toContain('private submission detail');
 	});
 
-	it('logs job persistence failures without stored request data', async () => {
+	it('cancels the accepted prompt and logs job persistence failures without stored request data', async () => {
 		const db = makeD1();
 		seedUser(db, 12);
 		jobStore.failNextCreate = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const requestPlatform = platform(db);
 
-		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db));
+		const response = await callPost({ pubkey: 'pubkey-1' }, requestPlatform);
 
 		expect(response.status).toBe(500);
 		expect(await response.json()).toEqual({
 			error: { code: 'object_replacement_failed', message: 'Object replacement failed' }
 		});
+		expect(integration.cancel).toHaveBeenCalledWith(requestPlatform, 'prompt-1');
 		expectSingleLog(
 			consoleError.mock.calls.flat(),
 			failureLog(500, 'object_replacement_failed', 'job_persistence')
@@ -404,6 +409,103 @@ describe('POST /api/object-replacement', () => {
 		expect(logged).not.toContain(requestBody.referenceImage);
 		expect(logged).not.toContain(requestBody.replacementObject);
 		expect(logged).not.toContain('private persistence detail');
+	});
+
+	it('logs a sanitized failure when persistence cleanup also fails', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		jobStore.failNextCreate = true;
+		integration.cancel.mockRejectedValue(
+			new ComfyUiError('network_error', 'cancel_workflow', 'private cleanup detail')
+		);
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db));
+
+		expect(response.status).toBe(500);
+		expect(consoleError.mock.calls.flat()).toEqual([
+			JSON.stringify(failureLog(500, 'object_replacement_failed', 'job_persistence')),
+			JSON.stringify(
+				failureLog(500, 'object_replacement_failed', 'job_persistence_cleanup', {
+					providerCode: 'network_error',
+					providerOperation: 'cancel_workflow'
+				})
+			)
+		]);
+		expect(consoleError.mock.calls.flat().join(' ')).not.toContain('private cleanup detail');
+	});
+
+	it('does not attempt cleanup on a successful submission or a submission failure', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+
+		await callPost({ pubkey: 'pubkey-1' }, platform(db));
+		expect(integration.cancel).not.toHaveBeenCalled();
+
+		integration.submit.mockRejectedValue(
+			new ComfyUiError('network_error', 'queue_workflow', 'private provider detail')
+		);
+		vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		await callPost({ pubkey: 'pubkey-1' }, platform(db));
+		expect(integration.cancel).not.toHaveBeenCalled();
+	});
+
+	it('rejects a concurrent submission for the same account and isolates the guard by pubkey', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		seedUser(db, 12, 'user-2', 'pubkey-2');
+		let resolveSubmission!: (promptId: string) => void;
+		integration.submit.mockImplementationOnce(
+			() =>
+				new Promise<string>((resolve) => {
+					resolveSubmission = resolve;
+				})
+		);
+		const requestPlatform = platform(db);
+
+		const first = callPost({ pubkey: 'pubkey-1' }, requestPlatform);
+		await vi.waitFor(() => expect(integration.submit).toHaveBeenCalledTimes(1));
+
+		const duplicate = await callPost({ pubkey: 'pubkey-1' }, requestPlatform);
+		expect(duplicate.status).toBe(409);
+		expect(await duplicate.json()).toEqual({
+			error: {
+				code: 'request_in_progress',
+				message: 'Object replacement request already in progress'
+			}
+		});
+		expect(integration.submit).toHaveBeenCalledTimes(1);
+
+		integration.submit.mockResolvedValueOnce('prompt-2');
+		const otherAccount = await callPost({ pubkey: 'pubkey-2' }, requestPlatform);
+		expect(otherAccount.status).toBe(202);
+
+		resolveSubmission('prompt-1');
+		expect((await first).status).toBe(202);
+		integration.submit.mockResolvedValueOnce('prompt-3');
+		expect((await callPost({ pubkey: 'pubkey-1' }, requestPlatform)).status).toBe(202);
+	});
+
+	it('releases the in-flight guard when submission fails', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		let rejectSubmission!: (error: Error) => void;
+		integration.submit.mockImplementationOnce(
+			() =>
+				new Promise<string>((_resolve, reject) => {
+					rejectSubmission = reject;
+				})
+		);
+		vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const requestPlatform = platform(db);
+
+		const first = callPost({ pubkey: 'pubkey-1' }, requestPlatform);
+		await vi.waitFor(() => expect(integration.submit).toHaveBeenCalledTimes(1));
+		expect((await callPost({ pubkey: 'pubkey-1' }, requestPlatform)).status).toBe(409);
+
+		rejectSubmission(new Error('private submission detail'));
+		expect((await first).status).toBe(502);
+		expect((await callPost({ pubkey: 'pubkey-1' }, requestPlatform)).status).toBe(202);
 	});
 
 	it('rate-limits repeated paid submissions for one account', async () => {

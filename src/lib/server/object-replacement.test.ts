@@ -14,6 +14,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Fetcher } from '@cloudflare/workers-types';
+import type { ComfyDownloadedImage } from '$lib/server/comfyui';
 import {
 	objectReplacementCost,
 	pollObjectReplacement,
@@ -108,5 +109,42 @@ describe('object replacement integration', () => {
 		await expect(pollObjectReplacement(platform({}), 'prompt-1')).rejects.toMatchObject({
 			code: 'invalid_configuration'
 		});
+	});
+
+	it('polls history and downloads the completed image over the ComfyUI VPC service', async () => {
+		const vpcFetch = vi.fn(async (input: RequestInfo | URL) => {
+			const url = new URL(input.toString());
+			if (url.pathname === '/history/prompt-1') {
+				return new Response(
+					JSON.stringify({
+						'prompt-1': {
+							outputs: {
+								'65': { images: [{ filename: 'final.png', subfolder: 'results', type: 'output' }] }
+							},
+							status: { completed: true, status_str: 'success' }
+						}
+					}),
+					{ headers: { 'content-type': 'application/json' } }
+				);
+			}
+			if (url.pathname === '/view') {
+				return new Response('image-bytes', { headers: { 'content-type': 'image/png' } });
+			}
+			throw new Error(`Unexpected URL: ${url}`);
+		});
+
+		const result = await pollObjectReplacement(
+			platform({ COMFYUI_BASE_URL: vpcService(vpcFetch) }),
+			'prompt-1'
+		);
+
+		expect(result).toEqual<ComfyDownloadedImage>({
+			filename: 'final.png',
+			subfolder: 'results',
+			type: 'output',
+			bytes: expect.any(ArrayBuffer),
+			contentType: 'image/png'
+		});
+		expect(vpcFetch).toHaveBeenCalledTimes(2);
 	});
 });
