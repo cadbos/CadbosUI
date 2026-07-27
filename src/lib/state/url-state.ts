@@ -31,6 +31,7 @@ export type ToolId =
 	| 'remove-object'
 	| 'atmosphere'
 	| 'object-replacement'
+	| 'color-replacement'
 	| 'texture-replacement';
 export type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
 
@@ -70,6 +71,7 @@ const TOOL_IDS: readonly ToolId[] = [
 	'remove-object',
 	'atmosphere',
 	'object-replacement',
+	'color-replacement',
 	'texture-replacement'
 ];
 const REFERENCE_TABS: readonly ReferenceTab[] = ['photorealistic', 'conceptual', 'custom'];
@@ -141,7 +143,10 @@ export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): Sub
 	if (mode === 'edit') {
 		const tool = slugToTool(searchParams.get('tool') ?? undefined);
 		const job = searchParams.get('job');
-		return (tool === 'object-replacement' || tool === 'texture-replacement') && isJobId(job)
+		return (tool === 'object-replacement' ||
+			tool === 'color-replacement' ||
+			tool === 'texture-replacement') &&
+			isJobId(job)
 			? { tool, job }
 			: { tool };
 	}
@@ -227,6 +232,15 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 				params.set('object', request.objectReplacementObject);
 			}
 			const job = subTab.job ?? request.activeObjectReplacementJobId;
+			if (isJobId(job)) params.set('job', job);
+		} else if (tool === 'color-replacement') {
+			if (request.colorReplacementTarget.trim() !== '') {
+				params.set('target', request.colorReplacementTarget);
+			}
+			if (request.colorReplacementColor.trim() !== '') {
+				params.set('color', request.colorReplacementColor);
+			}
+			const job = subTab.job ?? request.activeColorReplacementJobId;
 			if (isJobId(job)) params.set('job', job);
 		} else if (tool === 'texture-replacement') {
 			params.set('source', request.textureReplacementSourceMode);
@@ -321,6 +335,11 @@ export function applyShareParams(
 			request.setObjectReplacementObject((searchParams.get('object') ?? '').slice(0, 200));
 			const job = searchParams.get('job');
 			request.setActiveObjectReplacementJobId(isJobId(job) ? job : undefined);
+		} else if (tool === 'color-replacement') {
+			request.setColorReplacementTarget((searchParams.get('target') ?? '').slice(0, 200));
+			request.setColorReplacementColor((searchParams.get('color') ?? '').slice(0, 200));
+			const job = searchParams.get('job');
+			request.setActiveColorReplacementJobId(isJobId(job) ? job : undefined);
 		} else if (tool === 'texture-replacement') {
 			const source = searchParams.get('source');
 			request.setTextureReplacementSourceMode(

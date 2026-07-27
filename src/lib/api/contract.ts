@@ -102,6 +102,36 @@ export type ObjectReplacementJobResponse =
 	| ObjectReplacementCompletedResponse
 	| ObjectReplacementFailedResponse;
 
+export interface ColorReplacementRequest {
+	image: string;
+	targetObject: string;
+	color: string;
+}
+
+export interface ColorReplacementProcessingResponse {
+	id: string;
+	status: 'processing';
+}
+
+export interface ColorReplacementCompletedResponse {
+	id: string;
+	status: 'completed';
+	outputUrl: string;
+	cost: number;
+	balance: number;
+}
+
+export interface ColorReplacementFailedResponse {
+	id: string;
+	status: 'failed';
+	error: { code: string; message: string };
+}
+
+export type ColorReplacementJobResponse =
+	| ColorReplacementProcessingResponse
+	| ColorReplacementCompletedResponse
+	| ColorReplacementFailedResponse;
+
 export interface AutomaticTextureReplacementRequest {
 	image: string;
 	referenceImage: string;
@@ -265,6 +295,7 @@ export interface CreditTransaction {
 		| 'style-transfer'
 		| 'upscale'
 		| 'object-replacement'
+		| 'color-replacement'
 		| 'texture-replacement';
 	createdAt: number;
 }

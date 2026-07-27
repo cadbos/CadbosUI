@@ -50,3 +50,11 @@ export {
 	type TextureReplacementRequest,
 	type QueueTextureReplacementRequest
 } from '$lib/server/comfyui/texture-replacement';
+export {
+	getColorReplacementResult,
+	queueColorReplacement,
+	runColorReplacement,
+	type ColorReplacementImage,
+	type ColorReplacementRequest,
+	type QueueColorReplacementRequest
+} from '$lib/server/comfyui/color-replacement';

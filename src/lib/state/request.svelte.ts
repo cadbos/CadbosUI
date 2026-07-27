@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import {
 	OUTPUT_FORMATS,
+	type ColorReplacementRequest,
 	type ObjectReplacementRequest,
 	type OutputFormat,
 	type RenderRequest,
@@ -88,6 +89,13 @@ export interface TextureMaskUploadOperation {
 	sourceUrl: string;
 }
 
+export interface ActiveColorReplacementJob {
+	id: string;
+	targetObject: string;
+	color: string;
+	sourceRender?: RenderResult;
+}
+
 export type RequestStatus = 'idle' | 'rendering' | 'error';
 
 export const IMAGE_SOURCE_MODES = ['room-photo', 'current-result'] as const;
@@ -99,7 +107,9 @@ export type ValidationField =
 	| 'referenceImage'
 	| 'mask'
 	| 'replacementObject'
-	| 'replacementSurface';
+	| 'replacementSurface'
+	| 'targetObject'
+	| 'color';
 
 export interface ValidationResult {
 	valid: boolean;
@@ -127,6 +137,8 @@ export interface RequestJSON {
 	textureReplacementSurface?: string;
 	textureReplacementSourceMode?: ImageSourceMode;
 	textureReplacementMasked?: boolean;
+	colorReplacementTarget?: string;
+	colorReplacementColor?: string;
 	promptOverride: string | null;
 	currentRender?: RenderResult;
 	status: RequestStatus;
@@ -157,6 +169,9 @@ export interface NormalizedRequest {
 	textureReplacementSourceMode: ImageSourceMode;
 	textureReplacementSourceUrl: string | undefined;
 	textureReplacementMasked: boolean;
+	colorReplacementTarget: string;
+	colorReplacementColor: string;
+	colorReplacementSourceUrl: string | undefined;
 	editPrompt: string;
 	styleTransferPrompt: string;
 	prompt: string;
@@ -170,6 +185,8 @@ const replacementObjectSchema = z.string().max(200);
 export const objectReplacementJobIdSchema = z.uuid();
 const replacementSurfaceSchema = z.string().max(200);
 const textureReplacementJobIdSchema = z.uuid();
+const colorReplacementTextSchema = z.string().max(200);
+const colorReplacementJobIdSchema = z.uuid();
 
 const imageInputSchema = z.object({
 	url: z.string().trim().url(),
@@ -224,6 +241,8 @@ const requestJsonSchema = z
 		textureReplacementSurface: replacementSurfaceSchema.default(''),
 		textureReplacementSourceMode: imageSourceModeSchema.default('current-result'),
 		textureReplacementMasked: z.boolean().default(false),
+		colorReplacementTarget: colorReplacementTextSchema.default(''),
+		colorReplacementColor: colorReplacementTextSchema.default(''),
 		promptOverride: z.string().nullable(),
 		currentRender: renderResultSchema.optional(),
 		status: z.enum(['idle', 'rendering', 'error'])
@@ -434,6 +453,9 @@ export class RequestState {
 	textureReplacementMasked = $state(false);
 	textureMaskUploading = $state(false);
 	activeTextureReplacementJob = $state<ActiveTextureReplacementJob | undefined>(undefined);
+	colorReplacementTarget = $state('');
+	colorReplacementColor = $state('');
+	activeColorReplacementJob = $state<ActiveColorReplacementJob | undefined>(undefined);
 	promptOverride = $state<string | null>(null);
 	currentRender = $state<RenderResult | undefined>(undefined);
 	// Single-step undo/redo for the last edit (FR-К6) — in-session only, deliberately
@@ -464,6 +486,10 @@ export class RequestState {
 
 	get activeTextureReplacementJobId(): string | undefined {
 		return this.activeTextureReplacementJob?.id;
+	}
+
+	get activeColorReplacementJobId(): string | undefined {
+		return this.activeColorReplacementJob?.id;
 	}
 
 	addFragment(input: AddFragmentInput): string {
@@ -691,6 +717,40 @@ export class RequestState {
 		};
 	}
 
+	setColorReplacementTarget(targetObject: string): void {
+		this.colorReplacementTarget = colorReplacementTextSchema.parse(targetObject);
+	}
+
+	setColorReplacementColor(color: string): void {
+		this.colorReplacementColor = colorReplacementTextSchema.parse(color);
+	}
+
+	setActiveColorReplacementJobId(id: string | undefined): void {
+		const parsed = colorReplacementJobIdSchema.optional().parse(id);
+		if (parsed === this.activeColorReplacementJob?.id) return;
+		this.activeColorReplacementJob = parsed
+			? {
+					id: parsed,
+					targetObject: this.colorReplacementTarget.trim(),
+					color: this.colorReplacementColor.trim()
+				}
+			: undefined;
+	}
+
+	setActiveColorReplacementJob(
+		id: string,
+		sourceRender: RenderResult | undefined,
+		targetObject: string,
+		color: string
+	): void {
+		this.activeColorReplacementJob = {
+			id: colorReplacementJobIdSchema.parse(id),
+			targetObject: colorReplacementTextSchema.parse(targetObject).trim(),
+			color: colorReplacementTextSchema.parse(color).trim(),
+			sourceRender: cloneRenderResult(sourceRender)
+		};
+	}
+
 	setPromptOverride(text: string): void {
 		this.promptOverride = text;
 	}
@@ -775,6 +835,14 @@ export class RequestState {
 		return { valid: missing.length === 0, missing };
 	}
 
+	validateColorReplacement(): ValidationResult {
+		const missing: ValidationField[] = [];
+		if (!this.colorReplacementSourceUrl()) missing.push('image');
+		if (!this.colorReplacementTarget.trim()) missing.push('targetObject');
+		if (!this.colorReplacementColor.trim()) missing.push('color');
+		return { valid: missing.length === 0, missing };
+	}
+
 	#sourceUrlFor(mode: ImageSourceMode): string | undefined {
 		if (mode === 'current-result') {
 			return this.currentRender?.outputUrls[0] ?? this.image?.url;
@@ -792,6 +860,10 @@ export class RequestState {
 
 	textureReplacementSourceUrl(): string | undefined {
 		return this.#sourceUrlFor(this.textureReplacementSourceMode);
+	}
+
+	colorReplacementSourceUrl(): string | undefined {
+		return this.currentRender?.outputUrls[0] ?? this.image?.url;
 	}
 
 	toRenderRequest(): RenderRequest | null {
@@ -850,6 +922,17 @@ export class RequestState {
 		};
 	}
 
+	toColorReplacementRequest(): ColorReplacementRequest | null {
+		const validation = this.validateColorReplacement();
+		const image = this.colorReplacementSourceUrl();
+		if (!validation.valid || !image) return null;
+		return {
+			image,
+			targetObject: this.colorReplacementTarget.trim(),
+			color: this.colorReplacementColor.trim()
+		};
+	}
+
 	toJSON(): RequestJSON {
 		return {
 			id: this.id,
@@ -872,6 +955,8 @@ export class RequestState {
 			textureReplacementSurface: this.textureReplacementSurface,
 			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			textureReplacementMasked: this.textureReplacementMasked,
+			colorReplacementTarget: this.colorReplacementTarget,
+			colorReplacementColor: this.colorReplacementColor,
 			promptOverride: this.promptOverride,
 			currentRender: cloneRenderResult(this.currentRender),
 			status: this.status
@@ -904,6 +989,9 @@ export class RequestState {
 		this.textureReplacementSourceMode = parsed.textureReplacementSourceMode;
 		this.textureReplacementMasked = parsed.textureReplacementMasked;
 		this.activeTextureReplacementJob = undefined;
+		this.colorReplacementTarget = parsed.colorReplacementTarget;
+		this.colorReplacementColor = parsed.colorReplacementColor;
+		this.activeColorReplacementJob = undefined;
 		this.promptOverride = parsed.promptOverride;
 		this.currentRender = cloneRenderResult(parsed.currentRender);
 		this.status = parsed.status;
@@ -937,6 +1025,9 @@ export class RequestState {
 			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			textureReplacementSourceUrl: this.textureReplacementSourceUrl(),
 			textureReplacementMasked: this.textureReplacementMasked,
+			colorReplacementTarget: this.colorReplacementTarget,
+			colorReplacementColor: this.colorReplacementColor,
+			colorReplacementSourceUrl: this.colorReplacementSourceUrl(),
 			editPrompt: this.editPrompt,
 			styleTransferPrompt: this.styleTransferPrompt,
 			prompt: this.prompt
@@ -968,6 +1059,9 @@ export class RequestState {
 		this.textureReplacementSourceMode = 'current-result';
 		this.textureReplacementMasked = false;
 		this.activeTextureReplacementJob = undefined;
+		this.colorReplacementTarget = '';
+		this.colorReplacementColor = '';
+		this.activeColorReplacementJob = undefined;
 		this.promptOverride = null;
 		this.currentRender = undefined;
 		this.previousRender = undefined;
