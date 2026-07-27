@@ -230,7 +230,9 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 			if (isJobId(job)) params.set('job', job);
 		} else if (tool === 'texture-replacement') {
 			params.set('source', request.textureReplacementSourceMode);
-			if (request.textureReplacementSurface.trim() !== '') {
+			if (request.textureReplacementMasked) {
+				params.set('masked', '1');
+			} else if (request.textureReplacementSurface.trim() !== '') {
 				params.set('surface', request.textureReplacementSurface);
 			}
 			const job = subTab.job ?? request.activeTextureReplacementJobId;
@@ -326,7 +328,11 @@ export function applyShareParams(
 					? (source as ImageSourceMode)
 					: 'current-result'
 			);
-			request.setTextureReplacementSurface((searchParams.get('surface') ?? '').slice(0, 200));
+			const masked = searchParams.get('masked') === '1';
+			request.setTextureReplacementMasked(masked);
+			request.setTextureReplacementSurface(
+				masked ? '' : (searchParams.get('surface') ?? '').slice(0, 200)
+			);
 			const job = searchParams.get('job');
 			request.setActiveTextureReplacementJobId(isJobId(job) ? job : undefined);
 		} else if (tool === 'freeform') {

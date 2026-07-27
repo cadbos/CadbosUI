@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { TextureReplacementRequest } from '$lib/api/contract';
+import type { AutomaticTextureReplacementRequest } from '$lib/api/contract';
 import {
 	ComfyUiError,
 	createComfyUiClient,
@@ -74,7 +74,7 @@ export async function cancelTextureReplacement(
 
 export async function submitTextureReplacement(
 	platform: App.Platform | undefined,
-	request: TextureReplacementRequest,
+	request: AutomaticTextureReplacementRequest,
 	applicationOrigin: string,
 	jobId: string
 ): Promise<string> {

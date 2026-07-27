@@ -15,13 +15,20 @@
 import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { TextureReplacementJobResponse } from '$lib/api/contract';
+import type { RenderResponse, TextureReplacementJobResponse } from '$lib/api/contract';
 import { apiError, parseBody, textureReplacementRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
-import { assertGenerationAllowed, getUserIdByPubkey } from '$lib/server/billing';
+import {
+	assertGenerationAllowed,
+	getCredit,
+	getUserIdByPubkey,
+	recordBalance
+} from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+import { replaceTexturesWithMask } from '$lib/server/generation';
+import { recordGeneration } from '$lib/server/generations';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 import {
 	cancelTextureReplacement,
@@ -90,9 +97,11 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			return apiError(429, 'rate_limited', 'Too many requests');
 		}
 
-		let cost: number;
+		const maskedRequest = 'mask' in parsed.data ? parsed.data : undefined;
+		const automaticRequest = 'replacementSurface' in parsed.data ? parsed.data : undefined;
+		let precheckBalance: number | undefined;
+		let comfyCost: number | undefined;
 		try {
-			cost = textureReplacementCost(platform);
 			const check = await assertGenerationAllowed(db, userId);
 			if (!check.allowed) {
 				if (check.reason === 'not_approved') {
@@ -106,7 +115,9 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				logRejection(402, 'insufficient_credit');
 				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
 			}
-			if (check.balance < cost) {
+			precheckBalance = check.balance;
+			if (automaticRequest) comfyCost = textureReplacementCost(platform);
+			if (comfyCost !== undefined && check.balance < comfyCost) {
 				logRejection(402, 'insufficient_credit');
 				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
 			}
@@ -115,10 +126,56 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			return apiError(500, 'texture_replacement_failed', 'Texture replacement failed');
 		}
 
+		if (maskedRequest) {
+			let result: RenderResponse;
+			try {
+				result = await replaceTexturesWithMask(platform, maskedRequest);
+			} catch {
+				console.error('ArchAI masked texture replacement failed');
+				return apiError(502, 'texture_replacement_failed', 'Texture replacement failed');
+			}
+
+			try {
+				await recordBalance(db, userId, result.balance);
+			} catch (error) {
+				console.error('recordBalance failed after masked texture replacement:', error);
+			}
+			try {
+				const credit = await recordGeneration(db, userId, {
+					url: result.outputUrl,
+					sourceUrl: maskedRequest.image,
+					prompt: '',
+					kind: 'texture-replacement',
+					amount: result.cost
+				});
+				result = { ...result, balance: credit.balance };
+			} catch (error) {
+				console.error('recordGeneration failed after masked texture replacement:', error);
+				const fallback = await getCredit(db, userId).catch((fallbackError) => {
+					console.error('balance fallback failed after masked texture replacement:', fallbackError);
+					return null;
+				});
+				result = { ...result, balance: fallback?.balance ?? precheckBalance ?? 0 };
+			}
+
+			return json({
+				id: crypto.randomUUID(),
+				status: 'completed',
+				outputUrl: result.outputUrl,
+				cost: result.cost,
+				balance: result.balance
+			} satisfies TextureReplacementJobResponse);
+		}
+
+		if (!automaticRequest || comfyCost === undefined) {
+			console.error('Texture replacement cost unavailable after pre-check');
+			return apiError(500, 'texture_replacement_failed', 'Texture replacement failed');
+		}
+
 		const id = crypto.randomUUID();
 		let comfyPromptId: string;
 		try {
-			comfyPromptId = await submitTextureReplacement(platform, parsed.data, url.origin, id);
+			comfyPromptId = await submitTextureReplacement(platform, automaticRequest, url.origin, id);
 		} catch (error) {
 			if (error instanceof RemoteImageImportError) return remoteImageError(error);
 			if (error instanceof ComfyUiError) {
@@ -141,10 +198,10 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				id,
 				userId,
 				comfyPromptId,
-				sceneUrl: parsed.data.image,
-				referenceUrl: parsed.data.referenceImage,
-				replacementSurface: parsed.data.replacementSurface,
-				cost,
+				sceneUrl: automaticRequest.image,
+				referenceUrl: automaticRequest.referenceImage,
+				replacementSurface: automaticRequest.replacementSurface,
+				cost: comfyCost,
 				createdAt: Date.now()
 			});
 		} catch {

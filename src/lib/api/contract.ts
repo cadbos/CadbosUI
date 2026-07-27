@@ -96,11 +96,21 @@ export type ObjectReplacementJobResponse =
 	| ObjectReplacementCompletedResponse
 	| ObjectReplacementFailedResponse;
 
-export interface TextureReplacementRequest {
+export interface AutomaticTextureReplacementRequest {
 	image: string;
 	referenceImage: string;
 	replacementSurface: string;
 }
+
+export interface MaskedTextureReplacementRequest {
+	image: string;
+	referenceImage: string;
+	mask: string;
+}
+
+export type TextureReplacementRequest =
+	| AutomaticTextureReplacementRequest
+	| MaskedTextureReplacementRequest;
 
 export interface TextureReplacementProcessingResponse {
 	id: string;

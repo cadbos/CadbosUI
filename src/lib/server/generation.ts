@@ -15,6 +15,7 @@
 import { dev } from '$app/environment';
 import { createClient } from '$lib/server/archai/client';
 import {
+	postChangeTextures,
 	postEditByPrompt,
 	postRenderExterior,
 	postRenderInterior,
@@ -22,10 +23,15 @@ import {
 	postUpscale4K
 } from '$lib/server/archai';
 import type { ArrayGenerationResponse, SingleGenerationResponse } from '$lib/server/archai';
-import type { RenderResponse, OutputFormat } from '$lib/api/contract';
+import type {
+	MaskedTextureReplacementRequest,
+	OutputFormat,
+	RenderResponse
+} from '$lib/api/contract';
 import { imageExtensionFromMime } from '$lib/server/image-utils';
 import {
 	mockEdit,
+	mockMaskedTextureReplacement,
 	mockRender,
 	mockRenderExterior,
 	mockStyleTransfer,
@@ -350,6 +356,31 @@ export async function styleTransferInterior(
 		cost: data.cost,
 		balance: data.balance
 	};
+}
+
+export async function replaceTexturesWithMask(
+	platform: App.Platform | undefined,
+	params: MaskedTextureReplacementRequest
+): Promise<RenderResponse> {
+	const apiKey = platform?.env?.ARCHAI_API_KEY;
+	const apiUrl = platform?.env?.ARCHAI_API_URL;
+
+	if (!apiKey || !apiUrl) {
+		if (dev) return mockMaskedTextureReplacement();
+		generationFailed(
+			'change-textures',
+			'Texture replacement failed',
+			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
+		);
+	}
+
+	return processRenderResult('change-textures', 'Texture replacement failed', platform, () =>
+		postChangeTextures({
+			client: requestClientFor(apiKey, apiUrl),
+			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+			body: params
+		})
+	);
 }
 
 // Upscales the current render/edit result to 4K. `outputFormat` is optional —

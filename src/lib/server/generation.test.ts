@@ -15,6 +15,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const archai = vi.hoisted(() => ({
+	postChangeTextures: vi.fn(),
 	postRenderInterior: vi.fn(),
 	postEditByPrompt: vi.fn(),
 	postStyleTransfer: vi.fn()
@@ -28,7 +29,8 @@ vi.mock('$app/environment', () => ({
 	}
 }));
 
-const { editInterior, renderInterior, styleTransferInterior } = await import('./generation');
+const { editInterior, renderInterior, replaceTexturesWithMask, styleTransferInterior } =
+	await import('./generation');
 
 const withoutKey = { env: {} } as App.Platform;
 const publicUploadsUrl = 'https://uploads.cadbos.example';
@@ -434,5 +436,61 @@ describe('styleTransferInterior', () => {
 				outputFormat: 'webp'
 			})
 		).rejects.toThrow('Style transfer failed');
+	});
+});
+
+describe('replaceTexturesWithMask', () => {
+	it('falls back to the dev mock when ArchAI is not configured', async () => {
+		const result = await replaceTexturesWithMask(withoutKey, {
+			image: 'https://example.test/room.jpg',
+			referenceImage: 'https://example.test/texture.jpg',
+			mask: 'https://example.test/mask.png'
+		});
+
+		expect(result.outputUrl).toMatch(/^https:\/\//);
+	});
+
+	it('sends the masked reference request and stores the first output image', async () => {
+		const bucket = mockBucket();
+		mockDownloadedImage('image/png');
+		mockImageId('123e4567-e89b-12d3-a456-426614174005');
+		archai.postChangeTextures.mockResolvedValue({
+			data: {
+				output: ['https://example.test/retextured.png'],
+				cost: 1.5,
+				balance: 20
+			}
+		});
+
+		const result = await replaceTexturesWithMask(withKey(bucket), {
+			image: 'https://example.test/room.jpg',
+			referenceImage: 'https://example.test/texture.jpg',
+			mask: 'https://example.test/mask.png'
+		});
+
+		expect(archai.postChangeTextures.mock.calls[0][0].body).toEqual({
+			image: 'https://example.test/room.jpg',
+			referenceImage: 'https://example.test/texture.jpg',
+			mask: 'https://example.test/mask.png'
+		});
+		expect(result).toEqual({
+			outputUrl: `${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174005.png`,
+			cost: 1.5,
+			balance: 20
+		});
+	});
+
+	it('does not leak provider errors', async () => {
+		archai.postChangeTextures.mockResolvedValue({
+			error: { message: 'private provider trace' }
+		});
+
+		await expect(
+			replaceTexturesWithMask(withKey(), {
+				image: 'https://example.test/room.jpg',
+				referenceImage: 'https://example.test/texture.jpg',
+				mask: 'https://example.test/mask.png'
+			})
+		).rejects.toThrow(/^Texture replacement failed$/);
 	});
 });

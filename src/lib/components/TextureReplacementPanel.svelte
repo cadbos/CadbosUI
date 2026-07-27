@@ -15,17 +15,24 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { tick } from 'svelte';
 	import { z } from 'zod';
 	import type {
 		TextureReplacementCompletedResponse,
 		TextureReplacementJobResponse
 	} from '$lib/api/contract';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import MaskEditor from '$lib/components/MaskEditor.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
-	import { extractApiErrorCode, request, type ImageSourceMode } from '$lib/state/request.svelte';
+	import {
+		extractApiErrorCode,
+		request,
+		type ActiveTextureReplacementJob,
+		type ImageSourceMode
+	} from '$lib/state/request.svelte';
 	import { buildShareUrl, isEditToolRoute } from '$lib/state/url-state';
 	import { logBoundaryError } from '$lib/utils';
 
@@ -70,6 +77,7 @@ before the Change Date. See LICENSE for complete terms.
 	let pollRun = 0;
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const currentResultUrl = $derived(request.currentRender?.outputUrls[0]);
+	const textureSourceUrl = $derived(request.textureReplacementSourceUrl());
 	const usesCurrentResult = $derived(
 		request.textureReplacementSourceMode === 'current-result' && currentResultUrl !== undefined
 	);
@@ -81,7 +89,13 @@ before the Change Date. See LICENSE for complete terms.
 			terminalError?.jobId !== jobId &&
 			pollFailure?.jobId !== jobId
 	);
-	const formLocked = $derived(submitting || jobId !== null);
+	const completedJobMatches = $derived(
+		terminalJob !== null &&
+			(jobId === null ? request.currentRender?.id === terminalJob.id : terminalJob.id === jobId)
+	);
+	const formLocked = $derived(
+		submitting || request.textureMaskUploading || jobId !== null || completedJobMatches
+	);
 	const canSubmit = $derived(validation.valid && !formLocked && isAuthenticated);
 	const sourcePhotoLabel = $derived(
 		request.sceneType === 'exterior' ? t('upload.labelExterior') : t('upload.label')
@@ -91,10 +105,11 @@ before the Change Date. See LICENSE for complete terms.
 		if (field === 'image') return 'textureReplacement.validationSource';
 		if (field === 'referenceImage') return 'textureReplacement.validationReference';
 		if (field === 'replacementSurface') return 'textureReplacement.validationSurface';
+		if (field === 'mask') return 'textureReplacement.validationMask';
 		return null;
 	});
 
-	$effect(() => {
+	function pollingEffect(): void | (() => void) {
 		const id = jobId;
 		const authenticated = isAuthenticated;
 		const failedPoll = pollFailure;
@@ -103,16 +118,20 @@ before the Change Date. See LICENSE for complete terms.
 		const controller = new AbortController();
 		void pollJob(id, controller.signal, run);
 		return () => controller.abort();
-	});
+	}
+
+	$effect(pollingEffect);
 
 	// The full-screen overlay tracks this flow's own in-flight state (not just
 	// the button's `submitting`) since the wait spans the async job queue +
 	// poll cycle, not a single fetch.
-	$effect(() => {
+	function overlayEffect(): void | (() => void) {
 		if (!(submitting || isPolling)) return;
 		const overlayId = generationOverlay.start('generationOverlay.textureReplacement');
 		return () => generationOverlay.stop(overlayId);
-	});
+	}
+
+	$effect(overlayEffect);
 
 	beforeNavigate(({ to }) => {
 		if (
@@ -129,6 +148,10 @@ before the Change Date. See LICENSE for complete terms.
 
 	function surfaceValue(event: Event): string {
 		return event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : '';
+	}
+
+	function maskedValue(event: Event): boolean {
+		return event.currentTarget instanceof HTMLInputElement && event.currentTarget.checked;
 	}
 
 	function parseRetryAfter(response: Response): number {
@@ -166,14 +189,19 @@ before the Change Date. See LICENSE for complete terms.
 		return 'textureReplacement.failed';
 	}
 
-	function applyCompletedJob(result: TextureReplacementCompletedResponse): void {
+	function applyCompletedJob(
+		result: TextureReplacementCompletedResponse,
+		submittedContext?: Omit<ActiveTextureReplacementJob, 'id'>
+	): void {
 		if (request.currentRender?.id === result.id) {
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 			return;
 		}
-		const context = request.activeTextureReplacementJob;
-		if (context?.id === result.id && context.sourceRender) {
+		const activeContext = request.activeTextureReplacementJob;
+		const context =
+			submittedContext ?? (activeContext?.id === result.id ? activeContext : undefined);
+		if (context?.sourceRender) {
 			request.applyEditResult(
 				{
 					id: result.id,
@@ -293,7 +321,7 @@ before the Change Date. See LICENSE for complete terms.
 		if (!body) return;
 		const sourceRender =
 			request.textureReplacementSourceMode === 'current-result' ? request.currentRender : undefined;
-		const instruction = body.replacementSurface;
+		const instruction = 'replacementSurface' in body ? body.replacementSurface : '';
 		navigatedAwayWhileSubmitting = false;
 		submitting = true;
 		terminalJob = null;
@@ -311,8 +339,16 @@ before the Change Date. See LICENSE for complete terms.
 				return;
 			}
 			const result = await parseJobResponse(response);
-			if (result.status !== 'processing') throw new Error('invalid_response');
-			request.setActiveTextureReplacementJob(result.id, sourceRender, instruction);
+			if (result.status === 'failed') {
+				terminalError = { jobId: '', key: errorKey(result.error.code) };
+				return;
+			}
+			if (result.status === 'completed') {
+				terminalJob = result;
+				applyCompletedJob(result, { sourceRender, instruction });
+			} else {
+				request.setActiveTextureReplacementJob(result.id, sourceRender, instruction);
+			}
 			if (
 				navigatedAwayWhileSubmitting ||
 				!isEditToolRoute(page.route.id, page.url.searchParams, 'texture-replacement')
@@ -342,6 +378,8 @@ before the Change Date. See LICENSE for complete terms.
 	async function clearJob(): Promise<void> {
 		request.setActiveTextureReplacementJobId(undefined);
 		request.setTextureReferenceImage(undefined);
+		request.setTextureMaskImage(undefined);
+		request.setTextureReplacementMasked(false);
 		request.setTextureReplacementSurface('');
 		request.setTextureReplacementSourceMode('current-result');
 		request.setImage(undefined);
@@ -349,12 +387,15 @@ before the Change Date. See LICENSE for complete terms.
 		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
-		window.scrollTo({ top: 0, behavior: 'smooth' });
+		const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
 		await goto(buildShareUrl('edit', request, { tool: 'texture-replacement' }), {
 			replaceState: true,
-			keepFocus: true,
 			noScroll: true
 		}).catch((error: unknown) => logBoundaryError('textureReplacement.clearJobNavigation', error));
+		await tick();
+		const maskedToggle = document.getElementById('texture-replacement-masked-toggle');
+		if (maskedToggle instanceof HTMLInputElement) maskedToggle.focus({ preventScroll: true });
 	}
 </script>
 
@@ -362,6 +403,17 @@ before the Change Date. See LICENSE for complete terms.
 	<span class="alpha-badge">{t('textureReplacement.alpha')}</span>
 	<p>{t('textureReplacement.alphaNotice')}</p>
 </aside>
+
+<label class="masked-toggle">
+	<input
+		id="texture-replacement-masked-toggle"
+		type="checkbox"
+		checked={request.textureReplacementMasked}
+		disabled={formLocked}
+		onchange={(event) => request.setTextureReplacementMasked(maskedValue(event))}
+	/>
+	<span>{t('textureReplacement.maskedLabel')}</span>
+</label>
 
 <section class="replacement-section">
 	<h3>{t('textureReplacement.images')}</h3>
@@ -421,33 +473,42 @@ before the Change Date. See LICENSE for complete terms.
 	</div>
 </section>
 
-<section class="replacement-section">
-	<div class="section-header">
-		<h3>{t('textureReplacement.surfaceLabel')}</h3>
-		<span class="required-badge">{t('textureReplacement.required')}</span>
-	</div>
-	<label class="surface-field">
-		<span>{t('textureReplacement.surfaceHint')}</span>
-		<input
-			type="text"
-			value={request.textureReplacementSurface}
-			maxlength="200"
-			required
-			disabled={formLocked}
-			placeholder={t('textureReplacement.surfacePlaceholder')}
-			oninput={(event) => request.setTextureReplacementSurface(surfaceValue(event))}
-		/>
-	</label>
-</section>
+{#if request.textureReplacementMasked}
+	<section class="replacement-section">
+		<MaskEditor sourceUrl={textureSourceUrl} disabled={formLocked} />
+	</section>
+{:else}
+	<section class="replacement-section">
+		<div class="section-header">
+			<h3>{t('textureReplacement.surfaceLabel')}</h3>
+			<span class="required-badge">{t('textureReplacement.required')}</span>
+		</div>
+		<label class="surface-field">
+			<span>{t('textureReplacement.surfaceHint')}</span>
+			<input
+				type="text"
+				value={request.textureReplacementSurface}
+				maxlength="200"
+				required
+				disabled={formLocked}
+				placeholder={t('textureReplacement.surfacePlaceholder')}
+				oninput={(event) => request.setTextureReplacementSurface(surfaceValue(event))}
+			/>
+		</label>
+	</section>
+{/if}
 
 <section class="replacement-section generate-section">
 	<h3>{t('textureReplacement.controls')}</h3>
 
 	{#if !isAuthenticated}
 		<p class="auth-hint">{t('textureReplacement.signInToApply')}</p>
-	{:else if validationKey && jobId === null}
-		<p class="validation-hint">{t(validationKey)}</p>
 	{/if}
+	<div class="validation-live" role="status" aria-live="polite" aria-atomic="true">
+		{#if isAuthenticated && validationKey && jobId === null}
+			<p class="validation-hint">{t(validationKey)}</p>
+		{/if}
+	</div>
 
 	<button type="button" class="generate-btn" disabled={!canSubmit} onclick={() => void submit()}>
 		{#if submitting}
@@ -455,7 +516,7 @@ before the Change Date. See LICENSE for complete terms.
 			{t('textureReplacement.submitting')}
 		{:else if isPolling}
 			{t('textureReplacement.processing')}
-		{:else if terminalJob?.id === jobId}
+		{:else if completedJobMatches}
 			{t('textureReplacement.completed')}
 		{:else}
 			{t('textureReplacement.apply')}
@@ -468,12 +529,12 @@ before the Change Date. See LICENSE for complete terms.
 				<span class="spinner" aria-hidden="true"></span>
 				{t('textureReplacement.processing')}
 			</p>
-		{:else if terminalJob?.id === jobId}
+		{:else if completedJobMatches}
 			<p class="job-success">{t('textureReplacement.completed')}</p>
 		{/if}
 	</div>
 
-	{#if terminalJob?.id === jobId}
+	{#if completedJobMatches}
 		<button type="button" class="secondary-btn" onclick={() => void clearJob()}>
 			{t('textureReplacement.newReplacement')}
 		</button>
@@ -530,6 +591,29 @@ before the Change Date. See LICENSE for complete terms.
 		font-weight: 700;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
+	}
+
+	.masked-toggle {
+		display: flex;
+		align-items: center;
+		align-self: flex-start;
+		gap: 0.625rem;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--color-text);
+		cursor: pointer;
+	}
+
+	.masked-toggle input {
+		width: 1rem;
+		height: 1rem;
+		margin: 0;
+		accent-color: var(--color-accent);
+	}
+
+	.masked-toggle:has(input:disabled) {
+		opacity: 0.65;
+		cursor: not-allowed;
 	}
 
 	.replacement-section {
@@ -671,6 +755,7 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-muted-strong);
 	}
 
+	.validation-live:empty,
 	.job-live:empty {
 		display: none;
 	}
