@@ -13,26 +13,37 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { uploadResultSchema } from '$lib/api/contract';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
-	import type { UploadResult } from '$lib/api/contract';
-	import { request, type ImageInput } from '$lib/state/request.svelte';
+	import {
+		request,
+		type ImageInput,
+		type TextureMaskUploadOperation
+	} from '$lib/state/request.svelte';
 
 	const MAX_SIZE = 8 * 1024 * 1024;
 
-	type UploadTarget = 'room' | 'styleReference' | 'objectReference' | 'textureReference';
+	type UploadTarget =
+		| 'room'
+		| 'styleReference'
+		| 'objectReference'
+		| 'textureReference'
+		| 'textureMask';
 
 	interface Props {
 		target?: UploadTarget;
 		label?: TranslationKey;
 		requiredLabel?: TranslationKey;
 		disabled?: boolean;
+		onUploadingChange?: (uploading: boolean) => void;
 	}
 
 	let {
 		target = 'room',
 		label = undefined,
 		requiredLabel = undefined,
-		disabled = false
+		disabled = false,
+		onUploadingChange = undefined
 	}: Props = $props();
 
 	let uploading = $state(false);
@@ -53,7 +64,11 @@ before the Change Date. See LICENSE for complete terms.
 				? request.objectReferenceImage
 				: target === 'textureReference'
 					? request.textureReferenceImage
-					: request.image
+					: target === 'textureMask'
+						? request.textureMaskMatchesSource()
+							? request.textureMaskImage
+							: undefined
+						: request.image
 	);
 	const ariaLabelKey = $derived<TranslationKey>(
 		label ??
@@ -63,7 +78,9 @@ before the Change Date. See LICENSE for complete terms.
 					? 'objectReplacement.referenceImage'
 					: target === 'textureReference'
 						? 'textureReplacement.referenceImage'
-						: 'upload.label')
+						: target === 'textureMask'
+							? 'textureReplacement.maskImage'
+							: 'upload.label')
 	);
 	const buttonLabelKey = $derived<TranslationKey>(
 		label ??
@@ -73,7 +90,9 @@ before the Change Date. See LICENSE for complete terms.
 					? 'objectReplacement.referenceImage'
 					: target === 'textureReference'
 						? 'textureReplacement.referenceImage'
-						: 'upload.button')
+						: target === 'textureMask'
+							? 'textureReplacement.maskImage'
+							: 'upload.button')
 	);
 	const changeKey = $derived<TranslationKey>(
 		target === 'styleReference'
@@ -82,7 +101,9 @@ before the Change Date. See LICENSE for complete terms.
 				? 'objectReplacement.referenceChange'
 				: target === 'textureReference'
 					? 'textureReplacement.referenceChange'
-					: 'upload.change'
+					: target === 'textureMask'
+						? 'textureReplacement.maskChange'
+						: 'upload.change'
 	);
 	const dropTitleKey = $derived<TranslationKey>(
 		target === 'styleReference'
@@ -91,7 +112,9 @@ before the Change Date. See LICENSE for complete terms.
 				? 'objectReplacement.referenceDropTitle'
 				: target === 'textureReference'
 					? 'textureReplacement.referenceDropTitle'
-					: 'upload.dropTitle'
+					: target === 'textureMask'
+						? 'textureReplacement.maskDropTitle'
+						: 'upload.dropTitle'
 	);
 	const dropSubtitleKey = $derived<TranslationKey>(
 		target === 'styleReference'
@@ -100,7 +123,9 @@ before the Change Date. See LICENSE for complete terms.
 				? 'objectReplacement.referenceDropSubtitle'
 				: target === 'textureReference'
 					? 'textureReplacement.referenceDropSubtitle'
-					: 'upload.dropSubtitle'
+					: target === 'textureMask'
+						? 'textureReplacement.maskDropSubtitle'
+						: 'upload.dropSubtitle'
 	);
 	const imageUrl = $derived(image?.url ?? null);
 	const hasImage = $derived(imageUrl !== null || previewUrl !== null);
@@ -109,7 +134,10 @@ before the Change Date. See LICENSE for complete terms.
 	);
 	const dropButtonLabel = $derived(requiredLabel ? controlLabel : t(buttonLabelKey));
 
-	function setUploadedImage(next: ImageInput): void {
+	function setUploadedImage(
+		next: ImageInput,
+		textureMaskUpload?: TextureMaskUploadOperation
+	): void {
 		if (target === 'styleReference') {
 			request.setStyleReferenceImage(next);
 			return;
@@ -122,7 +150,22 @@ before the Change Date. See LICENSE for complete terms.
 			request.setTextureReferenceImage(next);
 			return;
 		}
+		if (target === 'textureMask') {
+			if (!textureMaskUpload) {
+				error = t('textureReplacement.maskEditor.saveFailed');
+				return;
+			}
+			if (!request.commitTextureMaskUpload(next, textureMaskUpload)) {
+				error = t('textureReplacement.maskEditor.saveFailed');
+			}
+			return;
+		}
 		request.setImage(next);
+	}
+
+	function setUploading(value: boolean): void {
+		uploading = value;
+		onUploadingChange?.(value);
 	}
 
 	function errorMessageForCode(code: string | null): string {
@@ -165,7 +208,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	async function handleFile(file: File): Promise<void> {
-		if (disabled) return;
+		if (disabled || uploading) return;
 		error = null;
 		if (!file.type.startsWith('image/')) {
 			error = t('upload.errorType');
@@ -175,10 +218,16 @@ before the Change Date. See LICENSE for complete terms.
 			error = t('upload.errorSize');
 			return;
 		}
+		const textureMaskUpload =
+			target === 'textureMask' ? (request.beginTextureMaskUpload() ?? undefined) : undefined;
+		if (target === 'textureMask' && !textureMaskUpload) {
+			error = t('textureReplacement.maskEditor.sourceRequired');
+			return;
+		}
 		if (previewUrl) URL.revokeObjectURL(previewUrl);
 		previewUrl = URL.createObjectURL(file);
 
-		uploading = true;
+		setUploading(true);
 		try {
 			const formData = new FormData();
 			formData.append('file', file);
@@ -187,32 +236,47 @@ before the Change Date. See LICENSE for complete terms.
 				error = await responseErrorMessage(response);
 				return;
 			}
-			const result = (await response.json()) as UploadResult;
+			const parsed = uploadResultSchema.safeParse(await response.json());
+			if (!parsed.success) {
+				error = t('upload.errorUpload');
+				return;
+			}
+			const result = parsed.data;
 			if (previewUrl) URL.revokeObjectURL(previewUrl);
 			previewUrl = null;
-			setUploadedImage({
-				url: result.url,
-				mime: result.mime,
-				size: result.size,
-				dimensions: result.dimensions
-			});
+			setUploadedImage(
+				{
+					url: result.url,
+					mime: result.mime,
+					size: result.size,
+					dimensions: result.dimensions
+				},
+				textureMaskUpload
+			);
 		} catch {
 			error = t('upload.errorUpload');
 		} finally {
-			uploading = false;
+			if (textureMaskUpload) request.finishTextureMaskUpload(textureMaskUpload);
+			setUploading(false);
 		}
 	}
 
 	async function importRemoteUrl(): Promise<void> {
-		if (disabled) return;
+		if (disabled || uploading) return;
 		const value = remoteUrl.trim();
 		error = null;
 		if (!isHttpsUrl(value)) {
 			error = t('upload.errorUrl');
 			return;
 		}
+		const textureMaskUpload =
+			target === 'textureMask' ? (request.beginTextureMaskUpload() ?? undefined) : undefined;
+		if (target === 'textureMask' && !textureMaskUpload) {
+			error = t('textureReplacement.maskEditor.sourceRequired');
+			return;
+		}
 
-		uploading = true;
+		setUploading(true);
 		try {
 			const response = await fetch('/api/uploads', {
 				method: 'POST',
@@ -223,20 +287,29 @@ before the Change Date. See LICENSE for complete terms.
 				error = await responseErrorMessage(response);
 				return;
 			}
-			const result = (await response.json()) as UploadResult;
+			const parsed = uploadResultSchema.safeParse(await response.json());
+			if (!parsed.success) {
+				error = t('upload.errorUpload');
+				return;
+			}
+			const result = parsed.data;
 			if (previewUrl) URL.revokeObjectURL(previewUrl);
 			previewUrl = null;
 			remoteUrl = '';
-			setUploadedImage({
-				url: result.url,
-				mime: result.mime,
-				size: result.size,
-				dimensions: result.dimensions
-			});
+			setUploadedImage(
+				{
+					url: result.url,
+					mime: result.mime,
+					size: result.size,
+					dimensions: result.dimensions
+				},
+				textureMaskUpload
+			);
 		} catch {
 			error = t('upload.errorRemote');
 		} finally {
-			uploading = false;
+			if (textureMaskUpload) request.finishTextureMaskUpload(textureMaskUpload);
+			setUploading(false);
 		}
 	}
 
@@ -365,6 +438,9 @@ before the Change Date. See LICENSE for complete terms.
 			{uploading ? t('upload.importing') : t('upload.import')}
 		</button>
 	</form>
+	<div class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+		{uploading ? t('upload.uploading') : ''}
+	</div>
 	{#if error}
 		<p class="error" role="alert">{error}</p>
 	{/if}
@@ -541,5 +617,17 @@ before the Change Date. See LICENSE for complete terms.
 		margin: 0;
 		font-size: 0.8125rem;
 		color: var(--color-danger);
+	}
+
+	.visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 </style>

@@ -21,7 +21,13 @@ const integration = vi.hoisted(() => ({
 	cancel: vi.fn(),
 	submit: vi.fn()
 }));
+const archai = vi.hoisted(() => ({ replaceTexturesWithMask: vi.fn() }));
 const jobs = vi.hoisted(() => ({ create: vi.fn() }));
+
+vi.mock('$lib/server/generation', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/generation')>();
+	return { ...actual, replaceTexturesWithMask: archai.replaceTexturesWithMask };
+});
 
 vi.mock('$lib/server/texture-replacement', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/texture-replacement')>();
@@ -84,12 +90,13 @@ type PostEvent = Parameters<typeof POST>[0];
 
 function callPost(
 	requestPlatform: App.Platform,
-	pubkey: string | null = 'pubkey-1'
+	pubkey: string | null = 'pubkey-1',
+	body: unknown = requestBody
 ): ReturnType<typeof POST> {
 	return POST({
 		request: new Request('https://cadbos.example/api/texture-replacement', {
 			method: 'POST',
-			body: JSON.stringify(requestBody)
+			body: JSON.stringify(body)
 		}),
 		platform: requestPlatform,
 		locals: { user: pubkey === null ? null : { pubkey } },
@@ -98,6 +105,11 @@ function callPost(
 }
 
 beforeEach(() => {
+	archai.replaceTexturesWithMask.mockReset().mockResolvedValue({
+		outputUrl: 'https://cdn.example.test/masked-result.webp',
+		cost: 1.5,
+		balance: 100
+	});
 	integration.cancel.mockReset().mockResolvedValue(undefined);
 	integration.submit.mockReset().mockResolvedValue('prompt-1');
 	jobs.create.mockReset().mockResolvedValue(undefined);
@@ -108,6 +120,78 @@ afterEach(() => {
 });
 
 describe('POST /api/texture-replacement', () => {
+	it('uses ArchAI for a masked request and completes without creating a ComfyUI job', async () => {
+		const db = makeD1();
+		seedUser(db);
+		const maskedRequest = {
+			image: requestBody.image,
+			referenceImage: requestBody.referenceImage,
+			mask: 'https://cdn.example.test/mask.png'
+		};
+
+		const response = await callPost(platform(db), 'pubkey-1', maskedRequest);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			id: expect.any(String),
+			status: 'completed',
+			outputUrl: 'https://cdn.example.test/masked-result.webp',
+			cost: 1.5,
+			balance: 10.5
+		});
+		expect(archai.replaceTexturesWithMask).toHaveBeenCalledWith(
+			expect.objectContaining({ env: expect.objectContaining({ DB: db }) }),
+			maskedRequest
+		);
+		expect(integration.submit).not.toHaveBeenCalled();
+		expect(jobs.create).not.toHaveBeenCalled();
+		const generation = await db
+			.prepare('SELECT kind, source_url, amount FROM generations WHERE user_id = ?')
+			.bind('user-1')
+			.first<{ kind: string; source_url: string; amount: number }>();
+		expect(generation).toEqual({
+			kind: 'texture-replacement',
+			source_url: requestBody.image,
+			amount: 1.5
+		});
+	});
+
+	it('returns a sanitized upstream error when masked replacement fails', async () => {
+		const db = makeD1();
+		seedUser(db);
+		archai.replaceTexturesWithMask.mockRejectedValue(new Error('private provider trace'));
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		const response = await callPost(platform(db), 'pubkey-1', {
+			image: requestBody.image,
+			referenceImage: requestBody.referenceImage,
+			mask: 'https://cdn.example.test/mask.png'
+		});
+
+		expect(response.status).toBe(502);
+		expect(await response.json()).toEqual({
+			error: { code: 'texture_replacement_failed', message: 'Texture replacement failed' }
+		});
+		expect(consoleError).toHaveBeenCalledWith('ArchAI masked texture replacement failed');
+		expect(consoleError.mock.calls.flat().join(' ')).not.toContain('private provider trace');
+		expect(integration.submit).not.toHaveBeenCalled();
+		expect(jobs.create).not.toHaveBeenCalled();
+	});
+
+	it('rejects requests that mix automatic surface detection with a mask', async () => {
+		const db = makeD1();
+		seedUser(db);
+
+		const response = await callPost(platform(db), 'pubkey-1', {
+			...requestBody,
+			mask: 'https://cdn.example.test/mask.png'
+		});
+
+		expect(response.status).toBe(400);
+		expect(archai.replaceTexturesWithMask).not.toHaveBeenCalled();
+		expect(integration.submit).not.toHaveBeenCalled();
+	});
+
 	it('logs authentication rejection without changing the API error', async () => {
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 

@@ -116,6 +116,46 @@ describe('texture replacement edit URL state', () => {
 		expect(state.textureReferenceImage).toBeUndefined();
 	});
 
+	it('round-trips masked mode without image URLs or the hidden surface', () => {
+		const state = new RequestState();
+		state.setTextureReplacementSourceMode('room-photo');
+		state.setTextureReplacementSurface('sofa upholstery');
+		state.setTextureReplacementMasked(true);
+		state.setImage({ url: 'https://example.test/scene.jpg' });
+		state.setTextureReferenceImage({ url: 'https://example.test/fabric.jpg' });
+		state.setTextureMaskImage({ url: 'https://example.test/mask.png' });
+
+		const url = buildShareUrl('edit', state, { tool: 'texture-replacement' });
+		expect(url).toBe('/edit?tool=texture-replacement&source=room-photo&masked=1');
+
+		const restored = new RequestState();
+		applyShareParams(
+			'edit',
+			undefined,
+			new URL(url, 'https://example.test').searchParams,
+			restored
+		);
+		expect(restored.textureReplacementMasked).toBe(true);
+		expect(restored.textureReplacementSurface).toBe('');
+		expect(restored.image).toBeUndefined();
+		expect(restored.textureReferenceImage).toBeUndefined();
+		expect(restored.textureMaskImage).toBeUndefined();
+	});
+
+	it('defaults masked mode to off unless masked is exactly 1', () => {
+		const state = new RequestState();
+		state.setTextureReplacementMasked(true);
+
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({ tool: 'texture-replacement', masked: 'true' }),
+			state
+		);
+
+		expect(state.textureReplacementMasked).toBe(false);
+	});
+
 	it('keeps only validated job ids on the replacement sub-tab', () => {
 		expect(
 			subTabFromSearch('edit', new URLSearchParams({ tool: 'texture-replacement', job: JOB_ID }))

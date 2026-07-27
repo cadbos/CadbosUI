@@ -83,6 +83,11 @@ export interface ActiveTextureReplacementJob {
 	sourceRender?: RenderResult;
 }
 
+export interface TextureMaskUploadOperation {
+	epoch: number;
+	sourceUrl: string;
+}
+
 export type RequestStatus = 'idle' | 'rendering' | 'error';
 
 export const IMAGE_SOURCE_MODES = ['room-photo', 'current-result'] as const;
@@ -92,6 +97,7 @@ export type ValidationField =
 	| 'prompt'
 	| 'image'
 	| 'referenceImage'
+	| 'mask'
 	| 'replacementObject'
 	| 'replacementSurface';
 
@@ -106,6 +112,8 @@ export interface RequestJSON {
 	styleReferenceImage?: ImageInput;
 	objectReferenceImage?: ImageInput;
 	textureReferenceImage?: ImageInput;
+	textureMaskImage?: ImageInput;
+	textureMaskSourceUrl?: string;
 	promptFragments: PromptFragment[];
 	editPrompt: string;
 	outputFormat: OutputFormat;
@@ -118,6 +126,7 @@ export interface RequestJSON {
 	objectReplacementSourceMode?: ImageSourceMode;
 	textureReplacementSurface?: string;
 	textureReplacementSourceMode?: ImageSourceMode;
+	textureReplacementMasked?: boolean;
 	promptOverride: string | null;
 	currentRender?: RenderResult;
 	status: RequestStatus;
@@ -128,6 +137,7 @@ export interface NormalizedRequest {
 	styleReferenceImage?: ImageInput;
 	objectReferenceImage?: ImageInput;
 	textureReferenceImage?: ImageInput;
+	textureMaskImage?: ImageInput;
 	promptFragments: PromptFragment[];
 	outputFormat: OutputFormat;
 	sceneType: SceneType;
@@ -146,6 +156,7 @@ export interface NormalizedRequest {
 	textureReplacementSurface: string;
 	textureReplacementSourceMode: ImageSourceMode;
 	textureReplacementSourceUrl: string | undefined;
+	textureReplacementMasked: boolean;
 	editPrompt: string;
 	styleTransferPrompt: string;
 	prompt: string;
@@ -197,6 +208,8 @@ const requestJsonSchema = z
 		styleReferenceImage: optionalImageInputSchema,
 		objectReferenceImage: optionalImageInputSchema,
 		textureReferenceImage: optionalImageInputSchema,
+		textureMaskImage: optionalImageInputSchema,
+		textureMaskSourceUrl: z.string().min(1).optional(),
 		promptFragments: z.array(promptFragmentSchema),
 		editPrompt: z.string().default(''),
 		outputFormat: outputFormatSchema,
@@ -210,6 +223,7 @@ const requestJsonSchema = z
 		objectReplacementSourceMode: imageSourceModeSchema.default('current-result'),
 		textureReplacementSurface: replacementSurfaceSchema.default(''),
 		textureReplacementSourceMode: imageSourceModeSchema.default('current-result'),
+		textureReplacementMasked: z.boolean().default(false),
 		promptOverride: z.string().nullable(),
 		currentRender: renderResultSchema.optional(),
 		status: z.enum(['idle', 'rendering', 'error'])
@@ -396,11 +410,14 @@ export function creditErrorKey(keys: CreditErrorKeys, err: unknown): Translation
 }
 
 export class RequestState {
+	#textureMaskUploadEpoch = 0;
 	id = $state<string>(crypto.randomUUID());
 	image = $state<ImageInput | undefined>(undefined);
 	styleReferenceImage = $state<ImageInput | undefined>(undefined);
 	objectReferenceImage = $state<ImageInput | undefined>(undefined);
 	textureReferenceImage = $state<ImageInput | undefined>(undefined);
+	textureMaskImage = $state<ImageInput | undefined>(undefined);
+	textureMaskSourceUrl = $state<string | undefined>(undefined);
 	promptFragments = $state<PromptFragment[]>([]);
 	editPrompt = $state('');
 	outputFormat = $state<OutputFormat>('webp');
@@ -414,6 +431,8 @@ export class RequestState {
 	activeObjectReplacementJob = $state<ActiveObjectReplacementJob | undefined>(undefined);
 	textureReplacementSurface = $state('');
 	textureReplacementSourceMode = $state<ImageSourceMode>('current-result');
+	textureReplacementMasked = $state(false);
+	textureMaskUploading = $state(false);
 	activeTextureReplacementJob = $state<ActiveTextureReplacementJob | undefined>(undefined);
 	promptOverride = $state<string | null>(null);
 	currentRender = $state<RenderResult | undefined>(undefined);
@@ -536,6 +555,53 @@ export class RequestState {
 		this.textureReferenceImage = cloneImage(optionalImageInputSchema.parse(image));
 	}
 
+	setTextureMaskImage(image: ImageInput | undefined): void {
+		this.#textureMaskUploadEpoch += 1;
+		this.textureMaskUploading = false;
+		if (image === undefined) {
+			this.textureMaskImage = undefined;
+			this.textureMaskSourceUrl = undefined;
+			return;
+		}
+		const sourceUrl = this.textureReplacementSourceUrl();
+		if (!sourceUrl) return;
+		this.textureMaskImage = cloneImage(optionalImageInputSchema.parse(image));
+		this.textureMaskSourceUrl = sourceUrl;
+	}
+
+	beginTextureMaskUpload(): TextureMaskUploadOperation | null {
+		const sourceUrl = this.textureReplacementSourceUrl();
+		if (!sourceUrl || !this.textureReplacementMasked) return null;
+		this.#textureMaskUploadEpoch += 1;
+		this.textureMaskUploading = true;
+		return { epoch: this.#textureMaskUploadEpoch, sourceUrl };
+	}
+
+	commitTextureMaskUpload(image: ImageInput, operation: TextureMaskUploadOperation): boolean {
+		if (
+			!this.textureReplacementMasked ||
+			operation.epoch !== this.#textureMaskUploadEpoch ||
+			operation.sourceUrl !== this.textureReplacementSourceUrl()
+		) {
+			return false;
+		}
+		this.textureMaskImage = cloneImage(optionalImageInputSchema.parse(image));
+		this.textureMaskSourceUrl = operation.sourceUrl;
+		this.textureMaskUploading = false;
+		return true;
+	}
+
+	finishTextureMaskUpload(operation: TextureMaskUploadOperation): void {
+		if (operation.epoch === this.#textureMaskUploadEpoch) this.textureMaskUploading = false;
+	}
+
+	textureMaskMatchesSource(): boolean {
+		return (
+			this.textureMaskImage?.url !== undefined &&
+			this.textureMaskSourceUrl === this.textureReplacementSourceUrl()
+		);
+	}
+
 	setStyleTransferPrompt(prompt: string): void {
 		this.styleTransferPrompt = prompt;
 	}
@@ -594,6 +660,15 @@ export class RequestState {
 
 	setTextureReplacementSourceMode(mode: ImageSourceMode): void {
 		this.textureReplacementSourceMode = imageSourceModeSchema.parse(mode);
+	}
+
+	setTextureReplacementMasked(masked: boolean): void {
+		const parsed = z.boolean().parse(masked);
+		if (parsed !== this.textureReplacementMasked) {
+			this.#textureMaskUploadEpoch += 1;
+			this.textureMaskUploading = false;
+		}
+		this.textureReplacementMasked = parsed;
 	}
 
 	setActiveTextureReplacementJobId(id: string | undefined): void {
@@ -692,7 +767,11 @@ export class RequestState {
 		const missing: ValidationField[] = [];
 		if (!this.textureReplacementSourceUrl()) missing.push('image');
 		if (!this.textureReferenceImage?.url) missing.push('referenceImage');
-		if (!this.textureReplacementSurface.trim()) missing.push('replacementSurface');
+		if (this.textureReplacementMasked) {
+			if (!this.textureMaskMatchesSource()) missing.push('mask');
+		} else if (!this.textureReplacementSurface.trim()) {
+			missing.push('replacementSurface');
+		}
 		return { valid: missing.length === 0, missing };
 	}
 
@@ -756,6 +835,14 @@ export class RequestState {
 		const validation = this.validateTextureReplacement();
 		const image = this.textureReplacementSourceUrl();
 		if (!validation.valid || !image || !this.textureReferenceImage) return null;
+		if (this.textureReplacementMasked) {
+			if (!this.textureMaskImage || !this.textureMaskMatchesSource()) return null;
+			return {
+				image,
+				referenceImage: this.textureReferenceImage.url,
+				mask: this.textureMaskImage.url
+			};
+		}
 		return {
 			image,
 			referenceImage: this.textureReferenceImage.url,
@@ -770,6 +857,8 @@ export class RequestState {
 			styleReferenceImage: cloneImage(this.styleReferenceImage),
 			objectReferenceImage: cloneImage(this.objectReferenceImage),
 			textureReferenceImage: cloneImage(this.textureReferenceImage),
+			textureMaskImage: cloneImage(this.textureMaskImage),
+			textureMaskSourceUrl: this.textureMaskSourceUrl,
 			promptFragments: cloneFragments(this.promptFragments),
 			editPrompt: this.editPrompt,
 			outputFormat: this.outputFormat,
@@ -782,6 +871,7 @@ export class RequestState {
 			objectReplacementSourceMode: this.objectReplacementSourceMode,
 			textureReplacementSurface: this.textureReplacementSurface,
 			textureReplacementSourceMode: this.textureReplacementSourceMode,
+			textureReplacementMasked: this.textureReplacementMasked,
 			promptOverride: this.promptOverride,
 			currentRender: cloneRenderResult(this.currentRender),
 			status: this.status
@@ -790,11 +880,15 @@ export class RequestState {
 
 	fromJSON(data: unknown): void {
 		const parsed = requestJsonSchema.parse(data);
+		this.#textureMaskUploadEpoch += 1;
+		this.textureMaskUploading = false;
 		this.id = parsed.id;
 		this.image = cloneImage(parsed.image);
 		this.styleReferenceImage = cloneImage(parsed.styleReferenceImage);
 		this.objectReferenceImage = cloneImage(parsed.objectReferenceImage);
 		this.textureReferenceImage = cloneImage(parsed.textureReferenceImage);
+		this.textureMaskImage = cloneImage(parsed.textureMaskImage);
+		this.textureMaskSourceUrl = parsed.textureMaskImage ? parsed.textureMaskSourceUrl : undefined;
 		this.promptFragments = cloneFragments(parsed.promptFragments);
 		this.editPrompt = parsed.editPrompt;
 		this.outputFormat = parsed.outputFormat;
@@ -808,6 +902,7 @@ export class RequestState {
 		this.activeObjectReplacementJob = undefined;
 		this.textureReplacementSurface = parsed.textureReplacementSurface;
 		this.textureReplacementSourceMode = parsed.textureReplacementSourceMode;
+		this.textureReplacementMasked = parsed.textureReplacementMasked;
 		this.activeTextureReplacementJob = undefined;
 		this.promptOverride = parsed.promptOverride;
 		this.currentRender = cloneRenderResult(parsed.currentRender);
@@ -822,6 +917,10 @@ export class RequestState {
 			styleReferenceImage: cloneImage(this.styleReferenceImage),
 			objectReferenceImage: cloneImage(this.objectReferenceImage),
 			textureReferenceImage: cloneImage(this.textureReferenceImage),
+			textureMaskImage:
+				this.textureReplacementMasked && this.textureMaskMatchesSource()
+					? cloneImage(this.textureMaskImage)
+					: undefined,
 			promptFragments: cloneFragments(this.promptFragments),
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
@@ -832,9 +931,12 @@ export class RequestState {
 			objectReplacementObject: this.objectReplacementObject,
 			objectReplacementSourceMode: this.objectReplacementSourceMode,
 			objectReplacementSourceUrl: this.objectReplacementSourceUrl(),
-			textureReplacementSurface: this.textureReplacementSurface,
+			textureReplacementSurface: this.textureReplacementMasked
+				? ''
+				: this.textureReplacementSurface,
 			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			textureReplacementSourceUrl: this.textureReplacementSourceUrl(),
+			textureReplacementMasked: this.textureReplacementMasked,
 			editPrompt: this.editPrompt,
 			styleTransferPrompt: this.styleTransferPrompt,
 			prompt: this.prompt
@@ -842,11 +944,15 @@ export class RequestState {
 	}
 
 	reset(): void {
+		this.#textureMaskUploadEpoch += 1;
+		this.textureMaskUploading = false;
 		this.id = crypto.randomUUID();
 		this.image = undefined;
 		this.styleReferenceImage = undefined;
 		this.objectReferenceImage = undefined;
 		this.textureReferenceImage = undefined;
+		this.textureMaskImage = undefined;
+		this.textureMaskSourceUrl = undefined;
 		this.promptFragments = [];
 		this.editPrompt = '';
 		this.outputFormat = 'webp';
@@ -860,6 +966,7 @@ export class RequestState {
 		this.activeObjectReplacementJob = undefined;
 		this.textureReplacementSurface = '';
 		this.textureReplacementSourceMode = 'current-result';
+		this.textureReplacementMasked = false;
 		this.activeTextureReplacementJob = undefined;
 		this.promptOverride = null;
 		this.currentRender = undefined;

@@ -88,6 +88,8 @@ it('retries a poll whose body stalls past the per-request timeout instead of fai
 
 	await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2), { timeout: 5_000 });
 
-	await expect.element(screen.getByRole('status')).toHaveTextContent(/Replacing the texture/);
+	await expect
+		.element(screen.getByRole('status').filter({ hasText: /Replacing the texture/ }))
+		.toHaveTextContent(/Replacing the texture/);
 	expect(document.querySelector('.submit-error')).toBeNull();
 });

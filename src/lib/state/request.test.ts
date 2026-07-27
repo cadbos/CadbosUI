@@ -171,8 +171,11 @@ describe('serialization', () => {
 		delete snapshot.objectReplacementObject;
 		delete snapshot.objectReplacementSourceMode;
 		delete snapshot.textureReferenceImage;
+		delete snapshot.textureMaskImage;
+		delete snapshot.textureMaskSourceUrl;
 		delete snapshot.textureReplacementSurface;
 		delete snapshot.textureReplacementSourceMode;
+		delete snapshot.textureReplacementMasked;
 
 		request.fromJSON(snapshot);
 
@@ -182,6 +185,8 @@ describe('serialization', () => {
 			styleReferenceImage: undefined,
 			objectReferenceImage: undefined,
 			textureReferenceImage: undefined,
+			textureMaskImage: undefined,
+			textureMaskSourceUrl: undefined,
 			styleTransferPrompt: '',
 			styleTransferStrength: 0.7,
 			styleNegativePrompt: '',
@@ -190,6 +195,7 @@ describe('serialization', () => {
 			objectReplacementSourceMode: 'current-result',
 			textureReplacementSurface: '',
 			textureReplacementSourceMode: 'current-result',
+			textureReplacementMasked: false,
 			currentRender: undefined
 		});
 	});
@@ -328,6 +334,44 @@ describe('normalizeForComparison', () => {
 		expect(first.objectReplacementSourceUrl).toBe('https://example.test/gen-1.jpg');
 		expect(second.objectReplacementSourceUrl).toBe('https://example.test/gen-2.jpg');
 		expect(second).not.toEqual(first);
+	});
+
+	it('normalizes texture replacement by active mode independently of prior mode history', () => {
+		const textureReference = { url: 'https://example.test/reference-fabric.webp' };
+		const textureMask = { url: 'https://example.test/sofa-mask.webp' };
+
+		request.setImage(AC9_IMAGE);
+		request.setTextureReferenceImage(textureReference);
+		request.setTextureMaskImage(textureMask);
+		request.setTextureReplacementSourceMode('room-photo');
+		request.setTextureReplacementSurface('sofa upholstery');
+		const automaticNormalization = request.normalizeForComparison();
+		const automaticPayload = request.toTextureReplacementRequest();
+
+		request.reset();
+		request.setImage(AC9_IMAGE);
+		request.setTextureReferenceImage(textureReference);
+		request.setTextureReplacementSourceMode('room-photo');
+		request.setTextureReplacementSurface('sofa upholstery');
+		expect(request.normalizeForComparison()).toEqual(automaticNormalization);
+		expect(request.toTextureReplacementRequest()).toEqual(automaticPayload);
+		expect(automaticNormalization.textureMaskImage).toBeUndefined();
+
+		request.setTextureReplacementMasked(true);
+		request.setTextureMaskImage(textureMask);
+		request.setTextureReplacementSurface('stale surface');
+		const maskedNormalization = request.normalizeForComparison();
+		const maskedPayload = request.toTextureReplacementRequest();
+
+		request.reset();
+		request.setImage(AC9_IMAGE);
+		request.setTextureReferenceImage(textureReference);
+		request.setTextureReplacementSourceMode('room-photo');
+		request.setTextureReplacementMasked(true);
+		request.setTextureMaskImage(textureMask);
+		expect(request.normalizeForComparison()).toEqual(maskedNormalization);
+		expect(request.toTextureReplacementRequest()).toEqual(maskedPayload);
+		expect(maskedNormalization.textureReplacementSurface).toBe('');
 	});
 });
 
@@ -564,6 +608,134 @@ describe('toObjectReplacementRequest', () => {
 				ts: 1
 			}
 		});
+	});
+});
+
+describe('toTextureReplacementRequest', () => {
+	const textureReference = { url: 'https://example.test/reference-fabric.webp' };
+	const textureMask = { url: 'https://example.test/sofa-mask.webp' };
+
+	it('requires a surface for automatic replacement', () => {
+		expect(request.validateTextureReplacement()).toEqual({
+			valid: false,
+			missing: ['image', 'referenceImage', 'replacementSurface']
+		});
+	});
+
+	it('builds the existing automatic replacement payload unchanged', () => {
+		request.setImage(AC9_IMAGE);
+		request.setTextureReferenceImage(textureReference);
+		request.setTextureReplacementSourceMode('room-photo');
+		request.setTextureReplacementSurface('  sofa upholstery  ');
+
+		expect(request.toTextureReplacementRequest()).toEqual({
+			image: AC9_IMAGE.url,
+			referenceImage: textureReference.url,
+			replacementSurface: 'sofa upholstery'
+		});
+	});
+
+	it('requires a mask instead of a surface in masked mode', () => {
+		request.setTextureReplacementMasked(true);
+
+		expect(request.validateTextureReplacement()).toEqual({
+			valid: false,
+			missing: ['image', 'referenceImage', 'mask']
+		});
+	});
+
+	it('builds a masked reference-image payload without the hidden surface', () => {
+		request.setImage(AC9_IMAGE);
+		request.setTextureReferenceImage(textureReference);
+		request.setTextureReplacementSourceMode('room-photo');
+		request.setTextureMaskImage(textureMask);
+		request.setTextureReplacementSurface('sofa upholstery');
+		request.setTextureReplacementMasked(true);
+
+		expect(request.toTextureReplacementRequest()).toEqual({
+			image: AC9_IMAGE.url,
+			referenceImage: textureReference.url,
+			mask: textureMask.url
+		});
+	});
+
+	it('round-trips and resets masked replacement state', () => {
+		request.setImage(AC9_IMAGE);
+		request.setTextureReplacementSourceMode('room-photo');
+		request.setTextureMaskImage(textureMask);
+		request.setTextureReplacementMasked(true);
+		const snapshot = request.toJSON();
+
+		request.reset();
+		request.fromJSON(snapshot);
+		expect(request.textureMaskImage).toEqual(textureMask);
+		expect(request.textureMaskSourceUrl).toBe(AC9_IMAGE.url);
+		expect(request.textureReplacementMasked).toBe(true);
+
+		request.reset();
+		expect(request.textureMaskImage).toBeUndefined();
+		expect(request.textureMaskSourceUrl).toBeUndefined();
+		expect(request.textureReplacementMasked).toBe(false);
+	});
+
+	it('rejects a stale mask after the effective source changes', () => {
+		request.setImage(AC9_IMAGE);
+		request.setTextureReferenceImage(textureReference);
+		request.setTextureReplacementSourceMode('room-photo');
+		request.setTextureReplacementMasked(true);
+		request.setTextureMaskImage(textureMask);
+
+		request.setImage({ url: 'https://example.test/another-room.webp' });
+
+		expect(request.textureMaskMatchesSource()).toBe(false);
+		expect(request.validateTextureReplacement()).toEqual({ valid: false, missing: ['mask'] });
+		expect(request.toTextureReplacementRequest()).toBeNull();
+	});
+
+	it('ignores a mask upload that finishes after the source changes', () => {
+		request.setImage(AC9_IMAGE);
+		request.setTextureReplacementSourceMode('room-photo');
+		request.setTextureReplacementMasked(true);
+		const operation = request.beginTextureMaskUpload();
+		if (!operation) throw new Error('Expected a texture mask upload operation');
+		request.setImage({ url: 'https://example.test/another-room.webp' });
+
+		expect(request.commitTextureMaskUpload(textureMask, operation)).toBe(false);
+
+		expect(request.textureMaskImage).toBeUndefined();
+		expect(request.textureMaskSourceUrl).toBeUndefined();
+	});
+
+	it('allows only the latest mask upload to commit for the same source', () => {
+		request.setImage(AC9_IMAGE);
+		request.setTextureReplacementSourceMode('room-photo');
+		request.setTextureReplacementMasked(true);
+		const first = request.beginTextureMaskUpload();
+		const second = request.beginTextureMaskUpload();
+		if (!first || !second) throw new Error('Expected texture mask upload operations');
+		expect(request.textureMaskUploading).toBe(true);
+
+		expect(request.commitTextureMaskUpload(textureMask, second)).toBe(true);
+		expect(request.textureMaskUploading).toBe(false);
+		expect(
+			request.commitTextureMaskUpload({ url: 'https://example.test/stale-mask.webp' }, first)
+		).toBe(false);
+		expect(request.textureMaskImage).toEqual(textureMask);
+	});
+
+	it('invalidates an upload when masked mode is toggled off', () => {
+		request.setImage(AC9_IMAGE);
+		request.setTextureReplacementSourceMode('room-photo');
+		request.setTextureReplacementMasked(true);
+		const operation = request.beginTextureMaskUpload();
+		if (!operation) throw new Error('Expected a texture mask upload operation');
+
+		request.setTextureReplacementMasked(false);
+		expect(request.textureMaskUploading).toBe(false);
+		request.setTextureReplacementMasked(true);
+
+		expect(request.commitTextureMaskUpload(textureMask, operation)).toBe(false);
+		expect(request.textureMaskImage).toBeUndefined();
 	});
 });
 
