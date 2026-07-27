@@ -12,6 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { z } from 'zod';
+
 // Shared client↔server wire types (no secrets). The server proxy normalizes
 // external-service responses to these shapes, so the client never depends on
 // provider quirks. Dev mocks and real endpoints return exactly these types.
@@ -26,12 +28,16 @@ export interface ApiError {
 }
 
 // POST /api/uploads (after UploadThing) → data for the image input.
-export interface UploadResult {
-	url: string;
-	mime: string;
-	size: number;
-	dimensions?: [number, number];
-}
+export const uploadResultSchema = z
+	.object({
+		url: z.url(),
+		mime: z.string().min(1),
+		size: z.number().nonnegative(),
+		dimensions: z.tuple([z.number().positive(), z.number().positive()]).optional()
+	})
+	.strict();
+
+export type UploadResult = z.infer<typeof uploadResultSchema>;
 
 export interface RemoteImageUploadRequest {
 	url: string;

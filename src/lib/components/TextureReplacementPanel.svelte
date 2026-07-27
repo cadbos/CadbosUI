@@ -73,6 +73,7 @@ before the Change Date. See LICENSE for complete terms.
 	let terminalJob = $state<TextureReplacementCompletedResponse | null>(null);
 	let terminalError = $state<PollFailure | null>(null);
 	let pollFailure = $state<PollFailure | null>(null);
+	let maskedToggle = $state<HTMLInputElement | null>(null);
 	let navigatedAwayWhileSubmitting = false;
 	let pollRun = 0;
 	const isAuthenticated = $derived(auth.status === 'authenticated');
@@ -152,6 +153,13 @@ before the Change Date. See LICENSE for complete terms.
 
 	function maskedValue(event: Event): boolean {
 		return event.currentTarget instanceof HTMLInputElement && event.currentTarget.checked;
+	}
+
+	function attachMaskedToggle(node: HTMLInputElement): () => void {
+		maskedToggle = node;
+		return () => {
+			maskedToggle = null;
+		};
 	}
 
 	function parseRetryAfter(response: Response): number {
@@ -394,8 +402,7 @@ before the Change Date. See LICENSE for complete terms.
 			noScroll: true
 		}).catch((error: unknown) => logBoundaryError('textureReplacement.clearJobNavigation', error));
 		await tick();
-		const maskedToggle = document.getElementById('texture-replacement-masked-toggle');
-		if (maskedToggle instanceof HTMLInputElement) maskedToggle.focus({ preventScroll: true });
+		maskedToggle?.focus({ preventScroll: true });
 	}
 </script>
 
@@ -406,6 +413,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <label class="masked-toggle">
 	<input
+		{@attach attachMaskedToggle}
 		id="texture-replacement-masked-toggle"
 		type="checkbox"
 		checked={request.textureReplacementMasked}

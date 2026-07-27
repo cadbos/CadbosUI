@@ -24,7 +24,10 @@ const integration = vi.hoisted(() => ({
 const archai = vi.hoisted(() => ({ replaceTexturesWithMask: vi.fn() }));
 const jobs = vi.hoisted(() => ({ create: vi.fn() }));
 
-vi.mock('$lib/server/generation', () => archai);
+vi.mock('$lib/server/generation', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/generation')>();
+	return { ...actual, replaceTexturesWithMask: archai.replaceTexturesWithMask };
+});
 
 vi.mock('$lib/server/texture-replacement', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/texture-replacement')>();

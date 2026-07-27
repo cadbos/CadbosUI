@@ -13,22 +13,13 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { z } from 'zod';
+	import { uploadResultSchema } from '$lib/api/contract';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { request } from '$lib/state/request.svelte';
 
 	const MAX_UPLOAD_SIZE = 8 * 1024 * 1024;
 	const MAX_CANVAS_DIMENSION = 2048;
-	const uploadResultSchema = z
-		.object({
-			url: z.string().url(),
-			mime: z.string().min(1),
-			size: z.number().nonnegative(),
-			dimensions: z.tuple([z.number().positive(), z.number().positive()]).optional()
-		})
-		.strict();
-
 	type DrawingTool = 'brush' | 'eraser';
 
 	interface Props {
@@ -321,7 +312,9 @@ before the Change Date. See LICENSE for complete terms.
 				errorKey = 'textureReplacement.maskEditor.saveFailed';
 				return;
 			}
-			request.commitTextureMaskUpload(parsed.data, operation);
+			if (!request.commitTextureMaskUpload(parsed.data, operation)) {
+				errorKey = 'textureReplacement.maskEditor.saveFailed';
+			}
 		} catch {
 			errorKey = 'textureReplacement.maskEditor.saveFailed';
 		} finally {

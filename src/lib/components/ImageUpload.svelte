@@ -13,8 +13,8 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { uploadResultSchema } from '$lib/api/contract';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
-	import type { UploadResult } from '$lib/api/contract';
 	import {
 		request,
 		type ImageInput,
@@ -151,7 +151,13 @@ before the Change Date. See LICENSE for complete terms.
 			return;
 		}
 		if (target === 'textureMask') {
-			if (textureMaskUpload) request.commitTextureMaskUpload(next, textureMaskUpload);
+			if (!textureMaskUpload) {
+				error = t('textureReplacement.maskEditor.saveFailed');
+				return;
+			}
+			if (!request.commitTextureMaskUpload(next, textureMaskUpload)) {
+				error = t('textureReplacement.maskEditor.saveFailed');
+			}
 			return;
 		}
 		request.setImage(next);
@@ -214,7 +220,10 @@ before the Change Date. See LICENSE for complete terms.
 		}
 		const textureMaskUpload =
 			target === 'textureMask' ? (request.beginTextureMaskUpload() ?? undefined) : undefined;
-		if (target === 'textureMask' && !textureMaskUpload) return;
+		if (target === 'textureMask' && !textureMaskUpload) {
+			error = t('textureReplacement.maskEditor.sourceRequired');
+			return;
+		}
 		if (previewUrl) URL.revokeObjectURL(previewUrl);
 		previewUrl = URL.createObjectURL(file);
 
@@ -227,7 +236,12 @@ before the Change Date. See LICENSE for complete terms.
 				error = await responseErrorMessage(response);
 				return;
 			}
-			const result = (await response.json()) as UploadResult;
+			const parsed = uploadResultSchema.safeParse(await response.json());
+			if (!parsed.success) {
+				error = t('upload.errorUpload');
+				return;
+			}
+			const result = parsed.data;
 			if (previewUrl) URL.revokeObjectURL(previewUrl);
 			previewUrl = null;
 			setUploadedImage(
@@ -257,7 +271,10 @@ before the Change Date. See LICENSE for complete terms.
 		}
 		const textureMaskUpload =
 			target === 'textureMask' ? (request.beginTextureMaskUpload() ?? undefined) : undefined;
-		if (target === 'textureMask' && !textureMaskUpload) return;
+		if (target === 'textureMask' && !textureMaskUpload) {
+			error = t('textureReplacement.maskEditor.sourceRequired');
+			return;
+		}
 
 		setUploading(true);
 		try {
@@ -270,7 +287,12 @@ before the Change Date. See LICENSE for complete terms.
 				error = await responseErrorMessage(response);
 				return;
 			}
-			const result = (await response.json()) as UploadResult;
+			const parsed = uploadResultSchema.safeParse(await response.json());
+			if (!parsed.success) {
+				error = t('upload.errorUpload');
+				return;
+			}
+			const result = parsed.data;
 			if (previewUrl) URL.revokeObjectURL(previewUrl);
 			previewUrl = null;
 			remoteUrl = '';
