@@ -74,7 +74,11 @@ function mockUsageFetch(
 }
 
 function pageProps(pubkeyViewer = PUBKEY_VIEWER): PageProps {
-	return { data: { pubkeyViewer }, form: undefined, params: {} };
+	return {
+		data: { customWorkflowsAvailable: true, pubkeyViewer },
+		form: undefined,
+		params: {}
+	};
 }
 
 function localDateTimeLabel(locale: Locale, timestamp: number): string {

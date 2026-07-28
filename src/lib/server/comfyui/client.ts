@@ -231,6 +231,25 @@ export function createComfyUiClient(options: ComfyUiClientOptions): ComfyUiClien
 		return descriptor;
 	}
 
+	async function checkHealth(requestOptions: ComfyRequestOptions = {}): Promise<void> {
+		const response = await request('health_check', endpoint('system_stats'), {
+			headers: requestHeaders(defaultHeaders, false),
+			method: 'GET',
+			signal: requestOptions.signal
+		});
+		if (!response.ok) {
+			throw new ComfyUiError('http_error', 'health_check', 'ComfyUI health check failed', {
+				status: response.status
+			});
+		}
+		const body = await responseJson(response, 'health_check');
+		if (!isRecord(body) || !isRecord(body.system) || !Array.isArray(body.devices)) {
+			throw new ComfyUiError('invalid_response', 'health_check', 'Invalid response from ComfyUI', {
+				status: response.status
+			});
+		}
+	}
+
 	async function cancelWorkflow(
 		promptId: string,
 		requestOptions: ComfyRequestOptions = {}
@@ -454,6 +473,7 @@ export function createComfyUiClient(options: ComfyUiClientOptions): ComfyUiClien
 
 	return {
 		cancelWorkflow,
+		checkHealth,
 		downloadImage,
 		getHistory,
 		queueWorkflow,

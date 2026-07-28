@@ -69,6 +69,12 @@ before the Change Date. See LICENSE for complete terms.
 		key: TranslationKey;
 	}
 
+	interface Props {
+		disabled?: boolean;
+	}
+
+	let { disabled = false }: Props = $props();
+
 	let submitting = $state(false);
 	let terminalJob = $state<TextureReplacementCompletedResponse | null>(null);
 	let terminalError = $state<PollFailure | null>(null);
@@ -85,7 +91,8 @@ before the Change Date. See LICENSE for complete terms.
 	const jobId = $derived(request.activeTextureReplacementJobId ?? null);
 	const validation = $derived(request.validateTextureReplacement());
 	const isPolling = $derived(
-		jobId !== null &&
+		!disabled &&
+			jobId !== null &&
 			terminalJob?.id !== jobId &&
 			terminalError?.jobId !== jobId &&
 			pollFailure?.jobId !== jobId
@@ -95,7 +102,7 @@ before the Change Date. See LICENSE for complete terms.
 			(jobId === null ? request.currentRender?.id === terminalJob.id : terminalJob.id === jobId)
 	);
 	const formLocked = $derived(
-		submitting || request.textureMaskUploading || jobId !== null || completedJobMatches
+		disabled || submitting || request.textureMaskUploading || jobId !== null || completedJobMatches
 	);
 	const canSubmit = $derived(validation.valid && !formLocked && isAuthenticated);
 	const sourcePhotoLabel = $derived(
@@ -115,7 +122,7 @@ before the Change Date. See LICENSE for complete terms.
 		const authenticated = isAuthenticated;
 		const failedPoll = pollFailure;
 		const run = ++pollRun;
-		if (!id || !authenticated || failedPoll?.jobId === id) return;
+		if (disabled || !id || !authenticated || failedPoll?.jobId === id) return;
 		const controller = new AbortController();
 		void pollJob(id, controller.signal, run);
 		return () => controller.abort();
@@ -188,6 +195,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function errorKey(code: string): TranslationKey {
+		if (code === 'custom_workflows_unavailable') return 'app.customWorkflowsUnavailable';
 		if (code === 'unauthorized') return 'textureReplacement.signInToApply';
 		if (code === 'insufficient_credit') return 'textureReplacement.insufficientCredit';
 		if (code === 'generation_restricted') return 'textureReplacement.generationRestricted';
@@ -380,10 +388,12 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function retryPolling(): void {
+		if (disabled) return;
 		pollFailure = null;
 	}
 
 	async function clearJob(): Promise<void> {
+		if (disabled) return;
 		request.setActiveTextureReplacementJobId(undefined);
 		request.setTextureReferenceImage(undefined);
 		request.setTextureMaskImage(undefined);
@@ -543,19 +553,19 @@ before the Change Date. See LICENSE for complete terms.
 	</div>
 
 	{#if completedJobMatches}
-		<button type="button" class="secondary-btn" onclick={() => void clearJob()}>
+		<button type="button" class="secondary-btn" {disabled} onclick={() => void clearJob()}>
 			{t('textureReplacement.newReplacement')}
 		</button>
 	{:else if terminalError?.jobId === jobId || (terminalError?.jobId === '' && jobId === null)}
 		<p class="submit-error" role="alert">{t(terminalError.key)}</p>
 		{#if jobId !== null}
-			<button type="button" class="secondary-btn" onclick={() => void clearJob()}>
+			<button type="button" class="secondary-btn" {disabled} onclick={() => void clearJob()}>
 				{t('textureReplacement.tryAgain')}
 			</button>
 		{/if}
 	{:else if pollFailure?.jobId === jobId}
 		<p class="submit-error" role="alert">{t(pollFailure.key)}</p>
-		<button type="button" class="secondary-btn" onclick={retryPolling}>
+		<button type="button" class="secondary-btn" {disabled} onclick={retryPolling}>
 			{t('textureReplacement.retryStatus')}
 		</button>
 	{/if}

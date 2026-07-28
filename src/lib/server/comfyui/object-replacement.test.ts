@@ -59,6 +59,7 @@ function history(outputs: ComfyHistoryEntry['outputs']): ComfyHistoryEntry {
 function mockClient(): ComfyUiClient {
 	return {
 		cancelWorkflow: vi.fn(),
+		checkHealth: vi.fn(),
 		downloadImage: vi.fn(),
 		getHistory: vi.fn(),
 		queueWorkflow: vi.fn(),

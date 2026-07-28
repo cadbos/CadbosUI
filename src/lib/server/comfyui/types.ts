@@ -74,6 +74,7 @@ export type ComfyUiOperation =
 	| 'configuration'
 	| 'download_image'
 	| 'get_history'
+	| 'health_check'
 	| 'queue_workflow'
 	| 'upload_image'
 	| 'wait_for_completion'
@@ -132,6 +133,7 @@ export interface ComfyWaitOptions extends ComfyRequestOptions {
 
 export interface ComfyUiClient {
 	cancelWorkflow(promptId: string, options?: ComfyRequestOptions): Promise<boolean>;
+	checkHealth(options?: ComfyRequestOptions): Promise<void>;
 	downloadImage(
 		image: ComfyImageDescriptor,
 		options?: ComfyRequestOptions

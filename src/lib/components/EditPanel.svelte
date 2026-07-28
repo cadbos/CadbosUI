@@ -37,6 +37,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	type LucideIcon = typeof Pencil;
 
+	interface Props {
+		customWorkflowsAvailable: boolean;
+	}
+
+	let { customWorkflowsAvailable }: Props = $props();
+
 	const TOOLS: {
 		id: ToolId;
 		label: TranslationKey;
@@ -75,9 +81,19 @@ before the Change Date. See LICENSE for complete terms.
 		if (activeTool === 'texture-replacement') textureReplacementOpened = true;
 	});
 
+	const toolTabStopIndex = $derived(
+		!customWorkflowsAvailable &&
+			(activeTool === 'object-replacement' || activeTool === 'texture-replacement')
+			? 0
+			: TOOLS.findIndex((tool) => tool.id === activeTool)
+	);
+
 	const toolTabs = createTabController({
 		itemCount: () => TOOLS.length,
-		getActiveIndex: () => TOOLS.findIndex((tool) => tool.id === activeTool),
+		isDisabled: (index) =>
+			!customWorkflowsAvailable &&
+			(TOOLS[index].id === 'object-replacement' || TOOLS[index].id === 'texture-replacement'),
+		getActiveIndex: () => toolTabStopIndex,
 		setActiveIndex: (index) => {
 			return goto(buildShareUrl('edit', request, { tool: TOOLS[index].id }), {
 				replaceState: true,
@@ -158,7 +174,9 @@ before the Change Date. See LICENSE for complete terms.
 				id={`edit-tool-tab-${tool.id}`}
 				aria-selected={activeTool === tool.id}
 				aria-controls={`edit-tool-panel-${tool.id}`}
-				tabindex={activeTool === tool.id ? 0 : -1}
+				tabindex={toolTabStopIndex === index ? 0 : -1}
+				disabled={!customWorkflowsAvailable &&
+					(tool.id === 'object-replacement' || tool.id === 'texture-replacement')}
 				class:active={activeTool === tool.id}
 				onclick={() => toolTabs.activate(index)}
 				onkeydown={toolTabs.onKeydown}
@@ -255,10 +273,15 @@ before the Change Date. See LICENSE for complete terms.
 			<svelte:boundary
 				onerror={(err: unknown) => logBoundaryError('editPanel.objectReplacement', err)}
 			>
-				<ObjectReplacementPanel />
+				<ObjectReplacementPanel disabled={!customWorkflowsAvailable} />
 				{#snippet failed(_error: unknown, reset: () => void)}
 					<p class="error">{t('boundary.failed')}</p>
-					<button type="button" class="btn-apply" onclick={reset}>
+					<button
+						type="button"
+						class="btn-apply"
+						disabled={!customWorkflowsAvailable}
+						onclick={reset}
+					>
 						{t('boundary.retry')}
 					</button>
 				{/snippet}
@@ -278,10 +301,15 @@ before the Change Date. See LICENSE for complete terms.
 			<svelte:boundary
 				onerror={(err: unknown) => logBoundaryError('editPanel.textureReplacement', err)}
 			>
-				<TextureReplacementPanel />
+				<TextureReplacementPanel disabled={!customWorkflowsAvailable} />
 				{#snippet failed(_error: unknown, reset: () => void)}
 					<p class="error">{t('boundary.failed')}</p>
-					<button type="button" class="btn-apply" onclick={reset}>
+					<button
+						type="button"
+						class="btn-apply"
+						disabled={!customWorkflowsAvailable}
+						onclick={reset}
+					>
 						{t('boundary.retry')}
 					</button>
 				{/snippet}

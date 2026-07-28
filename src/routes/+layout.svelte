@@ -13,7 +13,8 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { onMount, type Snippet } from 'svelte';
+	import { onMount } from 'svelte';
+	import type { LayoutProps } from './$types';
 	import '../app.css';
 	import { page } from '$app/state';
 	import favicon from '$lib/assets/favicon.svg';
@@ -28,7 +29,7 @@ before the Change Date. See LICENSE for complete terms.
 	// intentionally empty (see src/routes/create/[scene=scene]/+page.svelte): the
 	// workspace itself lives here, in the layout, so it stays mounted (and its
 	// UI state intact) while the user navigates between mode/scene routes.
-	let { children }: { children: Snippet } = $props();
+	let { children, data }: LayoutProps = $props();
 
 	// Standalone pages outside the three-tab workspace (e.g. '/usage') must not
 	// mount it: Workspace derives its mode from the route id, defaulting to
@@ -60,8 +61,14 @@ before the Change Date. See LICENSE for complete terms.
 	<AuthBar />
 </header>
 
+{#if !data.customWorkflowsAvailable}
+	<div class="custom-workflows-status" role="status" aria-live="polite">
+		{t('app.customWorkflowsUnavailable')}
+	</div>
+{/if}
+
 {#if showWorkspace}
-	<Workspace />
+	<Workspace customWorkflowsAvailable={data.customWorkflowsAvailable} />
 {/if}
 
 {@render children()}
@@ -121,6 +128,17 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 0.8125rem;
 		line-height: 1.35;
 		color: var(--color-muted);
+	}
+
+	.custom-workflows-status {
+		padding: 0.35rem clamp(1rem, 3vw, 2rem);
+		background: #fef3c7;
+		border-bottom: 1px solid #facc15;
+		color: #713f12;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		line-height: 1.4;
+		text-align: center;
 	}
 
 	@media (max-width: 720px) {

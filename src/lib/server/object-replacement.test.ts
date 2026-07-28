@@ -68,6 +68,11 @@ describe('object replacement integration', () => {
 		let uploadCount = 0;
 		const vpcFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 			const url = new URL(input.toString());
+			if (url.pathname === '/system_stats') {
+				return new Response(JSON.stringify({ system: {}, devices: [] }), {
+					headers: { 'content-type': 'application/json' }
+				});
+			}
 			if (url.pathname === '/upload/image') {
 				uploadCount += 1;
 				return new Response(
@@ -102,7 +107,7 @@ describe('object replacement integration', () => {
 			)
 		).resolves.toBe('prompt-1');
 		expect(imageFetcher).toHaveBeenCalledTimes(2);
-		expect(vpcFetch).toHaveBeenCalledTimes(3);
+		expect(vpcFetch).toHaveBeenCalledTimes(4);
 	});
 
 	it('requires configuration when polling', async () => {

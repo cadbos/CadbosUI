@@ -23,6 +23,9 @@ import { heyApiOpenApiConfig } from './openapi-ts.config';
 import { NOSTR_CONNECT_RELAYS } from './src/lib/nostr/connect';
 
 export default defineConfig({
+	define: {
+		__CADBOS_PLAYWRIGHT_TEST__: JSON.stringify(process.env.PLAYWRIGHT_TEST === '1')
+	},
 	plugins: [
 		tailwindcss(),
 		heyApiPlugin({ config: heyApiOpenApiConfig }),
