@@ -66,6 +66,12 @@ export const objectReplacementRequestSchema = z.strictObject({
 	replacementObject: z.string().trim().min(1).max(200)
 });
 
+export const colorReplacementRequestSchema = z.strictObject({
+	image: httpsImageUrl,
+	targetObject: z.string().trim().min(1).max(200),
+	color: z.string().trim().min(1).max(200)
+});
+
 export const textureReplacementRequestSchema = z.union([
 	z.strictObject({
 		image: httpsImageUrl,

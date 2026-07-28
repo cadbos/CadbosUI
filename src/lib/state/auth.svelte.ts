@@ -59,6 +59,7 @@ const creditTransactionSchema = z.object({
 		'edit',
 		'style-transfer',
 		'object-replacement',
+		'color-replacement',
 		'texture-replacement',
 		'upscale'
 	]),

@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Eraser, PaintRoller, Pencil, Plus, Replace, Sun } from '@lucide/svelte';
+	import { Eraser, PaintBucket, PaintRoller, Pencil, Plus, Replace, Sun } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -34,6 +34,7 @@ before the Change Date. See LICENSE for complete terms.
 	import EditAtmosphereTool from '$lib/components/EditAtmosphereTool.svelte';
 	import ObjectReplacementPanel from '$lib/components/ObjectReplacementPanel.svelte';
 	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
+	import ColorReplacementPanel from '$lib/components/ColorReplacementPanel.svelte';
 
 	type LucideIcon = typeof Pencil;
 
@@ -58,6 +59,12 @@ before the Change Date. See LICENSE for complete terms.
 			label: 'mode.textureReplacement',
 			Icon: PaintRoller,
 			alphaLabel: 'textureReplacement.alpha'
+		},
+		{
+			id: 'color-replacement',
+			label: 'mode.colorReplacement',
+			Icon: PaintBucket,
+			alphaLabel: 'colorReplacement.alpha'
 		}
 	];
 
@@ -69,10 +76,12 @@ before the Change Date. See LICENSE for complete terms.
 	let error = $state<string | null>(null);
 	let objectReplacementOpened = $state(false);
 	let textureReplacementOpened = $state(false);
+	let colorReplacementOpened = $state(false);
 
 	$effect(() => {
 		if (activeTool === 'object-replacement') objectReplacementOpened = true;
 		if (activeTool === 'texture-replacement') textureReplacementOpened = true;
+		if (activeTool === 'color-replacement') colorReplacementOpened = true;
 	});
 
 	const toolTabs = createTabController({
@@ -172,7 +181,7 @@ before the Change Date. See LICENSE for complete terms.
 		{/each}
 	</div>
 
-	{#if activeTool !== 'object-replacement' && activeTool !== 'texture-replacement'}
+	{#if activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'color-replacement'}
 		<div
 			class="tool-panel"
 			role="tabpanel"
@@ -289,7 +298,30 @@ before the Change Date. See LICENSE for complete terms.
 		</div>
 	{/if}
 
-	{#if !isAuthenticated && activeTool !== 'object-replacement' && activeTool !== 'texture-replacement'}
+	{#if colorReplacementOpened}
+		<div
+			class="tool-panel"
+			role="tabpanel"
+			id="edit-tool-panel-color-replacement"
+			aria-labelledby="edit-tool-tab-color-replacement"
+			tabindex="0"
+			hidden={activeTool !== 'color-replacement'}
+		>
+			<svelte:boundary
+				onerror={(err: unknown) => logBoundaryError('editPanel.colorReplacement', err)}
+			>
+				<ColorReplacementPanel />
+				{#snippet failed(_error: unknown, reset: () => void)}
+					<p class="error">{t('boundary.failed')}</p>
+					<button type="button" class="btn-apply" onclick={reset}>
+						{t('boundary.retry')}
+					</button>
+				{/snippet}
+			</svelte:boundary>
+		</div>
+	{/if}
+
+	{#if !isAuthenticated && activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'color-replacement'}
 		<p class="auth-hint">{t('edit.signInToApply')}</p>
 	{/if}
 

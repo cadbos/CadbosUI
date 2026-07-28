@@ -170,3 +170,46 @@ describe('texture replacement edit URL state', () => {
 		expect(isWorkspaceRoute('/texture-replacement')).toBe(false);
 	});
 });
+
+describe('color replacement edit URL state', () => {
+	it('serializes both text fields and the job without source or edit prompt leakage', () => {
+		const state = new RequestState();
+		state.setEditPrompt('brighten the room');
+		state.setColorReplacementTarget('sofa upholstery');
+		state.setColorReplacementColor('#AABBCC');
+		state.setActiveColorReplacementJobId(JOB_ID);
+
+		expect(buildShareUrl('edit', state, { tool: 'color-replacement' })).toBe(
+			`/edit?tool=color-replacement&target=sofa+upholstery&color=%23AABBCC&job=${JOB_ID}`
+		);
+	});
+
+	it('hydrates safe fields and ignores source selection and image URLs', () => {
+		const state = new RequestState();
+		const params = new URLSearchParams({
+			tool: 'color-replacement',
+			source: 'room-photo',
+			target: 'sofa upholstery',
+			color: 'NCS S 3020-Y20R',
+			job: JOB_ID,
+			image: 'https://evil.example.com/scene.jpg'
+		});
+
+		applyShareParams('edit', undefined, params, state);
+
+		expect(state.colorReplacementTarget).toBe('sofa upholstery');
+		expect(state.colorReplacementColor).toBe('NCS S 3020-Y20R');
+		expect(state.activeColorReplacementJobId).toBe(JOB_ID);
+		expect(state.image).toBeUndefined();
+	});
+
+	it('recognizes the tool and keeps only validated job ids', () => {
+		expect(slugToTool('color-replacement')).toBe('color-replacement');
+		expect(
+			subTabFromSearch('edit', new URLSearchParams({ tool: 'color-replacement', job: JOB_ID }))
+		).toEqual({ tool: 'color-replacement', job: JOB_ID });
+		expect(
+			subTabFromSearch('edit', new URLSearchParams({ tool: 'color-replacement', job: 'invalid' }))
+		).toEqual({ tool: 'color-replacement' });
+	});
+});

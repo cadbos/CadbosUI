@@ -176,6 +176,8 @@ describe('serialization', () => {
 		delete snapshot.textureReplacementSurface;
 		delete snapshot.textureReplacementSourceMode;
 		delete snapshot.textureReplacementMasked;
+		delete snapshot.colorReplacementTarget;
+		delete snapshot.colorReplacementColor;
 
 		request.fromJSON(snapshot);
 
@@ -196,6 +198,8 @@ describe('serialization', () => {
 			textureReplacementSurface: '',
 			textureReplacementSourceMode: 'current-result',
 			textureReplacementMasked: false,
+			colorReplacementTarget: '',
+			colorReplacementColor: '',
 			currentRender: undefined
 		});
 	});
@@ -867,5 +871,91 @@ describe('edit redo (symmetric one-step undo/redo, not a history tree — Д-16)
 		request.reset();
 
 		expect(request.canRedoEdit).toBe(false);
+	});
+});
+
+describe('color replacement request', () => {
+	it('requires a source image, target object, and color', () => {
+		expect(request.validateColorReplacement()).toEqual({
+			valid: false,
+			missing: ['image', 'targetObject', 'color']
+		});
+	});
+
+	it('trims inputs and builds the endpoint request', () => {
+		request.setImage(AC9_IMAGE);
+		request.setColorReplacementTarget('  обивка дивана  ');
+		request.setColorReplacementColor('  NCS S 3020-Y20R  ');
+
+		expect(request.toColorReplacementRequest()).toEqual({
+			image: AC9_IMAGE.url,
+			targetObject: 'обивка дивана',
+			color: 'NCS S 3020-Y20R'
+		});
+	});
+
+	it('uses the uploaded photo first, then reuses the current result', () => {
+		request.setImage(AC9_IMAGE);
+		request.setColorReplacementTarget('sofa');
+		request.setColorReplacementColor('#aabbcc');
+		expect(request.toColorReplacementRequest()?.image).toBe(AC9_IMAGE.url);
+
+		request.setCurrentRender({
+			id: 'render-1',
+			outputUrls: ['https://example.test/current-result.webp'],
+			cost: 2,
+			balance: 18,
+			ts: 0
+		});
+
+		expect(request.toColorReplacementRequest()?.image).toBe(
+			'https://example.test/current-result.webp'
+		);
+	});
+
+	it('enforces text limits and retains an immutable accepted-job snapshot', () => {
+		const source: RenderResult = {
+			id: 'source-render',
+			outputUrls: ['https://example.test/source.webp'],
+			cost: 1,
+			balance: 19,
+			ts: 1
+		};
+		expect(() => request.setColorReplacementTarget('x'.repeat(201))).toThrow();
+		expect(() => request.setColorReplacementColor('x'.repeat(201))).toThrow();
+
+		request.setActiveColorReplacementJob(
+			'123e4567-e89b-42d3-a456-426614174000',
+			source,
+			'sofa',
+			'#aabbcc'
+		);
+		source.outputUrls[0] = 'https://example.test/mutated.webp';
+
+		expect(request.activeColorReplacementJob).toEqual({
+			id: '123e4567-e89b-42d3-a456-426614174000',
+			targetObject: 'sofa',
+			color: '#aabbcc',
+			sourceRender: {
+				id: 'source-render',
+				outputUrls: ['https://example.test/source.webp'],
+				cost: 1,
+				balance: 19,
+				ts: 1
+			}
+		});
+	});
+
+	it('round-trips persisted fields and clears active jobs', () => {
+		request.setColorReplacementTarget('sofa');
+		request.setColorReplacementColor('RAL 9005');
+		const saved = request.toJSON();
+		request.setActiveColorReplacementJobId('123e4567-e89b-42d3-a456-426614174000');
+
+		request.fromJSON(saved);
+
+		expect(request.colorReplacementTarget).toBe('sofa');
+		expect(request.colorReplacementColor).toBe('RAL 9005');
+		expect(request.activeColorReplacementJobId).toBeUndefined();
 	});
 });

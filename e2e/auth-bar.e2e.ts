@@ -85,3 +85,25 @@ test('shows restored texture-replacement credit history', async ({ page }) => {
 	await history.getByText('История трат').click();
 	await expect(history.getByText(/Замена текстуры/)).toBeVisible();
 });
+
+test('shows restored color-replacement credit history', async ({ page }) => {
+	await restoreApprovedSession(page, {
+		balance: 8,
+		updatedAt: 5,
+		history: [
+			{
+				id: 'txn-3',
+				amount: 2,
+				balanceAfter: 8,
+				kind: 'color-replacement',
+				createdAt: 3
+			}
+		]
+	});
+	await page.goto('/');
+
+	await page.locator('.profile-toggle').click();
+	const history = page.locator('#auth-profile .credit-history');
+	await history.getByText('История трат').click();
+	await expect(history.getByText(/Замена цвета/)).toBeVisible();
+});
