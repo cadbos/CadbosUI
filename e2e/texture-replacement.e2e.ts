@@ -186,6 +186,7 @@ test('uses the masked texture mode and applies the synchronous result without po
 	const canvasBounds = await canvas.boundingBox();
 	if (!canvasBounds) throw new Error('Mask canvas has no visible bounds');
 	const brushCursor = panel.locator('.brush-cursor');
+	await page.mouse.move(0, 0);
 	await expect(brushCursor).toBeHidden();
 	const cursorX = canvasBounds.x + canvasBounds.width * 0.25;
 	const cursorY = canvasBounds.y + canvasBounds.height * 0.55;
