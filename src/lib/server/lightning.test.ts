@@ -257,4 +257,20 @@ describe('lookupInvoice', () => {
 
 		expect(status).toEqual({ state: 'settled', paymentHash: 'hash-1', settledAt: 1234 });
 	});
+
+	it('rejects a lookup response with an unknown invoice state', async () => {
+		const clientSecretKey = generateSecretKey();
+		const walletSecretKey = generateSecretKey();
+		const walletPubkey = getPublicKey(walletSecretKey);
+		const connection = parseNwcConnectionString(
+			connectionString(bytesToHex(clientSecretKey), walletPubkey)
+		);
+		const pool = mockPool({
+			walletSecretKey,
+			clientPubkey: connection.clientPubkey,
+			result: { state: 'unknown', payment_hash: 'hash-1' }
+		});
+
+		await expect(lookupInvoice(connection, 'hash-1', { pool })).rejects.toThrow();
+	});
 });

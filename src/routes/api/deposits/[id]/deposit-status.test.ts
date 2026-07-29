@@ -32,7 +32,7 @@ const { GET } = await import('./+server');
 
 afterEach(() => {
 	lightning.parseNwcConnectionString.mockClear();
-	lightning.lookupInvoice.mockClear();
+	lightning.lookupInvoice.mockReset();
 });
 
 type DepositStatusEvent = Parameters<typeof GET>[0];
@@ -180,12 +180,43 @@ describe('GET /api/deposits/[id]', () => {
 		expect(result.balance).toBe(3);
 	});
 
-	it('expires an overdue pending deposit without calling the wallet', async () => {
+	it('credits an overdue pending deposit when the wallet reports settlement', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		seedDeposit(db, 'deposit-1', 'user-1', {
 			createdAt: Date.now() - 2000,
 			expiresAt: Date.now() - 1000
+		});
+		lightning.lookupInvoice.mockResolvedValueOnce({
+			state: 'settled',
+			paymentHash: 'hash-deposit-1',
+			settledAt: 12345
+		});
+
+		const response = await call(
+			{ pubkey },
+			{ env: { DB: db, ...withWallet } } as App.Platform,
+			'deposit-1'
+		);
+
+		expect(response.status).toBe(200);
+		const result = (await response.json()) as DepositResponse;
+		expect(result.status).toBe('paid');
+		expect(result.balance).toBe(3);
+		expect(lightning.lookupInvoice).toHaveBeenCalledOnce();
+	});
+
+	it('returns expired only after the wallet confirms expiry', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', pubkey);
+		seedDeposit(db, 'deposit-1', 'user-1', {
+			createdAt: Date.now() - 2000,
+			expiresAt: Date.now() - 1000
+		});
+		lightning.lookupInvoice.mockResolvedValueOnce({
+			state: 'expired',
+			paymentHash: 'hash-deposit-1',
+			settledAt: null
 		});
 
 		const response = await call(
@@ -197,6 +228,64 @@ describe('GET /api/deposits/[id]', () => {
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as DepositResponse;
 		expect(result.status).toBe('expired');
-		expect(lightning.lookupInvoice).not.toHaveBeenCalled();
+		expect(lightning.lookupInvoice).toHaveBeenCalledOnce();
+	});
+
+	it('recovers a previously expired deposit when the wallet reports settlement', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', pubkey);
+		seedDeposit(db, 'deposit-1', 'user-1', { status: 'expired' });
+		lightning.lookupInvoice.mockResolvedValueOnce({
+			state: 'settled',
+			paymentHash: 'hash-deposit-1',
+			settledAt: 12345
+		});
+
+		const response = await call(
+			{ pubkey },
+			{ env: { DB: db, ...withWallet } } as App.Platform,
+			'deposit-1'
+		);
+
+		expect(response.status).toBe(200);
+		const result = (await response.json()) as DepositResponse;
+		expect(result.status).toBe('paid');
+		expect(result.balance).toBe(3);
+	});
+
+	it('keeps an unverified expired deposit polling after a wallet error', async () => {
+		const db = makeD1();
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		seedUser(db, 'user-1', pubkey);
+		seedDeposit(db, 'deposit-1', 'user-1', { status: 'expired' });
+		lightning.lookupInvoice.mockRejectedValueOnce(new Error('relay unavailable'));
+
+		const response = await call(
+			{ pubkey },
+			{ env: { DB: db, ...withWallet } } as App.Platform,
+			'deposit-1'
+		);
+
+		expect(response.status).toBe(200);
+		const result = (await response.json()) as DepositResponse;
+		expect(result.status).toBe('pending');
+		expect(consoleError).toHaveBeenCalledWith('Deposit reconciliation failed:', {
+			operation: 'lookup_invoice',
+			errorName: 'Error'
+		});
+		consoleError.mockRestore();
+	});
+
+	it('returns a retryable error when the wallet connection is not configured', async () => {
+		const db = makeD1();
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		seedUser(db, 'user-1', pubkey);
+		seedDeposit(db, 'deposit-1', 'user-1');
+
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, 'deposit-1');
+
+		expect(response.status).toBe(503);
+		expect(consoleError).toHaveBeenCalledOnce();
+		consoleError.mockRestore();
 	});
 });

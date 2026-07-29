@@ -22,8 +22,14 @@ const lightning = vi.hoisted(() => ({
 }));
 vi.mock('$lib/server/lightning', () => lightning);
 
-const { createDeposit, expireStaleDeposits, getDeposit, listPackages, markDepositPaid } =
-	await import('./payments');
+const {
+	claimDepositsForReconciliation,
+	createDeposit,
+	getDeposit,
+	listPackages,
+	markDepositPaid,
+	recordDepositInvoiceState
+} = await import('./payments');
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -229,24 +235,52 @@ describe('markDepositPaid', () => {
 		).toEqual({ count: 1 });
 	});
 
+	it('is idempotent when two settlement handlers race', async () => {
+		const db = makeD1();
+		await seedPendingDeposit(db);
+
+		const results = await Promise.all([
+			markDepositPaid(db, 'hash-1', 5000, 7000),
+			markDepositPaid(db, 'hash-1', 6000, 8000)
+		]);
+
+		expect(results).toEqual([
+			expect.objectContaining({ status: 'paid' }),
+			expect.objectContaining({ status: 'paid' })
+		]);
+		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBe(toLedgerAmountUnits(3));
+		expect(
+			await db
+				.prepare('SELECT COUNT(*) AS count FROM ledger_transactions WHERE id LIKE ?')
+				.bind('deposit:%')
+				.first<{ count: number }>()
+		).toEqual({ count: 1 });
+	});
+
 	it('returns null for an unknown payment hash', async () => {
 		const db = makeD1();
 		expect(await markDepositPaid(db, 'no-such-hash')).toBeNull();
 	});
 
-	it('returns null and does not credit an expired deposit', async () => {
+	it('recovers an expired deposit and still credits it exactly once', async () => {
 		const db = makeD1();
 		await seedPendingDeposit(db);
-		await expireStaleDeposits(db, Date.now() + 10 * 60 * 60 * 1000);
+		db.prepare("UPDATE deposits SET status = 'expired' WHERE payment_hash = ?")
+			.bind('hash-1')
+			.run();
 
-		expect(await markDepositPaid(db, 'hash-1')).toBeNull();
-		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBeNull();
+		const first = await markDepositPaid(db, 'hash-1', 5000, 9000);
+		const second = await markDepositPaid(db, 'hash-1', 8000, 10_000);
+
+		expect(first).toMatchObject({ status: 'paid', paidAt: 5000, providerCheckedAt: 9000 });
+		expect(second).toMatchObject({ status: 'paid', paidAt: 5000, providerCheckedAt: 9000 });
+		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBe(toLedgerAmountUnits(3));
 		expect(
 			await db
 				.prepare('SELECT enabled FROM generation_access WHERE user_id = ?')
 				.bind('user-1')
 				.first<{ enabled: number }>()
-		).toBeNull();
+		).toEqual({ enabled: 1 });
 	});
 });
 
@@ -271,8 +305,8 @@ describe('getDeposit', () => {
 	});
 });
 
-describe('expireStaleDeposits', () => {
-	it('flips only overdue pending deposits', async () => {
+describe('deposit reconciliation queue', () => {
+	it('leases due pending deposits once until the lease expires', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedPackage(db, 'pkg-1', 1, 3, 3);
@@ -284,18 +318,33 @@ describe('expireStaleDeposits', () => {
 			createdAt: 1,
 			expiresAt: 601
 		});
-		const deposit = await createDeposit(
-			db,
-			'user-1',
-			fakeNwc,
-			{ packageId: 'pkg-1', expirySeconds: 60 },
-			{},
-			1000
-		);
+		const deposit = await createDeposit(db, 'user-1', fakeNwc, { packageId: 'pkg-1' }, {}, 1000);
 
-		const changed = await expireStaleDeposits(db, deposit.createdAt + 61_000);
+		expect(await claimDepositsForReconciliation(db, 60_999, 180_999, 20)).toEqual([]);
 
-		expect(changed).toBe(1);
-		expect(await getDeposit(db, deposit.id, 'user-1')).toMatchObject({ status: 'expired' });
+		const claimed = await claimDepositsForReconciliation(db, 61_000, 181_000, 20);
+
+		expect(claimed).toEqual([
+			expect.objectContaining({ id: deposit.id, status: 'pending', reconcileAfter: 181_000 })
+		]);
+		expect(await claimDepositsForReconciliation(db, 61_000, 181_000, 20)).toEqual([]);
+	});
+
+	it('does not queue a provider-confirmed expired deposit', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedPackage(db, 'pkg-1', 1, 3, 3);
+		seedRate(db, 2000, 1000);
+		lightning.createInvoice.mockResolvedValueOnce({
+			invoice: 'lnbc1...',
+			paymentHash: 'hash-1',
+			satsAmount: 2000,
+			createdAt: 1,
+			expiresAt: 601
+		});
+		await createDeposit(db, 'user-1', fakeNwc, { packageId: 'pkg-1' }, {}, 1000);
+		await recordDepositInvoiceState(db, 'hash-1', 'expired', 5000, null);
+
+		expect(await claimDepositsForReconciliation(db, 100_000, 220_000, 20)).toEqual([]);
 	});
 });

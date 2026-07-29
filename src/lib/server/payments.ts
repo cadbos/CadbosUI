@@ -12,22 +12,13 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-// Lightning-deposit purchase flow (docs/payments-lightning-sats.md §5-7), on top
-// of the ledger schema from migrations/0007. Mirrors the shape of
-// generations.ts's recordGeneration(): a fixed rate/invoice is locked at
-// createDeposit time, and markDepositPaid() is the only place credits_awarded /
-// archai_tokens_awarded ever become real ledger entries — in the same atomic D1
-// batch as the deposit's own status transition.
-
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import { getExchangeRate, type ExchangeRateProvider } from '$lib/server/exchange-rate';
 import { toLedgerAmountUnits } from '$lib/server/ledger-units';
 import { createInvoice, type NwcConnection, type NwcRequestOptions } from '$lib/server/lightning';
 
-// Placeholder pending the client's final answer on deposit lifetime
-// (docs/payments-lightning-sats.md §10.3) — override via CreateDepositInput
-// once that's confirmed instead of editing this constant in multiple places.
 const DEFAULT_DEPOSIT_EXPIRY_SECONDS = 900;
+export const DEPOSIT_RECONCILIATION_INTERVAL_MS = 60_000;
 
 export interface Package {
 	id: string;
@@ -91,6 +82,8 @@ export interface Deposit {
 	createdAt: number;
 	expiresAt: number;
 	paidAt: number | null;
+	providerCheckedAt: number | null;
+	reconcileAfter: number | null;
 }
 
 interface DepositRow {
@@ -109,6 +102,8 @@ interface DepositRow {
 	created_at: number;
 	expires_at: number;
 	paid_at: number | null;
+	provider_checked_at: number | null;
+	reconcile_after: number | null;
 }
 
 function toDeposit(row: DepositRow): Deposit {
@@ -127,7 +122,9 @@ function toDeposit(row: DepositRow): Deposit {
 		status: row.status,
 		createdAt: row.created_at,
 		expiresAt: row.expires_at,
-		paidAt: row.paid_at
+		paidAt: row.paid_at,
+		providerCheckedAt: row.provider_checked_at,
+		reconcileAfter: row.reconcile_after
 	};
 }
 
@@ -172,8 +169,8 @@ export async function createDeposit(
 			'INSERT INTO deposits (' +
 				'id, user_id, package_id, provider, provider_invoice_id, payment_hash, ' +
 				'sats_amount, usd_amount, sats_per_usd_rate, credits_awarded, archai_tokens_awarded, ' +
-				'status, created_at, expires_at' +
-				') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+				'status, created_at, expires_at, reconcile_after' +
+				') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
 		)
 		.bind(
 			id,
@@ -189,7 +186,8 @@ export async function createDeposit(
 			pkg.archaiTokensAwarded,
 			'pending',
 			now,
-			expiresAt
+			expiresAt,
+			now + DEPOSIT_RECONCILIATION_INTERVAL_MS
 		)
 		.run();
 
@@ -208,7 +206,9 @@ export async function createDeposit(
 		status: 'pending',
 		createdAt: now,
 		expiresAt,
-		paidAt: null
+		paidAt: null,
+		providerCheckedAt: null,
+		reconcileAfter: now + DEPOSIT_RECONCILIATION_INTERVAL_MS
 	};
 }
 
@@ -224,18 +224,11 @@ export async function getDeposit(
 	return row ? toDeposit(row) : null;
 }
 
-// Called by the deposit-status poll route once lightning.ts's lookupInvoice
-// reports the invoice settled — there is no NWC webhook (see lightning.ts).
-// Idempotent: a deposit already 'paid' is returned as-is without crediting
-// twice; one already 'expired'/'failed' is left alone (returns null) rather
-// than resurrected. The credit is one atomic D1 batch, the same shape
-// generations.ts's recordGeneration() uses for the opposite (debiting) case —
-// both entries are positive here, crediting the user's app_credit account and
-// the shared archai_token pool it draws down from on each generation.
 export async function markDepositPaid(
 	db: D1Database,
 	paymentHash: string,
-	now: number = Date.now()
+	paidAt: number = Date.now(),
+	checkedAt: number = Date.now()
 ): Promise<Deposit | null> {
 	const existing = await db
 		.prepare('SELECT * FROM deposits WHERE payment_hash = ?')
@@ -243,7 +236,6 @@ export async function markDepositPaid(
 		.first<DepositRow>();
 	if (!existing) return null;
 	if (existing.status === 'paid') return toDeposit(existing);
-	if (existing.status !== 'pending') return null;
 
 	const transactionId = `deposit:${existing.id}`;
 	const accountId = `app-credit:${existing.user_id}`;
@@ -253,7 +245,7 @@ export async function markDepositPaid(
 				"INSERT INTO ledger_accounts (id, asset, user_id, created_at) VALUES (?, 'app_credit', ?, ?) " +
 					'ON CONFLICT DO NOTHING'
 			)
-			.bind(accountId, existing.user_id, now),
+			.bind(accountId, existing.user_id, paidAt),
 		db
 			.prepare(
 				'INSERT INTO generation_access (user_id, enabled) VALUES (?, 1) ' +
@@ -261,44 +253,97 @@ export async function markDepositPaid(
 			)
 			.bind(existing.user_id),
 		db
-			.prepare('INSERT INTO ledger_transactions (id, occurred_at) VALUES (?, ?)')
-			.bind(transactionId, now),
+			.prepare(
+				'INSERT INTO ledger_transactions (id, occurred_at) VALUES (?, ?) ON CONFLICT DO NOTHING'
+			)
+			.bind(transactionId, paidAt),
 		db
 			.prepare(
 				'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
-					"VALUES (?, (SELECT id FROM ledger_accounts WHERE user_id = ? AND asset = 'app_credit'), ?)"
+					"SELECT ?, (SELECT id FROM ledger_accounts WHERE user_id = ? AND asset = 'app_credit'), ? " +
+					"WHERE EXISTS (SELECT 1 FROM deposits WHERE payment_hash = ? AND status <> 'paid') " +
+					'ON CONFLICT DO NOTHING'
 			)
-			.bind(transactionId, existing.user_id, toLedgerAmountUnits(existing.credits_awarded)),
+			.bind(
+				transactionId,
+				existing.user_id,
+				toLedgerAmountUnits(existing.credits_awarded),
+				paymentHash
+			),
 		db
 			.prepare(
-				"INSERT INTO ledger_entries (transaction_id, account_id, amount) VALUES (?, 'archai-token', ?)"
+				"INSERT INTO ledger_entries (transaction_id, account_id, amount) SELECT ?, 'archai-token', ? " +
+					"WHERE EXISTS (SELECT 1 FROM deposits WHERE payment_hash = ? AND status <> 'paid') " +
+					'ON CONFLICT DO NOTHING'
 			)
-			.bind(transactionId, toLedgerAmountUnits(existing.archai_tokens_awarded)),
-		db.prepare('UPDATE ledger_transactions SET finalized = 1 WHERE id = ?').bind(transactionId),
+			.bind(transactionId, toLedgerAmountUnits(existing.archai_tokens_awarded), paymentHash),
+		db
+			.prepare('UPDATE ledger_transactions SET finalized = 1 WHERE id = ? AND finalized = 0')
+			.bind(transactionId),
 		db
 			.prepare(
-				"UPDATE deposits SET status = 'paid', paid_at = ?, ledger_transaction_id = ? " +
-					"WHERE payment_hash = ? AND status = 'pending'"
+				"UPDATE deposits SET status = 'paid', paid_at = ?, ledger_transaction_id = ?, " +
+					'provider_checked_at = ?, reconcile_after = NULL ' +
+					"WHERE payment_hash = ? AND status <> 'paid'"
 			)
-			.bind(now, transactionId, paymentHash),
+			.bind(paidAt, transactionId, checkedAt, paymentHash),
 		db.prepare('SELECT * FROM deposits WHERE payment_hash = ?').bind(paymentHash)
 	];
 
 	const results = await db.batch<DepositRow>(statements);
 	const row = results.at(-1)?.results[0];
 	if (!row || row.status !== 'paid') {
-		throw new Error(`deposit paid transition failed for payment_hash ${paymentHash}`);
+		throw new Error('Deposit paid transition failed');
 	}
 	return toDeposit(row);
 }
 
-export async function expireStaleDeposits(
+export async function recordDepositInvoiceState(
 	db: D1Database,
-	now: number = Date.now()
-): Promise<number> {
-	const result = await db
-		.prepare("UPDATE deposits SET status = 'expired' WHERE status = 'pending' AND expires_at < ?")
-		.bind(now)
-		.run();
-	return result.meta.changes;
+	paymentHash: string,
+	status: 'pending' | 'expired' | 'failed',
+	checkedAt: number,
+	reconcileAfter: number | null
+): Promise<Deposit | null> {
+	const row = await db
+		.prepare(
+			'UPDATE deposits SET status = ?, provider_checked_at = ?, reconcile_after = ? ' +
+				"WHERE payment_hash = ? AND status <> 'paid' RETURNING *"
+		)
+		.bind(status, checkedAt, reconcileAfter, paymentHash)
+		.first<DepositRow>();
+	if (row) return toDeposit(row);
+
+	const existing = await db
+		.prepare('SELECT * FROM deposits WHERE payment_hash = ?')
+		.bind(paymentHash)
+		.first<DepositRow>();
+	return existing ? toDeposit(existing) : null;
+}
+
+export function depositNeedsReconciliation(deposit: Deposit): boolean {
+	return (
+		deposit.status === 'pending' ||
+		((deposit.status === 'expired' || deposit.status === 'failed') &&
+			deposit.providerCheckedAt === null)
+	);
+}
+
+export async function claimDepositsForReconciliation(
+	db: D1Database,
+	now: number,
+	leaseUntil: number,
+	limit: number
+): Promise<Deposit[]> {
+	const { results } = await db
+		.prepare(
+			'UPDATE deposits SET reconcile_after = ? WHERE id IN (' +
+				'SELECT id FROM deposits WHERE reconcile_after IS NOT NULL AND reconcile_after <= ? ' +
+				"AND (status = 'pending' OR (status IN ('expired', 'failed') AND provider_checked_at IS NULL)) " +
+				'ORDER BY reconcile_after, created_at LIMIT ?' +
+				') RETURNING *'
+		)
+		.bind(leaseUntil, now, limit)
+		.all<DepositRow>();
+	return (results ?? []).map(toDeposit);
 }

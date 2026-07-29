@@ -12,22 +12,13 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-// NWC (NIP-47) client for the single wallet Cadbos holds (an Alby Hub instance —
-// see docs/payments-lightning-sats.md §3). No inbound webhook exists for NWC (it's
-// relay request/response, not HTTP), so this only exposes request/response calls;
-// payment confirmation is done by polling lookupInvoice from the deposit-status
-// route, not by a push notification.
-//
-// Only NIP-44 (the current, non-deprecated NIP-47 encryption) is supported. If the
-// held wallet ever stops advertising it, this throws rather than silently falling
-// back to the deprecated NIP-04 scheme.
-
 import { v2 as nip44 } from 'nostr-tools/nip44';
 import type { Filter } from 'nostr-tools/filter';
 import { NWCWalletInfo, NWCWalletRequest, NWCWalletResponse } from 'nostr-tools/kinds';
 import { SimplePool } from 'nostr-tools/pool';
 import { finalizeEvent, getPublicKey, type Event } from 'nostr-tools/pure';
 import { hexToBytes } from 'nostr-tools/utils';
+import { z } from 'zod';
 
 const NIP44_ENCRYPTION = 'nip44_v2';
 const DEFAULT_MAX_WAIT_MS = 15_000;
@@ -189,22 +180,24 @@ export async function createInvoice(
 	};
 }
 
-interface LookupInvoiceResult {
-	state: InvoiceState;
-	payment_hash: string;
-	settled_at?: number;
-}
+const lookupInvoiceResultSchema = z.object({
+	state: z.enum(['pending', 'settled', 'accepted', 'expired', 'failed']),
+	payment_hash: z.string().min(1),
+	settled_at: z.number().int().positive().optional()
+});
 
 export async function lookupInvoice(
 	connection: NwcConnection,
 	paymentHash: string,
 	options: NwcRequestOptions = {}
 ): Promise<InvoiceStatus> {
-	const result = await sendNwcRequest<LookupInvoiceResult>(
-		connection,
-		'lookup_invoice',
-		{ payment_hash: paymentHash },
-		options
+	const result = lookupInvoiceResultSchema.parse(
+		await sendNwcRequest<unknown>(
+			connection,
+			'lookup_invoice',
+			{ payment_hash: paymentHash },
+			options
+		)
 	);
 	return {
 		state: result.state,

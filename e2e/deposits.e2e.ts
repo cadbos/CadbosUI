@@ -74,7 +74,7 @@ test('a new account buys a package and sees its first balance', async ({ page })
 				bolt11: 'lnbc15860n1ptest0000000000000000000000000000000000000000000000000',
 				satsAmount: 1586,
 				usdAmount: 1,
-				expiresAt: Date.now() + 600_000
+				expiresAt: Date.now() - 1000
 			})
 		});
 	});
@@ -90,7 +90,7 @@ test('a new account buys a package and sees its first balance', async ({ page })
 				bolt11: 'lnbc15860n1ptest0000000000000000000000000000000000000000000000000',
 				satsAmount: 1586,
 				usdAmount: 1,
-				expiresAt: Date.now() + 600_000,
+				expiresAt: Date.now() - 1000,
 				...(paid.value ? { balance: 3 } : {})
 			})
 		});

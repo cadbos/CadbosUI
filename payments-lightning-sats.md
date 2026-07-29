@@ -147,12 +147,14 @@ export async function createDeposit(
 	rate: ExchangeRate // { satsPerUsd, fetchedAt }
 ): Promise<Deposit>; // status: 'pending'; также вызывает LN-провайдера для создания инвойса
 
-export async function markDepositPaid(db: D1Database, paymentHash: string): Promise<Balance | null>;
-// Атомарный D1 batch (та же форма, что и recordGeneration):
-//   UPDATE deposits SET status='paid', paid_at=? WHERE payment_hash=? AND status='pending'
-//   UPDATE credits SET balance = balance + (SELECT credits_awarded FROM deposits WHERE payment_hash=?), updated_at=? WHERE user_id=?
-// Если у покупателя ещё не было строки в credits.balance — upsert (ON CONFLICT),
-// как это уже делает recordBalance().
+export async function markDepositPaid(
+	db: D1Database,
+	paymentHash: string,
+	paidAt?: number,
+	checkedAt?: number
+): Promise<Deposit | null>;
+// Идемпотентный D1 batch создаёт детерминированную ledger-транзакцию,
+// начисляет оба актива и переводит любой неплатный статус в paid.
 
 export async function getDeposit(
 	db: D1Database,
@@ -160,22 +162,32 @@ export async function getDeposit(
 	userId: string
 ): Promise<Deposit | null>;
 
-export async function expireStaleDeposits(db: D1Database, now: number): Promise<number>;
-// UPDATE deposits SET status='expired' WHERE status='pending' AND expires_at < ?
+export async function claimDepositsForReconciliation(
+	db: D1Database,
+	now: number,
+	leaseUntil: number,
+	limit: number
+): Promise<Deposit[]>;
+
+export async function reconcileDeposit(
+	db: D1Database,
+	deposit: Deposit,
+	nwc: NwcConnection
+): Promise<Deposit>;
 ```
 
-`src/lib/server/lightning.ts` изолирует специфичные для провайдера HTTP-вызовы
-(`createInvoice`, `verifyWebhookSignature`) за небольшим интерфейсом, чтобы замена
-LNbits на другого провайдера позже (§3) не затрагивала `payments.ts` и роуты.
+`src/lib/server/lightning.ts` изолирует NWC-вызовы `createInvoice` и `lookupInvoice`.
+`settled` кошелька авторитетен даже после локального `expires_at`; локальный срок
+не может самостоятельно сделать депозит финально истёкшим.
 
 ## 7. API и флоу
 
-| Роут                    | Метод | Назначение                                                                                                                                                        |
-| ----------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/packages`         | GET   | Список из 3 пакетов (id, usd_amount, credits_awarded). Условно публичный, но всё равно за сессией, как и весь остальной app.                                      |
-| `/api/deposits`         | POST  | Тело `{ packageId }`. Создаёт строку `deposits` + Lightning-инвойс, возвращает `{ depositId, bolt11, sats, usdAmount, expiresAt }`.                               |
-| `/api/deposits/[id]`    | GET   | Опрос статуса: `{ status, balance? }`. Используется клиентом пока ждём оплату.                                                                                    |
-| `/api/deposits/webhook` | POST  | Коллбэк провайдера. Проверяет подпись, находит `payment_hash`, вызывает `markDepositPaid`. Не защищён сессией (вызывает провайдер), но защищён проверкой подписи. |
+| Роут                        | Метод | Назначение                                                                                                                               |
+| --------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/packages`             | GET   | Список из 3 пакетов (id, usd_amount, credits_awarded). Условно публичный, но всё равно за сессией, как и весь остальной app.             |
+| `/api/deposits`             | POST  | Тело `{ packageId }`. Создаёт строку `deposits` + Lightning-инвойс, возвращает `{ depositId, bolt11, sats, usdAmount, expiresAt }`.      |
+| `/api/deposits/[id]`        | GET   | Опрос статуса: `{ status, balance? }`. Используется клиентом пока ждём оплату.                                                           |
+| `cadbos-deposit-reconciler` | Cron  | Каждую минуту арендует пакет нерешённых депозитов, вызывает NWC `lookup_invoice` и сохраняет авторитетный статус независимо от браузера. |
 
 ```mermaid
 sequenceDiagram
@@ -192,10 +204,12 @@ sequenceDiagram
     C-->>U: { bolt11, sats, usdAmount, expiresAt }
     U->>W: оплата bolt11 (скан QR или кнопка "оплатить" через NWC)
     W->>LN: Lightning-платёж
-    LN-->>C: POST /api/deposits/webhook {payment_hash}
-    C->>C: проверка подписи, markDepositPaid (атомарно, идемпотентно)
-    U->>C: GET /api/deposits/{id} (опрос каждые ~2с)
+    U->>C: GET /api/deposits/{id} (опрос каждые ~2с, пока браузер открыт)
+    C->>LN: lookup_invoice {payment_hash}
+    LN-->>C: state
+    C->>C: markDepositPaid (атомарно, идемпотентно)
     C-->>U: { status: 'paid', balance }
+    Note over C,LN: Cron повторяет lookup_invoice без участия браузера
 ```
 
 Та же схема защиты, что и у `/api/render` (`src/routes/api/render/+server.ts:36`):
@@ -250,9 +264,8 @@ Nostr-учётка, которую вы поделитесь, уже содер�
    комплаенс-периметр и кто видит метаданные транзакций.
 2. **Точное значение `credits_awarded` на пакет** — $1 → 1 единица уже абстрактного
    "баланса" Модуля 6, или нужна явная таблица конвертации sats/генерация ↔ USD?
-3. **Срок действия депозита** — сколько неоплаченный инвойс остаётся валидным до
-   того, как `expireStaleDeposits` пометит его `expired` (влияет на UX при
-   медленной/неудавшейся оплате)?
+3. **Срок действия депозита** — сколько времени кошелёк принимает оплату инвойса;
+   финальный `expired` сохраняется только после подтверждения через `lookup_invoice`.
 4. **Входит ли Фаза 2 (настоящие zap'ы, §8) в объём вообще**, или "принять sats,
    зачислить приватный баланс в USD" — это вся фича?
 

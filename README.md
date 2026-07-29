@@ -39,4 +39,27 @@ pnpm build
 
 You can preview the production build with `pnpm preview`.
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## Deploying
+
+Apply D1 migrations before deploying either Worker:
+
+```sh
+pnpm exec wrangler d1 migrations apply DB --remote
+```
+
+Build and deploy the SvelteKit Worker:
+
+```sh
+pnpm build
+pnpm exec wrangler deploy
+```
+
+Provision the same server-only NWC connection for the deposit reconciler and deploy it:
+
+```sh
+pnpm exec wrangler secret put NWC_CONNECTION_STRING --config wrangler.reconciler.jsonc
+pnpm exec wrangler deploy --config wrangler.reconciler.jsonc
+```
+
+The reconciler runs every minute and uses the same D1 database as the application. Test its
+scheduled handler locally with Wrangler's `/cdn-cgi/handler/scheduled` endpoint.

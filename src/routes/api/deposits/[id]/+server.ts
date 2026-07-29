@@ -20,25 +20,17 @@ import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import { getCredit, getUserIdByPubkey } from '$lib/server/billing';
+import { reconcileDeposit } from '$lib/server/deposit-reconciliation';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { lookupInvoice, parseNwcConnectionString } from '$lib/server/lightning';
-import {
-	expireStaleDeposits,
-	getDeposit,
-	markDepositPaid,
-	type Deposit
-} from '$lib/server/payments';
+import { parseNwcConnectionString } from '$lib/server/lightning';
+import { depositNeedsReconciliation, getDeposit, type Deposit } from '$lib/server/payments';
 
-// There is no NWC webhook (lightning.ts) — this is the only place a pending
-// deposit's status ever advances, by asking the held wallet directly. Bound
-// well above the client's own ~2s poll interval so it isn't the limiting
-// factor, but still a limit: this is a real relay round-trip, not a free read.
 const DEPOSIT_STATUS_RATE_LIMIT = { windowMs: 10_000, max: 10 } as const;
 
 function toDepositResponse(deposit: Deposit, balance?: number): DepositResponse {
 	return {
 		id: deposit.id,
-		status: deposit.status,
+		status: depositNeedsReconciliation(deposit) ? 'pending' : deposit.status,
 		bolt11: deposit.bolt11,
 		satsAmount: deposit.satsAmount,
 		usdAmount: deposit.usdAmount,
@@ -61,33 +53,34 @@ export const GET: RequestHandler = async ({ platform, locals, params }) => {
 	let deposit = await getDeposit(db, params.id, userId);
 	if (!deposit) return apiError(404, 'not_found', 'Deposit not found');
 
-	if (deposit.status === 'pending') {
+	if (depositNeedsReconciliation(deposit)) {
+		const now = Date.now();
 		const limited = await touchRateLimit(
 			db,
 			`deposit-status:${locals.user.pubkey}`,
-			Date.now(),
+			now,
 			DEPOSIT_STATUS_RATE_LIMIT
 		);
 		if (limited) return apiError(429, 'rate_limited', 'Too many requests');
 
-		if (deposit.expiresAt <= Date.now()) {
-			await expireStaleDeposits(db);
-			deposit = (await getDeposit(db, params.id, userId)) ?? deposit;
-		} else {
-			const connectionString = platform?.env?.NWC_CONNECTION_STRING;
-			if (connectionString) {
-				try {
-					const nwc = parseNwcConnectionString(connectionString);
-					const status = await lookupInvoice(nwc, deposit.paymentHash);
-					if (status.state === 'settled') {
-						deposit = (await markDepositPaid(db, deposit.paymentHash)) ?? deposit;
-					}
-				} catch (err) {
-					// A failed poll leaves the deposit pending — the client just polls
-					// again; it never surfaces as an error to the buyer mid-payment.
-					console.error('lookupInvoice poll failed:', err);
-				}
-			}
+		const connectionString = platform?.env?.NWC_CONNECTION_STRING;
+		if (!connectionString) {
+			console.error('Deposit reconciliation unavailable: NWC connection is not configured');
+			return apiError(
+				503,
+				'deposit_status_unavailable',
+				'Payment status is temporarily unavailable'
+			);
+		}
+
+		try {
+			const nwc = parseNwcConnectionString(connectionString);
+			deposit = await reconcileDeposit(db, deposit, nwc, { now });
+		} catch (err) {
+			console.error('Deposit reconciliation failed:', {
+				operation: 'lookup_invoice',
+				errorName: err instanceof Error ? err.name : 'UnknownError'
+			});
 		}
 	}
 
