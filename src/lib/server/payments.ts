@@ -17,7 +17,7 @@ import { getExchangeRate, type ExchangeRateProvider } from '$lib/server/exchange
 import { toLedgerAmountUnits } from '$lib/server/ledger-units';
 import { createInvoice, type NwcConnection, type NwcRequestOptions } from '$lib/server/lightning';
 
-const DEFAULT_DEPOSIT_EXPIRY_SECONDS = 900;
+const INVOICE_EXPIRY_SECONDS = 15 * 60;
 export const DEPOSIT_RECONCILIATION_INTERVAL_MS = 60_000;
 
 export interface Package {
@@ -131,7 +131,6 @@ function toDeposit(row: DepositRow): Deposit {
 export interface CreateDepositInput {
 	packageId: string;
 	rateProvider?: ExchangeRateProvider;
-	expirySeconds?: number;
 }
 
 // Locks a sats amount for `input.packageId` at the current exchange rate and
@@ -152,18 +151,16 @@ export async function createDeposit(
 
 	const rate = await getExchangeRate(db, input.rateProvider, now);
 	const satsAmount = Math.ceil(pkg.usdAmount * rate.satsPerUsd);
-	const expirySeconds = input.expirySeconds ?? DEFAULT_DEPOSIT_EXPIRY_SECONDS;
-
 	const invoice = await createInvoice(
 		nwc,
 		satsAmount,
 		`Cadbos ${pkg.id} package`,
-		expirySeconds,
+		INVOICE_EXPIRY_SECONDS,
 		options
 	);
 
 	const id = crypto.randomUUID();
-	const expiresAt = now + expirySeconds * 1000;
+	const expiresAt = now + INVOICE_EXPIRY_SECONDS * 1000;
 	await db
 		.prepare(
 			'INSERT INTO deposits (' +

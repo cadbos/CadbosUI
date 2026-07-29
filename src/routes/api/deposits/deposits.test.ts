@@ -54,15 +54,6 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 		.run();
 }
 
-function seedPackage(db: D1Database, id: string, usdAmount: number, creditsAwarded: number): void {
-	db.prepare(
-		'INSERT INTO packages (id, usd_amount, credits_awarded, archai_tokens_awarded, enabled, created_at) ' +
-			'VALUES (?, ?, ?, ?, 1, ?)'
-	)
-		.bind(id, usdAmount, creditsAwarded, creditsAwarded, Date.now())
-		.run();
-}
-
 function seedRate(db: D1Database, satsPerUsd: number): void {
 	const now = Date.now();
 	db.prepare(
@@ -102,7 +93,6 @@ describe('POST /api/deposits', () => {
 	it('fails closed if the wallet connection string is not configured', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		seedPackage(db, 'pkg-1', 1, 3);
 		seedRate(db, 2000);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
@@ -127,14 +117,13 @@ describe('POST /api/deposits', () => {
 	it('creates a deposit and returns the invoice to pay', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		seedPackage(db, 'pkg-1', 1, 3);
 		seedRate(db, 2000);
 		lightning.createInvoice.mockResolvedValueOnce({
 			invoice: 'lnbc1...',
 			paymentHash: 'hash-1',
 			satsAmount: 2000,
 			createdAt: 1,
-			expiresAt: 601
+			expiresAt: 901
 		});
 
 		const response = await call({ pubkey }, { env: { DB: db, ...withWallet } } as App.Platform, {
@@ -154,14 +143,13 @@ describe('POST /api/deposits', () => {
 	it('rate-limits repeated invoice creation from the same account', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		seedPackage(db, 'pkg-1', 1, 3);
 		seedRate(db, 2000);
 		lightning.createInvoice.mockResolvedValue({
 			invoice: 'lnbc1...',
 			paymentHash: 'hash-x',
 			satsAmount: 2000,
 			createdAt: 1,
-			expiresAt: 601
+			expiresAt: 901
 		});
 		const platform = { env: { DB: db, ...withWallet } } as App.Platform;
 
@@ -172,7 +160,7 @@ describe('POST /api/deposits', () => {
 				paymentHash: `hash-${i}`,
 				satsAmount: 2000,
 				createdAt: 1,
-				expiresAt: 601
+				expiresAt: 901
 			});
 			responses.push(await call({ pubkey }, platform, { packageId: 'pkg-1' }));
 		}

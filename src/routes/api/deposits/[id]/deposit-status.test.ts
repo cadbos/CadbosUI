@@ -60,12 +60,6 @@ function seedDeposit(
 	const now = overrides.createdAt ?? Date.now();
 	const paymentHash = `hash-${id}`;
 	db.prepare(
-		'INSERT INTO packages (id, usd_amount, credits_awarded, archai_tokens_awarded, enabled, created_at) ' +
-			"VALUES ('pkg-1', 1, 3, 3, 1, ?)"
-	)
-		.bind(now)
-		.run();
-	db.prepare(
 		'INSERT INTO deposits (' +
 			'id, user_id, package_id, provider, provider_invoice_id, payment_hash, sats_amount, ' +
 			'usd_amount, sats_per_usd_rate, credits_awarded, archai_tokens_awarded, status, created_at, expires_at' +

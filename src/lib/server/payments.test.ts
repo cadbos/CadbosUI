@@ -82,14 +82,13 @@ const fakeNwc = {} as never;
 describe('listPackages', () => {
 	it('returns only enabled packages, ordered by usd amount', async () => {
 		const db = makeD1();
-		seedPackage(db, 'pkg-5', 5, 15, 15);
-		seedPackage(db, 'pkg-1', 1, 3, 3);
 		seedPackage(db, 'pkg-disabled', 3, 9, 9, 0);
 
 		const packages = await listPackages(db);
 
 		expect(packages).toEqual([
 			{ id: 'pkg-1', usdAmount: 1, creditsAwarded: 3, archaiTokensAwarded: 3 },
+			{ id: 'pkg-3', usdAmount: 3, creditsAwarded: 9, archaiTokensAwarded: 9 },
 			{ id: 'pkg-5', usdAmount: 5, creditsAwarded: 15, archaiTokensAwarded: 15 }
 		]);
 	});
@@ -99,14 +98,13 @@ describe('createDeposit', () => {
 	it('locks the current rate and stores the invoice from the NWC client', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedPackage(db, 'pkg-1', 1, 3, 3);
 		seedRate(db, 2000, 1000);
 		lightning.createInvoice.mockResolvedValueOnce({
 			invoice: 'lnbc1...',
 			paymentHash: 'hash-1',
 			satsAmount: 2000,
 			createdAt: 1,
-			expiresAt: 601
+			expiresAt: 901
 		});
 
 		const deposit = await createDeposit(db, 'user-1', fakeNwc, { packageId: 'pkg-1' }, {}, 1000);
@@ -123,13 +121,14 @@ describe('createDeposit', () => {
 			creditsAwarded: 3,
 			archaiTokensAwarded: 3,
 			status: 'pending',
+			expiresAt: 901_000,
 			paidAt: null
 		});
 		expect(lightning.createInvoice).toHaveBeenCalledWith(
 			fakeNwc,
 			2000,
 			expect.stringContaining('pkg-1'),
-			expect.any(Number),
+			900,
 			{}
 		);
 	});
@@ -152,16 +151,16 @@ describe('createDeposit', () => {
 describe('markDepositPaid', () => {
 	async function seedPendingDeposit(db: D1Database): Promise<void> {
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedPackage(db, 'pkg-1', 1, 3, 5);
+		seedPackage(db, 'pkg-ledger-test', 1, 3, 5);
 		seedRate(db, 2000, 1000);
 		lightning.createInvoice.mockResolvedValueOnce({
 			invoice: 'lnbc1...',
 			paymentHash: 'hash-1',
 			satsAmount: 2000,
 			createdAt: 1,
-			expiresAt: 601
+			expiresAt: 901
 		});
-		await createDeposit(db, 'user-1', fakeNwc, { packageId: 'pkg-1' }, {}, 1000);
+		await createDeposit(db, 'user-1', fakeNwc, { packageId: 'pkg-ledger-test' }, {}, 1000);
 	}
 
 	it('provisions a new account and credits both ledgers exactly once', async () => {
@@ -311,14 +310,13 @@ describe('getDeposit', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
-		seedPackage(db, 'pkg-1', 1, 3, 3);
 		seedRate(db, 2000, 1000);
 		lightning.createInvoice.mockResolvedValueOnce({
 			invoice: 'lnbc1...',
 			paymentHash: 'hash-1',
 			satsAmount: 2000,
 			createdAt: 1,
-			expiresAt: 601
+			expiresAt: 901
 		});
 		const deposit = await createDeposit(db, 'user-1', fakeNwc, { packageId: 'pkg-1' }, {}, 1000);
 
@@ -331,14 +329,13 @@ describe('deposit reconciliation queue', () => {
 	it('leases due pending deposits once until the lease expires', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedPackage(db, 'pkg-1', 1, 3, 3);
 		seedRate(db, 2000, 1000);
 		lightning.createInvoice.mockResolvedValueOnce({
 			invoice: 'lnbc1...',
 			paymentHash: 'hash-1',
 			satsAmount: 2000,
 			createdAt: 1,
-			expiresAt: 601
+			expiresAt: 901
 		});
 		const deposit = await createDeposit(db, 'user-1', fakeNwc, { packageId: 'pkg-1' }, {}, 1000);
 
@@ -355,14 +352,13 @@ describe('deposit reconciliation queue', () => {
 	it('does not queue a provider-confirmed expired deposit', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedPackage(db, 'pkg-1', 1, 3, 3);
 		seedRate(db, 2000, 1000);
 		lightning.createInvoice.mockResolvedValueOnce({
 			invoice: 'lnbc1...',
 			paymentHash: 'hash-1',
 			satsAmount: 2000,
 			createdAt: 1,
-			expiresAt: 601
+			expiresAt: 901
 		});
 		await createDeposit(db, 'user-1', fakeNwc, { packageId: 'pkg-1' }, {}, 1000);
 		await recordDepositInvoiceState(db, 'hash-1', 'expired', 5000, null);

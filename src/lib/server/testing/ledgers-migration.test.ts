@@ -15,6 +15,7 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
+import { makeD1 } from './d1-shim';
 
 const MIGRATIONS_DIR = new URL('../../../../migrations/', import.meta.url);
 
@@ -23,6 +24,40 @@ function readMigration(name: string): string {
 }
 
 describe('0007_ledgers migration', () => {
+	it('is followed by the production payment package catalog', async () => {
+		const db = makeD1();
+		const { results } = await db
+			.prepare(
+				'SELECT id, usd_amount, credits_awarded, archai_tokens_awarded, enabled ' +
+					'FROM packages ORDER BY usd_amount'
+			)
+			.all();
+
+		expect(results).toEqual([
+			{
+				id: 'pkg-1',
+				usd_amount: 1,
+				credits_awarded: 3,
+				archai_tokens_awarded: 3,
+				enabled: 1
+			},
+			{
+				id: 'pkg-3',
+				usd_amount: 3,
+				credits_awarded: 9,
+				archai_tokens_awarded: 9,
+				enabled: 1
+			},
+			{
+				id: 'pkg-5',
+				usd_amount: 5,
+				credits_awarded: 15,
+				archai_tokens_awarded: 15,
+				enabled: 1
+			}
+		]);
+	});
+
 	it('backfills balances, access, generations, and immutable ledger records', () => {
 		const db = new DatabaseSync(':memory:');
 		db.exec('PRAGMA foreign_keys = ON');

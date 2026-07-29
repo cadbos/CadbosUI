@@ -1,285 +1,159 @@
-# Оплата в sats через Lightning — проектный документ
+# Оплата в sats через Lightning — текущее устройство
 
-## 1. Цель
+## 1. Назначение и границы v1
 
-Дать пользователю купить пакет генераций номиналом **$1 / $3 / $5**, оплатить его
-в **sats через Lightning** и видеть баланс Cadbos в **долларах**. Без карточного
-процессинга, без KYC-шлюза — только Bitcoin/Lightning, что естественно ложится на
-уже существующую Nostr-идентичность (Модуль 2: аккаунт и так _есть_ pubkey).
+Пользователь Cadbos покупает один из фиксированных USD-пакетов, оплачивает
+Lightning invoice в sats и получает внутренний баланс для генераций. Аккаунт
+определяется существующей Nostr-сессией; платёж не является публичным zap-событием.
 
-### Не входит в объём (v1)
+В v1 не входят карточные платежи, возвраты, NIP-57 zap request/receipt и собственный
+Lightning-узел Cadbos.
 
-- **Полноценные социальные zap'ы NIP-57** (события kind `9734`/`9735`,
-  публикуемые в релеи, видимые в профиле/посте) — реальная сложность (публикация
-  в релеи, верификация receipt), которая ничего не даёт для приватного пополнения
-  баланса. В v1 принимается обычный Lightning-платёж по инвойсу конкретной покупки;
-  что добавит наслоение настоящих zap'ов позже — см. [§8](#8-фаза-2-настоящие-zap-ы-nip-57-опционально).
-- **Fiat/карточный ончейн внутри Cadbos** — вне объёма; пользователи приносят свои
-  sats сами (из существующего кошелька или купленные через внешний он-рамп, см.
-  [§9](#9-получение-тестовых-sats-через-getalby)).
-- **Возвраты/чарджбэки** — Lightning-платежи безвозвратны; в v1 нет флоу отмены.
-- **Свой Lightning-узел** — v1 использует хостингового провайдера (§3), а не
-  `lnd`/`cln`, управляемый нами.
+## 2. Принятое решение
 
-## 2. Как это расширяет существующую модель
+Cadbos подключается по Nostr Wallet Connect (NIP-47) к единственному кошельку,
+который держит компания. `src/lib/server/lightning.ts` разбирает
+`nostr+walletconnect://` URI и выполняет `make_invoice` и `lookup_invoice` через
+указанные в нём Nostr-релеи.
 
-В Модуле 6 (`src/lib/server/billing.ts`, `src/lib/server/generations.ts`) уже есть
-всё, что находится _после_ факта "у аккаунта есть баланс":
+Строка подключения хранится только в Cloudflare secret
+`NWC_CONNECTION_STRING`. Она содержит клиентский Nostr private key, поэтому не
+попадает в git, client bundle, HTTP-ответы и логи. Secret устанавливается отдельно
+для двух Workers:
 
-- Таблица `credits`: `user_id`, `balance`, `updated_at`, `enabled`
-  ([migrations/0004_credits.sql](../migrations/0004_credits.sql),
-  [migrations/0005_generation_access.sql](../migrations/0005_generation_access.sql)).
-- `recordGeneration()` ([src/lib/server/generations.ts:91](../src/lib/server/generations.ts))
-  атомарно списывает с `credits.balance` и пишет запись в журнал `generations`.
-- `getUserIdByPubkey()` ([src/lib/server/billing.ts:29](../src/lib/server/billing.ts))
-  превращает Nostr pubkey из сессии во внутренний `user_id`.
-- В `UserUsageRecord` ([src/lib/api/contract.ts:90](../src/lib/api/contract.ts)) уже
-  есть поля `totalDeposit` / `lastDepositAt` — сейчас захардкожены в `0`/`null` в
-  [src/lib/server/generations.ts:184](../src/lib/server/generations.ts). Они
-  созданы именно под эту фичу — это единственная заготовка, которая уже есть.
+- основного SvelteKit Worker, который создаёт invoice и проверяет его при клиентском
+  polling;
+- `cadbos-deposit-reconciler`, который продолжает проверку без открытого браузера.
 
-Не хватает всего, что находится _до_ этого: собственно превращения sats в
-пополнение `credits.balance`. Документ добавляет только это — то, как баланс
-тратится, не меняется.
+Оба Worker используют одну D1 database и одно значение NWC connection string.
 
-## 3. Выбор Lightning-провайдера
+## 3. Production-пакеты и курс
 
-Cadbos работает на Cloudflare Workers (`wrangler.jsonc`) — нет постоянного
-процесса, нет прямого TCP/gRPC-сокета к своему `lnd`. Провайдер обязан отдавать
-**обычный HTTPS REST API + webhook**, что исключает прямое общение с узлом.
+Миграция `migrations/0010_payment_packages.sql` создаёт рабочий каталог:
 
-| Вариант                                                                                   | Насколько подходит                                                                                                                                                                                                                                                                              | Компромисс                                                                                                                                                                                                                                                        |
-| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **LNbits** (хостинговый инстанс или self-hosted на небольшой VM)                          | REST API + поле `webhook` на каждый инвойс; расширение `lnurlp` может выдать настоящий Lightning Address/LNURL-pay для аккаунта — естественный мост к настоящим zap'ам NIP-57 в будущем. По умолчанию кастодиальный (LNbits держит средства в своём узле/аккаунте), но инстансом управляете вы. | Придётся эксплуатировать (или доверять) ещё один сервис; хостинговый LNbits (например, `legend.lnbits.com`) кастодиален для третьей стороны.                                                                                                                      |
-| **Кастодиальный wallet-as-a-service** (OpenNode, Speed, Strike)                           | Может выставлять **инвойсы напрямую в USD** — конвертацию sats↔USD делает провайдер, что полностью снимает с нас риск курса. Зрелые webhook + REST API.                                                                                                                                         | Обычно требует бизнес-аккаунт с KYC; менее "Nostr-нативно", больше похоже на обычный платёжный процессор.                                                                                                                                                         |
-| **NWC (Nostr Wallet Connect) к кошельку, который держим мы** (например, инстанс Alby Hub) | Максимально Nostr-идиоматично — сервер хранит одну строку подключения `nostr+walletconnect://` и вызывает `make_invoice`/`lookup_invoice` через релей. Отдельный REST-аккаунт провайдера не нужен.                                                                                              | Запрос/ответ идёт через Nostr-релей (WebSocket), а не обычный REST — на Workers это реализуемо (исходящий WebSocket поддерживается), но больше движущихся частей и зависимость от релея прямо в платёжном пути; на этом этапе менее обкатано, чем REST-провайдер. |
+| ID      | Цена | App credits | archAI tokens |
+| ------- | ---: | ----------: | ------------: |
+| `pkg-1` |   $1 |           3 |             3 |
+| `pkg-3` |   $3 |           9 |             9 |
+| `pkg-5` |   $5 |          15 |            15 |
 
-**Рекомендация**: начать с **LNbits** (хостинговый инстанс — самый быстрый способ
-попробовать; переход на self-hosted — когда потребуется полное доверие для
-продакшена). Это REST-first решение (вписывается в Workers без доп. инфраструктуры),
-с полноценной поддержкой webhook на каждый инвойс, а его расширение `lnurlp` —
-тот же строительный блок, что понадобится для настоящего приёма zap'ов — то есть
-этот выбор не закрывает путь к §8 позже. Пересмотреть решение стоит, если учётка,
-которую вы поделитесь (см. [§9](#9-получение-тестовых-sats-через-getalby)),
-указывает на конкретного провайдера, к которому лучше привязаться.
+`archai_tokens_awarded` — внутреннее обеспечение общего ledger и не возвращается
+клиенту через `/api/packages`. Отключённые строки остаются в истории, но не
+показываются и не принимаются для новых покупок.
 
-Это решение можете финализировать только вы (комплаенс-позиция, кто держит
-средства между оплатой и выплатой) — отмечено ещё раз в [§10](#10-открытые-вопросы).
+При создании депозита сервер получает BTC/USD rate и вычисляет сумму как
+`ceil(usd_amount * sats_per_usd)`. Production provider по умолчанию — Kraken;
+CoinGecko и Coinbase доступны как альтернативные реализации. Результат каждого
+provider кэшируется в D1 на 90 секунд. Зафиксированные `sats_amount` и
+`sats_per_usd_rate` записываются в депозит и больше не пересчитываются.
 
-## 4. Курс обмена
+## 4. Данные и ledger
 
-- **Источник**: публичный API курса (например, CoinGecko
-  `/simple/price?ids=bitcoin&vs_currencies=usd` или тикер Kraken/Coinbase). Любой
-  единственный источник — это единая точка отказа для ценообразования; для v1 с
-  небольшими фиксированными пакетами это приемлемо.
-- **Кэш**: добавить Workers KV-биндинг (например, `RATES_KV`) и кэшировать курс
-  sats-за-доллар с коротким `expirationTtl` (60–120 с). Это избавляет от лишних
-  запросов к API курса при каждом создании инвойса и ограничивает "устаревание"
-  курса.
-- **Фиксация курса, а не просто отображение**: курс должен фиксироваться **один
-  раз, в момент создания инвойса**, и сохраняться в строке `deposits`
-  (`sats_amount` фиксируется в этот же момент). Webhook курс заново не запрашивает
-  — он только подтверждает, что _sats_-инвойс на уже зафиксированную сумму _sats_
-  оплачен. Это исключает классический баг, когда движение цены между "показали QR"
-  и "пользователь оплатил" меняет сумму к оплате.
-- Пакеты определены как **фиксированный номинал в USD** ($1/$3/$5 → фиксированный
-  `credits_awarded`); "плавает" вместе с курсом только сумма инвойса в sats.
+`migrations/0007_ledgers.sql` создаёт основные сущности оплаты:
 
-## 5. Модель данных — миграция `0007_deposits.sql`
+- `packages` — каталог доступных номиналов;
+- `deposits` — snapshot выбранного пакета и invoice;
+- `ledger_accounts`, `ledger_transactions`, `ledger_entries` — неизменяемый журнал
+  начислений и списаний;
+- `generation_access` — разрешение аккаунту пользоваться генерацией.
 
-Только аддитивно; без изменений в `credits`/`generations`.
+Депозит хранит владельца, пакет, BOLT11 invoice, payment hash, USD/sats/rate,
+начисляемые credits/tokens, статус, время создания и истечения, результаты проверки
+provider и связанную ledger transaction. Snapshot защищает начисление от будущего
+изменения каталога.
 
-```sql
--- Пополнения через Lightning-платежи (пост-MVP эпик — см.
--- docs/payments-lightning-sats.md). Строка `packages` — статичные данные
--- каталога (заполняются один раз, редактируются админом); строка `deposits` —
--- одна попытка покупки, от создания инвойса до подтверждения оплаты (или
--- истечения срока). credits.balance трогается только когда deposit
--- переходит в 'paid' — тем же атомарным batch'ем, что уже использует
--- recordGeneration() для списаний (generations.ts).
+После авторитетного `settled` функция `markDepositPaid()` одним D1 batch:
 
-CREATE TABLE packages (
-	id TEXT PRIMARY KEY,
-	usd_amount REAL NOT NULL,
-	credits_awarded REAL NOT NULL,
-	enabled INTEGER NOT NULL DEFAULT 1,
-	created_at INTEGER NOT NULL
-);
+1. создаёт пользователю `app_credit` account, если это первая покупка;
+2. включает `generation_access`;
+3. начисляет package credits пользователю и package tokens глобальному
+   `archai_token` account;
+4. финализирует ledger transaction и переводит депозит в `paid`.
 
-CREATE TABLE deposits (
-	id TEXT PRIMARY KEY,
-	user_id TEXT NOT NULL REFERENCES users (id),
-	package_id TEXT NOT NULL REFERENCES packages (id),
-	provider TEXT NOT NULL,
-	provider_invoice_id TEXT NOT NULL,
-	payment_hash TEXT NOT NULL,
-	sats_amount INTEGER NOT NULL,
-	usd_amount REAL NOT NULL,
-	sats_per_usd_rate REAL NOT NULL,
-	credits_awarded REAL NOT NULL,
-	status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'expired', 'failed')),
-	created_at INTEGER NOT NULL,
-	expires_at INTEGER NOT NULL,
-	paid_at INTEGER
-);
+Повторная обработка того же payment hash идемпотентна. Оплаченные депозиты и
+финализированные ledger-записи защищены SQL triggers от изменения и удаления.
+Ledger хранит денежные значения в целочисленных сотых долях; API продолжает
+работать с обычными decimal numbers.
 
-CREATE UNIQUE INDEX deposits_payment_hash ON deposits (payment_hash);
-CREATE INDEX deposits_user_created_at ON deposits (user_id, created_at DESC);
-CREATE INDEX deposits_status ON deposits (status) WHERE status = 'pending';
-```
+## 5. Срок invoice и reconciliation
 
-`UNIQUE` на `deposits_payment_hash` — это защита от повторной обработки:
-повторный webhook от провайдера (или replay атакующим, каким-то образом узнавшим
-hash) может пометить одну и ту же строку оплаченной только один раз — второй
-`UPDATE ... WHERE status = 'pending'` затронет ноль строк.
+Каждый invoice создаётся со сроком **15 минут (900 секунд)**. Локальный
+`expires_at` равен времени создания депозита плюс 900 секунд и используется UI как
+граница текущей попытки оплаты.
 
-## 6. Серверный модуль — `src/lib/server/payments.ts`
+Локальное время не является доказательством окончательного статуса. Ответ кошелька
+через `lookup_invoice` авторитетен:
 
-Повторяет форму `billing.ts`/`generations.ts`, а не вводит новый паттерн:
+- `settled` начисляет пакет даже после локального `expires_at`;
+- `pending` и `accepted` оставляют депозит ожидающим следующей проверки;
+- `expired` и `failed` становятся финальными только после ответа кошелька;
+- старый локально завершённый депозит может быть восстановлен в `paid`, если
+  кошелёк сообщает фактическое settlement.
 
-```ts
-export async function listPackages(db: D1Database): Promise<Package[]>;
+Новый депозит впервые ставится на проверку через минуту. Cron Worker запускается
+каждую минуту, арендует до 20 due-записей на 120 секунд и проверяет их с
+concurrency 5. Успешно ожидающие invoice снова планируются через минуту; ошибка
+отдельного lookup учитывается и не останавливает остальной batch.
 
-export async function createDeposit(
-	db: D1Database,
-	userId: string,
-	packageId: string,
-	rate: ExchangeRate // { satsPerUsd, fetchedAt }
-): Promise<Deposit>; // status: 'pending'; также вызывает LN-провайдера для создания инвойса
+## 6. API и пользовательский поток
 
-export async function markDepositPaid(
-	db: D1Database,
-	paymentHash: string,
-	paidAt?: number,
-	checkedAt?: number
-): Promise<Deposit | null>;
-// Идемпотентный D1 batch создаёт детерминированную ledger-транзакцию,
-// начисляет оба актива и переводит любой неплатный статус в paid.
-
-export async function getDeposit(
-	db: D1Database,
-	id: string,
-	userId: string
-): Promise<Deposit | null>;
-
-export async function claimDepositsForReconciliation(
-	db: D1Database,
-	now: number,
-	leaseUntil: number,
-	limit: number
-): Promise<Deposit[]>;
-
-export async function reconcileDeposit(
-	db: D1Database,
-	deposit: Deposit,
-	nwc: NwcConnection
-): Promise<Deposit>;
-```
-
-`src/lib/server/lightning.ts` изолирует NWC-вызовы `createInvoice` и `lookupInvoice`.
-`settled` кошелька авторитетен даже после локального `expires_at`; локальный срок
-не может самостоятельно сделать депозит финально истёкшим.
-
-## 7. API и флоу
-
-| Роут                        | Метод | Назначение                                                                                                                               |
-| --------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/packages`             | GET   | Список из 3 пакетов (id, usd_amount, credits_awarded). Условно публичный, но всё равно за сессией, как и весь остальной app.             |
-| `/api/deposits`             | POST  | Тело `{ packageId }`. Создаёт строку `deposits` + Lightning-инвойс, возвращает `{ depositId, bolt11, sats, usdAmount, expiresAt }`.      |
-| `/api/deposits/[id]`        | GET   | Опрос статуса: `{ status, balance? }`. Используется клиентом пока ждём оплату.                                                           |
-| `cadbos-deposit-reconciler` | Cron  | Каждую минуту арендует пакет нерешённых депозитов, вызывает NWC `lookup_invoice` и сохраняет авторитетный статус независимо от браузера. |
+| Интерфейс                   | Назначение                                                                                                                              |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/packages`         | Возвращает включённые пакеты как `{ id, usdAmount, creditsAwarded }`, отсортированные по цене.                                          |
+| `POST /api/deposits`        | Принимает `{ packageId }`, фиксирует rate, создаёт invoice и возвращает `{ id, status, bolt11, satsAmount, usdAmount, expiresAt }`.     |
+| `GET /api/deposits/[id]`    | Проверяет принадлежащий пользователю депозит; при необходимости делает `lookup_invoice`, а для `paid` возвращает обновлённый `balance`. |
+| `cadbos-deposit-reconciler` | Scheduled Worker, который подтверждает платежи независимо от браузера.                                                                  |
 
 ```mermaid
 sequenceDiagram
-    participant U as Пользователь (браузер)
-    participant C as Сервер Cadbos
-    participant LN as Lightning-провайдер (LNbits)
-    participant W as Кошелёк пользователя (Alby/NWC)
+    participant U as Browser
+    participant A as Cadbos app Worker
+    participant D as D1
+    participant N as NWC wallet
+    participant C as Reconciler Worker
 
-    U->>C: POST /api/deposits {packageId}
-    C->>C: получить/взять из кэша курс, зафиксировать sats_amount
-    C->>LN: создать инвойс (sats_amount)
-    LN-->>C: bolt11 + payment_hash
-    C->>C: INSERT deposits (status=pending)
-    C-->>U: { bolt11, sats, usdAmount, expiresAt }
-    U->>W: оплата bolt11 (скан QR или кнопка "оплатить" через NWC)
-    W->>LN: Lightning-платёж
-    U->>C: GET /api/deposits/{id} (опрос каждые ~2с, пока браузер открыт)
-    C->>LN: lookup_invoice {payment_hash}
-    LN-->>C: state
-    C->>C: markDepositPaid (атомарно, идемпотентно)
-    C-->>U: { status: 'paid', balance }
-    Note over C,LN: Cron повторяет lookup_invoice без участия браузера
+    U->>A: POST /api/deposits { packageId }
+    A->>A: load cached rate and fix sats amount
+    A->>N: make_invoice (sats, expiry=900)
+    N-->>A: bolt11 and payment_hash
+    A->>D: INSERT pending deposit
+    A-->>U: invoice response
+    U->>N: pay bolt11
+    U->>A: GET /api/deposits/{id}
+    A->>N: lookup_invoice
+    N-->>A: authoritative state
+    A->>D: atomic ledger credit when settled
+    C->>D: claim due deposits every minute
+    C->>N: lookup_invoice
+    C->>D: persist authoritative state
 ```
 
-Та же схема защиты, что и у `/api/render` (`src/routes/api/render/+server.ts:36`):
-требуется сессия, `getUserIdByPubkey` разрешает аккаунт, и любая запись идёт по
-уже разрешённому `userId`, никогда — по значению, присланному клиентом.
+## 7. Безопасность и эксплуатация
 
-## 8. Фаза 2: настоящие zap'ы NIP-57 (опционально)
+- Оба API route требуют аутентифицированную Nostr-сессию; запрос статуса дополнительно
+  ограничен владельцем депозита.
+- Создание invoice ограничено пятью запросами в минуту на аккаунт, status polling —
+  десятью запросами за десять секунд.
+- Dev demo account не может обращаться к реальному кошельку.
+- Ошибки NWC логируются без connection string, invoice, payment hash и пользовательских
+  данных.
+- Отсутствующий secret закрывает создание покупок и возвращает retryable ошибку при
+  проверке статуса; reconciler завершает запуск ошибкой вместо пропуска платежей.
 
-Если позже станет важно, чтобы пополнение выглядело как настоящий публичный zap
-(например, видимый в Nostr-профиле пользователя, социальное доказательство,
-совместимость с другими Nostr-клиентами), это можно наслоить, не трогая модель
-credits/generations:
+Production-порядок описан в `README.md`: применить remote D1 migrations, установить
+`NWC_CONNECTION_STRING` отдельно для каждого Worker, затем развернуть приложение и
+reconciler. Значение вводится интерактивно через `wrangler secret put`.
 
-1. Выдать через-аккаунтный (или один общий) **Lightning Address** через
-   расширение `lnurlp` в LNbits, с поддержкой query-параметра `nostr`, которого
-   требует NIP-57.
-2. В LNURL-pay callback принимать параметр `nostr` с подписанным событием
-   kind `9734` (zap request); после оплаты публиковать receipt kind `9735` в
-   релеи, перечисленные в запросе (переиспользуя уже имеющийся в репозитории
-   инстанс NDK для авторизации Модуля 2 — `@nostr-dev-kit/ndk`).
-3. `payment_hash` по-прежнему остаётся ключом связи со строкой `deposits` —
-   обработчик webhook из §7 не меняется, учёт zap request/receipt добавляется
-   только на этапе _создания_ инвойса.
+## 8. Проверка
 
-Не требуется для "принять sats, зачислить доллары" — нужно только для того,
-чтобы платёж стал видимым Nostr-событием.
+Автоматические тесты покрывают каталог миграции, фиксацию rate и срока invoice,
+валидацию package ID, идемпотентное начисление двух ledger assets, восстановление
+позднего settlement, leasing очереди, cron batch и полный UI-поток покупки с
+замоканным provider boundary. Реальные внешние Lightning-платежи выполняются только
+при ручной проверке настроенного production/test wallet.
 
-## 9. Получение тестовых sats через getAlby
+## 9. Возможное продолжение
 
-Для ручного тестирования, когда реальная оплата заработает, самый быстрый способ
-получить sats в кошелёк, готовый к трате, — это **встроенная функция покупки в
-кастодиальном кошельке**, а не разворачивание Alby Hub с ончейн-каналом:
-
-- **Alby Account** или **Wallet of Satoshi**: встроенная кнопка "Buy Bitcoin" →
-  оплата картой/Apple Pay через партнёрский он-рамп (например, Mt Pelerin) → sats
-  сразу попадают в Lightning-баланс → отправка в один клик на наш инвойс/Lightning
-  Address.
-- Не стоит: открывать **Alby Hub** с ончейн-каналом только ради теста — это путь
-  self-custodial/роутинг-узла, избыточная сложность ради отправки нескольких тысяч
-  sats для проверки webhook.
-
-Nostr-учётка, которую вы поделитесь, уже содержит sats, так что этот раздел
-пригодится в основном для повторяемого тестирования уже после этого разового
-случая.
-
-## 10. Открытые вопросы
-
-Здесь нужно решение от вас, а не инженерное значение по умолчанию:
-
-1. **Провайдер**: LNbits (хостинговый vs self-hosted) vs кастодиальный процессор
-   с KYC (OpenNode/Speed) vs NWC к своему Alby Hub — меняет, кто держит средства,
-   комплаенс-периметр и кто видит метаданные транзакций.
-2. **Точное значение `credits_awarded` на пакет** — $1 → 1 единица уже абстрактного
-   "баланса" Модуля 6, или нужна явная таблица конвертации sats/генерация ↔ USD?
-3. **Срок действия депозита** — сколько времени кошелёк принимает оплату инвойса;
-   финальный `expired` сохраняется только после подтверждения через `lookup_invoice`.
-4. **Входит ли Фаза 2 (настоящие zap'ы, §8) в объём вообще**, или "принять sats,
-   зачислить приватный баланс в USD" — это вся фича?
-
-## 11. Оценка по срокам
-
-| Шаг                                                                                                                                  | Зависит от                    | Трудозатраты |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------ |
-| Миграция `0007_deposits.sql` + `payments.ts` + `lightning.ts` (клиент провайдера)                                                    | Решение по провайдеру (§10.1) | 2–3 дня      |
-| Роуты `/api/packages`, `/api/deposits`, `/api/deposits/webhook` + rate-limiting (переиспользовать `rate-limit.ts`)                   | Выше                          | 2 дня        |
-| Запрос курса + кэш в KV                                                                                                              | —                             | 0.5 дня      |
-| Клиент: карточки пакетов, отображение инвойса/QR, опрос до оплаты, обновление баланса                                                | Роуты выше                    | 2–3 дня      |
-| Подключить `UserUsageRecord.totalDeposit`/`lastDepositAt` к реальным данным `deposits` в `listUserUsage`                             | Миграция выше                 | 0.5 дня      |
-| Vitest (идемпотентность webhook, фиксация курса, валидация пакетов) + Playwright (полный флоу покупки против замоканного провайдера) | Всё выше                      | 2 дня        |
-
-**Итого: ~1.5–2 недели** для одного исполнителя, что совпадает с более ранней
-оценкой — этот документ просто делает каждый шаг достаточно конкретным, чтобы
-начать работу сразу после ответа на §10.
+NIP-57 можно добавить отдельным слоем с zap request kind `9734` и receipt kind
+`9735`. Это не требует менять package snapshot или ledger settlement: payment hash
+остаётся связью между Lightning invoice и депозитом. Решение не входит в v1.

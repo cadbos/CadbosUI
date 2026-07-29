@@ -47,17 +47,20 @@ Apply D1 migrations before deploying either Worker:
 pnpm exec wrangler d1 migrations apply DB --remote
 ```
 
-Build and deploy the SvelteKit Worker:
+Provision the same server-only NWC connection separately for both Workers. Each command
+prompts for the value interactively; never pass the connection string on the command line or
+commit it to the repository:
+
+```sh
+pnpm exec wrangler secret put NWC_CONNECTION_STRING
+pnpm exec wrangler secret put NWC_CONNECTION_STRING --config wrangler.reconciler.jsonc
+```
+
+Build and deploy the SvelteKit Worker and the deposit reconciler:
 
 ```sh
 pnpm build
 pnpm exec wrangler deploy
-```
-
-Provision the same server-only NWC connection for the deposit reconciler and deploy it:
-
-```sh
-pnpm exec wrangler secret put NWC_CONNECTION_STRING --config wrangler.reconciler.jsonc
 pnpm exec wrangler deploy --config wrangler.reconciler.jsonc
 ```
 

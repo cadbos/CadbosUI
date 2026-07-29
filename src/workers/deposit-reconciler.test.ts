@@ -33,12 +33,6 @@ function seedAccount(db: D1Database): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind('user-1', 'pubkey-1', 1000)
 		.run();
-	db.prepare(
-		'INSERT INTO packages (id, usd_amount, credits_awarded, archai_tokens_awarded, enabled, created_at) ' +
-			'VALUES (?, ?, ?, ?, 1, ?)'
-	)
-		.bind('pkg-1', 1, 3, 3, 1000)
-		.run();
 }
 
 function seedDeposit(

@@ -27,16 +27,11 @@ const { reconcileDeposit } = await import('./deposit-reconciliation');
 const { createDeposit, getDeposit } = await import('./payments');
 
 const connection = {} as never;
+const RECONCILIATION_NOW = 1_000_000;
 
 async function seedDeposit(db: D1Database): Promise<Awaited<ReturnType<typeof createDeposit>>> {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind('user-1', 'pubkey-1', 1000)
-		.run();
-	db.prepare(
-		'INSERT INTO packages (id, usd_amount, credits_awarded, archai_tokens_awarded, enabled, created_at) ' +
-			'VALUES (?, ?, ?, ?, 1, ?)'
-	)
-		.bind('pkg-1', 1, 3, 5, 1000)
 		.run();
 	db.prepare(
 		'INSERT INTO exchange_rate_cache (provider, sats_per_usd, fetched_at, expires_at) VALUES (?, ?, ?, ?)'
@@ -48,16 +43,9 @@ async function seedDeposit(db: D1Database): Promise<Awaited<ReturnType<typeof cr
 		paymentHash: 'hash-1',
 		satsAmount: 2000,
 		createdAt: 1,
-		expiresAt: 61
+		expiresAt: 901
 	});
-	return createDeposit(
-		db,
-		'user-1',
-		connection,
-		{ packageId: 'pkg-1', expirySeconds: 60 },
-		{},
-		1000
-	);
+	return createDeposit(db, 'user-1', connection, { packageId: 'pkg-1' }, {}, 1000);
 }
 
 beforeEach(() => {
@@ -72,7 +60,7 @@ describe('reconcileDeposit', () => {
 		db.prepare("UPDATE deposits SET status = 'expired' WHERE id = ?").bind(deposit.id).run();
 
 		const reconciled = await reconcileDeposit(db, { ...deposit, status: 'expired' }, connection, {
-			now: 100_000,
+			now: RECONCILIATION_NOW,
 			lookup: vi.fn().mockResolvedValue({
 				state: 'settled',
 				paymentHash: 'hash-1',
@@ -83,7 +71,7 @@ describe('reconcileDeposit', () => {
 		expect(reconciled).toMatchObject({
 			status: 'paid',
 			paidAt: 90_000,
-			providerCheckedAt: 100_000,
+			providerCheckedAt: RECONCILIATION_NOW,
 			reconcileAfter: null
 		});
 		expect(
@@ -103,7 +91,7 @@ describe('reconcileDeposit', () => {
 		const deposit = await seedDeposit(db);
 
 		const reconciled = await reconcileDeposit(db, deposit, connection, {
-			now: 100_000,
+			now: RECONCILIATION_NOW,
 			lookup: vi.fn().mockResolvedValue({
 				state: 'accepted',
 				paymentHash: 'hash-1',
@@ -113,8 +101,8 @@ describe('reconcileDeposit', () => {
 
 		expect(reconciled).toMatchObject({
 			status: 'pending',
-			providerCheckedAt: 100_000,
-			reconcileAfter: 160_000
+			providerCheckedAt: RECONCILIATION_NOW,
+			reconcileAfter: RECONCILIATION_NOW + 60_000
 		});
 	});
 
@@ -123,7 +111,7 @@ describe('reconcileDeposit', () => {
 		const deposit = await seedDeposit(db);
 
 		const reconciled = await reconcileDeposit(db, deposit, connection, {
-			now: 100_000,
+			now: RECONCILIATION_NOW,
 			lookup: vi.fn().mockResolvedValue({
 				state: 'expired',
 				paymentHash: 'hash-1',
@@ -133,7 +121,7 @@ describe('reconcileDeposit', () => {
 
 		expect(reconciled).toMatchObject({
 			status: 'expired',
-			providerCheckedAt: 100_000,
+			providerCheckedAt: RECONCILIATION_NOW,
 			reconcileAfter: null
 		});
 	});
@@ -144,7 +132,7 @@ describe('reconcileDeposit', () => {
 
 		await expect(
 			reconcileDeposit(db, deposit, connection, {
-				now: 100_000,
+				now: RECONCILIATION_NOW,
 				lookup: vi.fn().mockResolvedValue({
 					state: 'settled',
 					paymentHash: 'different-hash',
