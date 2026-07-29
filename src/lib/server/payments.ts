@@ -248,10 +248,11 @@ export async function markDepositPaid(
 			.bind(accountId, existing.user_id, paidAt),
 		db
 			.prepare(
-				'INSERT INTO generation_access (user_id, enabled) VALUES (?, 1) ' +
+				'INSERT INTO generation_access (user_id, enabled) ' +
+					"SELECT ?, 1 WHERE EXISTS (SELECT 1 FROM deposits WHERE payment_hash = ? AND status <> 'paid') " +
 					'ON CONFLICT(user_id) DO UPDATE SET enabled = excluded.enabled'
 			)
-			.bind(existing.user_id),
+			.bind(existing.user_id, paymentHash),
 		db
 			.prepare(
 				'INSERT INTO ledger_transactions (id, occurred_at) VALUES (?, ?) ON CONFLICT DO NOTHING'

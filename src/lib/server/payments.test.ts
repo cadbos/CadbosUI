@@ -238,6 +238,18 @@ describe('markDepositPaid', () => {
 	it('is idempotent when two settlement handlers race', async () => {
 		const db = makeD1();
 		await seedPendingDeposit(db);
+		const originalBatch = db.batch.bind(db);
+		let batchCalls = 0;
+		vi.spyOn(db, 'batch').mockImplementation((statements) => {
+			batchCalls += 1;
+			const result = originalBatch(statements);
+			if (batchCalls === 1) {
+				db.prepare('UPDATE generation_access SET enabled = 0 WHERE user_id = ?')
+					.bind('user-1')
+					.run();
+			}
+			return result;
+		});
 
 		const results = await Promise.all([
 			markDepositPaid(db, 'hash-1', 5000, 7000),
@@ -245,16 +257,26 @@ describe('markDepositPaid', () => {
 		]);
 
 		expect(results).toEqual([
-			expect.objectContaining({ status: 'paid' }),
-			expect.objectContaining({ status: 'paid' })
+			expect.objectContaining({ status: 'paid', paidAt: 5000, providerCheckedAt: 7000 }),
+			expect.objectContaining({ status: 'paid', paidAt: 5000, providerCheckedAt: 7000 })
 		]);
+		expect(batchCalls).toBe(2);
 		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBe(toLedgerAmountUnits(3));
+		expect(await readLedgerBalance(db, 'archai_token', null)).toBe(toLedgerAmountUnits(5));
 		expect(
 			await db
-				.prepare('SELECT COUNT(*) AS count FROM ledger_transactions WHERE id LIKE ?')
-				.bind('deposit:%')
-				.first<{ count: number }>()
-		).toEqual({ count: 1 });
+				.prepare(
+					"SELECT (SELECT COUNT(*) FROM ledger_transactions WHERE id LIKE 'deposit:%') AS transactions, " +
+						"(SELECT COUNT(*) FROM ledger_entries WHERE transaction_id LIKE 'deposit:%') AS entries"
+				)
+				.first<{ transactions: number; entries: number }>()
+		).toEqual({ transactions: 1, entries: 2 });
+		expect(
+			await db
+				.prepare('SELECT enabled FROM generation_access WHERE user_id = ?')
+				.bind('user-1')
+				.first<{ enabled: number }>()
+		).toEqual({ enabled: 0 });
 	});
 
 	it('returns null for an unknown payment hash', async () => {
