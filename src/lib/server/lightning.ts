@@ -12,9 +12,10 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { v2 as nip44 } from 'nostr-tools/nip44';
+import { decode } from 'light-bolt11-decoder';
 import type { Filter } from 'nostr-tools/filter';
 import { NWCWalletInfo, NWCWalletRequest, NWCWalletResponse } from 'nostr-tools/kinds';
+import { v2 as nip44 } from 'nostr-tools/nip44';
 import { SimplePool } from 'nostr-tools/pool';
 import { finalizeEvent, getPublicKey, type Event } from 'nostr-tools/pure';
 import { hexToBytes } from 'nostr-tools/utils';
@@ -78,18 +79,28 @@ export interface InvoiceStatus {
 	settledAt: number | null;
 }
 
-interface NwcResponsePayload<TResult> {
-	result_type: string;
-	error: { code: string; message: string } | null;
-	result: TResult | null;
-}
+const paymentHashSchema = z
+	.string()
+	.regex(/^[0-9a-f]{64}$/i)
+	.transform((value) => value.toLowerCase());
 
-async function sendNwcRequest<TResult>(
+const nwcResponsePayloadSchema = z.object({
+	result_type: z.string().min(1),
+	error: z
+		.object({
+			code: z.string().min(1),
+			message: z.string().min(1)
+		})
+		.nullable(),
+	result: z.unknown()
+});
+
+async function sendNwcRequest(
 	connection: NwcConnection,
 	method: string,
 	params: Record<string, unknown>,
 	options: NwcRequestOptions
-): Promise<TResult> {
+): Promise<unknown> {
 	const pool = options.pool ?? new SimplePool();
 	const maxWait = options.maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
 	const conversationKey = nip44.utils.getConversationKey(
@@ -137,26 +148,29 @@ async function sendNwcRequest<TResult>(
 			throw new Error(`NWC ${method} request timed out waiting for a response`);
 		}
 
-		const payload = JSON.parse(
-			nip44.decrypt(responseEvent.content, conversationKey)
-		) as NwcResponsePayload<TResult>;
+		const payload = nwcResponsePayloadSchema.parse(
+			JSON.parse(nip44.decrypt(responseEvent.content, conversationKey))
+		);
+		if (payload.result_type !== method) {
+			throw new Error(`NWC ${method} returned a mismatched result_type`);
+		}
 		if (payload.error) {
 			throw new Error(`NWC ${method} failed: ${payload.error.code} — ${payload.error.message}`);
 		}
-		if (!payload.result) throw new Error(`NWC ${method} returned no result`);
+		if (payload.result === null) throw new Error(`NWC ${method} returned no result`);
 		return payload.result;
 	} finally {
 		pool.close?.(connection.relays);
 	}
 }
 
-interface MakeInvoiceResult {
-	invoice: string;
-	payment_hash: string;
-	amount: number;
-	created_at: number;
-	expires_at: number;
-}
+const makeInvoiceResultSchema = z.object({
+	invoice: z.string().min(1),
+	payment_hash: paymentHashSchema,
+	amount: z.number().int().nonnegative().safe(),
+	created_at: z.number().int().positive(),
+	expires_at: z.number().int().positive()
+});
 
 export async function createInvoice(
 	connection: NwcConnection,
@@ -165,16 +179,41 @@ export async function createInvoice(
 	expirySeconds: number,
 	options: NwcRequestOptions = {}
 ): Promise<Invoice> {
-	const result = await sendNwcRequest<MakeInvoiceResult>(
-		connection,
-		'make_invoice',
-		{ amount: satsAmount * MSATS_PER_SAT, description, expiry: expirySeconds },
-		options
+	const amountMsats = satsAmount * MSATS_PER_SAT;
+	const result = makeInvoiceResultSchema.parse(
+		await sendNwcRequest(
+			connection,
+			'make_invoice',
+			{ amount: amountMsats, description, expiry: expirySeconds },
+			options
+		)
 	);
+	if (result.amount !== amountMsats) {
+		throw new Error('NWC make_invoice returned a mismatched amount');
+	}
+
+	let decodedInvoice: ReturnType<typeof decode>;
+	try {
+		decodedInvoice = decode(result.invoice);
+	} catch (error) {
+		throw new Error('NWC make_invoice returned an invalid BOLT11 invoice', { cause: error });
+	}
+
+	const invoiceAmount = decodedInvoice.sections.find((section) => section.name === 'amount');
+	if (!invoiceAmount || invoiceAmount.value !== amountMsats.toString()) {
+		throw new Error('NWC make_invoice returned a BOLT11 invoice with a mismatched amount');
+	}
+	const invoicePaymentHash = decodedInvoice.sections.find(
+		(section) => section.name === 'payment_hash'
+	);
+	if (!invoicePaymentHash || invoicePaymentHash.value.toLowerCase() !== result.payment_hash) {
+		throw new Error('NWC make_invoice returned a BOLT11 invoice with a mismatched payment hash');
+	}
+
 	return {
 		invoice: result.invoice,
 		paymentHash: result.payment_hash,
-		satsAmount: Math.round(result.amount / MSATS_PER_SAT),
+		satsAmount: result.amount / MSATS_PER_SAT,
 		createdAt: result.created_at,
 		expiresAt: result.expires_at
 	};
@@ -182,7 +221,7 @@ export async function createInvoice(
 
 const lookupInvoiceResultSchema = z.object({
 	state: z.enum(['pending', 'settled', 'accepted', 'expired', 'failed']),
-	payment_hash: z.string().min(1),
+	payment_hash: paymentHashSchema,
 	settled_at: z.number().int().positive().optional()
 });
 
@@ -191,14 +230,18 @@ export async function lookupInvoice(
 	paymentHash: string,
 	options: NwcRequestOptions = {}
 ): Promise<InvoiceStatus> {
+	const expectedPaymentHash = paymentHashSchema.parse(paymentHash);
 	const result = lookupInvoiceResultSchema.parse(
-		await sendNwcRequest<unknown>(
+		await sendNwcRequest(
 			connection,
 			'lookup_invoice',
-			{ payment_hash: paymentHash },
+			{ payment_hash: expectedPaymentHash },
 			options
 		)
 	);
+	if (result.payment_hash !== expectedPaymentHash) {
+		throw new Error('NWC lookup_invoice returned a mismatched payment hash');
+	}
 	return {
 		state: result.state,
 		paymentHash: result.payment_hash,
