@@ -23,11 +23,15 @@ async function mockAuthenticatedSession(page: Page, paid: { value: boolean }): P
 			contentType: 'application/json',
 			body: JSON.stringify({
 				user: { pubkey, firstName: 'Ada', lastName: 'Lovelace' },
-				credit: {
-					balance: paid.value ? 3 : 0,
-					updatedAt: Date.UTC(2026, 0, 1),
-					history: []
-				}
+				...(paid.value
+					? {
+							credit: {
+								balance: 3,
+								updatedAt: Date.UTC(2026, 0, 1),
+								history: []
+							}
+						}
+					: {})
 			})
 		});
 	});
@@ -44,9 +48,7 @@ function openTopUpDialog(page: Page): ReturnType<Page['getByRole']> {
 	return page.getByRole('dialog', { name: 'Пополнение баланса' });
 }
 
-test('buys a package: picks it, pays the invoice, and sees the balance update', async ({
-	page
-}) => {
+test('a new account buys a package and sees its first balance', async ({ page }) => {
 	const paid = { value: false };
 	let statusPolls = 0;
 	await mockAuthenticatedSession(page, paid);
@@ -96,7 +98,7 @@ test('buys a package: picks it, pays the invoice, and sees the balance update', 
 
 	await page.goto('/');
 	await page.locator('button[aria-controls="auth-profile"]').click();
-	await expect(page.getByText('Баланс: 0.00')).toBeVisible();
+	await expect(page.getByText(/^Баланс:/)).toHaveCount(0);
 
 	await page.getByRole('button', { name: 'Пополнить' }).click();
 	const dialog = openTopUpDialog(page);

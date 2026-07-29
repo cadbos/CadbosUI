@@ -54,6 +54,7 @@ before the Change Date. See LICENSE for complete terms.
 		auth.status === 'authenticated' && (!auth.user?.firstName || !auth.user?.lastName)
 	);
 	const relayCount = $derived(auth.nostrProfile?.relays.length ?? 0);
+	const isDemoUser = $derived(dev && auth.user?.pubkey?.startsWith('000000'));
 	const profileOpen = $derived(
 		profileState === 'open' || (profileState === 'auto' && missingCadbosName)
 	);
@@ -153,7 +154,7 @@ before the Change Date. See LICENSE for complete terms.
 					<span class="avatar" aria-hidden="true">{displayName.slice(0, 1).toUpperCase()}</span>
 				{/if}
 				<span class="identity">
-					{#if dev && auth.user?.pubkey?.startsWith('000000')}
+					{#if isDemoUser}
 						<span class="demo-badge">{t('auth.demo.badge')}</span>
 					{/if}
 					<span class="display">{displayName}</span>
@@ -167,9 +168,6 @@ before the Change Date. See LICENSE for complete terms.
 						<span class="balance">
 							{ti('auth.credit.balance', { balance: formatCredit(auth.credit.balance) })}
 						</span>
-						<button type="button" class="top-up-trigger" onclick={() => (topUpOpen = true)}>
-							{t('deposit.trigger')}
-						</button>
 						<details class="credit-history">
 							<summary>{t('auth.credit.history')}</summary>
 							{#if auth.credit.history.length === 0}
@@ -182,6 +180,11 @@ before the Change Date. See LICENSE for complete terms.
 								</ul>
 							{/if}
 						</details>
+					{/if}
+					{#if !isDemoUser}
+						<button type="button" class="top-up-trigger" onclick={() => (topUpOpen = true)}>
+							{t('deposit.trigger')}
+						</button>
 					{/if}
 					{#if missingCadbosName}
 						<span class="notice">{t('auth.profile.completeHint')}</span>

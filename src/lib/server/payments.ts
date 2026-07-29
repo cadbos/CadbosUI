@@ -246,7 +246,20 @@ export async function markDepositPaid(
 	if (existing.status !== 'pending') return null;
 
 	const transactionId = `deposit:${existing.id}`;
+	const accountId = `app-credit:${existing.user_id}`;
 	const statements: D1PreparedStatement[] = [
+		db
+			.prepare(
+				"INSERT INTO ledger_accounts (id, asset, user_id, created_at) VALUES (?, 'app_credit', ?, ?) " +
+					'ON CONFLICT DO NOTHING'
+			)
+			.bind(accountId, existing.user_id, now),
+		db
+			.prepare(
+				'INSERT INTO generation_access (user_id, enabled) VALUES (?, 1) ' +
+					'ON CONFLICT(user_id) DO UPDATE SET enabled = excluded.enabled'
+			)
+			.bind(existing.user_id),
 		db
 			.prepare('INSERT INTO ledger_transactions (id, occurred_at) VALUES (?, ?)')
 			.bind(transactionId, now),
@@ -261,6 +274,7 @@ export async function markDepositPaid(
 				"INSERT INTO ledger_entries (transaction_id, account_id, amount) VALUES (?, 'archai-token', ?)"
 			)
 			.bind(transactionId, toLedgerAmountUnits(existing.archai_tokens_awarded)),
+		db.prepare('UPDATE ledger_transactions SET finalized = 1 WHERE id = ?').bind(transactionId),
 		db
 			.prepare(
 				"UPDATE deposits SET status = 'paid', paid_at = ?, ledger_transaction_id = ? " +

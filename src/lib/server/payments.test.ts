@@ -146,7 +146,6 @@ describe('createDeposit', () => {
 describe('markDepositPaid', () => {
 	async function seedPendingDeposit(db: D1Database): Promise<void> {
 		seedUser(db, 'user-1', 'pubkey-1');
-		grantGenerationAccess(db, 'user-1', 0);
 		seedPackage(db, 'pkg-1', 1, 3, 5);
 		seedRate(db, 2000, 1000);
 		lightning.createInvoice.mockResolvedValueOnce({
@@ -159,7 +158,7 @@ describe('markDepositPaid', () => {
 		await createDeposit(db, 'user-1', fakeNwc, { packageId: 'pkg-1' }, {}, 1000);
 	}
 
-	it('credits the user app_credit and the shared archai_token ledger exactly once', async () => {
+	it('provisions a new account and credits both ledgers exactly once', async () => {
 		const db = makeD1();
 		await seedPendingDeposit(db);
 
@@ -173,6 +172,42 @@ describe('markDepositPaid', () => {
 		});
 		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBe(toLedgerAmountUnits(3));
 		expect(await readLedgerBalance(db, 'archai_token', null)).toBe(toLedgerAmountUnits(5));
+		expect(
+			await db
+				.prepare('SELECT enabled FROM generation_access WHERE user_id = ?')
+				.bind('user-1')
+				.first<{ enabled: number }>()
+		).toEqual({ enabled: 1 });
+		expect(
+			await db
+				.prepare('SELECT finalized FROM ledger_transactions WHERE id = ?')
+				.bind(`deposit:${paid?.id}`)
+				.first<{ finalized: number }>()
+		).toEqual({ finalized: 1 });
+	});
+
+	it('adds credit to an existing account and re-enables generation access', async () => {
+		const db = makeD1();
+		await seedPendingDeposit(db);
+		grantGenerationAccess(db, 'user-1', 2, 0);
+
+		await markDepositPaid(db, 'hash-1', 5000);
+
+		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBe(toLedgerAmountUnits(5));
+		expect(
+			await db
+				.prepare('SELECT enabled FROM generation_access WHERE user_id = ?')
+				.bind('user-1')
+				.first<{ enabled: number }>()
+		).toEqual({ enabled: 1 });
+		expect(
+			await db
+				.prepare(
+					"SELECT COUNT(*) AS count FROM ledger_accounts WHERE user_id = ? AND asset = 'app_credit'"
+				)
+				.bind('user-1')
+				.first<{ count: number }>()
+		).toEqual({ count: 1 });
 	});
 
 	it('is idempotent when called again for an already-paid deposit', async () => {
@@ -184,6 +219,14 @@ describe('markDepositPaid', () => {
 
 		expect(second).toMatchObject({ status: 'paid', paidAt: 5000 });
 		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBe(toLedgerAmountUnits(3));
+		expect(
+			await db
+				.prepare(
+					"SELECT COUNT(*) AS count FROM ledger_accounts WHERE user_id = ? AND asset = 'app_credit'"
+				)
+				.bind('user-1')
+				.first<{ count: number }>()
+		).toEqual({ count: 1 });
 	});
 
 	it('returns null for an unknown payment hash', async () => {
@@ -197,7 +240,13 @@ describe('markDepositPaid', () => {
 		await expireStaleDeposits(db, Date.now() + 10 * 60 * 60 * 1000);
 
 		expect(await markDepositPaid(db, 'hash-1')).toBeNull();
-		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBe(0);
+		expect(await readLedgerBalance(db, 'app_credit', 'user-1')).toBeNull();
+		expect(
+			await db
+				.prepare('SELECT enabled FROM generation_access WHERE user_id = ?')
+				.bind('user-1')
+				.first<{ enabled: number }>()
+		).toBeNull();
 	});
 });
 

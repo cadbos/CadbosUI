@@ -15,7 +15,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { DepositResponse, SessionUser } from '$lib/api/contract';
-import { grantGenerationAccess, makeD1 } from '$lib/server/testing/d1-shim';
+import { makeD1 } from '$lib/server/testing/d1-shim';
 
 const lightning = vi.hoisted(() => ({
 	parseNwcConnectionString: vi.fn(() => ({
@@ -141,7 +141,6 @@ describe('GET /api/deposits/[id]', () => {
 	it('credits the account and returns the fresh balance once the wallet reports settled', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantGenerationAccess(db, 'user-1', 0);
 		seedDeposit(db, 'deposit-1', 'user-1');
 		lightning.lookupInvoice.mockResolvedValueOnce({
 			state: 'settled',
@@ -164,7 +163,6 @@ describe('GET /api/deposits/[id]', () => {
 	it('does not double-credit on a second poll after settlement', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantGenerationAccess(db, 'user-1', 0);
 		seedDeposit(db, 'deposit-1', 'user-1');
 		lightning.lookupInvoice.mockResolvedValue({
 			state: 'settled',
