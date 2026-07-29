@@ -15,7 +15,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { ComfyUiError } from '$lib/server/comfyui';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { grantGenerationAccess, makeD1 } from '$lib/server/testing/d1-shim';
 
 const integration = vi.hoisted(() => ({
 	cancel: vi.fn(),
@@ -76,9 +76,7 @@ function seedUser(
 		.bind(id, pubkey, Date.now())
 		.run();
 	if (balance !== null) {
-		db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-			.bind(id, balance, Date.now())
-			.run();
+		grantGenerationAccess(db, id, balance);
 	}
 }
 
@@ -146,13 +144,19 @@ describe('POST /api/texture-replacement', () => {
 		expect(integration.submit).not.toHaveBeenCalled();
 		expect(jobs.create).not.toHaveBeenCalled();
 		const generation = await db
-			.prepare('SELECT kind, source_url, amount FROM generations WHERE user_id = ?')
+			.prepare(
+				'SELECT generation.kind, detail.input_url AS source_url, ' +
+					'-entry.amount AS amount_units FROM generations generation ' +
+					'JOIN image_generation_details detail ON detail.generation_id = generation.id ' +
+					'JOIN ledger_entries entry ON entry.transaction_id = generation.ledger_transaction_id ' +
+					"WHERE generation.user_id = ? AND entry.account_id = 'archai-token'"
+			)
 			.bind('user-1')
-			.first<{ kind: string; source_url: string; amount: number }>();
+			.first<{ kind: string; source_url: string; amount_units: number }>();
 		expect(generation).toEqual({
 			kind: 'texture-replacement',
 			source_url: requestBody.image,
-			amount: 1.5
+			amount_units: 150
 		});
 	});
 

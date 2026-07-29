@@ -15,6 +15,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { ObjectReplacementJobResponse, SessionUser } from '$lib/api/contract';
+import { getCredit } from '$lib/server/billing';
 import { ComfyUiError, type ComfyDownloadedImage } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import {
@@ -22,7 +23,7 @@ import {
 	getObjectReplacementJob
 } from '$lib/server/object-replacement-jobs';
 import { RemoteImageImportError } from '$lib/server/remote-image';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { grantGenerationAccess, makeD1 } from '$lib/server/testing/d1-shim';
 
 const integration = vi.hoisted(() => ({
 	cancel: vi.fn(),
@@ -115,9 +116,7 @@ function seedUser(db: D1Database, balance?: number, userId = 'user-1', pubkey = 
 		.bind(userId, pubkey, Date.now())
 		.run();
 	if (balance !== undefined) {
-		db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-			.bind(userId, balance, Date.now())
-			.run();
+		grantGenerationAccess(db, userId, balance);
 	}
 }
 
@@ -343,10 +342,7 @@ describe('POST /api/object-replacement', () => {
 			const count = await db
 				.prepare('SELECT COUNT(*) AS count FROM object_replacement_jobs')
 				.first<{ count: number }>();
-			const credit = await db
-				.prepare('SELECT balance FROM credits WHERE user_id = ?')
-				.bind('user-1')
-				.first<{ balance: number }>();
+			const credit = await getCredit(db, 'user-1');
 			expect(count?.count).toBe(0);
 			expect(credit?.balance).toBe(12);
 		}
@@ -588,10 +584,7 @@ describe('GET /api/object-replacement/[id]', () => {
 				balance: 10
 			}
 		]);
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
+		const credit = await getCredit(db, 'user-1');
 		const generations = await db
 			.prepare('SELECT COUNT(*) AS count FROM generations WHERE id = ?')
 			.bind('job-1')
@@ -631,10 +624,7 @@ describe('GET /api/object-replacement/[id]', () => {
 			status: 'failed',
 			error: { code: 'object_replacement_failed', message: 'Object replacement failed' }
 		});
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
+		const credit = await getCredit(db, 'user-1');
 		expect(credit?.balance).toBe(12);
 	});
 

@@ -13,6 +13,11 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
+import {
+	fromLedgerAmountUnits,
+	LEDGER_AMOUNT_SCALE,
+	toLedgerAmountUnits
+} from '$lib/server/ledger-units';
 
 export type ObjectReplacementJobStatus = 'processing' | 'completed' | 'failed';
 
@@ -52,7 +57,6 @@ interface ObjectReplacementJobRow {
 
 interface ObjectReplacementDeductionSnapshotRow {
 	available_balance: number;
-	cost: number;
 }
 
 function toObjectReplacementJob(row: ObjectReplacementJobRow): ObjectReplacementJob {
@@ -148,48 +152,91 @@ export async function completeObjectReplacementJob(
 	outputUrl: string,
 	completedAt: number
 ): Promise<ObjectReplacementJob> {
+	const costUnits = toLedgerAmountUnits(
+		(
+			await db
+				.prepare(
+					"SELECT cost FROM object_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing'"
+				)
+				.bind(id, userId)
+				.first<{ cost: number }>()
+		)?.cost ?? 0
+	);
+	const transactionId = `generation:${id}`;
 	const results = await db.batch<ObjectReplacementDeductionSnapshotRow | ObjectReplacementJobRow>([
 		db
 			.prepare(
-				'SELECT c.balance AS available_balance, j.cost FROM credits c ' +
-					'JOIN object_replacement_jobs j ON j.user_id = c.user_id ' +
-					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
+				'SELECT balance.balance AS available_balance FROM ledger_accounts account ' +
+					'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+					'JOIN object_replacement_jobs job ON job.user_id = account.user_id ' +
+					"WHERE account.asset = 'app_credit' AND job.id = ? AND job.user_id = ? " +
+					"AND job.status = 'processing'"
 			)
 			.bind(id, userId),
 		db
 			.prepare(
-				'UPDATE credits SET balance = MAX(balance - ' +
-					"(SELECT cost FROM object_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing'), " +
-					'0), ' +
-					'updated_at = ? WHERE user_id = ? AND EXISTS ' +
-					"(SELECT 1 FROM object_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing')"
+				'INSERT INTO ledger_transactions (id, occurred_at) SELECT ?, ? WHERE EXISTS (' +
+					"SELECT 1 FROM object_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing')"
 			)
-			.bind(id, userId, completedAt, userId, id, userId),
+			.bind(transactionId, completedAt, id, userId),
+		db
+			.prepare(
+				'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
+					'SELECT ?, account.id, -MIN(balance.balance, ?) FROM ledger_accounts account ' +
+					'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+					"WHERE account.user_id = ? AND account.asset = 'app_credit' AND balance.balance > 0 " +
+					'AND EXISTS (SELECT 1 FROM object_replacement_jobs ' +
+					"WHERE id = ? AND user_id = ? AND status = 'processing')"
+			)
+			.bind(transactionId, costUnits, userId, id, userId),
+		db
+			.prepare(
+				'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
+					'SELECT ?, account.id, -? FROM ledger_accounts account ' +
+					"WHERE account.user_id IS NULL AND account.asset = 'archai_token' " +
+					'AND EXISTS (SELECT 1 FROM object_replacement_jobs ' +
+					"WHERE id = ? AND user_id = ? AND status = 'processing')"
+			)
+			.bind(transactionId, costUnits, id, userId),
+		db
+			.prepare('UPDATE ledger_transactions SET finalized = 1 WHERE id = ? AND finalized = 0')
+			.bind(transactionId),
 		db
 			.prepare(
 				'INSERT INTO generations ' +
-					'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-					"SELECT j.id, j.user_id, ?, j.scene_url, j.replacement_object, 'object-replacement', j.cost, c.balance, ? " +
-					'FROM object_replacement_jobs j JOIN credits c ON c.user_id = j.user_id ' +
-					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
+					'(id, user_id, prompt, kind, ledger_transaction_id, created_at) ' +
+					"SELECT job.id, job.user_id, job.replacement_object, 'object-replacement', ?, ? " +
+					"FROM object_replacement_jobs job WHERE job.id = ? AND job.user_id = ? AND job.status = 'processing'"
 			)
-			.bind(outputUrl, completedAt, id, userId),
+			.bind(transactionId, completedAt, id, userId),
+		db
+			.prepare(
+				'INSERT INTO image_generation_details (generation_id, output_url, input_url) ' +
+					"SELECT job.id, ?, job.scene_url FROM object_replacement_jobs job WHERE job.id = ? AND job.user_id = ? AND job.status = 'processing'"
+			)
+			.bind(outputUrl, id, userId),
 		db
 			.prepare(
 				"UPDATE object_replacement_jobs SET status = 'completed', output_url = ?, " +
-					'balance_after = (SELECT balance FROM credits WHERE user_id = ?), updated_at = ?, completed_at = ? ' +
-					"WHERE id = ? AND user_id = ? AND status = 'processing' " +
-					'AND EXISTS (SELECT 1 FROM credits WHERE user_id = ?) RETURNING *'
+					'balance_after = (SELECT balance.balance / ? FROM ledger_accounts account ' +
+					'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+					"WHERE account.user_id = ? AND account.asset = 'app_credit'), " +
+					'updated_at = ?, completed_at = ? ' +
+					"WHERE id = ? AND user_id = ? AND status = 'processing' RETURNING *"
 			)
-			.bind(outputUrl, userId, completedAt, completedAt, id, userId, userId)
+			.bind(outputUrl, LEDGER_AMOUNT_SCALE, userId, completedAt, completedAt, id, userId)
 	]);
 	const snapshot = results[0]?.results[0];
-	if (snapshot && 'available_balance' in snapshot && snapshot.available_balance < snapshot.cost) {
+	if (
+		snapshot &&
+		'available_balance' in snapshot &&
+		fromLedgerAmountUnits(snapshot.available_balance) < fromLedgerAmountUnits(costUnits)
+	) {
 		console.warn('Object replacement credit deduction exceeded available balance:', {
 			jobId: id
 		});
 	}
-	const row = results[3]?.results[0];
+	const row = results[7]?.results[0];
 	if (row && 'id' in row) return toObjectReplacementJob(row);
 	const existing = await getObjectReplacementJob(db, userId, id);
 	if (!existing) throw new Error('object replacement job not found');

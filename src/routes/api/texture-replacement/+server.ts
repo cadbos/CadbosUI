@@ -19,12 +19,7 @@ import type { RenderResponse, TextureReplacementJobResponse } from '$lib/api/con
 import { apiError, parseBody, textureReplacementRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
-import {
-	assertGenerationAllowed,
-	getCredit,
-	getUserIdByPubkey,
-	recordBalance
-} from '$lib/server/billing';
+import { assertGenerationAllowed, getCredit, getUserIdByPubkey } from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { replaceTexturesWithMask } from '$lib/server/generation';
@@ -135,11 +130,6 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				return apiError(502, 'texture_replacement_failed', 'Texture replacement failed');
 			}
 
-			try {
-				await recordBalance(db, userId, result.balance);
-			} catch (error) {
-				console.error('recordBalance failed after masked texture replacement:', error);
-			}
 			try {
 				const credit = await recordGeneration(db, userId, {
 					url: result.outputUrl,

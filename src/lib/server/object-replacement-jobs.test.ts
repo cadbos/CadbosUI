@@ -14,21 +14,20 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
+import { getCredit } from '$lib/server/billing';
 import {
 	completeObjectReplacementJob,
 	createObjectReplacementJob,
 	failObjectReplacementJob,
 	getObjectReplacementJob
 } from '$lib/server/object-replacement-jobs';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { grantGenerationAccess, makeD1 } from '$lib/server/testing/d1-shim';
 
 function seedAccount(db: D1Database, balance = 12): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind('user-1', 'pubkey-1', 1)
 		.run();
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-		.bind('user-1', balance, 1)
-		.run();
+	grantGenerationAccess(db, 'user-1', balance, 1, 1);
 }
 
 async function seedJob(db: D1Database, id = 'job-1') {
@@ -76,13 +75,19 @@ describe('object replacement jobs', () => {
 
 		expect(job).toMatchObject({ status: 'completed', balanceAfter: 10, cost: 2 });
 		const generation = await db
-			.prepare('SELECT id, kind, amount, balance_after FROM generations WHERE id = ?')
+			.prepare(
+				'SELECT generation.id, generation.kind, -entry.amount AS amount_units, ' +
+					'job.balance_after FROM generations generation ' +
+					'JOIN ledger_entries entry ON entry.transaction_id = generation.ledger_transaction_id ' +
+					'JOIN object_replacement_jobs job ON job.id = generation.id ' +
+					"WHERE generation.id = ? AND entry.account_id = 'archai-token'"
+			)
 			.bind('job-1')
 			.first();
 		expect(generation).toEqual({
 			id: 'job-1',
 			kind: 'object-replacement',
-			amount: 2,
+			amount_units: 200,
 			balance_after: 10
 		});
 	});
@@ -105,10 +110,7 @@ describe('object replacement jobs', () => {
 
 		expect(first.balanceAfter).toBe(10);
 		expect(second.balanceAfter).toBe(10);
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
+		const credit = await getCredit(db, 'user-1');
 		const count = await db
 			.prepare('SELECT COUNT(*) AS count FROM generations WHERE id = ?')
 			.bind('job-1')
@@ -149,18 +151,21 @@ describe('object replacement jobs', () => {
 		);
 
 		expect(jobs.map((job) => job.balanceAfter).sort()).toEqual([0, 1]);
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
+		const credit = await getCredit(db, 'user-1');
 		const generations = await db
-			.prepare('SELECT id, amount, balance_after FROM generations WHERE user_id = ? ORDER BY id')
+			.prepare(
+				'SELECT generation.id, -entry.amount AS amount_units, job.balance_after ' +
+					'FROM generations generation ' +
+					'JOIN ledger_entries entry ON entry.transaction_id = generation.ledger_transaction_id ' +
+					'JOIN object_replacement_jobs job ON job.id = generation.id ' +
+					"WHERE generation.user_id = ? AND entry.account_id = 'archai-token' ORDER BY generation.id"
+			)
 			.bind('user-1')
-			.all<{ id: string; amount: number; balance_after: number }>();
+			.all<{ id: string; amount_units: number; balance_after: number }>();
 		expect(credit?.balance).toBe(0);
 		expect(generations.results).toEqual([
-			{ id: 'job-1', amount: 2, balance_after: 1 },
-			{ id: 'job-2', amount: 2, balance_after: 0 }
+			{ id: 'job-1', amount_units: 200, balance_after: 1 },
+			{ id: 'job-2', amount_units: 200, balance_after: 0 }
 		]);
 		expect(warning).toHaveBeenCalledOnce();
 		expect(warning).toHaveBeenCalledWith(
@@ -187,10 +192,7 @@ describe('object replacement jobs', () => {
 			status: 'failed',
 			errorCode: 'object_replacement_failed'
 		});
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
+		const credit = await getCredit(db, 'user-1');
 		expect(credit?.balance).toBe(12);
 	});
 });
