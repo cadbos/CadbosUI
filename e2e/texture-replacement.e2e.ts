@@ -16,6 +16,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const BASE_URL = 'https://cdn.example.test/scene-render.webp';
 
 interface UploadCapture {
 	maskPng(): Buffer | undefined;
@@ -66,7 +67,7 @@ async function authenticate(page: Page): Promise<void> {
 async function uploadInputs(page: Page): Promise<UploadCapture> {
 	let upload = 0;
 	let maskPng: Buffer | undefined;
-	await page.route('https://cdn.example.test/scene.webp', async (route) => {
+	await page.route(BASE_URL, async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'image/svg+xml',
@@ -96,22 +97,36 @@ async function uploadInputs(page: Page): Promise<UploadCapture> {
 			})
 		});
 	});
+	await page.route('**/api/render', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ outputUrl: BASE_URL, cost: 1, balance: 19 })
+		});
+	});
 
-	const inputs = page.locator('#mode-panel-edit input[type="file"]');
+	await page.goto('/create/interior?view=chat&format=webp');
+	await expect(page.getByRole('heading', { name: 'Сгенерированные изображения' })).toBeVisible();
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
-		inputs.nth(0).setInputFiles({
-			name: 'scene.webp',
-			mimeType: 'image/webp',
-			buffer: Buffer.from('scene')
+		page.locator('#mode-panel-render input[type="file"]').setInputFiles({
+			name: 'scene.png',
+			mimeType: 'image/png',
+			buffer: Buffer.from('project-source')
 		})
 	]);
+	await page.getByRole('button', { name: 'Сгенерировать' }).click();
+	await expect(page.getByRole('img', { name: 'Результат создания' })).toHaveAttribute(
+		'src',
+		BASE_URL
+	);
+	await page.getByRole('tab', { name: /Замена текстуры/ }).click();
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
-		inputs.nth(1).setInputFiles({
-			name: 'fabric.webp',
-			mimeType: 'image/webp',
-			buffer: Buffer.from('fabric')
+		page.locator('#edit-tool-panel-texture-replacement input[type="file"]').setInputFiles({
+			name: 'fabric.png',
+			mimeType: 'image/png',
+			buffer: Buffer.from('fabric-reference')
 		})
 	]);
 	return { maskPng: () => maskPng };
@@ -119,7 +134,6 @@ async function uploadInputs(page: Page): Promise<UploadCapture> {
 
 test('submits texture inputs and completes inside the nested edit tool', async ({ page }) => {
 	await authenticate(page);
-	await page.goto('/edit?tool=texture-replacement');
 	await uploadInputs(page);
 
 	let submittedBody: unknown;
@@ -156,7 +170,7 @@ test('submits texture inputs and completes inside the nested edit tool', async (
 	);
 	await expect(panel.locator('.job-success')).toHaveText('Замена текстуры завершена.');
 	expect(submittedBody).toEqual({
-		image: 'https://cdn.example.test/scene.webp',
+		image: BASE_URL,
 		referenceImage: 'https://cdn.example.test/reference-fabric.webp',
 		replacementSurface: 'обивка дивана'
 	});
@@ -166,7 +180,6 @@ test('uses the masked texture mode and applies the synchronous result without po
 	page
 }) => {
 	await authenticate(page);
-	await page.goto('/edit?tool=texture-replacement');
 	const uploads = await uploadInputs(page);
 
 	const panel = page.locator('#edit-tool-panel-texture-replacement');
@@ -306,7 +319,7 @@ test('uses the masked texture mode and applies the synchronous result without po
 	);
 	await expect(panel.locator('.job-success')).toHaveText('Замена текстуры завершена.');
 	expect(submittedBody).toEqual({
-		image: 'https://cdn.example.test/scene.webp',
+		image: BASE_URL,
 		referenceImage: 'https://cdn.example.test/reference-fabric.webp',
 		mask: 'https://cdn.example.test/texture-mask.png'
 	});
@@ -339,7 +352,6 @@ test('uses the masked texture mode and applies the synchronous result without po
 
 test('does not navigate back after switching tools during submission', async ({ page }) => {
 	await authenticate(page);
-	await page.goto('/edit?tool=texture-replacement');
 	await uploadInputs(page);
 
 	let releaseResponse: (() => void) | undefined;
@@ -375,4 +387,41 @@ test('does not navigate back after switching tools during submission', async ({ 
 
 	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
 	await expect(page).not.toHaveURL(/tool=texture-replacement/);
+});
+
+test('resumes a completed texture job after reload without submitting again', async ({ page }) => {
+	await authenticate(page);
+	let postCount = 0;
+	let getCount = 0;
+	await page.route('**/api/texture-replacement', async (route) => {
+		postCount += 1;
+		await route.abort();
+	});
+	await page.route(`**/api/texture-replacement/${JOB_ID}`, async (route) => {
+		getCount += 1;
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: JOB_ID,
+				status: 'completed',
+				outputUrl: 'https://cdn.example.test/recovered-texture.webp',
+				cost: 2,
+				balance: 18
+			})
+		});
+	});
+
+	await page.goto(`/edit?tool=texture-replacement&source=room-photo&surface=sofa&job=${JOB_ID}`);
+	await expect(page.getByRole('img', { name: 'Результат создания' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/recovered-texture.webp'
+	);
+	await page.reload();
+	await expect(page.getByRole('img', { name: 'Результат создания' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/recovered-texture.webp'
+	);
+	await expect.poll(() => getCount).toBe(2);
+	expect(postCount).toBe(0);
 });

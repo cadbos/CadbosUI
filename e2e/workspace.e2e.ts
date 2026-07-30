@@ -22,6 +22,34 @@ async function openCreate(page: Page): Promise<void> {
 	await page.goto('/create/interior?view=chat&format=webp');
 }
 
+async function unlockCreation(page: Page): Promise<void> {
+	await page.route('**/api/uploads', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				url: 'https://cdn.example.test/prompt-source.webp',
+				mime: 'image/webp',
+				size: 1024,
+				dimensions: [800, 600]
+			})
+		});
+	});
+	await expect(page.getByRole('button', { name: 'Войти' })).toBeVisible();
+	const input = page.locator('#mode-panel-render input[type="file"]');
+	await expect(async () => {
+		await input.setInputFiles([]);
+		await input.setInputFiles({
+			name: 'room.png',
+			mimeType: 'image/png',
+			buffer: Buffer.from('prompt-source')
+		});
+		await expect(
+			page.locator('#mode-panel-render').getByRole('button', { name: 'Изменить фото' })
+		).toBeVisible({ timeout: 2_000 });
+	}).toPass({ timeout: 10_000 });
+}
+
 function localDateLabel(createdAt: number): string {
 	const parts = new Intl.DateTimeFormat('ru', {
 		day: 'numeric',
@@ -46,8 +74,11 @@ function localTimeLabel(createdAt: number): string {
 
 test('renders the workspace and switches views', async ({ page }) => {
 	await openCreate(page);
+	await unlockCreation(page);
 	await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
-	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: 'Один проект — от исходного фото до финальной версии' })
+	).toBeVisible();
 	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
 });
 
@@ -197,6 +228,7 @@ test('switches to the graph view and edits fragment nodes reflected in key-value
 }) => {
 	await page.setViewportSize({ width: 1024, height: 768 });
 	await openCreate(page);
+	await unlockCreation(page);
 
 	const graphTab = page.getByRole('tab', { name: 'Граф' });
 	await graphTab.click();
@@ -220,6 +252,7 @@ test('switches to the graph view and edits fragment nodes reflected in key-value
 test('the graph view stays usable on a narrow (phone-sized) screen', async ({ page }) => {
 	await page.setViewportSize({ width: 375, height: 800 });
 	await openCreate(page);
+	await unlockCreation(page);
 
 	const graphTab = page.getByRole('tab', { name: 'Граф' });
 	await graphTab.click();
@@ -234,6 +267,7 @@ test('the graph view stays usable on a narrow (phone-sized) screen', async ({ pa
 test('keeps the prompt byte-identical when switching from chat to graph', async ({ page }) => {
 	await page.setViewportSize({ width: 1024, height: 768 });
 	await openCreate(page);
+	await unlockCreation(page);
 	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
 	const prompt = 'Scandinavian style, warm natural light';
 
@@ -249,6 +283,7 @@ test('keeps the prompt byte-identical when switching from chat to graph', async 
 
 test('key-value edits survive a round trip through the chat tab', async ({ page }) => {
 	await openCreate(page);
+	await unlockCreation(page);
 
 	await page.getByRole('tab', { name: 'Ключ-значение' }).click();
 	await page.getByRole('button', { name: 'Добавить фрагмент' }).click();
@@ -262,7 +297,8 @@ test('key-value edits survive a round trip through the chat tab', async ({ page 
 
 test('navigates tabs with the keyboard', async ({ page }) => {
 	await openCreate(page);
-	const promptTabs = page.getByRole('tablist', { name: 'Способ ввода' });
+	await unlockCreation(page);
+	const promptTabs = page.getByRole('tablist', { name: 'Создание основы' });
 	const chat = promptTabs.getByRole('tab', { name: 'Чат' });
 	const keyValue = promptTabs.getByRole('tab', { name: 'Ключ-значение' });
 
@@ -295,6 +331,7 @@ test('the Scene Type toggle switches to exterior and relabels the photo step', a
 
 test('navigates the Scene Type toggle with the keyboard', async ({ page }) => {
 	await openCreate(page);
+	await expect(page.getByRole('button', { name: 'Войти' })).toBeVisible();
 	const sceneTypeTabs = page.getByRole('tablist', { name: 'Тип сцены' });
 	await expect(sceneTypeTabs).toBeVisible();
 	const interiorTab = sceneTypeTabs.getByRole('tab', { name: 'Интерьер' });
@@ -378,7 +415,7 @@ test('generating with the exterior scene type calls the exterior render route', 
 		.setInputFiles({ name: 'house.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 	await page.getByRole('button', { name: 'Сгенерировать' }).click();
 
-	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
+	await expect(page.getByRole('img', { name: 'Результат создания' })).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/exterior-render.webp'
 	);
