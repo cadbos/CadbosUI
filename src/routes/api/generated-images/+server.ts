@@ -69,6 +69,8 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 		images: page.images.map((image) => ({
 			id: image.id,
 			url: image.url,
+			sourceUrl: image.sourceUrl,
+			kind: image.kind,
 			createdAt: image.createdAt
 		})),
 		pagination: {

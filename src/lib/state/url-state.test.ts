@@ -17,6 +17,7 @@ import { RequestState } from '$lib/state/request.svelte';
 import {
 	applyShareParams,
 	buildShareUrl,
+	destinationForGenerationKind,
 	isEditToolRoute,
 	isWorkspaceRoute,
 	slugToTool,
@@ -24,6 +25,35 @@ import {
 } from '$lib/state/url-state';
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
+
+describe('generation history destinations', () => {
+	it('restores the processing mode represented by each generation kind', () => {
+		expect(destinationForGenerationKind('render')).toEqual({
+			mode: 'render',
+			subTab: { view: 'chat' }
+		});
+		expect(destinationForGenerationKind('edit')).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'freeform' }
+		});
+		expect(destinationForGenerationKind('style-transfer')).toEqual({
+			mode: 'styleTransfer',
+			subTab: { reference: 'photorealistic' }
+		});
+		expect(destinationForGenerationKind('upscale')).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'freeform' }
+		});
+		expect(destinationForGenerationKind('object-replacement')).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'object-replacement' }
+		});
+		expect(destinationForGenerationKind('texture-replacement')).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'texture-replacement' }
+		});
+	});
+});
 
 describe('edit tool route matching', () => {
 	it('requires both an edit route and the requested normalized tool', () => {

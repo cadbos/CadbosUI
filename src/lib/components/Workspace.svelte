@@ -13,6 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { Images } from '@lucide/svelte';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -20,8 +21,8 @@ before the Change Date. See LICENSE for complete terms.
 	import RenderResult from '$lib/components/RenderResult.svelte';
 	import EditPanel from '$lib/components/EditPanel.svelte';
 	import PromptViews from '$lib/components/PromptViews.svelte';
+	import ScenesDrawer from '$lib/components/ScenesDrawer.svelte';
 	import StyleTransferPanel from '$lib/components/StyleTransferPanel.svelte';
-	import GeneratedImagesSidebar from '$lib/components/GeneratedImagesSidebar.svelte';
 	import {
 		creditErrorKey,
 		extractApiErrorCode,
@@ -56,6 +57,8 @@ before the Change Date. See LICENSE for complete terms.
 	let submitError = $state<string | null>(null);
 	let modeTabs = $state<HTMLElement[]>([]);
 	let sceneTypeTabs = $state<HTMLElement[]>([]);
+	let scenesOpen = $state(false);
+	let scenesTrigger: HTMLButtonElement | null = null;
 
 	// The URL is the source of truth for which mode is open — not local $state —
 	// so a shared link or a page reload always opens on the right tab.
@@ -103,6 +106,11 @@ before the Change Date. See LICENSE for complete terms.
 		if (auth.canLoadGeneratedImages) void generatedImages.load();
 		else generatedImages.clear();
 	});
+
+	function closeScenes(): void {
+		scenesOpen = false;
+		requestAnimationFrame(() => scenesTrigger?.focus());
+	}
 
 	// True once the request store has been hydrated from the URL at least once
 	// (see afterNavigate below). Gates the write-sync effect so it can't fire —
@@ -211,28 +219,49 @@ before the Change Date. See LICENSE for complete terms.
 <main class="page">
 	<div class="workspace-shell">
 		<div class="workspace-main">
-			<nav class="mode-nav" aria-label={t('mode.switcher.label')}>
-				<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
-					{#each modes as modeOption, index (modeOption.id)}
-						<button
-							{@attach (node) => {
-								modeTabs[index] = node as HTMLElement;
-							}}
-							type="button"
-							role="tab"
-							id={`mode-tab-${modeOption.id}`}
-							aria-selected={mode === modeOption.id}
-							aria-controls={`mode-panel-${modeOption.id}`}
-							tabindex={mode === modeOption.id ? 0 : -1}
-							class:active={mode === modeOption.id}
-							onclick={() => modeTabController.activate(index)}
-							onkeydown={modeTabController.onKeydown}
-						>
-							<span>{t(modeOption.label)}</span>
-						</button>
-					{/each}
-				</div>
-			</nav>
+			<div class="workspace-topbar">
+				<nav class="mode-nav" aria-label={t('mode.switcher.label')}>
+					<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
+						{#each modes as modeOption, index (modeOption.id)}
+							<button
+								{@attach (node) => {
+									modeTabs[index] = node as HTMLElement;
+								}}
+								type="button"
+								role="tab"
+								id={`mode-tab-${modeOption.id}`}
+								aria-selected={mode === modeOption.id}
+								aria-controls={`mode-panel-${modeOption.id}`}
+								tabindex={mode === modeOption.id ? 0 : -1}
+								class:active={mode === modeOption.id}
+								onclick={() => modeTabController.activate(index)}
+								onkeydown={modeTabController.onKeydown}
+							>
+								<span>{t(modeOption.label)}</span>
+							</button>
+						{/each}
+					</div>
+				</nav>
+
+				{#if isAuthenticated}
+					<button
+						{@attach (node) => {
+							scenesTrigger = node as HTMLButtonElement;
+							return () => {
+								scenesTrigger = null;
+							};
+						}}
+						type="button"
+						class="scenes-button"
+						aria-expanded={scenesOpen}
+						aria-controls="scenes-drawer"
+						onclick={() => (scenesOpen = true)}
+					>
+						<Images size={18} strokeWidth={1.8} aria-hidden="true" />
+						<span>{t('generatedImages.title')}</span>
+					</button>
+				{/if}
+			</div>
 
 			<div
 				class="mode-panel"
@@ -398,11 +427,11 @@ before the Change Date. See LICENSE for complete terms.
 				</svelte:boundary>
 			</div>
 		</div>
-
-		{#if isAuthenticated}
-			<GeneratedImagesSidebar />
-		{/if}
 	</div>
+
+	{#if isAuthenticated && scenesOpen}
+		<ScenesDrawer onClose={closeScenes} />
+	{/if}
 </main>
 
 <style>
@@ -422,11 +451,10 @@ before the Change Date. See LICENSE for complete terms.
 
 	.workspace-shell {
 		width: 100%;
-		max-width: calc(var(--content-width) + 368px + 1.5rem);
+		max-width: var(--content-width);
 		display: flex;
 		align-items: flex-start;
 		justify-content: center;
-		gap: 1.5rem;
 	}
 
 	.workspace-main {
@@ -439,12 +467,51 @@ before the Change Date. See LICENSE for complete terms.
 		min-width: 0;
 	}
 
-	.mode-nav {
+	.workspace-topbar {
 		width: 100%;
+		display: flex;
+		align-items: stretch;
+		gap: 0.75rem;
+	}
+
+	.mode-nav {
+		flex: 1 1 auto;
+		min-width: 0;
 		padding: 0.25rem;
 		background: #e9ece9;
 		border: 1px solid #d8ded8;
 		border-radius: 14px;
+	}
+
+	.scenes-button {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		min-height: 3rem;
+		padding: 0.65rem 1rem;
+		border: 1px solid var(--color-border);
+		border-radius: 14px;
+		background: var(--color-surface);
+		color: var(--color-text);
+		box-shadow: var(--shadow-sm);
+		font: inherit;
+		font-size: 0.875rem;
+		font-weight: 650;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			color 0.15s,
+			box-shadow 0.15s;
+	}
+
+	.scenes-button:hover {
+		background: var(--color-surface-hover);
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+		box-shadow: var(--shadow);
 	}
 
 	.mode-tabs {
@@ -556,13 +623,6 @@ before the Change Date. See LICENSE for complete terms.
 		display: none;
 	}
 
-	@media (max-width: 960px) {
-		.workspace-shell {
-			flex-direction: column;
-			align-items: center;
-		}
-	}
-
 	@media (max-width: 640px) {
 		.page {
 			--content-width: 100%;
@@ -572,6 +632,16 @@ before the Change Date. See LICENSE for complete terms.
 		.mode-tabs button {
 			padding: 0.7rem 0.75rem;
 			font-size: 0.875rem;
+		}
+
+		.scenes-button {
+			padding-inline: 0.75rem;
+		}
+	}
+
+	@media (max-width: 440px) {
+		.workspace-topbar {
+			flex-direction: column;
 		}
 	}
 </style>

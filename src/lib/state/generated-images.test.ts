@@ -20,6 +20,8 @@ function image(id: string, createdAt: number): GeneratedImageRecord {
 	return {
 		id,
 		url: `https://cdn.example.test/${id}.webp`,
+		sourceUrl: `https://cdn.example.test/${id}-source.jpg`,
+		kind: 'render',
 		createdAt
 	};
 }

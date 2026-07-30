@@ -18,12 +18,29 @@
 // record and the deduction to fall out of sync with each other.
 
 import type { D1Database } from '@cloudflare/workers-types';
-import type { Balance, CreditTransaction, UserUsageRecord } from '$lib/api/contract';
+import {
+	generationKinds,
+	type Balance,
+	type CreditTransaction,
+	type GenerationKind,
+	type UserUsageRecord
+} from '$lib/api/contract';
+
+function isGenerationKind(kind: string): kind is GenerationKind {
+	return generationKinds.some((candidate) => candidate === kind);
+}
+
+function generationKindForRow(id: string, kind: string): GenerationKind {
+	if (isGenerationKind(kind)) return kind;
+	throw new Error(`generation ${id} has invalid kind`);
+}
 
 export interface GeneratedImage {
 	id: string;
 	userId: string;
 	url: string;
+	sourceUrl: string;
+	kind: GenerationKind;
 	createdAt: number;
 }
 
@@ -41,6 +58,8 @@ interface GenerationRow {
 	id: string;
 	user_id: string;
 	url: string;
+	source_url: string;
+	kind: string;
 	created_at: number;
 }
 
@@ -49,6 +68,8 @@ function toGeneratedImage(row: GenerationRow): GeneratedImage {
 		id: row.id,
 		userId: row.user_id,
 		url: row.url,
+		sourceUrl: row.source_url,
+		kind: generationKindForRow(row.id, row.kind),
 		createdAt: row.created_at
 	};
 }
@@ -131,7 +152,9 @@ export async function getGeneratedImageForUser(
 	id: string
 ): Promise<GeneratedImage | null> {
 	const row = await db
-		.prepare('SELECT id, user_id, url, created_at FROM generations WHERE id = ? AND user_id = ?')
+		.prepare(
+			'SELECT id, user_id, url, source_url, kind, created_at FROM generations WHERE id = ? AND user_id = ?'
+		)
 		.bind(id, userId)
 		.first<GenerationRow>();
 	return row ? toGeneratedImage(row) : null;
@@ -157,7 +180,7 @@ export async function listGeneratedImages(
 ): Promise<GeneratedImagesPage> {
 	const result = await db
 		.prepare(
-			'SELECT id, user_id, url, created_at FROM generations ' +
+			'SELECT id, user_id, url, source_url, kind, created_at FROM generations ' +
 				'WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?'
 		)
 		.bind(userId, size + 1, offset)
@@ -226,7 +249,7 @@ function toCreditTransaction(row: CreditTransactionRow): CreditTransaction {
 		id: row.id,
 		amount: row.amount,
 		balanceAfter: row.balance_after,
-		kind: row.kind as CreditTransaction['kind'],
+		kind: generationKindForRow(row.id, row.kind),
 		createdAt: row.created_at
 	};
 }

@@ -152,9 +152,22 @@ export interface RenderResponse {
 	balance: number;
 }
 
+export const generationKinds = [
+	'render',
+	'edit',
+	'style-transfer',
+	'upscale',
+	'object-replacement',
+	'texture-replacement'
+] as const;
+
+export type GenerationKind = (typeof generationKinds)[number];
+
 export interface GeneratedImageRecord {
 	id: string;
 	url: string;
+	sourceUrl: string;
+	kind: GenerationKind;
 	createdAt: number;
 }
 
@@ -259,13 +272,7 @@ export interface CreditTransaction {
 	id: string;
 	amount: number;
 	balanceAfter: number;
-	kind:
-		| 'render'
-		| 'edit'
-		| 'style-transfer'
-		| 'upscale'
-		| 'object-replacement'
-		| 'texture-replacement';
+	kind: GenerationKind;
 	createdAt: number;
 }
 

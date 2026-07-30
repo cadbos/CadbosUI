@@ -104,6 +104,8 @@ describe('GET /api/generated-images', () => {
 		expect(result.images[0]).toEqual({
 			id: 'user-1-image-20',
 			url: 'https://cdn.example.test/user-1-image-20.webp',
+			sourceUrl: 'https://cdn.example.test/source.jpg',
+			kind: 'render',
 			createdAt: 10020
 		});
 		expect(result.pagination).toEqual({ offset: 0, size: 20, hasMore: true });

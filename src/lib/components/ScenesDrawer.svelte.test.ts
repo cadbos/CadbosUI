@@ -17,12 +17,14 @@ import { render } from 'vitest-browser-svelte';
 import type { GeneratedImageRecord, GeneratedImagesResponse } from '$lib/api/contract';
 import { setLocale, type Locale } from '$lib/i18n/index.svelte';
 import { generatedImages } from '$lib/state/generated-images.svelte';
-import GeneratedImagesSidebar from './GeneratedImagesSidebar.svelte';
+import ScenesDrawer from './ScenesDrawer.svelte';
 
 function image(id: string, createdAt: number): GeneratedImageRecord {
 	return {
 		id,
 		url: `https://cdn.example.test/${id}.webp`,
+		sourceUrl: `https://cdn.example.test/${id}-source.jpg`,
+		kind: 'render',
 		createdAt
 	};
 }
@@ -90,7 +92,7 @@ it.each(['ru', 'en'] as const)(
 		generatedImages.status = 'ready';
 		generatedImages.images = [image('sample', createdAt)];
 
-		render(GeneratedImagesSidebar);
+		render(ScenesDrawer, { onClose: vi.fn() });
 
 		await vi.waitFor(() => {
 			expect(
@@ -130,11 +132,9 @@ it('loads the next generated-images page when the infinite-scroll sentinel inter
 		.mockResolvedValueOnce(jsonResponse(page([image('second', 1000)], 1, false)));
 
 	await generatedImages.load();
-	const screen = render(GeneratedImagesSidebar);
+	const screen = render(ScenesDrawer, { onClose: vi.fn() });
 
-	await expect
-		.element(screen.getByRole('img', { name: 'Сгенерированное изображение 1' }))
-		.toBeVisible();
+	await expect.element(screen.getByRole('img', { name: 'Результат сцены 1' })).toBeVisible();
 	await vi.waitFor(() => expect(observe).toHaveBeenCalled());
 
 	observerCallbacks[0]?.(
@@ -142,9 +142,7 @@ it('loads the next generated-images page when the infinite-scroll sentinel inter
 		{} as IntersectionObserver
 	);
 
-	await expect
-		.element(screen.getByRole('img', { name: 'Сгенерированное изображение 2' }))
-		.toBeVisible();
+	await expect.element(screen.getByRole('img', { name: 'Результат сцены 2' })).toBeVisible();
 	expect(observerOptions?.root).toBeInstanceOf(HTMLElement);
 	expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/generated-images?offset=1&size=100', {
 		signal: expect.any(AbortSignal)
