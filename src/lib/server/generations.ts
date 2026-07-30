@@ -18,12 +18,22 @@
 // record and the deduction to fall out of sync with each other.
 
 import type { D1Database } from '@cloudflare/workers-types';
-import type {
-	Balance,
-	CreditTransaction,
-	GenerationKind,
-	UserUsageRecord
+import {
+	generationKinds,
+	type Balance,
+	type CreditTransaction,
+	type GenerationKind,
+	type UserUsageRecord
 } from '$lib/api/contract';
+
+function isGenerationKind(kind: string): kind is GenerationKind {
+	return generationKinds.some((candidate) => candidate === kind);
+}
+
+function generationKindForRow(id: string, kind: string): GenerationKind {
+	if (isGenerationKind(kind)) return kind;
+	throw new Error(`generation ${id} has invalid kind`);
+}
 
 export interface GeneratedImage {
 	id: string;
@@ -59,7 +69,7 @@ function toGeneratedImage(row: GenerationRow): GeneratedImage {
 		userId: row.user_id,
 		url: row.url,
 		sourceUrl: row.source_url,
-		kind: row.kind as GenerationKind,
+		kind: generationKindForRow(row.id, row.kind),
 		createdAt: row.created_at
 	};
 }
@@ -239,7 +249,7 @@ function toCreditTransaction(row: CreditTransactionRow): CreditTransaction {
 		id: row.id,
 		amount: row.amount,
 		balanceAfter: row.balance_after,
-		kind: row.kind as CreditTransaction['kind'],
+		kind: generationKindForRow(row.id, row.kind),
 		createdAt: row.created_at
 	};
 }

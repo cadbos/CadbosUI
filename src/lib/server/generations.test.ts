@@ -37,13 +37,19 @@ function grantAccess(db: D1Database, userId: string, balance: number): void {
 		.run();
 }
 
-function seedGeneration(db: D1Database, id: string, userId: string, createdAt: number): void {
+function seedGeneration(
+	db: D1Database,
+	id: string,
+	userId: string,
+	createdAt: number,
+	kind = 'render'
+): void {
 	db.prepare(
 		'INSERT INTO generations ' +
 			'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-			"VALUES (?, ?, ?, 'https://cdn.example.test/source.jpg', 'cozy', 'render', 1, 10, ?)"
+			"VALUES (?, ?, ?, 'https://cdn.example.test/source.jpg', 'cozy', ?, 1, 10, ?)"
 	)
-		.bind(id, userId, `https://cdn.example.test/${id}.webp`, createdAt)
+		.bind(id, userId, `https://cdn.example.test/${id}.webp`, kind, createdAt)
 		.run();
 }
 
@@ -124,6 +130,15 @@ describe('listCreditHistory', () => {
 
 		const history = await listCreditHistory(db, 'user-1');
 		expect(history.map((entry) => entry.kind)).toEqual(['edit', 'render']);
+	});
+
+	it('rejects an invalid stored generation kind', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneration(db, 'invalid-kind', 'user-1', 1000, 'unknown');
+
+		await expect(listCreditHistory(db, 'user-1')).rejects.toThrow(
+			'generation invalid-kind has invalid kind'
+		);
 	});
 });
 
@@ -212,5 +227,14 @@ describe('listGeneratedImages', () => {
 
 		expect(page.images.map((image) => image.id)).toEqual(['second', 'third']);
 		expect(page.hasMore).toBe(false);
+	});
+
+	it('rejects an invalid stored generation kind', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneration(db, 'invalid-kind', 'user-1', 1000, 'unknown');
+
+		await expect(listGeneratedImages(db, 'user-1', 0, 10)).rejects.toThrow(
+			'generation invalid-kind has invalid kind'
+		);
 	});
 });
