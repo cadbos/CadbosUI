@@ -515,16 +515,18 @@ before the Change Date. See LICENSE for complete terms.
 
 	.image-wrapper {
 		position: relative;
+		aspect-ratio: 16 / 9;
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		border: 1.5px solid var(--color-border);
+		background: #000;
 	}
 
 	.preview {
-		width: 100%;
-		max-height: 280px;
-		object-fit: cover;
 		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
 	}
 
 	.image-overlay {

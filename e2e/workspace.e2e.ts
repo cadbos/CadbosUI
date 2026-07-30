@@ -419,6 +419,24 @@ test('generating with the exterior scene type calls the exterior render route', 
 	await page
 		.locator('#mode-panel-render input[type="file"]')
 		.setInputFiles({ name: 'house.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+	const uploadedImage = page.locator('#mode-panel-render .image-wrapper img');
+	await expect(uploadedImage).toHaveAttribute('src', 'https://cdn.example.test/facade.webp');
+	const uploadViewportStyles = await uploadedImage.evaluate((image) => {
+		const viewport = image.parentElement;
+		if (!viewport) throw new Error('uploaded image viewport missing');
+		const viewportStyle = getComputedStyle(viewport);
+		const imageStyle = getComputedStyle(image);
+		return {
+			aspectRatio: viewportStyle.aspectRatio,
+			backgroundColor: viewportStyle.backgroundColor,
+			objectFit: imageStyle.objectFit
+		};
+	});
+	expect(uploadViewportStyles).toEqual({
+		aspectRatio: '16 / 9',
+		backgroundColor: 'rgb(0, 0, 0)',
+		objectFit: 'contain'
+	});
 	await page.getByRole('button', { name: 'Сгенерировать' }).click();
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
