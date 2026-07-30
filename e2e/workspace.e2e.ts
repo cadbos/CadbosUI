@@ -51,13 +51,13 @@ test('renders the workspace and switches views', async ({ page }) => {
 	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('hides generated image sidebar for anonymous users', async ({ page }) => {
+test('hides scenes for anonymous users', async ({ page }) => {
 	await openCreate(page);
 
-	await expect(page.getByRole('heading', { name: 'Сгенерированные изображения' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Сцены' })).toHaveCount(0);
 });
 
-test('shows authenticated generated images newest first', async ({ page }) => {
+test('shows authenticated scenes newest first', async ({ page }) => {
 	let deletedImageId: string | null = null;
 	const oldestCreatedAt = Date.UTC(2026, 0, 1, 12);
 	const middleCreatedAt = Date.UTC(2026, 0, 2, 12);
@@ -95,11 +95,15 @@ test('shows authenticated generated images newest first', async ({ page }) => {
 						{
 							id: 'oldest',
 							url: 'https://cdn.example.test/oldest.webp',
+							sourceUrl: 'https://cdn.example.test/oldest-source.jpg',
+							kind: 'render',
 							createdAt: oldestCreatedAt
 						},
 						{
 							id: 'newest',
 							url: 'https://cdn.example.test/newest.webp',
+							sourceUrl: 'https://cdn.example.test/newest-source.jpg',
+							kind: 'style-transfer',
 							createdAt: newestCreatedAt
 						}
 					]
@@ -107,6 +111,8 @@ test('shows authenticated generated images newest first', async ({ page }) => {
 						{
 							id: 'middle',
 							url: 'https://cdn.example.test/middle.webp',
+							sourceUrl: 'https://cdn.example.test/middle-source.jpg',
+							kind: 'edit',
 							createdAt: middleCreatedAt
 						}
 					];
@@ -122,24 +128,34 @@ test('shows authenticated generated images newest first', async ({ page }) => {
 	});
 	await page.route('**/api/download**', async (route) => {
 		const url = new URL(route.request().url());
-		expect(url.searchParams.get('filename')).toBe('generated-image-newest.webp');
+		const filename = url.searchParams.get('filename');
+		expect(filename).not.toBeNull();
 		await route.fulfill({
 			status: 200,
 			headers: {
-				'content-type': 'image/webp',
-				'content-disposition': 'attachment; filename="generated-image-newest.webp"'
+				'content-type': filename?.endsWith('.jpg') ? 'image/jpeg' : 'image/webp',
+				'content-disposition': `attachment; filename="${filename}"`
 			},
 			body: 'image-bytes'
 		});
 	});
 	await openCreate(page);
 
-	await expect(page.getByRole('heading', { name: 'Сгенерированные изображения' })).toBeVisible();
-	const images = page.getByRole('img', { name: /Сгенерированное изображение/ });
+	const scenesButton = page.getByRole('button', { name: 'Сцены', exact: true });
+	await expect(scenesButton).toHaveAttribute('aria-expanded', 'false');
+	await scenesButton.click();
+	await expect(scenesButton).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.getByRole('heading', { name: 'Сцены', exact: true })).toBeVisible();
+	const images = page.getByRole('img', { name: /Результат сцены/ });
 	await expect(images).toHaveCount(3);
 	await expect(images.nth(0)).toHaveAttribute('src', 'https://cdn.example.test/newest.webp');
 	await expect(images.nth(1)).toHaveAttribute('src', 'https://cdn.example.test/middle.webp');
 	await expect(images.nth(2)).toHaveAttribute('src', 'https://cdn.example.test/oldest.webp');
+	await expect(page.locator('.generation-kind')).toHaveText([
+		'Перенос стиля',
+		'Редактирование',
+		'Генерация'
+	]);
 	const generatedDates = page.locator('time');
 	await expect(generatedDates.nth(0).locator('span')).toHaveText([
 		localDateLabel(newestCreatedAt),
@@ -158,22 +174,49 @@ test('shows authenticated generated images newest first', async ({ page }) => {
 		new Date(newestCreatedAt).toISOString()
 	);
 
+	const sourceImages = page.getByRole('img', { name: /Исходное изображение сцены/ });
+	await sourceImages.nth(0).hover();
+	const sourceDownloadPromise = page.waitForEvent('download');
+	await page.getByRole('button', { name: 'Скачать исходник сцены 1' }).click();
+	const sourceDownload = await sourceDownloadPromise;
+	expect(sourceDownload.suggestedFilename()).toBe('generated-image-newest-source.jpg');
+
+	await page.getByRole('button', { name: 'Обработать исходник сцены 1' }).click();
+	await expect(page).toHaveURL(/\/style-transfer\/interior\?.*source=room-photo/);
+	await expect(
+		page.getByRole('region', { name: 'Исходное изображение' }).getByRole('img')
+	).toHaveAttribute('src', 'https://cdn.example.test/newest-source.jpg');
+
+	await scenesButton.click();
+	await images.nth(1).hover();
+	await page.getByRole('button', { name: 'Обработать результат сцены 2' }).click();
+	await expect(page).toHaveURL(/\/edit\?tool=freeform/);
+	await expect(page.getByRole('tab', { name: 'Свой промпт' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await expect(page.getByRole('img', { name: 'Фото комнаты' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/middle.webp'
+	);
+
+	await scenesButton.click();
+
 	const downloadButton = page.getByRole('button', {
-		name: 'Скачать сгенерированное изображение 1'
+		name: 'Скачать результат сцены 1'
 	});
+	await images.nth(0).hover();
 	const downloadPromise = page.waitForEvent('download');
 	await downloadButton.click();
 	const download = await downloadPromise;
 	expect(download.suggestedFilename()).toBe('generated-image-newest.webp');
 
-	await page.getByRole('button', { name: 'Удалить сгенерированное изображение 2' }).click();
+	await page.getByRole('button', { name: 'Удалить сцену 2' }).click();
 
-	const dialog = page.getByRole('dialog', { name: 'Удалить изображение?' });
+	const dialog = page.getByRole('dialog', { name: 'Удалить сцену?' });
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText('Это действие необратимо.')).toBeVisible();
-	await expect(
-		page.getByRole('button', { name: 'Удалить сгенерированное изображение 1' })
-	).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Удалить сцену 1' })).toHaveCount(0);
 	expect(deletedImageId).toBeNull();
 
 	await dialog.getByRole('button', { name: 'Удалить', exact: true }).click();

@@ -18,12 +18,19 @@
 // record and the deduction to fall out of sync with each other.
 
 import type { D1Database } from '@cloudflare/workers-types';
-import type { Balance, CreditTransaction, UserUsageRecord } from '$lib/api/contract';
+import type {
+	Balance,
+	CreditTransaction,
+	GenerationKind,
+	UserUsageRecord
+} from '$lib/api/contract';
 
 export interface GeneratedImage {
 	id: string;
 	userId: string;
 	url: string;
+	sourceUrl: string;
+	kind: GenerationKind;
 	createdAt: number;
 }
 
@@ -41,6 +48,8 @@ interface GenerationRow {
 	id: string;
 	user_id: string;
 	url: string;
+	source_url: string;
+	kind: string;
 	created_at: number;
 }
 
@@ -49,6 +58,8 @@ function toGeneratedImage(row: GenerationRow): GeneratedImage {
 		id: row.id,
 		userId: row.user_id,
 		url: row.url,
+		sourceUrl: row.source_url,
+		kind: row.kind as GenerationKind,
 		createdAt: row.created_at
 	};
 }
@@ -131,7 +142,9 @@ export async function getGeneratedImageForUser(
 	id: string
 ): Promise<GeneratedImage | null> {
 	const row = await db
-		.prepare('SELECT id, user_id, url, created_at FROM generations WHERE id = ? AND user_id = ?')
+		.prepare(
+			'SELECT id, user_id, url, source_url, kind, created_at FROM generations WHERE id = ? AND user_id = ?'
+		)
 		.bind(id, userId)
 		.first<GenerationRow>();
 	return row ? toGeneratedImage(row) : null;
@@ -157,7 +170,7 @@ export async function listGeneratedImages(
 ): Promise<GeneratedImagesPage> {
 	const result = await db
 		.prepare(
-			'SELECT id, user_id, url, created_at FROM generations ' +
+			'SELECT id, user_id, url, source_url, kind, created_at FROM generations ' +
 				'WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?'
 		)
 		.bind(userId, size + 1, offset)

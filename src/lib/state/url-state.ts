@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { OUTPUT_FORMATS, type OutputFormat } from '$lib/api/contract';
+import { OUTPUT_FORMATS, type GenerationKind, type OutputFormat } from '$lib/api/contract';
 import {
 	SCENE_TYPES,
 	IMAGE_SOURCE_MODES,
@@ -44,6 +44,11 @@ export interface SubTab {
 	tool?: ToolId;
 	reference?: ReferenceTab;
 	job?: string;
+}
+
+export interface WorkspaceDestination {
+	mode: Mode;
+	subTab: SubTab;
 }
 
 const MODE_PATHS: Record<Mode, string> = {
@@ -116,6 +121,22 @@ export function routeIdToMode(routeId: string | null): Mode {
 	if (routeId?.startsWith('/edit')) return 'edit';
 	if (routeId?.startsWith('/style-transfer')) return 'styleTransfer';
 	return 'render';
+}
+
+export function destinationForGenerationKind(kind: GenerationKind): WorkspaceDestination {
+	switch (kind) {
+		case 'render':
+			return { mode: 'render', subTab: { view: 'chat' } };
+		case 'style-transfer':
+			return { mode: 'styleTransfer', subTab: { reference: 'photorealistic' } };
+		case 'object-replacement':
+			return { mode: 'edit', subTab: { tool: 'object-replacement' } };
+		case 'texture-replacement':
+			return { mode: 'edit', subTab: { tool: 'texture-replacement' } };
+		case 'edit':
+		case 'upscale':
+			return { mode: 'edit', subTab: { tool: 'freeform' } };
+	}
 }
 
 // Whether the given route id belongs to the workspace at all (as

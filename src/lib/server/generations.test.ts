@@ -149,6 +149,8 @@ describe('getGeneratedImageForUser', () => {
 			id: 'image-1',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/image-1.webp',
+			sourceUrl: 'https://cdn.example.test/source.jpg',
+			kind: 'render',
 			createdAt: 1000
 		});
 	});
@@ -183,12 +185,16 @@ describe('listGeneratedImages', () => {
 					id: 'newest',
 					userId: 'user-1',
 					url: 'https://cdn.example.test/newest.webp',
+					sourceUrl: 'https://cdn.example.test/source.jpg',
+					kind: 'render',
 					createdAt: 3000
 				},
 				{
 					id: 'middle',
 					userId: 'user-1',
 					url: 'https://cdn.example.test/middle.webp',
+					sourceUrl: 'https://cdn.example.test/source.jpg',
+					kind: 'render',
 					createdAt: 2000
 				}
 			],

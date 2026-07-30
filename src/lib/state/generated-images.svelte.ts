@@ -14,7 +14,7 @@
 
 import { SvelteSet } from 'svelte/reactivity';
 import { z } from 'zod';
-import type { GeneratedImageRecord } from '$lib/api/contract';
+import { generationKinds, type GeneratedImageRecord } from '$lib/api/contract';
 
 export type GeneratedImagesStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -23,6 +23,8 @@ const PAGE_SIZE = 100;
 const generatedImageRecordSchema = z.object({
 	id: z.string().min(1),
 	url: z.url(),
+	sourceUrl: z.url(),
+	kind: z.enum(generationKinds),
 	createdAt: z.number().int().min(0)
 });
 
