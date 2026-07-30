@@ -13,7 +13,16 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Download, Pencil, Redo, Sparkles, SquareSplitHorizontal, Undo } from '@lucide/svelte';
+	import type { Attachment } from 'svelte/attachments';
+	import {
+		Download,
+		ImagePlus,
+		Pencil,
+		Redo,
+		Sparkles,
+		SquareSplitHorizontal,
+		Undo
+	} from '@lucide/svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
@@ -22,9 +31,10 @@ before the Change Date. See LICENSE for complete terms.
 	import { formatCredit } from '$lib/utils';
 
 	interface Props {
-		onEditRequest: () => void;
+		onContinueEditing: () => void;
+		onStartNewPhoto: () => void;
 	}
-	let { onEditRequest }: Props = $props();
+	let { onContinueEditing, onStartNewPhoto }: Props = $props();
 
 	let comparing = $state(false);
 	let upscaling = $state(false);
@@ -34,24 +44,15 @@ before the Change Date. See LICENSE for complete terms.
 	const imageUrl = $derived(render?.outputUrls[0]);
 	const previousImageUrl = $derived(request.previousRender?.outputUrls[0]);
 	const canCompare = $derived(previousImageUrl !== undefined);
+	const comparisonActive = $derived(comparing && canCompare);
 	const isAuthenticated = $derived(auth.status === 'authenticated');
-	// The render result doesn't carry its own format, so the current form setting
-	// is the best available signal for the download filename's extension.
 	const downloadName = $derived(`render.${request.outputFormat}`);
-	// archAI hosts the output on its own CDN, so a plain <a download> to imageUrl
-	// only works same-origin — cross-origin, browsers just navigate away instead,
-	// losing all in-page form state. Routing through our own proxy with
-	// Content-Disposition: attachment forces a real download with no navigation.
 	const downloadHref = $derived(
 		imageUrl
 			? `/api/download?url=${encodeURIComponent(imageUrl)}&filename=${encodeURIComponent(downloadName)}`
 			: undefined
 	);
 
-	// The archAI CDN occasionally stalls mid-transfer: the connection never
-	// errors and never completes, so the <img> just hangs with no onload and
-	// no onerror. This watchdog force-reloads via a cache-busted URL if load
-	// hasn't fired within STALL_TIMEOUT_MS, capped at MAX_STALL_RETRIES.
 	const STALL_TIMEOUT_MS = 20_000;
 	const MAX_STALL_RETRIES = 2;
 
@@ -60,47 +61,40 @@ before the Change Date. See LICENSE for complete terms.
 		return `${url}${separator}retry=${attempt}`;
 	}
 
-	function createStallWatchdog(getUrl: () => string | undefined) {
-		let src = $state<string | undefined>(undefined);
-		let clearTimer = () => {};
-
-		$effect(() => {
-			const url = getUrl();
-			src = url;
-			clearTimer = () => {};
-			if (!url) return;
-
+	function imageStallWatchdog(url: string): Attachment<HTMLImageElement> {
+		return (image) => {
 			let attempt = 0;
 			let timer: ReturnType<typeof setTimeout>;
-			const arm = () => {
+			function arm(): void {
 				timer = setTimeout(() => {
 					attempt += 1;
-					src = withRetryParam(url, attempt);
+					image.src = withRetryParam(url, attempt);
 					if (attempt < MAX_STALL_RETRIES) arm();
 				}, STALL_TIMEOUT_MS);
-			};
+			}
+
+			function clearTimer(): void {
+				clearTimeout(timer);
+			}
+
+			if (image.complete) return;
 			arm();
-			clearTimer = () => clearTimeout(timer);
+			image.addEventListener('load', clearTimer, { once: true });
 
-			return () => clearTimeout(timer);
-		});
-
-		return {
-			get src() {
-				return src;
-			},
-			onload: () => clearTimer()
+			return () => {
+				clearTimer();
+				image.removeEventListener('load', clearTimer);
+			};
 		};
 	}
 
-	const imageWatchdog = createStallWatchdog(() => imageUrl);
-	const previousImageWatchdog = createStallWatchdog(() => previousImageUrl);
+	function selectRevision(index: number): void {
+		comparing = false;
+		request.selectRevision(index);
+	}
 
 	async function upscale(): Promise<void> {
 		if (!render || upscaling || !isAuthenticated) return;
-		// Snapshot the render being upscaled — request.currentRender can move on
-		// (undo/redo, a new edit) while this call is in flight, and the response
-		// must still attach to the chain it was actually requested against.
 		const sourceRender = render;
 		upscaling = true;
 		upscaleError = null;
@@ -120,7 +114,7 @@ before the Change Date. See LICENSE for complete terms.
 				parentId: sourceRender.id,
 				editOp: { type: 'upscale', instruction: t('toolbar.upscaleDone') }
 			});
-			request.applyEditResult(newRender);
+			request.applyEditResult(newRender, sourceRender);
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 		} catch {
@@ -133,35 +127,35 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 {#if render && imageUrl}
-	<section class="result">
+	<section class="result" aria-label={t('render.result')}>
 		<div class="image-card">
-			{#if comparing && previousImageUrl}
+			{#if comparisonActive && previousImageUrl}
 				<div class="compare">
 					<div class="compare-half">
 						<span class="compare-label">{t('toolbar.before')}</span>
 						<img
-							src={previousImageWatchdog.src}
+							src={previousImageUrl}
 							alt={t('toolbar.before')}
 							class="output"
-							onload={previousImageWatchdog.onload}
+							{@attach imageStallWatchdog(previousImageUrl)}
 						/>
 					</div>
 					<div class="compare-half">
 						<span class="compare-label">{t('toolbar.after')}</span>
 						<img
-							src={imageWatchdog.src}
+							src={imageUrl}
 							alt={t('toolbar.after')}
 							class="output"
-							onload={imageWatchdog.onload}
+							{@attach imageStallWatchdog(imageUrl)}
 						/>
 					</div>
 				</div>
 			{:else}
 				<img
-					src={imageWatchdog.src}
-					alt={t('render.generate')}
+					src={imageUrl}
+					alt={t('render.result')}
 					class="output"
-					onload={imageWatchdog.onload}
+					{@attach imageStallWatchdog(imageUrl)}
 				/>
 			{/if}
 		</div>
@@ -169,23 +163,23 @@ before the Change Date. See LICENSE for complete terms.
 		<div class="toolbar">
 			<button
 				type="button"
-				class="icon-btn"
+				class="toolbar-action"
 				disabled={!request.canUndoEdit}
-				aria-label={t('toolbar.undo')}
 				title={t('toolbar.undo')}
 				onclick={() => request.undoLastEdit()}
 			>
 				<Undo size={16} strokeWidth={1.8} aria-hidden="true" />
+				<span>{t('toolbar.undo')}</span>
 			</button>
 			<button
 				type="button"
-				class="icon-btn"
+				class="toolbar-action"
 				disabled={!request.canRedoEdit}
-				aria-label={t('toolbar.redo')}
 				title={t('toolbar.redo')}
 				onclick={() => request.redoEdit()}
 			>
 				<Redo size={16} strokeWidth={1.8} aria-hidden="true" />
+				<span>{t('toolbar.redo')}</span>
 			</button>
 
 			<span class="toolbar-sep" aria-hidden="true"></span>
@@ -203,7 +197,7 @@ before the Change Date. See LICENSE for complete terms.
 				type="button"
 				class="icon-btn"
 				disabled={upscaling || !isAuthenticated}
-				aria-label={t('toolbar.upscale')}
+				aria-label={isAuthenticated ? t('toolbar.upscale') : t('toolbar.signInToUpscale')}
 				title={isAuthenticated ? t('toolbar.upscale') : t('toolbar.signInToUpscale')}
 				onclick={() => void upscale()}
 			>
@@ -212,9 +206,9 @@ before the Change Date. See LICENSE for complete terms.
 			<button
 				type="button"
 				class="icon-btn"
-				class:active={comparing}
+				class:active={comparisonActive}
 				disabled={!canCompare}
-				aria-pressed={comparing}
+				aria-pressed={comparisonActive}
 				aria-label={t('toolbar.compare')}
 				title={t('toolbar.compare')}
 				onclick={() => (comparing = !comparing)}
@@ -227,6 +221,39 @@ before the Change Date. See LICENSE for complete terms.
 			{/if}
 		</div>
 
+		{#if request.renderHistory.length > 0}
+			<section class="history" aria-labelledby="render-history-heading">
+				<div class="history-header">
+					<h2 id="render-history-heading">{t('history.label')}</h2>
+					<p>{t('history.hint')}</p>
+				</div>
+				<div class="revision-list">
+					{#each request.renderHistory as revision, index (revision.id)}
+						<button
+							type="button"
+							class="revision"
+							class:selected={index === request.currentRevisionIndex}
+							aria-current={index === request.currentRevisionIndex ? 'true' : undefined}
+							aria-label={`${ti('history.select', { order: index + 1 })}${
+								index === request.currentRevisionIndex ? ` — ${t('history.current')}` : ''
+							}`}
+							onclick={() => selectRevision(index)}
+						>
+							<span class="revision-image">
+								<img src={revision.outputUrls[0]} alt="" loading="lazy" />
+							</span>
+							<span class="revision-label">
+								{index === 0 ? t('history.base') : ti('history.edit', { order: index })}
+							</span>
+							{#if index === request.currentRevisionIndex}
+								<span class="revision-current">{t('history.current')}</span>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			</section>
+		{/if}
+
 		<div class="footer">
 			<div class="meta">
 				<span>{ti('render.cost', { cost: formatCredit(render.cost) })}</span>
@@ -234,9 +261,13 @@ before the Change Date. See LICENSE for complete terms.
 				<span>{ti('render.balance', { balance: formatCredit(render.balance) })}</span>
 			</div>
 			<div class="actions">
-				<button type="button" class="btn btn-accent" onclick={onEditRequest}>
+				<button type="button" class="btn btn-secondary" onclick={onStartNewPhoto}>
+					<ImagePlus size={14} strokeWidth={1.75} aria-hidden="true" />
+					{t('project.startNewPhoto')}
+				</button>
+				<button type="button" class="btn btn-accent" onclick={onContinueEditing}>
 					<Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
-					{t('render.edit')}
+					{t('project.continueEditing')}
 				</button>
 			</div>
 		</div>
@@ -256,19 +287,23 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.image-card {
+		display: grid;
+		place-items: center;
 		width: 100%;
+		min-height: clamp(20rem, 52vw, 34rem);
 		background: var(--color-background);
 	}
 
 	.output {
 		width: 100%;
-		max-height: 480px;
+		height: clamp(20rem, 52vw, 34rem);
 		object-fit: contain;
 		display: block;
 	}
 
 	.compare {
 		display: flex;
+		width: 100%;
 	}
 
 	.compare-half {
@@ -282,7 +317,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.compare-half .output {
-		max-height: 480px;
+		height: clamp(20rem, 52vw, 34rem);
 	}
 
 	.compare-label {
@@ -333,7 +368,28 @@ before the Change Date. See LICENSE for complete terms.
 			color 0.15s;
 	}
 
-	.icon-btn:hover:not(:disabled) {
+	.toolbar-action {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.375rem;
+		min-height: 2rem;
+		padding: 0.375rem 0.625rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font: inherit;
+		font-size: 0.8125rem;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			color 0.15s;
+	}
+
+	.icon-btn:hover:not(:disabled),
+	.toolbar-action:hover:not(:disabled) {
 		background: var(--color-surface-hover);
 		border-color: var(--color-accent);
 		color: var(--color-accent);
@@ -345,15 +401,128 @@ before the Change Date. See LICENSE for complete terms.
 		border-color: var(--color-accent);
 	}
 
-	.icon-btn:disabled {
+	.icon-btn:disabled,
+	.toolbar-action:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
+	}
+
+	.icon-btn:focus-visible,
+	.toolbar-action:focus-visible,
+	.revision:focus-visible,
+	.btn:focus-visible {
+		outline: 3px solid var(--color-accent);
+		outline-offset: 2px;
 	}
 
 	.toolbar-error {
 		margin: 0;
 		font-size: 0.8125rem;
 		color: var(--color-danger);
+	}
+
+	.history {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		padding: 1rem 1.25rem;
+		border-top: 1px solid var(--color-border);
+		background: color-mix(in srgb, var(--color-background) 70%, var(--color-surface));
+	}
+
+	.history-header {
+		display: flex;
+		align-items: baseline;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+	}
+
+	.history-header h2,
+	.history-header p {
+		margin: 0;
+	}
+
+	.history-header h2 {
+		font-size: 0.9375rem;
+		color: var(--color-text);
+	}
+
+	.history-header p {
+		font-size: 0.75rem;
+		color: var(--color-muted-strong);
+	}
+
+	.revision-list {
+		display: flex;
+		gap: 0.625rem;
+		padding: 0.125rem 0.125rem 0.5rem;
+		overflow-x: auto;
+		scrollbar-gutter: stable;
+		scroll-snap-type: x proximity;
+	}
+
+	.revision {
+		position: relative;
+		display: flex;
+		flex: 0 0 8rem;
+		flex-direction: column;
+		gap: 0.375rem;
+		padding: 0.375rem;
+		border: 1.5px solid var(--color-border);
+		border-radius: var(--radius);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		scroll-snap-align: start;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			transform 0.15s;
+	}
+
+	.revision:hover,
+	.revision.selected {
+		border-color: var(--color-accent);
+	}
+
+	.revision:hover {
+		transform: translateY(-1px);
+	}
+
+	.revision.selected {
+		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+	}
+
+	.revision-image {
+		display: grid;
+		place-items: center;
+		width: 100%;
+		height: 4.75rem;
+		overflow: hidden;
+		border-radius: calc(var(--radius) - 3px);
+		background: var(--color-background);
+	}
+
+	.revision-image img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		display: block;
+	}
+
+	.revision-label {
+		overflow: hidden;
+		font-size: 0.75rem;
+		font-weight: 600;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.revision-current {
+		font-size: 0.6875rem;
+		color: var(--color-accent);
 	}
 
 	.footer {
@@ -371,7 +540,7 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		gap: 0.5rem;
 		font-size: 0.8125rem;
-		color: var(--color-muted);
+		color: var(--color-muted-strong);
 	}
 
 	.sep {
@@ -410,5 +579,76 @@ before the Change Date. See LICENSE for complete terms.
 	.btn-accent:hover {
 		background: var(--color-accent-hover);
 		border-color: var(--color-accent-hover);
+	}
+
+	.btn-secondary {
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: 1.5px solid var(--color-border);
+	}
+
+	.btn-secondary:hover {
+		color: var(--color-accent);
+		border-color: var(--color-accent);
+	}
+
+	@media (max-width: 640px) {
+		.image-card,
+		.output {
+			min-height: 16rem;
+			height: min(72vw, 24rem);
+		}
+
+		.compare {
+			flex-direction: column;
+		}
+
+		.compare-half {
+			width: 100%;
+			border-right: none;
+			border-bottom: 1px solid var(--color-border);
+		}
+
+		.compare-half:last-child {
+			border-bottom: none;
+		}
+
+		.compare-half .output {
+			height: min(72vw, 24rem);
+		}
+
+		.toolbar,
+		.history,
+		.footer {
+			padding-right: 0.875rem;
+			padding-left: 0.875rem;
+		}
+
+		.footer,
+		.actions {
+			align-items: stretch;
+			width: 100%;
+		}
+
+		.actions {
+			flex-direction: column-reverse;
+		}
+
+		.btn {
+			justify-content: center;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.icon-btn,
+		.toolbar-action,
+		.revision,
+		.btn {
+			transition: none;
+		}
+
+		.revision:hover {
+			transform: none;
+		}
 	}
 </style>

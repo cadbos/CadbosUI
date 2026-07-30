@@ -518,12 +518,13 @@ before the Change Date. See LICENSE for complete terms.
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		border: 1.5px solid var(--color-border);
+		background: var(--color-background);
 	}
 
 	.preview {
 		width: 100%;
-		max-height: 280px;
-		object-fit: cover;
+		height: clamp(14rem, 32vw, 20rem);
+		object-fit: contain;
 		display: block;
 	}
 
@@ -613,6 +614,14 @@ before the Change Date. See LICENSE for complete terms.
 		cursor: not-allowed;
 	}
 
+	.drop-zone:focus-visible,
+	.change-btn:focus-visible,
+	.url-label input:focus-visible,
+	.url-form button:focus-visible {
+		outline: 3px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+
 	.error {
 		margin: 0;
 		font-size: 0.8125rem;
@@ -629,5 +638,27 @@ before the Change Date. See LICENSE for complete terms.
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+
+	@media (max-width: 480px) {
+		.preview {
+			height: 14rem;
+		}
+
+		.url-form {
+			flex-direction: column;
+		}
+
+		.url-form button {
+			align-self: stretch;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.drop-zone,
+		.image-overlay,
+		.change-btn {
+			transition: none;
+		}
 	}
 </style>

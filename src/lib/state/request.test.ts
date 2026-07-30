@@ -775,7 +775,7 @@ describe('edit lifecycle (FR-К4/К6)', () => {
 		expect(request.currentRender?.id).toBe('gen-1');
 	});
 
-	it('only holds a single undo step — a second edit replaces the earlier one', () => {
+	it('keeps every prior version available across multiple edits', () => {
 		request.setCurrentRender(render('gen-1'));
 		request.applyEditResult(render('edit-1'));
 		request.applyEditResult(render('edit-2'));
@@ -783,6 +783,11 @@ describe('edit lifecycle (FR-К4/К6)', () => {
 		request.undoLastEdit();
 
 		expect(request.currentRender?.id).toBe('edit-1');
+		expect(request.canUndoEdit).toBe(true);
+
+		request.undoLastEdit();
+
+		expect(request.currentRender?.id).toBe('gen-1');
 		expect(request.canUndoEdit).toBe(false);
 	});
 
@@ -806,7 +811,7 @@ describe('edit lifecycle (FR-К4/К6)', () => {
 	});
 });
 
-describe('edit redo (symmetric one-step undo/redo, not a history tree — Д-16)', () => {
+describe('edit version history', () => {
 	function render(id: string): RenderResult {
 		return { id, outputUrls: [`https://example.test/${id}.jpg`], cost: 1, balance: 24, ts: 0 };
 	}
@@ -847,6 +852,23 @@ describe('edit redo (symmetric one-step undo/redo, not a history tree — Д-16)
 
 		expect(request.currentRender?.id).toBe('edit-2');
 		expect(request.canRedoEdit).toBe(false);
+		expect(request.renderHistory.map((version) => version.id)).toEqual(['gen-1', 'edit-2']);
+	});
+
+	it('selects any saved version and continues from that point', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.applyEditResult(render('edit-1'));
+		request.applyEditResult(render('edit-2'));
+
+		request.selectRevision(0);
+
+		expect(request.currentRender?.id).toBe('gen-1');
+		expect(request.canRedoEdit).toBe(true);
+
+		request.applyEditResult(render('edit-3'));
+
+		expect(request.renderHistory.map((version) => version.id)).toEqual(['gen-1', 'edit-3']);
+		expect(request.currentRevisionIndex).toBe(1);
 	});
 
 	it('a fresh generation clears any pending redo from a prior edit chain', () => {

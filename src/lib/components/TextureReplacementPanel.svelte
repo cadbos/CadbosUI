@@ -390,8 +390,6 @@ before the Change Date. See LICENSE for complete terms.
 		request.setTextureReplacementMasked(false);
 		request.setTextureReplacementSurface('');
 		request.setTextureReplacementSourceMode('current-result');
-		request.setImage(undefined);
-		request.setCurrentRender(undefined);
 		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
@@ -724,8 +722,8 @@ before the Change Date. See LICENSE for complete terms.
 
 	.source-preview img {
 		width: 100%;
-		max-height: 280px;
-		object-fit: cover;
+		height: clamp(14rem, 32vw, 20rem);
+		object-fit: contain;
 		display: block;
 	}
 
@@ -798,6 +796,12 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-accent);
 	}
 
+	button:focus-visible,
+	input:focus-visible {
+		outline: 3px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+
 	@media (max-width: 760px) {
 		.image-grid {
 			grid-template-columns: 1fr;
@@ -814,6 +818,18 @@ before the Change Date. See LICENSE for complete terms.
 
 		.source-tabs button {
 			flex: 1;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.source-preview img {
+			height: 14rem;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.spinner {
+			animation: none;
 		}
 	}
 </style>

@@ -70,10 +70,12 @@ before the Change Date. See LICENSE for complete terms.
 	let objectReplacementOpened = $state(false);
 	let textureReplacementOpened = $state(false);
 
-	$effect(() => {
+	function openedToolsEffect(): void {
 		if (activeTool === 'object-replacement') objectReplacementOpened = true;
 		if (activeTool === 'texture-replacement') textureReplacementOpened = true;
-	});
+	}
+
+	$effect(openedToolsEffect);
 
 	const toolTabs = createTabController({
 		itemCount: () => TOOLS.length,
@@ -90,9 +92,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	const currentRender = $derived(request.currentRender);
 	const isAuthenticated = $derived(auth.status === 'authenticated');
-	// Editing targets the latest render/edit result once one exists; before that,
-	// it falls back to the room photo uploaded on the Render tab (same underlying
-	// state — FR: editing works independent of having rendered first).
 	const targetImageUrl = $derived(currentRender?.outputUrls[0] ?? request.image?.url);
 	const toolDisabled = $derived(applying || !isAuthenticated);
 
@@ -102,7 +101,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function submit(prompt: string, type: EditOperationType): Promise<void> {
 		const trimmed = prompt.trim();
-		if (!targetImageUrl || !trimmed || applying || !isAuthenticated) return;
+		const sourceRender = currentRender;
+		const sourceImageUrl = sourceRender?.outputUrls[0] ?? request.image?.url;
+		if (!sourceImageUrl || !trimmed || applying || !isAuthenticated) return;
 		applying = true;
 		error = null;
 		const overlayId = generationOverlay.start('generationOverlay.edit');
@@ -111,17 +112,17 @@ before the Change Date. See LICENSE for complete terms.
 			const response = await fetch('/api/edit', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ image: targetImageUrl, prompt: trimmed })
+				body: JSON.stringify({ image: sourceImageUrl, prompt: trimmed })
 			});
 			if (!response.ok) {
 				throw new Error(await extractApiErrorCode(response, 'edit_failed'));
 			}
 			const result = await response.json();
 			const newRender = renderResultFromResponse(result, {
-				parentId: currentRender?.id,
+				parentId: sourceRender?.id,
 				editOp: { type, instruction: trimmed }
 			});
-			request.applyEditResult(newRender);
+			request.applyEditResult(newRender, sourceRender);
 			void auth.refreshCredit();
 			if (type === 'freeform') request.setEditPrompt('');
 			if (auth.canLoadGeneratedImages) void generatedImages.load();

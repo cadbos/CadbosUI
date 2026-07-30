@@ -41,9 +41,8 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
-	const modes: { id: Mode; label: TranslationKey }[] = [
+	const modes: { id: Exclude<Mode, 'edit'>; label: TranslationKey }[] = [
 		{ id: 'render', label: 'mode.render' },
-		{ id: 'edit', label: 'mode.edit' },
 		{ id: 'styleTransfer', label: 'mode.styleTransfer' }
 	];
 
@@ -60,16 +59,27 @@ before the Change Date. See LICENSE for complete terms.
 	// The URL is the source of truth for which mode is open — not local $state —
 	// so a shared link or a page reload always opens on the right tab.
 	const mode = $derived(routeIdToMode(page.route.id));
+	const activeMode = $derived(mode === 'styleTransfer' ? 'styleTransfer' : 'render');
+	const hasActiveEditJob = $derived(
+		request.activeObjectReplacementJobId !== undefined ||
+			request.activeTextureReplacementJobId !== undefined
+	);
+	const syncMode = $derived(
+		mode === 'edit' &&
+			request.currentRender === undefined &&
+			request.image !== undefined &&
+			!hasActiveEditJob
+			? 'render'
+			: mode
+	);
+	const projectStep = $derived(
+		hasActiveEditJob || request.currentRender ? 2 : request.image ? 1 : 0
+	);
 
 	const modeTabController = createTabController({
 		itemCount: () => modes.length,
-		getActiveIndex: () => modes.findIndex((m) => m.id === mode),
+		getActiveIndex: () => modes.findIndex((m) => m.id === activeMode),
 		setActiveIndex: (index) => {
-			// No sub-tab passed: switching modes has no "current" sub-tab to carry
-			// over from a different mode, so each mode opens on its own default.
-			// Pushes a history entry (unlike the sub-tab/settings navigations
-			// below) so Back/Forward actually steps through Create/Edit/Style
-			// transfer/Object replacement, matching what a dedicated URL per mode implies.
 			return goto(buildShareUrl(modes[index].id, request), {
 				replaceState: false,
 				keepFocus: true,
@@ -79,8 +89,34 @@ before the Change Date. See LICENSE for complete terms.
 		focusTab: (index) => modeTabs[index]?.focus()
 	});
 
-	function activateMode(id: Mode): void {
-		modeTabController.activate(modes.findIndex((m) => m.id === id));
+	async function continueEditing(): Promise<void> {
+		try {
+			await goto(buildShareUrl('edit', request, { tool: 'freeform' }), {
+				replaceState: false,
+				keepFocus: true,
+				noScroll: true
+			});
+			const editPanel = document.querySelector<HTMLElement>('#project-edit-panel');
+			const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+			editPanel?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+			editPanel?.focus({ preventScroll: true });
+		} catch (error) {
+			logBoundaryError('workspace.continueEditing', error);
+		}
+	}
+
+	async function startNewPhoto(): Promise<void> {
+		request.setCurrentRender(undefined);
+		submitError = null;
+		try {
+			await goto(buildShareUrl('render', request, { view: 'chat' }), {
+				replaceState: false,
+				keepFocus: false,
+				noScroll: false
+			});
+		} catch (error) {
+			logBoundaryError('workspace.startNewPhoto', error);
+		}
 	}
 
 	const sceneTypeTabController = createTabController({
@@ -99,10 +135,12 @@ before the Change Date. See LICENSE for complete terms.
 		request.sceneType === 'exterior' ? t('upload.labelExterior') : t('upload.label')
 	);
 
-	$effect(() => {
+	function generatedImagesEffect(): void {
 		if (auth.canLoadGeneratedImages) void generatedImages.load();
 		else generatedImages.clear();
-	});
+	}
+
+	$effect(generatedImagesEffect);
 
 	// True once the request store has been hydrated from the URL at least once
 	// (see afterNavigate below). Gates the write-sync effect so it can't fire —
@@ -143,12 +181,12 @@ before the Change Date. See LICENSE for complete terms.
 	// clicks the Graph tab) while a request-field debounce from a moment
 	// earlier is still pending — the timer would then fire with the *old*
 	// sub-tab and clobber the switch by navigating back to it.
-	$effect(() => {
+	function urlSyncEffect(): void | (() => void) {
 		if (!hydrated) return;
-		buildShareUrl(mode, request);
+		buildShareUrl(syncMode, request);
 		const timer = setTimeout(() => {
 			const currentSearch = new URLSearchParams(window.location.search);
-			const url = buildShareUrl(mode, request, subTabFromSearch(mode, currentSearch));
+			const url = buildShareUrl(syncMode, request, subTabFromSearch(syncMode, currentSearch));
 			if (`${window.location.pathname}${window.location.search}` !== url) {
 				goto(url, { replaceState: true, keepFocus: true, noScroll: true }).catch((error: unknown) =>
 					logBoundaryError('workspace.urlSync', error)
@@ -156,7 +194,9 @@ before the Change Date. See LICENSE for complete terms.
 			}
 		}, 400);
 		return () => clearTimeout(timer);
-	});
+	}
+
+	$effect(urlSyncEffect);
 
 	async function generate(): Promise<void> {
 		if (!canGenerate) return;
@@ -208,6 +248,13 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
+{#snippet boundaryFailed(_error: unknown, reset: () => void)}
+	<p class="boundary-failed">{t('boundary.failed')}</p>
+	<button type="button" class="boundary-retry" onclick={reset}>
+		{t('boundary.retry')}
+	</button>
+{/snippet}
+
 <main class="page">
 	<div class="workspace-shell">
 		<div class="workspace-main">
@@ -221,10 +268,10 @@ before the Change Date. See LICENSE for complete terms.
 							type="button"
 							role="tab"
 							id={`mode-tab-${modeOption.id}`}
-							aria-selected={mode === modeOption.id}
+							aria-selected={activeMode === modeOption.id}
 							aria-controls={`mode-panel-${modeOption.id}`}
-							tabindex={mode === modeOption.id ? 0 : -1}
-							class:active={mode === modeOption.id}
+							tabindex={activeMode === modeOption.id ? 0 : -1}
+							class:active={activeMode === modeOption.id}
 							onclick={() => modeTabController.activate(index)}
 							onkeydown={modeTabController.onKeydown}
 						>
@@ -234,147 +281,176 @@ before the Change Date. See LICENSE for complete terms.
 				</div>
 			</nav>
 
+			{#if activeMode === 'render'}
+				<header class="project-intro">
+					<p class="project-kicker">{t('mode.render')}</p>
+					<h1>{t('project.title')}</h1>
+					<p>{t('project.subtitle')}</p>
+				</header>
+
+				<ol class="project-progress" aria-label={t('project.progressLabel')}>
+					<li
+						class:current={projectStep === 0}
+						aria-current={projectStep === 0 ? 'step' : undefined}
+					>
+						<span class="progress-marker" aria-hidden="true">1</span>
+						<span>{t('project.stepSource')}</span>
+					</li>
+					<li
+						class:current={projectStep === 1}
+						aria-current={projectStep === 1 ? 'step' : undefined}
+					>
+						<span class="progress-marker" aria-hidden="true">2</span>
+						<span>{t('project.stepCreate')}</span>
+					</li>
+					<li
+						class:current={projectStep === 2}
+						aria-current={projectStep === 2 ? 'step' : undefined}
+					>
+						<span class="progress-marker" aria-hidden="true">3</span>
+						<span>{t('project.stepEdit')}</span>
+					</li>
+				</ol>
+			{/if}
+
 			<div
 				class="mode-panel"
 				role="tabpanel"
 				id="mode-panel-render"
 				aria-labelledby="mode-tab-render"
 				tabindex="0"
-				hidden={mode !== 'render'}
+				hidden={activeMode !== 'render'}
 			>
-				<section class="step-card">
-					<div class="step-header">
-						<span class="step-num" aria-hidden="true">①</span>
-						<h2>{t('render.sceneType.label')}</h2>
-					</div>
-
-					<div class="scene-type-toggle" role="tablist" aria-label={t('render.sceneType.label')}>
-						{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
-							<button
-								{@attach (node) => {
-									sceneTypeTabs[index] = node as HTMLElement;
-								}}
-								type="button"
-								role="tab"
-								aria-selected={request.sceneType === sceneTypeOption.id}
-								tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
-								class:active={request.sceneType === sceneTypeOption.id}
-								onclick={() => sceneTypeTabController.activate(index)}
-								onkeydown={sceneTypeTabController.onKeydown}
-							>
-								{t(sceneTypeOption.label)}
-							</button>
-						{/each}
-					</div>
-				</section>
-
-				<section class="step-card">
-					<div class="step-header">
-						<span class="step-num" aria-hidden="true">②</span>
-						<h2>{uploadLabel}</h2>
-					</div>
-					<ImageUpload />
-				</section>
-
-				<PromptViews
-					stepLabel="③"
-					headingKey="view.switcher.label"
-					optionalBadgeKey="render.optional"
-				/>
-
-				<section class="step-card generate-section">
-					<label class="format-label">
-						<span class="format-text">{t('render.outputFormat')}</span>
-						<select
-							value={request.outputFormat}
-							onchange={(event) =>
-								request.setOutputFormat(event.currentTarget.value as OutputFormat)}
-							class="format-select"
-						>
-							<option value="webp">WebP</option>
-							<option value="jpg">JPG</option>
-							<option value="png">PNG</option>
-							<option value="avif">AVIF</option>
-						</select>
-					</label>
-
-					{#if !isAuthenticated}
-						<p class="auth-hint">{t('render.signInToGenerate')}</p>
-					{/if}
-
-					<button
-						type="button"
-						class="generate-btn"
-						disabled={!canGenerate || !isAuthenticated}
-						onclick={() => void generate()}
-					>
-						{#if request.status === 'rendering'}
-							<span class="spinner" aria-hidden="true"></span>
-							{t('render.generating')}
-						{:else}
-							{t('render.generate')}
-						{/if}
-					</button>
-
-					{#if submitError}
-						<p class="submit-error" role="alert">{submitError}</p>
-					{/if}
-				</section>
-			</div>
-
-			{#if request.currentRender}
-				<section class="result-wrap" aria-label={t('render.result')}>
-					<svelte:boundary
-						onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
-					>
-						<RenderResult onEditRequest={() => activateMode('edit')} />
-						{#snippet failed(_error: unknown, reset: () => void)}
-							<p class="boundary-failed">{t('boundary.failed')}</p>
-							<button type="button" class="boundary-retry" onclick={reset}>
-								{t('boundary.retry')}
-							</button>
-						{/snippet}
-					</svelte:boundary>
-				</section>
-			{/if}
-
-			<div
-				class="result-wrap"
-				role="tabpanel"
-				id="mode-panel-edit"
-				aria-labelledby="mode-tab-edit"
-				tabindex="0"
-				hidden={mode !== 'edit'}
-			>
-				{#if !request.currentRender}
-					<section class="step-card">
-						<div class="step-header">
-							<span class="step-num" aria-hidden="true">①</span>
-							<h2>{t('upload.label')}</h2>
+				{#if request.currentRender}
+					<section class="result-stage" aria-labelledby="project-result-title">
+						<div class="stage-heading">
+							<span class="stage-number" aria-hidden="true">2</span>
+							<div>
+								<h2 id="project-result-title">{t('project.resultTitle')}</h2>
+								<p>{t('project.resultDescription')}</p>
+							</div>
 						</div>
-						<ImageUpload />
+						<svelte:boundary
+							failed={boundaryFailed}
+							onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
+						>
+							<RenderResult
+								onContinueEditing={() => void continueEditing()}
+								onStartNewPhoto={() => void startNewPhoto()}
+							/>
+						</svelte:boundary>
 					</section>
 				{/if}
 
-				<section class="step-card">
-					<div class="step-header">
-						<span class="step-num" aria-hidden="true">
-							{request.currentRender ? '①' : '②'}
-						</span>
-						<h2>{t('edit.title')}</h2>
-					</div>
-					<svelte:boundary
-						onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
+				{#if request.currentRender || hasActiveEditJob}
+					<section
+						class="edit-stage"
+						id="project-edit-panel"
+						tabindex="-1"
+						aria-labelledby="project-edit-title"
 					>
-						<EditPanel />
-						{#snippet failed(_error: unknown, reset: () => void)}
-							<p class="boundary-failed">{t('boundary.failed')}</p>
-							<button type="button" class="boundary-retry" onclick={reset}>
-								{t('boundary.retry')}
-							</button>
-						{/snippet}
-					</svelte:boundary>
-				</section>
+						<div class="stage-heading">
+							<span class="stage-number" aria-hidden="true">3</span>
+							<div>
+								<h2 id="project-edit-title">{t('project.editTitle')}</h2>
+								<p>{t('project.editDescription')}</p>
+							</div>
+						</div>
+						<svelte:boundary
+							failed={boundaryFailed}
+							onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
+						>
+							<EditPanel />
+						</svelte:boundary>
+					</section>
+				{:else}
+					<section class="step-card source-stage" aria-labelledby="project-source-title">
+						<div class="step-header">
+							<span class="step-num" aria-hidden="true">1</span>
+							<div class="step-copy">
+								<h2 id="project-source-title">{uploadLabel}</h2>
+								<p>{t('project.sourceHint')}</p>
+							</div>
+						</div>
+
+						<div class="scene-type-toggle" role="tablist" aria-label={t('render.sceneType.label')}>
+							{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
+								<button
+									{@attach (node) => {
+										sceneTypeTabs[index] = node as HTMLElement;
+									}}
+									type="button"
+									role="tab"
+									aria-selected={request.sceneType === sceneTypeOption.id}
+									tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
+									class:active={request.sceneType === sceneTypeOption.id}
+									onclick={() => sceneTypeTabController.activate(index)}
+									onkeydown={sceneTypeTabController.onKeydown}
+								>
+									{t(sceneTypeOption.label)}
+								</button>
+							{/each}
+						</div>
+						<ImageUpload />
+					</section>
+
+					{#if request.image}
+						<div class="creation-stage">
+							<PromptViews
+								stepLabel="2"
+								headingKey="project.stepCreate"
+								optionalBadgeKey="render.optional"
+							/>
+
+							<section class="step-card generate-section">
+								<label class="format-label">
+									<span class="format-text">{t('render.outputFormat')}</span>
+									<select
+										value={request.outputFormat}
+										onchange={(event) =>
+											request.setOutputFormat(event.currentTarget.value as OutputFormat)}
+										class="format-select"
+									>
+										<option value="webp">WebP</option>
+										<option value="jpg">JPG</option>
+										<option value="png">PNG</option>
+										<option value="avif">AVIF</option>
+									</select>
+								</label>
+
+								{#if !isAuthenticated}
+									<p class="auth-hint">{t('render.signInToGenerate')}</p>
+								{/if}
+
+								<button
+									type="button"
+									class="generate-btn"
+									disabled={!canGenerate || !isAuthenticated}
+									onclick={() => void generate()}
+								>
+									{#if request.status === 'rendering'}
+										<span class="spinner" aria-hidden="true"></span>
+										{t('render.generating')}
+									{:else}
+										{t('render.generate')}
+									{/if}
+								</button>
+
+								{#if submitError}
+									<p class="submit-error" role="alert">{submitError}</p>
+								{/if}
+							</section>
+						</div>
+					{:else}
+						<section class="locked-stage" aria-labelledby="project-locked-title">
+							<span class="lock-mark" aria-hidden="true">2–3</span>
+							<div>
+								<h2 id="project-locked-title">{t('project.lockedTitle')}</h2>
+								<p>{t('project.lockedDescription')}</p>
+							</div>
+						</section>
+					{/if}
+				{/if}
 			</div>
 
 			<div
@@ -383,18 +459,13 @@ before the Change Date. See LICENSE for complete terms.
 				id="mode-panel-styleTransfer"
 				aria-labelledby="mode-tab-styleTransfer"
 				tabindex="0"
-				hidden={mode !== 'styleTransfer'}
+				hidden={activeMode !== 'styleTransfer'}
 			>
 				<svelte:boundary
+					failed={boundaryFailed}
 					onerror={(error: unknown) => logBoundaryError('workspace.styleTransfer', error)}
 				>
 					<StyleTransferPanel />
-					{#snippet failed(_error: unknown, reset: () => void)}
-						<p class="boundary-failed">{t('boundary.failed')}</p>
-						<button type="button" class="boundary-retry" onclick={reset}>
-							{t('boundary.retry')}
-						</button>
-					{/snippet}
 				</svelte:boundary>
 			</div>
 		</div>
@@ -437,6 +508,110 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		gap: 1.5rem;
 		min-width: 0;
+	}
+
+	.project-intro {
+		width: 100%;
+		display: grid;
+		gap: 0.45rem;
+		padding: clamp(1.25rem, 3vw, 2rem);
+		color: var(--color-text);
+		background:
+			linear-gradient(120deg, rgb(255 255 255 / 0.92), rgb(244 247 244 / 0.86)),
+			var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.project-intro h1,
+	.project-intro p,
+	.stage-heading h2,
+	.stage-heading p,
+	.step-copy h2,
+	.step-copy p,
+	.locked-stage h2,
+	.locked-stage p {
+		margin: 0;
+	}
+
+	.project-intro h1 {
+		max-width: 22ch;
+		font-size: clamp(1.55rem, 4vw, 2.5rem);
+		line-height: 1.05;
+		letter-spacing: -0.035em;
+	}
+
+	.project-intro > p:last-child {
+		max-width: 68ch;
+		color: var(--color-text);
+		line-height: 1.55;
+	}
+
+	.project-kicker {
+		font-size: 0.75rem;
+		font-weight: 750;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--color-accent);
+	}
+
+	.project-progress {
+		width: 100%;
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		overflow: hidden;
+	}
+
+	.project-progress li {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.55rem;
+		min-width: 0;
+		padding: 0.7rem 1rem;
+		font-size: 0.8125rem;
+		font-weight: 650;
+		color: var(--color-muted-strong);
+	}
+
+	.project-progress li + li::before {
+		content: '';
+		position: absolute;
+		inset-block: 25%;
+		left: 0;
+		width: 1px;
+		background: var(--color-border);
+	}
+
+	.project-progress li.current {
+		color: var(--color-accent-contrast);
+		background: var(--color-text);
+	}
+
+	.progress-marker,
+	.stage-number,
+	.lock-mark {
+		display: inline-grid;
+		place-items: center;
+		flex: 0 0 auto;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.progress-marker {
+		width: 1.55rem;
+		height: 1.55rem;
+		font-size: 0.75rem;
+		border: 1px solid currentColor;
+		border-radius: 999px;
 	}
 
 	.mode-nav {
@@ -509,6 +684,102 @@ before the Change Date. See LICENSE for complete terms.
 		display: none;
 	}
 
+	.source-stage,
+	.creation-stage,
+	.result-stage,
+	.edit-stage {
+		width: 100%;
+	}
+
+	.source-stage {
+		display: grid;
+		gap: 1rem;
+	}
+
+	.step-copy,
+	.stage-heading {
+		display: grid;
+		gap: 0.3rem;
+	}
+
+	.step-copy p,
+	.stage-heading p,
+	.locked-stage p {
+		color: var(--color-muted-strong);
+		font-size: 0.875rem;
+		line-height: 1.5;
+	}
+
+	.creation-stage {
+		display: grid;
+		gap: 1rem;
+	}
+
+	.result-stage,
+	.edit-stage {
+		display: grid;
+		gap: 1rem;
+	}
+
+	.result-stage {
+		padding: clamp(0.75rem, 2vw, 1.25rem);
+		background: #edf0ed;
+		border: 1px solid #d9dfd9;
+		border-radius: calc(var(--radius-lg) + 4px);
+	}
+
+	.edit-stage {
+		padding: clamp(1rem, 2.5vw, 1.5rem);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		scroll-margin-top: 1rem;
+	}
+
+	.edit-stage:focus-visible {
+		outline: 3px solid var(--color-accent);
+		outline-offset: 3px;
+	}
+
+	.stage-heading {
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: start;
+	}
+
+	.stage-number {
+		width: 2rem;
+		height: 2rem;
+		font-size: 0.8125rem;
+		font-weight: 750;
+		color: var(--color-accent-contrast);
+		background: var(--color-text);
+		border-radius: 999px;
+	}
+
+	.locked-stage {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: center;
+		gap: 1rem;
+		width: 100%;
+		padding: 1.25rem;
+		background: color-mix(in srgb, var(--color-background) 82%, var(--color-surface));
+		border: 1px dashed var(--color-border);
+		border-radius: var(--radius-lg);
+	}
+
+	.lock-mark {
+		min-width: 2.7rem;
+		height: 2.7rem;
+		padding-inline: 0.5rem;
+		font-size: 0.75rem;
+		font-weight: 700;
+		color: var(--color-muted-strong);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+	}
+
 	.scene-type-toggle {
 		display: flex;
 		gap: 0.5rem;
@@ -523,7 +794,7 @@ before the Change Date. See LICENSE for complete terms.
 		font: inherit;
 		font-size: 0.875rem;
 		font-weight: 500;
-		color: var(--color-muted);
+		color: var(--color-muted-strong);
 		background: transparent;
 		border: none;
 		border-radius: 9px;
@@ -544,18 +815,6 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 	}
 
-	.result-wrap {
-		width: 100%;
-		max-width: var(--content-width);
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-	}
-
-	.result-wrap[hidden] {
-		display: none;
-	}
-
 	@media (max-width: 960px) {
 		.workspace-shell {
 			flex-direction: column;
@@ -572,6 +831,25 @@ before the Change Date. See LICENSE for complete terms.
 		.mode-tabs button {
 			padding: 0.7rem 0.75rem;
 			font-size: 0.875rem;
+		}
+
+		.project-progress {
+			border-radius: var(--radius-lg);
+		}
+
+		.project-progress li {
+			flex-direction: column;
+			gap: 0.35rem;
+			padding: 0.7rem 0.35rem;
+			font-size: 0.7rem;
+			text-align: center;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.mode-tabs button,
+		.scene-type-toggle button {
+			transition: none;
 		}
 	}
 </style>

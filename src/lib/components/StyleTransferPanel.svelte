@@ -146,6 +146,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function submit(): Promise<void> {
 		if (!canApply || !isAuthenticated) return;
+		const sourceRender =
+			request.styleSourceMode === 'current-result' ? request.currentRender : undefined;
+		const instruction = request.styleTransferPrompt.trim() || t('styleTransfer.apply');
 		const body = request.toStyleTransferRequest();
 		if (!body) return;
 		applying = true;
@@ -162,7 +165,12 @@ before the Change Date. See LICENSE for complete terms.
 				throw new Error(await extractApiErrorCode(response, 'style_transfer_failed'));
 			}
 			const result = (await response.json()) as RenderResponse;
-			request.setCurrentRender(renderResultFromResponse(result));
+			const newRender = renderResultFromResponse(result, {
+				...(sourceRender ? { parentId: sourceRender.id } : {}),
+				editOp: { type: 'style-transfer', instruction }
+			});
+			if (sourceRender) request.applyEditResult(newRender, sourceRender);
+			else request.setCurrentRender(newRender);
 			request.setStatus('idle');
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
@@ -470,8 +478,8 @@ before the Change Date. See LICENSE for complete terms.
 
 	.source-preview img {
 		width: 100%;
-		max-height: 280px;
-		object-fit: cover;
+		height: clamp(14rem, 32vw, 20rem);
+		object-fit: contain;
 		display: block;
 	}
 
@@ -582,8 +590,9 @@ before the Change Date. See LICENSE for complete terms.
 	.preset img {
 		width: 100%;
 		aspect-ratio: 1 / 1;
-		object-fit: cover;
+		object-fit: contain;
 		border-radius: calc(var(--radius) - 4px);
+		background: var(--color-surface);
 		display: block;
 	}
 
@@ -661,6 +670,16 @@ before the Change Date. See LICENSE for complete terms.
 		border-color: var(--color-border-focus);
 	}
 
+	button:focus-visible,
+	select:focus-visible,
+	textarea:focus-visible,
+	input:focus-visible,
+	summary:focus-visible,
+	[role='tabpanel']:focus-visible {
+		outline: 3px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+
 	textarea:disabled {
 		opacity: 0.75;
 		cursor: not-allowed;
@@ -681,8 +700,23 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	@media (max-width: 480px) {
+		.source-preview img {
+			height: 14rem;
+		}
+
 		.preset-grid {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.source-tabs button,
+		.scene-type-toggle button,
+		.preset,
+		textarea,
+		.spinner {
+			transition: none;
+			animation: none;
 		}
 	}
 </style>

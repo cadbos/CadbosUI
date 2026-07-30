@@ -94,7 +94,7 @@ before the Change Date. See LICENSE for complete terms.
 		return null;
 	});
 
-	$effect(() => {
+	function pollingEffect(): void | (() => void) {
 		const id = jobId;
 		const authenticated = isAuthenticated;
 		const failedPoll = pollFailure;
@@ -103,19 +103,20 @@ before the Change Date. See LICENSE for complete terms.
 		const controller = new AbortController();
 		void pollJob(id, controller.signal, run);
 		return () => controller.abort();
-	});
+	}
 
-	// The full-screen overlay tracks this flow's own in-flight state (not just
-	// the button's `submitting`) since the wait spans the async job queue +
-	// poll cycle, not a single fetch.
-	$effect(() => {
+	$effect(pollingEffect);
+
+	function overlayEffect(): void | (() => void) {
 		if (!(submitting || isPolling)) return;
 		const overlayId = generationOverlay.start(
 			'generationOverlay.objectReplacement',
 			'generationOverlay.objectReplacementDetail'
 		);
 		return () => generationOverlay.stop(overlayId);
-	});
+	}
+
+	$effect(overlayEffect);
 
 	beforeNavigate(({ to }) => {
 		if (
@@ -347,12 +348,11 @@ before the Change Date. See LICENSE for complete terms.
 		request.setObjectReferenceImage(undefined);
 		request.setObjectReplacementObject('');
 		request.setObjectReplacementSourceMode('current-result');
-		request.setImage(undefined);
-		request.setCurrentRender(undefined);
 		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
-		window.scrollTo({ top: 0, behavior: 'smooth' });
+		const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
 		await goto(buildShareUrl('edit', request, { tool: 'object-replacement' }), {
 			replaceState: true,
 			keepFocus: true,
@@ -635,8 +635,8 @@ before the Change Date. See LICENSE for complete terms.
 
 	.source-preview img {
 		width: 100%;
-		max-height: 280px;
-		object-fit: cover;
+		height: clamp(14rem, 32vw, 20rem);
+		object-fit: contain;
 		display: block;
 	}
 
@@ -708,6 +708,12 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-accent);
 	}
 
+	button:focus-visible,
+	input:focus-visible {
+		outline: 3px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+
 	@media (max-width: 760px) {
 		.image-grid {
 			grid-template-columns: 1fr;
@@ -724,6 +730,18 @@ before the Change Date. See LICENSE for complete terms.
 
 		.source-tabs button {
 			flex: 1;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.source-preview img {
+			height: 14rem;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.spinner {
+			animation: none;
 		}
 	}
 </style>

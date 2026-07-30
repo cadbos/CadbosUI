@@ -137,7 +137,11 @@ export function isWorkspaceRoute(routeId: string | null): boolean {
 // effect so rebuilding the URL for an unrelated request change doesn't drop
 // whichever sub-tab is showing.
 export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): SubTab {
-	if (mode === 'render') return { view: slugToView(searchParams.get('view') ?? undefined) };
+	if (mode === 'render') {
+		const view = slugToView(searchParams.get('view') ?? undefined);
+		const tool = searchParams.get('tool');
+		return tool === null ? { view } : { view, tool: slugToTool(tool) };
+	}
 	if (mode === 'edit') {
 		const tool = slugToTool(searchParams.get('tool') ?? undefined);
 		const job = searchParams.get('job');
@@ -203,6 +207,7 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 
 	if (mode === 'render') {
 		params.set('view', viewToSlug(subTab.view ?? 'chat'));
+		if (subTab.tool) params.set('tool', subTab.tool);
 		params.set('format', request.outputFormat);
 
 		if (request.promptOverride !== null) {
@@ -292,12 +297,15 @@ export function applyShareParams(
 	searchParams: URLSearchParams,
 	request: RequestState
 ): void {
-	request.setSceneType(mode === 'edit' ? 'interior' : slugToScene(sceneParam));
-
-	const format = searchParams.get('format');
-	request.setOutputFormat(
-		(OUTPUT_FORMATS as readonly string[]).includes(format ?? '') ? (format as OutputFormat) : 'webp'
-	);
+	if (mode !== 'edit') {
+		request.setSceneType(slugToScene(sceneParam));
+		const format = searchParams.get('format');
+		request.setOutputFormat(
+			(OUTPUT_FORMATS as readonly string[]).includes(format ?? '')
+				? (format as OutputFormat)
+				: 'webp'
+		);
+	}
 
 	if (mode === 'render') {
 		const prompt = searchParams.get('prompt');

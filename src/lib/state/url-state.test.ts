@@ -33,6 +33,34 @@ describe('edit tool route matching', () => {
 		expect(isEditToolRoute('/create/interior', params, 'object-replacement')).toBe(false);
 		expect(isEditToolRoute('/edit', params, 'texture-replacement')).toBe(false);
 	});
+
+	it('preserves project scene and format while hydrating an edit deep-link', () => {
+		const state = new RequestState();
+		state.setSceneType('exterior');
+		state.setOutputFormat('png');
+
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({ tool: 'freeform', prompt: 'add evening light' }),
+			state
+		);
+
+		expect(state.sceneType).toBe('exterior');
+		expect(state.outputFormat).toBe('png');
+		expect(state.editPrompt).toBe('add evening light');
+	});
+
+	it('carries a requested edit tool through the gated create URL', () => {
+		const state = new RequestState();
+		const params = new URLSearchParams({ tool: 'add-object' });
+		const subTab = subTabFromSearch('render', params);
+
+		expect(subTab).toEqual({ view: 'chat', tool: 'add-object' });
+		expect(buildShareUrl('render', state, subTab)).toBe(
+			'/create/interior?view=chat&tool=add-object&format=webp'
+		);
+	});
 });
 
 describe('object replacement edit URL state', () => {

@@ -51,6 +51,7 @@ export const EDIT_OPERATION_TYPES = [
 	'add-object',
 	'remove-object',
 	'atmosphere',
+	'style-transfer',
 	'upscale'
 ] as const;
 
@@ -436,12 +437,8 @@ export class RequestState {
 	activeTextureReplacementJob = $state<ActiveTextureReplacementJob | undefined>(undefined);
 	promptOverride = $state<string | null>(null);
 	currentRender = $state<RenderResult | undefined>(undefined);
-	// Single-step undo/redo for the last edit (FR-К6) — in-session only, deliberately
-	// not part of toJSON()/fromJSON(): it's session UI state, not the request model.
-	// A symmetric one-step pair, not a full revision history/tree (still out of MVP
-	// scope per Д-16) — undoneRender only ever holds the one render undo just left.
-	previousRender = $state<RenderResult | undefined>(undefined);
-	undoneRender = $state<RenderResult | undefined>(undefined);
+	renderHistory = $state<RenderResult[]>([]);
+	currentRevisionIndex = $state(-1);
 	status = $state<RequestStatus>('idle');
 
 	prompt = $derived.by(() => derivePrompt(this.promptOverride, this.promptFragments));
@@ -451,11 +448,23 @@ export class RequestState {
 	}
 
 	get canUndoEdit(): boolean {
-		return this.previousRender !== undefined;
+		return this.currentRevisionIndex > 0;
 	}
 
 	get canRedoEdit(): boolean {
-		return this.undoneRender !== undefined;
+		return (
+			this.currentRevisionIndex >= 0 && this.currentRevisionIndex < this.renderHistory.length - 1
+		);
+	}
+
+	get previousRender(): RenderResult | undefined {
+		if (!this.canUndoEdit) return undefined;
+		return this.renderHistory[this.currentRevisionIndex - 1];
+	}
+
+	get undoneRender(): RenderResult | undefined {
+		if (!this.canRedoEdit) return undefined;
+		return this.renderHistory[this.currentRevisionIndex + 1];
 	}
 
 	get activeObjectReplacementJobId(): string | undefined {
@@ -699,43 +708,50 @@ export class RequestState {
 		this.promptOverride = null;
 	}
 
-	// A fresh generation (not an edit) starts a new edit chain — any pending
-	// undo/redo from a previous chain no longer applies.
 	setCurrentRender(render: RenderResult | undefined): void {
-		this.currentRender = cloneRenderResult(render);
-		this.previousRender = undefined;
-		this.undoneRender = undefined;
+		const next = cloneRenderResult(render);
+		this.currentRender = next;
+		this.renderHistory = next ? [next] : [];
+		this.currentRevisionIndex = next ? 0 : -1;
 	}
 
-	// Applies the result of an edit (FR-К4): the prior currentRender becomes the
-	// one-step undo target (FR-К6), and the edit result becomes current. A new
-	// edit invalidates any pending redo — it's a new branch, not a continuation
-	// of whatever was just undone.
 	applyEditResult(
 		render: RenderResult,
 		sourceRender: RenderResult | undefined = this.currentRender
 	): void {
-		this.previousRender = cloneRenderResult(sourceRender);
-		this.currentRender = cloneRenderResult(render);
-		this.undoneRender = undefined;
+		const sourceIndex = sourceRender
+			? this.renderHistory.findIndex((candidate) => candidate.id === sourceRender.id)
+			: -1;
+		const retainedHistory =
+			sourceIndex >= 0
+				? this.renderHistory.slice(0, sourceIndex + 1)
+				: sourceRender
+					? [cloneRenderResult(sourceRender)]
+					: [];
+		const next = cloneRenderResult(render);
+		if (!next) return;
+		this.renderHistory = [
+			...retainedHistory.filter((item): item is RenderResult => item !== undefined),
+			next
+		];
+		this.currentRevisionIndex = this.renderHistory.length - 1;
+		this.currentRender = next;
 	}
 
-	// Rolls back to the render before the last edit (FR-К6). No-op if there's
-	// nothing to undo. Keeps the render it left as the one-step redo target.
 	undoLastEdit(): void {
-		if (this.previousRender === undefined) return;
-		this.undoneRender = cloneRenderResult(this.currentRender);
-		this.currentRender = cloneRenderResult(this.previousRender);
-		this.previousRender = undefined;
+		if (!this.canUndoEdit) return;
+		this.selectRevision(this.currentRevisionIndex - 1);
 	}
 
-	// Re-applies the edit that undoLastEdit() just reverted. No-op if there's
-	// nothing to redo.
 	redoEdit(): void {
-		if (this.undoneRender === undefined) return;
-		this.previousRender = cloneRenderResult(this.currentRender);
-		this.currentRender = cloneRenderResult(this.undoneRender);
-		this.undoneRender = undefined;
+		if (!this.canRedoEdit) return;
+		this.selectRevision(this.currentRevisionIndex + 1);
+	}
+
+	selectRevision(index: number): void {
+		if (!Number.isInteger(index) || index < 0 || index >= this.renderHistory.length) return;
+		this.currentRevisionIndex = index;
+		this.currentRender = cloneRenderResult(this.renderHistory[index]);
 	}
 
 	setStatus(status: RequestStatus): void {
@@ -905,10 +921,8 @@ export class RequestState {
 		this.textureReplacementMasked = parsed.textureReplacementMasked;
 		this.activeTextureReplacementJob = undefined;
 		this.promptOverride = parsed.promptOverride;
-		this.currentRender = cloneRenderResult(parsed.currentRender);
+		this.setCurrentRender(parsed.currentRender);
 		this.status = parsed.status;
-		this.previousRender = undefined;
-		this.undoneRender = undefined;
 	}
 
 	normalizeForComparison(): NormalizedRequest {
@@ -970,8 +984,8 @@ export class RequestState {
 		this.activeTextureReplacementJob = undefined;
 		this.promptOverride = null;
 		this.currentRender = undefined;
-		this.previousRender = undefined;
-		this.undoneRender = undefined;
+		this.renderHistory = [];
+		this.currentRevisionIndex = -1;
 		this.status = 'idle';
 	}
 }
