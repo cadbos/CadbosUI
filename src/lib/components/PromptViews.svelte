@@ -65,10 +65,9 @@ before the Change Date. See LICENSE for complete terms.
 	});
 </script>
 
-<section class="step-card">
-	<div class="step-header">
-		<span class="step-num" aria-hidden="true">{stepLabel}</span>
-		<h2>{t(headingKey)}</h2>
+<section class="prompt-views">
+	<div class="prompt-views-header">
+		<h2 class="heading">{t(headingKey)}</h2>
 		{#if optionalBadgeKey}
 			<span class="optional-badge">{t(optionalBadgeKey)}</span>
 		{/if}
@@ -123,6 +122,25 @@ before the Change Date. See LICENSE for complete terms.
 </section>
 
 <style>
+	.prompt-views {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.prompt-views-header {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+	}
+
+	.heading {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+
 	.optional-badge {
 		margin-left: auto;
 		font-size: 0.75rem;

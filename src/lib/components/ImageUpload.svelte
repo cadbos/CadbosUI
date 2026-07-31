@@ -35,6 +35,7 @@ before the Change Date. See LICENSE for complete terms.
 		label?: TranslationKey;
 		requiredLabel?: TranslationKey;
 		disabled?: boolean;
+		compact?: boolean;
 		onUploadingChange?: (uploading: boolean) => void;
 	}
 
@@ -43,6 +44,7 @@ before the Change Date. See LICENSE for complete terms.
 		label = undefined,
 		requiredLabel = undefined,
 		disabled = false,
+		compact = false,
 		onUploadingChange = undefined
 	}: Props = $props();
 
@@ -347,6 +349,7 @@ before the Change Date. See LICENSE for complete terms.
 	class:has-image={hasImage}
 	class:drag-over={dragOver}
 	class:has-error={error !== null}
+	class:compact
 	ondragover={onDragOver}
 	ondragleave={onDragLeave}
 	ondrop={onDrop}
@@ -631,5 +634,48 @@ before the Change Date. See LICENSE for complete terms.
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+
+	/* Compact variant: a small thumbnail-sized picker for reference images
+	   (style/object/texture reference) — the working photo is already visible
+	   in the main canvas, so these don't need full-size dropzones. */
+	.compact .drop-zone {
+		min-height: 0;
+		aspect-ratio: 1 / 1;
+		max-width: 110px;
+		padding: 0.5rem;
+		gap: 0.25rem;
+	}
+
+	.compact .upload-icon {
+		width: 18px;
+		height: 18px;
+	}
+
+	.compact .drop-title {
+		font-size: 0.6875rem;
+	}
+
+	.compact .drop-subtitle,
+	.compact .uploading-text {
+		display: none;
+	}
+
+	.compact .image-wrapper {
+		aspect-ratio: 1 / 1;
+		max-width: 110px;
+	}
+
+	.compact .change-btn {
+		padding: 0.3rem 0.625rem;
+		font-size: 0.75rem;
+	}
+
+	.compact .url-form {
+		flex-direction: column;
+	}
+
+	.compact .url-form button {
+		align-self: stretch;
 	}
 </style>

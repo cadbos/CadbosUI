@@ -80,13 +80,16 @@ export function createTabController(options: TabControllerOptions): TabControlle
 		const current = getActiveIndex();
 		let next: number | null = null;
 
-		if (event.key === 'ArrowRight') {
+		// ArrowDown/ArrowUp mirror ArrowRight/ArrowLeft so the same controller
+		// works for a horizontal tablist or a vertical one (e.g. Edit's tool
+		// rail) per the ARIA APG tab pattern.
+		if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
 			let candidate = current === last ? 0 : current + 1;
 			while (isDisabled(candidate) && candidate !== current) {
 				candidate = candidate === last ? 0 : candidate + 1;
 			}
 			next = candidate;
-		} else if (event.key === 'ArrowLeft') {
+		} else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
 			let candidate = current === 0 ? last : current - 1;
 			while (isDisabled(candidate) && candidate !== current) {
 				candidate = candidate === 0 ? last : candidate - 1;

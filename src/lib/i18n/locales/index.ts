@@ -185,8 +185,6 @@ export interface Dictionary {
 	'usage.column.latestSpendAt': string;
 	'render.insufficientCredit': string;
 	'render.generationRestricted': string;
-	'styleTransfer.sourceImage': string;
-	'styleTransfer.sourceCurrentResult': string;
 	'styleTransfer.referenceImage': string;
 	'styleTransfer.referenceChange': string;
 	'styleTransfer.referenceDropTitle': string;
@@ -218,8 +216,6 @@ export interface Dictionary {
 	'objectReplacement.alphaNotice': string;
 	'objectReplacement.required': string;
 	'objectReplacement.images': string;
-	'objectReplacement.sourceImage': string;
-	'objectReplacement.sourceCurrentResult': string;
 	'objectReplacement.referenceImage': string;
 	'objectReplacement.referenceChange': string;
 	'objectReplacement.referenceDropTitle': string;
@@ -250,8 +246,6 @@ export interface Dictionary {
 	'textureReplacement.alphaNotice': string;
 	'textureReplacement.required': string;
 	'textureReplacement.images': string;
-	'textureReplacement.sourceImage': string;
-	'textureReplacement.sourceCurrentResult': string;
 	'textureReplacement.referenceImage': string;
 	'textureReplacement.referenceChange': string;
 	'textureReplacement.referenceDropTitle': string;
@@ -262,6 +256,7 @@ export interface Dictionary {
 	'textureReplacement.maskDropTitle': string;
 	'textureReplacement.maskDropSubtitle': string;
 	'textureReplacement.maskEditor.title': string;
+	'textureReplacement.maskEditor.canvasHint': string;
 	'textureReplacement.maskEditor.hint': string;
 	'textureReplacement.maskEditor.toolbar': string;
 	'textureReplacement.maskEditor.brush': string;

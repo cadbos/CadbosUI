@@ -20,6 +20,7 @@ before the Change Date. See LICENSE for complete terms.
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import RenderResult from '$lib/components/RenderResult.svelte';
 	import EditPanel from '$lib/components/EditPanel.svelte';
+	import MaskEditor from '$lib/components/MaskEditor.svelte';
 	import PromptViews from '$lib/components/PromptViews.svelte';
 	import ScenesDrawer from '$lib/components/ScenesDrawer.svelte';
 	import StyleTransferPanel from '$lib/components/StyleTransferPanel.svelte';
@@ -37,6 +38,7 @@ before the Change Date. See LICENSE for complete terms.
 		applyShareParams,
 		buildShareUrl,
 		routeIdToMode,
+		slugToTool,
 		subTabFromSearch,
 		type Mode
 	} from '$lib/state/url-state';
@@ -100,6 +102,23 @@ before the Change Date. See LICENSE for complete terms.
 	const canGenerate = $derived(validation.valid && !submitting && request.status !== 'rendering');
 	const uploadLabel = $derived(
 		request.sceneType === 'exterior' ? t('upload.labelExterior') : t('upload.label')
+	);
+
+	const activeEditTool = $derived(slugToTool(page.url.searchParams.get('tool') ?? undefined));
+
+	// While drawing a texture-replacement mask, the canvas shows the mask
+	// editor's own drawing surface instead of the plain upload/result — so the
+	// user paints directly on the image they're already looking at, not a
+	// duplicate copy inside the panel. `activeEditTool`/`request.textureReplacementMasked`
+	// are enough to derive this without any prop-drilling through EditPanel.
+	const showMaskOnCanvas = $derived(
+		mode === 'edit' &&
+			activeEditTool === 'texture-replacement' &&
+			request.textureReplacementMasked &&
+			!request.textureReplacementResultReady
+	);
+	const maskEditorLocked = $derived(
+		request.textureMaskUploading || request.activeTextureReplacementJobId !== undefined
 	);
 
 	$effect(() => {
@@ -220,6 +239,25 @@ before the Change Date. See LICENSE for complete terms.
 	<div class="workspace-shell">
 		<div class="workspace-main">
 			<div class="workspace-topbar">
+				{#if isAuthenticated}
+					<button
+						{@attach (node) => {
+							scenesTrigger = node as HTMLButtonElement;
+							return () => {
+								scenesTrigger = null;
+							};
+						}}
+						type="button"
+						class="scenes-button"
+						aria-expanded={scenesOpen}
+						aria-controls="scenes-drawer"
+						onclick={() => (scenesOpen = true)}
+					>
+						<Images size={18} strokeWidth={1.8} aria-hidden="true" />
+						<span>{t('generatedImages.title')}</span>
+					</button>
+				{/if}
+
 				<nav class="mode-nav" aria-label={t('mode.switcher.label')}>
 					<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
 						{#each modes as modeOption, index (modeOption.id)}
@@ -242,156 +280,162 @@ before the Change Date. See LICENSE for complete terms.
 						{/each}
 					</div>
 				</nav>
-
-				{#if isAuthenticated}
-					<button
-						{@attach (node) => {
-							scenesTrigger = node as HTMLButtonElement;
-							return () => {
-								scenesTrigger = null;
-							};
-						}}
-						type="button"
-						class="scenes-button"
-						aria-expanded={scenesOpen}
-						aria-controls="scenes-drawer"
-						onclick={() => (scenesOpen = true)}
-					>
-						<Images size={18} strokeWidth={1.8} aria-hidden="true" />
-						<span>{t('generatedImages.title')}</span>
-					</button>
-				{/if}
 			</div>
 
+			<!-- Each mode keeps its own persistent canvas-layout (hidden via CSS, not
+			     destroyed via {#if}) so that in-flight background work — the Object/
+			     Texture Replacement tools' async job polling in particular — survives
+			     switching away to another mode and back. All three share the same
+			     `.canvas-layout` shape so the workspace footprint never changes
+			     between modes. -->
 			<div
-				class="mode-panel"
+				class="canvas-layout"
 				role="tabpanel"
 				id="mode-panel-render"
 				aria-labelledby="mode-tab-render"
 				tabindex="0"
 				hidden={mode !== 'render'}
 			>
-				<section class="step-card">
-					<div class="step-header">
-						<span class="step-num" aria-hidden="true">①</span>
-						<h2>{t('render.sceneType.label')}</h2>
-					</div>
-
-					<div class="scene-type-toggle" role="tablist" aria-label={t('render.sceneType.label')}>
-						{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
-							<button
-								{@attach (node) => {
-									sceneTypeTabs[index] = node as HTMLElement;
-								}}
-								type="button"
-								role="tab"
-								aria-selected={request.sceneType === sceneTypeOption.id}
-								tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
-								class:active={request.sceneType === sceneTypeOption.id}
-								onclick={() => sceneTypeTabController.activate(index)}
-								onkeydown={sceneTypeTabController.onKeydown}
-							>
-								{t(sceneTypeOption.label)}
-							</button>
-						{/each}
-					</div>
-				</section>
-
-				<section class="step-card">
-					<div class="step-header">
-						<span class="step-num" aria-hidden="true">②</span>
-						<h2>{uploadLabel}</h2>
-					</div>
+				<div class="canvas-col">
+					<h2 class="canvas-heading">{uploadLabel}</h2>
 					<ImageUpload />
-				</section>
-
-				<PromptViews
-					stepLabel="③"
-					headingKey="view.switcher.label"
-					optionalBadgeKey="render.optional"
-				/>
-
-				<section class="step-card generate-section">
-					<label class="format-label">
-						<span class="format-text">{t('render.outputFormat')}</span>
-						<select
-							value={request.outputFormat}
-							onchange={(event) =>
-								request.setOutputFormat(event.currentTarget.value as OutputFormat)}
-							class="format-select"
-						>
-							<option value="webp">WebP</option>
-							<option value="jpg">JPG</option>
-							<option value="png">PNG</option>
-							<option value="avif">AVIF</option>
-						</select>
-					</label>
-
-					{#if !isAuthenticated}
-						<p class="auth-hint">{t('render.signInToGenerate')}</p>
+					{#if mode === 'render' && request.currentRender}
+						<section aria-label={t('render.result')}>
+							<svelte:boundary
+								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
+							>
+								<RenderResult onEditRequest={() => activateMode('edit')} />
+								{#snippet failed(_error: unknown, reset: () => void)}
+									<p class="boundary-failed">{t('boundary.failed')}</p>
+									<button type="button" class="boundary-retry" onclick={reset}>
+										{t('boundary.retry')}
+									</button>
+								{/snippet}
+							</svelte:boundary>
+						</section>
 					{/if}
+				</div>
 
-					<button
-						type="button"
-						class="generate-btn"
-						disabled={!canGenerate || !isAuthenticated}
-						onclick={() => void generate()}
-					>
-						{#if request.status === 'rendering'}
-							<span class="spinner" aria-hidden="true"></span>
-							{t('render.generating')}
-						{:else}
-							{t('render.generate')}
-						{/if}
-					</button>
+				<div class="panel-col">
+					<div class="step-card">
+						<div class="panel-section">
+							<h2 class="panel-heading">{t('render.sceneType.label')}</h2>
+							<div
+								class="scene-type-toggle"
+								role="tablist"
+								aria-label={t('render.sceneType.label')}
+							>
+								{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
+									<button
+										{@attach (node) => {
+											sceneTypeTabs[index] = node as HTMLElement;
+										}}
+										type="button"
+										role="tab"
+										aria-selected={request.sceneType === sceneTypeOption.id}
+										tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
+										class:active={request.sceneType === sceneTypeOption.id}
+										onclick={() => sceneTypeTabController.activate(index)}
+										onkeydown={sceneTypeTabController.onKeydown}
+									>
+										{t(sceneTypeOption.label)}
+									</button>
+								{/each}
+							</div>
+						</div>
 
-					{#if submitError}
-						<p class="submit-error" role="alert">{submitError}</p>
-					{/if}
-				</section>
+						<PromptViews
+							stepLabel="③"
+							headingKey="view.switcher.label"
+							optionalBadgeKey="render.optional"
+						/>
+
+						<div class="panel-section generate-section">
+							<label class="format-label">
+								<span class="format-text">{t('render.outputFormat')}</span>
+								<select
+									value={request.outputFormat}
+									onchange={(event) =>
+										request.setOutputFormat(event.currentTarget.value as OutputFormat)}
+									class="format-select"
+								>
+									<option value="webp">WebP</option>
+									<option value="jpg">JPG</option>
+									<option value="png">PNG</option>
+									<option value="avif">AVIF</option>
+								</select>
+							</label>
+
+							{#if !isAuthenticated}
+								<p class="auth-hint">{t('render.signInToGenerate')}</p>
+							{/if}
+
+							<button
+								type="button"
+								class="generate-btn"
+								disabled={!canGenerate || !isAuthenticated}
+								onclick={() => void generate()}
+							>
+								{#if request.status === 'rendering'}
+									<span class="spinner" aria-hidden="true"></span>
+									{t('render.generating')}
+								{:else}
+									{t('render.generate')}
+								{/if}
+							</button>
+
+							{#if submitError}
+								<p class="submit-error" role="alert">{submitError}</p>
+							{/if}
+						</div>
+					</div>
+				</div>
 			</div>
 
-			{#if request.currentRender}
-				<section class="result-wrap" aria-label={t('render.result')}>
-					<svelte:boundary
-						onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
-					>
-						<RenderResult onEditRequest={() => activateMode('edit')} />
-						{#snippet failed(_error: unknown, reset: () => void)}
-							<p class="boundary-failed">{t('boundary.failed')}</p>
-							<button type="button" class="boundary-retry" onclick={reset}>
-								{t('boundary.retry')}
-							</button>
-						{/snippet}
-					</svelte:boundary>
-				</section>
-			{/if}
-
 			<div
-				class="result-wrap"
+				class="canvas-layout"
 				role="tabpanel"
 				id="mode-panel-edit"
 				aria-labelledby="mode-tab-edit"
 				tabindex="0"
 				hidden={mode !== 'edit'}
 			>
-				{#if !request.currentRender}
-					<section class="step-card">
-						<div class="step-header">
-							<span class="step-num" aria-hidden="true">①</span>
-							<h2>{t('upload.label')}</h2>
-						</div>
+				<div class="canvas-col">
+					{#if showMaskOnCanvas}
+						<svelte:boundary
+							onerror={(error: unknown) => logBoundaryError('workspace.maskEditor', error)}
+						>
+							<MaskEditor
+								sourceUrl={request.textureReplacementSourceUrl()}
+								disabled={maskEditorLocked}
+							/>
+							{#snippet failed(_error: unknown, reset: () => void)}
+								<p class="boundary-failed">{t('boundary.failed')}</p>
+								<button type="button" class="boundary-retry" onclick={reset}>
+									{t('boundary.retry')}
+								</button>
+							{/snippet}
+						</svelte:boundary>
+					{:else if mode === 'edit' && !request.currentRender}
 						<ImageUpload />
-					</section>
-				{/if}
+					{:else if mode === 'edit' && request.currentRender}
+						<section aria-label={t('render.result')}>
+							<svelte:boundary
+								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
+							>
+								<RenderResult onEditRequest={() => activateMode('edit')} />
+								{#snippet failed(_error: unknown, reset: () => void)}
+									<p class="boundary-failed">{t('boundary.failed')}</p>
+									<button type="button" class="boundary-retry" onclick={reset}>
+										{t('boundary.retry')}
+									</button>
+								{/snippet}
+							</svelte:boundary>
+						</section>
+					{/if}
+				</div>
 
-				<section class="step-card">
-					<div class="step-header">
-						<span class="step-num" aria-hidden="true">
-							{request.currentRender ? '①' : '②'}
-						</span>
-						<h2>{t('edit.title')}</h2>
-					</div>
+				<div class="panel-col">
 					<svelte:boundary
 						onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
 					>
@@ -403,28 +447,50 @@ before the Change Date. See LICENSE for complete terms.
 							</button>
 						{/snippet}
 					</svelte:boundary>
-				</section>
+				</div>
 			</div>
 
 			<div
-				class="mode-panel"
+				class="canvas-layout"
 				role="tabpanel"
 				id="mode-panel-styleTransfer"
 				aria-labelledby="mode-tab-styleTransfer"
 				tabindex="0"
 				hidden={mode !== 'styleTransfer'}
 			>
-				<svelte:boundary
-					onerror={(error: unknown) => logBoundaryError('workspace.styleTransfer', error)}
-				>
-					<StyleTransferPanel />
-					{#snippet failed(_error: unknown, reset: () => void)}
-						<p class="boundary-failed">{t('boundary.failed')}</p>
-						<button type="button" class="boundary-retry" onclick={reset}>
-							{t('boundary.retry')}
-						</button>
-					{/snippet}
-				</svelte:boundary>
+				<div class="canvas-col">
+					{#if mode === 'styleTransfer' && !request.currentRender}
+						<ImageUpload />
+					{:else if mode === 'styleTransfer' && request.currentRender}
+						<section aria-label={t('render.result')}>
+							<svelte:boundary
+								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
+							>
+								<RenderResult onEditRequest={() => activateMode('edit')} />
+								{#snippet failed(_error: unknown, reset: () => void)}
+									<p class="boundary-failed">{t('boundary.failed')}</p>
+									<button type="button" class="boundary-retry" onclick={reset}>
+										{t('boundary.retry')}
+									</button>
+								{/snippet}
+							</svelte:boundary>
+						</section>
+					{/if}
+				</div>
+
+				<div class="panel-col">
+					<svelte:boundary
+						onerror={(error: unknown) => logBoundaryError('workspace.styleTransfer', error)}
+					>
+						<StyleTransferPanel />
+						{#snippet failed(_error: unknown, reset: () => void)}
+							<p class="boundary-failed">{t('boundary.failed')}</p>
+							<button type="button" class="boundary-retry" onclick={reset}>
+								{t('boundary.retry')}
+							</button>
+						{/snippet}
+					</svelte:boundary>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -471,12 +537,15 @@ before the Change Date. See LICENSE for complete terms.
 		width: 100%;
 		display: flex;
 		align-items: stretch;
+		justify-content: space-between;
 		gap: 0.75rem;
 	}
 
+	/* Fixed to roughly the panel column's width (below) so the mode switcher
+	   reads as part of that right-hand panel instead of a full-width header. */
 	.mode-nav {
-		flex: 1 1 auto;
-		min-width: 0;
+		flex: 0 0 360px;
+		max-width: 100%;
 		padding: 0.25rem;
 		background: #e9ece9;
 		border: 1px solid #d8ded8;
@@ -516,15 +585,15 @@ before the Change Date. See LICENSE for complete terms.
 
 	.mode-tabs {
 		display: flex;
-		gap: 0.5rem;
+		gap: 0.375rem;
 	}
 
 	.mode-tabs button {
 		flex: 1;
 		min-width: 0;
-		padding: 0.7rem 1.5rem;
+		padding: 0.55rem 0.5rem;
 		font: inherit;
-		font-size: 0.9375rem;
+		font-size: 0.8125rem;
 		font-weight: 600;
 		line-height: 1.2;
 		text-align: center;
@@ -561,19 +630,45 @@ before the Change Date. See LICENSE for complete terms.
 		outline-color: var(--color-text);
 	}
 
-	.mode-panel {
-		/* .workspace-main uses align-items: center, so a flex child needs an
-		   explicit width to stretch across the available content area. */
+	/* One shared container for all three modes — its *content* switches on
+	   `mode`, so the canvas/panel footprint is identical everywhere instead of
+	   each mode having its own independently-sized layout. */
+	.canvas-layout {
 		width: 100%;
 		display: flex;
-		flex-direction: column;
-		/* Matches .result-wrap's gap on the Edit tab — the create steps are now
-		   separate cards too, stacked the same way. */
+		flex-direction: row;
+		align-items: flex-start;
 		gap: 1.5rem;
 	}
 
-	.mode-panel[hidden] {
-		display: none;
+	.canvas-col {
+		flex: 1 1 0;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.panel-col {
+		flex: 0 0 360px;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.panel-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.canvas-heading,
+	.panel-heading {
+		margin: 0;
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--color-text);
 	}
 
 	.scene-type-toggle {
@@ -611,16 +706,26 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 	}
 
-	.result-wrap {
-		width: 100%;
-		max-width: var(--content-width);
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
+	@media (max-width: 900px) {
+		.canvas-layout {
+			flex-direction: column;
+		}
+
+		.panel-col {
+			flex-basis: auto;
+			width: 100%;
+		}
+
+		.mode-nav {
+			flex-basis: auto;
+			width: 100%;
+		}
 	}
 
-	.result-wrap[hidden] {
-		display: none;
+	@media (max-width: 440px) {
+		.workspace-topbar {
+			flex-direction: column;
+		}
 	}
 
 	@media (max-width: 640px) {
@@ -629,19 +734,8 @@ before the Change Date. See LICENSE for complete terms.
 			padding: 1.5rem 1rem 3rem;
 		}
 
-		.mode-tabs button {
-			padding: 0.7rem 0.75rem;
-			font-size: 0.875rem;
-		}
-
 		.scenes-button {
 			padding-inline: 0.75rem;
-		}
-	}
-
-	@media (max-width: 440px) {
-		.workspace-topbar {
-			flex-direction: column;
 		}
 	}
 </style>

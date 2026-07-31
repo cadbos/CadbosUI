@@ -25,7 +25,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
-	import { extractApiErrorCode, request, type ImageSourceMode } from '$lib/state/request.svelte';
+	import { extractApiErrorCode, request } from '$lib/state/request.svelte';
 	import { buildShareUrl, isEditToolRoute } from '$lib/state/url-state';
 	import { logBoundaryError } from '$lib/utils';
 
@@ -69,10 +69,6 @@ before the Change Date. See LICENSE for complete terms.
 	let navigatedAwayWhileSubmitting = false;
 	let pollRun = 0;
 	const isAuthenticated = $derived(auth.status === 'authenticated');
-	const currentResultUrl = $derived(request.currentRender?.outputUrls[0]);
-	const usesCurrentResult = $derived(
-		request.objectReplacementSourceMode === 'current-result' && currentResultUrl !== undefined
-	);
 	const jobId = $derived(request.activeObjectReplacementJobId ?? null);
 	const validation = $derived(request.validateObjectReplacement());
 	const isPolling = $derived(
@@ -83,9 +79,6 @@ before the Change Date. See LICENSE for complete terms.
 	);
 	const formLocked = $derived(submitting || jobId !== null);
 	const canSubmit = $derived(validation.valid && !formLocked && isAuthenticated);
-	const sourcePhotoLabel = $derived(
-		request.sceneType === 'exterior' ? t('upload.labelExterior') : t('upload.label')
-	);
 	const validationKey = $derived.by((): TranslationKey | null => {
 		const field = validation.missing[0];
 		if (field === 'image') return 'objectReplacement.validationSource';
@@ -125,10 +118,6 @@ before the Change Date. See LICENSE for complete terms.
 			navigatedAwayWhileSubmitting = true;
 		}
 	});
-
-	function setSourceMode(mode: ImageSourceMode): void {
-		request.setObjectReplacementSourceMode(mode);
-	}
 
 	function objectValue(event: Event): string {
 		return event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : '';
@@ -361,76 +350,30 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
-<aside class="alpha-notice" aria-label={t('objectReplacement.alpha')}>
-	<span class="alpha-badge">{t('objectReplacement.alpha')}</span>
-	<p>{t('objectReplacement.alphaNotice')}</p>
-</aside>
+<section class="step-card">
+	<aside class="alpha-notice" aria-label={t('objectReplacement.alpha')}>
+		<span class="alpha-badge">{t('objectReplacement.alpha')}</span>
+		<p>{t('objectReplacement.alphaNotice')}</p>
+	</aside>
 
-<section class="replacement-section">
-	<h3>{t('objectReplacement.images')}</h3>
-	<div class:single-column={!currentResultUrl} class="image-grid">
-		{#if currentResultUrl}
-			<div class="image-column">
-				<div class="column-header">
-					<h4>{t('objectReplacement.sourceImage')}</h4>
-					<span class="required-badge">{t('objectReplacement.required')}</span>
-					<div class="source-tabs" role="group" aria-label={t('objectReplacement.sourceImage')}>
-						<button
-							type="button"
-							class:active={request.objectReplacementSourceMode === 'room-photo'}
-							aria-pressed={request.objectReplacementSourceMode === 'room-photo'}
-							disabled={formLocked}
-							onclick={() => setSourceMode('room-photo')}
-						>
-							{sourcePhotoLabel}
-						</button>
-						<button
-							type="button"
-							class:active={request.objectReplacementSourceMode === 'current-result'}
-							aria-pressed={request.objectReplacementSourceMode === 'current-result'}
-							disabled={formLocked}
-							onclick={() => setSourceMode('current-result')}
-						>
-							{t('objectReplacement.sourceCurrentResult')}
-						</button>
-					</div>
-				</div>
-
-				{#if usesCurrentResult}
-					<div class="source-preview">
-						<img src={currentResultUrl} alt={t('objectReplacement.sourceCurrentResult')} />
-					</div>
-				{:else}
-					<ImageUpload
-						label="objectReplacement.sourceImage"
-						requiredLabel="objectReplacement.required"
-						disabled={formLocked}
-					/>
-				{/if}
-			</div>
-		{/if}
-
-		<div class="image-column">
-			<div class="column-header">
-				<h4>{t('objectReplacement.referenceImage')}</h4>
-				<span class="required-badge">{t('objectReplacement.required')}</span>
-			</div>
-			<ImageUpload
-				target="objectReference"
-				requiredLabel="objectReplacement.required"
-				disabled={formLocked}
-			/>
-		</div>
+	<div class="field">
+		<span>
+			{t('objectReplacement.referenceImage')}
+			<span class="required-badge">{t('objectReplacement.required')}</span>
+		</span>
+		<ImageUpload
+			target="objectReference"
+			requiredLabel="objectReplacement.required"
+			disabled={formLocked}
+			compact
+		/>
 	</div>
-</section>
 
-<section class="replacement-section">
-	<div class="section-header">
-		<h3>{t('objectReplacement.objectLabel')}</h3>
-		<span class="required-badge">{t('objectReplacement.required')}</span>
-	</div>
-	<label class="object-field">
-		<span>{t('objectReplacement.objectHint')}</span>
+	<label class="field">
+		<span>
+			{t('objectReplacement.objectHint')}
+			<span class="required-badge">{t('objectReplacement.required')}</span>
+		</span>
 		<input
 			type="text"
 			value={request.objectReplacementObject}
@@ -441,10 +384,6 @@ before the Change Date. See LICENSE for complete terms.
 			oninput={(event) => request.setObjectReplacementObject(objectValue(event))}
 		/>
 	</label>
-</section>
-
-<section class="replacement-section generate-section">
-	<h3>{t('objectReplacement.controls')}</h3>
 
 	{#if !isAuthenticated}
 		<p class="auth-hint">{t('objectReplacement.signInToApply')}</p>
@@ -509,8 +448,6 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.alpha-notice p,
-	.column-header h4,
-	.replacement-section h3,
 	.job-status,
 	.job-success,
 	.validation-hint {
@@ -535,57 +472,17 @@ before the Change Date. See LICENSE for complete terms.
 		text-transform: uppercase;
 	}
 
-	.replacement-section {
+	.field {
 		display: flex;
 		flex-direction: column;
-		gap: 0.875rem;
-		padding-top: 1rem;
-		border-top: 1px solid var(--color-border);
-	}
-
-	.replacement-section h3 {
-		font-size: 1rem;
-		font-weight: 600;
-	}
-
-	.section-header {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
-
-	.image-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 1rem;
-	}
-
-	.image-grid.single-column {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.image-column {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		min-width: 0;
-	}
-
-	.column-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
-	}
-
-	.column-header h4 {
-		margin: 0;
+		gap: 0.5rem;
 		font-size: 0.875rem;
-		font-weight: 600;
+		color: var(--color-muted-strong);
 	}
 
 	.required-badge {
-		margin-left: auto;
+		display: inline-block;
+		margin-left: 0.375rem;
 		padding: 0.15rem 0.5rem;
 		border: 1px solid var(--color-border);
 		border-radius: 100px;
@@ -594,61 +491,7 @@ before the Change Date. See LICENSE for complete terms.
 		font-weight: 600;
 	}
 
-	.source-tabs {
-		display: inline-flex;
-		gap: 0.25rem;
-		padding: 0.25rem;
-		background: var(--color-background);
-		border-radius: 10px;
-	}
-
-	.source-tabs button {
-		padding: 0.375rem 0.625rem;
-		font: inherit;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--color-muted-strong);
-		background: transparent;
-		border: 1px solid transparent;
-		border-radius: 8px;
-		cursor: pointer;
-	}
-
-	.source-tabs button.active {
-		color: var(--color-text);
-		background: var(--color-surface);
-		border-color: var(--color-accent);
-		box-shadow: var(--shadow-sm);
-	}
-
-	.source-tabs button:disabled {
-		opacity: 0.65;
-		cursor: not-allowed;
-	}
-
-	.source-preview {
-		border: 1.5px solid var(--color-muted-strong);
-		border-radius: var(--radius-lg);
-		overflow: hidden;
-		background: var(--color-background);
-	}
-
-	.source-preview img {
-		width: 100%;
-		max-height: 280px;
-		object-fit: cover;
-		display: block;
-	}
-
-	.object-field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		font-size: 0.875rem;
-		color: var(--color-muted-strong);
-	}
-
-	.object-field input {
+	.field input {
 		width: 100%;
 		box-sizing: border-box;
 		padding: 0.75rem 1rem;
@@ -659,11 +502,11 @@ before the Change Date. See LICENSE for complete terms.
 		font: inherit;
 	}
 
-	.object-field input:focus {
+	.field input:focus {
 		border-color: var(--color-border-focus);
 	}
 
-	.object-field input:disabled {
+	.field input:disabled {
 		opacity: 0.75;
 		cursor: not-allowed;
 	}
@@ -706,24 +549,5 @@ before the Change Date. See LICENSE for complete terms.
 	.secondary-btn:hover {
 		border-color: var(--color-accent);
 		color: var(--color-accent);
-	}
-
-	@media (max-width: 760px) {
-		.image-grid {
-			grid-template-columns: 1fr;
-		}
-
-		.column-header {
-			align-items: stretch;
-			flex-direction: column;
-		}
-
-		.source-tabs {
-			width: 100%;
-		}
-
-		.source-tabs button {
-			flex: 1;
-		}
 	}
 </style>
