@@ -188,13 +188,15 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 	);
 	await expect(panel.getByRole('button', { name: 'Перенести стиль' })).toBeDisabled();
 
-	const sourceUpload = panel.getByRole('region', { name: 'Исходное изображение' });
-	await sourceUpload.locator('input[type="file"]').setInputFiles({
+	// The working photo is the canvas's own upload (shared across all three
+	// modes), not a separate copy inside the panel.
+	const canvasInputs = panel.locator('input[type="file"]');
+	await canvasInputs.nth(0).setInputFiles({
 		name: 'room.png',
 		mimeType: 'image/png',
 		buffer: Buffer.from('room')
 	});
-	await expect(sourceUpload.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await expect(panel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
 
 	await panel.getByRole('tab', { name: 'Свои' }).click();
 	const referenceUpload = panel.getByRole('region', { name: 'Референс стиля' });
@@ -341,7 +343,8 @@ test('the Style transfer tab lets you pick a ready-made photorealistic preset as
 	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
 
 	await panel
-		.locator('input[type="file"][aria-label="Исходное изображение"]')
+		.locator('input[type="file"]')
+		.nth(0)
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('room') });
 
 	const presetTab = panel.getByRole('tab', { name: 'Реалистичные' });
@@ -373,7 +376,8 @@ test('switching scene type clears a selected conceptual preset instead of keepin
 	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
 
 	await panel
-		.locator('input[type="file"][aria-label="Исходное изображение"]')
+		.locator('input[type="file"]')
+		.nth(0)
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('room') });
 
 	await panel.getByRole('tab', { name: 'Концептуальные' }).click();
@@ -429,12 +433,14 @@ test('switching from a custom reference upload back to a preset tab clears the u
 	const panel = page.locator('#mode-panel-styleTransfer');
 	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
 
-	const sourceUpload = panel.getByRole('region', { name: 'Исходное изображение' });
-	await sourceUpload.locator('input[type="file"]').setInputFiles({
-		name: 'room.png',
-		mimeType: 'image/png',
-		buffer: Buffer.from('room')
-	});
+	await panel
+		.locator('input[type="file"]')
+		.nth(0)
+		.setInputFiles({
+			name: 'room.png',
+			mimeType: 'image/png',
+			buffer: Buffer.from('room')
+		});
 
 	await panel.getByRole('tab', { name: 'Свои' }).click();
 	const referenceUpload = panel.getByRole('region', { name: 'Референс стиля' });
@@ -623,15 +629,35 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
 	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render.webp');
 
+	// The upload step keeps showing the originally uploaded photo — it must not
+	// be swapped out for the generated result.
+	await expect(page.locator('#mode-panel-render .image-wrapper img')).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/uploaded.webp'
+	);
+
 	const undoButton = page.getByRole('button', { name: 'Отменить' });
 	const redoButton = page.getByRole('button', { name: 'Повторить' });
 	const compareButton = page.getByRole('button', { name: 'Сравнить до/после' });
 	const upscaleButton = page.getByRole('button', { name: 'Улучшить до 4K' });
 
-	// Undo/redo/compare have nothing to act on before any edit exists yet.
+	// Undo/redo have nothing to act on before any edit exists yet, but compare
+	// is available right away — it falls back to the originally uploaded photo
+	// as "before" when there's no edit chain.
 	await expect(undoButton).toBeDisabled();
 	await expect(redoButton).toBeDisabled();
-	await expect(compareButton).toBeDisabled();
+	await expect(compareButton).toBeEnabled();
+
+	await compareButton.click();
+	await expect(page.getByAltText('До', { exact: true })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/uploaded.webp'
+	);
+	await expect(page.getByAltText('После', { exact: true })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/render.webp'
+	);
+	await compareButton.click();
 
 	await page.getByRole('button', { name: 'Редактировать' }).click();
 	await page.getByLabel('Инструкция для правки').fill('Replace the sofa with an armchair');
@@ -642,8 +668,14 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	await expect(compareButton).toBeEnabled();
 
 	await compareButton.click();
-	await expect(page.getByText('До', { exact: true })).toBeVisible();
-	await expect(page.getByText('После', { exact: true })).toBeVisible();
+	await expect(page.getByAltText('До', { exact: true })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/render.webp'
+	);
+	await expect(page.getByAltText('После', { exact: true })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/edited.webp'
+	);
 	await compareButton.click();
 
 	await undoButton.click();

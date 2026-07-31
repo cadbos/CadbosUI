@@ -183,9 +183,10 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 
 	await page.getByRole('button', { name: 'Обработать исходник сцены 1' }).click();
 	await expect(page).toHaveURL(/\/style-transfer\/interior\?.*source=room-photo/);
-	await expect(
-		page.getByRole('region', { name: 'Исходное изображение' }).getByRole('img')
-	).toHaveAttribute('src', 'https://cdn.example.test/newest-source.jpg');
+	await expect(page.getByRole('img', { name: 'Фото комнаты' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/newest-source.jpg'
+	);
 
 	await scenesButton.click();
 	await images.nth(1).hover();

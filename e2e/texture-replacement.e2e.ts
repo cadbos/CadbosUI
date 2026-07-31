@@ -170,10 +170,14 @@ test('uses the masked texture mode and applies the synchronous result without po
 	const uploads = await uploadInputs(page);
 
 	const panel = page.locator('#edit-tool-panel-texture-replacement');
+	// The mask editor draws directly on the canvas image (Workspace.svelte's
+	// canvas-col), not inside this tool panel — only the checkbox/surface
+	// field/job status live in the panel itself.
+	const maskEditor = page.locator('#mode-panel-edit .canvas-col');
 	await panel.getByRole('checkbox', { name: 'С маской' }).check();
 	await expect(page).toHaveURL(/masked=1/);
 	await expect(panel.getByLabel(/Укажите поверхность или материал/)).toHaveCount(0);
-	const canvas = panel.locator(
+	const canvas = maskEditor.locator(
 		'canvas[aria-label="Область рисования маски поверх исходной сцены"]'
 	);
 	await expect(canvas).toBeVisible();
@@ -185,7 +189,7 @@ test('uses the masked texture mode and applies the synchronous result without po
 	await canvas.scrollIntoViewIfNeeded();
 	const canvasBounds = await canvas.boundingBox();
 	if (!canvasBounds) throw new Error('Mask canvas has no visible bounds');
-	const brushCursor = panel.locator('.brush-cursor');
+	const brushCursor = maskEditor.locator('.brush-cursor');
 	await page.mouse.move(0, 0);
 	await expect(brushCursor).toBeHidden();
 	const cursorX = canvasBounds.x + canvasBounds.width * 0.25;
@@ -199,7 +203,7 @@ test('uses the masked texture mode and applies the synchronous result without po
 	expect(brushCursorBounds.height).toBeCloseTo((48 * canvasBounds.height) / 600, 0);
 	expect(brushCursorBounds.x + brushCursorBounds.width / 2).toBeCloseTo(cursorX, 0);
 	expect(brushCursorBounds.y + brushCursorBounds.height / 2).toBeCloseTo(cursorY, 0);
-	const brushSize = panel.locator('.brush-size input[type="range"]');
+	const brushSize = maskEditor.locator('.brush-size input[type="range"]');
 	await brushSize.evaluate((element) => {
 		if (!(element instanceof HTMLInputElement))
 			throw new Error('Brush size control is unavailable');
@@ -211,12 +215,12 @@ test('uses the masked texture mode and applies the synchronous result without po
 	if (!brushCursorBounds) throw new Error('Brush cursor has no visible bounds');
 	expect(brushCursorBounds.width).toBeCloseTo((160 * canvasBounds.width) / 800, 0);
 	expect(brushCursorBounds.height).toBeCloseTo((160 * canvasBounds.height) / 600, 0);
-	await panel.getByRole('button', { name: 'Ластик' }).click();
+	await maskEditor.getByRole('button', { name: 'Ластик' }).click();
 	await canvas.hover({ position: { x: canvasBounds.width * 0.25, y: canvasBounds.height * 0.55 } });
 	await expect(brushCursor).toHaveClass(/eraser/);
 	await page.mouse.move(0, 0);
 	await expect(brushCursor).toBeHidden();
-	await panel.getByRole('button', { name: 'Кисть' }).click();
+	await maskEditor.getByRole('button', { name: 'Кисть' }).click();
 	await brushSize.evaluate((element) => {
 		if (!(element instanceof HTMLInputElement))
 			throw new Error('Brush size control is unavailable');
@@ -239,12 +243,12 @@ test('uses the masked texture mode and applies the synchronous result without po
 		}
 	);
 	await page.mouse.up();
-	await expect(panel.getByText('Сохраните маску после рисования.')).toBeVisible();
+	await expect(maskEditor.getByText('Сохраните маску после рисования.')).toBeVisible();
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
-		panel.getByRole('button', { name: 'Сохранить маску' }).click()
+		maskEditor.getByRole('button', { name: 'Сохранить маску' }).click()
 	]);
-	await expect(panel.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
+	await expect(maskEditor.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
 	const maskPng = uploads.maskPng();
 	if (!maskPng) throw new Error('The generated mask PNG was not captured');
 	const decodedMask = await page.evaluate(async (base64) => {
