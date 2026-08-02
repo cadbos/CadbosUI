@@ -42,6 +42,12 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
+	interface Props {
+		customWorkflowsAvailable: boolean;
+	}
+
+	let { customWorkflowsAvailable }: Props = $props();
+
 	const modes: { id: Mode; label: TranslationKey }[] = [
 		{ id: 'render', label: 'mode.render' },
 		{ id: 'edit', label: 'mode.edit' },
@@ -395,7 +401,7 @@ before the Change Date. See LICENSE for complete terms.
 					<svelte:boundary
 						onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
 					>
-						<EditPanel />
+						<EditPanel {customWorkflowsAvailable} />
 						{#snippet failed(_error: unknown, reset: () => void)}
 							<p class="boundary-failed">{t('boundary.failed')}</p>
 							<button type="button" class="boundary-retry" onclick={reset}>

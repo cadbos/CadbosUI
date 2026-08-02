@@ -14,6 +14,11 @@
 
 export { createComfyUiClient } from '$lib/server/comfyui/client';
 export {
+	customWorkflowsAvailable,
+	getComfyUiClient,
+	requireHealthyComfyUiClient
+} from '$lib/server/comfyui/service';
+export {
 	ComfyUiError,
 	type ComfyDownloadedImage,
 	type ComfyHistoryEntry,

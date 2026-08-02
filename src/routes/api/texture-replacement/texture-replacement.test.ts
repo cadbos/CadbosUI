@@ -345,6 +345,27 @@ describe('POST /api/texture-replacement', () => {
 		expect(integration.cancel).not.toHaveBeenCalled();
 	});
 
+	it('returns a generic unavailable response when the private health preflight fails', async () => {
+		const db = makeD1();
+		seedUser(db);
+		integration.submit.mockRejectedValue(
+			new ComfyUiError('network_error', 'health_check', 'private provider detail')
+		);
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		const response = await callPost(platform(db));
+
+		expect(response.status).toBe(503);
+		expect(await response.json()).toEqual({
+			error: {
+				code: 'custom_workflows_unavailable',
+				message: 'Custom workflows unavailable'
+			}
+		});
+		expect(jobs.create).not.toHaveBeenCalled();
+		expect(consoleError.mock.calls.flat().join(' ')).not.toContain('private provider detail');
+	});
+
 	it('cancels an accepted prompt when job persistence fails', async () => {
 		const db = makeD1();
 		seedUser(db);

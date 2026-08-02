@@ -15,9 +15,10 @@
 import type { ObjectReplacementRequest } from '$lib/api/contract';
 import {
 	ComfyUiError,
-	createComfyUiClient,
 	getObjectReplacementResult,
+	getComfyUiClient,
 	queueObjectReplacement,
+	requireHealthyComfyUiClient,
 	type ComfyDownloadedImage
 } from '$lib/server/comfyui';
 import { imageExtensionFromMime } from '$lib/server/image-utils';
@@ -26,28 +27,6 @@ import { downloadRemoteImage } from '$lib/server/remote-image';
 const DEFAULT_OBJECT_REPLACEMENT_COST = 0.03;
 const COMFYUI_REQUEST_TIMEOUT_MS = 120_000;
 export const OBJECT_REPLACEMENT_TIMEOUT_MS = 10 * 60_000;
-
-// Target of the COMFYUI_BASE_URL VPC Service binding (wrangler.jsonc), which
-// routes to ComfyUI's actual localhost:8188 on the VPS over the private tunnel.
-const COMFYUI_VPC_TARGET_URL = 'http://localhost:8188/';
-
-function createClient(platform: App.Platform | undefined) {
-	const vpcService = platform?.env?.COMFYUI_BASE_URL;
-	if (!vpcService) {
-		throw new ComfyUiError(
-			'invalid_configuration',
-			'configuration',
-			'ComfyUI VPC service not configured'
-		);
-	}
-	return createComfyUiClient({
-		baseUrl: COMFYUI_VPC_TARGET_URL,
-		// Fetcher.fetch is structurally identical to the DOM fetch signature at
-		// runtime; only its Request/RequestInfo types (from workers-types, with
-		// added `cf`/`fetcher` properties) are nominally distinct from DOM's.
-		fetch: vpcService.fetch.bind(vpcService) as unknown as typeof fetch
-	});
-}
 
 export function objectReplacementCost(platform: App.Platform | undefined): number {
 	const configured = platform?.env?.OBJECT_REPLACEMENT_COST?.trim();
@@ -67,7 +46,7 @@ export async function cancelObjectReplacement(
 	platform: App.Platform | undefined,
 	promptId: string
 ): Promise<void> {
-	await createClient(platform).cancelWorkflow(promptId, {
+	await getComfyUiClient(platform).cancelWorkflow(promptId, {
 		signal: AbortSignal.timeout(COMFYUI_REQUEST_TIMEOUT_MS)
 	});
 }
@@ -78,7 +57,7 @@ export async function submitObjectReplacement(
 	applicationOrigin: string,
 	jobId: string
 ): Promise<string> {
-	const client = createClient(platform);
+	const client = await requireHealthyComfyUiClient(platform);
 	const [scene, reference] = await Promise.all([
 		downloadRemoteImage(request.image, applicationOrigin),
 		downloadRemoteImage(request.referenceImage, applicationOrigin)
@@ -105,7 +84,7 @@ export async function pollObjectReplacement(
 	promptId: string
 ): Promise<ComfyDownloadedImage | null> {
 	return getObjectReplacementResult(
-		createClient(platform),
+		getComfyUiClient(platform),
 		promptId,
 		AbortSignal.timeout(COMFYUI_REQUEST_TIMEOUT_MS)
 	);

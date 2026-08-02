@@ -157,6 +157,10 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 					providerOperation: error.operation,
 					...(error.status === undefined ? {} : { providerStatus: error.status })
 				};
+				if (error.operation === 'health_check') {
+					logFailure(503, 'custom_workflows_unavailable', detail);
+					return apiError(503, 'custom_workflows_unavailable', 'Custom workflows unavailable');
+				}
 				if (error.code === 'invalid_configuration') {
 					logFailure(500, 'object_replacement_failed', detail);
 					return apiError(500, 'object_replacement_failed', 'Object replacement failed');

@@ -49,6 +49,50 @@ afterEach(() => {
 });
 
 describe('createComfyUiClient', () => {
+	it('checks health through system statistics without provider credentials', async () => {
+		const fetcher = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(jsonResponse({ system: { comfyui_version: '1.0.0' }, devices: [] }));
+		const client = createComfyUiClient({
+			baseUrl: 'http://127.0.0.1:8188',
+			fetch: fetcher,
+			headers: { 'x-internal-route': 'test' }
+		});
+
+		await expect(client.checkHealth()).resolves.toBeUndefined();
+
+		const [url, init] = fetcher.mock.calls[0] ?? [];
+		expect(url?.toString()).toBe('http://127.0.0.1:8188/system_stats');
+		expect(init?.method).toBe('GET');
+		expect(new Headers(init?.headers).get('x-internal-route')).toBe('test');
+		expect(new Headers(init?.headers).has('authorization')).toBe(false);
+		expect(new Headers(init?.headers).has('x-api-key')).toBe(false);
+	});
+
+	it('rejects failed and malformed health responses without exposing response details', async () => {
+		const failedFetcher = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(jsonResponse({ error: 'private provider detail' }, 503));
+		const failedClient = createComfyUiClient({
+			baseUrl: 'http://127.0.0.1:8188',
+			fetch: failedFetcher
+		});
+
+		const failed = await failedClient.checkHealth().catch((error: unknown) => error);
+
+		expect(failed).toMatchObject({ code: 'http_error', operation: 'health_check', status: 503 });
+		expect((failed as Error).message).not.toContain('private provider detail');
+
+		const malformedClient = createComfyUiClient({
+			baseUrl: 'http://127.0.0.1:8188',
+			fetch: vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ system: {}, devices: {} }))
+		});
+		await expect(malformedClient.checkHealth()).rejects.toMatchObject({
+			code: 'invalid_response',
+			operation: 'health_check'
+		});
+	});
+
 	it('uploads an image with multipart fields and preserves configured authentication headers', async () => {
 		const fetcher = vi
 			.fn<typeof fetch>()

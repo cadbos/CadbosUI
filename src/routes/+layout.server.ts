@@ -12,15 +12,16 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { defineConfig } from '@playwright/test';
+import type { LayoutServerLoad } from './$types';
+import { customWorkflowsAvailable } from '$lib/server/comfyui';
 
-export default defineConfig({
-	webServer: {
-		command: 'pnpm run build && pnpm run preview',
-		env: { PLAYWRIGHT_TEST: '1' },
-		port: 4173
-	},
-	use: { baseURL: 'http://localhost:4173' },
-	testDir: 'e2e',
-	testMatch: '**/*.e2e.{ts,js}'
-});
+const PLAYWRIGHT_AVAILABILITY_HEADER = 'x-cadbos-test-custom-workflows';
+
+export const load: LayoutServerLoad = async ({ platform, request }) => {
+	const testAvailability = __CADBOS_PLAYWRIGHT_TEST__
+		? request.headers.get(PLAYWRIGHT_AVAILABILITY_HEADER) !== 'unavailable'
+		: null;
+	return {
+		customWorkflowsAvailable: testAvailability ?? (await customWorkflowsAvailable(platform))
+	};
+};

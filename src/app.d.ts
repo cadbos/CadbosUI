@@ -18,6 +18,8 @@ import type { SessionUser } from '$lib/api/contract';
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
 declare global {
+	const __CADBOS_PLAYWRIGHT_TEST__: boolean;
+
 	namespace App {
 		// interface Error {}
 		interface Locals {

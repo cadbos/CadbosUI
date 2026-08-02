@@ -184,6 +184,9 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 					operation: error.operation,
 					status: error.status
 				});
+				if (error.operation === 'health_check') {
+					return apiError(503, 'custom_workflows_unavailable', 'Custom workflows unavailable');
+				}
 				if (error.code === 'invalid_configuration') {
 					return apiError(500, 'texture_replacement_failed', 'Texture replacement failed');
 				}

@@ -352,6 +352,33 @@ describe('POST /api/object-replacement', () => {
 		}
 	);
 
+	it('returns a generic unavailable response when the private health preflight fails', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		integration.submit.mockRejectedValue(
+			new ComfyUiError('network_error', 'health_check', 'private provider detail')
+		);
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db));
+
+		expect(response.status).toBe(503);
+		expect(await response.json()).toEqual({
+			error: {
+				code: 'custom_workflows_unavailable',
+				message: 'Custom workflows unavailable'
+			}
+		});
+		expectSingleLog(
+			consoleError.mock.calls.flat(),
+			failureLog(503, 'custom_workflows_unavailable', 'provider_submission', {
+				providerCode: 'network_error',
+				providerOperation: 'health_check'
+			})
+		);
+		expect(consoleError.mock.calls.flat().join(' ')).not.toContain('private provider detail');
+	});
+
 	it('logs remote-image fetch failures at the route boundary', async () => {
 		const db = makeD1();
 		seedUser(db, 12);
