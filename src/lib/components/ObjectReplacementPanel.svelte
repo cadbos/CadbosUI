@@ -435,11 +435,15 @@ before the Change Date. See LICENSE for complete terms.
 </section>
 
 <style>
+	/* Stacked (badge above text) rather than side-by-side: this panel lives in
+	   a fixed-width floating tools panel, next to EditPanel's vertical tool
+	   rail — there isn't enough width left for a badge-beside-paragraph row
+	   without squeezing the text down to single-word-per-line wrapping. */
 	.alpha-notice {
 		width: 100%;
 		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
+		flex-direction: column;
+		gap: 0.5rem;
 		box-sizing: border-box;
 		padding: 0.875rem 1rem;
 		border: 1px solid color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
@@ -461,6 +465,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.alpha-badge {
+		align-self: flex-start;
 		flex: 0 0 auto;
 		padding: 0.2rem 0.5rem;
 		border-radius: 100px;

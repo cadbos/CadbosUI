@@ -424,14 +424,15 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-muted);
 	}
 
+	/* No max-height/overflow of its own — the floating tools panel that hosts
+	   this (see FloatingToolsPanel.svelte's .panel-body) is already the single
+	   scroll container for the whole tool, and nesting a second independently
+	   scrolling region here just produces the "scroll the grid, then scroll
+	   the panel" double-scroll a reader has to fight through. */
 	.preset-grid {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 0.625rem;
-		max-height: 22rem;
-		padding-right: 0.25rem;
-		overflow-y: auto;
-		scrollbar-gutter: stable;
 	}
 
 	.preset {
