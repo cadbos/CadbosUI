@@ -893,6 +893,7 @@ export class RequestState {
 		const parsed = requestJsonSchema.parse(data);
 		this.#textureMaskUploadEpoch += 1;
 		this.textureMaskUploading = false;
+		this.textureReplacementResultReady = false;
 		this.id = parsed.id;
 		this.image = cloneImage(parsed.image);
 		this.styleReferenceImage = cloneImage(parsed.styleReferenceImage);
@@ -957,6 +958,7 @@ export class RequestState {
 	reset(): void {
 		this.#textureMaskUploadEpoch += 1;
 		this.textureMaskUploading = false;
+		this.textureReplacementResultReady = false;
 		this.id = crypto.randomUUID();
 		this.image = undefined;
 		this.styleReferenceImage = undefined;

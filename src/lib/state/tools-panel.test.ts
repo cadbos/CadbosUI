@@ -50,10 +50,12 @@ describe('clampToolsPanelPosition', () => {
 describe('toolsPanel store', () => {
 	beforeEach(() => {
 		toolsPanel.setOpen(true);
+		toolsPanel.position = null;
 	});
 
 	it('defaults to open with no dragged position', () => {
 		expect(toolsPanel.open).toBe(true);
+		expect(toolsPanel.position).toBeNull();
 	});
 
 	it('setOpen toggles the open flag', () => {
@@ -66,5 +68,10 @@ describe('toolsPanel store', () => {
 	it('setPosition records the dragged position', () => {
 		toolsPanel.setPosition(120, 80);
 		expect(toolsPanel.position).toEqual({ x: 120, y: 80 });
+	});
+
+	it('updatePosition records the position without requiring a persist call', () => {
+		toolsPanel.updatePosition(200, 140);
+		expect(toolsPanel.position).toEqual({ x: 200, y: 140 });
 	});
 });

@@ -25,6 +25,27 @@ before the Change Date. See LICENSE for complete terms.
 	let comparing = $state(false);
 	let upscaling = $state(false);
 	let upscaleError = $state<string | null>(null);
+	let resetConfirmOpen = $state(false);
+
+	function openModal(dialog: HTMLDialogElement): () => void {
+		dialog.showModal();
+		return () => {
+			if (dialog.open) dialog.close();
+		};
+	}
+
+	function requestReset(): void {
+		resetConfirmOpen = true;
+	}
+
+	function cancelReset(): void {
+		resetConfirmOpen = false;
+	}
+
+	function confirmReset(): void {
+		resetConfirmOpen = false;
+		request.reset();
+	}
 
 	const render = $derived(request.currentRender);
 	const imageUrl = $derived(render?.outputUrls[0]);
@@ -59,7 +80,14 @@ before the Change Date. See LICENSE for complete terms.
 		return `${url}${separator}retry=${attempt}`;
 	}
 
-	function createStallWatchdog(getUrl: () => string | undefined) {
+	// `active` gates whether the watchdog should be armed at all — the before
+	// image only actually renders (and can stall) while the compare slider is
+	// open, so arming its timer regardless would reload/retry an <img> that
+	// isn't even in the DOM.
+	function createStallWatchdog(
+		getUrl: () => string | undefined,
+		active: () => boolean = () => true
+	) {
 		let src = $state<string | undefined>(undefined);
 		let clearTimer = () => {};
 
@@ -67,7 +95,7 @@ before the Change Date. See LICENSE for complete terms.
 			const url = getUrl();
 			src = url;
 			clearTimer = () => {};
-			if (!url) return;
+			if (!url || !active()) return;
 
 			let attempt = 0;
 			let timer: ReturnType<typeof setTimeout>;
@@ -93,7 +121,10 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	const imageWatchdog = createStallWatchdog(() => imageUrl);
-	const beforeImageWatchdog = createStallWatchdog(() => beforeImageUrl);
+	const beforeImageWatchdog = createStallWatchdog(
+		() => beforeImageUrl,
+		() => comparing
+	);
 
 	async function upscale(): Promise<void> {
 		if (!render || upscaling || !isAuthenticated) return;
@@ -216,7 +247,7 @@ before the Change Date. See LICENSE for complete terms.
 					class="icon-btn"
 					aria-label={t('toolbar.reset')}
 					title={t('toolbar.reset')}
-					onclick={() => request.reset()}
+					onclick={requestReset}
 				>
 					<ImagePlus size={16} strokeWidth={1.8} aria-hidden="true" />
 				</button>
@@ -235,6 +266,30 @@ before the Change Date. See LICENSE for complete terms.
 			</div>
 		</div>
 	</section>
+
+	{#if resetConfirmOpen}
+		<dialog
+			class="reset-confirm-dialog"
+			{@attach openModal}
+			aria-labelledby="reset-confirm-title"
+			aria-describedby="reset-confirm-description"
+			oncancel={(event) => {
+				event.preventDefault();
+				cancelReset();
+			}}
+		>
+			<h3 id="reset-confirm-title">{t('toolbar.resetConfirmTitle')}</h3>
+			<p id="reset-confirm-description">{t('toolbar.resetConfirmDescription')}</p>
+			<div class="reset-confirm-actions">
+				<button type="button" class="secondary-button" onclick={cancelReset}>
+					{t('toolbar.resetConfirmCancel')}
+				</button>
+				<button type="button" class="primary-danger-button" onclick={confirmReset}>
+					{t('toolbar.resetConfirmConfirm')}
+				</button>
+			</div>
+		</dialog>
+	{/if}
 {/if}
 
 <style>
@@ -333,12 +388,20 @@ before the Change Date. See LICENSE for complete terms.
 		cursor: not-allowed;
 	}
 
+	/* An opaque chip (not just colored text) — the toolbar itself is a
+	   translucent, blurred pill floating over the rendered photo, so danger-
+	   colored text alone has no reliable contrast against whatever image is
+	   behind it. No flex-basis: 100% here either: that forced the error onto
+	   its own full-width line, breaking the toolbar out of its compact pill
+	   shape instead of just adding one more inline item. */
 	.toolbar-error {
-		flex-basis: 100%;
 		margin: 0;
+		padding: 0.25rem 0.625rem;
 		font-size: 0.8125rem;
-		text-align: center;
+		white-space: nowrap;
 		color: var(--color-danger);
+		background: var(--color-danger-bg);
+		border-radius: 999px;
 	}
 
 	.footer {
@@ -360,5 +423,81 @@ before the Change Date. See LICENSE for complete terms.
 
 	.sep {
 		opacity: 0.4;
+	}
+
+	.reset-confirm-dialog {
+		width: min(100% - 2rem, 25rem);
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		max-width: none;
+		margin: auto;
+		padding: 1.25rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		background: var(--color-surface);
+		box-shadow: var(--shadow-lg);
+	}
+
+	.reset-confirm-dialog::backdrop {
+		background: rgb(29 29 31 / 0.32);
+		backdrop-filter: blur(4px);
+	}
+
+	.reset-confirm-dialog h3 {
+		margin: 0;
+		color: var(--color-text);
+		font-size: 1rem;
+		font-weight: 650;
+	}
+
+	.reset-confirm-dialog p {
+		margin: 0;
+		color: var(--color-muted);
+		font-size: 0.875rem;
+		line-height: 1.4;
+	}
+
+	.reset-confirm-actions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.5rem;
+	}
+
+	.secondary-button,
+	.primary-danger-button {
+		min-height: 2.5rem;
+		padding: 0.625rem 0.75rem;
+		border-radius: var(--radius-sm);
+		font: inherit;
+		font-size: 0.875rem;
+		font-weight: 650;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			color 0.15s;
+	}
+
+	.secondary-button {
+		border: 1px solid var(--color-border);
+		background: var(--color-surface);
+		color: var(--color-text);
+	}
+
+	.secondary-button:hover {
+		background: var(--color-surface-hover);
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+	}
+
+	.primary-danger-button {
+		border: 1px solid var(--color-danger);
+		background: var(--color-danger);
+		color: white;
+	}
+
+	.primary-danger-button:hover {
+		background: color-mix(in srgb, var(--color-danger) 86%, black);
 	}
 </style>

@@ -16,7 +16,9 @@ import { browser } from '$app/environment';
 import { logBoundaryError } from '$lib/utils';
 
 // Matches the former `.panel-col`/`.mode-nav` flex-basis so the floating
-// panel keeps the width users are already used to.
+// panel keeps the width users are already used to. Kept in sync by hand with
+// the `--tools-panel-width` custom property in app.css (this module has no
+// DOM access to read that value back at import time).
 export const TOOLS_PANEL_WIDTH = 360;
 
 const VIEWPORT_MARGIN = 16;
@@ -72,9 +74,9 @@ function isStoredToolsPanel(value: unknown): value is StoredToolsPanel {
 
 function readStoredState(): StoredToolsPanel | null {
 	if (!browser) return null;
-	const raw = localStorage.getItem(STORAGE_KEY);
-	if (!raw) return null;
 	try {
+		const raw = localStorage.getItem(STORAGE_KEY);
+		if (!raw) return null;
 		const parsed: unknown = JSON.parse(raw);
 		return isStoredToolsPanel(parsed) ? parsed : null;
 	} catch (error) {
@@ -87,8 +89,17 @@ class ToolsPanelState {
 	open = $state(true);
 	// null = not yet dragged, panel sits at its CSS-anchored default corner.
 	position = $state.raw<ToolsPanelPosition | null>(null);
+	#hydrated = false;
 
-	constructor() {
+	// Deliberately not read in the constructor: this store is a client+server
+	// module-level singleton, so restoring localStorage there would make the
+	// very first client render (the one hydration diffs against the
+	// server-rendered HTML) already reflect a dragged/closed state the server
+	// never rendered. Called once from FloatingToolsPanel's mount effect
+	// instead, so it only ever runs after hydration has settled.
+	hydrate(): void {
+		if (this.#hydrated) return;
+		this.#hydrated = true;
 		const stored = readStoredState();
 		if (stored) {
 			this.open = stored.open;
@@ -103,6 +114,17 @@ class ToolsPanelState {
 
 	setPosition(x: number, y: number): void {
 		this.position = { x, y };
+		this.#persist();
+	}
+
+	// Updates the position without writing to localStorage — for high-frequency
+	// callers like pointermove, where persisting on every event would hammer
+	// storage for no benefit until the drag actually ends.
+	updatePosition(x: number, y: number): void {
+		this.position = { x, y };
+	}
+
+	persist(): void {
 		this.#persist();
 	}
 

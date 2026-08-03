@@ -141,6 +141,11 @@ export const en = {
 	'toolbar.upscaleDone': 'Upscaled to 4K',
 	'toolbar.upscaleFailed': 'Upscale failed. Please try again.',
 	'toolbar.reset': 'New photo',
+	'toolbar.resetConfirmTitle': 'Start a new photo?',
+	'toolbar.resetConfirmDescription':
+		'This clears the uploaded photo, all reference images, and the current edit history.',
+	'toolbar.resetConfirmCancel': 'Cancel',
+	'toolbar.resetConfirmConfirm': 'Start new photo',
 	'generatedImages.title': 'Scenes',
 	'generatedImages.subtitle': 'Source images and generation results.',
 	'generatedImages.close': 'Close scenes',

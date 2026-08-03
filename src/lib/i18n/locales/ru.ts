@@ -141,6 +141,11 @@ export const ru = {
 	'toolbar.upscaleDone': 'Улучшено до 4K',
 	'toolbar.upscaleFailed': 'Не удалось улучшить изображение. Попробуйте ещё раз.',
 	'toolbar.reset': 'Новое фото',
+	'toolbar.resetConfirmTitle': 'Начать с нового фото?',
+	'toolbar.resetConfirmDescription':
+		'Это очистит загруженное фото, все референсные изображения и текущую историю правок.',
+	'toolbar.resetConfirmCancel': 'Отмена',
+	'toolbar.resetConfirmConfirm': 'Начать заново',
 	'generatedImages.title': 'Сцены',
 	'generatedImages.subtitle': 'Исходные изображения и результаты генераций.',
 	'generatedImages.close': 'Закрыть сцены',

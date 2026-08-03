@@ -31,8 +31,11 @@ before the Change Date. See LICENSE for complete terms.
 	let position = $state(50);
 	let frame = $state<HTMLDivElement | null>(null);
 
-	function attachFrame(node: HTMLDivElement): void {
+	function attachFrame(node: HTMLDivElement): () => void {
 		frame = node;
+		return () => {
+			frame = null;
+		};
 	}
 
 	function positionFromPointer(clientX: number): number {
@@ -84,11 +87,12 @@ before the Change Date. See LICENSE for complete terms.
 	onpointerup={onPointerUp}
 	onpointercancel={onPointerUp}
 >
-	<img src={afterSrc} alt={afterAlt} class="output" onload={onAfterLoad} />
+	<img src={afterSrc} alt={afterAlt} class="output" draggable="false" onload={onAfterLoad} />
 	<img
 		src={beforeSrc}
 		alt={beforeAlt}
 		class="overlay"
+		draggable="false"
 		style:clip-path={`inset(0 ${100 - position}% 0 0)`}
 		onload={onBeforeLoad}
 	/>

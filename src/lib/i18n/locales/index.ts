@@ -137,6 +137,10 @@ export interface Dictionary {
 	'toolbar.upscaleDone': string;
 	'toolbar.upscaleFailed': string;
 	'toolbar.reset': string;
+	'toolbar.resetConfirmTitle': string;
+	'toolbar.resetConfirmDescription': string;
+	'toolbar.resetConfirmCancel': string;
+	'toolbar.resetConfirmConfirm': string;
 	'generatedImages.title': string;
 	'generatedImages.subtitle': string;
 	'generatedImages.close': string;

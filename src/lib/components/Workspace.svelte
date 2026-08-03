@@ -665,7 +665,7 @@ before the Change Date. See LICENSE for complete terms.
 	   below 900px the panel becomes a static, normal-flow block instead. */
 	@media (min-width: 901px) {
 		.canvas-layout.reserve-panel-space {
-			padding-right: calc(360px + 1.5rem);
+			padding-right: calc(var(--tools-panel-width) + 1.5rem);
 		}
 	}
 
@@ -681,13 +681,6 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
-	}
-
-	.panel-heading {
-		margin: 0;
-		font-size: 1rem;
-		font-weight: 600;
-		color: var(--color-text);
 	}
 
 	.scene-type-toggle {

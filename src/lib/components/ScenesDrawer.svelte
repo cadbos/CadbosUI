@@ -76,10 +76,15 @@ before the Change Date. See LICENSE for complete terms.
 	// the page, not just switching tabs within the same session.
 	function readStoredWidth(): number | null {
 		if (!browser) return null;
-		const raw = localStorage.getItem(WIDTH_STORAGE_KEY);
-		if (!raw) return null;
-		const value = Number(raw);
-		return Number.isFinite(value) ? clampDrawerWidth(value) : null;
+		try {
+			const raw = localStorage.getItem(WIDTH_STORAGE_KEY);
+			if (!raw) return null;
+			const value = Number(raw);
+			return Number.isFinite(value) ? clampDrawerWidth(value) : null;
+		} catch (error) {
+			logBoundaryError('scenesDrawer.restoreWidth', error);
+			return null;
+		}
 	}
 
 	let width = $state<number | null>(readStoredWidth());
@@ -93,9 +98,16 @@ before the Change Date. See LICENSE for complete terms.
 	let drawerEl = $state<HTMLDialogElement | null>(null);
 	let dragStartX = 0;
 	let dragStartWidth = 0;
+	// Reactive mirrors of window.innerWidth / the drawer's measured width, so
+	// the resize handle's aria-value* attributes below re-render on resize
+	// instead of reading the DOM directly inside the template (which only
+	// re-evaluates when some other tracked value changes).
+	let viewportWidth = $state(browser ? window.innerWidth : MIN_DRAWER_WIDTH);
+	let measuredWidth = $state(MIN_DRAWER_WIDTH);
 
 	function attachDrawer(node: HTMLDialogElement): () => void {
 		drawerEl = node;
+		measuredWidth = node.getBoundingClientRect().width;
 		return () => {
 			drawerEl = null;
 		};
@@ -110,8 +122,13 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	});
 
+	// Skips persisting while a resize drag is in progress — width changes on
+	// every pointermove, and writing to localStorage that often would be pure
+	// overhead. Reading `resizing` here (rather than only in the pointerup
+	// handler) means this same effect fires once more the moment the drag
+	// ends, persisting the final width without a separate explicit call.
 	$effect(() => {
-		if (!browser || width === null) return;
+		if (!browser || width === null || resizing) return;
 		try {
 			localStorage.setItem(WIDTH_STORAGE_KEY, String(width));
 		} catch (error) {
@@ -123,6 +140,7 @@ before the Change Date. See LICENSE for complete terms.
 		if (!drawerEl) return;
 		dragStartX = event.clientX;
 		dragStartWidth = drawerEl.getBoundingClientRect().width;
+		measuredWidth = dragStartWidth;
 		resizing = true;
 		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
 	}
@@ -131,6 +149,7 @@ before the Change Date. See LICENSE for complete terms.
 		const target = event.currentTarget as HTMLElement;
 		if (!target.hasPointerCapture(event.pointerId)) return;
 		width = clampDrawerWidth(dragStartWidth + (event.clientX - dragStartX));
+		measuredWidth = width;
 	}
 
 	function onResizeHandlePointerUp(event: PointerEvent): void {
@@ -140,7 +159,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function onResizeHandleKeydown(event: KeyboardEvent): void {
-		const current = width ?? drawerEl?.getBoundingClientRect().width ?? MIN_DRAWER_WIDTH;
+		const current = width ?? measuredWidth;
 		let next: number;
 		if (event.key === 'ArrowLeft') next = current - RESIZE_STEP;
 		else if (event.key === 'ArrowRight') next = current + RESIZE_STEP;
@@ -149,15 +168,21 @@ before the Change Date. See LICENSE for complete terms.
 		else return;
 		event.preventDefault();
 		width = clampDrawerWidth(next);
+		measuredWidth = width;
 	}
 
 	// Keeps a previously dragged width from pinning the drawer wider than the
 	// viewport (or wider than the sub-540px "always fullscreen" breakpoint
 	// expects) if the window shrinks while the drawer is still open.
 	function onWindowResize(): void {
-		if (width === null) return;
+		viewportWidth = window.innerWidth;
+		if (width === null) {
+			if (drawerEl) measuredWidth = drawerEl.getBoundingClientRect().width;
+			return;
+		}
 		const clamped = clampDrawerWidth(width);
 		if (clamped !== width) width = clamped;
+		measuredWidth = clamped;
 	}
 
 	$effect(() => {
@@ -314,11 +339,11 @@ before the Change Date. See LICENSE for complete terms.
 		class="resize-handle"
 		class:resizing
 		role="slider"
-		aria-orientation="vertical"
+		aria-orientation="horizontal"
 		aria-label={t('generatedImages.resizeHandle')}
 		aria-valuemin={MIN_DRAWER_WIDTH}
-		aria-valuemax={typeof window === 'undefined' ? MIN_DRAWER_WIDTH : window.innerWidth}
-		aria-valuenow={Math.round(width ?? drawerEl?.getBoundingClientRect().width ?? MIN_DRAWER_WIDTH)}
+		aria-valuemax={viewportWidth}
+		aria-valuenow={Math.round(width ?? measuredWidth)}
 		tabindex="0"
 		onpointerdown={onResizeHandlePointerDown}
 		onpointermove={onResizeHandlePointerMove}

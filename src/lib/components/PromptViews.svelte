@@ -67,7 +67,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <section class="prompt-views">
 	<div class="prompt-views-header">
-		<h2 class="heading">{t(headingKey)}</h2>
+		<h2 class="panel-heading">{t(headingKey)}</h2>
 		{#if optionalBadgeKey}
 			<span class="optional-badge">{t(optionalBadgeKey)}</span>
 		{/if}
@@ -132,13 +132,6 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		align-items: center;
 		gap: 0.625rem;
-	}
-
-	.heading {
-		margin: 0;
-		font-size: 1rem;
-		font-weight: 600;
-		color: var(--color-text);
 	}
 
 	.optional-badge {

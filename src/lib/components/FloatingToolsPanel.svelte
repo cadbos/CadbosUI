@@ -76,7 +76,10 @@ before the Change Date. See LICENSE for complete terms.
 			window.innerWidth,
 			window.innerHeight
 		);
-		toolsPanel.setPosition(next.x, next.y);
+		// Not persisted here — pointermove fires far too often to justify a
+		// localStorage write on every event. The final position is persisted
+		// once the drag ends, in endDrag below.
+		toolsPanel.updatePosition(next.x, next.y);
 	}
 
 	function endDrag(event: PointerEvent): boolean {
@@ -84,6 +87,7 @@ before the Change Date. See LICENSE for complete terms.
 		if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
 		const wasDrag = drag?.moved ?? false;
 		drag = null;
+		if (wasDrag) toolsPanel.persist();
 		return wasDrag;
 	}
 
@@ -106,9 +110,18 @@ before the Change Date. See LICENSE for complete terms.
 	// rotating a tablet) so the panel can't end up stranded off-screen. A
 	// position that's still null (never dragged) is left alone — it's
 	// CSS-anchored to the default corner and already tracks the viewport.
+	//
+	// Workspace.svelte mounts one FloatingToolsPanel per mode (render/edit/
+	// styleTransfer) sharing this same `toolsPanel` singleton, with only the
+	// active mode's instance actually visible — the others sit behind
+	// `hidden` on an ancestor. A hidden element's getBoundingClientRect() is
+	// all zeros, so without this guard every window resize would have the
+	// *inactive* panels clamp the shared position against a 0×0 box and stomp
+	// on whatever the visible panel just computed.
 	function onWindowResize(): void {
 		if (!panel || !toolsPanel.position) return;
 		const bounds = panel.getBoundingClientRect();
+		if (bounds.width === 0 && bounds.height === 0) return;
 		const next = clampToolsPanelPosition(
 			bounds.left,
 			bounds.top,
@@ -123,6 +136,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	$effect(() => {
+		toolsPanel.hydrate();
 		window.addEventListener('resize', onWindowResize);
 		return () => window.removeEventListener('resize', onWindowResize);
 	});
@@ -132,11 +146,8 @@ before the Change Date. See LICENSE for complete terms.
 	{@attach attachPanel}
 	class="floating-tools-panel"
 	class:at-default-corner={toolsPanel.position === null}
-	style:left={toolsPanel.position ? `${toolsPanel.position.x}px` : undefined}
-	style:top={toolsPanel.position ? `${toolsPanel.position.y}px` : undefined}
-	style:max-height={toolsPanel.position
-		? `calc(100dvh - ${toolsPanel.position.y}px - 1rem)`
-		: undefined}
+	style:--tools-panel-x={toolsPanel.position ? `${toolsPanel.position.x}px` : undefined}
+	style:--tools-panel-y={toolsPanel.position ? `${toolsPanel.position.y}px` : undefined}
 >
 	<div
 		class="panel-bar"
@@ -171,7 +182,7 @@ before the Change Date. See LICENSE for complete terms.
 	.floating-tools-panel {
 		position: fixed;
 		z-index: var(--z-tools-panel);
-		width: 360px;
+		width: var(--tools-panel-width);
 		max-width: calc(100vw - 2rem);
 		max-height: calc(100dvh - 2rem);
 		display: flex;
@@ -187,6 +198,22 @@ before the Change Date. See LICENSE for complete terms.
 		   real default-corner offset so the panel's bottom edge (and controls
 		   like the generate button inside it) never falls below the viewport. */
 		max-height: calc(100dvh - 13.5rem - 1rem);
+	}
+
+	/* Desktop-only: a dragged position is stored/applied as pixel coordinates,
+	   which only make sense once the panel is `position: fixed` (see the
+	   media query below, which drops it to a static, normal-flow block on
+	   narrow screens). Scoping this to the same breakpoint — rather than
+	   relying on the mobile rule to override it — means a stale dragged
+	   position from a previous desktop session can't constrain the panel's
+	   height on mobile, since the custom properties driving it simply don't
+	   apply outside this query. */
+	@media (min-width: 901px) {
+		.floating-tools-panel:not(.at-default-corner) {
+			left: var(--tools-panel-x);
+			top: var(--tools-panel-y);
+			max-height: calc(100dvh - var(--tools-panel-y) - 1rem);
+		}
 	}
 
 	.panel-bar {

@@ -49,6 +49,11 @@
 	   explicit in one place instead of implicit in element order. */
 	--z-tools-panel: 10;
 	--z-scenes-panel: 20;
+
+	/* FloatingToolsPanel's fixed desktop width — also read by Workspace to
+	   reserve matching canvas padding while the panel sits at its default
+	   corner. Keep both in sync through this one token. */
+	--tools-panel-width: 360px;
 }
 
 /* Legacy CSS variable aliases for existing components */
@@ -88,4 +93,26 @@ body {
 :focus-visible {
 	outline: 2px solid var(--color-accent);
 	outline-offset: 2px;
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* Shared floating-panel section heading (EditPanel, PromptViews, Workspace's
+   FloatingToolsPanel sections) — kept in one place so the three panels stay
+   visually identical instead of re-declaring the same rule each. */
+.panel-heading {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--color-text);
 }

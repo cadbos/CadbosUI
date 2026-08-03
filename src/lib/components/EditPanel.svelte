@@ -146,9 +146,44 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <section class="edit-panel">
-	<h2 class="heading">{t('edit.title')}</h2>
+	<h2 class="panel-heading">{t('edit.title')}</h2>
 
 	<div class="edit-body">
+		<div
+			class="tool-tabs"
+			role="tablist"
+			aria-label={t('edit.tool.switcher.label')}
+			aria-orientation="vertical"
+		>
+			{#each TOOLS as tool, index (tool.id)}
+				{@const Icon = tool.Icon}
+				<button
+					{@attach (node) => {
+						toolTabButtons[index] = node as HTMLElement;
+					}}
+					type="button"
+					role="tab"
+					id={`edit-tool-tab-${tool.id}`}
+					aria-selected={activeTool === tool.id}
+					aria-controls={`edit-tool-panel-${tool.id}`}
+					tabindex={activeTool === tool.id ? 0 : -1}
+					class:active={activeTool === tool.id}
+					title={tool.alphaLabel ? `${t(tool.label)} — ${t(tool.alphaLabel)}` : t(tool.label)}
+					onclick={() => toolTabs.activate(index)}
+					onkeydown={toolTabs.onKeydown}
+				>
+					<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
+					<span class="visually-hidden">
+						{t(tool.label)}{#if tool.alphaLabel}
+							&nbsp;— {t(tool.alphaLabel)}{/if}
+					</span>
+					{#if tool.alphaLabel}
+						<span class="tool-alpha-dot" aria-hidden="true"></span>
+					{/if}
+				</button>
+			{/each}
+		</div>
+
 		<div class="tool-content">
 			{#if activeTool !== 'object-replacement' && activeTool !== 'texture-replacement'}
 				<div
@@ -267,41 +302,6 @@ before the Change Date. See LICENSE for complete terms.
 				</div>
 			{/if}
 		</div>
-
-		<div
-			class="tool-tabs"
-			role="tablist"
-			aria-label={t('edit.tool.switcher.label')}
-			aria-orientation="vertical"
-		>
-			{#each TOOLS as tool, index (tool.id)}
-				{@const Icon = tool.Icon}
-				<button
-					{@attach (node) => {
-						toolTabButtons[index] = node as HTMLElement;
-					}}
-					type="button"
-					role="tab"
-					id={`edit-tool-tab-${tool.id}`}
-					aria-selected={activeTool === tool.id}
-					aria-controls={`edit-tool-panel-${tool.id}`}
-					tabindex={activeTool === tool.id ? 0 : -1}
-					class:active={activeTool === tool.id}
-					title={t(tool.label)}
-					onclick={() => toolTabs.activate(index)}
-					onkeydown={toolTabs.onKeydown}
-				>
-					<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-					<span class="visually-hidden">
-						{t(tool.label)}{#if tool.alphaLabel}
-							&nbsp;— {t(tool.alphaLabel)}{/if}
-					</span>
-					{#if tool.alphaLabel}
-						<span class="tool-alpha-dot" aria-hidden="true"></span>
-					{/if}
-				</button>
-			{/each}
-		</div>
 	</div>
 
 	{#if !isAuthenticated && activeTool !== 'object-replacement' && activeTool !== 'texture-replacement'}
@@ -334,13 +334,6 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: 0 4px 16px rgb(0 0 0 / 0.07);
 	}
 
-	.heading {
-		margin: 0;
-		font-size: 1rem;
-		font-weight: 600;
-		color: var(--color-text);
-	}
-
 	.edit-body {
 		display: flex;
 		align-items: flex-start;
@@ -356,8 +349,12 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	/* A vertical icon rail instead of horizontal tabs — switches the same
-	   tools via the same tablist/URL-driven controller, just reoriented. */
+	   tools via the same tablist/URL-driven controller, just reoriented.
+	   Ordered after .tool-content so it still renders on the right visually
+	   despite coming first in the DOM (a keyboard user tabbing through must
+	   reach the tabs before the panel they control). */
 	.tool-tabs {
+		order: 1;
 		flex: 0 0 auto;
 		display: flex;
 		flex-direction: column;
@@ -415,18 +412,6 @@ before the Change Date. See LICENSE for complete terms.
 		height: 0.375rem;
 		border-radius: 50%;
 		background: var(--color-accent);
-	}
-
-	.visually-hidden {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		margin: -1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
-		border: 0;
 	}
 
 	.chips {
