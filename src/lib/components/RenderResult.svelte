@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Download, Pencil, Redo, Sparkles, SquareSplitHorizontal, Undo } from '@lucide/svelte';
+	import { Download, ImagePlus, Redo, Sparkles, SquareSplitHorizontal, Undo } from '@lucide/svelte';
 	import CompareSlider from '$lib/components/CompareSlider.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
@@ -21,11 +21,6 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import { formatCredit } from '$lib/utils';
-
-	interface Props {
-		onEditRequest: () => void;
-	}
-	let { onEditRequest }: Props = $props();
 
 	let comparing = $state(false);
 	let upscaling = $state(false);
@@ -214,6 +209,18 @@ before the Change Date. See LICENSE for complete terms.
 					<SquareSplitHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
 				</button>
 
+				<span class="toolbar-sep" aria-hidden="true"></span>
+
+				<button
+					type="button"
+					class="icon-btn"
+					aria-label={t('toolbar.reset')}
+					title={t('toolbar.reset')}
+					onclick={() => request.reset()}
+				>
+					<ImagePlus size={16} strokeWidth={1.8} aria-hidden="true" />
+				</button>
+
 				{#if upscaleError}
 					<p class="toolbar-error" role="alert">{upscaleError}</p>
 				{/if}
@@ -225,12 +232,6 @@ before the Change Date. See LICENSE for complete terms.
 				<span>{ti('render.cost', { cost: formatCredit(render.cost) })}</span>
 				<span class="sep">·</span>
 				<span>{ti('render.balance', { balance: formatCredit(render.balance) })}</span>
-			</div>
-			<div class="actions">
-				<button type="button" class="btn btn-accent" onclick={onEditRequest}>
-					<Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
-					{t('render.edit')}
-				</button>
 			</div>
 		</div>
 	</section>
@@ -343,7 +344,6 @@ before the Change Date. See LICENSE for complete terms.
 	.footer {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
 		padding: 0.875rem 1.25rem;
 		border-top: 1px solid var(--color-border);
 		gap: 1rem;
@@ -360,39 +360,5 @@ before the Change Date. See LICENSE for complete terms.
 
 	.sep {
 		opacity: 0.4;
-	}
-
-	.actions {
-		display: flex;
-		gap: 0.5rem;
-		flex-wrap: wrap;
-	}
-
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.5rem 1rem;
-		font: inherit;
-		font-size: 0.875rem;
-		font-weight: 500;
-		border-radius: var(--radius);
-		cursor: pointer;
-		text-decoration: none;
-		transition:
-			background 0.15s,
-			border-color 0.15s;
-		white-space: nowrap;
-	}
-
-	.btn-accent {
-		color: var(--color-accent-contrast);
-		background: var(--color-accent);
-		border: 1.5px solid var(--color-accent);
-	}
-
-	.btn-accent:hover {
-		background: var(--color-accent-hover);
-		border-color: var(--color-accent-hover);
 	}
 </style>

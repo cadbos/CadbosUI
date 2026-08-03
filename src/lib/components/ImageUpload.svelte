@@ -519,10 +519,18 @@ before the Change Date. See LICENSE for complete terms.
 	.image-wrapper {
 		position: relative;
 		aspect-ratio: 16 / 9;
+		min-width: 12rem;
+		min-height: 9rem;
+		max-width: 100%;
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		border: 1.5px solid var(--color-border);
 		background: #000;
+		/* Lets the user drag the bottom-right corner to size the preview to
+		   whatever's comfortable — the image itself stays centered and fully
+		   visible inside via `object-fit: contain` on `.preview` below,
+		   whatever the resulting box shape. */
+		resize: both;
 	}
 
 	.preview {
@@ -664,6 +672,9 @@ before the Change Date. See LICENSE for complete terms.
 	.compact .image-wrapper {
 		aspect-ratio: 1 / 1;
 		max-width: 110px;
+		min-width: 0;
+		min-height: 0;
+		resize: none;
 	}
 
 	.compact .change-btn {
