@@ -14,6 +14,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { ArrowRight, Download, Pencil, Trash2, X } from '@lucide/svelte';
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import type { GenerationKind } from '$lib/api/contract';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -32,6 +33,7 @@ before the Change Date. See LICENSE for complete terms.
 	};
 
 	interface Props {
+		open: boolean;
 		onClose: () => void;
 	}
 
@@ -47,7 +49,7 @@ before the Change Date. See LICENSE for complete terms.
 		ariaLabel: string;
 	}
 
-	let { onClose }: Props = $props();
+	let { open, onClose }: Props = $props();
 	let deleteCandidate = $state<DeleteCandidate | null>(null);
 	const isDeletingCandidate = $derived(
 		deleteCandidate ? generatedImages.deletingIds.has(deleteCandidate.id) : false
@@ -59,6 +61,109 @@ before the Change Date. See LICENSE for complete terms.
 			if (dialog.open) dialog.close();
 		};
 	}
+
+	const MIN_DRAWER_WIDTH = 320;
+	const RESIZE_STEP = 24;
+	const WIDTH_STORAGE_KEY = 'cadbos.scenesDrawer.width.v1';
+
+	function clampDrawerWidth(value: number): number {
+		return Math.min(Math.max(value, MIN_DRAWER_WIDTH), window.innerWidth);
+	}
+
+	// null = the CSS default (min(46rem, 100vw), narrowing further at the
+	// existing breakpoints below). Restored from localStorage so a size the
+	// user dragged/keyboard-resized survives closing the drawer and reloading
+	// the page, not just switching tabs within the same session.
+	function readStoredWidth(): number | null {
+		if (!browser) return null;
+		const raw = localStorage.getItem(WIDTH_STORAGE_KEY);
+		if (!raw) return null;
+		const value = Number(raw);
+		return Number.isFinite(value) ? clampDrawerWidth(value) : null;
+	}
+
+	let width = $state<number | null>(readStoredWidth());
+	let resizing = $state(false);
+	// The dialog stays mounted for the component's whole lifetime (see the
+	// `open` prop / effect below) rather than being torn down and recreated by
+	// an `{#if}` in the parent — that's what lets the native <dialog> close
+	// transition (CSS `@starting-style` + `allow-discrete`, further down)
+	// actually play instead of being cut short by the DOM node disappearing
+	// mid-animation.
+	let drawerEl = $state<HTMLDialogElement | null>(null);
+	let dragStartX = 0;
+	let dragStartWidth = 0;
+
+	function attachDrawer(node: HTMLDialogElement): () => void {
+		drawerEl = node;
+		return () => {
+			drawerEl = null;
+		};
+	}
+
+	$effect(() => {
+		if (!drawerEl) return;
+		if (open) {
+			if (!drawerEl.open) drawerEl.showModal();
+		} else if (drawerEl.open) {
+			drawerEl.close();
+		}
+	});
+
+	$effect(() => {
+		if (!browser || width === null) return;
+		try {
+			localStorage.setItem(WIDTH_STORAGE_KEY, String(width));
+		} catch (error) {
+			logBoundaryError('scenesDrawer.persistWidth', error);
+		}
+	});
+
+	function onResizeHandlePointerDown(event: PointerEvent): void {
+		if (!drawerEl) return;
+		dragStartX = event.clientX;
+		dragStartWidth = drawerEl.getBoundingClientRect().width;
+		resizing = true;
+		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+	}
+
+	function onResizeHandlePointerMove(event: PointerEvent): void {
+		const target = event.currentTarget as HTMLElement;
+		if (!target.hasPointerCapture(event.pointerId)) return;
+		width = clampDrawerWidth(dragStartWidth + (event.clientX - dragStartX));
+	}
+
+	function onResizeHandlePointerUp(event: PointerEvent): void {
+		const target = event.currentTarget as HTMLElement;
+		if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
+		resizing = false;
+	}
+
+	function onResizeHandleKeydown(event: KeyboardEvent): void {
+		const current = width ?? drawerEl?.getBoundingClientRect().width ?? MIN_DRAWER_WIDTH;
+		let next: number;
+		if (event.key === 'ArrowLeft') next = current - RESIZE_STEP;
+		else if (event.key === 'ArrowRight') next = current + RESIZE_STEP;
+		else if (event.key === 'Home') next = MIN_DRAWER_WIDTH;
+		else if (event.key === 'End') next = window.innerWidth;
+		else return;
+		event.preventDefault();
+		width = clampDrawerWidth(next);
+	}
+
+	// Keeps a previously dragged width from pinning the drawer wider than the
+	// viewport (or wider than the sub-540px "always fullscreen" breakpoint
+	// expects) if the window shrinks while the drawer is still open.
+	function onWindowResize(): void {
+		if (width === null) return;
+		const clamped = clampDrawerWidth(width);
+		if (clamped !== width) width = clamped;
+	}
+
+	$effect(() => {
+		window.addEventListener('resize', onWindowResize);
+		return () => window.removeEventListener('resize', onWindowResize);
+	});
 
 	function observeLoadMore(sentinel: HTMLElement): () => void {
 		const root = sentinel.closest<HTMLElement>('.drawer-content');
@@ -198,12 +303,30 @@ before the Change Date. See LICENSE for complete terms.
 <dialog
 	id="scenes-drawer"
 	class="drawer"
-	{@attach openModal}
+	{@attach attachDrawer}
 	aria-labelledby="scenes-title"
+	style:width={width !== null ? `${width}px` : undefined}
 	oncancel={handleDrawerCancel}
 	onclose={handleDrawerClose}
 	onclick={handleDrawerClick}
 >
+	<div
+		class="resize-handle"
+		class:resizing
+		role="slider"
+		aria-orientation="vertical"
+		aria-label={t('generatedImages.resizeHandle')}
+		aria-valuemin={MIN_DRAWER_WIDTH}
+		aria-valuemax={typeof window === 'undefined' ? MIN_DRAWER_WIDTH : window.innerWidth}
+		aria-valuenow={Math.round(width ?? drawerEl?.getBoundingClientRect().width ?? MIN_DRAWER_WIDTH)}
+		tabindex="0"
+		onpointerdown={onResizeHandlePointerDown}
+		onpointermove={onResizeHandlePointerMove}
+		onpointerup={onResizeHandlePointerUp}
+		onpointercancel={onResizeHandlePointerUp}
+		onkeydown={onResizeHandleKeydown}
+	></div>
+
 	<div class="drawer-panel" inert={deleteCandidate !== null} aria-hidden={deleteCandidate !== null}>
 		<header class="drawer-header">
 			<div>
@@ -383,7 +506,8 @@ before the Change Date. See LICENSE for complete terms.
 <style>
 	.drawer {
 		position: fixed;
-		inset: 0 0 0 auto;
+		z-index: var(--z-scenes-panel);
+		inset: 0 auto 0 0;
 		width: min(46rem, 100vw);
 		height: 100dvh;
 		max-width: none;
@@ -392,16 +516,50 @@ before the Change Date. See LICENSE for complete terms.
 		padding: 0;
 		overflow: hidden;
 		border: 0;
-		border-left: 1px solid var(--color-border);
+		border-right: 1px solid var(--color-border);
 		background: var(--color-surface);
-		box-shadow: -16px 0 40px rgb(29 29 31 / 0.14);
+		box-shadow: 16px 0 40px rgb(29 29 31 / 0.14);
 		opacity: 0;
-		transform: translateX(100%);
+		transform: translateX(-100%);
 		transition:
 			opacity 0.24s ease,
 			transform 0.24s ease,
 			display 0.24s allow-discrete,
 			overlay 0.24s allow-discrete;
+	}
+
+	.resize-handle {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		right: 0;
+		width: 8px;
+		background: transparent;
+		cursor: ew-resize;
+		touch-action: none;
+	}
+
+	.resize-handle::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 50%;
+		width: 2px;
+		transform: translateX(-50%);
+		background: transparent;
+		transition: background 0.15s;
+	}
+
+	.resize-handle:hover::after,
+	.resize-handle:focus-visible::after,
+	.resize-handle.resizing::after {
+		background: var(--color-accent);
+	}
+
+	.resize-handle:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: -2px;
 	}
 
 	.drawer[open] {
@@ -412,7 +570,7 @@ before the Change Date. See LICENSE for complete terms.
 	@starting-style {
 		.drawer[open] {
 			opacity: 0;
-			transform: translateX(100%);
+			transform: translateX(-100%);
 		}
 	}
 
@@ -813,7 +971,11 @@ before the Change Date. See LICENSE for complete terms.
 	@media (max-width: 540px) {
 		.drawer {
 			width: 100vw;
-			border-left: 0;
+			border-right: 0;
+		}
+
+		.resize-handle {
+			display: none;
 		}
 
 		.drawer-header {

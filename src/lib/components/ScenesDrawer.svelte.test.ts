@@ -92,7 +92,7 @@ it.each(['ru', 'en'] as const)(
 		generatedImages.status = 'ready';
 		generatedImages.images = [image('sample', createdAt)];
 
-		render(ScenesDrawer, { onClose: vi.fn() });
+		render(ScenesDrawer, { open: true, onClose: vi.fn() });
 
 		await vi.waitFor(() => {
 			expect(
@@ -132,7 +132,7 @@ it('loads the next generated-images page when the infinite-scroll sentinel inter
 		.mockResolvedValueOnce(jsonResponse(page([image('second', 1000)], 1, false)));
 
 	await generatedImages.load();
-	const screen = render(ScenesDrawer, { onClose: vi.fn() });
+	const screen = render(ScenesDrawer, { open: true, onClose: vi.fn() });
 
 	await expect.element(screen.getByRole('img', { name: 'Результат сцены 1' })).toBeVisible();
 	await vi.waitFor(() => expect(observe).toHaveBeenCalled());
