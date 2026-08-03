@@ -410,6 +410,21 @@ describe('sceneType', () => {
 	});
 });
 
+describe('textureReplacementResultReady (session UI state)', () => {
+	it('reset() clears a result-ready flag left over from a prior masked replacement', () => {
+		request.setTextureReplacementResultReady(true);
+		request.reset();
+		expect(request.textureReplacementResultReady).toBe(false);
+	});
+
+	it('fromJSON() clears a result-ready flag so a loaded request starts on the mask-drawing surface', () => {
+		request.setTextureReplacementResultReady(true);
+		const snapshot = request.toJSON();
+		request.fromJSON(snapshot);
+		expect(request.textureReplacementResultReady).toBe(false);
+	});
+});
+
 describe('toRenderRequest', () => {
 	it('returns the wire body for a valid AC-9 fixture', () => {
 		applyAc9Fixture();

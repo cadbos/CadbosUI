@@ -22,8 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 		extractApiErrorCode,
 		renderResultFromResponse,
 		request,
-		type SceneType,
-		type ImageSourceMode
+		type SceneType
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
@@ -58,10 +57,6 @@ before the Change Date. See LICENSE for complete terms.
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const validation = $derived(request.validateStyleTransfer());
 	const canApply = $derived(validation.valid && !applying && request.status !== 'rendering');
-	const currentResultUrl = $derived(request.currentRender?.outputUrls[0]);
-	const usesCurrentResult = $derived(
-		request.styleSourceMode === 'current-result' && currentResultUrl !== undefined
-	);
 	const strengthPercent = $derived(Math.round(request.styleTransferStrength * 100));
 	const strengthTier = $derived.by((): TranslationKey => {
 		if (request.styleTransferStrength <= 0.33) return 'styleTransfer.strengthSubtle';
@@ -69,9 +64,6 @@ before the Change Date. See LICENSE for complete terms.
 		return 'styleTransfer.strengthStrong';
 	});
 	const strengthValueText = $derived(`${strengthPercent}% ${t(strengthTier)}`);
-	const sourcePhotoLabel = $derived(
-		request.sceneType === 'exterior' ? t('upload.labelExterior') : t('upload.label')
-	);
 	const currentPresets = $derived(
 		referenceTab === 'custom' ? [] : stylePresetsFor(request.sceneType, referenceTab)
 	);
@@ -140,10 +132,6 @@ before the Change Date. See LICENSE for complete terms.
 		return event.currentTarget instanceof HTMLTextAreaElement ? event.currentTarget.value : '';
 	}
 
-	function setSourceMode(mode: ImageSourceMode): void {
-		request.setStyleSourceMode(mode);
-	}
-
 	async function submit(): Promise<void> {
 		if (!canApply || !isAuthenticated) return;
 		const body = request.toStyleTransferRequest();
@@ -188,165 +176,98 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <section class="step-card">
-	<div class="step-header">
-		<span class="step-num" aria-hidden="true">①</span>
-		<h2>{t('styleTransfer.sourceImage')}</h2>
-	</div>
+	<div class="field">
+		<span>{t('styleTransfer.referenceImage')}</span>
 
-	<div class="image-grid">
-		<div class="image-column">
-			<div class="column-header">
-				<h3>{t('styleTransfer.sourceImage')}</h3>
-				{#if currentResultUrl}
-					<div class="source-tabs" role="group" aria-label={t('styleTransfer.sourceImage')}>
-						<button
-							type="button"
-							class:active={request.styleSourceMode === 'room-photo'}
-							aria-pressed={request.styleSourceMode === 'room-photo'}
-							onclick={() => setSourceMode('room-photo')}
-						>
-							{sourcePhotoLabel}
-						</button>
-						<button
-							type="button"
-							class:active={request.styleSourceMode === 'current-result'}
-							aria-pressed={request.styleSourceMode === 'current-result'}
-							onclick={() => setSourceMode('current-result')}
-						>
-							{t('styleTransfer.sourceCurrentResult')}
-						</button>
-					</div>
-				{/if}
-			</div>
+		<div class="scene-type-toggle" role="tablist" aria-label={t('render.sceneType.label')}>
+			{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
+				<button
+					{@attach (node) => {
+						sceneTypeButtons[index] = node as HTMLElement;
+					}}
+					type="button"
+					role="tab"
+					id={`style-scene-tab-${sceneTypeOption.id}`}
+					aria-selected={request.sceneType === sceneTypeOption.id}
+					aria-controls="style-reference-panel"
+					tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
+					class:active={request.sceneType === sceneTypeOption.id}
+					onclick={() => sceneTypeTabs.activate(index)}
+					onkeydown={sceneTypeTabs.onKeydown}
+				>
+					{t(sceneTypeOption.label)}
+				</button>
+			{/each}
+		</div>
 
-			{#if usesCurrentResult}
-				<div class="source-preview">
-					<img src={currentResultUrl} alt={t('styleTransfer.sourceCurrentResult')} />
-				</div>
+		<div class="reference-tabs" role="tablist" aria-label={t('styleTransfer.referenceTabsLabel')}>
+			{#each REFERENCE_TABS as tab, index (tab.id)}
+				<button
+					{@attach (node) => {
+						referenceTabButtons[index] = node as HTMLElement;
+					}}
+					type="button"
+					role="tab"
+					id={`style-reference-tab-${tab.id}`}
+					aria-selected={referenceTab === tab.id}
+					aria-controls="style-reference-panel"
+					tabindex={referenceTab === tab.id ? 0 : -1}
+					class:active={referenceTab === tab.id}
+					onclick={() => referenceTabs.activate(index)}
+					onkeydown={referenceTabs.onKeydown}
+				>
+					{t(tab.label)}
+				</button>
+			{/each}
+		</div>
+
+		<div
+			role="tabpanel"
+			id="style-reference-panel"
+			aria-labelledby={`style-scene-tab-${request.sceneType} style-reference-tab-${referenceTab}`}
+			tabindex="0"
+		>
+			{#if referenceTab === 'custom'}
+				<ImageUpload target="styleReference" compact />
+			{:else if currentPresets.length === 0}
+				<p class="presets-empty">{t('styleTransfer.presetsEmpty')}</p>
 			{:else}
-				<ImageUpload label="styleTransfer.sourceImage" />
+				<p class="presets-hint" id="style-presets-hint">{t('styleTransfer.presetsGridLabel')}</p>
+				<div class="preset-grid" role="radiogroup" aria-labelledby="style-presets-hint">
+					{#each currentPresets as preset, index (preset.id)}
+						<button
+							{@attach (node) => {
+								presetButtons[index] = node as HTMLElement;
+							}}
+							type="button"
+							role="radio"
+							class="preset"
+							class:selected={selectedPresetId === preset.id}
+							aria-checked={selectedPresetId === preset.id}
+							tabindex={index === activePresetIndex ? 0 : -1}
+							onclick={() => presetRadios.activate(index)}
+							onkeydown={presetRadios.onKeydown}
+						>
+							<img src={preset.src} alt={t(preset.label)} loading="lazy" />
+							<span>{t(preset.label)}</span>
+						</button>
+					{/each}
+				</div>
 			{/if}
 		</div>
-
-		<div class="image-column">
-			<div class="column-header">
-				<h3>{t('styleTransfer.referenceImage')}</h3>
-			</div>
-
-			<div class="scene-type-toggle" role="tablist" aria-label={t('render.sceneType.label')}>
-				{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
-					<button
-						{@attach (node) => {
-							sceneTypeButtons[index] = node as HTMLElement;
-						}}
-						type="button"
-						role="tab"
-						id={`style-scene-tab-${sceneTypeOption.id}`}
-						aria-selected={request.sceneType === sceneTypeOption.id}
-						aria-controls="style-reference-panel"
-						tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
-						class:active={request.sceneType === sceneTypeOption.id}
-						onclick={() => sceneTypeTabs.activate(index)}
-						onkeydown={sceneTypeTabs.onKeydown}
-					>
-						{t(sceneTypeOption.label)}
-					</button>
-				{/each}
-			</div>
-
-			<div class="reference-tabs" role="tablist" aria-label={t('styleTransfer.referenceTabsLabel')}>
-				{#each REFERENCE_TABS as tab, index (tab.id)}
-					<button
-						{@attach (node) => {
-							referenceTabButtons[index] = node as HTMLElement;
-						}}
-						type="button"
-						role="tab"
-						id={`style-reference-tab-${tab.id}`}
-						aria-selected={referenceTab === tab.id}
-						aria-controls="style-reference-panel"
-						tabindex={referenceTab === tab.id ? 0 : -1}
-						class:active={referenceTab === tab.id}
-						onclick={() => referenceTabs.activate(index)}
-						onkeydown={referenceTabs.onKeydown}
-					>
-						{t(tab.label)}
-					</button>
-				{/each}
-			</div>
-
-			<div
-				role="tabpanel"
-				id="style-reference-panel"
-				aria-labelledby={`style-scene-tab-${request.sceneType} style-reference-tab-${referenceTab}`}
-				tabindex="0"
-			>
-				{#if referenceTab === 'custom'}
-					<ImageUpload target="styleReference" />
-				{:else if currentPresets.length === 0}
-					<p class="presets-empty">{t('styleTransfer.presetsEmpty')}</p>
-				{:else}
-					<p class="presets-hint" id="style-presets-hint">{t('styleTransfer.presetsGridLabel')}</p>
-					<div class="preset-grid" role="radiogroup" aria-labelledby="style-presets-hint">
-						{#each currentPresets as preset, index (preset.id)}
-							<button
-								{@attach (node) => {
-									presetButtons[index] = node as HTMLElement;
-								}}
-								type="button"
-								role="radio"
-								class="preset"
-								class:selected={selectedPresetId === preset.id}
-								aria-checked={selectedPresetId === preset.id}
-								tabindex={index === activePresetIndex ? 0 : -1}
-								onclick={() => presetRadios.activate(index)}
-								onkeydown={presetRadios.onKeydown}
-							>
-								<img src={preset.src} alt={t(preset.label)} loading="lazy" />
-								<span>{t(preset.label)}</span>
-							</button>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		</div>
-	</div>
-</section>
-
-<section class="step-card guidance-section">
-	<div class="step-header">
-		<span class="step-num" aria-hidden="true">②</span>
-		<h2>{t('styleTransfer.guidance')}</h2>
-		<span class="optional-badge">{t('render.optional')}</span>
 	</div>
 
-	<textarea
-		value={request.styleTransferPrompt}
-		oninput={(event) => request.setStyleTransferPrompt(event.currentTarget.value)}
-		rows="4"
-		aria-label={t('styleTransfer.guidance')}
-		disabled={applying}
-		placeholder={t('view.chat.placeholder')}></textarea>
-</section>
-
-<section class="step-card generate-section">
-	<div class="step-header">
-		<span class="step-num" aria-hidden="true">③</span>
-		<h2>{t('styleTransfer.controls')}</h2>
-	</div>
-
-	<label class="format-label">
-		<span class="format-text">{t('render.outputFormat')}</span>
-		<select
-			value={request.outputFormat}
-			onchange={(event) => request.setOutputFormat(event.currentTarget.value as OutputFormat)}
-			class="format-select"
-		>
-			<option value="webp">WebP</option>
-			<option value="jpg">JPG</option>
-			<option value="png">PNG</option>
-			<option value="avif">AVIF</option>
-		</select>
+	<label class="field">
+		<span>
+			{t('styleTransfer.guidance')}
+			<span class="optional-badge">{t('render.optional')}</span>
+		</span>
+		<textarea
+			value={request.styleTransferPrompt}
+			oninput={(event) => request.setStyleTransferPrompt(event.currentTarget.value)}
+			rows="2"
+			disabled={applying}
+			placeholder={t('view.chat.placeholder')}></textarea>
 	</label>
 
 	<label class="strength-label">
@@ -374,12 +295,26 @@ before the Change Date. See LICENSE for complete terms.
 		<label class="field">
 			<span>{t('styleTransfer.negativePrompt')}</span>
 			<textarea
-				rows="3"
+				rows="2"
 				value={request.styleNegativePrompt}
 				placeholder={t('styleTransfer.negativePromptPlaceholder')}
 				oninput={(event) => request.setStyleNegativePrompt(textareaValue(event))}></textarea>
 		</label>
 	</details>
+
+	<label class="format-label">
+		<span class="format-text">{t('render.outputFormat')}</span>
+		<select
+			value={request.outputFormat}
+			onchange={(event) => request.setOutputFormat(event.currentTarget.value as OutputFormat)}
+			class="format-select"
+		>
+			<option value="webp">WebP</option>
+			<option value="jpg">JPG</option>
+			<option value="png">PNG</option>
+			<option value="avif">AVIF</option>
+		</select>
+	</label>
 
 	{#if !isAuthenticated}
 		<p class="auth-hint">{t('styleTransfer.signInToApply')}</p>
@@ -413,66 +348,14 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.optional-badge {
-		margin-left: auto;
+		display: inline-block;
+		margin-left: 0.375rem;
 		font-size: 0.75rem;
 		color: var(--color-muted);
 		background: var(--color-background);
 		border: 1px solid var(--color-border);
 		padding: 0.15rem 0.5rem;
 		border-radius: 100px;
-	}
-
-	.image-grid {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 1rem;
-	}
-
-	.image-column {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		min-width: 0;
-	}
-
-	.source-tabs {
-		display: inline-flex;
-		gap: 0.25rem;
-		padding: 0.25rem;
-		background: var(--color-background);
-		border-radius: 10px;
-	}
-
-	.source-tabs button {
-		padding: 0.375rem 0.625rem;
-		font: inherit;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--color-muted);
-		background: transparent;
-		border: none;
-		border-radius: 8px;
-		cursor: pointer;
-	}
-
-	.source-tabs button.active {
-		color: var(--color-text);
-		background: var(--color-surface);
-		box-shadow: var(--shadow-sm);
-	}
-
-	.source-preview {
-		border: 1.5px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		overflow: hidden;
-		background: var(--color-background);
-	}
-
-	.source-preview img {
-		width: 100%;
-		max-height: 280px;
-		object-fit: cover;
-		display: block;
 	}
 
 	.scene-type-toggle {
@@ -541,14 +424,15 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-muted);
 	}
 
+	/* No max-height/overflow of its own — the floating tools panel that hosts
+	   this (see FloatingToolsPanel.svelte's .panel-body) is already the single
+	   scroll container for the whole tool, and nesting a second independently
+	   scrolling region here just produces the "scroll the grid, then scroll
+	   the panel" double-scroll a reader has to fight through. */
 	.preset-grid {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 0.625rem;
-		max-height: 22rem;
-		padding-right: 0.25rem;
-		overflow-y: auto;
-		scrollbar-gutter: stable;
 	}
 
 	.preset {
@@ -638,10 +522,6 @@ before the Change Date. See LICENSE for complete terms.
 		font-weight: 600;
 	}
 
-	.field {
-		margin-top: 0.75rem;
-	}
-
 	textarea {
 		width: 100%;
 		font: inherit;
@@ -664,20 +544,6 @@ before the Change Date. See LICENSE for complete terms.
 	textarea:disabled {
 		opacity: 0.75;
 		cursor: not-allowed;
-	}
-
-	@media (max-width: 760px) {
-		.image-grid {
-			grid-template-columns: 1fr;
-		}
-
-		.source-tabs {
-			width: 100%;
-		}
-
-		.source-tabs button {
-			flex: 1;
-		}
 	}
 
 	@media (max-width: 480px) {

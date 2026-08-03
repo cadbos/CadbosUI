@@ -434,6 +434,12 @@ export class RequestState {
 	textureReplacementMasked = $state(false);
 	textureMaskUploading = $state(false);
 	activeTextureReplacementJob = $state<ActiveTextureReplacementJob | undefined>(undefined);
+	// Whether the currently displayed render is already the resolved result of a
+	// masked texture-replacement submission — Workspace.svelte reads this to know
+	// when to swap the canvas from the mask-drawing surface back to the render
+	// result. Session UI state (not part of toJSON()/fromJSON()), same as
+	// textureMaskUploading above.
+	textureReplacementResultReady = $state(false);
 	promptOverride = $state<string | null>(null);
 	currentRender = $state<RenderResult | undefined>(undefined);
 	// Single-step undo/redo for the last edit (FR-К6) — in-session only, deliberately
@@ -667,8 +673,13 @@ export class RequestState {
 		if (parsed !== this.textureReplacementMasked) {
 			this.#textureMaskUploadEpoch += 1;
 			this.textureMaskUploading = false;
+			if (parsed) this.textureReplacementResultReady = false;
 		}
 		this.textureReplacementMasked = parsed;
+	}
+
+	setTextureReplacementResultReady(ready: boolean): void {
+		this.textureReplacementResultReady = z.boolean().parse(ready);
 	}
 
 	setActiveTextureReplacementJobId(id: string | undefined): void {
@@ -882,6 +893,7 @@ export class RequestState {
 		const parsed = requestJsonSchema.parse(data);
 		this.#textureMaskUploadEpoch += 1;
 		this.textureMaskUploading = false;
+		this.textureReplacementResultReady = false;
 		this.id = parsed.id;
 		this.image = cloneImage(parsed.image);
 		this.styleReferenceImage = cloneImage(parsed.styleReferenceImage);
@@ -946,6 +958,7 @@ export class RequestState {
 	reset(): void {
 		this.#textureMaskUploadEpoch += 1;
 		this.textureMaskUploading = false;
+		this.textureReplacementResultReady = false;
 		this.id = crypto.randomUUID();
 		this.image = undefined;
 		this.styleReferenceImage = undefined;

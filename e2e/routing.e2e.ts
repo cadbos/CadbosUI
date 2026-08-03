@@ -93,7 +93,7 @@ test('direct navigation to /style-transfer redirects to the interior scene with 
 	await expect(page).toHaveURL(
 		/\/style-transfer\/interior\?reference=photorealistic&format=webp&source=current-result&strength=0\.7$/
 	);
-	await expect(page.getByRole('tab', { name: 'Перенос стиля' })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: 'Миграция стиля' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
@@ -166,7 +166,7 @@ test('switching mode tabs opens each mode default, carrying scene but not sub-ta
 	// Edit has no scene concept, so it isn't in the path.
 	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
 
-	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
 	// Style transfer's scene toggle is bound to the same request.sceneType, so
 	// exterior carries over from before the excursion into edit.
 	await expect(page).toHaveURL(
@@ -194,7 +194,7 @@ test('object replacement source and scene-object text round-trip without image U
 	await expect(page).not.toHaveURL(/image=/);
 	await expect(page).not.toHaveURL(/referenceImage=/);
 
-	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
 	await expect(page).toHaveURL(/source=current-result/);
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page.getByRole('tab', { name: /Замена объекта/ }).click();
@@ -211,7 +211,7 @@ test('browser Back steps through mode tabs instead of leaving the app', async ({
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
 
-	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
 	await expect(page).toHaveURL(/\/style-transfer\/exterior\?/);
 
 	await page.goBack();
@@ -268,7 +268,7 @@ test('texture replacement source and surface text round-trip without image URLs'
 	await expect(page).not.toHaveURL(/image=/);
 	await expect(page).not.toHaveURL(/referenceImage=/);
 
-	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
 	await expect(page).toHaveURL(/source=current-result/);
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page.getByRole('tab', { name: /Замена текстуры/ }).click();
@@ -302,7 +302,7 @@ test('render-only content (prompt/fragments) never appears on edit or style tran
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await expect(page).not.toHaveURL(/fragments=/);
 
-	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
 	await expect(page).not.toHaveURL(/fragments=/);
 });
 

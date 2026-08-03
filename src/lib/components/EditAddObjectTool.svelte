@@ -179,6 +179,7 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		min-width: 0;
 		gap: 0.375rem;
 		padding: 0.75rem 0.5rem;
 		font: inherit;
@@ -194,6 +195,11 @@ before the Change Date. See LICENSE for complete terms.
 			border-color 0.15s,
 			background 0.15s,
 			color 0.15s;
+	}
+
+	.preset span {
+		width: 100%;
+		overflow-wrap: break-word;
 	}
 
 	.preset:hover:not(:disabled) {

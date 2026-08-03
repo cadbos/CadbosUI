@@ -152,7 +152,7 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	await expect(images.nth(1)).toHaveAttribute('src', 'https://cdn.example.test/middle.webp');
 	await expect(images.nth(2)).toHaveAttribute('src', 'https://cdn.example.test/oldest.webp');
 	await expect(page.locator('.generation-kind')).toHaveText([
-		'Перенос стиля',
+		'Миграция стиля',
 		'Редактирование',
 		'Генерация'
 	]);
@@ -183,9 +183,10 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 
 	await page.getByRole('button', { name: 'Обработать исходник сцены 1' }).click();
 	await expect(page).toHaveURL(/\/style-transfer\/interior\?.*source=room-photo/);
-	await expect(
-		page.getByRole('region', { name: 'Исходное изображение' }).getByRole('img')
-	).toHaveAttribute('src', 'https://cdn.example.test/newest-source.jpg');
+	await expect(page.getByRole('img', { name: 'Фото комнаты' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/newest-source.jpg'
+	);
 
 	await scenesButton.click();
 	await images.nth(1).hover();
@@ -321,19 +322,17 @@ test('navigates tabs with the keyboard', async ({ page }) => {
 	await expect(chat).toHaveAttribute('aria-selected', 'true');
 });
 
-test('the Scene Type toggle switches to exterior and relabels the photo step', async ({ page }) => {
+test('the Scene Type toggle switches to exterior', async ({ page }) => {
 	await openCreate(page);
 
 	const interiorTab = page.getByRole('tab', { name: 'Интерьер' });
 	const exteriorTab = page.getByRole('tab', { name: 'Экстерьер' });
 
 	await expect(interiorTab).toHaveAttribute('aria-selected', 'true');
-	await expect(page.getByRole('heading', { name: 'Фото комнаты' })).toBeVisible();
 
 	await exteriorTab.click();
 	await expect(exteriorTab).toHaveAttribute('aria-selected', 'true');
 	await expect(interiorTab).toHaveAttribute('aria-selected', 'false');
-	await expect(page.getByRole('heading', { name: 'Фото здания' })).toBeVisible();
 });
 
 test('navigates the Scene Type toggle with the keyboard', async ({ page }) => {

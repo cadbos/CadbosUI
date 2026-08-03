@@ -145,7 +145,9 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 	});
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
-	await expect(page.getByRole('button', { name: 'Сравнить до/после' })).toBeDisabled();
+	// Compare falls back to the originally uploaded photo as "before" even
+	// without an edit chain, so it's enabled as soon as a result exists.
+	await expect(page.getByRole('button', { name: 'Сравнить до/после' })).toBeEnabled();
 	await page.getByRole('tab', { name: /Замена объекта/ }).click();
 	await expect(page).toHaveURL(new RegExp(`job=${JOB_ID}`));
 

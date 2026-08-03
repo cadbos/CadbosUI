@@ -94,7 +94,6 @@ export interface Dictionary {
 	'auth.credit.entryTextureReplacement': string;
 	'auth.credit.entryUpscale': string;
 	'upload.label': string;
-	'upload.labelExterior': string;
 	'upload.button': string;
 	'upload.dropHint': string;
 	'upload.dropTitle': string;
@@ -121,11 +120,13 @@ export interface Dictionary {
 	'render.cost': string;
 	'render.balance': string;
 	'render.download': string;
-	'render.edit': string;
 	'render.result': string;
 	'render.validationImage': string;
 	'render.validationPrompt': string;
 	'render.failed': string;
+	'toolsPanel.title': string;
+	'toolsPanel.collapse': string;
+	'toolsPanel.expand': string;
 	'toolbar.undo': string;
 	'toolbar.redo': string;
 	'toolbar.compare': string;
@@ -135,6 +136,11 @@ export interface Dictionary {
 	'toolbar.signInToUpscale': string;
 	'toolbar.upscaleDone': string;
 	'toolbar.upscaleFailed': string;
+	'toolbar.reset': string;
+	'toolbar.resetConfirmTitle': string;
+	'toolbar.resetConfirmDescription': string;
+	'toolbar.resetConfirmCancel': string;
+	'toolbar.resetConfirmConfirm': string;
 	'generatedImages.title': string;
 	'generatedImages.subtitle': string;
 	'generatedImages.close': string;
@@ -166,6 +172,7 @@ export interface Dictionary {
 	'generatedImages.confirmDeleteCancel': string;
 	'generatedImages.confirmDeleteConfirm': string;
 	'generatedImages.confirmDeleteDeleting': string;
+	'generatedImages.resizeHandle': string;
 	'usage.title': string;
 	'usage.subtitle': string;
 	'usage.walletBalance': string;
@@ -185,8 +192,6 @@ export interface Dictionary {
 	'usage.column.latestSpendAt': string;
 	'render.insufficientCredit': string;
 	'render.generationRestricted': string;
-	'styleTransfer.sourceImage': string;
-	'styleTransfer.sourceCurrentResult': string;
 	'styleTransfer.referenceImage': string;
 	'styleTransfer.referenceChange': string;
 	'styleTransfer.referenceDropTitle': string;
@@ -218,8 +223,6 @@ export interface Dictionary {
 	'objectReplacement.alphaNotice': string;
 	'objectReplacement.required': string;
 	'objectReplacement.images': string;
-	'objectReplacement.sourceImage': string;
-	'objectReplacement.sourceCurrentResult': string;
 	'objectReplacement.referenceImage': string;
 	'objectReplacement.referenceChange': string;
 	'objectReplacement.referenceDropTitle': string;
@@ -250,8 +253,6 @@ export interface Dictionary {
 	'textureReplacement.alphaNotice': string;
 	'textureReplacement.required': string;
 	'textureReplacement.images': string;
-	'textureReplacement.sourceImage': string;
-	'textureReplacement.sourceCurrentResult': string;
 	'textureReplacement.referenceImage': string;
 	'textureReplacement.referenceChange': string;
 	'textureReplacement.referenceDropTitle': string;
@@ -262,6 +263,7 @@ export interface Dictionary {
 	'textureReplacement.maskDropTitle': string;
 	'textureReplacement.maskDropSubtitle': string;
 	'textureReplacement.maskEditor.title': string;
+	'textureReplacement.maskEditor.canvasHint': string;
 	'textureReplacement.maskEditor.hint': string;
 	'textureReplacement.maskEditor.toolbar': string;
 	'textureReplacement.maskEditor.brush': string;

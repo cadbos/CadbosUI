@@ -146,148 +146,163 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <section class="edit-panel">
-	<div class="tool-tabs" role="tablist" aria-label={t('edit.tool.switcher.label')}>
-		{#each TOOLS as tool, index (tool.id)}
-			{@const Icon = tool.Icon}
-			<button
-				{@attach (node) => {
-					toolTabButtons[index] = node as HTMLElement;
-				}}
-				type="button"
-				role="tab"
-				id={`edit-tool-tab-${tool.id}`}
-				aria-selected={activeTool === tool.id}
-				aria-controls={`edit-tool-panel-${tool.id}`}
-				tabindex={activeTool === tool.id ? 0 : -1}
-				class:active={activeTool === tool.id}
-				onclick={() => toolTabs.activate(index)}
-				onkeydown={toolTabs.onKeydown}
-			>
-				<Icon size={16} strokeWidth={1.8} aria-hidden="true" />
-				<span>{t(tool.label)}</span>
-				{#if tool.alphaLabel}
-					<span class="tool-alpha">{t(tool.alphaLabel)}</span>
-				{/if}
-			</button>
-		{/each}
-	</div>
+	<h2 class="panel-heading">{t('edit.title')}</h2>
 
-	{#if activeTool !== 'object-replacement' && activeTool !== 'texture-replacement'}
+	<div class="edit-body">
 		<div
-			class="tool-panel"
-			role="tabpanel"
-			id={`edit-tool-panel-${activeTool}`}
-			aria-labelledby={`edit-tool-tab-${activeTool}`}
-			tabindex="0"
+			class="tool-tabs"
+			role="tablist"
+			aria-label={t('edit.tool.switcher.label')}
+			aria-orientation="vertical"
 		>
-			{#if activeTool === 'freeform'}
-				<div class="chips">
-					<button
-						type="button"
-						class="chip"
-						onclick={() => applyTemplate(t('edit.templateReplaceFill'))}
-					>
-						{t('edit.templateReplace')}
-					</button>
-					<button
-						type="button"
-						class="chip"
-						onclick={() => applyTemplate(t('edit.templateColorFill'))}
-					>
-						{t('edit.templateColor')}
-					</button>
-				</div>
+			{#each TOOLS as tool, index (tool.id)}
+				{@const Icon = tool.Icon}
+				<button
+					{@attach (node) => {
+						toolTabButtons[index] = node as HTMLElement;
+					}}
+					type="button"
+					role="tab"
+					id={`edit-tool-tab-${tool.id}`}
+					aria-selected={activeTool === tool.id}
+					aria-controls={`edit-tool-panel-${tool.id}`}
+					tabindex={activeTool === tool.id ? 0 : -1}
+					class:active={activeTool === tool.id}
+					title={tool.alphaLabel ? `${t(tool.label)} — ${t(tool.alphaLabel)}` : t(tool.label)}
+					onclick={() => toolTabs.activate(index)}
+					onkeydown={toolTabs.onKeydown}
+				>
+					<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
+					<span class="visually-hidden">
+						{t(tool.label)}{#if tool.alphaLabel}
+							&nbsp;— {t(tool.alphaLabel)}{/if}
+					</span>
+					{#if tool.alphaLabel}
+						<span class="tool-alpha-dot" aria-hidden="true"></span>
+					{/if}
+				</button>
+			{/each}
+		</div>
 
-				<label class="field">
-					<span class="field-label">{t('edit.instruction')}</span>
-					<textarea
-						value={request.editPrompt}
-						oninput={(event) => request.setEditPrompt(event.currentTarget.value)}
-						rows="3"
-						disabled={applying}
-						placeholder={t('edit.templateReplaceFill')}></textarea>
-				</label>
+		<div class="tool-content">
+			{#if activeTool !== 'object-replacement' && activeTool !== 'texture-replacement'}
+				<div
+					class="tool-panel"
+					role="tabpanel"
+					id={`edit-tool-panel-${activeTool}`}
+					aria-labelledby={`edit-tool-tab-${activeTool}`}
+					tabindex="0"
+				>
+					{#if activeTool === 'freeform'}
+						<div class="chips">
+							<button
+								type="button"
+								class="chip"
+								onclick={() => applyTemplate(t('edit.templateReplaceFill'))}
+							>
+								{t('edit.templateReplace')}
+							</button>
+							<button
+								type="button"
+								class="chip"
+								onclick={() => applyTemplate(t('edit.templateColorFill'))}
+							>
+								{t('edit.templateColor')}
+							</button>
+						</div>
 
-				<div class="actions">
-					<button
-						type="button"
-						class="btn-apply"
-						disabled={!request.editPrompt.trim() || toolDisabled || !targetImageUrl}
-						onclick={() => void submit(request.editPrompt, 'freeform')}
-					>
-						{#if applying}
-							<span class="spinner" aria-hidden="true"></span>
-						{/if}
-						{applying ? t('edit.applying') : t('edit.apply')}
-					</button>
+						<label class="field">
+							<span class="field-label">{t('edit.instruction')}</span>
+							<textarea
+								value={request.editPrompt}
+								oninput={(event) => request.setEditPrompt(event.currentTarget.value)}
+								rows="3"
+								disabled={applying}
+								placeholder={t('edit.templateReplaceFill')}></textarea>
+						</label>
+
+						<div class="actions">
+							<button
+								type="button"
+								class="btn-apply"
+								disabled={!request.editPrompt.trim() || toolDisabled || !targetImageUrl}
+								onclick={() => void submit(request.editPrompt, 'freeform')}
+							>
+								{#if applying}
+									<span class="spinner" aria-hidden="true"></span>
+								{/if}
+								{applying ? t('edit.applying') : t('edit.apply')}
+							</button>
+						</div>
+					{:else if activeTool === 'add-object'}
+						<EditAddObjectTool
+							disabled={toolDisabled || !targetImageUrl}
+							{applying}
+							onApply={(prompt) => void submit(prompt, 'add-object')}
+						/>
+					{:else if activeTool === 'remove-object'}
+						<EditRemoveObjectTool
+							disabled={toolDisabled || !targetImageUrl}
+							{applying}
+							onApply={(prompt) => void submit(prompt, 'remove-object')}
+						/>
+					{:else if activeTool === 'atmosphere'}
+						<EditAtmosphereTool
+							disabled={toolDisabled || !targetImageUrl}
+							{applying}
+							onApply={(prompt) => void submit(prompt, 'atmosphere')}
+						/>
+					{/if}
 				</div>
-			{:else if activeTool === 'add-object'}
-				<EditAddObjectTool
-					disabled={toolDisabled || !targetImageUrl}
-					{applying}
-					onApply={(prompt) => void submit(prompt, 'add-object')}
-				/>
-			{:else if activeTool === 'remove-object'}
-				<EditRemoveObjectTool
-					disabled={toolDisabled || !targetImageUrl}
-					{applying}
-					onApply={(prompt) => void submit(prompt, 'remove-object')}
-				/>
-			{:else if activeTool === 'atmosphere'}
-				<EditAtmosphereTool
-					disabled={toolDisabled || !targetImageUrl}
-					{applying}
-					onApply={(prompt) => void submit(prompt, 'atmosphere')}
-				/>
+			{/if}
+
+			{#if objectReplacementOpened}
+				<div
+					class="tool-panel"
+					role="tabpanel"
+					id="edit-tool-panel-object-replacement"
+					aria-labelledby="edit-tool-tab-object-replacement"
+					tabindex="0"
+					hidden={activeTool !== 'object-replacement'}
+				>
+					<svelte:boundary
+						onerror={(err: unknown) => logBoundaryError('editPanel.objectReplacement', err)}
+					>
+						<ObjectReplacementPanel />
+						{#snippet failed(_error: unknown, reset: () => void)}
+							<p class="error">{t('boundary.failed')}</p>
+							<button type="button" class="btn-apply" onclick={reset}>
+								{t('boundary.retry')}
+							</button>
+						{/snippet}
+					</svelte:boundary>
+				</div>
+			{/if}
+
+			{#if textureReplacementOpened}
+				<div
+					class="tool-panel"
+					role="tabpanel"
+					id="edit-tool-panel-texture-replacement"
+					aria-labelledby="edit-tool-tab-texture-replacement"
+					tabindex="0"
+					hidden={activeTool !== 'texture-replacement'}
+				>
+					<svelte:boundary
+						onerror={(err: unknown) => logBoundaryError('editPanel.textureReplacement', err)}
+					>
+						<TextureReplacementPanel />
+						{#snippet failed(_error: unknown, reset: () => void)}
+							<p class="error">{t('boundary.failed')}</p>
+							<button type="button" class="btn-apply" onclick={reset}>
+								{t('boundary.retry')}
+							</button>
+						{/snippet}
+					</svelte:boundary>
+				</div>
 			{/if}
 		</div>
-	{/if}
-
-	{#if objectReplacementOpened}
-		<div
-			class="tool-panel"
-			role="tabpanel"
-			id="edit-tool-panel-object-replacement"
-			aria-labelledby="edit-tool-tab-object-replacement"
-			tabindex="0"
-			hidden={activeTool !== 'object-replacement'}
-		>
-			<svelte:boundary
-				onerror={(err: unknown) => logBoundaryError('editPanel.objectReplacement', err)}
-			>
-				<ObjectReplacementPanel />
-				{#snippet failed(_error: unknown, reset: () => void)}
-					<p class="error">{t('boundary.failed')}</p>
-					<button type="button" class="btn-apply" onclick={reset}>
-						{t('boundary.retry')}
-					</button>
-				{/snippet}
-			</svelte:boundary>
-		</div>
-	{/if}
-
-	{#if textureReplacementOpened}
-		<div
-			class="tool-panel"
-			role="tabpanel"
-			id="edit-tool-panel-texture-replacement"
-			aria-labelledby="edit-tool-tab-texture-replacement"
-			tabindex="0"
-			hidden={activeTool !== 'texture-replacement'}
-		>
-			<svelte:boundary
-				onerror={(err: unknown) => logBoundaryError('editPanel.textureReplacement', err)}
-			>
-				<TextureReplacementPanel />
-				{#snippet failed(_error: unknown, reset: () => void)}
-					<p class="error">{t('boundary.failed')}</p>
-					<button type="button" class="btn-apply" onclick={reset}>
-						{t('boundary.retry')}
-					</button>
-				{/snippet}
-			</svelte:boundary>
-		</div>
-	{/if}
+	</div>
 
 	{#if !isAuthenticated && activeTool !== 'object-replacement' && activeTool !== 'texture-replacement'}
 		<p class="auth-hint">{t('edit.signInToApply')}</p>
@@ -319,13 +334,34 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: 0 4px 16px rgb(0 0 0 / 0.07);
 	}
 
-	.tool-tabs {
+	.edit-body {
 		display: flex;
+		align-items: flex-start;
+		gap: 1rem;
+	}
+
+	.tool-content {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	/* A vertical icon rail instead of horizontal tabs — switches the same
+	   tools via the same tablist/URL-driven controller, just reoriented.
+	   Ordered after .tool-content so it still renders on the right visually
+	   despite coming first in the DOM (a keyboard user tabbing through must
+	   reach the tabs before the panel they control). */
+	.tool-tabs {
+		order: 1;
+		flex: 0 0 auto;
+		display: flex;
+		flex-direction: column;
 		gap: 0.375rem;
 		padding: 0.25rem;
 		background: var(--color-background);
 		border-radius: 12px;
-		flex-wrap: wrap;
 	}
 
 	.tool-panel {
@@ -339,21 +375,19 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.tool-tabs button {
+		position: relative;
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		flex: 1;
 		justify-content: center;
-		padding: 0.5rem 0.75rem;
+		width: 2.75rem;
+		height: 2.75rem;
+		padding: 0;
 		font: inherit;
-		font-size: 0.8125rem;
-		font-weight: 500;
 		color: var(--color-muted);
 		background: transparent;
 		border: none;
 		border-radius: 9px;
 		cursor: pointer;
-		white-space: nowrap;
 		transition:
 			background 0.15s,
 			color 0.15s;
@@ -370,15 +404,14 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 	}
 
-	.tool-alpha {
-		padding: 0.1rem 0.35rem;
-		border: 1px solid currentColor;
-		border-radius: 100px;
-		font-size: 0.5625rem;
-		font-weight: 700;
-		line-height: 1.2;
-		letter-spacing: 0.03em;
-		text-transform: uppercase;
+	.tool-alpha-dot {
+		position: absolute;
+		top: 0.3rem;
+		right: 0.3rem;
+		width: 0.375rem;
+		height: 0.375rem;
+		border-radius: 50%;
+		background: var(--color-accent);
 	}
 
 	.chips {

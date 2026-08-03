@@ -13,7 +13,8 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Download, Pencil, Redo, Sparkles, SquareSplitHorizontal, Undo } from '@lucide/svelte';
+	import { Download, ImagePlus, Redo, Sparkles, SquareSplitHorizontal, Undo } from '@lucide/svelte';
+	import CompareSlider from '$lib/components/CompareSlider.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
@@ -21,19 +22,38 @@ before the Change Date. See LICENSE for complete terms.
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import { formatCredit } from '$lib/utils';
 
-	interface Props {
-		onEditRequest: () => void;
-	}
-	let { onEditRequest }: Props = $props();
-
 	let comparing = $state(false);
 	let upscaling = $state(false);
 	let upscaleError = $state<string | null>(null);
+	let resetConfirmOpen = $state(false);
+
+	function openModal(dialog: HTMLDialogElement): () => void {
+		dialog.showModal();
+		return () => {
+			if (dialog.open) dialog.close();
+		};
+	}
+
+	function requestReset(): void {
+		resetConfirmOpen = true;
+	}
+
+	function cancelReset(): void {
+		resetConfirmOpen = false;
+	}
+
+	function confirmReset(): void {
+		resetConfirmOpen = false;
+		request.reset();
+	}
 
 	const render = $derived(request.currentRender);
 	const imageUrl = $derived(render?.outputUrls[0]);
-	const previousImageUrl = $derived(request.previousRender?.outputUrls[0]);
-	const canCompare = $derived(previousImageUrl !== undefined);
+	// Falls back to the originally uploaded room photo when there's no prior
+	// edit yet, so comparing is available right after the very first
+	// generation, not only once an edit chain exists.
+	const beforeImageUrl = $derived(request.previousRender?.outputUrls[0] ?? request.image?.url);
+	const canCompare = $derived(beforeImageUrl !== undefined);
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	// The render result doesn't carry its own format, so the current form setting
 	// is the best available signal for the download filename's extension.
@@ -60,7 +80,14 @@ before the Change Date. See LICENSE for complete terms.
 		return `${url}${separator}retry=${attempt}`;
 	}
 
-	function createStallWatchdog(getUrl: () => string | undefined) {
+	// `active` gates whether the watchdog should be armed at all — the before
+	// image only actually renders (and can stall) while the compare slider is
+	// open, so arming its timer regardless would reload/retry an <img> that
+	// isn't even in the DOM.
+	function createStallWatchdog(
+		getUrl: () => string | undefined,
+		active: () => boolean = () => true
+	) {
 		let src = $state<string | undefined>(undefined);
 		let clearTimer = () => {};
 
@@ -68,7 +95,7 @@ before the Change Date. See LICENSE for complete terms.
 			const url = getUrl();
 			src = url;
 			clearTimer = () => {};
-			if (!url) return;
+			if (!url || !active()) return;
 
 			let attempt = 0;
 			let timer: ReturnType<typeof setTimeout>;
@@ -94,7 +121,10 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	const imageWatchdog = createStallWatchdog(() => imageUrl);
-	const previousImageWatchdog = createStallWatchdog(() => previousImageUrl);
+	const beforeImageWatchdog = createStallWatchdog(
+		() => beforeImageUrl,
+		() => comparing
+	);
 
 	async function upscale(): Promise<void> {
 		if (!render || upscaling || !isAuthenticated) return;
@@ -135,27 +165,16 @@ before the Change Date. See LICENSE for complete terms.
 {#if render && imageUrl}
 	<section class="result">
 		<div class="image-card">
-			{#if comparing && previousImageUrl}
-				<div class="compare">
-					<div class="compare-half">
-						<span class="compare-label">{t('toolbar.before')}</span>
-						<img
-							src={previousImageWatchdog.src}
-							alt={t('toolbar.before')}
-							class="output"
-							onload={previousImageWatchdog.onload}
-						/>
-					</div>
-					<div class="compare-half">
-						<span class="compare-label">{t('toolbar.after')}</span>
-						<img
-							src={imageWatchdog.src}
-							alt={t('toolbar.after')}
-							class="output"
-							onload={imageWatchdog.onload}
-						/>
-					</div>
-				</div>
+			{#if comparing && beforeImageUrl}
+				<CompareSlider
+					beforeSrc={beforeImageWatchdog.src}
+					afterSrc={imageWatchdog.src}
+					beforeAlt={t('toolbar.before')}
+					afterAlt={t('toolbar.after')}
+					handleLabel={t('toolbar.compare')}
+					onBeforeLoad={beforeImageWatchdog.onload}
+					onAfterLoad={imageWatchdog.onload}
+				/>
 			{:else}
 				<img
 					src={imageWatchdog.src}
@@ -164,67 +183,79 @@ before the Change Date. See LICENSE for complete terms.
 					onload={imageWatchdog.onload}
 				/>
 			{/if}
-		</div>
 
-		<div class="toolbar">
-			<button
-				type="button"
-				class="icon-btn"
-				disabled={!request.canUndoEdit}
-				aria-label={t('toolbar.undo')}
-				title={t('toolbar.undo')}
-				onclick={() => request.undoLastEdit()}
-			>
-				<Undo size={16} strokeWidth={1.8} aria-hidden="true" />
-			</button>
-			<button
-				type="button"
-				class="icon-btn"
-				disabled={!request.canRedoEdit}
-				aria-label={t('toolbar.redo')}
-				title={t('toolbar.redo')}
-				onclick={() => request.redoEdit()}
-			>
-				<Redo size={16} strokeWidth={1.8} aria-hidden="true" />
-			</button>
+			<div class="toolbar">
+				<button
+					type="button"
+					class="icon-btn"
+					disabled={!request.canUndoEdit}
+					aria-label={t('toolbar.undo')}
+					title={t('toolbar.undo')}
+					onclick={() => request.undoLastEdit()}
+				>
+					<Undo size={16} strokeWidth={1.8} aria-hidden="true" />
+				</button>
+				<button
+					type="button"
+					class="icon-btn"
+					disabled={!request.canRedoEdit}
+					aria-label={t('toolbar.redo')}
+					title={t('toolbar.redo')}
+					onclick={() => request.redoEdit()}
+				>
+					<Redo size={16} strokeWidth={1.8} aria-hidden="true" />
+				</button>
 
-			<span class="toolbar-sep" aria-hidden="true"></span>
+				<span class="toolbar-sep" aria-hidden="true"></span>
 
-			<a
-				href={downloadHref}
-				download={downloadName}
-				class="icon-btn"
-				aria-label={t('render.download')}
-				title={t('render.download')}
-			>
-				<Download size={16} strokeWidth={1.8} aria-hidden="true" />
-			</a>
-			<button
-				type="button"
-				class="icon-btn"
-				disabled={upscaling || !isAuthenticated}
-				aria-label={t('toolbar.upscale')}
-				title={isAuthenticated ? t('toolbar.upscale') : t('toolbar.signInToUpscale')}
-				onclick={() => void upscale()}
-			>
-				<Sparkles size={16} strokeWidth={1.8} aria-hidden="true" />
-			</button>
-			<button
-				type="button"
-				class="icon-btn"
-				class:active={comparing}
-				disabled={!canCompare}
-				aria-pressed={comparing}
-				aria-label={t('toolbar.compare')}
-				title={t('toolbar.compare')}
-				onclick={() => (comparing = !comparing)}
-			>
-				<SquareSplitHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
-			</button>
+				<a
+					href={downloadHref}
+					download={downloadName}
+					class="icon-btn"
+					aria-label={t('render.download')}
+					title={t('render.download')}
+				>
+					<Download size={16} strokeWidth={1.8} aria-hidden="true" />
+				</a>
+				<button
+					type="button"
+					class="icon-btn"
+					disabled={upscaling || !isAuthenticated}
+					aria-label={t('toolbar.upscale')}
+					title={isAuthenticated ? t('toolbar.upscale') : t('toolbar.signInToUpscale')}
+					onclick={() => void upscale()}
+				>
+					<Sparkles size={16} strokeWidth={1.8} aria-hidden="true" />
+				</button>
+				<button
+					type="button"
+					class="icon-btn"
+					class:active={comparing}
+					disabled={!canCompare}
+					aria-pressed={comparing}
+					aria-label={t('toolbar.compare')}
+					title={t('toolbar.compare')}
+					onclick={() => (comparing = !comparing)}
+				>
+					<SquareSplitHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
+				</button>
 
-			{#if upscaleError}
-				<p class="toolbar-error" role="alert">{upscaleError}</p>
-			{/if}
+				<span class="toolbar-sep" aria-hidden="true"></span>
+
+				<button
+					type="button"
+					class="icon-btn"
+					aria-label={t('toolbar.reset')}
+					title={t('toolbar.reset')}
+					onclick={requestReset}
+				>
+					<ImagePlus size={16} strokeWidth={1.8} aria-hidden="true" />
+				</button>
+
+				{#if upscaleError}
+					<p class="toolbar-error" role="alert">{upscaleError}</p>
+				{/if}
+			</div>
 		</div>
 
 		<div class="footer">
@@ -233,14 +264,32 @@ before the Change Date. See LICENSE for complete terms.
 				<span class="sep">·</span>
 				<span>{ti('render.balance', { balance: formatCredit(render.balance) })}</span>
 			</div>
-			<div class="actions">
-				<button type="button" class="btn btn-accent" onclick={onEditRequest}>
-					<Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
-					{t('render.edit')}
-				</button>
-			</div>
 		</div>
 	</section>
+
+	{#if resetConfirmOpen}
+		<dialog
+			class="reset-confirm-dialog"
+			{@attach openModal}
+			aria-labelledby="reset-confirm-title"
+			aria-describedby="reset-confirm-description"
+			oncancel={(event) => {
+				event.preventDefault();
+				cancelReset();
+			}}
+		>
+			<h3 id="reset-confirm-title">{t('toolbar.resetConfirmTitle')}</h3>
+			<p id="reset-confirm-description">{t('toolbar.resetConfirmDescription')}</p>
+			<div class="reset-confirm-actions">
+				<button type="button" class="secondary-button" onclick={cancelReset}>
+					{t('toolbar.resetConfirmCancel')}
+				</button>
+				<button type="button" class="primary-danger-button" onclick={confirmReset}>
+					{t('toolbar.resetConfirmConfirm')}
+				</button>
+			</div>
+		</dialog>
+	{/if}
 {/if}
 
 <style>
@@ -255,55 +304,44 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: var(--shadow-lg);
 	}
 
+	/* Fixed aspect-ratio (not just the <img>'s intrinsic size) so the card has
+	   a real, predictable box — and the floating toolbar a stable anchor —
+	   even before the image has loaded or if it never does (the CDN stalls
+	   this app already has to guard against elsewhere, see the watchdog
+	   below). */
 	.image-card {
+		position: relative;
 		width: 100%;
+		aspect-ratio: 16 / 9;
+		max-height: min(70vh, 720px);
 		background: var(--color-background);
 	}
 
 	.output {
 		width: 100%;
-		max-height: 480px;
+		height: 100%;
 		object-fit: contain;
 		display: block;
 	}
 
-	.compare {
-		display: flex;
-	}
-
-	.compare-half {
-		position: relative;
-		width: 50%;
-		border-right: 1px solid var(--color-border);
-	}
-
-	.compare-half:last-child {
-		border-right: none;
-	}
-
-	.compare-half .output {
-		max-height: 480px;
-	}
-
-	.compare-label {
-		position: absolute;
-		top: 0.5rem;
-		left: 0.5rem;
-		padding: 0.15rem 0.5rem;
-		font-size: 0.6875rem;
-		font-weight: 600;
-		color: white;
-		background: rgb(0 0 0 / 0.55);
-		border-radius: 100px;
-		z-index: 1;
-	}
-
+	/* Floats over the bottom of the canvas instead of sitting in a bordered
+	   strip below it, so the image reads as the workspace's main surface. */
 	.toolbar {
+		position: absolute;
+		left: 50%;
+		bottom: 0.875rem;
+		transform: translateX(-50%);
+		max-width: calc(100% - 1.5rem);
 		display: flex;
 		align-items: center;
+		justify-content: center;
 		gap: 0.375rem;
-		padding: 0.625rem 1.25rem;
-		border-top: 1px solid var(--color-border);
+		padding: 0.5rem 0.75rem;
+		background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+		backdrop-filter: blur(10px);
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		box-shadow: var(--shadow-lg);
 		flex-wrap: wrap;
 	}
 
@@ -350,16 +388,25 @@ before the Change Date. See LICENSE for complete terms.
 		cursor: not-allowed;
 	}
 
+	/* An opaque chip (not just colored text) — the toolbar itself is a
+	   translucent, blurred pill floating over the rendered photo, so danger-
+	   colored text alone has no reliable contrast against whatever image is
+	   behind it. No flex-basis: 100% here either: that forced the error onto
+	   its own full-width line, breaking the toolbar out of its compact pill
+	   shape instead of just adding one more inline item. */
 	.toolbar-error {
 		margin: 0;
+		padding: 0.25rem 0.625rem;
 		font-size: 0.8125rem;
+		white-space: nowrap;
 		color: var(--color-danger);
+		background: var(--color-danger-bg);
+		border-radius: 999px;
 	}
 
 	.footer {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
 		padding: 0.875rem 1.25rem;
 		border-top: 1px solid var(--color-border);
 		gap: 1rem;
@@ -378,37 +425,79 @@ before the Change Date. See LICENSE for complete terms.
 		opacity: 0.4;
 	}
 
-	.actions {
+	.reset-confirm-dialog {
+		width: min(100% - 2rem, 25rem);
 		display: flex;
-		gap: 0.5rem;
-		flex-wrap: wrap;
+		flex-direction: column;
+		gap: 0.75rem;
+		max-width: none;
+		margin: auto;
+		padding: 1.25rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		background: var(--color-surface);
+		box-shadow: var(--shadow-lg);
 	}
 
-	.btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.5rem 1rem;
+	.reset-confirm-dialog::backdrop {
+		background: rgb(29 29 31 / 0.32);
+		backdrop-filter: blur(4px);
+	}
+
+	.reset-confirm-dialog h3 {
+		margin: 0;
+		color: var(--color-text);
+		font-size: 1rem;
+		font-weight: 650;
+	}
+
+	.reset-confirm-dialog p {
+		margin: 0;
+		color: var(--color-muted);
+		font-size: 0.875rem;
+		line-height: 1.4;
+	}
+
+	.reset-confirm-actions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.5rem;
+	}
+
+	.secondary-button,
+	.primary-danger-button {
+		min-height: 2.5rem;
+		padding: 0.625rem 0.75rem;
+		border-radius: var(--radius-sm);
 		font: inherit;
 		font-size: 0.875rem;
-		font-weight: 500;
-		border-radius: var(--radius);
+		font-weight: 650;
 		cursor: pointer;
-		text-decoration: none;
 		transition:
 			background 0.15s,
-			border-color 0.15s;
-		white-space: nowrap;
+			border-color 0.15s,
+			color 0.15s;
 	}
 
-	.btn-accent {
-		color: var(--color-accent-contrast);
-		background: var(--color-accent);
-		border: 1.5px solid var(--color-accent);
+	.secondary-button {
+		border: 1px solid var(--color-border);
+		background: var(--color-surface);
+		color: var(--color-text);
 	}
 
-	.btn-accent:hover {
-		background: var(--color-accent-hover);
-		border-color: var(--color-accent-hover);
+	.secondary-button:hover {
+		background: var(--color-surface-hover);
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+	}
+
+	.primary-danger-button {
+		border: 1px solid var(--color-danger);
+		background: var(--color-danger);
+		color: white;
+	}
+
+	.primary-danger-button:hover {
+		background: color-mix(in srgb, var(--color-danger) 86%, black);
 	}
 </style>
