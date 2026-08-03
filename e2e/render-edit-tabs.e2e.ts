@@ -181,8 +181,8 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 	await openCreate(page);
 
 	const panel = page.locator('#mode-panel-styleTransfer');
-	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
-	await expect(page.getByRole('tab', { name: 'Перенос стиля' })).toHaveAttribute(
+	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
+	await expect(page.getByRole('tab', { name: 'Миграция стиля' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
@@ -284,7 +284,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…')
 		.fill('render prompt for paid generation');
 
-	const styleTransferTab = page.getByRole('tab', { name: 'Перенос стиля' });
+	const styleTransferTab = page.getByRole('tab', { name: 'Миграция стиля' });
 	await styleTransferTab.click();
 	const stylePanel = page.locator('#mode-panel-styleTransfer');
 	await stylePanel.getByRole('tab', { name: 'Свои' }).click();
@@ -340,7 +340,7 @@ test('the Style transfer tab lets you pick a ready-made photorealistic preset as
 	await openCreate(page);
 
 	const panel = page.locator('#mode-panel-styleTransfer');
-	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
 
 	await panel
 		.locator('input[type="file"]')
@@ -373,7 +373,7 @@ test('switching scene type clears a selected conceptual preset instead of keepin
 	await openCreate(page);
 
 	const panel = page.locator('#mode-panel-styleTransfer');
-	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
 
 	await panel
 		.locator('input[type="file"]')
@@ -431,7 +431,7 @@ test('switching from a custom reference upload back to a preset tab clears the u
 	await openCreate(page);
 
 	const panel = page.locator('#mode-panel-styleTransfer');
-	await page.getByRole('tab', { name: 'Перенос стиля' }).click();
+	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
 
 	await panel
 		.locator('input[type="file"]')
@@ -564,7 +564,7 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toBeVisible();
 
 	const editTab = page.getByRole('tab', { name: 'Редактирование' });
-	await page.getByRole('button', { name: 'Редактировать' }).click();
+	await editTab.click();
 	await expect(editTab).toHaveAttribute('aria-selected', 'true');
 	await expect(page.getByLabel('Инструкция для правки')).toBeVisible();
 	await expect(page.locator('#mode-panel-edit input[type="file"]')).toHaveCount(0);
@@ -629,12 +629,9 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
 	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render.webp');
 
-	// The upload step keeps showing the originally uploaded photo — it must not
-	// be swapped out for the generated result.
-	await expect(page.locator('#mode-panel-render .image-wrapper img')).toHaveAttribute(
-		'src',
-		'https://cdn.example.test/uploaded.webp'
-	);
+	// The result replaces the upload step on the canvas — there's only ever
+	// one current image, and it's now the just-generated render.
+	await expect(page.locator('#mode-panel-render input[type="file"]')).toHaveCount(0);
 
 	const undoButton = page.getByRole('button', { name: 'Отменить' });
 	const redoButton = page.getByRole('button', { name: 'Повторить' });
@@ -659,7 +656,7 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	);
 	await compareButton.click();
 
-	await page.getByRole('button', { name: 'Редактировать' }).click();
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page.getByLabel('Инструкция для правки').fill('Replace the sofa with an armchair');
 	await page.getByRole('button', { name: 'Применить правку' }).click();
 	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/edited.webp');

@@ -152,7 +152,7 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	await expect(images.nth(1)).toHaveAttribute('src', 'https://cdn.example.test/middle.webp');
 	await expect(images.nth(2)).toHaveAttribute('src', 'https://cdn.example.test/oldest.webp');
 	await expect(page.locator('.generation-kind')).toHaveText([
-		'Перенос стиля',
+		'Миграция стиля',
 		'Редактирование',
 		'Генерация'
 	]);
