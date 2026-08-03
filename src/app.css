@@ -41,6 +41,14 @@
 	--shadow-lg: 0 10px 24px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.05);
 
 	--font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+	/* Workspace stacking levels: 0 canvas (normal flow, no z-index needed),
+	   1 the floating tools panel, 2 the scenes panel. The scenes drawer is a
+	   native <dialog> and renders in the top layer regardless, so its token is
+	   mostly documentation, but keeping both here makes the intended order
+	   explicit in one place instead of implicit in element order. */
+	--z-tools-panel: 10;
+	--z-scenes-panel: 20;
 }
 
 /* Legacy CSS variable aliases for existing components */

@@ -17,6 +17,8 @@ before the Change Date. See LICENSE for complete terms.
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
+	import FloatingToolsPanel from '$lib/components/FloatingToolsPanel.svelte';
+	import { toolsPanel } from '$lib/state/tools-panel.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import RenderResult from '$lib/components/RenderResult.svelte';
 	import EditPanel from '$lib/components/EditPanel.svelte';
@@ -84,10 +86,6 @@ before the Change Date. See LICENSE for complete terms.
 		focusTab: (index) => modeTabs[index]?.focus()
 	});
 
-	function activateMode(id: Mode): void {
-		modeTabController.activate(modes.findIndex((m) => m.id === id));
-	}
-
 	const sceneTypeTabController = createTabController({
 		itemCount: () => sceneTypes.length,
 		getActiveIndex: () => sceneTypes.findIndex((s) => s.id === request.sceneType),
@@ -98,6 +96,11 @@ before the Change Date. See LICENSE for complete terms.
 	});
 
 	const isAuthenticated = $derived(auth.status === 'authenticated');
+	// Only reserves canvas space while the floating tools panel is both open
+	// and still sitting at its untouched default corner — the moment the user
+	// drags it elsewhere or collapses it, the canvas reclaims the full width
+	// rather than keeping a permanent gap for a panel that's no longer there.
+	const toolsPanelAtDefaultCorner = $derived(toolsPanel.open && toolsPanel.position === null);
 	const validation = $derived(request.validate());
 	const canGenerate = $derived(validation.valid && !submitting && request.status !== 'rendering');
 	const uploadLabel = $derived(
@@ -290,6 +293,7 @@ before the Change Date. See LICENSE for complete terms.
 			     between modes. -->
 			<div
 				class="canvas-layout"
+				class:reserve-panel-space={toolsPanelAtDefaultCorner}
 				role="tabpanel"
 				id="mode-panel-render"
 				aria-labelledby="mode-tab-render"
@@ -297,14 +301,15 @@ before the Change Date. See LICENSE for complete terms.
 				hidden={mode !== 'render'}
 			>
 				<div class="canvas-col">
-					<h2 class="canvas-heading">{uploadLabel}</h2>
-					<ImageUpload />
-					{#if mode === 'render' && request.currentRender}
+					{#if mode === 'render' && !request.currentRender}
+						<h2 class="canvas-heading">{uploadLabel}</h2>
+						<ImageUpload />
+					{:else if mode === 'render' && request.currentRender}
 						<section aria-label={t('render.result')}>
 							<svelte:boundary
 								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
 							>
-								<RenderResult onEditRequest={() => activateMode('edit')} />
+								<RenderResult />
 								{#snippet failed(_error: unknown, reset: () => void)}
 									<p class="boundary-failed">{t('boundary.failed')}</p>
 									<button type="button" class="boundary-retry" onclick={reset}>
@@ -316,7 +321,7 @@ before the Change Date. See LICENSE for complete terms.
 					{/if}
 				</div>
 
-				<div class="panel-col">
+				<FloatingToolsPanel>
 					<div class="step-card">
 						<div class="panel-section">
 							<h2 class="panel-heading">{t('render.sceneType.label')}</h2>
@@ -389,11 +394,12 @@ before the Change Date. See LICENSE for complete terms.
 							{/if}
 						</div>
 					</div>
-				</div>
+				</FloatingToolsPanel>
 			</div>
 
 			<div
 				class="canvas-layout"
+				class:reserve-panel-space={toolsPanelAtDefaultCorner}
 				role="tabpanel"
 				id="mode-panel-edit"
 				aria-labelledby="mode-tab-edit"
@@ -423,7 +429,7 @@ before the Change Date. See LICENSE for complete terms.
 							<svelte:boundary
 								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
 							>
-								<RenderResult onEditRequest={() => activateMode('edit')} />
+								<RenderResult />
 								{#snippet failed(_error: unknown, reset: () => void)}
 									<p class="boundary-failed">{t('boundary.failed')}</p>
 									<button type="button" class="boundary-retry" onclick={reset}>
@@ -435,7 +441,7 @@ before the Change Date. See LICENSE for complete terms.
 					{/if}
 				</div>
 
-				<div class="panel-col">
+				<FloatingToolsPanel>
 					<svelte:boundary
 						onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
 					>
@@ -447,11 +453,12 @@ before the Change Date. See LICENSE for complete terms.
 							</button>
 						{/snippet}
 					</svelte:boundary>
-				</div>
+				</FloatingToolsPanel>
 			</div>
 
 			<div
 				class="canvas-layout"
+				class:reserve-panel-space={toolsPanelAtDefaultCorner}
 				role="tabpanel"
 				id="mode-panel-styleTransfer"
 				aria-labelledby="mode-tab-styleTransfer"
@@ -466,7 +473,7 @@ before the Change Date. See LICENSE for complete terms.
 							<svelte:boundary
 								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
 							>
-								<RenderResult onEditRequest={() => activateMode('edit')} />
+								<RenderResult />
 								{#snippet failed(_error: unknown, reset: () => void)}
 									<p class="boundary-failed">{t('boundary.failed')}</p>
 									<button type="button" class="boundary-retry" onclick={reset}>
@@ -478,7 +485,7 @@ before the Change Date. See LICENSE for complete terms.
 					{/if}
 				</div>
 
-				<div class="panel-col">
+				<FloatingToolsPanel>
 					<svelte:boundary
 						onerror={(error: unknown) => logBoundaryError('workspace.styleTransfer', error)}
 					>
@@ -490,13 +497,13 @@ before the Change Date. See LICENSE for complete terms.
 							</button>
 						{/snippet}
 					</svelte:boundary>
-				</div>
+				</FloatingToolsPanel>
 			</div>
 		</div>
 	</div>
 
-	{#if isAuthenticated && scenesOpen}
-		<ScenesDrawer onClose={closeScenes} />
+	{#if isAuthenticated}
+		<ScenesDrawer open={scenesOpen} onClose={closeScenes} />
 	{/if}
 </main>
 
@@ -537,15 +544,21 @@ before the Change Date. See LICENSE for complete terms.
 		width: 100%;
 		display: flex;
 		align-items: stretch;
-		justify-content: space-between;
 		gap: 0.75rem;
 	}
 
-	/* Fixed to roughly the panel column's width (below) so the mode switcher
-	   reads as part of that right-hand panel instead of a full-width header. */
+	/* Wide enough that "Миграция стиля" (the longest tab label) always fits on
+	   one line — narrower than this, only that tab wrapped to two lines while
+	   its siblings stayed single-line, making the row look uneven. No longer
+	   tied to the removed panel-col's width now that the tools panel floats.
+	   margin-left: auto (rather than justify-content: space-between on the
+	   parent) keeps it pinned to the right even when the scenes button isn't
+	   rendered for a signed-out user, since space-between collapses a single
+	   remaining flex item to the start. */
 	.mode-nav {
-		flex: 0 0 360px;
+		flex: 0 0 440px;
 		max-width: 100%;
+		margin-left: auto;
 		padding: 0.25rem;
 		background: #e9ece9;
 		border: 1px solid #d8ded8;
@@ -558,8 +571,11 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
-		min-height: 3rem;
-		padding: 0.65rem 1rem;
+		/* Matches .mode-nav's own (content-driven) height so the stretched
+		   .workspace-topbar row doesn't leave the mode tabs looking like
+		   they're floating in a taller pill with empty space below them. */
+		min-height: 2.5rem;
+		padding: 0.5rem 1rem;
 		border: 1px solid var(--color-border);
 		border-radius: 14px;
 		background: var(--color-surface);
@@ -589,13 +605,18 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.mode-tabs button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4rem;
 		flex: 1;
 		min-width: 0;
-		padding: 0.55rem 0.5rem;
+		padding: 0.45rem 0.75rem;
 		font: inherit;
 		font-size: 0.8125rem;
 		font-weight: 600;
 		line-height: 1.2;
+		white-space: nowrap;
 		text-align: center;
 		color: #3f4d43;
 		background: transparent;
@@ -606,13 +627,6 @@ before the Change Date. See LICENSE for complete terms.
 			background 0.15s,
 			color 0.15s,
 			box-shadow 0.15s;
-	}
-
-	.mode-tabs button {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.4rem;
 	}
 
 	.mode-tabs button:hover:not(.active) {
@@ -631,8 +645,11 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	/* One shared container for all three modes — its *content* switches on
-	   `mode`, so the canvas/panel footprint is identical everywhere instead of
-	   each mode having its own independently-sized layout. */
+	   `mode`, so the canvas footprint is identical everywhere instead of each
+	   mode having its own independently-sized layout. The mode's tools live in
+	   a FloatingToolsPanel sibling (fixed-position on desktop, a normal-flow
+	   block here on narrow screens — see its own component for the
+	   breakpoint), so canvas-col is this container's only flex-sized child. */
 	.canvas-layout {
 		width: 100%;
 		display: flex;
@@ -641,16 +658,23 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 1.5rem;
 	}
 
-	.canvas-col {
-		flex: 1 1 0;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
+	/* The floating panel is fixed-positioned and out of flow, so it doesn't
+	   naturally reserve space here. Full-width canvas controls (e.g. the photo
+	   URL import row, the render result toolbar) would otherwise extend under
+	   its default top-right corner and become unclickable — but only while the
+	   panel is actually sitting there unopened-and-undragged; the moment the
+	   user drags it or collapses it (`toolsPanelAtDefaultCorner` goes false),
+	   the canvas reclaims that width immediately rather than keeping a
+	   permanent gap for a panel that's no longer in the way. Desktop-only:
+	   below 900px the panel becomes a static, normal-flow block instead. */
+	@media (min-width: 901px) {
+		.canvas-layout.reserve-panel-space {
+			padding-right: calc(360px + 1.5rem);
+		}
 	}
 
-	.panel-col {
-		flex: 0 0 360px;
+	.canvas-col {
+		flex: 1 1 0;
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
@@ -709,11 +733,6 @@ before the Change Date. See LICENSE for complete terms.
 	@media (max-width: 900px) {
 		.canvas-layout {
 			flex-direction: column;
-		}
-
-		.panel-col {
-			flex-basis: auto;
-			width: 100%;
 		}
 
 		.mode-nav {

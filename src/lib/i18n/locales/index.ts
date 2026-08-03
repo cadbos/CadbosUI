@@ -121,11 +121,13 @@ export interface Dictionary {
 	'render.cost': string;
 	'render.balance': string;
 	'render.download': string;
-	'render.edit': string;
 	'render.result': string;
 	'render.validationImage': string;
 	'render.validationPrompt': string;
 	'render.failed': string;
+	'toolsPanel.title': string;
+	'toolsPanel.collapse': string;
+	'toolsPanel.expand': string;
 	'toolbar.undo': string;
 	'toolbar.redo': string;
 	'toolbar.compare': string;
@@ -135,6 +137,7 @@ export interface Dictionary {
 	'toolbar.signInToUpscale': string;
 	'toolbar.upscaleDone': string;
 	'toolbar.upscaleFailed': string;
+	'toolbar.reset': string;
 	'generatedImages.title': string;
 	'generatedImages.subtitle': string;
 	'generatedImages.close': string;
@@ -166,6 +169,7 @@ export interface Dictionary {
 	'generatedImages.confirmDeleteCancel': string;
 	'generatedImages.confirmDeleteConfirm': string;
 	'generatedImages.confirmDeleteDeleting': string;
+	'generatedImages.resizeHandle': string;
 	'usage.title': string;
 	'usage.subtitle': string;
 	'usage.walletBalance': string;
