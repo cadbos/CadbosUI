@@ -322,19 +322,17 @@ test('navigates tabs with the keyboard', async ({ page }) => {
 	await expect(chat).toHaveAttribute('aria-selected', 'true');
 });
 
-test('the Scene Type toggle switches to exterior and relabels the photo step', async ({ page }) => {
+test('the Scene Type toggle switches to exterior', async ({ page }) => {
 	await openCreate(page);
 
 	const interiorTab = page.getByRole('tab', { name: 'Интерьер' });
 	const exteriorTab = page.getByRole('tab', { name: 'Экстерьер' });
 
 	await expect(interiorTab).toHaveAttribute('aria-selected', 'true');
-	await expect(page.getByRole('heading', { name: 'Фото комнаты' })).toBeVisible();
 
 	await exteriorTab.click();
 	await expect(exteriorTab).toHaveAttribute('aria-selected', 'true');
 	await expect(interiorTab).toHaveAttribute('aria-selected', 'false');
-	await expect(page.getByRole('heading', { name: 'Фото здания' })).toBeVisible();
 });
 
 test('navigates the Scene Type toggle with the keyboard', async ({ page }) => {

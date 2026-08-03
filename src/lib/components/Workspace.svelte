@@ -103,9 +103,6 @@ before the Change Date. See LICENSE for complete terms.
 	const toolsPanelAtDefaultCorner = $derived(toolsPanel.open && toolsPanel.position === null);
 	const validation = $derived(request.validate());
 	const canGenerate = $derived(validation.valid && !submitting && request.status !== 'rendering');
-	const uploadLabel = $derived(
-		request.sceneType === 'exterior' ? t('upload.labelExterior') : t('upload.label')
-	);
 
 	const activeEditTool = $derived(slugToTool(page.url.searchParams.get('tool') ?? undefined));
 
@@ -302,7 +299,6 @@ before the Change Date. See LICENSE for complete terms.
 			>
 				<div class="canvas-col">
 					{#if mode === 'render' && !request.currentRender}
-						<h2 class="canvas-heading">{uploadLabel}</h2>
 						<ImageUpload />
 					{:else if mode === 'render' && request.currentRender}
 						<section aria-label={t('render.result')}>
@@ -687,7 +683,6 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 0.75rem;
 	}
 
-	.canvas-heading,
 	.panel-heading {
 		margin: 0;
 		font-size: 1rem;

@@ -98,7 +98,6 @@ export const ru = {
 	'auth.credit.entryTextureReplacement': 'Замена текстуры · {date}: −{amount} → {balance}',
 	'auth.credit.entryUpscale': 'Апскейл · {date}: −{amount} → {balance}',
 	'upload.label': 'Фото комнаты',
-	'upload.labelExterior': 'Фото здания',
 	'upload.button': 'Выбрать файл',
 	'upload.dropHint': 'Перетащите фото сюда или нажмите для выбора',
 	'upload.dropTitle': 'Перетащите фото сюда',

@@ -98,7 +98,6 @@ export const en = {
 	'auth.credit.entryTextureReplacement': 'Texture replacement · {date}: −{amount} → {balance}',
 	'auth.credit.entryUpscale': 'Upscale · {date}: −{amount} → {balance}',
 	'upload.label': 'Room photo',
-	'upload.labelExterior': 'Building photo',
 	'upload.button': 'Choose file',
 	'upload.dropHint': 'Drop a photo here or click to select',
 	'upload.dropTitle': 'Drop your photo here',

@@ -94,7 +94,6 @@ export interface Dictionary {
 	'auth.credit.entryTextureReplacement': string;
 	'auth.credit.entryUpscale': string;
 	'upload.label': string;
-	'upload.labelExterior': string;
 	'upload.button': string;
 	'upload.dropHint': string;
 	'upload.dropTitle': string;
