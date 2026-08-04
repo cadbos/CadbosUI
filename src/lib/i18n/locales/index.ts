@@ -109,6 +109,7 @@ export interface Dictionary {
 	'upload.errorRemote': string;
 	'upload.errorUpload': string;
 	'upload.change': string;
+	'upload.remove': string;
 	'render.sceneType.label': string;
 	'render.sceneType.interior': string;
 	'render.sceneType.exterior': string;

@@ -113,6 +113,7 @@ export const en = {
 	'upload.errorRemote': 'Could not download the image. Check the URL and try again.',
 	'upload.errorUpload': 'Upload failed. Please try again.',
 	'upload.change': 'Change photo',
+	'upload.remove': 'Remove photo',
 	'render.sceneType.label': 'Scene type',
 	'render.sceneType.interior': 'Interior',
 	'render.sceneType.exterior': 'Exterior',

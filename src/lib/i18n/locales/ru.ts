@@ -113,6 +113,7 @@ export const ru = {
 	'upload.errorRemote': 'Не удалось скачать изображение. Проверьте ссылку и повторите попытку.',
 	'upload.errorUpload': 'Ошибка загрузки. Попробуйте ещё раз.',
 	'upload.change': 'Изменить фото',
+	'upload.remove': 'Убрать фото',
 	'render.sceneType.label': 'Тип сцены',
 	'render.sceneType.interior': 'Интерьер',
 	'render.sceneType.exterior': 'Экстерьер',

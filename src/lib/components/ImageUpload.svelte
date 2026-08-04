@@ -165,6 +165,27 @@ before the Change Date. See LICENSE for complete terms.
 		request.setImage(next);
 	}
 
+	function clearUploadedImage(): void {
+		if (disabled || uploading) return;
+		if (target === 'styleReference') {
+			request.setStyleReferenceImage(undefined);
+		} else if (target === 'objectReference') {
+			request.setObjectReferenceImage(undefined);
+		} else if (target === 'textureReference') {
+			request.setTextureReferenceImage(undefined);
+		} else if (target === 'textureMask') {
+			request.setTextureMaskImage(undefined);
+		} else {
+			request.setImage(undefined);
+		}
+		if (previewUrl) URL.revokeObjectURL(previewUrl);
+		previewUrl = null;
+		if (inputEl) inputEl.value = '';
+		remoteUrl = '';
+		error = null;
+		dragOver = false;
+	}
+
 	function setUploading(value: boolean): void {
 		uploading = value;
 		onUploadingChange?.(value);
@@ -360,54 +381,108 @@ before the Change Date. See LICENSE for complete terms.
 		<div class="image-wrapper">
 			<img src={previewUrl ?? imageUrl ?? ''} alt={t(ariaLabelKey)} class="preview" />
 			<div class="image-overlay">
-				<button
-					type="button"
-					class="change-btn"
-					onclick={() => inputEl?.click()}
-					disabled={uploading || disabled}
-				>
-					{uploading ? t('upload.uploading') : t(changeKey)}
-				</button>
+				<div class="image-actions">
+					<button
+						type="button"
+						class="image-action change-btn"
+						onclick={() => inputEl?.click()}
+						disabled={uploading || disabled}
+						aria-label={t(changeKey)}
+					>
+						<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+							<path
+								d="M13.5 6.5L17.5 10.5M4 20L8.2 19.1L19.4 7.9C20.2 7.1 20.2 5.9 19.4 5.1L18.9 4.6C18.1 3.8 16.9 3.8 16.1 4.6L4.9 15.8L4 20Z"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+						<span class="action-label">{uploading ? t('upload.uploading') : t(changeKey)}</span>
+					</button>
+					<button
+						type="button"
+						class="image-action remove-btn"
+						onclick={clearUploadedImage}
+						disabled={uploading || disabled}
+						aria-label={t('upload.remove')}
+					>
+						<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+							<path
+								d="M8 9V18M12 9V18M16 9V18M5 6H19M9 6V4H15V6M7 6L8 21H16L17 6"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+						<span class="action-label">{t('upload.remove')}</span>
+					</button>
+				</div>
 			</div>
 		</div>
 	{:else}
-		<button
-			type="button"
-			class="drop-zone"
-			onclick={() => inputEl?.click()}
-			disabled={uploading || disabled}
-			aria-label={dropButtonLabel}
-		>
-			{#if uploading}
-				<span class="uploading-text">{t('upload.uploading')}</span>
-			{:else}
-				<svg
-					class="upload-icon"
-					width="32"
-					height="32"
-					viewBox="0 0 24 24"
-					fill="none"
-					aria-hidden="true"
+		<div class="empty-state">
+			<button
+				type="button"
+				class="drop-zone"
+				onclick={() => inputEl?.click()}
+				disabled={uploading || disabled}
+				aria-label={dropButtonLabel}
+			>
+				{#if uploading}
+					<span class="uploading-text">{t('upload.uploading')}</span>
+				{:else}
+					<svg
+						class="upload-icon"
+						width="32"
+						height="32"
+						viewBox="0 0 24 24"
+						fill="none"
+						aria-hidden="true"
+					>
+						<path
+							d="M12 16V8M12 8L9 11M12 8L15 11"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+						<path
+							d="M20 16.7428C21.2215 15.9808 22 14.5985 22 13C22 10.5147 19.9956 8.5 17.5 8.5C17.3557 8.5 17.2143 8.506 17.075 8.518C16.5554 6.22048 14.4981 4.5 12 4.5C9.01766 4.5 6.6 6.9 6.6 9.9C6.6 9.9483 6.60107 9.99645 6.60319 10.0445C4.55587 10.3177 3 12.0896 3 14.2C3 16.5196 4.89543 18.4 7.2 18.4H9"
+							stroke="currentColor"
+							stroke-width="1.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+					<span class="drop-title">{t(dropTitleKey)}</span>
+					<span class="drop-subtitle">{t(dropSubtitleKey)}</span>
+				{/if}
+			</button>
+			<form class="url-form" novalidate onsubmit={onRemoteUrlSubmit}>
+				<label class="url-label">
+					<span>{t('upload.urlLabel')}</span>
+					<input
+						type="url"
+						bind:value={remoteUrl}
+						aria-label={`${controlLabel}: ${t('upload.urlLabel')}`}
+						placeholder={t('upload.urlPlaceholder')}
+						autocomplete="url"
+						inputmode="url"
+						disabled={uploading || disabled}
+						oninput={() => (error = null)}
+					/>
+				</label>
+				<button
+					type="submit"
+					aria-label={`${t('upload.import')}: ${controlLabel}`}
+					disabled={uploading || disabled || remoteUrl.trim().length === 0}
 				>
-					<path
-						d="M12 16V8M12 8L9 11M12 8L15 11"
-						stroke="currentColor"
-						stroke-width="1.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-					<path
-						d="M20 16.7428C21.2215 15.9808 22 14.5985 22 13C22 10.5147 19.9956 8.5 17.5 8.5C17.3557 8.5 17.2143 8.506 17.075 8.518C16.5554 6.22048 14.4981 4.5 12 4.5C9.01766 4.5 6.6 6.9 6.6 9.9C6.6 9.9483 6.60107 9.99645 6.60319 10.0445C4.55587 10.3177 3 12.0896 3 14.2C3 16.5196 4.89543 18.4 7.2 18.4H9"
-						stroke="currentColor"
-						stroke-width="1.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
-				</svg>
-				<span class="drop-title">{t(dropTitleKey)}</span>
-				<span class="drop-subtitle">{t(dropSubtitleKey)}</span>
-			{/if}
-		</button>
+					{uploading ? t('upload.importing') : t('upload.import')}
+				</button>
+			</form>
+		</div>
 	{/if}
 	<input
 		{@attach attachInput}
@@ -419,28 +494,6 @@ before the Change Date. See LICENSE for complete terms.
 		class="file-input"
 		oninput={onInput}
 	/>
-	<form class="url-form" novalidate onsubmit={onRemoteUrlSubmit}>
-		<label class="url-label">
-			<span>{t('upload.urlLabel')}</span>
-			<input
-				type="url"
-				bind:value={remoteUrl}
-				aria-label={`${controlLabel}: ${t('upload.urlLabel')}`}
-				placeholder={t('upload.urlPlaceholder')}
-				autocomplete="url"
-				inputmode="url"
-				disabled={uploading || disabled}
-				oninput={() => (error = null)}
-			/>
-		</label>
-		<button
-			type="submit"
-			aria-label={`${t('upload.import')}: ${controlLabel}`}
-			disabled={uploading || disabled || remoteUrl.trim().length === 0}
-		>
-			{uploading ? t('upload.importing') : t('upload.import')}
-		</button>
-	</form>
 	<div class="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
 		{uploading ? t('upload.uploading') : ''}
 	</div>
@@ -454,6 +507,26 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+		min-width: 0;
+	}
+
+	.empty-state {
+		overflow: hidden;
+		background: var(--color-surface);
+		border: 2px dashed var(--color-border);
+		border-radius: var(--radius-lg);
+		transition:
+			border-color 0.15s,
+			box-shadow 0.15s;
+	}
+
+	.drag-over .empty-state {
+		border-color: var(--color-accent);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 12%, transparent);
+	}
+
+	.has-error .empty-state {
+		border-color: var(--color-danger);
 	}
 
 	.drop-zone {
@@ -464,15 +537,13 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 0.5rem;
 		min-height: 200px;
 		padding: 2rem 1.5rem;
-		background: var(--color-surface);
-		border: 2px dashed var(--color-border);
-		border-radius: var(--radius-lg);
+		background: transparent;
+		border: 0;
 		color: var(--color-muted-strong);
 		font: inherit;
 		cursor: pointer;
 		text-align: center;
 		transition:
-			border-color 0.15s,
 			background 0.15s,
 			color 0.15s;
 		width: 100%;
@@ -481,13 +552,8 @@ before the Change Date. See LICENSE for complete terms.
 
 	.drop-zone:hover:not(:disabled),
 	.drag-over .drop-zone {
-		border-color: var(--color-accent);
 		background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface));
 		color: var(--color-text);
-	}
-
-	.has-error .drop-zone {
-		border-color: var(--color-danger);
 	}
 
 	.drop-zone:disabled {
@@ -525,11 +591,7 @@ before the Change Date. See LICENSE for complete terms.
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		border: 1.5px solid var(--color-border);
-		background: #000;
-		/* Lets the user drag the bottom-right corner to size the preview to
-		   whatever's comfortable — the image itself stays centered and fully
-		   visible inside via `object-fit: contain` on `.preview` below,
-		   whatever the resulting box shape. */
+		background: var(--color-background);
 		resize: both;
 	}
 
@@ -544,37 +606,63 @@ before the Change Date. See LICENSE for complete terms.
 		position: absolute;
 		inset: 0;
 		display: flex;
-		align-items: center;
+		align-items: flex-end;
 		justify-content: center;
-		background: rgb(0 0 0 / 0.35);
-		opacity: 0;
+		padding: 0.75rem;
+		background: linear-gradient(to top, rgb(0 0 0 / 0.5), transparent 55%);
+		opacity: 1;
 		transition: opacity 0.2s;
 	}
 
-	.image-wrapper:hover .image-overlay,
-	.image-wrapper:focus-within .image-overlay {
-		opacity: 1;
+	.image-actions {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		max-width: 100%;
 	}
 
-	.change-btn {
-		padding: 0.5rem 1.25rem;
+	.image-action {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.375rem;
+		min-height: 2.5rem;
+		padding: 0.5rem 0.875rem;
 		font: inherit;
 		font-size: 0.875rem;
 		font-weight: 500;
-		color: #fff;
-		background: rgb(0 0 0 / 0.55);
-		border: 1.5px solid rgb(255 255 255 / 0.4);
+		color: var(--color-text);
+		background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+		border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
 		border-radius: var(--radius);
 		cursor: pointer;
 		backdrop-filter: blur(4px);
-		transition: background 0.15s;
+		box-shadow: var(--shadow-sm);
+		transition:
+			background 0.15s,
+			color 0.15s;
 	}
 
-	.change-btn:hover:not(:disabled) {
-		background: rgb(0 0 0 / 0.7);
+	.image-action svg {
+		width: 1rem;
+		height: 1rem;
+		flex-shrink: 0;
 	}
 
-	.change-btn:disabled {
+	.image-action:hover:not(:disabled) {
+		background: var(--color-surface);
+	}
+
+	.remove-btn {
+		color: var(--color-danger);
+	}
+
+	.remove-btn:hover:not(:disabled) {
+		background: var(--color-danger-bg);
+	}
+
+	.image-action:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
 	}
@@ -586,6 +674,9 @@ before the Change Date. See LICENSE for complete terms.
 	.url-form {
 		display: flex;
 		gap: 0.5rem;
+		padding: 0.75rem;
+		border-top: 1px solid var(--color-border);
+		background: color-mix(in srgb, var(--color-background) 45%, var(--color-surface));
 	}
 
 	.url-label {
@@ -644,14 +735,13 @@ before the Change Date. See LICENSE for complete terms.
 		border: 0;
 	}
 
-	/* Compact variant: a small thumbnail-sized picker for reference images
-	   (style/object/texture reference) — the working photo is already visible
-	   in the main canvas, so these don't need full-size dropzones. */
+	.compact .empty-state {
+		max-width: 22rem;
+	}
+
 	.compact .drop-zone {
-		min-height: 0;
-		aspect-ratio: 1 / 1;
-		max-width: 110px;
-		padding: 0.5rem;
+		min-height: 7rem;
+		padding: 0.75rem;
 		gap: 0.25rem;
 	}
 
@@ -670,16 +760,30 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.compact .image-wrapper {
-		aspect-ratio: 1 / 1;
-		max-width: 110px;
+		width: 100%;
+		aspect-ratio: 16 / 9;
+		max-width: 22rem;
 		min-width: 0;
 		min-height: 0;
 		resize: none;
 	}
 
-	.compact .change-btn {
-		padding: 0.3rem 0.625rem;
-		font-size: 0.75rem;
+	.compact .image-overlay {
+		padding: 0.5rem;
+	}
+
+	.compact .image-actions {
+		gap: 0.375rem;
+	}
+
+	.compact .image-action {
+		width: 2.25rem;
+		min-height: 2.25rem;
+		padding: 0.375rem;
+	}
+
+	.compact .action-label {
+		display: none;
 	}
 
 	.compact .url-form {
@@ -688,5 +792,26 @@ before the Change Date. See LICENSE for complete terms.
 
 	.compact .url-form button {
 		align-self: stretch;
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.image-overlay {
+			opacity: 0;
+		}
+
+		.image-wrapper:hover .image-overlay,
+		.image-wrapper:focus-within .image-overlay {
+			opacity: 1;
+		}
+	}
+
+	@media (max-width: 36rem) {
+		.url-form {
+			flex-direction: column;
+		}
+
+		.url-form button {
+			align-self: stretch;
+		}
 	}
 </style>
