@@ -14,7 +14,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { Move, SlidersHorizontal, X } from '@lucide/svelte';
+	import { ChevronDown, ChevronUp, Move, SlidersHorizontal } from '@lucide/svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { clampToolsPanelPosition, toolsPanel } from '$lib/state/tools-panel.svelte';
 
@@ -162,12 +162,13 @@ before the Change Date. See LICENSE for complete terms.
 		onpointercancel={onBarPointerCancel}
 		onkeydown={onBarKeydown}
 	>
-		<Move size={14} strokeWidth={1.8} aria-hidden="true" class="drag-icon" />
+		<SlidersHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
 		<span>{t('toolsPanel.title')}</span>
+		<Move size={14} strokeWidth={1.8} aria-hidden="true" class="drag-icon" />
 		{#if toolsPanel.open}
-			<X size={16} strokeWidth={1.8} aria-hidden="true" />
+			<ChevronUp size={16} strokeWidth={1.8} aria-hidden="true" />
 		{:else}
-			<SlidersHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
+			<ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" />
 		{/if}
 	</div>
 
