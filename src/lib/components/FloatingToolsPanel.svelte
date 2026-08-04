@@ -40,6 +40,10 @@ before the Change Date. See LICENSE for complete terms.
 	// instead of reading the DOM directly inside the template.
 	let viewportWidth = $state(browser ? window.innerWidth : TOOLS_PANEL_WIDTH);
 	let measuredWidth = $state(TOOLS_PANEL_WIDTH);
+	// The actual reachable maximum (clamped, unlike viewportWidth itself) —
+	// shared by aria-valuemax and the End-key branch below so the announced
+	// max always matches what End actually produces.
+	let maxWidth = $derived(clampToolsPanelWidth(Number.MAX_SAFE_INTEGER, viewportWidth));
 
 	function attachPanel(node: HTMLDivElement): void {
 		panel = node;
@@ -163,7 +167,7 @@ before the Change Date. See LICENSE for complete terms.
 		if (event.key === 'ArrowLeft') next = current - RESIZE_STEP;
 		else if (event.key === 'ArrowRight') next = current + RESIZE_STEP;
 		else if (event.key === 'Home') next = MIN_TOOLS_PANEL_WIDTH;
-		else if (event.key === 'End') next = window.innerWidth;
+		else if (event.key === 'End') next = maxWidth;
 		else return;
 		event.preventDefault();
 		const clamped = clampWidth(next);
@@ -258,7 +262,7 @@ before the Change Date. See LICENSE for complete terms.
 		aria-orientation="horizontal"
 		aria-label={t('toolsPanel.resizeHandle')}
 		aria-valuemin={MIN_TOOLS_PANEL_WIDTH}
-		aria-valuemax={viewportWidth}
+		aria-valuemax={maxWidth}
 		aria-valuenow={Math.round(toolsPanel.width ?? measuredWidth)}
 		tabindex="0"
 		onpointerdown={onResizeHandlePointerDown}

@@ -84,7 +84,11 @@ function isStoredToolsPanel(value: unknown): value is StoredToolsPanel {
 	const candidate = value as Partial<StoredToolsPanel>;
 	if (typeof candidate.open !== 'boolean') return false;
 	if (candidate.position !== null && !isToolsPanelPosition(candidate.position)) return false;
-	return candidate.width === null || typeof candidate.width === 'number';
+	// width didn't exist before the resizable-panel feature, so payloads
+	// written by older sessions have it absent (not null) — accept that as
+	// "not resized yet" rather than rejecting the whole stored object.
+	if (candidate.width === undefined || candidate.width === null) return true;
+	return Number.isFinite(candidate.width);
 }
 
 function readStoredState(): StoredToolsPanel | null {
@@ -93,7 +97,8 @@ function readStoredState(): StoredToolsPanel | null {
 		const raw = localStorage.getItem(STORAGE_KEY);
 		if (!raw) return null;
 		const parsed: unknown = JSON.parse(raw);
-		return isStoredToolsPanel(parsed) ? parsed : null;
+		if (!isStoredToolsPanel(parsed)) return null;
+		return { ...parsed, width: parsed.width ?? null };
 	} catch (error) {
 		logBoundaryError('toolsPanel.restore', error);
 		return null;
@@ -122,7 +127,8 @@ class ToolsPanelState {
 		if (stored) {
 			this.open = stored.open;
 			this.position = stored.position;
-			this.width = stored.width;
+			this.width =
+				stored.width === null ? null : clampToolsPanelWidth(stored.width, window.innerWidth);
 		}
 	}
 
