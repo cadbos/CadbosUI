@@ -13,9 +13,21 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { ArrowRight, Download, Pencil, Trash2, X } from '@lucide/svelte';
+	import {
+		Download,
+		Palette,
+		PaintRoller,
+		Pencil,
+		PenLine,
+		Replace,
+		Sparkles,
+		Trash2,
+		Wand,
+		X
+	} from '@lucide/svelte';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
+	import type { Component, ComponentProps } from 'svelte';
 	import type { GenerationKind } from '$lib/api/contract';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
@@ -30,6 +42,15 @@ before the Change Date. See LICENSE for complete terms.
 		upscale: 'generatedImages.kind.upscale',
 		'object-replacement': 'generatedImages.kind.objectReplacement',
 		'texture-replacement': 'generatedImages.kind.textureReplacement'
+	};
+
+	const generationKindIcons: Record<GenerationKind, Component<ComponentProps<typeof Sparkles>>> = {
+		render: Wand,
+		edit: PenLine,
+		'style-transfer': Palette,
+		upscale: Sparkles,
+		'object-replacement': Replace,
+		'texture-replacement': PaintRoller
 	};
 
 	interface Props {
@@ -337,7 +358,6 @@ before the Change Date. See LICENSE for complete terms.
 >
 	<div
 		class="resize-handle"
-		class:resizing
 		role="slider"
 		aria-orientation="horizontal"
 		aria-label={t('generatedImages.resizeHandle')}
@@ -377,33 +397,36 @@ before the Change Date. See LICENSE for complete terms.
 			{:else if generatedImages.images.length === 0}
 				<p class="status">{t('generatedImages.empty')}</p>
 			{:else}
+				<div class="scene-columns-header">
+					<span>{t('generatedImages.source')}</span>
+					<span>{t('generatedImages.kindColumn')}</span>
+					<span>{t('generatedImages.result')}</span>
+				</div>
+
 				<ul class="list" aria-label={t('generatedImages.listLabel')}>
 					{#each generatedImages.images as image, index (image.id)}
 						{const date = generatedDate(image.createdAt)}
+						{const Icon = generationKindIcons[image.kind]}
 						<li class="scene-card">
 							<div class="scene-meta">
-								<span class="generation-kind">{t(generationKindKeys[image.kind])}</span>
-								<div class="scene-record-actions">
-									<time class="date" datetime={date.datetime} aria-label={date.ariaLabel}>
-										<span>{date.dateLabel}</span>
-										<span>{date.timeLabel}</span>
-									</time>
-									<button
-										type="button"
-										class="record-delete-button"
-										disabled={generatedImages.deletingIds.has(image.id)}
-										aria-label={ti('generatedImages.delete', { order: index + 1 })}
-										title={ti('generatedImages.delete', { order: index + 1 })}
-										onclick={() => requestDelete(image.id, index + 1)}
-									>
-										<Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
-									</button>
-								</div>
+								<time class="date" datetime={date.datetime} aria-label={date.ariaLabel}>
+									<span>{date.dateLabel}</span>
+									<span>{date.timeLabel}</span>
+								</time>
 							</div>
+							<button
+								type="button"
+								class="record-delete-button"
+								disabled={generatedImages.deletingIds.has(image.id)}
+								aria-label={ti('generatedImages.delete', { order: index + 1 })}
+								title={ti('generatedImages.delete', { order: index + 1 })}
+								onclick={() => requestDelete(image.id, index + 1)}
+							>
+								<Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
+							</button>
 
 							<div class="scene-flow">
 								<div class="image-column">
-									<span class="image-label">{t('generatedImages.source')}</span>
 									<div class="image-frame">
 										<img
 											src={image.sourceUrl}
@@ -433,12 +456,15 @@ before the Change Date. See LICENSE for complete terms.
 									</div>
 								</div>
 
-								<div class="flow-arrow" aria-hidden="true">
-									<ArrowRight size={20} strokeWidth={1.8} />
+								<div
+									class="flow-kind"
+									aria-label={t(generationKindKeys[image.kind])}
+									data-tooltip={t(generationKindKeys[image.kind])}
+								>
+									<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
 								</div>
 
 								<div class="image-column">
-									<span class="image-label">{t('generatedImages.result')}</span>
 									<div class="image-frame result-frame">
 										<img
 											src={image.url}
@@ -564,24 +590,6 @@ before the Change Date. See LICENSE for complete terms.
 		touch-action: none;
 	}
 
-	.resize-handle::after {
-		content: '';
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		left: 50%;
-		width: 2px;
-		transform: translateX(-50%);
-		background: transparent;
-		transition: background 0.15s;
-	}
-
-	.resize-handle:hover::after,
-	.resize-handle:focus-visible::after,
-	.resize-handle.resizing::after {
-		background: var(--color-accent);
-	}
-
 	.resize-handle:focus-visible {
 		outline: 2px solid var(--color-accent);
 		outline-offset: -2px;
@@ -686,6 +694,7 @@ before the Change Date. See LICENSE for complete terms.
 		padding: 1rem 1.5rem 1.5rem;
 		overflow-y: auto;
 		overscroll-behavior: contain;
+		scrollbar-gutter: stable;
 	}
 
 	.status {
@@ -698,6 +707,29 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-danger);
 	}
 
+	.scene-columns-header {
+		position: sticky;
+		top: -1rem;
+		z-index: 2;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 7rem minmax(0, 1fr);
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0;
+		background: var(--color-surface);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.scene-columns-header span {
+		color: var(--color-muted);
+		font-size: 0.6875rem;
+		font-weight: 650;
+		letter-spacing: 0.045em;
+		white-space: nowrap;
+		text-align: center;
+		text-transform: uppercase;
+	}
+
 	.list {
 		display: flex;
 		flex-direction: column;
@@ -708,9 +740,10 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.scene-card {
+		position: relative;
 		display: flex;
 		flex-direction: column;
-		gap: 0.625rem;
+		gap: 0.875rem;
 		padding: 0.75rem;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);
@@ -720,29 +753,8 @@ before the Change Date. See LICENSE for complete terms.
 	.scene-meta {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 0.625rem;
-		flex-wrap: wrap;
-	}
-
-	.scene-record-actions {
-		display: flex;
-		align-items: center;
+		min-height: 2rem;
 		gap: 0.5rem;
-	}
-
-	.generation-kind {
-		display: inline-flex;
-		align-items: center;
-		min-height: 1.5rem;
-		padding: 0.2rem 0.5rem;
-		border: 1px solid color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
-		border-radius: 999px;
-		background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));
-		color: var(--color-accent);
-		font-size: 0.6875rem;
-		font-weight: 650;
-		line-height: 1.1;
 	}
 
 	.date {
@@ -760,6 +772,10 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.record-delete-button {
+		position: absolute;
+		z-index: 2;
+		top: 0.5rem;
+		right: 0.5rem;
 		flex: 0 0 auto;
 		display: inline-flex;
 		align-items: center;
@@ -772,11 +788,19 @@ before the Change Date. See LICENSE for complete terms.
 		background: transparent;
 		color: var(--color-muted);
 		cursor: pointer;
+		opacity: 0;
+		pointer-events: none;
 		transition:
 			background 0.15s,
 			border-color 0.15s,
 			color 0.15s,
 			opacity 0.15s;
+	}
+
+	.scene-card:hover .record-delete-button,
+	.scene-card:focus-within .record-delete-button {
+		opacity: 1;
+		pointer-events: auto;
 	}
 
 	.record-delete-button:hover {
@@ -792,25 +816,13 @@ before the Change Date. See LICENSE for complete terms.
 
 	.scene-flow {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) 2.25rem minmax(0, 1fr);
+		grid-template-columns: minmax(0, 1fr) 7rem minmax(0, 1fr);
 		align-items: center;
 		gap: 0.5rem;
 	}
 
 	.image-column {
 		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
-	}
-
-	.image-label {
-		color: var(--color-muted);
-		font-size: 0.6875rem;
-		font-weight: 650;
-		letter-spacing: 0.045em;
-		line-height: 1.2;
-		text-transform: uppercase;
 	}
 
 	.image-frame {
@@ -819,7 +831,7 @@ before the Change Date. See LICENSE for complete terms.
 		overflow: hidden;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-sm);
-		background: #000;
+		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
 	}
 
 	.image-frame img {
@@ -829,16 +841,59 @@ before the Change Date. See LICENSE for complete terms.
 		object-fit: contain;
 	}
 
-	.flow-arrow {
+	.flow-kind {
+		position: relative;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		aspect-ratio: 1;
-		margin-top: 1.2rem;
-		border: 1px solid color-mix(in srgb, var(--color-accent) 24%, var(--color-border));
-		border-radius: 50%;
-		background: var(--color-surface);
+		color: var(--color-muted);
+		transition: color 0.15s;
+	}
+
+	.flow-kind:hover {
 		color: var(--color-accent);
+	}
+
+	.flow-kind::after {
+		content: attr(data-tooltip);
+		position: absolute;
+		bottom: calc(100% + 0.5rem);
+		left: 50%;
+		transform: translateX(-50%);
+		padding: 0.35rem 0.6rem;
+		border-radius: var(--radius-sm);
+		background: var(--color-text);
+		color: var(--color-surface);
+		font-size: 0.6875rem;
+		font-weight: 600;
+		line-height: 1.2;
+		white-space: nowrap;
+		box-shadow: var(--shadow-md);
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.1s ease;
+		z-index: 5;
+	}
+
+	.flow-kind::before {
+		content: '';
+		position: absolute;
+		bottom: calc(100% + 0.25rem);
+		left: 50%;
+		transform: translateX(-50%);
+		border: 5px solid transparent;
+		border-top-color: var(--color-text);
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.1s ease;
+		z-index: 5;
+	}
+
+	.flow-kind:hover::after,
+	.flow-kind:focus-visible::after,
+	.flow-kind:hover::before,
+	.flow-kind:focus-visible::before {
+		opacity: 1;
 	}
 
 	.actions {
@@ -1016,13 +1071,19 @@ before the Change Date. See LICENSE for complete terms.
 		}
 
 		.scene-flow {
-			grid-template-columns: minmax(0, 1fr) 1.75rem minmax(0, 1fr);
+			grid-template-columns: minmax(0, 1fr) 7rem minmax(0, 1fr);
+			gap: 0.375rem;
+		}
+
+		.scene-columns-header {
+			grid-template-columns: minmax(0, 1fr) 7rem minmax(0, 1fr);
 			gap: 0.375rem;
 		}
 	}
 
 	@media (hover: none) {
-		.actions {
+		.actions,
+		.record-delete-button {
 			opacity: 1;
 			pointer-events: auto;
 			transform: none;
@@ -1032,7 +1093,10 @@ before the Change Date. See LICENSE for complete terms.
 	@media (prefers-reduced-motion: reduce) {
 		.drawer,
 		.drawer::backdrop,
-		.actions {
+		.actions,
+		.record-delete-button,
+		.flow-kind::after,
+		.flow-kind::before {
 			transition: none;
 		}
 	}

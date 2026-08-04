@@ -160,6 +160,7 @@ export const ru = {
 	'generatedImages.delete': 'Удалить сцену {order}',
 	'generatedImages.useSource': 'Обработать исходник сцены {order}',
 	'generatedImages.useResult': 'Обработать результат сцены {order}',
+	'generatedImages.kindColumn': 'Тип генерации',
 	'generatedImages.source': 'Исходник',
 	'generatedImages.result': 'Результат',
 	'generatedImages.kind.render': 'Генерация',

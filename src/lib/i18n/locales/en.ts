@@ -160,6 +160,7 @@ export const en = {
 	'generatedImages.delete': 'Delete scene {order}',
 	'generatedImages.useSource': 'Process scene {order} source',
 	'generatedImages.useResult': 'Process scene {order} result',
+	'generatedImages.kindColumn': 'Generation type',
 	'generatedImages.source': 'Source',
 	'generatedImages.result': 'Result',
 	'generatedImages.kind.render': 'Generation',

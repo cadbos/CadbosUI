@@ -155,6 +155,7 @@ export interface Dictionary {
 	'generatedImages.delete': string;
 	'generatedImages.useSource': string;
 	'generatedImages.useResult': string;
+	'generatedImages.kindColumn': string;
 	'generatedImages.source': string;
 	'generatedImages.result': string;
 	'generatedImages.kind.render': string;
