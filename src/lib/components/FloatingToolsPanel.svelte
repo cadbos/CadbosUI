@@ -14,9 +14,16 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { Move, SlidersHorizontal, X } from '@lucide/svelte';
+	import { ChevronDown, ChevronUp, Move, SlidersHorizontal } from '@lucide/svelte';
+	import { browser } from '$app/environment';
 	import { t } from '$lib/i18n/index.svelte';
-	import { clampToolsPanelPosition, toolsPanel } from '$lib/state/tools-panel.svelte';
+	import {
+		clampToolsPanelPosition,
+		clampToolsPanelWidth,
+		MIN_TOOLS_PANEL_WIDTH,
+		toolsPanel,
+		TOOLS_PANEL_WIDTH
+	} from '$lib/state/tools-panel.svelte';
 
 	interface Props {
 		children: Snippet;
@@ -28,9 +35,19 @@ before the Change Date. See LICENSE for complete terms.
 	const bodyId = `${uid}-body`;
 
 	let panel = $state<HTMLDivElement | null>(null);
+	// Reactive mirrors of window.innerWidth / the panel's measured width, so
+	// the resize handle's aria-value* attributes below re-render on resize
+	// instead of reading the DOM directly inside the template.
+	let viewportWidth = $state(browser ? window.innerWidth : TOOLS_PANEL_WIDTH);
+	let measuredWidth = $state(TOOLS_PANEL_WIDTH);
+	// The actual reachable maximum (clamped, unlike viewportWidth itself) —
+	// shared by aria-valuemax and the End-key branch below so the announced
+	// max always matches what End actually produces.
+	let maxWidth = $derived(clampToolsPanelWidth(Number.MAX_SAFE_INTEGER, viewportWidth));
 
 	function attachPanel(node: HTMLDivElement): void {
 		panel = node;
+		measuredWidth = node.getBoundingClientRect().width;
 	}
 
 	// A drag gesture and a click-to-toggle share the same bar: below the
@@ -106,32 +123,93 @@ before the Change Date. See LICENSE for complete terms.
 		toolsPanel.setOpen(!toolsPanel.open);
 	}
 
-	// Re-clamps a previously dragged position after the viewport shrinks (e.g.
-	// rotating a tablet) so the panel can't end up stranded off-screen. A
-	// position that's still null (never dragged) is left alone — it's
-	// CSS-anchored to the default corner and already tracks the viewport.
+	const RESIZE_STEP = 24;
+
+	function clampWidth(value: number): number {
+		return clampToolsPanelWidth(value, window.innerWidth);
+	}
+
+	let resizeStartX = 0;
+	let resizeStartWidth = 0;
+
+	function onResizeHandlePointerDown(event: PointerEvent): void {
+		if (!panel) return;
+		resizeStartX = event.clientX;
+		resizeStartWidth = panel.getBoundingClientRect().width;
+		measuredWidth = resizeStartWidth;
+		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+	}
+
+	function onResizeHandlePointerMove(event: PointerEvent): void {
+		const target = event.currentTarget as HTMLElement;
+		if (!target.hasPointerCapture(event.pointerId)) return;
+		const dx = event.clientX - resizeStartX;
+		// At the default corner the panel is anchored to its right edge (CSS
+		// `right: 1rem`) and grows leftward, so dragging the handle left widens
+		// it. Once dragged to an explicit position it's anchored to its left
+		// edge (`left: var(--tools-panel-x)`) and grows rightward instead, like
+		// ScenesDrawer's drawer — so the sign flips.
+		const delta = toolsPanel.position === null ? -dx : dx;
+		const next = clampWidth(resizeStartWidth + delta);
+		toolsPanel.updateWidth(next);
+		measuredWidth = next;
+	}
+
+	function onResizeHandlePointerUp(event: PointerEvent): void {
+		const target = event.currentTarget as HTMLElement;
+		if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
+		toolsPanel.persist();
+	}
+
+	function onResizeHandleKeydown(event: KeyboardEvent): void {
+		const current = toolsPanel.width ?? measuredWidth;
+		let next: number;
+		if (event.key === 'ArrowLeft') next = current - RESIZE_STEP;
+		else if (event.key === 'ArrowRight') next = current + RESIZE_STEP;
+		else if (event.key === 'Home') next = MIN_TOOLS_PANEL_WIDTH;
+		else if (event.key === 'End') next = maxWidth;
+		else return;
+		event.preventDefault();
+		const clamped = clampWidth(next);
+		toolsPanel.setWidth(clamped);
+		measuredWidth = clamped;
+	}
+
+	// Re-clamps a previously dragged position/width after the viewport shrinks
+	// (e.g. rotating a tablet) so the panel can't end up stranded off-screen or
+	// wider than the viewport. A position/width that's still null (never
+	// dragged/resized) is left alone — it's CSS-anchored and already tracks
+	// the viewport on its own.
 	//
 	// Workspace.svelte mounts one FloatingToolsPanel per mode (render/edit/
 	// styleTransfer) sharing this same `toolsPanel` singleton, with only the
 	// active mode's instance actually visible — the others sit behind
 	// `hidden` on an ancestor. A hidden element's getBoundingClientRect() is
 	// all zeros, so without this guard every window resize would have the
-	// *inactive* panels clamp the shared position against a 0×0 box and stomp
-	// on whatever the visible panel just computed.
+	// *inactive* panels clamp the shared position/width against a 0×0 box and
+	// stomp on whatever the visible panel just computed.
 	function onWindowResize(): void {
-		if (!panel || !toolsPanel.position) return;
+		viewportWidth = window.innerWidth;
+		if (!panel) return;
 		const bounds = panel.getBoundingClientRect();
 		if (bounds.width === 0 && bounds.height === 0) return;
-		const next = clampToolsPanelPosition(
-			bounds.left,
-			bounds.top,
-			bounds.width,
-			bounds.height,
-			window.innerWidth,
-			window.innerHeight
-		);
-		if (next.x !== toolsPanel.position.x || next.y !== toolsPanel.position.y) {
-			toolsPanel.setPosition(next.x, next.y);
+		measuredWidth = bounds.width;
+		if (toolsPanel.position) {
+			const next = clampToolsPanelPosition(
+				bounds.left,
+				bounds.top,
+				bounds.width,
+				bounds.height,
+				window.innerWidth,
+				window.innerHeight
+			);
+			if (next.x !== toolsPanel.position.x || next.y !== toolsPanel.position.y) {
+				toolsPanel.setPosition(next.x, next.y);
+			}
+		}
+		if (toolsPanel.width !== null) {
+			const clampedWidth = clampWidth(toolsPanel.width);
+			if (clampedWidth !== toolsPanel.width) toolsPanel.setWidth(clampedWidth);
 		}
 	}
 
@@ -162,12 +240,13 @@ before the Change Date. See LICENSE for complete terms.
 		onpointercancel={onBarPointerCancel}
 		onkeydown={onBarKeydown}
 	>
-		<Move size={14} strokeWidth={1.8} aria-hidden="true" class="drag-icon" />
+		<SlidersHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
 		<span>{t('toolsPanel.title')}</span>
+		<Move size={14} strokeWidth={1.8} aria-hidden="true" class="drag-icon" />
 		{#if toolsPanel.open}
-			<X size={16} strokeWidth={1.8} aria-hidden="true" />
+			<ChevronUp size={16} strokeWidth={1.8} aria-hidden="true" />
 		{:else}
-			<SlidersHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
+			<ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" />
 		{/if}
 	</div>
 
@@ -176,6 +255,22 @@ before the Change Date. See LICENSE for complete terms.
 			{@render children()}
 		</div>
 	{/if}
+
+	<div
+		class="resize-handle"
+		role="slider"
+		aria-orientation="horizontal"
+		aria-label={t('toolsPanel.resizeHandle')}
+		aria-valuemin={MIN_TOOLS_PANEL_WIDTH}
+		aria-valuemax={maxWidth}
+		aria-valuenow={Math.round(toolsPanel.width ?? measuredWidth)}
+		tabindex="0"
+		onpointerdown={onResizeHandlePointerDown}
+		onpointermove={onResizeHandlePointerMove}
+		onpointerup={onResizeHandlePointerUp}
+		onpointercancel={onResizeHandlePointerUp}
+		onkeydown={onResizeHandleKeydown}
+	></div>
 </div>
 
 <style>
@@ -258,6 +353,22 @@ before the Change Date. See LICENSE for complete terms.
 		overflow-y: auto;
 	}
 
+	.resize-handle {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		right: 0;
+		width: 8px;
+		cursor: ew-resize;
+		touch-action: none;
+	}
+
+	.resize-handle:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: -2px;
+		border-radius: var(--radius-sm);
+	}
+
 	@media (max-width: 900px) {
 		.floating-tools-panel {
 			position: static;
@@ -272,6 +383,10 @@ before the Change Date. See LICENSE for complete terms.
 		}
 
 		.panel-bar :global(.drag-icon) {
+			display: none;
+		}
+
+		.resize-handle {
 			display: none;
 		}
 	}

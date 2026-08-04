@@ -109,6 +109,7 @@ export interface Dictionary {
 	'upload.errorRemote': string;
 	'upload.errorUpload': string;
 	'upload.change': string;
+	'upload.remove': string;
 	'render.sceneType.label': string;
 	'render.sceneType.interior': string;
 	'render.sceneType.exterior': string;
@@ -127,6 +128,7 @@ export interface Dictionary {
 	'toolsPanel.title': string;
 	'toolsPanel.collapse': string;
 	'toolsPanel.expand': string;
+	'toolsPanel.resizeHandle': string;
 	'toolbar.undo': string;
 	'toolbar.redo': string;
 	'toolbar.compare': string;
@@ -155,6 +157,7 @@ export interface Dictionary {
 	'generatedImages.delete': string;
 	'generatedImages.useSource': string;
 	'generatedImages.useResult': string;
+	'generatedImages.kindColumn': string;
 	'generatedImages.source': string;
 	'generatedImages.result': string;
 	'generatedImages.kind.render': string;

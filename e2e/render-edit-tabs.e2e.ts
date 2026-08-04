@@ -138,8 +138,12 @@ test('the shared image picker imports an HTTPS image URL through the upload endp
 	await renderPanel.getByRole('button', { name: 'Импортировать' }).click();
 
 	await expect(renderPanel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await expect(renderPanel.getByLabel('Ссылка на изображение')).toHaveCount(0);
 	expect(uploadBody).toEqual({ url: 'https://images.example.com/room.webp' });
 
+	await renderPanel.getByRole('button', { name: 'Убрать фото' }).click();
+	await expect(renderPanel.getByRole('button', { name: 'Выбрать файл' })).toBeVisible();
+	await expect(renderPanel.getByLabel('Ссылка на изображение')).toBeVisible();
 	await renderPanel.getByLabel('Ссылка на изображение').fill('http://images.example.com/room.webp');
 	await renderPanel.getByRole('button', { name: 'Импортировать' }).click();
 	await expect(
@@ -212,7 +216,12 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 	await panel.getByText('Дополнительно').click();
 	await panel.getByLabel('Что исключить').fill('people');
 
-	await panel.getByRole('button', { name: 'Перенести стиль' }).click();
+	await Promise.all([
+		page.waitForResponse(
+			(response) => response.url().endsWith('/api/style-transfer') && response.ok()
+		),
+		panel.getByRole('button', { name: 'Перенести стиль' }).click()
+	]);
 
 	expect(capturedBody).toEqual({
 		image: 'https://cdn.example.test/source.webp',
@@ -289,7 +298,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 	const stylePanel = page.locator('#mode-panel-styleTransfer');
 	await stylePanel.getByRole('tab', { name: 'Свои' }).click();
 	const referenceUpload = stylePanel.getByRole('region', { name: 'Референс стиля' });
-	await referenceUpload.locator('input[type="file"]').setInputFiles({
+	await uploadImageFile(page, referenceUpload.locator('input[type="file"]'), {
 		name: 'reference.png',
 		mimeType: 'image/png',
 		buffer: Buffer.from('reference')
@@ -298,7 +307,12 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 	await stylePanel
 		.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…')
 		.fill('style transfer guidance only');
-	await stylePanel.getByRole('button', { name: 'Перенести стиль' }).click();
+	await Promise.all([
+		page.waitForResponse(
+			(response) => response.url().endsWith('/api/style-transfer') && response.ok()
+		),
+		stylePanel.getByRole('button', { name: 'Перенести стиль' }).click()
+	]);
 
 	expect(styleTransferBody).toEqual({
 		image: 'https://cdn.example.test/source.webp',
@@ -309,7 +323,10 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 	});
 
 	await page.getByRole('tab', { name: 'Создание' }).click();
-	await renderPanel.getByRole('button', { name: 'Сгенерировать' }).click();
+	await Promise.all([
+		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
+		renderPanel.getByRole('button', { name: 'Сгенерировать' }).click()
+	]);
 
 	expect(renderBody).toEqual({
 		image: 'https://cdn.example.test/source.webp',
@@ -354,7 +371,12 @@ test('the Style transfer tab lets you pick a ready-made photorealistic preset as
 	await preset.click();
 	await expect(preset).toHaveAttribute('aria-checked', 'true');
 
-	await panel.getByRole('button', { name: 'Перенести стиль' }).click();
+	await Promise.all([
+		page.waitForResponse(
+			(response) => response.url().endsWith('/api/style-transfer') && response.ok()
+		),
+		panel.getByRole('button', { name: 'Перенести стиль' }).click()
+	]);
 
 	expect(capturedBody).toMatchObject({
 		image: 'https://cdn.example.test/uploaded.webp',
@@ -456,7 +478,12 @@ test('switching from a custom reference upload back to a preset tab clears the u
 
 	const preset = panel.getByRole('radio', { name: 'Спа-ванная из бетона' });
 	await preset.click();
-	await panel.getByRole('button', { name: 'Перенести стиль' }).click();
+	await Promise.all([
+		page.waitForResponse(
+			(response) => response.url().endsWith('/api/style-transfer') && response.ok()
+		),
+		panel.getByRole('button', { name: 'Перенести стиль' }).click()
+	]);
 
 	// The submitted reference must be the freshly selected preset, not the
 	// custom upload left over from the earlier "Custom" tab.
