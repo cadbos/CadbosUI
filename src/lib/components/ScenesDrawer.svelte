@@ -458,6 +458,7 @@ before the Change Date. See LICENSE for complete terms.
 
 								<div
 									class="flow-kind"
+									role="img"
 									aria-label={t(generationKindKeys[image.kind])}
 									data-tooltip={t(generationKindKeys[image.kind])}
 								>
