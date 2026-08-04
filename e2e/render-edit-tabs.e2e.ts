@@ -138,8 +138,12 @@ test('the shared image picker imports an HTTPS image URL through the upload endp
 	await renderPanel.getByRole('button', { name: 'Импортировать' }).click();
 
 	await expect(renderPanel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await expect(renderPanel.getByLabel('Ссылка на изображение')).toHaveCount(0);
 	expect(uploadBody).toEqual({ url: 'https://images.example.com/room.webp' });
 
+	await renderPanel.getByRole('button', { name: 'Убрать фото' }).click();
+	await expect(renderPanel.getByRole('button', { name: 'Выбрать файл' })).toBeVisible();
+	await expect(renderPanel.getByLabel('Ссылка на изображение')).toBeVisible();
 	await renderPanel.getByLabel('Ссылка на изображение').fill('http://images.example.com/room.webp');
 	await renderPanel.getByRole('button', { name: 'Импортировать' }).click();
 	await expect(

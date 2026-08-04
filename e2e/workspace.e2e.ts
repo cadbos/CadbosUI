@@ -151,11 +151,11 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	await expect(images.nth(0)).toHaveAttribute('src', 'https://cdn.example.test/newest.webp');
 	await expect(images.nth(1)).toHaveAttribute('src', 'https://cdn.example.test/middle.webp');
 	await expect(images.nth(2)).toHaveAttribute('src', 'https://cdn.example.test/oldest.webp');
-	await expect(page.locator('.generation-kind')).toHaveText([
-		'Миграция стиля',
-		'Редактирование',
-		'Генерация'
-	]);
+	const flowKinds = page.locator('.flow-kind');
+	await expect(flowKinds).toHaveCount(3);
+	expect(
+		await flowKinds.evaluateAll((elements) => elements.map((element) => element.ariaLabel))
+	).toEqual(['Миграция стиля', 'Редактирование', 'Генерация']);
 	const generatedDates = page.locator('time');
 	await expect(generatedDates.nth(0).locator('span')).toHaveText([
 		localDateLabel(newestCreatedAt),
@@ -206,13 +206,15 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	const downloadButton = page.getByRole('button', {
 		name: 'Скачать результат сцены 1'
 	});
-	await images.nth(0).hover();
+	await downloadButton.focus();
 	const downloadPromise = page.waitForEvent('download');
-	await downloadButton.click();
+	await downloadButton.press('Enter');
 	const download = await downloadPromise;
 	expect(download.suggestedFilename()).toBe('generated-image-newest.webp');
 
-	await page.getByRole('button', { name: 'Удалить сцену 2' }).click();
+	const deleteButton = page.getByRole('button', { name: 'Удалить сцену 2' });
+	await deleteButton.focus();
+	await deleteButton.press('Enter');
 
 	const dialog = page.getByRole('dialog', { name: 'Удалить сцену?' });
 	await expect(dialog).toBeVisible();
@@ -433,7 +435,7 @@ test('generating with the exterior scene type calls the exterior render route', 
 	});
 	expect(uploadViewportStyles).toEqual({
 		aspectRatio: '16 / 9',
-		backgroundColor: 'rgb(0, 0, 0)',
+		backgroundColor: 'rgb(245, 245, 247)',
 		objectFit: 'contain'
 	});
 	await page.getByRole('button', { name: 'Сгенерировать' }).click();
