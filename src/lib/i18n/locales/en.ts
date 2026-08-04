@@ -131,6 +131,7 @@ export const en = {
 	'toolsPanel.title': 'Tools',
 	'toolsPanel.collapse': 'Collapse the tools panel',
 	'toolsPanel.expand': 'Show the tools panel',
+	'toolsPanel.resizeHandle': 'Resize the tools panel',
 	'toolbar.undo': 'Undo',
 	'toolbar.redo': 'Redo',
 	'toolbar.compare': 'Compare before/after',

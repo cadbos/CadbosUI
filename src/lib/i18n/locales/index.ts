@@ -127,6 +127,7 @@ export interface Dictionary {
 	'toolsPanel.title': string;
 	'toolsPanel.collapse': string;
 	'toolsPanel.expand': string;
+	'toolsPanel.resizeHandle': string;
 	'toolbar.undo': string;
 	'toolbar.redo': string;
 	'toolbar.compare': string;

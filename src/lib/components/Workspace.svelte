@@ -237,7 +237,10 @@ before the Change Date. See LICENSE for complete terms.
 
 <main class="page">
 	<div class="workspace-shell">
-		<div class="workspace-main">
+		<div
+			class="workspace-main"
+			style:--tools-panel-width={toolsPanel.width !== null ? `${toolsPanel.width}px` : undefined}
+		>
 			<div class="workspace-topbar">
 				{#if isAuthenticated}
 					<button
