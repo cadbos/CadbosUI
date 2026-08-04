@@ -514,11 +514,14 @@ before the Change Date. See LICENSE for complete terms.
 		flex-direction: column;
 		align-items: center;
 		gap: 1.5rem;
-		/* Unchanged up to ~890px viewport (640px is the floor); on tablet/desktop it
+		/* The 640px floor only applies once the viewport is wide enough to fit
+		   it (min(640px, 100vw)) — otherwise a phone narrower than 640px would
+		   get a --content-width wider than its own screen, leaving the
+		   workspace looking inset instead of edge-to-edge. Above that floor it
 		   fills the screen minus a comfortable side margin — the graph view in
 		   particular benefits from the extra room — capped well above any real
 		   monitor width so it never gets absurd on an ultrawide display. */
-		--content-width: clamp(640px, calc(100vw - 4rem), 1800px);
+		--content-width: clamp(min(640px, 100vw), calc(100vw - 4rem), 1800px);
 	}
 
 	.workspace-shell {
@@ -724,6 +727,13 @@ before the Change Date. See LICENSE for complete terms.
 	@media (max-width: 900px) {
 		.canvas-layout {
 			flex-direction: column;
+			/* align-items: flex-start (the row-mode default, above) sizes flex
+			   children to their own content in the cross axis. That's correct
+			   in a row, but once this switches to a column the cross axis is
+			   horizontal — without stretch here, .canvas-col (and the stacked
+			   FloatingToolsPanel) shrink to their content width instead of
+			   filling the screen. */
+			align-items: stretch;
 		}
 
 		.mode-nav {
@@ -740,8 +750,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	@media (max-width: 640px) {
 		.page {
-			--content-width: 100%;
-			padding: 1.5rem 1rem 3rem;
+			padding: 1.5rem 0.5rem 3rem;
 		}
 
 		.scenes-button {

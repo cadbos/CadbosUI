@@ -351,7 +351,7 @@ before the Change Date. See LICENSE for complete terms.
 	class="drawer"
 	{@attach attachDrawer}
 	aria-labelledby="scenes-title"
-	style:width={width !== null ? `${width}px` : undefined}
+	style:--drawer-resized-width={width !== null ? `${width}px` : undefined}
 	oncancel={handleDrawerCancel}
 	onclose={handleDrawerClose}
 	onclick={handleDrawerClick}
@@ -559,7 +559,7 @@ before the Change Date. See LICENSE for complete terms.
 		position: fixed;
 		z-index: var(--z-scenes-panel);
 		inset: 0 auto 0 0;
-		width: min(46rem, 100vw);
+		width: var(--drawer-resized-width, min(46rem, 100vw));
 		height: 100dvh;
 		max-width: none;
 		max-height: none;
@@ -1048,7 +1048,12 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
-	@media (max-width: 540px) {
+	/* Matches Workspace's own mobile breakpoint (FloatingToolsPanel and
+	   .canvas-layout both switch to a stacked, full-width mobile layout at the
+	   same 900px threshold) — using a narrower breakpoint here left a visible
+	   gap between this drawer and the viewport edge, with correspondingly
+	   tiny image thumbnails, on any device between the two thresholds. */
+	@media (max-width: 900px) {
 		.drawer {
 			width: 100vw;
 			border-right: 0;
@@ -1081,12 +1086,26 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
+	/* Touch devices have no hover state to reveal .actions/.record-delete-button
+	   on, so they stay permanently visible here rather than being unreachable
+	   — but at touch-thumbnail sizes a pair of full-size buttons reads as
+	   clutter sitting on top of a small image, so they're also shrunk down a
+	   step from their hover-revealed desktop size. */
 	@media (hover: none) {
 		.actions,
 		.record-delete-button {
 			opacity: 1;
 			pointer-events: auto;
 			transform: none;
+		}
+
+		.actions {
+			gap: 0.25rem;
+		}
+
+		.icon-button {
+			width: 1.75rem;
+			height: 1.75rem;
 		}
 	}
 
