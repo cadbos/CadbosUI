@@ -63,8 +63,13 @@
 	]
 	// Secrets set via `wrangler secret put <NAME>` — never committed to source:
 	// ARCHAI_API_KEY
+	// LNBITS_INVOICE_KEY
 	//
-	// Generation access itself is controlled in D1, not an env var: an account
-	// can render/edit only once an admin inserts a row for it into the `credits`
-	// table (see the workflow note in migrations/0004_generation_access.sql).
+	// Payment configuration also requires LNBITS_BASE_URL and
+	// PAYMENTS_WEBHOOK_URL. The webhook URL ends in /api/webhooks/lnbits.
+	//
+	// Generation access itself is controlled in D1, not an env var. Provision the
+	// user's immutable `app_credit` ledger account and opening transaction before
+	// inserting an enabled `generation_access` row. Revoke or restore access by
+	// updating `generation_access.enabled`; adjust balances only with new ledger entries.
 }
