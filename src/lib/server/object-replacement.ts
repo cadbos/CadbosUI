@@ -20,7 +20,7 @@ import {
 	queueObjectReplacement,
 	type ComfyDownloadedImage
 } from '$lib/server/comfyui';
-import { imageExtensionFromMime } from '$lib/server/image-utils';
+import { imageExtensionFromMime } from '$lib/image-mime';
 import { downloadRemoteImage } from '$lib/server/remote-image';
 
 const DEFAULT_OBJECT_REPLACEMENT_COST = 0.03;

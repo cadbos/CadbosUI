@@ -28,7 +28,7 @@ import type {
 	OutputFormat,
 	RenderResponse
 } from '$lib/api/contract';
-import { imageExtensionFromMime } from '$lib/server/image-utils';
+import { imageExtensionFromMime } from '$lib/image-mime';
 import {
 	mockEdit,
 	mockMaskedTextureReplacement,

@@ -21,7 +21,7 @@ import { getDb } from '$lib/server/auth/repository';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { imageExtensionFromMime } from '$lib/server/image-utils';
+import { imageExtensionFromMime } from '$lib/image-mime';
 import {
 	OBJECT_REPLACEMENT_TIMEOUT_MS,
 	pollObjectReplacement

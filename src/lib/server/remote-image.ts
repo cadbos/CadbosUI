@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { normalizeImageContentType, type ImageMime } from '$lib/server/image-utils';
+import { normalizeImageContentType, type ImageMime } from '$lib/image-mime';
 import { hashBytes, uploadImageBytes } from '$lib/server/uploads';
 
 export const MAX_IMAGE_UPLOAD_SIZE = 8 * 1024 * 1024;
