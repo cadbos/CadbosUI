@@ -42,8 +42,12 @@ function mockResourcesFetch(pages: ResourcesResponse[]) {
 	let pageIndex = 0;
 	return vi.fn<typeof fetch>((input) => {
 		const url = String(input);
-		if (url.startsWith('/api/resources?'))
-			return Promise.resolve(jsonResponse(pages[pageIndex++]!));
+		if (url.startsWith('/api/resources?')) {
+			const page = pages[pageIndex++];
+			if (page === undefined)
+				throw new Error(`No mocked resources page for index ${pageIndex - 1}`);
+			return Promise.resolve(jsonResponse(page));
+		}
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
 }

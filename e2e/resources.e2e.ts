@@ -137,7 +137,10 @@ test('loads more photos when scrolling near the end of the list', async ({ page 
 	const images = page.getByRole('img', { name: /Загруженное фото/ });
 	// The sentinel starts within the viewport on this short a page, so the
 	// IntersectionObserver fires — and loadMore() resolves — without any
-	// explicit scroll; expect()'s built-in retry covers the async gap.
+	// explicit scroll; expect()'s built-in retry covers the async gap. An
+	// explicit scrollIntoViewIfNeeded() actually races the sentinel's own
+	// removal once hasMore goes false and loses more often than not — verified
+	// against a real run, not just theory.
 	await expect(images).toHaveCount(2);
 	await expect(images.nth(1)).toHaveAttribute('src', 'https://cdn.example.test/two.jpg');
 	// hasMore is false after the second page, so the sentinel is gone — no
