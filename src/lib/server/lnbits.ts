@@ -17,6 +17,8 @@ import { z } from 'zod';
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const MSATS_PER_SAT = 1000;
+const PAYMENT_RECOVERY_PAGE_SIZE = 100;
+const PAYMENT_RECOVERY_RECORD_LIMIT = 2_000;
 
 const paymentHashSchema = z.string().regex(/^[0-9a-f]{64}$/i);
 const createInvoiceResponseSchema = z.looseObject({
@@ -40,6 +42,7 @@ const listedPaymentSchema = z.looseObject({
 	bolt11: z.string().min(1),
 	amount: z.number().int(),
 	status: z.enum(['pending', 'success', 'failed']),
+	time: z.number().int(),
 	extra: z.record(z.string(), z.unknown()).default({})
 });
 const listedPaymentsSchema = z.array(listedPaymentSchema);
@@ -247,14 +250,20 @@ export async function lookupLnbitsPayment(
 export async function findLnbitsInvoiceByAttempt(
 	config: LnbitsConfig,
 	attemptId: string,
+	attemptCreatedAt: number,
 	fetcher: LnbitsFetch = fetch
 ): Promise<LnbitsInvoice | null> {
-	for (let offset = 0; offset < 500; offset += 100) {
+	const attemptCreatedAtSeconds = Math.floor(attemptCreatedAt / 1000);
+	for (
+		let offset = 0;
+		offset < PAYMENT_RECOVERY_RECORD_LIMIT;
+		offset += PAYMENT_RECOVERY_PAGE_SIZE
+	) {
 		const parsed = listedPaymentsSchema.safeParse(
 			await request(
 				config,
 				'list_payments',
-				`api/v1/payments?limit=100&offset=${offset}`,
+				`api/v1/payments?limit=${PAYMENT_RECOVERY_PAGE_SIZE}&offset=${offset}&sortby=time&direction=desc`,
 				{},
 				fetcher
 			)
@@ -270,9 +279,16 @@ export async function findLnbitsInvoiceByAttempt(
 			}
 			return { ...invoice, checkingId: match.checking_id };
 		}
-		if (parsed.data.length < 100) return null;
+		const oldestPayment = parsed.data.at(-1);
+		if (
+			!oldestPayment ||
+			oldestPayment.time < attemptCreatedAtSeconds ||
+			parsed.data.length < PAYMENT_RECOVERY_PAGE_SIZE
+		) {
+			return null;
+		}
 	}
-	throw new LnbitsError('list_payments', 'ambiguous', 'LNbits recovery window was exceeded');
+	return null;
 }
 
 export async function getLnbitsUsdPerBtc(

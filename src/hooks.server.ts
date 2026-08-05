@@ -36,6 +36,8 @@ const guardedPaths = [
 	'/api/upscale',
 	'/api/uploads',
 	'/api/download',
+	'/api/packages',
+	'/api/deposits',
 	'/api/object-replacement',
 	'/api/texture-replacement'
 ];
