@@ -207,6 +207,10 @@ before the Change Date. See LICENSE for complete terms.
 		const overlayId = generationOverlay.start('generationOverlay.render');
 		try {
 			const body = await request.toRenderRequest();
+			if (!body) {
+				request.setStatus('idle');
+				return;
+			}
 			const endpoint = request.sceneType === 'exterior' ? '/api/render/exterior' : '/api/render';
 			const response = await fetch(endpoint, {
 				method: 'POST',
