@@ -20,6 +20,7 @@ before the Change Date. See LICENSE for complete terms.
 	import type { CreditTransaction } from '$lib/api/contract';
 	import { formatCredit } from '$lib/utils';
 	import QrCode from './QrCode.svelte';
+	import TopUpDialog from './TopUpDialog.svelte';
 
 	const errorKeys: Record<AuthError, TranslationKey> = {
 		extension_missing: 'auth.error.extensionMissing',
@@ -126,6 +127,9 @@ before the Change Date. See LICENSE for complete terms.
 
 <div class="auth">
 	{#if auth.status === 'authenticated'}
+		{#if !(dev && auth.user?.pubkey === '0'.repeat(64))}
+			<TopUpDialog />
+		{/if}
 		<div
 			class="profile"
 			{@attach dismissable(

@@ -14,6 +14,8 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { npubEncode } from 'nostr-tools/nip19';
+	import { onMount } from 'svelte';
+	import type { Attachment } from 'svelte/attachments';
 	import type { PageProps } from './$types';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 	import { usage } from '$lib/state/usage.svelte';
@@ -21,34 +23,29 @@ before the Change Date. See LICENSE for complete terms.
 
 	let { data }: PageProps = $props();
 
-	let loadMoreSentinel = $state<HTMLElement | null>(null);
 	let failedPicturePubkeys = $state<string[]>([]);
-	let timeZone = $derived('UTC');
-	$effect(() => {
+	let timeZone = $state('UTC');
+	onMount(() => {
 		timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+		void usage.load();
+		return () => usage.clear();
 	});
 	let timeZoneAbbreviation = $derived(formatTimeZoneName('short'));
 	let timeZoneFullName = $derived(formatTimeZoneName('long'));
 
-	$effect(() => {
-		void usage.load();
-		return () => usage.clear();
-	});
-
-	$effect(() => {
-		const sentinel = loadMoreSentinel;
-		if (!sentinel || !usage.hasMore) return;
-
+	const loadMore: Attachment<HTMLElement> = (element) => {
 		const observer = new IntersectionObserver(
 			(entries) => {
-				if (entries.some((entry) => entry.isIntersecting)) void usage.loadMore();
+				if (usage.hasMore && entries.some((entry) => entry.isIntersecting)) {
+					void usage.loadMore();
+				}
 			},
 			{ root: null, rootMargin: '0px 0px 240px 0px' }
 		);
-		observer.observe(sentinel);
+		observer.observe(element);
 
 		return () => observer.disconnect();
-	});
+	};
 
 	function formatTimestamp(timestamp: number | null): string {
 		if (timestamp === null) return t('usage.emptyValue');
@@ -141,7 +138,7 @@ before the Change Date. See LICENSE for complete terms.
 										<a
 											href={data.pubkeyViewer.replaceAll('{}', npub)}
 											target="_blank"
-											rel="noopener noreferrer">{npub}</a
+											rel="external noopener noreferrer">{npub}</a
 										>
 									</span>
 								</th>
@@ -157,7 +154,7 @@ before the Change Date. See LICENSE for complete terms.
 				</table>
 			</div>
 			{#if usage.hasMore}
-				<div bind:this={loadMoreSentinel} class="load-more-sentinel">
+				<div class="load-more-sentinel" {@attach loadMore}>
 					{#if usage.loadingMore}
 						<p class="status" aria-live="polite">{t('usage.loadingMore')}</p>
 					{/if}
