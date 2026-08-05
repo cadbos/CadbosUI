@@ -31,7 +31,11 @@ const optionalText = z
 // SHA-256 hex digest of the uploaded `image`'s bytes — omitted when `image`
 // is a previous render/edit result rather than a fresh upload. See
 // RenderRequest.imageHash in $lib/api/contract.
-const optionalImageHash = z.string().trim().min(1).optional();
+const optionalImageHash = z
+	.string()
+	.trim()
+	.regex(/^[0-9a-f]{64}$/)
+	.optional();
 
 export const renderRequestSchema = z.object({
 	image: z.string().trim().min(1),
