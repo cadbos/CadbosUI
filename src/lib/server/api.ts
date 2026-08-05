@@ -52,6 +52,7 @@ export const remoteImageUploadRequestSchema = z.object({
 // the instruction is the whole point of the call (FR-К2/К3).
 export const editRequestSchema = z.object({
 	image: z.url().trim(),
+	imageHash: optionalImageHash,
 	prompt: z.string().trim().min(1)
 });
 

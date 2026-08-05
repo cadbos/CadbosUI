@@ -516,7 +516,9 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 }) => {
 	await authenticate(page);
 	await mockUpload(page);
+	let editBody: unknown;
 	await page.route('**/api/edit', async (route) => {
+		editBody = route.request().postDataJSON();
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -542,6 +544,10 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 		'src',
 		'https://cdn.example.test/edited.webp'
 	);
+	// The source was a fresh upload (no prior render) — its hash must travel
+	// through to /api/edit so the resources gallery can tell this apart from
+	// an edit continuing off a previous result (which never has a hash).
+	expect(editBody).toMatchObject({ imageHash: expect.any(String) });
 	// Once a result exists, the Edit tab no longer offers a raw upload — it edits
 	// the result itself, same as the post-render flow.
 	await expect(page.locator('#mode-panel-edit input[type="file"]')).toHaveCount(0);

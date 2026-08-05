@@ -116,7 +116,11 @@ before the Change Date. See LICENSE for complete terms.
 			const response = await fetch('/api/edit', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ image: source.url, prompt: trimmed })
+				body: JSON.stringify({
+					image: source.url,
+					...(source.hash ? { imageHash: source.hash } : {}),
+					prompt: trimmed
+				})
 			});
 			if (!response.ok) {
 				throw new Error(await extractApiErrorCode(response, 'edit_failed'));

@@ -59,6 +59,10 @@ export interface RenderRequest {
 // POST /api/edit — edit by prompt (no outputFormat; aspect ratio is preserved).
 export interface EditRequest {
 	image: string;
+	// See RenderRequest.imageHash — Edit has no room-photo/current-result
+	// toggle, but still falls back to the room photo when there's no render
+	// yet (resolveEditSource), so `image` isn't always a previous result.
+	imageHash?: string;
 	prompt: string;
 }
 
