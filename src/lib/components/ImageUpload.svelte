@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { uploadResultSchema } from '$lib/api/contract';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { normalizeImageContentType } from '$lib/image-mime';
 	import {
 		request,
 		type ImageInput,
@@ -249,6 +250,14 @@ before the Change Date. See LICENSE for complete terms.
 			return;
 		}
 		if (target === 'room') {
+			// The upload itself is deferred (see below), so there's no server
+			// round trip here to catch a type the API would reject — check
+			// against the same accepted list up front instead of letting the
+			// user fill in a whole prompt before finding out at generate-time.
+			if (normalizeImageContentType(file.type) === null) {
+				error = t('upload.errorType');
+				return;
+			}
 			// Defer the actual /api/uploads call to generate-time (see
 			// request.svelte.ts's #ensureImageUploaded()) so a photo the user
 			// picks but never generates from never lands in the bucket.
