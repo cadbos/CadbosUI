@@ -340,48 +340,51 @@ describe('listDistinctSourceImages', () => {
 		});
 	});
 
-	// The migration backfills pre-existing rows with source_hash = '' (no hash
-	// was ever computed for them). Grouping by url — not hash — means two such
-	// rows sharing the same source_url (e.g. repeated renders from one photo,
-	// recorded before hash-based dedup existed) still collapse into a single
-	// card, exactly like hashed rows do. Grouping by hash instead left them as
-	// separate cards sharing an identical url, which crashed the gallery
-	// (Svelte's each_key_duplicate) in production.
-	it('collapses pre-migration rows (empty source_hash) sharing a url into one card', async () => {
+	// source_hash = '' means this row's source_url isn't something the user
+	// uploaded: #resolveSourceFor never attaches a hash for the
+	// 'current-result' source mode (edit/upscale always use it; the other
+	// tools do whenever "use the current result" is picked over a fresh
+	// photo), so source_url there is a previous generation's own *output*.
+	// Pre-migration rows share the same '' backfill and are indistinguishable
+	// from those — both are excluded, not just deduped away.
+	it('excludes rows whose source was a previous result, not an upload', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneration(db, 'legacy-a', 'user-1', 1000);
-		seedGeneration(db, 'legacy-b', 'user-1', 2000);
+		// A real upload, mixed in so the exclusion isn't just "everything is empty".
+		seedGenerationWithSource(
+			db,
+			'upload',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			'hash-1',
+			500
+		);
+		// An edit continuing from a previous render result — source_hash is
+		// always '' for this mode, even though the row itself is recent.
+		seedGenerationWithSource(
+			db,
+			'edit-from-result',
+			'user-1',
+			'https://cdn.example.test/prior-render.webp',
+			'',
+			2000
+		);
+		// A legacy, pre-migration upload row — also '', indistinguishable from
+		// the case above by design.
+		seedGenerationWithSource(
+			db,
+			'legacy-upload',
+			'user-1',
+			'https://cdn.example.test/legacy-room.jpg',
+			'',
+			1000
+		);
 
 		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
 
 		expect(page).toEqual({
-			images: [{ sourceUrl: 'https://cdn.example.test/source.jpg', createdAt: 2000 }],
+			images: [{ sourceUrl: 'https://cdn.example.test/room.jpg', createdAt: 500 }],
 			hasMore: false
 		});
-	});
-
-	it('keeps pre-migration rows with different urls as separate cards', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGenerationWithSource(
-			db,
-			'legacy-a',
-			'user-1',
-			'https://cdn.example.test/room-a.jpg',
-			'',
-			1000
-		);
-		seedGenerationWithSource(
-			db,
-			'legacy-b',
-			'user-1',
-			'https://cdn.example.test/room-b.jpg',
-			'',
-			2000
-		);
-
-		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
-
-		expect(page.images).toHaveLength(2);
 	});
 
 	it('never mixes another user’s photos into the page', async () => {

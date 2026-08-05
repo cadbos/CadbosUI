@@ -235,17 +235,23 @@ interface ResourceImageRow {
 	created_at: number;
 }
 
-// Gallery of distinct source photos for /resources. Grouped by source_url,
-// not source_hash: the hash only dedups at *upload* time (findGenerationSourceByHash
-// reuses an existing url for a matching hash instead of storing a new object), so
-// two rows ever sharing a hash already share the identical url too — grouping by
-// url gets the same result without the '' collision that hash-only rows (every
-// edit/upscale row, and anything written before this migration) would otherwise
-// cause: those all carry source_hash = '', so GROUP BY source_hash would either
-// collapse every one of them into a single card (grouping on '' directly) or, if
-// falling back per-row, leave literal duplicate urls ungrouped — both wrong. A
-// plain source_url is always a true 1:1 identity for a given uploaded image,
-// since each upload gets a freshly generated storage key.
+// Gallery of distinct source *photos the user actually uploaded* for
+// /resources — not every source_url a generation ever recorded. A row's
+// source_url is only a real upload when source_hash is non-empty:
+// #resolveSourceFor never attaches a hash for the 'current-result' source
+// mode (edit and upscale always use it; style-transfer/object-replacement/
+// texture-replacement do whenever the user picks "use the current result"
+// instead of a fresh photo), so those rows' source_url is a previous
+// generation's *output*, not something the user uploaded — excluding
+// source_hash = '' keeps those, and pre-migration rows backfilled the same
+// way (indistinguishable from each other by design), out of the gallery.
+//
+// Grouped by source_url, not source_hash: the hash only dedups at *upload*
+// time (findGenerationSourceByHash reuses an existing url for a matching
+// hash instead of storing a new object), so two rows ever sharing a hash
+// already share the identical url too — grouping by url gets the same
+// result without a '' collision, and is a true 1:1 identity for a given
+// uploaded image since each upload gets a freshly generated storage key.
 export async function listDistinctSourceImages(
 	db: D1Database,
 	userId: string,
@@ -255,7 +261,7 @@ export async function listDistinctSourceImages(
 	const result = await db
 		.prepare(
 			'SELECT source_url, MAX(created_at) AS created_at FROM generations ' +
-				'WHERE user_id = ? ' +
+				"WHERE user_id = ? AND source_hash != '' " +
 				'GROUP BY source_url ' +
 				'ORDER BY created_at DESC, source_url DESC LIMIT ? OFFSET ?'
 		)

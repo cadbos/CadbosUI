@@ -190,13 +190,14 @@ export interface GeneratedImagesResponse {
 	};
 }
 
-// GET /api/resources — distinct source photos the user has uploaded (one card
-// per photo, grouped by source_url — including empty-hash rows from before
-// hash-based dedup existed or from edit/upscale calls, which intentionally
-// carry imageHash: '' since nothing was freshly uploaded in those calls; see
-// listDistinctSourceImages). Content-hash dedup still applies at *upload*
-// time (findGenerationSourceByHash) to avoid storing duplicate objects.
-// Read-only gallery: no delete in this iteration.
+// GET /api/resources — distinct source photos the user has actually
+// uploaded (one card per photo, grouped by source_url). Rows whose source
+// was a previous generation's own result rather than a fresh upload (edit,
+// upscale, or any other call made with source mode 'current-result' —
+// these intentionally carry imageHash: '') are excluded, not shown as if
+// they were uploads; see listDistinctSourceImages. Content-hash dedup still
+// applies at *upload* time (findGenerationSourceByHash) to avoid storing
+// duplicate objects. Read-only gallery: no delete in this iteration.
 export interface ResourceImageRecord {
 	sourceUrl: string;
 	createdAt: number;
