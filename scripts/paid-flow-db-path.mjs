@@ -12,21 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { defineConfig } from '@playwright/test';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-export default defineConfig({
-	webServer: {
-		command: 'pnpm run preview --host 127.0.0.1 --port 4174',
-		port: 4174,
-		timeout: 180_000
-	},
-	use: { baseURL: 'http://127.0.0.1:4174' },
-	testDir: 'e2e',
-	projects: [
-		{
-			name: 'ui',
-			testMatch: '**/*.e2e.{ts,js}',
-			testIgnore: '**/*.paid.e2e.{ts,js}'
-		}
-	]
-});
+export const PAID_FLOW_PERSIST_ROOT = join(tmpdir(), 'cadbos-paid-flow-d1');
+export const PAID_FLOW_PERSIST_PATH = join(PAID_FLOW_PERSIST_ROOT, 'v3');
