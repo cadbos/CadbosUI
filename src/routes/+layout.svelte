@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { onMount, type Snippet } from 'svelte';
 	import '../app.css';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import favicon from '$lib/assets/favicon.svg';
 	import AuthBar from '$lib/components/AuthBar.svelte';
@@ -50,13 +51,13 @@ before the Change Date. See LICENSE for complete terms.
 </svelte:head>
 
 <header class="app-header">
-	<div class="brand">
+	<a class="brand" href={resolve('/', {})}>
 		<img class="brand-mark" src={favicon} alt="" />
 		<div class="brand-copy">
 			<h1 class="brand-title">{t('app.title')}</h1>
 			<p class="brand-subtitle">{t('app.subtitle')}</p>
 		</div>
-	</div>
+	</a>
 	<AuthBar />
 </header>
 
@@ -88,6 +89,8 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		gap: 0.75rem;
 		min-width: 0;
+		color: inherit;
+		text-decoration: none;
 	}
 
 	.brand-mark {
