@@ -341,13 +341,43 @@ describe('listDistinctSourceImages', () => {
 	});
 
 	// The migration backfills pre-existing rows with source_hash = '' (no hash
-	// was ever computed for them) — grouping by hash alone would collapse every
-	// pre-migration photo into a single card, which is the bug the CASE-based
-	// grouping in listDistinctSourceImages exists to avoid.
-	it('keeps pre-migration rows (empty source_hash) as separate cards', async () => {
+	// was ever computed for them). Grouping by url — not hash — means two such
+	// rows sharing the same source_url (e.g. repeated renders from one photo,
+	// recorded before hash-based dedup existed) still collapse into a single
+	// card, exactly like hashed rows do. Grouping by hash instead left them as
+	// separate cards sharing an identical url, which crashed the gallery
+	// (Svelte's each_key_duplicate) in production.
+	it('collapses pre-migration rows (empty source_hash) sharing a url into one card', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedGeneration(db, 'legacy-a', 'user-1', 1000);
 		seedGeneration(db, 'legacy-b', 'user-1', 2000);
+
+		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
+
+		expect(page).toEqual({
+			images: [{ sourceUrl: 'https://cdn.example.test/source.jpg', createdAt: 2000 }],
+			hasMore: false
+		});
+	});
+
+	it('keeps pre-migration rows with different urls as separate cards', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGenerationWithSource(
+			db,
+			'legacy-a',
+			'user-1',
+			'https://cdn.example.test/room-a.jpg',
+			'',
+			1000
+		);
+		seedGenerationWithSource(
+			db,
+			'legacy-b',
+			'user-1',
+			'https://cdn.example.test/room-b.jpg',
+			'',
+			2000
+		);
 
 		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
 
