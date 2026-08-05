@@ -286,28 +286,38 @@ export interface UsageProfilesResponse {
 	profiles: Record<string, UsageProfile>;
 }
 
-export interface PackageRecord {
-	id: string;
-	usdAmount: number;
-	creditsAwarded: number;
-}
+export const packageRecordSchema = z.strictObject({
+	id: z.string().min(1),
+	usdAmount: z.number().positive(),
+	creditsAwarded: z.number().positive()
+});
 
-export interface CreateDepositRequest {
-	requestId: string;
-	packageId: string;
-}
+export const packagesResponseSchema = z.strictObject({
+	packages: z.array(packageRecordSchema)
+});
 
-export type DepositStatus = 'creating' | 'pending' | 'paid' | 'expired' | 'failed';
+export const createDepositRequestSchema = z.strictObject({
+	requestId: z.uuid(),
+	packageId: z.string().trim().min(1).max(64)
+});
 
-export interface DepositResponse {
-	id: string;
-	status: DepositStatus;
-	bolt11?: string;
-	satsAmount?: number;
-	usdAmount?: number;
-	expiresAt?: number;
-	balance?: number;
-}
+export const depositIdSchema = z.uuid();
+export const depositStatusSchema = z.enum(['creating', 'pending', 'paid', 'expired', 'failed']);
+
+export const depositResponseSchema = z.strictObject({
+	id: depositIdSchema,
+	status: depositStatusSchema,
+	bolt11: z.string().min(1).optional(),
+	satsAmount: z.number().int().positive().optional(),
+	usdAmount: z.number().positive().optional(),
+	expiresAt: z.number().int().positive().optional(),
+	balance: z.number().optional()
+});
+
+export type PackageRecord = z.infer<typeof packageRecordSchema>;
+export type CreateDepositRequest = z.infer<typeof createDepositRequestSchema>;
+export type DepositStatus = z.infer<typeof depositStatusSchema>;
+export type DepositResponse = z.infer<typeof depositResponseSchema>;
 
 // Auth (Appendix B). The signed NIP-98 event travels in
 // `Authorization: Nostr <base64>`.

@@ -13,7 +13,8 @@
  */
 
 import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
-import type { DepositStatus, PackageRecord } from '$lib/api/contract';
+import type { DepositResponse, DepositStatus, PackageRecord } from '$lib/api/contract';
+import { getCredit } from '$lib/server/billing';
 import { fromLedgerAmountUnits } from '$lib/server/ledger-units';
 import type { LnbitsInvoice } from '$lib/server/lnbits';
 
@@ -140,6 +141,22 @@ function toDeposit(row: DepositRow): Deposit {
 		reconcileAfter: row.reconcile_after,
 		invoiceCreationLeaseUntil: row.invoice_creation_lease_until,
 		ledgerTransactionId: row.ledger_transaction_id
+	};
+}
+
+export async function serializeDepositResponse(
+	db: D1Database,
+	deposit: Deposit
+): Promise<DepositResponse> {
+	const credit = deposit.status === 'paid' ? await getCredit(db, deposit.userId) : null;
+	return {
+		id: deposit.id,
+		status: deposit.status,
+		...(deposit.bolt11 ? { bolt11: deposit.bolt11 } : {}),
+		...(deposit.satsAmount === null ? {} : { satsAmount: deposit.satsAmount }),
+		...(deposit.expiresAt === null ? {} : { expiresAt: deposit.expiresAt }),
+		usdAmount: deposit.usdAmount,
+		...(credit ? { balance: credit.balance } : {})
 	};
 }
 
