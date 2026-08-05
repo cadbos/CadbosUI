@@ -16,7 +16,15 @@
 	// ownership" resolver (used by oxc/rolldown during transform and dependency
 	// optimization) never walks above the project looking for a matching
 	// tsconfig. Non-app trees and build artifacts are excluded.
-	"include": ["**/*.js", "**/*.ts", "**/*.svelte", "**/*.d.ts"],
+	"include": [
+		"**/*.js",
+		"**/*.ts",
+		"**/*.svelte",
+		"**/*.d.ts",
+		".svelte-kit/ambient.d.ts",
+		".svelte-kit/env.d.ts",
+		".svelte-kit/non-ambient.d.ts"
+	],
 	"exclude": [
 		"node_modules/**",
 		".svelte-kit/output/**",
