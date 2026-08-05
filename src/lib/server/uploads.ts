@@ -13,11 +13,7 @@
  */
 
 import { dev } from '$app/environment';
-import {
-	imageExtensionFromMime,
-	normalizeImageContentType,
-	type ImageMime
-} from '$lib/server/image-utils';
+import { imageExtensionFromMime, normalizeImageContentType, type ImageMime } from '$lib/image-mime';
 import { mockUpload } from '$lib/server/mocks/fixtures';
 
 type StoredImage = {
@@ -38,6 +34,16 @@ export async function hashBytes(bytes: ArrayBuffer): Promise<string> {
 	return Array.from(new Uint8Array(digest))
 		.map((byte) => byte.toString(16).padStart(2, '0'))
 		.join('');
+}
+
+// Guards the dedup path in POST /api/uploads: generations.source_url can also
+// hold a render/edit *output* URL (any generation kind, not just uploads —
+// see recordGeneration), so a hash lookup match must be confirmed to actually
+// point at our own R2 bucket before it's reused as if it were a stored
+// upload. Same trailing-slash-safe base as storeImage's own key resolution.
+export function isStoredUploadUrl(url: string, publicUrl: string): boolean {
+	const base = publicUrl.endsWith('/') ? publicUrl : `${publicUrl}/`;
+	return url.startsWith(base);
 }
 
 async function storeImage(

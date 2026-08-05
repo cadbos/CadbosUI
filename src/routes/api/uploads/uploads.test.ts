@@ -13,17 +13,25 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { SessionUser } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { MAX_IMAGE_UPLOAD_SIZE } from '$lib/server/remote-image';
+import { makeD1 } from '$lib/server/testing/d1-shim';
 import { POST } from './+server';
 
 type UploadEvent = Parameters<typeof POST>[0];
 
-function platform(bucket = { put: vi.fn(async () => undefined) }): App.Platform {
+const UPLOADS_PUBLIC_URL = 'https://uploads.cadbos.example';
+
+function platform(
+	bucket = { put: vi.fn(async () => undefined) },
+	db?: ReturnType<typeof makeD1>
+): App.Platform {
 	return {
 		env: {
 			UPLOADS_BUCKET: bucket,
-			UPLOADS_PUBLIC_URL: 'https://uploads.cadbos.example'
+			UPLOADS_PUBLIC_URL,
+			...(db ? { DB: db } : {})
 		}
 	} as unknown as App.Platform;
 }
@@ -31,7 +39,11 @@ function platform(bucket = { put: vi.fn(async () => undefined) }): App.Platform 
 // DEMO_PUBKEY bypasses D1 entirely (see hooks.server.ts / the route's demoUser
 // check), so these tests exercise the pure R2 storage path without needing to
 // seed a database for the dedup lookup.
-function call(body: unknown, uploadPlatform = platform()): ReturnType<typeof POST> {
+function call(
+	body: unknown,
+	uploadPlatform = platform(),
+	user: SessionUser | null = { pubkey: DEMO_PUBKEY }
+): ReturnType<typeof POST> {
 	return POST({
 		request: new Request('https://cadbos.example/api/uploads', {
 			method: 'POST',
@@ -40,8 +52,39 @@ function call(body: unknown, uploadPlatform = platform()): ReturnType<typeof POS
 		}),
 		platform: uploadPlatform,
 		url: new URL('https://cadbos.example/api/uploads'),
-		locals: { user: { pubkey: DEMO_PUBKEY } }
+		locals: { user }
 	} as UploadEvent);
+}
+
+function seedUser(db: ReturnType<typeof makeD1>, id: string, pubkey: string): void {
+	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+		.bind(id, pubkey, Date.now())
+		.run();
+}
+
+// Mirrors generations.test.ts's own seedGenerationWithSource — lets the test
+// set source_url/source_hash directly to exercise the /api/uploads dedup path.
+function seedGenerationWithSource(
+	db: ReturnType<typeof makeD1>,
+	id: string,
+	userId: string,
+	sourceUrl: string,
+	sourceHash: string
+): void {
+	db.prepare(
+		'INSERT INTO generations ' +
+			'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at) ' +
+			"VALUES (?, ?, ?, ?, ?, 'cozy', 'render', 1, 10, ?)"
+	)
+		.bind(id, userId, `https://cdn.example.test/${id}.webp`, sourceUrl, sourceHash, Date.now())
+		.run();
+}
+
+async function sha256Hex(bytes: string): Promise<string> {
+	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(bytes));
+	return Array.from(new Uint8Array(digest))
+		.map((byte) => byte.toString(16).padStart(2, '0'))
+		.join('');
 }
 
 describe('POST /api/uploads remote import', () => {
@@ -132,5 +175,75 @@ describe('POST /api/uploads remote import', () => {
 		expect(await response.json()).toEqual({
 			error: { code: 'upload_failed', message: 'Upload failed' }
 		});
+	});
+});
+
+describe('POST /api/uploads auth', () => {
+	it('returns 401 when the request has no authenticated user', async () => {
+		const response = await call({ url: 'https://images.example.com/room.webp' }, platform(), null);
+
+		expect(response.status).toBe(401);
+		expect(await response.json()).toEqual({
+			error: { code: 'unauthorized', message: 'Authentication required' }
+		});
+	});
+});
+
+describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('reuses an existing stored-upload source_url instead of writing to R2', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		const hash = await sha256Hex('image-bytes');
+		seedGenerationWithSource(db, 'a', 'user-1', `${UPLOADS_PUBLIC_URL}/existing.webp`, hash);
+		const bucket = { put: vi.fn(async () => undefined) };
+		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+			new Response('image-bytes', { headers: { 'content-type': 'image/webp' } })
+		);
+
+		const response = await call(
+			{ url: 'https://images.example.com/room.webp' },
+			platform(bucket, db),
+			{ pubkey: 'pubkey-1' }
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({ url: `${UPLOADS_PUBLIC_URL}/existing.webp` });
+		expect(bucket.put).not.toHaveBeenCalled();
+	});
+
+	it('does not reuse a matching-hash source_url that points outside the uploads bucket', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		const hash = await sha256Hex('image-bytes');
+		// A render/edit call also writes generations.source_url (recordGeneration),
+		// so a hash match here isn't necessarily a stored upload — reusing it as
+		// one would hand back an arbitrary, attacker-influenced URL.
+		seedGenerationWithSource(
+			db,
+			'a',
+			'user-1',
+			'https://render-provider.example/output.webp',
+			hash
+		);
+		const bucket = { put: vi.fn(async () => undefined) };
+		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+			new Response('image-bytes', { headers: { 'content-type': 'image/webp' } })
+		);
+
+		const response = await call(
+			{ url: 'https://images.example.com/room.webp' },
+			platform(bucket, db),
+			{ pubkey: 'pubkey-1' }
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			url: expect.stringMatching(new RegExp(`^${UPLOADS_PUBLIC_URL}/`))
+		});
+		expect(bucket.put).toHaveBeenCalledTimes(1);
 	});
 });
