@@ -281,8 +281,8 @@ export class RequestReorderError extends Error {
 }
 
 export class RequestImageUploadError extends Error {
-	constructor(message: string) {
-		super(message);
+	constructor(message: string, options?: ErrorOptions) {
+		super(message, options);
 		this.name = 'RequestImageUploadError';
 	}
 }
@@ -422,6 +422,11 @@ export function creditErrorKey(keys: CreditErrorKeys, err: unknown): Translation
 
 export class RequestState {
 	#textureMaskUploadEpoch = 0;
+	// In-flight #ensureImageUploaded() upload, keyed to the file it's for — so
+	// concurrent callers (e.g. the mask editor's eager upload alongside a
+	// submit's own resolution) share one POST /api/uploads instead of each
+	// firing a duplicate. Cleared once the upload settles, success or failure.
+	#pendingUpload: { file: File; promise: Promise<ImageInput | undefined> } | undefined;
 	id = $state<string>(crypto.randomUUID());
 	image = $state<ImageInput | undefined>(undefined);
 	// The main photo, picked but not yet uploaded — set by ImageUpload.svelte
@@ -875,6 +880,19 @@ export class RequestState {
 		const file = this.pendingImageFile;
 		if (!file) return undefined;
 
+		if (this.#pendingUpload?.file === file) return this.#pendingUpload.promise;
+
+		const promise = this.#uploadPendingImage(file);
+		this.#pendingUpload = { file, promise };
+		promise
+			.finally(() => {
+				if (this.#pendingUpload?.file === file) this.#pendingUpload = undefined;
+			})
+			.catch(() => {});
+		return promise;
+	}
+
+	async #uploadPendingImage(file: File): Promise<ImageInput | undefined> {
 		let uploaded: ImageInput;
 		try {
 			const formData = new FormData();
@@ -892,7 +910,7 @@ export class RequestState {
 			};
 		} catch (error) {
 			if (error instanceof RequestImageUploadError) throw error;
-			throw new RequestImageUploadError('upload failed');
+			throw new RequestImageUploadError('upload failed', { cause: error });
 		}
 
 		this.setImage(uploaded);
