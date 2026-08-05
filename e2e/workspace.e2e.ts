@@ -388,6 +388,7 @@ test('generating with the exterior scene type calls the exterior render route', 
 				url: 'https://cdn.example.test/facade.webp',
 				mime: 'image/webp',
 				size: 1024,
+				hash: 'facade-hash',
 				dimensions: [800, 600]
 			})
 		});
@@ -417,11 +418,13 @@ test('generating with the exterior scene type calls the exterior render route', 
 
 	await openCreate(page);
 	await page.getByRole('tab', { name: 'Экстерьер' }).click();
+	// The room/main photo upload is deferred to generate time — picking the
+	// file only produces a local (blob:) preview here, no /api/uploads call yet.
 	await page
 		.locator('#mode-panel-render input[type="file"]')
 		.setInputFiles({ name: 'house.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 	const uploadedImage = page.locator('#mode-panel-render .image-wrapper img');
-	await expect(uploadedImage).toHaveAttribute('src', 'https://cdn.example.test/facade.webp');
+	await expect(uploadedImage).toHaveAttribute('src', /^blob:/);
 	const uploadViewportStyles = await uploadedImage.evaluate((image) => {
 		const viewport = image.parentElement;
 		if (!viewport) throw new Error('uploaded image viewport missing');
@@ -438,7 +441,13 @@ test('generating with the exterior scene type calls the exterior render route', 
 		backgroundColor: 'rgb(245, 245, 247)',
 		objectFit: 'contain'
 	});
-	await page.getByRole('button', { name: 'Сгенерировать' }).click();
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		page.waitForResponse(
+			(response) => response.url().endsWith('/api/render/exterior') && response.ok()
+		),
+		page.getByRole('button', { name: 'Сгенерировать' }).click()
+	]);
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',

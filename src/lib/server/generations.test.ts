@@ -18,8 +18,10 @@ import { makeD1 } from './testing/d1-shim';
 import { getCredit } from './billing';
 import {
 	deleteGeneratedImage,
+	findGenerationSourceByHash,
 	getGeneratedImageForUser,
 	listCreditHistory,
+	listDistinctSourceImages,
 	listGeneratedImages,
 	recordGeneration
 } from './generations';
@@ -53,6 +55,25 @@ function seedGeneration(
 		.run();
 }
 
+// Unlike seedGeneration, lets the caller set source_url/source_hash directly —
+// needed to exercise dedup lookups and the pre-migration ('') grouping case.
+function seedGenerationWithSource(
+	db: D1Database,
+	id: string,
+	userId: string,
+	sourceUrl: string,
+	sourceHash: string,
+	createdAt: number
+): void {
+	db.prepare(
+		'INSERT INTO generations ' +
+			'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at) ' +
+			"VALUES (?, ?, ?, ?, ?, 'cozy', 'render', 1, 10, ?)"
+	)
+		.bind(id, userId, `https://cdn.example.test/${id}.webp`, sourceUrl, sourceHash, createdAt)
+		.run();
+}
+
 let db: D1Database;
 
 beforeEach(() => {
@@ -67,6 +88,7 @@ describe('recordGeneration', () => {
 		const result = await recordGeneration(db, 'user-1', {
 			url: 'https://cdn.example.test/out.webp',
 			sourceUrl: 'https://cdn.example.test/room.jpg',
+			sourceHash: 'hash-room',
 			prompt: 'cozy',
 			kind: 'render',
 			amount: 1.5
@@ -93,6 +115,7 @@ describe('recordGeneration', () => {
 		await recordGeneration(db, 'user-1', {
 			url: 'https://cdn.example.test/out.webp',
 			sourceUrl: 'https://cdn.example.test/room.jpg',
+			sourceHash: 'hash-room',
 			prompt: 'cozy',
 			kind: 'render',
 			amount: 2
@@ -116,6 +139,7 @@ describe('listCreditHistory', () => {
 		await recordGeneration(db, 'user-1', {
 			url: 'https://cdn.example.test/a.webp',
 			sourceUrl: 'https://cdn.example.test/room.jpg',
+			sourceHash: 'hash-room',
 			prompt: 'cozy',
 			kind: 'render',
 			amount: 1
@@ -123,6 +147,7 @@ describe('listCreditHistory', () => {
 		await recordGeneration(db, 'user-1', {
 			url: 'https://cdn.example.test/b.webp',
 			sourceUrl: 'https://cdn.example.test/a.webp',
+			sourceHash: '',
 			prompt: 'change the sofa',
 			kind: 'edit',
 			amount: 2
@@ -236,5 +261,123 @@ describe('listGeneratedImages', () => {
 		await expect(listGeneratedImages(db, 'user-1', 0, 10)).rejects.toThrow(
 			'generation invalid-kind has invalid kind'
 		);
+	});
+});
+
+describe('findGenerationSourceByHash', () => {
+	it('returns the most recent source_url for a matching hash', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGenerationWithSource(
+			db,
+			'a',
+			'user-1',
+			'https://cdn.example.test/room-v1.jpg',
+			'hash-1',
+			1000
+		);
+		seedGenerationWithSource(
+			db,
+			'b',
+			'user-1',
+			'https://cdn.example.test/room-v2.jpg',
+			'hash-1',
+			2000
+		);
+
+		await expect(findGenerationSourceByHash(db, 'user-1', 'hash-1')).resolves.toBe(
+			'https://cdn.example.test/room-v2.jpg'
+		);
+	});
+
+	it('never matches across users', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		seedGenerationWithSource(
+			db,
+			'a',
+			'user-2',
+			'https://cdn.example.test/room.jpg',
+			'hash-1',
+			1000
+		);
+
+		await expect(findGenerationSourceByHash(db, 'user-1', 'hash-1')).resolves.toBeNull();
+	});
+
+	it('never matches an empty hash, even against pre-migration rows', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneration(db, 'legacy', 'user-1', 1000); // seedGeneration leaves source_hash at its '' default
+
+		await expect(findGenerationSourceByHash(db, 'user-1', '')).resolves.toBeNull();
+	});
+});
+
+describe('listDistinctSourceImages', () => {
+	it('collapses repeat uploads of the same hash into one card', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGenerationWithSource(
+			db,
+			'a',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			'hash-1',
+			1000
+		);
+		seedGenerationWithSource(
+			db,
+			'b',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			'hash-1',
+			2000
+		);
+
+		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
+
+		expect(page).toEqual({
+			images: [{ sourceUrl: 'https://cdn.example.test/room.jpg', createdAt: 2000 }],
+			hasMore: false
+		});
+	});
+
+	// The migration backfills pre-existing rows with source_hash = '' (no hash
+	// was ever computed for them) — grouping by hash alone would collapse every
+	// pre-migration photo into a single card, which is the bug the CASE-based
+	// grouping in listDistinctSourceImages exists to avoid.
+	it('keeps pre-migration rows (empty source_hash) as separate cards', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneration(db, 'legacy-a', 'user-1', 1000);
+		seedGeneration(db, 'legacy-b', 'user-1', 2000);
+
+		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
+
+		expect(page.images).toHaveLength(2);
+	});
+
+	it('never mixes another user’s photos into the page', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		seedGenerationWithSource(
+			db,
+			'a',
+			'user-1',
+			'https://cdn.example.test/mine.jpg',
+			'hash-1',
+			1000
+		);
+		seedGenerationWithSource(
+			db,
+			'b',
+			'user-2',
+			'https://cdn.example.test/theirs.jpg',
+			'hash-2',
+			2000
+		);
+
+		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
+
+		expect(page.images).toEqual([
+			{ sourceUrl: 'https://cdn.example.test/mine.jpg', createdAt: 1000 }
+		]);
 	});
 });

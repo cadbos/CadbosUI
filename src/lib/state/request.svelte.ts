@@ -20,7 +20,8 @@ import {
 	type RenderRequest,
 	type RenderResponse,
 	type StyleTransferRequest,
-	type TextureReplacementRequest
+	type TextureReplacementRequest,
+	uploadResultSchema
 } from '$lib/api/contract';
 import type { TranslationKey } from '$lib/i18n/index.svelte';
 
@@ -34,6 +35,7 @@ export interface ImageInput {
 	url: string;
 	mime?: string;
 	size?: number;
+	hash?: string;
 	dimensions?: [number, number];
 }
 
@@ -175,6 +177,7 @@ const imageInputSchema = z.object({
 	url: z.string().trim().url(),
 	mime: z.string().min(1).optional(),
 	size: z.number().nonnegative().optional(),
+	hash: z.string().min(1).optional(),
 	dimensions: z.tuple([z.number().positive(), z.number().positive()]).optional()
 });
 const optionalImageInputSchema = imageInputSchema.optional();
@@ -277,6 +280,13 @@ export class RequestReorderError extends Error {
 	}
 }
 
+export class RequestImageUploadError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'RequestImageUploadError';
+	}
+}
+
 function formatPromptFragment(fragment: PromptFragment): string {
 	const label = fragment.label?.trim();
 	if (!label) return fragment.text;
@@ -305,6 +315,7 @@ function cloneImage(image: ImageInput | undefined): ImageInput | undefined {
 		url: image.url,
 		...(image.mime !== undefined ? { mime: image.mime } : {}),
 		...(image.size !== undefined ? { size: image.size } : {}),
+		...(image.hash !== undefined ? { hash: image.hash } : {}),
 		...(image.dimensions ? { dimensions: [...image.dimensions] } : {})
 	};
 }
@@ -413,6 +424,19 @@ export class RequestState {
 	#textureMaskUploadEpoch = 0;
 	id = $state<string>(crypto.randomUUID());
 	image = $state<ImageInput | undefined>(undefined);
+	// The main photo, picked but not yet uploaded — set by ImageUpload.svelte
+	// (target 'room' only) instead of calling /api/uploads immediately, so a
+	// photo the user picks but never generates from never lands in the
+	// bucket. Session UI state only: never part of toJSON()/fromJSON(), same
+	// as textureMaskUploading/previousRender elsewhere in this class.
+	pendingImageFile = $state<File | undefined>(undefined);
+	// Local (blob:) preview of pendingImageFile, kept here rather than as
+	// component-local state so it survives Render/Edit swapping between
+	// separate <ImageUpload target="room"> instances (Workspace.svelte
+	// mounts a fresh one per mode) and so #sourceUrlFor can offer it to
+	// preview-only consumers (e.g. the mask editor) before the real upload
+	// happens. Session UI state only, same as pendingImageFile above.
+	pendingImagePreviewUrl = $state<string | undefined>(undefined);
 	styleReferenceImage = $state<ImageInput | undefined>(undefined);
 	objectReferenceImage = $state<ImageInput | undefined>(undefined);
 	textureReferenceImage = $state<ImageInput | undefined>(undefined);
@@ -547,6 +571,24 @@ export class RequestState {
 
 	setImage(image: ImageInput | undefined): void {
 		this.image = cloneImage(optionalImageInputSchema.parse(image));
+		this.pendingImageFile = undefined;
+		this.#clearPendingImagePreview();
+	}
+
+	// Called by ImageUpload.svelte (target 'room') when the user picks a
+	// file: stores it locally without uploading. The actual /api/uploads call
+	// happens lazily, only when a generate call needs the resolved URL — see
+	// #ensureImageUploaded().
+	setPendingImage(file: File | undefined): void {
+		this.#clearPendingImagePreview();
+		this.pendingImageFile = file;
+		this.pendingImagePreviewUrl = file ? URL.createObjectURL(file) : undefined;
+		this.image = undefined;
+	}
+
+	#clearPendingImagePreview(): void {
+		if (this.pendingImagePreviewUrl) URL.revokeObjectURL(this.pendingImagePreviewUrl);
+		this.pendingImagePreviewUrl = undefined;
 	}
 
 	setStyleReferenceImage(image: ImageInput | undefined): void {
@@ -755,20 +797,20 @@ export class RequestState {
 
 	validate(): ValidationResult {
 		const missing: ValidationField[] = [];
-		if (!this.image?.url) missing.push('image');
+		if (!this.image?.url && !this.pendingImageFile) missing.push('image');
 		return { valid: missing.length === 0, missing };
 	}
 
 	validateStyleTransfer(): ValidationResult {
 		const missing: ValidationField[] = [];
-		if (!this.styleTransferSourceUrl()) missing.push('image');
+		if (!this.hasStyleTransferSource()) missing.push('image');
 		if (!this.styleReferenceImage?.url) missing.push('referenceImage');
 		return { valid: missing.length === 0, missing };
 	}
 
 	validateObjectReplacement(): ValidationResult {
 		const missing: ValidationField[] = [];
-		if (!this.objectReplacementSourceUrl()) missing.push('image');
+		if (!this.hasObjectReplacementSource()) missing.push('image');
 		if (!this.objectReferenceImage?.url) missing.push('referenceImage');
 		if (!this.objectReplacementObject.trim()) missing.push('replacementObject');
 		return { valid: missing.length === 0, missing };
@@ -776,7 +818,7 @@ export class RequestState {
 
 	validateTextureReplacement(): ValidationResult {
 		const missing: ValidationField[] = [];
-		if (!this.textureReplacementSourceUrl()) missing.push('image');
+		if (!this.hasTextureReplacementSource()) missing.push('image');
 		if (!this.textureReferenceImage?.url) missing.push('referenceImage');
 		if (this.textureReplacementMasked) {
 			if (!this.textureMaskMatchesSource()) missing.push('mask');
@@ -788,11 +830,102 @@ export class RequestState {
 
 	#sourceUrlFor(mode: ImageSourceMode): string | undefined {
 		if (mode === 'current-result') {
-			return this.currentRender?.outputUrls[0] ?? this.image?.url;
+			return this.currentRender?.outputUrls[0] ?? this.image?.url ?? this.pendingImagePreviewUrl;
 		}
-		return this.image?.url;
+		return this.image?.url ?? this.pendingImagePreviewUrl;
 	}
 
+	// Sync "is there something to submit" check for button-enabled validation —
+	// a pending, not-yet-uploaded file already counts (the actual upload is
+	// deferred, not skipped: #ensureImageUploaded() guarantees it runs before
+	// the request is sent). Used by validateStyleTransfer()/etc.; do not use
+	// this for building request bodies — see #resolveSourceFor.
+	#hasSourceFor(mode: ImageSourceMode): boolean {
+		if (mode === 'current-result') {
+			return (
+				this.currentRender !== undefined ||
+				this.image !== undefined ||
+				this.pendingImageFile !== undefined
+			);
+		}
+		return this.image !== undefined || this.pendingImageFile !== undefined;
+	}
+
+	// Resolves the actual URL (and, when it came from a fresh upload, its
+	// content hash) for the outgoing request body. Triggers the deferred main-
+	// photo upload the first time it's needed — see #ensureImageUploaded().
+	async #resolveSourceFor(
+		mode: ImageSourceMode
+	): Promise<{ url: string; hash?: string } | undefined> {
+		if (mode === 'current-result' && this.currentRender) {
+			return { url: this.currentRender.outputUrls[0] };
+		}
+		const image = await this.#ensureImageUploaded();
+		return image ? { url: image.url, hash: image.hash } : undefined;
+	}
+
+	// Uploads the pending main photo the first time a generate call actually
+	// needs its resolved URL, then caches the result on `image` (via
+	// setImage) so a second generate call in the same session — e.g.
+	// re-generating with a tweaked prompt — reuses it instead of re-uploading.
+	// Throws RequestImageUploadError on failure so callers can show an
+	// upload-specific message instead of a generic "render failed" one.
+	async #ensureImageUploaded(): Promise<ImageInput | undefined> {
+		if (this.image) return this.image;
+		const file = this.pendingImageFile;
+		if (!file) return undefined;
+
+		let uploaded: ImageInput;
+		try {
+			const formData = new FormData();
+			formData.append('file', file);
+			const response = await fetch('/api/uploads', { method: 'POST', body: formData });
+			if (!response.ok) throw new RequestImageUploadError('upload request failed');
+			const parsed = uploadResultSchema.safeParse(await response.json().catch(() => null));
+			if (!parsed.success) throw new RequestImageUploadError('upload response invalid');
+			uploaded = {
+				url: parsed.data.url,
+				mime: parsed.data.mime,
+				size: parsed.data.size,
+				hash: parsed.data.hash,
+				...(parsed.data.dimensions ? { dimensions: parsed.data.dimensions } : {})
+			};
+		} catch (error) {
+			if (error instanceof RequestImageUploadError) throw error;
+			throw new RequestImageUploadError('upload failed');
+		}
+
+		this.setImage(uploaded);
+		return this.image;
+	}
+
+	hasStyleTransferSource(): boolean {
+		return this.#hasSourceFor(this.styleSourceMode);
+	}
+
+	hasObjectReplacementSource(): boolean {
+		return this.#hasSourceFor(this.objectReplacementSourceMode);
+	}
+
+	hasTextureReplacementSource(): boolean {
+		return this.#hasSourceFor(this.textureReplacementSourceMode);
+	}
+
+	// The mask editor draws on, and later validates the finished mask against
+	// (textureMaskMatchesSource()), a stable server URL — a local blob:
+	// preview isn't enough for that. Workspace.svelte calls this eagerly the
+	// moment masked mode is entered, so the deferred main-photo upload
+	// resolves before the user starts drawing instead of waiting for submit.
+	async ensureTextureReplacementSourceUploaded(): Promise<void> {
+		await this.#resolveSourceFor(this.textureReplacementSourceMode);
+	}
+
+	// Sync "best guess" URL for preview/display purposes only (e.g. the mask
+	// editor's canvas source) — falls back to the pending file's local blob:
+	// preview when nothing has actually been uploaded yet (same origin, so
+	// it's safe to draw into a canvas). Do not use these for building request
+	// bodies — that's what #resolveSourceFor is for, since a blob: URL isn't
+	// resolvable by the server.
 	styleTransferSourceUrl(): string | undefined {
 		return this.#sourceUrlFor(this.styleSourceMode);
 	}
@@ -805,24 +938,42 @@ export class RequestState {
 		return this.#sourceUrlFor(this.textureReplacementSourceMode);
 	}
 
-	toRenderRequest(): RenderRequest | null {
+	// Edit tools (EditPanel.svelte: freeform/add-object/remove-object/
+	// atmosphere) target the latest render/edit result once one exists;
+	// before that, they fall back to the room photo — same 'current-result'
+	// semantics as the other tools' source mode, just without a toggle since
+	// Edit has no separate room-photo/current-result choice to make.
+	hasEditSource(): boolean {
+		return this.#hasSourceFor('current-result');
+	}
+
+	async resolveEditSource(): Promise<{ url: string; hash?: string } | undefined> {
+		return this.#resolveSourceFor('current-result');
+	}
+
+	async toRenderRequest(): Promise<RenderRequest | null> {
 		const validation = this.validate();
-		if (!validation.valid || !this.image) return null;
+		if (!validation.valid) return null;
+		const image = await this.#ensureImageUploaded();
+		if (!image) return null;
 		return {
-			image: this.image.url,
+			image: image.url,
+			...(image.hash ? { imageHash: image.hash } : {}),
 			prompt: this.prompt,
 			outputFormat: this.outputFormat
 		};
 	}
 
-	toStyleTransferRequest(): StyleTransferRequest | null {
+	async toStyleTransferRequest(): Promise<StyleTransferRequest | null> {
 		const validation = this.validateStyleTransfer();
-		const image = this.styleTransferSourceUrl();
-		if (!validation.valid || !image || !this.styleReferenceImage) return null;
+		if (!validation.valid) return null;
+		const source = await this.#resolveSourceFor(this.styleSourceMode);
+		if (!source || !this.styleReferenceImage) return null;
 		const prompt = this.styleTransferPrompt.trim();
 		const negativePrompt = this.styleNegativePrompt.trim();
 		return {
-			image,
+			image: source.url,
+			...(source.hash ? { imageHash: source.hash } : {}),
 			referenceImage: this.styleReferenceImage.url,
 			outputFormat: this.outputFormat,
 			...(prompt ? { prompt } : {}),
@@ -831,31 +982,36 @@ export class RequestState {
 		};
 	}
 
-	toObjectReplacementRequest(): ObjectReplacementRequest | null {
+	async toObjectReplacementRequest(): Promise<ObjectReplacementRequest | null> {
 		const validation = this.validateObjectReplacement();
-		const image = this.objectReplacementSourceUrl();
-		if (!validation.valid || !image || !this.objectReferenceImage) return null;
+		if (!validation.valid) return null;
+		const source = await this.#resolveSourceFor(this.objectReplacementSourceMode);
+		if (!source || !this.objectReferenceImage) return null;
 		return {
-			image,
+			image: source.url,
+			...(source.hash ? { imageHash: source.hash } : {}),
 			referenceImage: this.objectReferenceImage.url,
 			replacementObject: this.objectReplacementObject.trim()
 		};
 	}
 
-	toTextureReplacementRequest(): TextureReplacementRequest | null {
+	async toTextureReplacementRequest(): Promise<TextureReplacementRequest | null> {
 		const validation = this.validateTextureReplacement();
-		const image = this.textureReplacementSourceUrl();
-		if (!validation.valid || !image || !this.textureReferenceImage) return null;
+		if (!validation.valid) return null;
+		const source = await this.#resolveSourceFor(this.textureReplacementSourceMode);
+		if (!source || !this.textureReferenceImage) return null;
 		if (this.textureReplacementMasked) {
 			if (!this.textureMaskImage || !this.textureMaskMatchesSource()) return null;
 			return {
-				image,
+				image: source.url,
+				...(source.hash ? { imageHash: source.hash } : {}),
 				referenceImage: this.textureReferenceImage.url,
 				mask: this.textureMaskImage.url
 			};
 		}
 		return {
-			image,
+			image: source.url,
+			...(source.hash ? { imageHash: source.hash } : {}),
 			referenceImage: this.textureReferenceImage.url,
 			replacementSurface: this.textureReplacementSurface.trim()
 		};
@@ -896,6 +1052,8 @@ export class RequestState {
 		this.textureReplacementResultReady = false;
 		this.id = parsed.id;
 		this.image = cloneImage(parsed.image);
+		this.pendingImageFile = undefined;
+		this.#clearPendingImagePreview();
 		this.styleReferenceImage = cloneImage(parsed.styleReferenceImage);
 		this.objectReferenceImage = cloneImage(parsed.objectReferenceImage);
 		this.textureReferenceImage = cloneImage(parsed.textureReferenceImage);
@@ -961,6 +1119,8 @@ export class RequestState {
 		this.textureReplacementResultReady = false;
 		this.id = crypto.randomUUID();
 		this.image = undefined;
+		this.pendingImageFile = undefined;
+		this.#clearPendingImagePreview();
 		this.styleReferenceImage = undefined;
 		this.objectReferenceImage = undefined;
 		this.textureReferenceImage = undefined;

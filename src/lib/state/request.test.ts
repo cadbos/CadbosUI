@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	AC9_IMAGE,
 	AC9_PROMPT,
@@ -22,10 +22,19 @@ import {
 	applyAc9Fixture,
 	buildAc9RequestJSON
 } from '$lib/state/request-fixtures';
-import { RequestReorderError, request, type RenderResult } from '$lib/state/request.svelte';
+import {
+	RequestImageUploadError,
+	RequestReorderError,
+	request,
+	type RenderResult
+} from '$lib/state/request.svelte';
 
 beforeEach(() => {
 	request.reset();
+});
+
+afterEach(() => {
+	vi.unstubAllGlobals();
 });
 
 describe('prompt derivation', () => {
@@ -336,7 +345,7 @@ describe('normalizeForComparison', () => {
 		expect(second).not.toEqual(first);
 	});
 
-	it('normalizes texture replacement by active mode independently of prior mode history', () => {
+	it('normalizes texture replacement by active mode independently of prior mode history', async () => {
 		const textureReference = { url: 'https://example.test/reference-fabric.webp' };
 		const textureMask = { url: 'https://example.test/sofa-mask.webp' };
 
@@ -346,7 +355,7 @@ describe('normalizeForComparison', () => {
 		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureReplacementSurface('sofa upholstery');
 		const automaticNormalization = request.normalizeForComparison();
-		const automaticPayload = request.toTextureReplacementRequest();
+		const automaticPayload = await request.toTextureReplacementRequest();
 
 		request.reset();
 		request.setImage(AC9_IMAGE);
@@ -354,14 +363,14 @@ describe('normalizeForComparison', () => {
 		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureReplacementSurface('sofa upholstery');
 		expect(request.normalizeForComparison()).toEqual(automaticNormalization);
-		expect(request.toTextureReplacementRequest()).toEqual(automaticPayload);
+		expect(await request.toTextureReplacementRequest()).toEqual(automaticPayload);
 		expect(automaticNormalization.textureMaskImage).toBeUndefined();
 
 		request.setTextureReplacementMasked(true);
 		request.setTextureMaskImage(textureMask);
 		request.setTextureReplacementSurface('stale surface');
 		const maskedNormalization = request.normalizeForComparison();
-		const maskedPayload = request.toTextureReplacementRequest();
+		const maskedPayload = await request.toTextureReplacementRequest();
 
 		request.reset();
 		request.setImage(AC9_IMAGE);
@@ -370,7 +379,7 @@ describe('normalizeForComparison', () => {
 		request.setTextureReplacementMasked(true);
 		request.setTextureMaskImage(textureMask);
 		expect(request.normalizeForComparison()).toEqual(maskedNormalization);
-		expect(request.toTextureReplacementRequest()).toEqual(maskedPayload);
+		expect(await request.toTextureReplacementRequest()).toEqual(maskedPayload);
 		expect(maskedNormalization.textureReplacementSurface).toBe('');
 	});
 });
@@ -380,11 +389,11 @@ describe('sceneType', () => {
 		expect(request.sceneType).toBe('interior');
 	});
 
-	it('setSceneType updates the UI routing value without changing the render body', () => {
+	it('setSceneType updates the UI routing value without changing the render body', async () => {
 		applyAc9Fixture();
 		request.setSceneType('exterior');
 		expect(request.sceneType).toBe('exterior');
-		expect(request.toRenderRequest()).toEqual(AC9_RENDER_REQUEST);
+		expect(await request.toRenderRequest()).toEqual(AC9_RENDER_REQUEST);
 	});
 
 	it('reset() reverts to interior', () => {
@@ -426,14 +435,47 @@ describe('textureReplacementResultReady (session UI state)', () => {
 });
 
 describe('toRenderRequest', () => {
-	it('returns the wire body for a valid AC-9 fixture', () => {
+	it('returns the wire body for a valid AC-9 fixture', async () => {
 		applyAc9Fixture();
-		expect(request.toRenderRequest()).toEqual(AC9_RENDER_REQUEST);
+		expect(await request.toRenderRequest()).toEqual(AC9_RENDER_REQUEST);
 		expect(request.prompt).toBe(AC9_PROMPT);
 	});
 
-	it('returns null when invalid', () => {
-		expect(request.toRenderRequest()).toBeNull();
+	it('returns null when invalid', async () => {
+		expect(await request.toRenderRequest()).toBeNull();
+	});
+
+	it('uploads a pending file lazily on submit and caches the result on image', async () => {
+		const file = new File(['bytes'], 'room.jpg', { type: 'image/jpeg' });
+		request.setPendingImage(file);
+		const uploadResult = {
+			url: 'https://example.test/uploaded-room.webp',
+			mime: 'image/webp',
+			size: 1234,
+			hash: 'deadbeef'
+		};
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve(uploadResult)
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const body = await request.toRenderRequest();
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(body?.image).toBe(uploadResult.url);
+		expect(body?.imageHash).toBe(uploadResult.hash);
+		expect(request.image?.url).toBe(uploadResult.url);
+		expect(request.pendingImageFile).toBeUndefined();
+	});
+
+	it('throws RequestImageUploadError when the deferred upload fails', async () => {
+		const file = new File(['bytes'], 'room.jpg', { type: 'image/jpeg' });
+		request.setPendingImage(file);
+		const fetchMock = vi.fn().mockResolvedValue({ ok: false, json: () => Promise.resolve(null) });
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(request.toRenderRequest()).rejects.toThrow(RequestImageUploadError);
 	});
 });
 
@@ -453,13 +495,13 @@ describe('toStyleTransferRequest', () => {
 		});
 	});
 
-	it('builds the wire body from the room photo and reference image', () => {
+	it('builds the wire body from the room photo and reference image', async () => {
 		applyAc9Fixture();
 		request.setStyleSourceMode('room-photo');
-		expect(request.toStyleTransferRequest()).toEqual(AC9_STYLE_TRANSFER_REQUEST);
+		expect(await request.toStyleTransferRequest()).toEqual(AC9_STYLE_TRANSFER_REQUEST);
 	});
 
-	it('uses the current result as the source when selected and available', () => {
+	it('uses the current result as the source when selected and available', async () => {
 		applyAc9Fixture();
 		request.setCurrentRender({
 			id: 'render-1',
@@ -469,24 +511,24 @@ describe('toStyleTransferRequest', () => {
 			ts: 0
 		});
 
-		expect(request.toStyleTransferRequest()).toEqual({
+		expect(await request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
 			image: 'https://example.test/current-result.webp'
 		});
 	});
 
-	it('falls back to the room photo when current-result is selected before a result exists', () => {
+	it('falls back to the room photo when current-result is selected before a result exists', async () => {
 		applyAc9Fixture();
-		expect(request.toStyleTransferRequest()?.image).toBe(AC9_IMAGE.url);
+		expect((await request.toStyleTransferRequest())?.image).toBe(AC9_IMAGE.url);
 	});
 
-	it('omits optional prompt fields when they are empty', () => {
+	it('omits optional prompt fields when they are empty', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setStyleReferenceImage(AC9_REFERENCE_IMAGE);
 		request.setStyleTransferPrompt('   ');
 		request.setStyleNegativePrompt('   ');
 
-		expect(request.toStyleTransferRequest()).toEqual({
+		expect(await request.toStyleTransferRequest()).toEqual({
 			image: AC9_IMAGE.url,
 			referenceImage: AC9_REFERENCE_IMAGE.url,
 			outputFormat: 'webp',
@@ -494,22 +536,22 @@ describe('toStyleTransferRequest', () => {
 		});
 	});
 
-	it('includes a trimmed negative prompt when set', () => {
+	it('includes a trimmed negative prompt when set', async () => {
 		applyAc9Fixture();
 		request.setStyleNegativePrompt('  no people  ');
 
-		expect(request.toStyleTransferRequest()).toEqual({
+		expect(await request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
 			negativePrompt: 'no people'
 		});
 	});
 
-	it('uses explicit style guidance instead of the render prompt', () => {
+	it('uses explicit style guidance instead of the render prompt', async () => {
 		applyAc9Fixture();
 		request.setPromptOverride('render prompt that must stay isolated');
 		request.setStyleTransferPrompt('  style transfer guidance  ');
 
-		expect(request.toStyleTransferRequest()).toEqual({
+		expect(await request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
 			prompt: 'style transfer guidance'
 		});
@@ -520,7 +562,7 @@ describe('toStyleTransferRequest', () => {
 		expect(() => request.setStyleTransferStrength(1.1)).toThrow();
 	});
 
-	it('round-trips style transfer settings through JSON', () => {
+	it('round-trips style transfer settings through JSON', async () => {
 		applyAc9Fixture();
 		request.setStyleTransferStrength(0.35);
 		request.setStyleTransferPrompt('style guidance');
@@ -532,7 +574,7 @@ describe('toStyleTransferRequest', () => {
 		request.fromJSON(snapshot);
 
 		expect(request.toJSON()).toEqual(snapshot);
-		expect(request.toStyleTransferRequest()).toEqual({
+		expect(await request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
 			prompt: 'style guidance',
 			styleTransferStrength: 0.35,
@@ -547,32 +589,32 @@ describe('toObjectReplacementRequest', () => {
 		mime: 'image/webp'
 	};
 
-	it('reports every required field when the form is empty', () => {
+	it('reports every required field when the form is empty', async () => {
 		expect(request.validateObjectReplacement()).toEqual({
 			valid: false,
 			missing: ['image', 'referenceImage', 'replacementObject']
 		});
-		expect(request.toObjectReplacementRequest()).toBeNull();
+		expect(await request.toObjectReplacementRequest()).toBeNull();
 	});
 
-	it('builds the exact request with trimmed scene-object text', () => {
+	it('builds the exact request with trimmed scene-object text', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setObjectReferenceImage(objectReference);
 		request.setObjectReplacementSourceMode('room-photo');
 		request.setObjectReplacementObject('  gray sofa by the window  ');
 
-		expect(request.toObjectReplacementRequest()).toEqual({
+		expect(await request.toObjectReplacementRequest()).toEqual({
 			image: AC9_IMAGE.url,
 			referenceImage: objectReference.url,
 			replacementObject: 'gray sofa by the window'
 		});
 	});
 
-	it('uses the current result when selected and falls back to the room photo', () => {
+	it('uses the current result when selected and falls back to the room photo', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setObjectReferenceImage(objectReference);
 		request.setObjectReplacementObject('sofa');
-		expect(request.toObjectReplacementRequest()?.image).toBe(AC9_IMAGE.url);
+		expect((await request.toObjectReplacementRequest())?.image).toBe(AC9_IMAGE.url);
 
 		request.setCurrentRender({
 			id: 'render-1',
@@ -582,7 +624,7 @@ describe('toObjectReplacementRequest', () => {
 			ts: 0
 		});
 
-		expect(request.toObjectReplacementRequest()?.image).toBe(
+		expect((await request.toObjectReplacementRequest())?.image).toBe(
 			'https://example.test/current-result.webp'
 		);
 	});
@@ -637,13 +679,13 @@ describe('toTextureReplacementRequest', () => {
 		});
 	});
 
-	it('builds the existing automatic replacement payload unchanged', () => {
+	it('builds the existing automatic replacement payload unchanged', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
 		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureReplacementSurface('  sofa upholstery  ');
 
-		expect(request.toTextureReplacementRequest()).toEqual({
+		expect(await request.toTextureReplacementRequest()).toEqual({
 			image: AC9_IMAGE.url,
 			referenceImage: textureReference.url,
 			replacementSurface: 'sofa upholstery'
@@ -659,7 +701,7 @@ describe('toTextureReplacementRequest', () => {
 		});
 	});
 
-	it('builds a masked reference-image payload without the hidden surface', () => {
+	it('builds a masked reference-image payload without the hidden surface', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
 		request.setTextureReplacementSourceMode('room-photo');
@@ -667,7 +709,7 @@ describe('toTextureReplacementRequest', () => {
 		request.setTextureReplacementSurface('sofa upholstery');
 		request.setTextureReplacementMasked(true);
 
-		expect(request.toTextureReplacementRequest()).toEqual({
+		expect(await request.toTextureReplacementRequest()).toEqual({
 			image: AC9_IMAGE.url,
 			referenceImage: textureReference.url,
 			mask: textureMask.url
@@ -693,7 +735,7 @@ describe('toTextureReplacementRequest', () => {
 		expect(request.textureReplacementMasked).toBe(false);
 	});
 
-	it('rejects a stale mask after the effective source changes', () => {
+	it('rejects a stale mask after the effective source changes', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
 		request.setTextureReplacementSourceMode('room-photo');
@@ -704,7 +746,7 @@ describe('toTextureReplacementRequest', () => {
 
 		expect(request.textureMaskMatchesSource()).toBe(false);
 		expect(request.validateTextureReplacement()).toEqual({ valid: false, missing: ['mask'] });
-		expect(request.toTextureReplacementRequest()).toBeNull();
+		expect(await request.toTextureReplacementRequest()).toBeNull();
 	});
 
 	it('ignores a mask upload that finishes after the source changes', () => {

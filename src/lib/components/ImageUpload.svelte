@@ -130,7 +130,14 @@ before the Change Date. See LICENSE for complete terms.
 						: 'upload.dropSubtitle'
 	);
 	const imageUrl = $derived(image?.url ?? null);
-	const hasImage = $derived(imageUrl !== null || previewUrl !== null);
+	// For target 'room' the local preview lives on the shared store instead
+	// of `previewUrl` (a plain component $state) — Render and Edit each
+	// mount their own <ImageUpload target="room"> instance, and a
+	// component-local preview wouldn't survive switching between them.
+	const effectivePreviewUrl = $derived(
+		target === 'room' ? (request.pendingImagePreviewUrl ?? null) : previewUrl
+	);
+	const hasImage = $derived(imageUrl !== null || effectivePreviewUrl !== null);
 	const controlLabel = $derived(
 		requiredLabel ? `${t(ariaLabelKey)} — ${t(requiredLabel)}` : t(ariaLabelKey)
 	);
@@ -241,6 +248,16 @@ before the Change Date. See LICENSE for complete terms.
 			error = t('upload.errorSize');
 			return;
 		}
+		if (target === 'room') {
+			// Defer the actual /api/uploads call to generate-time (see
+			// request.svelte.ts's #ensureImageUploaded()) so a photo the user
+			// picks but never generates from never lands in the bucket.
+			// setPendingImage() creates and owns the blob: preview on the
+			// shared store — see effectivePreviewUrl above.
+			request.setPendingImage(file);
+			return;
+		}
+
 		const textureMaskUpload =
 			target === 'textureMask' ? (request.beginTextureMaskUpload() ?? undefined) : undefined;
 		if (target === 'textureMask' && !textureMaskUpload) {
@@ -272,6 +289,7 @@ before the Change Date. See LICENSE for complete terms.
 					url: result.url,
 					mime: result.mime,
 					size: result.size,
+					hash: result.hash,
 					dimensions: result.dimensions
 				},
 				textureMaskUpload
@@ -324,6 +342,7 @@ before the Change Date. See LICENSE for complete terms.
 					url: result.url,
 					mime: result.mime,
 					size: result.size,
+					hash: result.hash,
 					dimensions: result.dimensions
 				},
 				textureMaskUpload
@@ -379,7 +398,7 @@ before the Change Date. See LICENSE for complete terms.
 >
 	{#if hasImage}
 		<div class="image-wrapper">
-			<img src={previewUrl ?? imageUrl ?? ''} alt={t(ariaLabelKey)} class="preview" />
+			<img src={effectivePreviewUrl ?? imageUrl ?? ''} alt={t(ariaLabelKey)} class="preview" />
 			<div class="image-overlay">
 				<div class="image-actions">
 					<button

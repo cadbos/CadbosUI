@@ -33,6 +33,7 @@ export const uploadResultSchema = z
 		url: z.url(),
 		mime: z.string().min(1),
 		size: z.number().nonnegative(),
+		hash: z.string().min(1),
 		dimensions: z.tuple([z.number().positive(), z.number().positive()]).optional()
 	})
 	.strict();
@@ -46,6 +47,11 @@ export interface RemoteImageUploadRequest {
 // POST /api/render or /api/render/exterior — create a render.
 export interface RenderRequest {
 	image: string;
+	// SHA-256 hex digest of `image`'s bytes, from the /api/uploads response —
+	// omitted when `image` is a previous render/edit result rather than a
+	// fresh upload. Lets the server record generations.source_hash for future
+	// upload dedup; never forwarded to the render provider.
+	imageHash?: string;
 	prompt: string;
 	outputFormat: OutputFormat;
 }
@@ -59,6 +65,7 @@ export interface EditRequest {
 // POST /api/style-transfer — apply a reference image's style to a source image.
 export interface StyleTransferRequest {
 	image: string;
+	imageHash?: string;
 	referenceImage: string;
 	outputFormat: OutputFormat;
 	prompt?: string;
@@ -74,6 +81,7 @@ export interface UpscaleRequest {
 
 export interface ObjectReplacementRequest {
 	image: string;
+	imageHash?: string;
 	referenceImage: string;
 	replacementObject: string;
 }
@@ -104,12 +112,14 @@ export type ObjectReplacementJobResponse =
 
 export interface AutomaticTextureReplacementRequest {
 	image: string;
+	imageHash?: string;
 	referenceImage: string;
 	replacementSurface: string;
 }
 
 export interface MaskedTextureReplacementRequest {
 	image: string;
+	imageHash?: string;
 	referenceImage: string;
 	mask: string;
 }
@@ -173,6 +183,23 @@ export interface GeneratedImageRecord {
 
 export interface GeneratedImagesResponse {
 	images: GeneratedImageRecord[];
+	pagination: {
+		offset: number;
+		size: number;
+		hasMore: boolean;
+	};
+}
+
+// GET /api/resources — distinct source photos the user has uploaded (one card
+// per photo, deduped by content hash; see listDistinctSourceImages). Read-only
+// gallery: no delete in this iteration.
+export interface ResourceImageRecord {
+	sourceUrl: string;
+	createdAt: number;
+}
+
+export interface ResourcesResponse {
+	images: ResourceImageRecord[];
 	pagination: {
 		offset: number;
 		size: number;

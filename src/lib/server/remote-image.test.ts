@@ -63,7 +63,8 @@ describe('remote image import', () => {
 		expect(result).toEqual({
 			url: `https://uploads.cadbos.example/${id}.png`,
 			mime: 'image/png',
-			size: 11
+			size: 11,
+			hash: expect.any(String)
 		});
 	});
 

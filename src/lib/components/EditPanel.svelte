@@ -21,6 +21,7 @@ before the Change Date. See LICENSE for complete terms.
 		creditErrorKey,
 		extractApiErrorCode,
 		request,
+		RequestImageUploadError,
 		renderResultFromResponse,
 		type EditOperationType
 	} from '$lib/state/request.svelte';
@@ -92,8 +93,10 @@ before the Change Date. See LICENSE for complete terms.
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	// Editing targets the latest render/edit result once one exists; before that,
 	// it falls back to the room photo uploaded on the Render tab (same underlying
-	// state — FR: editing works independent of having rendered first).
-	const targetImageUrl = $derived(currentRender?.outputUrls[0] ?? request.image?.url);
+	// state — FR: editing works independent of having rendered first). A photo
+	// picked but not yet uploaded (request.pendingImageFile) already counts here —
+	// the actual upload is deferred, not skipped, see request.resolveEditSource().
+	const hasEditTarget = $derived(request.hasEditSource());
 	const toolDisabled = $derived(applying || !isAuthenticated);
 
 	function applyTemplate(fill: string): void {
@@ -102,16 +105,18 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function submit(prompt: string, type: EditOperationType): Promise<void> {
 		const trimmed = prompt.trim();
-		if (!targetImageUrl || !trimmed || applying || !isAuthenticated) return;
+		if (!hasEditTarget || !trimmed || applying || !isAuthenticated) return;
 		applying = true;
 		error = null;
 		const overlayId = generationOverlay.start('generationOverlay.edit');
 
 		try {
+			const source = await request.resolveEditSource();
+			if (!source) return;
 			const response = await fetch('/api/edit', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ image: targetImageUrl, prompt: trimmed })
+				body: JSON.stringify({ image: source.url, prompt: trimmed })
 			});
 			if (!response.ok) {
 				throw new Error(await extractApiErrorCode(response, 'edit_failed'));
@@ -134,6 +139,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function editErrorKey(err: unknown): TranslationKey {
+		if (err instanceof RequestImageUploadError) return 'upload.errorUpload';
 		return creditErrorKey(
 			{
 				failed: 'edit.failed',
@@ -225,7 +231,7 @@ before the Change Date. See LICENSE for complete terms.
 							<button
 								type="button"
 								class="btn-apply"
-								disabled={!request.editPrompt.trim() || toolDisabled || !targetImageUrl}
+								disabled={!request.editPrompt.trim() || toolDisabled || !hasEditTarget}
 								onclick={() => void submit(request.editPrompt, 'freeform')}
 							>
 								{#if applying}
@@ -236,19 +242,19 @@ before the Change Date. See LICENSE for complete terms.
 						</div>
 					{:else if activeTool === 'add-object'}
 						<EditAddObjectTool
-							disabled={toolDisabled || !targetImageUrl}
+							disabled={toolDisabled || !hasEditTarget}
 							{applying}
 							onApply={(prompt) => void submit(prompt, 'add-object')}
 						/>
 					{:else if activeTool === 'remove-object'}
 						<EditRemoveObjectTool
-							disabled={toolDisabled || !targetImageUrl}
+							disabled={toolDisabled || !hasEditTarget}
 							{applying}
 							onApply={(prompt) => void submit(prompt, 'remove-object')}
 						/>
 					{:else if activeTool === 'atmosphere'}
 						<EditAtmosphereTool
-							disabled={toolDisabled || !targetImageUrl}
+							disabled={toolDisabled || !hasEditTarget}
 							{applying}
 							onApply={(prompt) => void submit(prompt, 'atmosphere')}
 						/>

@@ -28,9 +28,14 @@ const optionalText = z
 	.trim()
 	.transform((value) => (value.length === 0 ? undefined : value))
 	.optional();
+// SHA-256 hex digest of the uploaded `image`'s bytes — omitted when `image`
+// is a previous render/edit result rather than a fresh upload. See
+// RenderRequest.imageHash in $lib/api/contract.
+const optionalImageHash = z.string().trim().min(1).optional();
 
 export const renderRequestSchema = z.object({
 	image: z.string().trim().min(1),
+	imageHash: optionalImageHash,
 	prompt: z.string().trim().default(''),
 	outputFormat
 });
@@ -48,6 +53,7 @@ export const editRequestSchema = z.object({
 
 export const styleTransferRequestSchema = z.object({
 	image: httpImageUrl,
+	imageHash: optionalImageHash,
 	referenceImage: httpImageUrl,
 	outputFormat,
 	prompt: optionalText,
@@ -62,6 +68,7 @@ export const upscaleRequestSchema = z.object({
 
 export const objectReplacementRequestSchema = z.strictObject({
 	image: httpsImageUrl,
+	imageHash: optionalImageHash,
 	referenceImage: httpsImageUrl,
 	replacementObject: z.string().trim().min(1).max(200)
 });
@@ -69,11 +76,13 @@ export const objectReplacementRequestSchema = z.strictObject({
 export const textureReplacementRequestSchema = z.union([
 	z.strictObject({
 		image: httpsImageUrl,
+		imageHash: optionalImageHash,
 		referenceImage: httpsImageUrl,
 		replacementSurface: z.string().trim().min(1).max(200)
 	}),
 	z.strictObject({
 		image: httpsImageUrl,
+		imageHash: optionalImageHash,
 		referenceImage: httpsImageUrl,
 		mask: httpsImageUrl
 	})

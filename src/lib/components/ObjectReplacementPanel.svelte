@@ -25,7 +25,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
-	import { extractApiErrorCode, request } from '$lib/state/request.svelte';
+	import { extractApiErrorCode, request, RequestImageUploadError } from '$lib/state/request.svelte';
 	import { buildShareUrl, isEditToolRoute } from '$lib/state/url-state';
 	import { logBoundaryError } from '$lib/utils';
 
@@ -281,17 +281,19 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function submit(): Promise<void> {
 		if (!canSubmit) return;
-		const body = request.toObjectReplacementRequest();
-		if (!body) return;
-		const sourceRender =
-			request.objectReplacementSourceMode === 'current-result' ? request.currentRender : undefined;
-		const instruction = body.replacementObject;
 		navigatedAwayWhileSubmitting = false;
 		submitting = true;
 		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
 		try {
+			const body = await request.toObjectReplacementRequest();
+			if (!body) return;
+			const sourceRender =
+				request.objectReplacementSourceMode === 'current-result'
+					? request.currentRender
+					: undefined;
+			const instruction = body.replacementObject;
 			const response = await fetch('/api/object-replacement', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
@@ -320,8 +322,14 @@ before the Change Date. See LICENSE for complete terms.
 			} catch (error) {
 				logBoundaryError('objectReplacement.jobNavigation', error);
 			}
-		} catch {
-			terminalError = { jobId: '', key: 'objectReplacement.failed' };
+		} catch (error) {
+			terminalError = {
+				jobId: '',
+				key:
+					error instanceof RequestImageUploadError
+						? 'upload.errorUpload'
+						: 'objectReplacement.failed'
+			};
 		} finally {
 			submitting = false;
 		}

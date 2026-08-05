@@ -13,8 +13,9 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Images } from '@lucide/svelte';
+	import { GalleryHorizontalEnd, Images } from '@lucide/svelte';
 	import { afterNavigate, goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import FloatingToolsPanel from '$lib/components/FloatingToolsPanel.svelte';
@@ -30,6 +31,7 @@ before the Change Date. See LICENSE for complete terms.
 		creditErrorKey,
 		extractApiErrorCode,
 		request,
+		RequestImageUploadError,
 		type SceneType
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
@@ -126,6 +128,18 @@ before the Change Date. See LICENSE for complete terms.
 		else generatedImages.clear();
 	});
 
+	// The mask editor needs a real, stable server URL (not a local blob:
+	// preview) to draw on — see ensureTextureReplacementSourceUploaded().
+	// Entering masked mode resolves the deferred main-photo upload eagerly
+	// instead of waiting for the texture-replacement submit itself.
+	$effect(() => {
+		if (showMaskOnCanvas) {
+			request
+				.ensureTextureReplacementSourceUploaded()
+				.catch((error: unknown) => logBoundaryError('workspace.maskEditorSourceUpload', error));
+		}
+	});
+
 	function closeScenes(): void {
 		scenesOpen = false;
 		requestAnimationFrame(() => scenesTrigger?.focus());
@@ -192,7 +206,7 @@ before the Change Date. See LICENSE for complete terms.
 		request.setStatus('rendering');
 		const overlayId = generationOverlay.start('generationOverlay.render');
 		try {
-			const body = request.toRenderRequest();
+			const body = await request.toRenderRequest();
 			const endpoint = request.sceneType === 'exterior' ? '/api/render/exterior' : '/api/render';
 			const response = await fetch(endpoint, {
 				method: 'POST',
@@ -224,6 +238,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function renderErrorKey(err: unknown): TranslationKey {
+		if (err instanceof RequestImageUploadError) return 'upload.errorUpload';
 		return creditErrorKey(
 			{
 				failed: 'render.failed',
@@ -259,6 +274,10 @@ before the Change Date. See LICENSE for complete terms.
 						<Images size={18} strokeWidth={1.8} aria-hidden="true" />
 						<span>{t('generatedImages.title')}</span>
 					</button>
+					<a class="resources-button" href={resolve('/resources', {})}>
+						<GalleryHorizontalEnd size={18} strokeWidth={1.8} aria-hidden="true" />
+						<span>{t('resources.title')}</span>
+					</a>
 				{/if}
 
 				<nav class="mode-nav" aria-label={t('mode.switcher.label')}>
@@ -601,6 +620,38 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: var(--shadow);
 	}
 
+	.resources-button {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		min-height: 2.5rem;
+		padding: 0.5rem 1rem;
+		border: 1px solid var(--color-border);
+		border-radius: 14px;
+		background: var(--color-surface);
+		color: var(--color-text);
+		box-shadow: var(--shadow-sm);
+		font: inherit;
+		font-size: 0.875rem;
+		font-weight: 650;
+		text-decoration: none;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			color 0.15s,
+			box-shadow 0.15s;
+	}
+
+	.resources-button:hover {
+		background: var(--color-surface-hover);
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+		box-shadow: var(--shadow);
+	}
+
 	.mode-tabs {
 		display: flex;
 		gap: 0.375rem;
@@ -753,7 +804,8 @@ before the Change Date. See LICENSE for complete terms.
 			padding: 1.5rem 0.5rem 3rem;
 		}
 
-		.scenes-button {
+		.scenes-button,
+		.resources-button {
 			padding-inline: 0.75rem;
 		}
 	}

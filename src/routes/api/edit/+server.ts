@@ -110,6 +110,9 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			const credit = await recordGeneration(db, userId, {
 				url: result.outputUrl,
 				sourceUrl: parsed.data.image,
+				// edit always operates on a previous render/edit result, never a
+				// fresh upload — nothing to dedup against.
+				sourceHash: '',
 				prompt: parsed.data.prompt,
 				kind: 'edit',
 				amount: result.cost

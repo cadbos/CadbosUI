@@ -21,6 +21,7 @@ export interface TextureReplacementJob {
 	userId: string;
 	comfyPromptId: string;
 	sceneUrl: string;
+	sceneHash: string;
 	referenceUrl: string;
 	replacementSurface: string;
 	cost: number;
@@ -38,6 +39,7 @@ interface TextureReplacementJobRow {
 	user_id: string;
 	comfy_prompt_id: string;
 	scene_url: string;
+	scene_hash: string;
 	reference_url: string;
 	replacement_surface: string;
 	cost: number;
@@ -61,6 +63,7 @@ function toTextureReplacementJob(row: TextureReplacementJobRow): TextureReplacem
 		userId: row.user_id,
 		comfyPromptId: row.comfy_prompt_id,
 		sceneUrl: row.scene_url,
+		sceneHash: row.scene_hash,
 		referenceUrl: row.reference_url,
 		replacementSurface: row.replacement_surface,
 		cost: row.cost,
@@ -81,6 +84,7 @@ export async function createTextureReplacementJob(
 		userId: string;
 		comfyPromptId: string;
 		sceneUrl: string;
+		sceneHash: string;
 		referenceUrl: string;
 		replacementSurface: string;
 		cost: number;
@@ -90,14 +94,15 @@ export async function createTextureReplacementJob(
 	const row = await db
 		.prepare(
 			'INSERT INTO texture_replacement_jobs ' +
-				'(id, user_id, comfy_prompt_id, scene_url, reference_url, replacement_surface, cost, status, created_at, updated_at) ' +
-				"VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?) RETURNING *"
+				'(id, user_id, comfy_prompt_id, scene_url, scene_hash, reference_url, replacement_surface, cost, status, created_at, updated_at) ' +
+				"VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?) RETURNING *"
 		)
 		.bind(
 			input.id,
 			input.userId,
 			input.comfyPromptId,
 			input.sceneUrl,
+			input.sceneHash,
 			input.referenceUrl,
 			input.replacementSurface,
 			input.cost,
@@ -169,8 +174,8 @@ export async function completeTextureReplacementJob(
 			db
 				.prepare(
 					'INSERT INTO generations ' +
-						'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-						"SELECT j.id, j.user_id, ?, j.scene_url, j.replacement_surface, 'texture-replacement', j.cost, c.balance, ? " +
+						'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at) ' +
+						"SELECT j.id, j.user_id, ?, j.scene_url, j.scene_hash, j.replacement_surface, 'texture-replacement', j.cost, c.balance, ? " +
 						'FROM texture_replacement_jobs j JOIN credits c ON c.user_id = j.user_id ' +
 						"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
 				)

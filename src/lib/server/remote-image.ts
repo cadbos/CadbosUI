@@ -13,7 +13,7 @@
  */
 
 import { normalizeImageContentType, type ImageMime } from '$lib/server/image-utils';
-import { uploadImageBytes } from '$lib/server/uploads';
+import { hashBytes, uploadImageBytes } from '$lib/server/uploads';
 
 export const MAX_IMAGE_UPLOAD_SIZE = 8 * 1024 * 1024;
 
@@ -192,10 +192,22 @@ export async function importRemoteImage(
 	platform: App.Platform | undefined,
 	value: string,
 	applicationOrigin: string,
-	fetcher: typeof fetch = globalThis.fetch
-): Promise<{ url: string; mime: ImageMime; size: number; dimensions?: [number, number] }> {
+	fetcher: typeof fetch = globalThis.fetch,
+	// Optional dedup lookup (generations.source_hash for the current user) —
+	// callers without a D1 user to dedup against (e.g. tests) simply omit it.
+	findExisting?: (hash: string) => Promise<string | null>
+): Promise<{
+	url: string;
+	mime: ImageMime;
+	size: number;
+	hash: string;
+	dimensions?: [number, number];
+}> {
 	const { bytes, mime } = await downloadRemoteImage(value, applicationOrigin, fetcher);
-	return uploadImageBytes(platform, bytes, mime);
+	const hash = await hashBytes(bytes);
+	const existingUrl = await findExisting?.(hash);
+	if (existingUrl) return { url: existingUrl, mime, size: bytes.byteLength, hash };
+	return uploadImageBytes(platform, bytes, mime, undefined, hash);
 }
 
 export async function downloadRemoteImage(

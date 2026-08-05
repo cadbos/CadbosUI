@@ -44,6 +44,16 @@ export interface GeneratedImage {
 	createdAt: number;
 }
 
+export interface ResourceImage {
+	sourceUrl: string;
+	createdAt: number;
+}
+
+export interface ResourceImagesPage {
+	images: ResourceImage[];
+	hasMore: boolean;
+}
+
 export interface GeneratedImagesPage {
 	images: GeneratedImage[];
 	hasMore: boolean;
@@ -86,6 +96,12 @@ function toBalance(row: BalanceRow): Balance {
 export interface RecordGenerationInput {
 	url: string;
 	sourceUrl: string;
+	// SHA-256 hex digest of the source image's bytes, or '' when the source is
+	// a previous render/edit result rather than a fresh upload (e.g. edit,
+	// upscale, or a style-transfer/object-replacement/texture-replacement call
+	// whose source mode is 'current-result') — nothing was uploaded in this
+	// call to dedup against. See findGenerationSourceByHash.
+	sourceHash: string;
 	prompt: string;
 	kind: CreditTransaction['kind'];
 	amount: number;
@@ -125,14 +141,15 @@ export async function recordGeneration(
 		db
 			.prepare(
 				'INSERT INTO generations ' +
-					'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ? FROM credits WHERE user_id = ?'
+					'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at) ' +
+					'SELECT ?, ?, ?, ?, ?, ?, ?, ?, balance, ? FROM credits WHERE user_id = ?'
 			)
 			.bind(
 				crypto.randomUUID(),
 				userId,
 				input.url,
 				input.sourceUrl,
+				input.sourceHash,
 				input.prompt,
 				input.kind,
 				input.amount,
@@ -188,6 +205,67 @@ export async function listGeneratedImages(
 	const rows = result.results ?? [];
 	return {
 		images: rows.slice(0, size).map(toGeneratedImage),
+		hasMore: rows.length > size
+	};
+}
+
+// Dedup lookup for /api/uploads: reuse an already-stored object instead of
+// writing a duplicate to R2 when this user has uploaded identical bytes
+// before. Empty-string hashes (pre-migration rows, or calls whose source
+// wasn't a fresh upload) never match, since a real SHA-256 hex digest is
+// never ''.
+export async function findGenerationSourceByHash(
+	db: D1Database,
+	userId: string,
+	hash: string
+): Promise<string | null> {
+	if (hash.length === 0) return null;
+	const row = await db
+		.prepare(
+			'SELECT source_url FROM generations WHERE user_id = ? AND source_hash = ? ' +
+				'ORDER BY created_at DESC LIMIT 1'
+		)
+		.bind(userId, hash)
+		.first<{ source_url: string }>();
+	return row?.source_url ?? null;
+}
+
+interface ResourceImageRow {
+	source_url: string;
+	created_at: number;
+}
+
+// Gallery of distinct source photos for /resources. Grouped by source_url,
+// not source_hash: the hash only dedups at *upload* time (findGenerationSourceByHash
+// reuses an existing url for a matching hash instead of storing a new object), so
+// two rows ever sharing a hash already share the identical url too — grouping by
+// url gets the same result without the '' collision that hash-only rows (every
+// edit/upscale row, and anything written before this migration) would otherwise
+// cause: those all carry source_hash = '', so GROUP BY source_hash would either
+// collapse every one of them into a single card (grouping on '' directly) or, if
+// falling back per-row, leave literal duplicate urls ungrouped — both wrong. A
+// plain source_url is always a true 1:1 identity for a given uploaded image,
+// since each upload gets a freshly generated storage key.
+export async function listDistinctSourceImages(
+	db: D1Database,
+	userId: string,
+	offset: number,
+	size: number
+): Promise<ResourceImagesPage> {
+	const result = await db
+		.prepare(
+			'SELECT source_url, MAX(created_at) AS created_at FROM generations ' +
+				'WHERE user_id = ? ' +
+				'GROUP BY source_url ' +
+				'ORDER BY created_at DESC, source_url DESC LIMIT ? OFFSET ?'
+		)
+		.bind(userId, size + 1, offset)
+		.all<ResourceImageRow>();
+	const rows = result.results ?? [];
+	return {
+		images: rows
+			.slice(0, size)
+			.map((row) => ({ sourceUrl: row.source_url, createdAt: row.created_at })),
 		hasMore: rows.length > size
 	};
 }

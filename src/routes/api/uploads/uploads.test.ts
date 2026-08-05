@@ -13,6 +13,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DEMO_PUBKEY } from '$lib/server/demo';
 import { MAX_IMAGE_UPLOAD_SIZE } from '$lib/server/remote-image';
 import { POST } from './+server';
 
@@ -27,6 +28,9 @@ function platform(bucket = { put: vi.fn(async () => undefined) }): App.Platform 
 	} as unknown as App.Platform;
 }
 
+// DEMO_PUBKEY bypasses D1 entirely (see hooks.server.ts / the route's demoUser
+// check), so these tests exercise the pure R2 storage path without needing to
+// seed a database for the dedup lookup.
 function call(body: unknown, uploadPlatform = platform()): ReturnType<typeof POST> {
 	return POST({
 		request: new Request('https://cadbos.example/api/uploads', {
@@ -35,7 +39,8 @@ function call(body: unknown, uploadPlatform = platform()): ReturnType<typeof POS
 			body: JSON.stringify(body)
 		}),
 		platform: uploadPlatform,
-		url: new URL('https://cadbos.example/api/uploads')
+		url: new URL('https://cadbos.example/api/uploads'),
+		locals: { user: { pubkey: DEMO_PUBKEY } }
 	} as UploadEvent);
 }
 
