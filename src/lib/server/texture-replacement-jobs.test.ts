@@ -14,19 +14,18 @@
 
 import type { D1Database } from '@cloudflare/workers-types';
 import { describe, expect, it, vi } from 'vitest';
+import { getCredit } from '$lib/server/billing';
 import {
 	completeTextureReplacementJob,
 	createTextureReplacementJob
 } from '$lib/server/texture-replacement-jobs';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { grantGenerationAccess, makeD1 } from '$lib/server/testing/d1-shim';
 
 function seedAccount(db: D1Database): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind('user-1', 'pubkey-1', 1)
 		.run();
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-		.bind('user-1', 1, 1)
-		.run();
+	grantGenerationAccess(db, 'user-1', 1, 1, 1);
 }
 
 describe('texture replacement jobs', () => {
@@ -55,16 +54,20 @@ describe('texture replacement jobs', () => {
 		);
 
 		expect(job).toMatchObject({ status: 'completed', balanceAfter: 0, cost: 2 });
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
+		const credit = await getCredit(db, 'user-1');
 		const generation = await db
-			.prepare('SELECT amount, balance_after FROM generations WHERE id = ?')
+			.prepare(
+				'SELECT -entry.amount / 100.0 AS amount, job.balance_after ' +
+					'FROM generations generation ' +
+					'JOIN texture_replacement_jobs job ON job.id = generation.id ' +
+					'JOIN ledger_entries entry ON entry.transaction_id = generation.ledger_transaction_id ' +
+					'JOIN ledger_accounts account ON account.id = entry.account_id ' +
+					"WHERE generation.id = ? AND account.kind = 'user_balance'"
+			)
 			.bind('job-1')
 			.first<{ amount: number; balance_after: number }>();
 		expect(credit?.balance).toBe(0);
-		expect(generation).toEqual({ amount: 2, balance_after: 0 });
+		expect(generation).toEqual({ amount: 1, balance_after: 0 });
 		expect(warning).toHaveBeenCalledOnce();
 		expect(warning).toHaveBeenCalledWith(
 			'Texture replacement credit deduction exceeded available balance:',

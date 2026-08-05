@@ -120,7 +120,9 @@ export function seedGeneratedImage(
 	id: string,
 	userId: string,
 	createdAt: number,
-	url = `https://cdn.example.test/${id}.webp`
+	url = `https://cdn.example.test/${id}.webp`,
+	inputUrl = 'https://cdn.example.test/source.jpg',
+	inputHash = ''
 ): void {
 	const transactionId = `generation:${id}`;
 	db.prepare('INSERT INTO ledger_transactions (id, occurred_at) VALUES (?, ?)')
@@ -133,9 +135,10 @@ export function seedGeneratedImage(
 		.bind(id, userId, 'cozy', 'render', transactionId, createdAt)
 		.run();
 	db.prepare(
-		'INSERT INTO image_generation_details (generation_id, output_url, input_url) VALUES (?, ?, ?)'
+		'INSERT INTO image_generation_details ' +
+			'(generation_id, output_url, input_url, input_hash) VALUES (?, ?, ?, ?)'
 	)
-		.bind(id, url, 'https://cdn.example.test/source.jpg')
+		.bind(id, url, inputUrl, inputHash)
 		.run();
 	db.prepare('UPDATE ledger_transactions SET finalized = 1 WHERE id = ?').bind(transactionId).run();
 }

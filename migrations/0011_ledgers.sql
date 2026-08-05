@@ -177,6 +177,7 @@ CREATE TABLE generation_operations (
 	),
 	user_id TEXT NOT NULL REFERENCES users (id),
 	input_url TEXT NOT NULL CHECK (input_url LIKE 'http://%' OR input_url LIKE 'https://%'),
+	input_hash TEXT NOT NULL,
 	prompt TEXT NOT NULL,
 	kind TEXT NOT NULL CHECK (length(kind) > 0),
 	cost_units INTEGER CHECK (cost_units IS NULL OR (typeof(cost_units) = 'integer' AND cost_units >= 0)),
@@ -215,8 +216,12 @@ CREATE INDEX generations_user_created_at ON generations (user_id, created_at DES
 CREATE TABLE image_generation_details (
 	generation_id TEXT PRIMARY KEY REFERENCES generations (id) ON DELETE CASCADE,
 	output_url TEXT NOT NULL CHECK (output_url LIKE 'http://%' OR output_url LIKE 'https://%'),
-	input_url TEXT NOT NULL CHECK (input_url LIKE 'http://%' OR input_url LIKE 'https://%')
+	input_url TEXT NOT NULL CHECK (input_url LIKE 'http://%' OR input_url LIKE 'https://%'),
+	input_hash TEXT NOT NULL
 );
+
+CREATE INDEX image_generation_details_input_hash
+	ON image_generation_details (input_hash, generation_id);
 
 INSERT INTO generation_access (user_id, enabled)
 SELECT user_id, enabled
@@ -241,8 +246,8 @@ INSERT INTO generations (id, user_id, prompt, kind, ledger_transaction_id, creat
 SELECT id, user_id, prompt, kind, 'generation:' || id, created_at
 FROM generations_before_ledgers;
 
-INSERT INTO image_generation_details (generation_id, output_url, input_url)
-SELECT id, url, source_url
+INSERT INTO image_generation_details (generation_id, output_url, input_url, input_hash)
+SELECT id, url, source_url, source_hash
 FROM generations_before_ledgers;
 
 WITH credit_openings AS (
@@ -518,9 +523,9 @@ END;
 CREATE TRIGGER generation_operations_enforce_transition
 BEFORE UPDATE ON generation_operations
 WHEN NOT (
-	(OLD.status = 'pending' AND NEW.status IN ('confirmed', 'failed') AND OLD.id IS NEW.id AND OLD.user_id IS NEW.user_id AND OLD.input_url IS NEW.input_url AND OLD.prompt IS NEW.prompt AND OLD.kind IS NEW.kind AND OLD.created_at IS NEW.created_at)
+	(OLD.status = 'pending' AND NEW.status IN ('confirmed', 'failed') AND OLD.id IS NEW.id AND OLD.user_id IS NEW.user_id AND OLD.input_url IS NEW.input_url AND OLD.input_hash IS NEW.input_hash AND OLD.prompt IS NEW.prompt AND OLD.kind IS NEW.kind AND OLD.created_at IS NEW.created_at)
 	OR
-	(OLD.status = 'confirmed' AND NEW.status = 'completed' AND OLD.id IS NEW.id AND OLD.user_id IS NEW.user_id AND OLD.input_url IS NEW.input_url AND OLD.prompt IS NEW.prompt AND OLD.kind IS NEW.kind AND OLD.cost_units IS NEW.cost_units AND OLD.output_url IS NEW.output_url AND OLD.created_at IS NEW.created_at AND OLD.confirmed_at IS NEW.confirmed_at)
+	(OLD.status = 'confirmed' AND NEW.status = 'completed' AND OLD.id IS NEW.id AND OLD.user_id IS NEW.user_id AND OLD.input_url IS NEW.input_url AND OLD.input_hash IS NEW.input_hash AND OLD.prompt IS NEW.prompt AND OLD.kind IS NEW.kind AND OLD.cost_units IS NEW.cost_units AND OLD.output_url IS NEW.output_url AND OLD.created_at IS NEW.created_at AND OLD.confirmed_at IS NEW.confirmed_at)
 )
 BEGIN
 	SELECT RAISE(ABORT, 'invalid generation operation transition');
