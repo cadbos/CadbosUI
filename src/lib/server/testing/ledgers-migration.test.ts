@@ -22,14 +22,28 @@ function readMigration(name: string): string {
 	return readFileSync(new URL(name, MIGRATIONS_DIR), 'utf8');
 }
 
-describe('0009_ledgers migration', () => {
+const preLedgerMigrations = [
+	'0001_auth.sql',
+	'0002_balance.sql',
+	'0003_generated_images.sql',
+	'0004_credits.sql',
+	'0005_generation_access.sql',
+	'0006_generations.sql',
+	'0007_object_replacement_jobs.sql',
+	'0008_texture_replacement_jobs.sql',
+	'0009_source_hash.sql',
+	'0010_resources_source_url_index.sql'
+];
+
+function applyPreLedgerMigrations(db: DatabaseSync): void {
+	for (const name of preLedgerMigrations) db.exec(readMigration(name));
+}
+
+describe('0011_ledgers migration', () => {
 	it('backfills balances, access, generations, and immutable ledger records', () => {
 		const db = new DatabaseSync(':memory:');
 		db.exec('PRAGMA foreign_keys = ON');
-		for (let index = 1; index <= 6; index += 1) {
-			const name = `${String(index).padStart(4, '0')}_${['auth', 'balance', 'generated_images', 'credits', 'generation_access', 'generations'][index - 1]}.sql`;
-			db.exec(readMigration(name));
-		}
+		applyPreLedgerMigrations(db);
 
 		db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)').run(
 			'user-1',
@@ -46,13 +60,14 @@ describe('0009_ledgers migration', () => {
 		);
 		db.prepare(
 			'INSERT INTO generations ' +
-				'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-				'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+				'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at) ' +
+				'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
 		).run(
 			'generation-1',
 			'user-1',
 			'https://cdn.example.test/output.webp',
 			'https://cdn.example.test/input.jpg',
+			'hash-room',
 			'cozy',
 			'render',
 			0.06,
@@ -60,7 +75,7 @@ describe('0009_ledgers migration', () => {
 			5000
 		);
 
-		db.exec(readMigration('0009_ledgers.sql'));
+		db.exec(readMigration('0011_ledgers.sql'));
 
 		expect(
 			db
@@ -105,7 +120,8 @@ describe('0009_ledgers migration', () => {
 		expect(
 			db
 				.prepare(
-					'SELECT generation.prompt, generation.kind, detail.output_url, detail.input_url ' +
+					'SELECT generation.prompt, generation.kind, detail.output_url, detail.input_url, ' +
+						'detail.input_hash ' +
 						'FROM generations generation JOIN image_generation_details detail ' +
 						'ON detail.generation_id = generation.id'
 				)
@@ -114,7 +130,8 @@ describe('0009_ledgers migration', () => {
 			prompt: 'cozy',
 			kind: 'render',
 			output_url: 'https://cdn.example.test/output.webp',
-			input_url: 'https://cdn.example.test/input.jpg'
+			input_url: 'https://cdn.example.test/input.jpg',
+			input_hash: 'hash-room'
 		});
 		expect(() => db.prepare('SELECT * FROM credits').all()).toThrow('no such table: credits');
 		expect(() => db.prepare('UPDATE ledger_entries SET amount = 1').run()).toThrow(
@@ -204,10 +221,7 @@ describe('0009_ledgers migration', () => {
 	it('keeps generation-only users out of app-credit accounts and access', () => {
 		const db = new DatabaseSync(':memory:');
 		db.exec('PRAGMA foreign_keys = ON');
-		for (let index = 1; index <= 6; index += 1) {
-			const name = `${String(index).padStart(4, '0')}_${['auth', 'balance', 'generated_images', 'credits', 'generation_access', 'generations'][index - 1]}.sql`;
-			db.exec(readMigration(name));
-		}
+		applyPreLedgerMigrations(db);
 
 		db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)').run(
 			'legacy-user',
@@ -230,7 +244,7 @@ describe('0009_ledgers migration', () => {
 			5000
 		);
 
-		db.exec(readMigration('0009_ledgers.sql'));
+		db.exec(readMigration('0011_ledgers.sql'));
 
 		expect(
 			db.prepare('SELECT user_id FROM generation_access WHERE user_id = ?').get('legacy-user')
@@ -291,11 +305,8 @@ describe('0009_ledgers migration', () => {
 	it('enforces generation operation identities, states, transitions, and immutability', () => {
 		const db = new DatabaseSync(':memory:');
 		db.exec('PRAGMA foreign_keys = ON');
-		for (let index = 1; index <= 6; index += 1) {
-			const name = `${String(index).padStart(4, '0')}_${['auth', 'balance', 'generated_images', 'credits', 'generation_access', 'generations'][index - 1]}.sql`;
-			db.exec(readMigration(name));
-		}
-		db.exec(readMigration('0009_ledgers.sql'));
+		applyPreLedgerMigrations(db);
+		db.exec(readMigration('0011_ledgers.sql'));
 		db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)').run(
 			'user-1',
 			'pubkey-1',
@@ -306,8 +317,8 @@ describe('0009_ledgers migration', () => {
 			db
 				.prepare(
 					'INSERT INTO generation_operations ' +
-						'(id, user_id, input_url, prompt, kind, status, created_at) ' +
-						"VALUES ('not-a-uuid', 'user-1', 'https://example.test/in.jpg', 'cozy', 'render', 'pending', 2000)"
+						'(id, user_id, input_url, input_hash, prompt, kind, status, created_at) ' +
+						"VALUES ('not-a-uuid', 'user-1', 'https://example.test/in.jpg', '', 'cozy', 'render', 'pending', 2000)"
 				)
 				.run()
 		).toThrow();
@@ -315,8 +326,8 @@ describe('0009_ledgers migration', () => {
 		const operationId = '00000000-0000-4000-8000-000000000001';
 		db.prepare(
 			'INSERT INTO generation_operations ' +
-				'(id, user_id, input_url, prompt, kind, status, created_at) ' +
-				"VALUES (?, 'user-1', 'https://example.test/in.jpg', 'cozy', 'render', 'pending', 2000)"
+				'(id, user_id, input_url, input_hash, prompt, kind, status, created_at) ' +
+				"VALUES (?, 'user-1', 'https://example.test/in.jpg', '', 'cozy', 'render', 'pending', 2000)"
 		).run(operationId);
 
 		expect(() =>

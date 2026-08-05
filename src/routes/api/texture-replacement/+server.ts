@@ -19,16 +19,11 @@ import type { RenderResponse, TextureReplacementJobResponse } from '$lib/api/con
 import { apiError, parseBody, textureReplacementRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
-import {
-	assertGenerationAllowed,
-	getCredit,
-	getUserIdByPubkey,
-	recordBalance
-} from '$lib/server/billing';
+import { assertGenerationAllowed, getUserIdByPubkey } from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { replaceTexturesWithMask } from '$lib/server/generation';
-import { recordGeneration } from '$lib/server/generations';
+import { runPaidGeneration } from '$lib/server/paid-generation';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 import {
 	cancelTextureReplacement,
@@ -99,7 +94,6 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 
 		const maskedRequest = 'mask' in parsed.data ? parsed.data : undefined;
 		const automaticRequest = 'replacementSurface' in parsed.data ? parsed.data : undefined;
-		let precheckBalance: number | undefined;
 		let comfyCost: number | undefined;
 		try {
 			const check = await assertGenerationAllowed(db, userId);
@@ -115,7 +109,6 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				logRejection(402, 'insufficient_credit');
 				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
 			}
-			precheckBalance = check.balance;
 			if (automaticRequest) comfyCost = textureReplacementCost(platform);
 			if (comfyCost !== undefined && check.balance < comfyCost) {
 				logRejection(402, 'insufficient_credit');
@@ -127,45 +120,35 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		}
 
 		if (maskedRequest) {
-			let result: RenderResponse;
 			try {
-				result = await replaceTexturesWithMask(platform, maskedRequest);
+				const paid = await runPaidGeneration(
+					db,
+					userId,
+					{
+						sourceUrl: maskedRequest.image,
+						sourceHash: maskedRequest.imageHash ?? '',
+						prompt: '',
+						kind: 'texture-replacement'
+					},
+					() => replaceTexturesWithMask(platform, maskedRequest)
+				);
+				if (!paid.allowed) {
+					return paid.reason === 'not_approved'
+						? apiError(403, 'generation_restricted', 'Generation is limited to approved accounts')
+						: apiError(402, 'insufficient_credit', 'Test balance exhausted');
+				}
+				const result: RenderResponse = paid.response;
+				return json({
+					id: crypto.randomUUID(),
+					status: 'completed',
+					outputUrl: result.outputUrl,
+					cost: result.cost,
+					balance: result.balance
+				} satisfies TextureReplacementJobResponse);
 			} catch {
 				console.error('ArchAI masked texture replacement failed');
 				return apiError(502, 'texture_replacement_failed', 'Texture replacement failed');
 			}
-
-			try {
-				await recordBalance(db, userId, result.balance);
-			} catch (error) {
-				console.error('recordBalance failed after masked texture replacement:', error);
-			}
-			try {
-				const credit = await recordGeneration(db, userId, {
-					url: result.outputUrl,
-					sourceUrl: maskedRequest.image,
-					sourceHash: maskedRequest.imageHash ?? '',
-					prompt: '',
-					kind: 'texture-replacement',
-					amount: result.cost
-				});
-				result = { ...result, balance: credit.balance };
-			} catch (error) {
-				console.error('recordGeneration failed after masked texture replacement:', error);
-				const fallback = await getCredit(db, userId).catch((fallbackError) => {
-					console.error('balance fallback failed after masked texture replacement:', fallbackError);
-					return null;
-				});
-				result = { ...result, balance: fallback?.balance ?? precheckBalance ?? 0 };
-			}
-
-			return json({
-				id: crypto.randomUUID(),
-				status: 'completed',
-				outputUrl: result.outputUrl,
-				cost: result.cost,
-				balance: result.balance
-			} satisfies TextureReplacementJobResponse);
 		}
 
 		if (!automaticRequest || comfyCost === undefined) {

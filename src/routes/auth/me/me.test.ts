@@ -80,6 +80,7 @@ describe('GET /auth/me — generation access control', () => {
 		grantGenerationAccess(db, 'user-1', 5);
 		const operationId = await createGenerationOperation(db, 'user-1', {
 			sourceUrl: 'https://cdn.example.test/room.jpg',
+			sourceHash: 'hash-room',
 			prompt: 'cozy',
 			kind: 'render'
 		});

@@ -15,49 +15,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { toLedgerAmountUnits } from '$lib/server/ledger-units';
+import { grantGenerationAccess, makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
-// Lets a single test force recordGeneration and/or the getCredit fallback to
-// reject, to prove the response never falls back to archAI's raw (shared) balance.
-const billingMock = vi.hoisted(() => ({
-	failNextRecordBalance: false,
-	failNextGetCredit: false
-}));
-const generationsMock = vi.hoisted(() => ({ failNextRecordGeneration: false }));
-
-vi.mock('$lib/server/billing', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/billing')>();
-	return {
-		...actual,
-		recordBalance: vi.fn((...args: Parameters<typeof actual.recordBalance>) => {
-			if (billingMock.failNextRecordBalance) {
-				billingMock.failNextRecordBalance = false;
-				return Promise.reject(new Error('simulated D1 failure'));
-			}
-			return actual.recordBalance(...args);
-		}),
-		getCredit: vi.fn((...args: Parameters<typeof actual.getCredit>) => {
-			if (billingMock.failNextGetCredit) {
-				billingMock.failNextGetCredit = false;
-				return Promise.reject(new Error('simulated D1 failure'));
-			}
-			return actual.getCredit(...args);
-		})
-	};
-});
+const generationsMock = vi.hoisted(() => ({ failFinalization: false }));
 
 vi.mock('$lib/server/generations', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/generations')>();
 	return {
 		...actual,
-		recordGeneration: vi.fn((...args: Parameters<typeof actual.recordGeneration>) => {
-			if (generationsMock.failNextRecordGeneration) {
-				generationsMock.failNextRecordGeneration = false;
-				return Promise.reject(new Error('simulated D1 failure'));
+		finalizeGenerationOperation: vi.fn(
+			(...args: Parameters<typeof actual.finalizeGenerationOperation>) => {
+				if (generationsMock.failFinalization) {
+					return Promise.reject(new Error('simulated D1 failure'));
+				}
+				return actual.finalizeGenerationOperation(...args);
 			}
-			return actual.recordGeneration(...args);
-		})
+		)
 	};
 });
 
@@ -72,12 +47,6 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 // The admin's manual approval step (migrations/0005) — no auto-provisioning
 // exists anymore, so every test that expects a render to succeed must grant
 // access first.
-function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
-		.bind(userId, balance, Date.now(), enabled)
-		.run();
-}
-
 type ExteriorRenderEvent = Parameters<typeof POST>[0];
 
 function call(
@@ -111,7 +80,7 @@ describe('POST /api/render/exterior — billing', () => {
 	it('renders an exterior image and returns a URL', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
@@ -119,36 +88,42 @@ describe('POST /api/render/exterior — billing', () => {
 		expect(result.outputUrl).toMatch(/^https:\/\//);
 	});
 
-	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
+	it('debits the global token ledger without exposing the provider balance', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { balance: number; cost: number };
 
-		// The archAI mock reports balance 48 — that must land in the ops-only
-		// mirror, never in the response the client sees.
 		const balanceRow = await db
-			.prepare('SELECT balance FROM balances WHERE user_id = ?')
-			.bind('user-1')
+			.prepare(
+				'SELECT balance.balance FROM ledger_accounts account ' +
+					'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+					"WHERE account.asset = 'archai_token' AND account.user_id IS NULL"
+			)
 			.first<{ balance: number }>();
-		expect(balanceRow?.balance).toBe(48);
+		expect(balanceRow?.balance).toBe(-toLedgerAmountUnits(result.cost));
 		expect(result.balance).toBe(12 - result.cost);
 	});
 
 	it('records the generated exterior image, source and prompt against the authenticated profile', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12);
+		grantGenerationAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { outputUrl: string };
 
 		const row = await db
-			.prepare('SELECT user_id, url, source_url, prompt, kind FROM generations WHERE user_id = ?')
+			.prepare(
+				'SELECT generation.user_id, detail.output_url AS url, detail.input_url AS source_url, ' +
+					'generation.prompt, generation.kind FROM generations generation ' +
+					'JOIN image_generation_details detail ON detail.generation_id = generation.id ' +
+					'WHERE generation.user_id = ?'
+			)
 			.bind('user-1')
 			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
 		expect(row).toEqual({
@@ -160,11 +135,11 @@ describe('POST /api/render/exterior — billing', () => {
 		});
 	});
 
-	it('still returns the completed, already-charged render if recordGeneration fails', async () => {
+	it('returns 500 and retains a confirmed operation when finalization keeps failing', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12);
-		generationsMock.failNextRecordGeneration = true;
+		grantGenerationAccess(db, 'user-1', 12);
+		generationsMock.failFinalization = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 		try {
@@ -174,55 +149,21 @@ describe('POST /api/render/exterior — billing', () => {
 				body
 			);
 
-			expect(response.status).toBe(200);
-			const result = (await response.json()) as { outputUrl: string };
-			expect(result.outputUrl).toMatch(/^https:\/\//);
+			expect(response.status).toBe(500);
 			expect(consoleError).toHaveBeenCalledWith(
-				'recordGeneration failed after a successful exterior render:',
+				'exterior render operation failed:',
 				expect.any(Error)
 			);
+			expect(
+				db
+					.prepare('SELECT status FROM generation_operations WHERE user_id = ?')
+					.bind('user-1')
+					.first<{ status: string }>()
+			).toEqual({ status: 'confirmed' });
 		} finally {
+			generationsMock.failFinalization = false;
 			consoleError.mockRestore();
 		}
-	});
-
-	it('still returns the completed, already-charged render if recording the balance fails', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12);
-		billingMock.failNextRecordBalance = true;
-		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-
-		try {
-			const response = await call(
-				{ pubkey: 'pubkey-1' },
-				{ env: { DB: db } } as App.Platform,
-				body
-			);
-
-			expect(response.status).toBe(200);
-			const result = (await response.json()) as { outputUrl: string };
-			expect(result.outputUrl).toMatch(/^https:\/\//);
-			expect(consoleError).toHaveBeenCalledWith(
-				'recordBalance failed after a successful exterior render:',
-				expect.any(Error)
-			);
-		} finally {
-			consoleError.mockRestore();
-		}
-	});
-
-	it('never falls back to the raw archAI balance if recordGeneration and the getCredit fallback both fail', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
-		generationsMock.failNextRecordGeneration = true;
-		billingMock.failNextGetCredit = true;
-
-		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(200);
-		const result = (await response.json()) as { balance: number };
-		expect(result.balance).toBe(12);
 	});
 
 	it('bypasses balance recording entirely for the dev-only demo session', async () => {
@@ -242,7 +183,7 @@ describe('POST /api/render/exterior — billing', () => {
 	});
 
 	describe('generation access control', () => {
-		it('blocks an account with no credits row at all', async () => {
+		it('blocks an account with no generation access', async () => {
 			const db = makeD1();
 			seedUser(db, 'user-1', pubkey);
 
@@ -255,7 +196,7 @@ describe('POST /api/render/exterior — billing', () => {
 		it('blocks an account the admin disabled, even with balance remaining', async () => {
 			const db = makeD1();
 			seedUser(db, 'user-1', pubkey);
-			grantAccess(db, 'user-1', 5, 0);
+			grantGenerationAccess(db, 'user-1', 5, 0);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(403);
@@ -266,23 +207,27 @@ describe('POST /api/render/exterior — billing', () => {
 		it('allows and deducts the real archAI cost for an approved, enabled account', async () => {
 			const db = makeD1();
 			seedUser(db, 'user-1', pubkey);
-			grantAccess(db, 'user-1', 12);
+			grantGenerationAccess(db, 'user-1', 12);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(200);
 			const result = (await response.json()) as { cost: number };
 
 			const creditRow = await db
-				.prepare('SELECT balance FROM credits WHERE user_id = ?')
+				.prepare(
+					'SELECT balance.balance FROM ledger_accounts account ' +
+						'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+						"WHERE account.user_id = ? AND account.asset = 'app_credit'"
+				)
 				.bind('user-1')
 				.first<{ balance: number }>();
-			expect(creditRow?.balance).toBe(12 - result.cost);
+			expect(creditRow?.balance).toBe(toLedgerAmountUnits(12 - result.cost));
 		});
 
 		it('blocks generation once an approved account exhausts its balance', async () => {
 			const db = makeD1();
 			seedUser(db, 'user-1', pubkey);
-			grantAccess(db, 'user-1', 0);
+			grantGenerationAccess(db, 'user-1', 0);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(402);
@@ -290,10 +235,10 @@ describe('POST /api/render/exterior — billing', () => {
 			expect(result.error.code).toBe('insufficient_credit');
 		});
 
-		it('returns a clean 500 instead of crashing if the credits table is missing (unapplied migration)', async () => {
+		it('returns a clean 500 instead of crashing if the ledger schema is missing', async () => {
 			const db = makeD1();
 			seedUser(db, 'user-1', pubkey);
-			db.prepare('DROP TABLE credits').run();
+			db.prepare('DROP TABLE generation_access').run();
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(500);
