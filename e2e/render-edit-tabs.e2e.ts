@@ -53,7 +53,7 @@ async function mockUpload(page: Page): Promise<void> {
 				url: 'https://cdn.example.test/uploaded.webp',
 				mime: 'image/webp',
 				size: 1024,
-				hash: 'uploaded-hash',
+				hash: 'a'.repeat(64),
 				dimensions: [800, 600]
 			})
 		});
@@ -547,7 +547,7 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 	// The source was a fresh upload (no prior render) — its hash must travel
 	// through to /api/edit so the resources gallery can tell this apart from
 	// an edit continuing off a previous result (which never has a hash).
-	expect(editBody).toMatchObject({ imageHash: expect.any(String) });
+	expect(editBody).toMatchObject({ imageHash: expect.stringMatching(/^[0-9a-f]{64}$/) });
 	// Once a result exists, the Edit tab no longer offers a raw upload — it edits
 	// the result itself, same as the post-render flow.
 	await expect(page.locator('#mode-panel-edit input[type="file"]')).toHaveCount(0);
