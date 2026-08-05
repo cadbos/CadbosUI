@@ -20,7 +20,7 @@
 		"test:unit": "vitest",
 		"test": "pnpm run check && pnpm run lint && vitest run",
 		"e2e": "pnpm run build && playwright test --config playwright.config.ts && playwright test --config playwright.paid.config.ts",
-		"e2e:server": "node scripts/reset-paid-flow-db.mjs && wrangler d1 migrations apply DB --local --persist-to /tmp/cadbos-paid-flow-d1 && wrangler d1 execute DB --local --persist-to /tmp/cadbos-paid-flow-d1 --file e2e/fixtures/paid-flow-seed.sql && PLAYWRIGHT_TEST=1 PLAYWRIGHT_PAID_FLOW=1 vite dev --host 127.0.0.1 --port 4175"
+		"e2e:server": "export CADBOS_PAID_FLOW_PERSIST_ROOT=$(node --input-type=module --eval=\"import { PAID_FLOW_PERSIST_ROOT } from './scripts/paid-flow-db-path.mjs'; process.stdout.write(PAID_FLOW_PERSIST_ROOT)\") && node scripts/reset-paid-flow-db.mjs && wrangler d1 migrations apply DB --local --persist-to \"$CADBOS_PAID_FLOW_PERSIST_ROOT\" && wrangler d1 execute DB --local --persist-to \"$CADBOS_PAID_FLOW_PERSIST_ROOT\" --file e2e/fixtures/paid-flow-seed.sql && PLAYWRIGHT_TEST=1 PLAYWRIGHT_PAID_FLOW=1 vite dev --host 127.0.0.1 --port 4175"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20260626.1",

@@ -145,8 +145,8 @@ pnpm exec wrangler deploy --config wrangler.reconciler.jsonc
 ```
 
 Apply the D1 migrations before deploying either Worker. Migration
-`0009_ledgers.sql` replaces the branch's unapplied `0007_ledgers.sql`, and
-`0010_payment_packages.sql` installs the $1, $3, and $5 packages.
+`0011_ledgers.sql` introduces the ledger schema after the resource migrations, and
+`0012_payment_packages.sql` installs the $1, $3, and $5 packages.
 
 Inspect status and logs with:
 

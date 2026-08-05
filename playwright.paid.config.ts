@@ -14,28 +14,9 @@
 
 import { defineConfig } from '@playwright/test';
 
-const buildMode = process.env.PLAYWRIGHT_BUILD_MODE;
-
-if (buildMode !== undefined && buildMode !== 'preview') {
-	throw new Error('PLAYWRIGHT_BUILD_MODE must be preview when provided');
-}
-
-const buildCommand = buildMode === 'preview' ? 'pnpm run build --mode preview' : 'pnpm run build';
-
 export default defineConfig({
-	webServer: {
-		command: `${buildCommand} && pnpm run preview --host 127.0.0.1 --port 4174`,
-		env: { PLAYWRIGHT_TEST: '1' },
-		port: 4174,
-		timeout: 180_000
-	},
-	use: { baseURL: 'http://127.0.0.1:4174' },
+	webServer: { command: 'pnpm run e2e:server', port: 4175, timeout: 180_000 },
+	use: { baseURL: 'http://127.0.0.1:4175' },
 	testDir: 'e2e',
-	projects: [
-		{
-			name: 'ui',
-			testMatch: '**/*.e2e.{ts,js}',
-			testIgnore: '**/*.paid.e2e.{ts,js}'
-		}
-	]
+	projects: [{ name: 'paid-flow', testMatch: '**/*.paid.e2e.{ts,js}', workers: 1 }]
 });

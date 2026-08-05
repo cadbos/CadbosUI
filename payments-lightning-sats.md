@@ -98,6 +98,6 @@ PAYMENTS_WEBHOOK_URL=https://cadbos.example.com/api/webhooks/lnbits
 The invoice key is server-only. LNbits is configured separately with
 `LNBITS_BACKEND_WALLET_CLASS=NWCWallet` and the Alby Hub `NWC_PAIRING_URL`.
 
-Apply `0009_ledgers.sql`, `0010_payment_packages.sql`, and
-`0011_deposit_invoice_creation_lease.sql`, then deploy the app and the scheduled
+Apply `0011_ledgers.sql`, `0012_payment_packages.sql`, and
+`0013_deposit_invoice_creation_lease.sql`, then deploy the app and the scheduled
 Worker from `wrangler.reconciler.jsonc`.

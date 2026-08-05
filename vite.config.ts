@@ -25,6 +25,7 @@ import { clientIntegrityPlugin } from './config/client-integrity-plugin';
 // Relative import: the `$lib` alias is not resolved while Vite evaluates this config.
 import { heyApiOpenApiConfig } from './openapi-ts.config';
 import packageMetadata from './package.json';
+import { PAID_FLOW_PERSIST_PATH } from './scripts/paid-flow-db-path.mjs';
 import { NOSTR_CONNECT_RELAYS } from './src/lib/nostr/connect';
 
 const commitSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
@@ -96,7 +97,12 @@ export default defineConfig(({ mode }) => {
 				// Deployed to Cloudflare Workers (Static Assets); see wrangler.jsonc.
 				adapter: adapter({
 					platformProxy: {
-						persist: process.env.PLAYWRIGHT_TEST === '1' ? false : undefined,
+						persist:
+							process.env.PLAYWRIGHT_PAID_FLOW === '1'
+								? { path: PAID_FLOW_PERSIST_PATH }
+								: process.env.PLAYWRIGHT_TEST === '1'
+									? false
+									: undefined,
 						remoteBindings: process.env.PLAYWRIGHT_TEST === '1' ? false : undefined
 					}
 				}),
