@@ -287,12 +287,12 @@ before the Change Date. See LICENSE for complete terms.
 		terminalError = null;
 		pollFailure = null;
 		try {
-			const body = await request.toObjectReplacementRequest();
-			if (!body) return;
 			const sourceRender =
 				request.objectReplacementSourceMode === 'current-result'
 					? request.currentRender
 					: undefined;
+			const body = await request.toObjectReplacementRequest();
+			if (!body) return;
 			const instruction = body.replacementObject;
 			const response = await fetch('/api/object-replacement', {
 				method: 'POST',
