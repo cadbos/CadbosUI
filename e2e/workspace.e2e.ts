@@ -189,8 +189,9 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	);
 
 	await scenesButton.click();
-	await images.nth(1).hover();
-	await page.getByRole('button', { name: 'Обработать результат сцены 2' }).click();
+	const useResultButton = page.getByRole('button', { name: 'Обработать результат сцены 2' });
+	await useResultButton.focus();
+	await useResultButton.press('Enter');
 	await expect(page).toHaveURL(/\/edit\?tool=freeform/);
 	await expect(page.getByRole('tab', { name: 'Свой промпт' })).toHaveAttribute(
 		'aria-selected',
