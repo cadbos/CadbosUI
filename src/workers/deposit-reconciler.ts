@@ -16,13 +16,14 @@ import type {
 	D1Database,
 	ExecutionContext,
 	ExportedHandler,
+	Fetcher,
 	ScheduledController
 } from '@cloudflare/workers-types';
 import {
 	reconcileClaimedDeposit,
 	type DepositReconciliationOptions
 } from '$lib/server/deposit-reconciliation';
-import type { LnbitsConfig } from '$lib/server/lnbits';
+import type { LnbitsConfig, LnbitsFetch } from '$lib/server/lnbits';
 import { claimDepositsForReconciliation, INVOICE_CREATION_LEASE_MS } from '$lib/server/payments';
 
 const RECONCILIATION_BATCH_SIZE = 25;
@@ -30,7 +31,7 @@ const RECONCILIATION_CONCURRENCY = 5;
 
 export interface DepositReconcilerEnv {
 	DB: D1Database;
-	LNBITS_BASE_URL: string;
+	LNBITS_VPC: Fetcher;
 	LNBITS_INVOICE_KEY: string;
 	PAYMENTS_WEBHOOK_URL?: string;
 }
@@ -49,11 +50,11 @@ export interface ReconcileDueDepositsOptions {
 }
 
 function configFrom(env: DepositReconcilerEnv): LnbitsConfig {
-	if (!env.LNBITS_BASE_URL || !env.LNBITS_INVOICE_KEY) {
+	if (!env.LNBITS_VPC || !env.LNBITS_INVOICE_KEY) {
 		throw new Error('LNbits is not configured');
 	}
 	return {
-		baseUrl: env.LNBITS_BASE_URL,
+		fetcher: env.LNBITS_VPC.fetch.bind(env.LNBITS_VPC) as unknown as LnbitsFetch,
 		invoiceKey: env.LNBITS_INVOICE_KEY,
 		...(env.PAYMENTS_WEBHOOK_URL ? { webhookUrl: env.PAYMENTS_WEBHOOK_URL } : {})
 	};

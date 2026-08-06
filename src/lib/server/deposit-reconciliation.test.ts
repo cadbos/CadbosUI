@@ -15,7 +15,12 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getCredit } from '$lib/server/billing';
-import { LnbitsError, type LnbitsInvoice, type LnbitsPaymentStatus } from './lnbits';
+import {
+	LnbitsError,
+	type LnbitsFetch,
+	type LnbitsInvoice,
+	type LnbitsPaymentStatus
+} from './lnbits';
 import {
 	createDepositIntent,
 	getDeposit,
@@ -29,7 +34,7 @@ import { createOrResumeDeposit, reconcileClaimedDeposit } from './deposit-reconc
 
 const NOW = 1_800_000_000_000;
 const PAYMENT_HASH = 'a'.repeat(64);
-const config = { baseUrl: 'https://lnbits.example.test', invoiceKey: 'invoice-key' };
+const config = { fetcher: vi.fn<LnbitsFetch>(), invoiceKey: 'invoice-key' };
 const invoice: LnbitsInvoice = {
 	checkingId: 'checking-1',
 	paymentHash: PAYMENT_HASH,

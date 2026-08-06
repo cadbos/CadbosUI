@@ -13,6 +13,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { LnbitsFetch } from '$lib/server/lnbits';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 
 const lnbits = vi.hoisted(() => ({ getLnbitsUsdPerBtc: vi.fn() }));
@@ -22,7 +23,7 @@ vi.mock('$lib/server/lnbits', async (importOriginal) => ({
 }));
 
 const { getUsdExchangeRate } = await import('./exchange-rate');
-const config = { baseUrl: 'https://lnbits.example.test', invoiceKey: 'invoice-key' };
+const config = { fetcher: vi.fn<LnbitsFetch>(), invoiceKey: 'invoice-key' };
 const now = 1_800_000_000_000;
 
 beforeEach(() => {

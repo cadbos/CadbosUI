@@ -41,7 +41,7 @@ declare global {
 				ARCHAI_API_KEY: string;
 				ARCHAI_API_URL: string;
 				HEALTH_CACHE_TTL_SECONDS?: string;
-				LNBITS_BASE_URL?: string;
+				LNBITS_VPC: Fetcher;
 				LNBITS_INVOICE_KEY?: string;
 				PAYMENTS_WEBHOOK_URL?: string;
 				// VPC Service binding to the ComfyUI VPS (Cloudflare Tunnel

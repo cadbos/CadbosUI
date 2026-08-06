@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, Fetcher } from '@cloudflare/workers-types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionUser } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
@@ -31,13 +31,17 @@ function seedUser(db: D1Database, pubkey = 'pubkey-1'): void {
 		.run();
 }
 
+function vpcService(fetchImpl: typeof fetch = vi.fn()): Fetcher {
+	return { fetch: fetchImpl } as unknown as Fetcher;
+}
+
 function platform(db: D1Database, configured = true): App.Platform {
 	return {
 		env: {
 			DB: db,
 			...(configured
 				? {
-						LNBITS_BASE_URL: 'https://lnbits.example.test',
+						LNBITS_VPC: vpcService(),
 						LNBITS_INVOICE_KEY: 'invoice-key'
 					}
 				: {})

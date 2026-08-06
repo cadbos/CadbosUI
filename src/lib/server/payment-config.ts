@@ -12,12 +12,16 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { LnbitsConfig } from '$lib/server/lnbits';
+import type { LnbitsConfig, LnbitsFetch } from '$lib/server/lnbits';
 
 export function getLnbitsConfig(platform: App.Platform | undefined): LnbitsConfig {
-	const baseUrl = platform?.env?.LNBITS_BASE_URL;
+	const service = platform?.env?.LNBITS_VPC;
 	const invoiceKey = platform?.env?.LNBITS_INVOICE_KEY;
 	const webhookUrl = platform?.env?.PAYMENTS_WEBHOOK_URL;
-	if (!baseUrl || !invoiceKey) throw new Error('LNbits is not configured');
-	return { baseUrl, invoiceKey, ...(webhookUrl ? { webhookUrl } : {}) };
+	if (!service || !invoiceKey) throw new Error('LNbits is not configured');
+	return {
+		fetcher: service.fetch.bind(service) as unknown as LnbitsFetch,
+		invoiceKey,
+		...(webhookUrl ? { webhookUrl } : {})
+	};
 }
