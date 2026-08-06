@@ -9,11 +9,13 @@ Cadbos talks only to the LNbits REST API. LNbits uses an Alby Hub NWC connection
 as its funding source:
 
 ```text
-Cadbos Worker -> LNbits REST API -> NWC -> Alby Hub
+Cadbos Worker -> LNBITS_VPC -> Cloudflare Tunnel -> LNbits REST API -> NWC -> Alby Hub
 ```
 
 The Alby Hub pairing URL is stored only in LNbits. Cadbos stores only the LNbits
-base URL and invoice key; no NWC credential reaches the application or browser.
+invoice key; no NWC credential reaches the application or browser. LNbits has no
+public application endpoint: both Cadbos Workers reach its loopback-bound Docker
+port through the same private VPS tunnel used for ComfyUI.
 
 The payment path consists of:
 
@@ -87,15 +89,19 @@ another. Malformed, contradictory, or mismatched responses are provider failures
 
 ## Configuration
 
-Cadbos and the reconciliation Worker require:
+Register an HTTP Workers VPC Service on the existing VPS tunnel with hostname
+`localhost` and HTTP port `5000`. Add the returned service ID to both Wrangler
+configurations as the `LNBITS_VPC` binding with `remote: true`.
+
+Cadbos and the reconciliation Worker also require:
 
 ```dotenv
-LNBITS_BASE_URL=https://lnbits.example.com
 LNBITS_INVOICE_KEY=replace-with-the-wallet-invoice-key
 PAYMENTS_WEBHOOK_URL=https://cadbos.example.com/api/webhooks/lnbits
 ```
 
-The invoice key is server-only. LNbits is configured separately with
+The invoice key is server-only, and there is no public-network fallback when the
+VPC binding is absent. LNbits is configured separately with
 `LNBITS_BACKEND_WALLET_CLASS=NWCWallet` and the Alby Hub `NWC_PAIRING_URL`.
 
 Apply `0011_ledgers.sql`, `0012_payment_packages.sql`, and

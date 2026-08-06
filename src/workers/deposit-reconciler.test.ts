@@ -12,8 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, Fetcher } from '@cloudflare/workers-types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { LnbitsConfig } from '$lib/server/lnbits';
 import { createDepositIntent, type Deposit } from '$lib/server/payments';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { reconcileDueDeposits, type DepositReconcilerEnv } from './deposit-reconciler';
@@ -21,10 +22,14 @@ import { reconcileDueDeposits, type DepositReconcilerEnv } from './deposit-recon
 const NOW = 1_800_000_000_000;
 let db: D1Database;
 
+function vpcService(fetchImpl: typeof fetch = vi.fn()): Fetcher {
+	return { fetch: fetchImpl } as unknown as Fetcher;
+}
+
 function env(overrides: Partial<DepositReconcilerEnv> = {}): DepositReconcilerEnv {
 	return {
 		DB: db,
-		LNBITS_BASE_URL: 'https://lnbits.example.test',
+		LNBITS_VPC: vpcService(),
 		LNBITS_INVOICE_KEY: 'invoice-key',
 		...overrides
 	};
@@ -93,12 +98,27 @@ describe('reconcileDueDeposits', () => {
 		consoleError.mockRestore();
 	});
 
+	it('passes the bound VPC fetcher to provider reconciliation', async () => {
+		await seedCreating(1);
+		const request = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+		const reconcile = vi.fn(async (_db, deposit: Deposit, config: LnbitsConfig) => {
+			await config.fetcher(new URL('http://localhost:5000/health'));
+			return { ...deposit, status: 'pending' as const };
+		});
+
+		await reconcileDueDeposits(env({ LNBITS_VPC: vpcService(request) }), NOW + 100, {
+			reconcile
+		});
+
+		expect(request).toHaveBeenCalledWith(new URL('http://localhost:5000/health'));
+	});
+
 	it('fails before claiming deposits when LNbits configuration is missing', async () => {
 		const [deposit] = await seedCreating(1);
 
-		await expect(reconcileDueDeposits(env({ LNBITS_BASE_URL: '' }), NOW + 100)).rejects.toThrow(
-			'LNbits is not configured'
-		);
+		await expect(
+			reconcileDueDeposits(env({ LNBITS_VPC: undefined as unknown as Fetcher }), NOW + 100)
+		).rejects.toThrow('LNbits is not configured');
 		expect(
 			await db.prepare('SELECT reconcile_after FROM deposits WHERE id = ?').bind(deposit.id).first()
 		).toEqual({ reconcile_after: deposit.reconcileAfter });

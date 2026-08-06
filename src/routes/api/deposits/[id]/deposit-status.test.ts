@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, Fetcher } from '@cloudflare/workers-types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SessionUser } from '$lib/api/contract';
 import {
@@ -37,13 +37,21 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 		.run();
 }
 
-function platform(db: D1Database, configured = true): App.Platform {
+function vpcService(fetchImpl: typeof fetch): Fetcher {
+	return { fetch: fetchImpl } as unknown as Fetcher;
+}
+
+function platform(
+	db: D1Database,
+	configured = true,
+	fetchImpl: typeof fetch = vi.fn()
+): App.Platform {
 	return {
 		env: {
 			DB: db,
 			...(configured
 				? {
-						LNBITS_BASE_URL: 'https://lnbits.example.test',
+						LNBITS_VPC: vpcService(fetchImpl),
 						LNBITS_INVOICE_KEY: 'invoice-key'
 					}
 				: {})
@@ -55,11 +63,12 @@ function call(
 	user: SessionUser | null,
 	db: D1Database,
 	id: string,
-	configured = true
+	configured = true,
+	fetchImpl: typeof fetch = vi.fn()
 ): ReturnType<typeof GET> {
 	return GET({
 		params: { id },
-		platform: platform(db, configured),
+		platform: platform(db, configured, fetchImpl),
 		locals: { user }
 	} as DepositStatusEvent);
 }
@@ -166,10 +175,10 @@ describe('GET /api/deposits/[id]', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		const pending = await pendingDeposit(db, 'user-1');
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
+		const request = vi.fn().mockResolvedValue(new Response(null, { status: 503 }));
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-		const response = await call({ pubkey: 'pubkey-1' }, db, pending.id);
+		const response = await call({ pubkey: 'pubkey-1' }, db, pending.id, true, request);
 
 		expect(response.status).toBe(502);
 		expect(consoleError).toHaveBeenCalledWith('Payment status reconciliation failed:', {

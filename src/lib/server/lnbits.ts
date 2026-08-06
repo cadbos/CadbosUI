@@ -19,6 +19,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const MSATS_PER_SAT = 1000;
 const PAYMENT_RECOVERY_PAGE_SIZE = 100;
 const PAYMENT_RECOVERY_RECORD_LIMIT = 2_000;
+const LNBITS_VPC_TARGET_URL = 'http://localhost:5000/';
 
 const paymentHashSchema = z.string().regex(/^[0-9a-f]{64}$/i);
 const createInvoiceResponseSchema = z.looseObject({
@@ -49,7 +50,7 @@ const listedPaymentsSchema = z.array(listedPaymentSchema);
 const exchangeRateSchema = z.looseObject({ rate: z.number().positive() });
 
 export interface LnbitsConfig {
-	baseUrl: string;
+	fetcher: LnbitsFetch;
 	invoiceKey: string;
 	webhookUrl?: string;
 }
@@ -86,24 +87,19 @@ export interface LnbitsPaymentStatus {
 
 export type LnbitsFetch = typeof fetch;
 
-function endpoint(config: LnbitsConfig, path: string): URL {
-	const baseUrl = new URL(config.baseUrl);
-	if (baseUrl.protocol !== 'https:') {
-		throw new LnbitsError('configuration', 'explicit_failure', 'invalid LNbits URL protocol');
-	}
-	return new URL(path, `${baseUrl.toString().replace(/\/$/, '')}/`);
+function endpoint(path: string): URL {
+	return new URL(path, LNBITS_VPC_TARGET_URL);
 }
 
 async function request(
 	config: LnbitsConfig,
 	operation: string,
 	path: string,
-	init: RequestInit = {},
-	fetcher: LnbitsFetch = fetch
+	init: RequestInit = {}
 ): Promise<unknown> {
 	let response: Response;
 	try {
-		response = await fetcher(endpoint(config, path), {
+		response = await config.fetcher(endpoint(path), {
 			...init,
 			headers: {
 				accept: 'application/json',
@@ -166,8 +162,7 @@ function msatsToSats(amount: number, operation: string): number {
 
 export async function createLnbitsInvoice(
 	config: LnbitsConfig,
-	input: { attemptId: string; satsAmount: number; memo: string; expirySeconds: number },
-	fetcher: LnbitsFetch = fetch
+	input: { attemptId: string; satsAmount: number; memo: string; expirySeconds: number }
 ): Promise<LnbitsInvoice> {
 	const body = {
 		out: false,
@@ -178,17 +173,11 @@ export async function createLnbitsInvoice(
 		...(config.webhookUrl ? { webhook: config.webhookUrl } : {})
 	};
 	const parsed = createInvoiceResponseSchema.safeParse(
-		await request(
-			config,
-			'create_invoice',
-			'api/v1/payments',
-			{
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify(body)
-			},
-			fetcher
-		)
+		await request(config, 'create_invoice', 'api/v1/payments', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify(body)
+		})
 	);
 	if (!parsed.success) {
 		throw new LnbitsError('create_invoice', 'ambiguous', 'LNbits invoice response is invalid');
@@ -202,17 +191,14 @@ export async function createLnbitsInvoice(
 
 export async function lookupLnbitsPayment(
 	config: LnbitsConfig,
-	paymentHash: string,
-	fetcher: LnbitsFetch = fetch
+	paymentHash: string
 ): Promise<LnbitsPaymentStatus> {
 	const normalizedPaymentHash = paymentHash.toLowerCase();
 	const parsed = paymentStatusResponseSchema.safeParse(
 		await request(
 			config,
 			'lookup_payment',
-			`api/v1/payments/${encodeURIComponent(normalizedPaymentHash)}`,
-			{},
-			fetcher
+			`api/v1/payments/${encodeURIComponent(normalizedPaymentHash)}`
 		)
 	);
 	if (!parsed.success) {
@@ -250,8 +236,7 @@ export async function lookupLnbitsPayment(
 export async function findLnbitsInvoiceByAttempt(
 	config: LnbitsConfig,
 	attemptId: string,
-	attemptCreatedAt: number,
-	fetcher: LnbitsFetch = fetch
+	attemptCreatedAt: number
 ): Promise<LnbitsInvoice | null> {
 	const attemptCreatedAtSeconds = Math.floor(attemptCreatedAt / 1000);
 	for (
@@ -263,9 +248,7 @@ export async function findLnbitsInvoiceByAttempt(
 			await request(
 				config,
 				'list_payments',
-				`api/v1/payments?limit=${PAYMENT_RECOVERY_PAGE_SIZE}&offset=${offset}&sortby=time&direction=desc`,
-				{},
-				fetcher
+				`api/v1/payments?limit=${PAYMENT_RECOVERY_PAGE_SIZE}&offset=${offset}&sortby=time&direction=desc`
 			)
 		);
 		if (!parsed.success) {
@@ -291,12 +274,9 @@ export async function findLnbitsInvoiceByAttempt(
 	return null;
 }
 
-export async function getLnbitsUsdPerBtc(
-	config: LnbitsConfig,
-	fetcher: LnbitsFetch = fetch
-): Promise<number> {
+export async function getLnbitsUsdPerBtc(config: LnbitsConfig): Promise<number> {
 	const parsed = exchangeRateSchema.safeParse(
-		await request(config, 'exchange_rate', 'api/v1/rate/USD', {}, fetcher)
+		await request(config, 'exchange_rate', 'api/v1/rate/USD')
 	);
 	if (!parsed.success) {
 		throw new LnbitsError('exchange_rate', 'ambiguous', 'LNbits rate response is invalid');

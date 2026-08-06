@@ -14,13 +14,14 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import {
+	createLnbitsInvoice,
 	findLnbitsInvoiceByAttempt,
 	getLnbitsUsdPerBtc,
 	lookupLnbitsPayment,
+	type LnbitsConfig,
 	type LnbitsFetch
 } from './lnbits';
 
-const config = { baseUrl: 'https://lnbits.example.test', invoiceKey: 'invoice-key' };
 const paymentHash = 'a'.repeat(64);
 const recoveryPaymentHash = 'f5636521e98000697a6700b979c288ddad56cb3995a2eb07550872c466ccc3e5';
 const recoveryBolt11 =
@@ -45,6 +46,10 @@ function requestUrl(input: Parameters<LnbitsFetch>[0]): URL {
 	return new URL(input instanceof Request ? input.url : input);
 }
 
+function config(fetcher: LnbitsFetch, webhookUrl?: string): LnbitsConfig {
+	return { fetcher, invoiceKey: 'invoice-key', ...(webhookUrl ? { webhookUrl } : {}) };
+}
+
 function paymentResponse(overrides: Record<string, unknown> = {}): Response {
 	return Response.json({
 		paid: true,
@@ -59,6 +64,44 @@ function paymentResponse(overrides: Record<string, unknown> = {}): Response {
 }
 
 describe('LNbits client', () => {
+	it('creates an invoice through the private service with authenticated metadata', async () => {
+		const request = vi.fn<LnbitsFetch>().mockResolvedValue(
+			Response.json({
+				checking_id: 'checking-1',
+				payment_hash: recoveryPaymentHash,
+				payment_request: recoveryBolt11
+			})
+		);
+
+		await expect(
+			createLnbitsInvoice(config(request, 'https://cadbos.example/api/webhooks/lnbits'), {
+				attemptId: 'attempt-1',
+				satsAmount: 2_000,
+				memo: 'Cadbos pkg-1',
+				expirySeconds: 900
+			})
+		).resolves.toMatchObject({
+			checkingId: 'checking-1',
+			paymentHash: recoveryPaymentHash,
+			satsAmount: 2_000
+		});
+		expect(request).toHaveBeenCalledWith(
+			new URL('http://localhost:5000/api/v1/payments'),
+			expect.objectContaining({
+				method: 'POST',
+				headers: expect.objectContaining({ 'X-Api-Key': 'invoice-key' }),
+				body: JSON.stringify({
+					out: false,
+					amount: 2_000,
+					memo: 'Cadbos pkg-1',
+					expiry: 900,
+					extra: { cadbos_attempt_id: 'attempt-1' },
+					webhook: 'https://cadbos.example/api/webhooks/lnbits'
+				})
+			})
+		);
+	});
+
 	it('stops after reaching payments older than the attempt while retaining same-second records', async () => {
 		const attemptCreatedAt = 1_800_000_000_900;
 		const request = vi
@@ -71,7 +114,7 @@ describe('LNbits client', () => {
 			);
 
 		await expect(
-			findLnbitsInvoiceByAttempt(config, 'attempt-1', attemptCreatedAt, request)
+			findLnbitsInvoiceByAttempt(config(request), 'attempt-1', attemptCreatedAt)
 		).resolves.toBeNull();
 		expect(request).toHaveBeenCalledTimes(2);
 	});
@@ -84,7 +127,7 @@ describe('LNbits client', () => {
 			);
 
 		await expect(
-			findLnbitsInvoiceByAttempt(config, 'attempt-1', 1_800_000_000_000, request)
+			findLnbitsInvoiceByAttempt(config(request), 'attempt-1', 1_800_000_000_000)
 		).resolves.toBeNull();
 		expect(request).toHaveBeenCalledTimes(20);
 		expect(request.mock.calls.map(([url]) => requestUrl(url).searchParams.get('offset'))).toEqual(
@@ -113,7 +156,7 @@ describe('LNbits client', () => {
 		});
 
 		await expect(
-			findLnbitsInvoiceByAttempt(config, 'attempt-1', 1_800_000_000_000, request)
+			findLnbitsInvoiceByAttempt(config(request), 'attempt-1', 1_800_000_000_000)
 		).resolves.toEqual({
 			checkingId: 'recovered-checking',
 			paymentHash: recoveryPaymentHash,
@@ -126,7 +169,7 @@ describe('LNbits client', () => {
 	it('looks up the official status endpoint by payment hash and validates a paid response', async () => {
 		const request = vi.fn<LnbitsFetch>().mockResolvedValue(paymentResponse());
 
-		await expect(lookupLnbitsPayment(config, paymentHash, request)).resolves.toEqual({
+		await expect(lookupLnbitsPayment(config(request), paymentHash)).resolves.toEqual({
 			checkingId: 'checking-1',
 			paymentHash,
 			state: 'paid',
@@ -135,22 +178,10 @@ describe('LNbits client', () => {
 			status: 'success'
 		});
 		expect(request).toHaveBeenCalledWith(
-			new URL(`https://lnbits.example.test/api/v1/payments/${paymentHash}`),
+			new URL(`http://localhost:5000/api/v1/payments/${paymentHash}`),
 			expect.objectContaining({ headers: expect.objectContaining({ 'X-Api-Key': 'invoice-key' }) })
 		);
 	});
-
-	it.each(['http://lnbits.example.test', 'ftp://lnbits.example.test'])(
-		'rejects a non-HTTPS endpoint before requesting %s',
-		async (baseUrl) => {
-			const request = vi.fn<LnbitsFetch>();
-
-			await expect(getLnbitsUsdPerBtc({ ...config, baseUrl }, request)).rejects.toMatchObject({
-				name: 'LnbitsError'
-			});
-			expect(request).not.toHaveBeenCalled();
-		}
-	);
 
 	it.each([
 		[true, 'pending'],
@@ -169,7 +200,7 @@ describe('LNbits client', () => {
 			})
 		);
 
-		await expect(lookupLnbitsPayment(config, paymentHash, request)).rejects.toMatchObject({
+		await expect(lookupLnbitsPayment(config(request), paymentHash)).rejects.toMatchObject({
 			operation: 'lookup_payment',
 			outcome: 'explicit_failure'
 		});
@@ -179,19 +210,19 @@ describe('LNbits client', () => {
 		const mismatched = vi
 			.fn<LnbitsFetch>()
 			.mockResolvedValue(paymentResponse({ payment_hash: 'b'.repeat(64) }));
-		await expect(lookupLnbitsPayment(config, paymentHash, mismatched)).rejects.toMatchObject({
+		await expect(lookupLnbitsPayment(config(mismatched), paymentHash)).rejects.toMatchObject({
 			outcome: 'explicit_failure'
 		});
 
 		const malformed = vi.fn<LnbitsFetch>().mockResolvedValue(Response.json({ paid: true }));
-		await expect(lookupLnbitsPayment(config, paymentHash, malformed)).rejects.toMatchObject({
+		await expect(lookupLnbitsPayment(config(malformed), paymentHash)).rejects.toMatchObject({
 			outcome: 'explicit_failure'
 		});
 
 		const invalidAmount = vi
 			.fn<LnbitsFetch>()
 			.mockResolvedValue(paymentResponse({ amount: 1_200_001 }));
-		await expect(lookupLnbitsPayment(config, paymentHash, invalidAmount)).rejects.toMatchObject({
+		await expect(lookupLnbitsPayment(config(invalidAmount), paymentHash)).rejects.toMatchObject({
 			outcome: 'explicit_failure'
 		});
 	});
@@ -200,10 +231,10 @@ describe('LNbits client', () => {
 		const valid = vi
 			.fn<LnbitsFetch>()
 			.mockResolvedValue(Response.json({ rate: 100_000, price: 0.00001 }));
-		await expect(getLnbitsUsdPerBtc(config, valid)).resolves.toBe(100_000);
+		await expect(getLnbitsUsdPerBtc(config(valid))).resolves.toBe(100_000);
 
 		const malformed = vi.fn<LnbitsFetch>().mockResolvedValue(Response.json({ rate: '100000' }));
-		await expect(getLnbitsUsdPerBtc(config, malformed)).rejects.toMatchObject({
+		await expect(getLnbitsUsdPerBtc(config(malformed))).rejects.toMatchObject({
 			operation: 'exchange_rate',
 			outcome: 'ambiguous'
 		});
@@ -213,18 +244,18 @@ describe('LNbits client', () => {
 		const timeout = vi
 			.fn<LnbitsFetch>()
 			.mockRejectedValue(new DOMException('timed out', 'TimeoutError'));
-		await expect(getLnbitsUsdPerBtc(config, timeout)).rejects.toMatchObject({
+		await expect(getLnbitsUsdPerBtc(config(timeout))).rejects.toMatchObject({
 			operation: 'exchange_rate',
 			outcome: 'ambiguous'
 		});
 
 		const serverError = vi.fn<LnbitsFetch>().mockResolvedValue(new Response(null, { status: 503 }));
-		await expect(getLnbitsUsdPerBtc(config, serverError)).rejects.toMatchObject({
+		await expect(getLnbitsUsdPerBtc(config(serverError))).rejects.toMatchObject({
 			outcome: 'ambiguous'
 		});
 
 		const clientError = vi.fn<LnbitsFetch>().mockResolvedValue(new Response(null, { status: 400 }));
-		await expect(getLnbitsUsdPerBtc(config, clientError)).rejects.toMatchObject({
+		await expect(getLnbitsUsdPerBtc(config(clientError))).rejects.toMatchObject({
 			outcome: 'explicit_failure'
 		});
 	});

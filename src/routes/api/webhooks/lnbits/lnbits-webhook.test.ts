@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, Fetcher } from '@cloudflare/workers-types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getCredit } from '$lib/server/billing';
 import {
@@ -48,7 +48,15 @@ async function pendingDeposit(db: D1Database): Promise<Deposit> {
 	);
 }
 
-function call(db: D1Database, body: unknown): ReturnType<typeof POST> {
+function vpcService(fetchImpl: typeof fetch): Fetcher {
+	return { fetch: fetchImpl } as unknown as Fetcher;
+}
+
+function call(
+	db: D1Database,
+	body: unknown,
+	fetchImpl: typeof fetch = vi.fn()
+): ReturnType<typeof POST> {
 	return POST({
 		request: new Request('https://cadbos.example/api/webhooks/lnbits', {
 			method: 'POST',
@@ -57,7 +65,7 @@ function call(db: D1Database, body: unknown): ReturnType<typeof POST> {
 		platform: {
 			env: {
 				DB: db,
-				LNBITS_BASE_URL: 'https://lnbits.example.test',
+				LNBITS_VPC: vpcService(fetchImpl),
 				LNBITS_INVOICE_KEY: 'invoice-key'
 			}
 		},
@@ -93,13 +101,12 @@ describe('POST /api/webhooks/lnbits', () => {
 		const db = makeD1();
 		const pending = await pendingDeposit(db);
 		const request = vi.fn().mockResolvedValue(statusResponse());
-		vi.stubGlobal('fetch', request);
 
-		const response = await call(db, { checking_id: pending.checkingId, paid: true });
+		const response = await call(db, { checking_id: pending.checkingId, paid: true }, request);
 
 		expect(response.status).toBe(202);
 		expect(request).toHaveBeenCalledWith(
-			new URL(`https://lnbits.example.test/api/v1/payments/${PAYMENT_HASH}`),
+			new URL(`http://localhost:5000/api/v1/payments/${PAYMENT_HASH}`),
 			expect.objectContaining({ headers: expect.objectContaining({ 'X-Api-Key': 'invoice-key' }) })
 		);
 		await expect(getDeposit(db, pending.id)).resolves.toMatchObject({ status: 'paid' });
@@ -109,10 +116,10 @@ describe('POST /api/webhooks/lnbits', () => {
 	it('never credits a callback whose provider lookup returns a different identity', async () => {
 		const db = makeD1();
 		const pending = await pendingDeposit(db);
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(statusResponse('b'.repeat(64))));
+		const request = vi.fn().mockResolvedValue(statusResponse('b'.repeat(64)));
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-		const response = await call(db, { payment_hash: PAYMENT_HASH });
+		const response = await call(db, { payment_hash: PAYMENT_HASH }, request);
 
 		expect(response.status).toBe(202);
 		await expect(getDeposit(db, pending.id)).resolves.toMatchObject({ status: 'failed' });

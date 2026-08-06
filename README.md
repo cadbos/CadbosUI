@@ -33,11 +33,11 @@ pnpm dev -- --open
 
 The [Docker Compose](docker-compose.yml) stack runs the services used for Lightning payments:
 
-| Service    | Local URL               | Purpose                                     | Persistent data                     |
+| Service    | VPS access              | Purpose                                     | Persistent data                     |
 | ---------- | ----------------------- | ------------------------------------------- | ----------------------------------- |
-| Alby Hub   | <http://localhost:8080> | Self-hosted Lightning node and NWC provider | `ALBYHUB_DATA` or `./ddata/albyhub` |
-| LNbits     | <http://localhost:5000> | Wallet and account API used by Cadbos       | `LNBITS_DATA` or `./ddata/lnbits`   |
-| PostgreSQL | Internal port `5432`    | LNbits database                             | `PG_DATA` or `./ddata/pg`           |
+| Alby Hub   | `127.0.0.1:8080`        | Self-hosted Lightning node and NWC provider | `ALBYHUB_DATA` or `./ddata/albyhub` |
+| LNbits     | `127.0.0.1:5000`        | Wallet and account API used by Cadbos       | `LNBITS_DATA` or `./ddata/lnbits`   |
+| PostgreSQL | Docker network port 5432 | LNbits database                             | `PG_DATA` or `./ddata/pg`           |
 
 Docker Engine with the Compose plugin is required.
 
@@ -75,7 +75,7 @@ LNBITS_DATABASE_URL="postgres://lnbits:replace-with-the-db-password@db:5432/lnbi
 LNBITS_EXTENSIONS_PATH="/app/data/extensions"
 ```
 
-The database name, user, and password in `LNBITS_DATABASE_URL` must match the values in `.env`. The hostname is `db`, the Compose service name, rather than `localhost`. `AUTH_HTTPS_ONLY=false` is appropriate only for local HTTP access; use HTTPS and set it to `true` when exposing LNbits through a reverse proxy. The current port mappings publish Alby Hub and LNbits on every host interface, so protect them with host firewall rules or a properly configured reverse proxy. Review the remaining settings in `.lnbits.env`, especially authentication, allowed users, and the optional `FIRST_INSTALL_TOKEN`, before exposing either service outside the local machine.
+The database name, user, and password in `LNBITS_DATABASE_URL` must match the values in `.env`. The hostname is `db`, the Compose service name, rather than `localhost`. `AUTH_HTTPS_ONLY=false` is required because the Workers VPC origin leg connects to LNbits over loopback HTTP. Cloudflare encrypts traffic until it reaches the VPS tunnel, and the Compose port is bound only to `127.0.0.1`. Review the remaining settings in `.lnbits.env`, especially authentication, allowed users, and the optional `FIRST_INSTALL_TOKEN`.
 
 ### Start and initialize
 
@@ -86,7 +86,7 @@ docker compose pull
 docker compose up -d albyhub
 ```
 
-Open Alby Hub at <http://localhost:8080> and complete its onboarding. Securely back up its recovery phrase and unlock password.
+Open Alby Hub from the VPS or through an SSH local-forward to `127.0.0.1:8080` and complete its onboarding. Securely back up its recovery phrase and unlock password.
 
 LNbits uses `VoidWallet` from `.lnbits.env` by default. This is suitable for opening the interface but cannot process real Lightning payments. Before starting LNbits, configure Alby Hub as its funding source:
 
@@ -107,22 +107,41 @@ docker compose up -d
 docker compose ps
 ```
 
-Open LNbits at <http://localhost:5000> and create its first superuser.
+Open LNbits from the VPS or through an SSH local-forward to `127.0.0.1:5000` and create its first superuser.
 
 Create a dedicated LNbits wallet for Cadbos and copy its invoice key from the
-wallet API page. Configure the SvelteKit Worker and the reconciliation Worker
-with:
+wallet API page.
+
+### Configure Workers VPC
+
+Create an HTTP VPC Service on the Cloudflare Tunnel already connected to the VPS.
+The service must target hostname `localhost` and HTTP port `5000`:
+
+```sh
+pnpm exec wrangler vpc service create lnbits-equuleus \
+  --type http \
+  --tunnel-id <existing-vps-tunnel-id> \
+  --hostname localhost \
+  --http-port 5000
+```
+
+Use the returned service ID for the `LNBITS_VPC` binding in both
+`wrangler.jsonc` and `wrangler.reconciler.jsonc`. Both bindings use `remote: true`,
+so local Wrangler development reaches LNbits through the real private tunnel.
+
+Configure both Workers with:
 
 ```dotenv
-LNBITS_BASE_URL=https://lnbits.example.com
 LNBITS_INVOICE_KEY=replace-with-the-wallet-invoice-key
 PAYMENTS_WEBHOOK_URL=https://cadbos.example.com/api/webhooks/lnbits
 ```
 
 `LNBITS_INVOICE_KEY` must be stored as a Cloudflare secret and must never be
-exposed to the browser. Set the same three values for the Worker defined in
+exposed to the browser. Set the same two values for the Worker defined in
 `wrangler.reconciler.jsonc`; it polls unfinished payment attempts once per minute
-and recovers payments if webhook delivery or a request fails. Deploy it with:
+and recovers payments if webhook delivery or a request fails. `LNBITS_BASE_URL`
+must be removed from existing Worker settings because all provider requests
+require the VPC Service binding. Deploy the reconciler with:
 
 ```sh
 pnpm exec wrangler deploy --config wrangler.reconciler.jsonc

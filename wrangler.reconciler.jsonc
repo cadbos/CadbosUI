@@ -31,5 +31,12 @@
 			"database_id": "d1f2f49c-bb39-473c-ae35-2d78eebcbc53",
 			"migrations_dir": "migrations"
 		}
+	],
+	"vpc_services": [
+		{
+			"binding": "LNBITS_VPC",
+			"service_id": "019fd6e5-6967-7c41-9ef4-ec825404baf2",
+			"remote": true
+		}
 	]
 }
