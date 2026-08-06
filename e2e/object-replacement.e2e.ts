@@ -44,33 +44,37 @@ async function authenticate(page: Page): Promise<void> {
 }
 
 async function uploadInputs(page: Page): Promise<void> {
-	let upload = 0;
 	await page.route('**/api/uploads', async (route) => {
-		upload += 1;
+		const body = route.request().postDataBuffer();
+		if (body === null) throw new Error('Upload request body is missing');
+		const isScene = body.includes(Buffer.from('scene'));
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				url:
-					upload === 1
-						? 'https://cdn.example.test/scene.webp'
-						: 'https://cdn.example.test/reference-chair.webp',
+				url: isScene
+					? 'https://cdn.example.test/scene.webp'
+					: 'https://cdn.example.test/reference-chair.webp',
 				mime: 'image/webp',
 				size: 1024,
+				hash: isScene ? 'scene-hash' : 'reference-chair-hash',
 				dimensions: [800, 600]
 			})
 		});
 	});
 
 	const inputs = page.locator('#mode-panel-edit input[type="file"]');
-	await Promise.all([
-		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
-		inputs.nth(0).setInputFiles({
-			name: 'scene.webp',
-			mimeType: 'image/webp',
-			buffer: Buffer.from('scene')
-		})
-	]);
+	// The room/main photo upload (nth(0)) is deferred to submit time — just
+	// pick the file locally here; the actual /api/uploads call fires once the
+	// test later submits the object-replacement request. Wait for the local
+	// preview to render before continuing, so validation/canSubmit has settled
+	// on the picked file rather than racing a still-pending reactive update.
+	await inputs.nth(0).setInputFiles({
+		name: 'scene.webp',
+		mimeType: 'image/webp',
+		buffer: Buffer.from('scene')
+	});
+	await expect(page.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
 		inputs.nth(1).setInputFiles({
@@ -140,6 +144,7 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 	await expect.poll(() => polls).toBe(2);
 	expect(submittedBody).toEqual({
 		image: 'https://cdn.example.test/scene.webp',
+		imageHash: 'scene-hash',
 		referenceImage: 'https://cdn.example.test/reference-chair.webp',
 		replacementObject: 'серый диван у окна'
 	});
@@ -220,6 +225,7 @@ test('keeps the accepted current-result lineage when another render finishes fir
 						: 'https://cdn.example.test/reference.webp',
 				mime: 'image/webp',
 				size: 1024,
+				hash: uploads === 1 ? 'room-hash' : 'reference-hash',
 				dimensions: [800, 600]
 			})
 		});
@@ -273,15 +279,20 @@ test('keeps the accepted current-result lineage when another render finishes fir
 	});
 
 	await page.goto('/create/interior');
+	// The room/main photo upload is deferred to generate time — picking the
+	// file only produces a local preview here, no /api/uploads call yet.
+	const renderPanel = page.locator('#mode-panel-render');
+	await renderPanel.locator('input[type="file"]').setInputFiles({
+		name: 'room.webp',
+		mimeType: 'image/webp',
+		buffer: Buffer.from('room')
+	});
+	await expect(renderPanel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
-		page.locator('#mode-panel-render input[type="file"]').setInputFiles({
-			name: 'room.webp',
-			mimeType: 'image/webp',
-			buffer: Buffer.from('room')
-		})
+		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
+		page.getByRole('button', { name: 'Сгенерировать' }).click()
 	]);
-	await page.getByRole('button', { name: 'Сгенерировать' }).click();
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/original-result.webp'

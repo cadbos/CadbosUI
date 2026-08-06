@@ -173,6 +173,39 @@ describe('POST /api/edit — billing', () => {
 		});
 	});
 
+	it('records source_hash from imageHash when editing a fresh upload with no prior render', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 12);
+
+		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, {
+			...body,
+			imageHash: 'a'.repeat(64)
+		});
+		expect(response.status).toBe(200);
+
+		const row = await db
+			.prepare('SELECT source_hash FROM generations WHERE user_id = ?')
+			.bind('user-1')
+			.first<{ source_hash: string }>();
+		expect(row?.source_hash).toBe('a'.repeat(64));
+	});
+
+	it('records an empty source_hash when editing without imageHash (continuing from a result)', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 12);
+
+		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
+		expect(response.status).toBe(200);
+
+		const row = await db
+			.prepare('SELECT source_hash FROM generations WHERE user_id = ?')
+			.bind('user-1')
+			.first<{ source_hash: string }>();
+		expect(row?.source_hash).toBe('');
+	});
+
 	it('still returns the completed, already-charged edit if recordGeneration fails', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');

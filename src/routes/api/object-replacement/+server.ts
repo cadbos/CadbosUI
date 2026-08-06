@@ -174,6 +174,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				userId,
 				comfyPromptId,
 				sceneUrl: parsed.data.image,
+				sceneHash: parsed.data.imageHash ?? '',
 				referenceUrl: parsed.data.referenceImage,
 				replacementObject: parsed.data.replacementObject,
 				cost,

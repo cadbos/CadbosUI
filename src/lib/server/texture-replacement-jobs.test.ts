@@ -38,6 +38,7 @@ describe('texture replacement jobs', () => {
 			userId: 'user-1',
 			comfyPromptId: 'prompt-job-1',
 			sceneUrl: 'https://cdn.example.test/scene.jpg',
+			sceneHash: 'hash-scene',
 			referenceUrl: 'https://cdn.example.test/reference.jpg',
 			replacementSurface: 'oak flooring',
 			cost: 2,

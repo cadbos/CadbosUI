@@ -53,6 +53,7 @@ async function mockUpload(page: Page): Promise<void> {
 				url: 'https://cdn.example.test/uploaded.webp',
 				mime: 'image/webp',
 				size: 1024,
+				hash: 'a'.repeat(64),
 				dimensions: [800, 600]
 			})
 		});
@@ -75,6 +76,14 @@ function styleTransferUploadUrl(route: Route): string {
 	if (body === null) throw new Error('Upload request body is missing');
 	if (body.includes(Buffer.from('room'))) return 'https://cdn.example.test/source.webp';
 	if (body.includes(Buffer.from('reference'))) return 'https://cdn.example.test/reference.webp';
+	throw new Error('Upload request body does not match the style transfer fixtures');
+}
+
+function styleTransferUploadHash(route: Route): string {
+	const body = route.request().postDataBuffer();
+	if (body === null) throw new Error('Upload request body is missing');
+	if (body.includes(Buffer.from('room'))) return 'source-hash';
+	if (body.includes(Buffer.from('reference'))) return 'reference-hash';
 	throw new Error('Upload request body does not match the style transfer fixtures');
 }
 
@@ -125,6 +134,7 @@ test('the shared image picker imports an HTTPS image URL through the upload endp
 				url: 'https://cdn.example.test/imported.webp',
 				mime: 'image/webp',
 				size: 1024,
+				hash: 'imported-hash',
 				dimensions: [800, 600]
 			})
 		});
@@ -165,6 +175,7 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 				url: styleTransferUploadUrl(route),
 				mime: 'image/webp',
 				size: 1024,
+				hash: styleTransferUploadHash(route),
 				dimensions: [800, 600]
 			})
 		});
@@ -225,6 +236,7 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 
 	expect(capturedBody).toEqual({
 		image: 'https://cdn.example.test/source.webp',
+		imageHash: 'source-hash',
 		referenceImage: 'https://cdn.example.test/reference.webp',
 		outputFormat: 'webp',
 		prompt: 'keep layout, use warmer materials',
@@ -251,6 +263,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 				url: styleTransferUploadUrl(route),
 				mime: 'image/webp',
 				size: 1024,
+				hash: styleTransferUploadHash(route),
 				dimensions: [800, 600]
 			})
 		});
@@ -283,7 +296,9 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 	await openCreate(page);
 
 	const renderPanel = page.locator('#mode-panel-render');
-	await uploadImageFile(page, renderPanel.locator('input[type="file"]'), {
+	// The room/main photo upload is deferred to generate time — picking the
+	// file only produces a local preview here, no /api/uploads call yet.
+	await renderPanel.locator('input[type="file"]').setInputFiles({
 		name: 'room.png',
 		mimeType: 'image/png',
 		buffer: Buffer.from('room')
@@ -316,6 +331,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 
 	expect(styleTransferBody).toEqual({
 		image: 'https://cdn.example.test/source.webp',
+		imageHash: 'source-hash',
 		referenceImage: 'https://cdn.example.test/reference.webp',
 		outputFormat: 'webp',
 		prompt: 'style transfer guidance only',
@@ -330,6 +346,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 
 	expect(renderBody).toEqual({
 		image: 'https://cdn.example.test/source.webp',
+		imageHash: 'source-hash',
 		prompt: 'render prompt for paid generation',
 		outputFormat: 'webp'
 	});
@@ -433,6 +450,7 @@ test('switching from a custom reference upload back to a preset tab clears the u
 				url: styleTransferUploadUrl(route),
 				mime: 'image/webp',
 				size: 1024,
+				hash: styleTransferUploadHash(route),
 				dimensions: [800, 600]
 			})
 		});
@@ -498,7 +516,9 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 }) => {
 	await authenticate(page);
 	await mockUpload(page);
+	let editBody: unknown;
 	await page.route('**/api/edit', async (route) => {
+		editBody = route.request().postDataJSON();
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -524,6 +544,10 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 		'src',
 		'https://cdn.example.test/edited.webp'
 	);
+	// The source was a fresh upload (no prior render) — its hash must travel
+	// through to /api/edit so the resources gallery can tell this apart from
+	// an edit continuing off a previous result (which never has a hash).
+	expect(editBody).toMatchObject({ imageHash: expect.stringMatching(/^[0-9a-f]{64}$/) });
 	// Once a result exists, the Edit tab no longer offers a raw upload — it edits
 	// the result itself, same as the post-render flow.
 	await expect(page.locator('#mode-panel-edit input[type="file"]')).toHaveCount(0);
@@ -580,14 +604,20 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 	const renderPanel = page.locator('#mode-panel-render');
 	const roomInput = renderPanel.locator('input[type="file"]');
 	await expect(renderPanel.getByRole('button', { name: 'Выбрать файл' })).toBeVisible();
-	await uploadImageFile(page, roomInput, {
+	// The room/main photo upload is deferred to generate time — picking the
+	// file only produces a local preview here, no /api/uploads call yet.
+	await roomInput.setInputFiles({
 		name: 'room.png',
 		mimeType: 'image/png',
 		buffer: Buffer.from('fake-image')
 	});
 	await expect(renderPanel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
 
-	await page.getByRole('button', { name: 'Сгенерировать' }).click();
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
+		page.getByRole('button', { name: 'Сгенерировать' }).click()
+	]);
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toBeVisible();
 
 	const editTab = page.getByRole('tab', { name: 'Редактирование' });
@@ -645,13 +675,19 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 
 	await openCreate(page);
 
-	await uploadImageFile(page, page.locator('#mode-panel-render input[type="file"]'), {
+	// The room/main photo upload is deferred to generate time — picking the
+	// file only produces a local preview here, no /api/uploads call yet.
+	await page.locator('#mode-panel-render input[type="file"]').setInputFiles({
 		name: 'room.png',
 		mimeType: 'image/png',
 		buffer: Buffer.from('fake-image')
 	});
 	await expect(page.getByRole('button', { name: 'Сгенерировать' })).toBeEnabled();
-	await page.getByRole('button', { name: 'Сгенерировать' }).click();
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
+		page.getByRole('button', { name: 'Сгенерировать' }).click()
+	]);
 
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
 	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render.webp');

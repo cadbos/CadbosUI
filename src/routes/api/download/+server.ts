@@ -13,7 +13,7 @@
  */
 
 import { error } from '@sveltejs/kit';
-import { imageExtensionFromMime } from '$lib/server/image-utils';
+import { imageExtensionFromMime } from '$lib/image-mime';
 import type { RequestHandler } from './$types';
 
 // Forces a real download of a render/edit result hosted on archAI's external

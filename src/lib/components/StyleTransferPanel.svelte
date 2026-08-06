@@ -22,6 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 		extractApiErrorCode,
 		renderResultFromResponse,
 		request,
+		RequestImageUploadError,
 		type SceneType
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
@@ -134,13 +135,16 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function submit(): Promise<void> {
 		if (!canApply || !isAuthenticated) return;
-		const body = request.toStyleTransferRequest();
-		if (!body) return;
 		applying = true;
 		error = null;
 		request.setStatus('rendering');
 		const overlayId = generationOverlay.start('generationOverlay.styleTransfer');
 		try {
+			const body = await request.toStyleTransferRequest();
+			if (!body) {
+				request.setStatus('idle');
+				return;
+			}
 			const response = await fetch('/api/style-transfer', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
@@ -164,6 +168,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function styleTransferErrorKey(err: unknown): TranslationKey {
+		if (err instanceof RequestImageUploadError) return 'upload.errorUpload';
 		return creditErrorKey(
 			{
 				failed: 'styleTransfer.failed',

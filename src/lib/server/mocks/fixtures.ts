@@ -27,6 +27,7 @@ export function mockUpload(): UploadResult {
 		url: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=1200&q=80',
 		mime: 'image/jpeg',
 		size: 342_000,
+		hash: 'mock-upload-hash',
 		dimensions: [1200, 800]
 	};
 }

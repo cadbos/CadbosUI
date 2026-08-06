@@ -84,6 +84,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			const credit = await recordGeneration(db, userId, {
 				url: result.outputUrl,
 				sourceUrl: parsed.data.image,
+				sourceHash: parsed.data.imageHash ?? '',
 				prompt: parsed.data.prompt ?? '',
 				kind: 'style-transfer',
 				amount: result.cost

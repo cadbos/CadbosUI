@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -63,8 +63,30 @@ async function authenticate(page: Page): Promise<void> {
 	});
 }
 
+function textureUploadFixture(route: Route): { url: string; mime: string; hash: string } {
+	const body = route.request().postDataBuffer();
+	if (body === null) throw new Error('Upload request body is missing');
+	if (pngFromMultipart(body) !== undefined) {
+		return {
+			url: 'https://cdn.example.test/texture-mask.png',
+			mime: 'image/png',
+			hash: 'mask-hash'
+		};
+	}
+	if (body.includes(Buffer.from('scene'))) {
+		return { url: 'https://cdn.example.test/scene.webp', mime: 'image/webp', hash: 'scene-hash' };
+	}
+	if (body.includes(Buffer.from('fabric'))) {
+		return {
+			url: 'https://cdn.example.test/reference-fabric.webp',
+			mime: 'image/webp',
+			hash: 'fabric-hash'
+		};
+	}
+	throw new Error('Upload request body does not match the texture replacement fixtures');
+}
+
 async function uploadInputs(page: Page): Promise<UploadCapture> {
-	let upload = 0;
 	let maskPng: Buffer | undefined;
 	await page.route('https://cdn.example.test/scene.webp', async (route) => {
 		await route.fulfill({
@@ -74,8 +96,8 @@ async function uploadInputs(page: Page): Promise<UploadCapture> {
 		});
 	});
 	await page.route('**/api/uploads', async (route) => {
-		upload += 1;
-		if (upload === 3) {
+		const fixture = textureUploadFixture(route);
+		if (fixture.mime === 'image/png') {
 			expect(route.request().headers()['content-type']).toContain('multipart/form-data');
 			maskPng = pngFromMultipart(route.request().postDataBuffer());
 			expect(maskPng).toBeDefined();
@@ -84,28 +106,27 @@ async function uploadInputs(page: Page): Promise<UploadCapture> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				url:
-					upload === 1
-						? 'https://cdn.example.test/scene.webp'
-						: upload === 2
-							? 'https://cdn.example.test/reference-fabric.webp'
-							: 'https://cdn.example.test/texture-mask.png',
-				mime: upload === 3 ? 'image/png' : 'image/webp',
+				url: fixture.url,
+				mime: fixture.mime,
 				size: 1024,
+				hash: fixture.hash,
 				dimensions: [800, 600]
 			})
 		});
 	});
 
 	const inputs = page.locator('#mode-panel-edit input[type="file"]');
-	await Promise.all([
-		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
-		inputs.nth(0).setInputFiles({
-			name: 'scene.webp',
-			mimeType: 'image/webp',
-			buffer: Buffer.from('scene')
-		})
-	]);
+	// The room/main photo upload is deferred to submit time — just pick the
+	// file locally; the actual /api/uploads call fires once the test later
+	// submits the texture-replacement request (or enters masked mode). Wait
+	// for the local preview to render before continuing, so validation has
+	// settled on the picked file rather than racing a pending reactive update.
+	await inputs.nth(0).setInputFiles({
+		name: 'scene.webp',
+		mimeType: 'image/webp',
+		buffer: Buffer.from('scene')
+	});
+	await expect(page.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
 		inputs.nth(1).setInputFiles({
@@ -157,6 +178,7 @@ test('submits texture inputs and completes inside the nested edit tool', async (
 	await expect(panel.locator('.job-success')).toHaveText('Замена текстуры завершена.');
 	expect(submittedBody).toEqual({
 		image: 'https://cdn.example.test/scene.webp',
+		imageHash: 'scene-hash',
 		referenceImage: 'https://cdn.example.test/reference-fabric.webp',
 		replacementSurface: 'обивка дивана'
 	});
@@ -311,6 +333,7 @@ test('uses the masked texture mode and applies the synchronous result without po
 	await expect(panel.locator('.job-success')).toHaveText('Замена текстуры завершена.');
 	expect(submittedBody).toEqual({
 		image: 'https://cdn.example.test/scene.webp',
+		imageHash: 'scene-hash',
 		referenceImage: 'https://cdn.example.test/reference-fabric.webp',
 		mask: 'https://cdn.example.test/texture-mask.png'
 	});

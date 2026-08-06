@@ -144,6 +144,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				const credit = await recordGeneration(db, userId, {
 					url: result.outputUrl,
 					sourceUrl: maskedRequest.image,
+					sourceHash: maskedRequest.imageHash ?? '',
 					prompt: '',
 					kind: 'texture-replacement',
 					amount: result.cost
@@ -199,6 +200,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				userId,
 				comfyPromptId,
 				sceneUrl: automaticRequest.image,
+				sceneHash: automaticRequest.imageHash ?? '',
 				referenceUrl: automaticRequest.referenceImage,
 				replacementSurface: automaticRequest.replacementSurface,
 				cost: comfyCost,

@@ -33,6 +33,7 @@ export const uploadResultSchema = z
 		url: z.url(),
 		mime: z.string().min(1),
 		size: z.number().nonnegative(),
+		hash: z.string().min(1),
 		dimensions: z.tuple([z.number().positive(), z.number().positive()]).optional()
 	})
 	.strict();
@@ -46,6 +47,11 @@ export interface RemoteImageUploadRequest {
 // POST /api/render or /api/render/exterior — create a render.
 export interface RenderRequest {
 	image: string;
+	// SHA-256 hex digest of `image`'s bytes, from the /api/uploads response —
+	// omitted when `image` is a previous render/edit result rather than a
+	// fresh upload. Lets the server record generations.source_hash for future
+	// upload dedup; never forwarded to the render provider.
+	imageHash?: string;
 	prompt: string;
 	outputFormat: OutputFormat;
 }
@@ -53,12 +59,17 @@ export interface RenderRequest {
 // POST /api/edit — edit by prompt (no outputFormat; aspect ratio is preserved).
 export interface EditRequest {
 	image: string;
+	// See RenderRequest.imageHash — Edit has no room-photo/current-result
+	// toggle, but still falls back to the room photo when there's no render
+	// yet (resolveEditSource), so `image` isn't always a previous result.
+	imageHash?: string;
 	prompt: string;
 }
 
 // POST /api/style-transfer — apply a reference image's style to a source image.
 export interface StyleTransferRequest {
 	image: string;
+	imageHash?: string;
 	referenceImage: string;
 	outputFormat: OutputFormat;
 	prompt?: string;
@@ -74,6 +85,7 @@ export interface UpscaleRequest {
 
 export interface ObjectReplacementRequest {
 	image: string;
+	imageHash?: string;
 	referenceImage: string;
 	replacementObject: string;
 }
@@ -104,12 +116,14 @@ export type ObjectReplacementJobResponse =
 
 export interface AutomaticTextureReplacementRequest {
 	image: string;
+	imageHash?: string;
 	referenceImage: string;
 	replacementSurface: string;
 }
 
 export interface MaskedTextureReplacementRequest {
 	image: string;
+	imageHash?: string;
 	referenceImage: string;
 	mask: string;
 }
@@ -173,6 +187,28 @@ export interface GeneratedImageRecord {
 
 export interface GeneratedImagesResponse {
 	images: GeneratedImageRecord[];
+	pagination: {
+		offset: number;
+		size: number;
+		hasMore: boolean;
+	};
+}
+
+// GET /api/resources — distinct source photos the user has actually
+// uploaded (one card per photo, grouped by source_url). Rows whose source
+// was a previous generation's own result rather than a fresh upload (edit,
+// upscale, or any other call made with source mode 'current-result' —
+// these intentionally carry imageHash: '') are excluded, not shown as if
+// they were uploads; see listDistinctSourceImages. Content-hash dedup still
+// applies at *upload* time (findGenerationSourceByHash) to avoid storing
+// duplicate objects. Read-only gallery: no delete in this iteration.
+export interface ResourceImageRecord {
+	sourceUrl: string;
+	createdAt: number;
+}
+
+export interface ResourcesResponse {
+	images: ResourceImageRecord[];
 	pagination: {
 		offset: number;
 		size: number;

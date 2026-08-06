@@ -29,6 +29,7 @@ before the Change Date. See LICENSE for complete terms.
 	import {
 		extractApiErrorCode,
 		request,
+		RequestImageUploadError,
 		type ActiveTextureReplacementJob
 	} from '$lib/state/request.svelte';
 	import { buildShareUrl, isEditToolRoute } from '$lib/state/url-state';
@@ -312,11 +313,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function submit(): Promise<void> {
 		if (!canSubmit) return;
-		const body = request.toTextureReplacementRequest();
-		if (!body) return;
-		const sourceRender =
-			request.textureReplacementSourceMode === 'current-result' ? request.currentRender : undefined;
-		const instruction = 'replacementSurface' in body ? body.replacementSurface : '';
 		navigatedAwayWhileSubmitting = false;
 		submitting = true;
 		terminalJob = null;
@@ -324,6 +320,13 @@ before the Change Date. See LICENSE for complete terms.
 		pollFailure = null;
 		request.setTextureReplacementResultReady(false);
 		try {
+			const body = await request.toTextureReplacementRequest();
+			if (!body) return;
+			const sourceRender =
+				request.textureReplacementSourceMode === 'current-result'
+					? request.currentRender
+					: undefined;
+			const instruction = 'replacementSurface' in body ? body.replacementSurface : '';
 			const response = await fetch('/api/texture-replacement', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
@@ -360,8 +363,14 @@ before the Change Date. See LICENSE for complete terms.
 			} catch (error) {
 				logBoundaryError('textureReplacement.jobNavigation', error);
 			}
-		} catch {
-			terminalError = { jobId: '', key: 'textureReplacement.failed' };
+		} catch (error) {
+			terminalError = {
+				jobId: '',
+				key:
+					error instanceof RequestImageUploadError
+						? 'upload.errorUpload'
+						: 'textureReplacement.failed'
+			};
 		} finally {
 			submitting = false;
 		}

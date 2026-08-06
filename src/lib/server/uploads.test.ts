@@ -47,7 +47,8 @@ describe('uploadImage', () => {
 		expect(result).toEqual({
 			url: `https://uploads.cadbos.example/${id}.jpg`,
 			mime: 'image/jpeg',
-			size: file.size
+			size: file.size,
+			hash: expect.any(String)
 		});
 	});
 
@@ -88,7 +89,8 @@ describe('uploadImage', () => {
 		expect(result).toEqual({
 			url: `https://uploads.cadbos.example/${id}.webp`,
 			mime: 'image/webp',
-			size: bytes.byteLength
+			size: bytes.byteLength,
+			hash: expect.any(String)
 		});
 	});
 
@@ -110,7 +112,8 @@ describe('uploadImage', () => {
 		expect(result).toEqual({
 			url: `https://uploads.cadbos.example/${id}.jpg`,
 			mime: 'image/jpeg',
-			size: bytes.byteLength
+			size: bytes.byteLength,
+			hash: expect.any(String)
 		});
 	});
 

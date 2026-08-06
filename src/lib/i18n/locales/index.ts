@@ -193,6 +193,16 @@ export interface Dictionary {
 	'usage.column.generationCount': string;
 	'usage.column.totalSpend': string;
 	'usage.column.latestSpendAt': string;
+	'resources.title': string;
+	'resources.subtitle': string;
+	'resources.loading': string;
+	'resources.empty': string;
+	'resources.failed': string;
+	'resources.loadingMore': string;
+	'resources.listLabel': string;
+	'resources.imageAlt': string;
+	'resources.useImageAria': string;
+	'resources.createdAt': string;
 	'render.insufficientCredit': string;
 	'render.generationRestricted': string;
 	'styleTransfer.referenceImage': string;

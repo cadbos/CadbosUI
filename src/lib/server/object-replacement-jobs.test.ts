@@ -37,6 +37,7 @@ async function seedJob(db: D1Database, id = 'job-1') {
 		userId: 'user-1',
 		comfyPromptId: `prompt-${id}`,
 		sceneUrl: 'https://cdn.example.test/scene.jpg',
+		sceneHash: 'hash-scene',
 		referenceUrl: 'https://cdn.example.test/reference.jpg',
 		replacementObject: 'sofa',
 		cost: 2,

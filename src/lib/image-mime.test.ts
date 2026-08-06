@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { imageExtensionFromMime } from './image-utils';
+import { imageExtensionFromMime } from './image-mime';
 
 describe('image utilities', () => {
 	it('maps MIME types to canonical extensions', () => {

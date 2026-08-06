@@ -176,6 +176,7 @@ async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
 		userId: 'user-1',
 		comfyPromptId: 'prompt-1',
 		sceneUrl: requestBody.image,
+		sceneHash: 'hash-scene',
 		referenceUrl: requestBody.referenceImage,
 		replacementObject: requestBody.replacementObject,
 		cost: 2,

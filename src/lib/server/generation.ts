@@ -28,7 +28,7 @@ import type {
 	OutputFormat,
 	RenderResponse
 } from '$lib/api/contract';
-import { imageExtensionFromMime } from '$lib/server/image-utils';
+import { imageExtensionFromMime } from '$lib/image-mime';
 import {
 	mockEdit,
 	mockMaskedTextureReplacement,
@@ -378,7 +378,10 @@ export async function replaceTexturesWithMask(
 		postChangeTextures({
 			client: requestClientFor(apiKey, apiUrl),
 			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
-			body: params
+			// Explicit field list, not `params` as-is: MaskedTextureReplacementRequest
+			// also carries our own imageHash (dedup bookkeeping), which must never
+			// reach the external provider.
+			body: { image: params.image, referenceImage: params.referenceImage, mask: params.mask }
 		})
 	);
 }
