@@ -127,7 +127,7 @@ describe('POST /api/edit — billing', () => {
 		});
 	});
 
-	it('records source_hash from imageHash when editing a fresh upload with no prior render', async () => {
+	it('records input_hash from imageHash when editing a fresh upload with no prior render', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantGenerationAccess(db, 'user-1', 12);
@@ -149,7 +149,7 @@ describe('POST /api/edit — billing', () => {
 		expect(row?.input_hash).toBe('a'.repeat(64));
 	});
 
-	it('records an empty source_hash when editing without imageHash (continuing from a result)', async () => {
+	it('records an empty input_hash when editing without imageHash (continuing from a result)', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantGenerationAccess(db, 'user-1', 12);

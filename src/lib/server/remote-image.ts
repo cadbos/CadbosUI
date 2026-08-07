@@ -193,7 +193,7 @@ export async function importRemoteImage(
 	value: string,
 	applicationOrigin: string,
 	fetcher: typeof fetch = globalThis.fetch,
-	// Optional dedup lookup (generations.source_hash for the current user) —
+	// Optional dedup lookup (image_generation_details.input_hash for the current user) —
 	// callers without a D1 user to dedup against (e.g. tests) simply omit it.
 	findExisting?: (hash: string) => Promise<string | null>
 ): Promise<{

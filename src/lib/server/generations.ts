@@ -523,12 +523,12 @@ interface ResourceImageRow {
 // #resolveSourceFor never attaches a hash for the 'current-result' source
 // mode (edit and upscale always use it; style-transfer/object-replacement/
 // texture-replacement do whenever the user picks "use the current result"
-// instead of a fresh photo), so those rows' source_url is a previous
+// instead of a fresh photo), so those rows' input_url is a previous
 // generation's *output*, not something the user uploaded — excluding
 // input_hash = '' keeps those, and pre-migration rows backfilled the same
 // way (indistinguishable from each other by design), out of the gallery.
 //
-// Grouped by source_url, not source_hash: the hash only dedups at *upload*
+// Grouped by input_url, not input_hash: the hash only dedups at *upload*
 // time (findGenerationSourceByHash reuses an existing url for a matching
 // hash instead of storing a new object), so two rows ever sharing a hash
 // already share the identical url too — grouping by url gets the same

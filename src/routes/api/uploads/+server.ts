@@ -51,8 +51,8 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 	const userId = db ? await getUserIdByPubkey(db, locals.user.pubkey) : null;
 	if (db && !userId) return apiError(500, 'account_error', 'Account record not found');
 
-	// generations.source_url isn't always a stored upload — render/edit calls
-	// record their output URL there too (recordGeneration) — so a hash match
+	// image_generation_details.input_url isn't always a stored upload — tools can
+	// use generated output URLs as inputs — so a hash match
 	// is only reused when it actually resolves to our own bucket; otherwise
 	// this falls through to a normal upload rather than handing back an
 	// arbitrary URL as if it were deduped.
