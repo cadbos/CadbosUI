@@ -121,6 +121,7 @@ export const ru = {
 	'topUp.invoice.pending': 'Ожидаем подтверждение оплаты.',
 	'topUp.invoice.pollWarning': 'Связь прервалась. Проверка оплаты продолжится автоматически.',
 	'topUp.invoice.pollFailed': 'Не удалось проверить этот платёж.',
+	'topUp.invoice.cancel': 'Отменить и выбрать другой пакет',
 	'topUp.paid.title': 'Оплата получена',
 	'topUp.paid.description': 'Кредиты уже доступны.',
 	'topUp.paid.balance': 'Новый баланс: {balance}',
