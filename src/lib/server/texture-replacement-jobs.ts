@@ -53,8 +53,8 @@ interface TextureReplacementJobRow {
 }
 
 interface TextureReplacementDeductionSnapshotRow {
-	available_balance: number;
-	cost: number;
+	available_balance_units: number;
+	cost_units: number;
 }
 
 function toTextureReplacementJob(row: TextureReplacementJobRow): TextureReplacementJob {
@@ -153,50 +153,117 @@ export async function completeTextureReplacementJob(
 	outputUrl: string,
 	completedAt: number
 ): Promise<TextureReplacementJob> {
+	const transactionId = `generation:${id}`;
 	const results = await db.batch<TextureReplacementDeductionSnapshotRow | TextureReplacementJobRow>(
 		[
 			db
 				.prepare(
-					'SELECT c.balance AS available_balance, j.cost FROM credits c ' +
-						'JOIN texture_replacement_jobs j ON j.user_id = c.user_id ' +
+					'SELECT balance.balance AS available_balance_units, ' +
+						'CAST(ROUND(j.cost * 100) AS INTEGER) AS cost_units ' +
+						'FROM texture_replacement_jobs j ' +
+						'JOIN ledger_accounts account ON account.user_id = j.user_id ' +
+						"AND account.kind = 'user_balance' " +
+						'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
 						"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
 				)
 				.bind(id, userId),
 			db
 				.prepare(
-					'UPDATE credits SET balance = MAX(balance - ' +
-						"(SELECT cost FROM texture_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing'), " +
-						'0), ' +
-						'updated_at = ? WHERE user_id = ? AND EXISTS ' +
-						"(SELECT 1 FROM texture_replacement_jobs WHERE id = ? AND user_id = ? AND status = 'processing')"
+					'INSERT INTO ledger_transactions (id, occurred_at) ' +
+						'SELECT ?, ? FROM texture_replacement_jobs job ' +
+						"WHERE job.id = ? AND job.user_id = ? AND job.status = 'processing' " +
+						'AND EXISTS (SELECT 1 FROM ledger_accounts account ' +
+						"WHERE account.user_id = job.user_id AND account.kind = 'user_balance') " +
+						"AND EXISTS (SELECT 1 FROM ledger_accounts WHERE kind = 'asset_balance')"
 				)
-				.bind(id, userId, completedAt, userId, id, userId),
+				.bind(transactionId, completedAt, id, userId),
 			db
 				.prepare(
-					'INSERT INTO generations ' +
-						'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at) ' +
-						"SELECT j.id, j.user_id, ?, j.scene_url, j.scene_hash, j.replacement_surface, 'texture-replacement', j.cost, c.balance, ? " +
-						'FROM texture_replacement_jobs j JOIN credits c ON c.user_id = j.user_id ' +
-						"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
+					'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
+						'SELECT ?, account.id, -MIN(balance.balance, CAST(ROUND(job.cost * 100) AS INTEGER)) ' +
+						'FROM texture_replacement_jobs job ' +
+						'JOIN ledger_accounts account ON account.user_id = job.user_id ' +
+						"AND account.kind = 'user_balance' " +
+						'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+						"WHERE job.id = ? AND job.user_id = ? AND job.status = 'processing' " +
+						'AND balance.balance > 0 AND EXISTS ' +
+						'(SELECT 1 FROM ledger_transactions WHERE id = ?)'
 				)
-				.bind(outputUrl, completedAt, id, userId),
+				.bind(transactionId, id, userId, transactionId),
+			db
+				.prepare(
+					'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
+						"SELECT ?, 'app-credit:system', -entry.amount FROM ledger_entries entry " +
+						'JOIN ledger_accounts account ON account.id = entry.account_id ' +
+						"WHERE entry.transaction_id = ? AND account.kind = 'user_balance' " +
+						'AND EXISTS (SELECT 1 FROM ledger_transactions WHERE id = ? AND finalized = 0)'
+				)
+				.bind(transactionId, transactionId, transactionId),
+			db
+				.prepare(
+					'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
+						"SELECT ?, 'archai-token', entry.amount FROM ledger_entries entry " +
+						'JOIN ledger_accounts account ON account.id = entry.account_id ' +
+						"WHERE entry.transaction_id = ? AND account.kind = 'user_balance' " +
+						'AND EXISTS (SELECT 1 FROM ledger_transactions WHERE id = ? AND finalized = 0)'
+				)
+				.bind(transactionId, transactionId, transactionId),
+			db
+				.prepare(
+					'INSERT INTO ledger_entries (transaction_id, account_id, amount) ' +
+						"SELECT ?, 'archai-token:system', -entry.amount FROM ledger_entries entry " +
+						'JOIN ledger_accounts account ON account.id = entry.account_id ' +
+						"WHERE entry.transaction_id = ? AND account.kind = 'user_balance' " +
+						'AND EXISTS (SELECT 1 FROM ledger_transactions WHERE id = ? AND finalized = 0)'
+				)
+				.bind(transactionId, transactionId, transactionId),
+			db
+				.prepare('UPDATE ledger_transactions SET finalized = 1 WHERE id = ? AND finalized = 0')
+				.bind(transactionId),
+			db
+				.prepare(
+					'INSERT INTO generations (id, user_id, prompt, kind, ledger_transaction_id, created_at) ' +
+						"SELECT job.id, job.user_id, job.replacement_surface, 'texture-replacement', ?, ? " +
+						'FROM texture_replacement_jobs job WHERE job.id = ? AND job.user_id = ? ' +
+						"AND job.status = 'processing' AND EXISTS " +
+						'(SELECT 1 FROM ledger_transactions WHERE id = ?)'
+				)
+				.bind(transactionId, completedAt, id, userId, transactionId),
+			db
+				.prepare(
+					'INSERT INTO image_generation_details ' +
+						'(generation_id, output_url, input_url, input_hash) ' +
+						'SELECT ?, ?, scene_url, scene_hash FROM texture_replacement_jobs ' +
+						"WHERE id = ? AND user_id = ? AND status = 'processing'"
+				)
+				.bind(id, outputUrl, id, userId),
 			db
 				.prepare(
 					"UPDATE texture_replacement_jobs SET status = 'completed', output_url = ?, " +
-						'balance_after = (SELECT balance FROM credits WHERE user_id = ?), updated_at = ?, completed_at = ? ' +
+						'balance_after = (SELECT balance.balance / 100.0 FROM ledger_accounts account ' +
+						'JOIN ledger_account_balances balance ON balance.account_id = account.id ' +
+						"WHERE account.user_id = ? AND account.kind = 'user_balance'), " +
+						'updated_at = ?, completed_at = ? ' +
 						"WHERE id = ? AND user_id = ? AND status = 'processing' " +
-						'AND EXISTS (SELECT 1 FROM credits WHERE user_id = ?) RETURNING *'
+						'AND EXISTS (SELECT 1 FROM generations WHERE id = ?) RETURNING *'
 				)
-				.bind(outputUrl, userId, completedAt, completedAt, id, userId, userId)
+				.bind(outputUrl, userId, completedAt, completedAt, id, userId, id),
+			db
+				.prepare('SELECT * FROM texture_replacement_jobs WHERE id = ? AND user_id = ?')
+				.bind(id, userId)
 		]
 	);
 	const snapshot = results[0]?.results[0];
-	if (snapshot && 'available_balance' in snapshot && snapshot.available_balance < snapshot.cost) {
+	if (
+		snapshot &&
+		'available_balance_units' in snapshot &&
+		snapshot.available_balance_units < snapshot.cost_units
+	) {
 		console.warn('Texture replacement credit deduction exceeded available balance:', {
 			jobId: id
 		});
 	}
-	const row = results[3]?.results[0];
+	const row = results.at(-1)?.results[0];
 	if (row && 'id' in row) return toTextureReplacementJob(row);
 	const existing = await getTextureReplacementJob(db, userId, id);
 	if (!existing) throw new Error('texture replacement job not found');

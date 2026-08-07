@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SessionUser } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { MAX_IMAGE_UPLOAD_SIZE } from '$lib/server/remote-image';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { makeD1, seedGeneratedImage } from '$lib/server/testing/d1-shim';
 import { POST } from './+server';
 
 type UploadEvent = Parameters<typeof POST>[0];
@@ -62,8 +62,6 @@ function seedUser(db: ReturnType<typeof makeD1>, id: string, pubkey: string): vo
 		.run();
 }
 
-// Mirrors generations.test.ts's own seedGenerationWithSource — lets the test
-// set source_url/source_hash directly to exercise the /api/uploads dedup path.
 function seedGenerationWithSource(
 	db: ReturnType<typeof makeD1>,
 	id: string,
@@ -71,13 +69,15 @@ function seedGenerationWithSource(
 	sourceUrl: string,
 	sourceHash: string
 ): void {
-	db.prepare(
-		'INSERT INTO generations ' +
-			'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at) ' +
-			"VALUES (?, ?, ?, ?, ?, 'cozy', 'render', 1, 10, ?)"
-	)
-		.bind(id, userId, `https://cdn.example.test/${id}.webp`, sourceUrl, sourceHash, Date.now())
-		.run();
+	seedGeneratedImage(
+		db,
+		id,
+		userId,
+		Date.now(),
+		`https://cdn.example.test/${id}.webp`,
+		sourceUrl,
+		sourceHash
+	);
 }
 
 async function sha256Hex(bytes: string): Promise<string> {
@@ -219,8 +219,8 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		const hash = await sha256Hex('image-bytes');
-		// A render/edit call also writes generations.source_url (recordGeneration),
-		// so a hash match here isn't necessarily a stored upload — reusing it as
+		// A render/edit call also writes image_generation_details.input_url, so a
+		// hash match here isn't necessarily a stored upload — reusing it as
 		// one would hand back an arbitrary, attacker-influenced URL.
 		seedGenerationWithSource(
 			db,

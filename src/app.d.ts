@@ -32,6 +32,9 @@ declare global {
 				DB: D1Database;
 				ARCHAI_API_KEY: string;
 				ARCHAI_API_URL: string;
+				LNBITS_VPC: Fetcher;
+				LNBITS_INVOICE_KEY?: string;
+				PAYMENTS_WEBHOOK_URL?: string;
 				// VPC Service binding to the ComfyUI VPS (Cloudflare Tunnel
 				// `comfyui-equuleus` -> localhost:8188). Not a URL string — see
 				// wrangler.jsonc `vpc_services`.

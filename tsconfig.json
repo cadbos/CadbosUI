@@ -16,14 +16,24 @@
 	// ownership" resolver (used by oxc/rolldown during transform and dependency
 	// optimization) never walks above the project looking for a matching
 	// tsconfig. Non-app trees and build artifacts are excluded.
-	"include": ["**/*.js", "**/*.ts", "**/*.svelte", "**/*.d.ts"],
+	"include": [
+		"**/*.js",
+		"**/*.ts",
+		"**/*.svelte",
+		"**/*.d.ts",
+		".svelte-kit/ambient.d.ts",
+		".svelte-kit/env.d.ts",
+		".svelte-kit/non-ambient.d.ts"
+	],
 	"exclude": [
 		"node_modules/**",
+		"d1-tests/**",
 		".svelte-kit/output/**",
 		".claude/**",
 		"docs/**",
 		"ai-context/**",
-		"static/**"
+		"static/**",
+		"vitest.d1.config.ts"
 	]
 	// Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
 	// except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
