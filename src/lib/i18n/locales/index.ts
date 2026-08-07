@@ -121,6 +121,7 @@ export interface Dictionary {
 	'topUp.invoice.pending': string;
 	'topUp.invoice.pollWarning': string;
 	'topUp.invoice.pollFailed': string;
+	'topUp.invoice.cancel': string;
 	'topUp.paid.title': string;
 	'topUp.paid.description': string;
 	'topUp.paid.balance': string;

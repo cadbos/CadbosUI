@@ -152,6 +152,9 @@ before the Change Date. See LICENSE for complete terms.
 								</button>
 							</div>
 						{/if}
+						<button type="button" class="secondary" onclick={() => deposits.startAnother()}>
+							{t('topUp.invoice.cancel')}
+						</button>
 					{/if}
 				</section>
 			{:else}

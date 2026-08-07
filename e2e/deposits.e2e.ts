@@ -90,3 +90,59 @@ test('restores an in-progress payment after a page reload', async ({ page }) => 
 	await expect(dialog(page).getByText('Оплата через Lightning')).toBeVisible();
 	await expect(dialog(page).getByText('1586 сатоши')).toBeVisible();
 });
+
+test('cancels a pending invoice and returns to package selection', async ({ page }) => {
+	const paid = { value: false };
+	await mockAuthenticatedSession(page, paid);
+	await page.route('**/api/packages', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ packages: [{ id: 'pkg-1', usdAmount: 1, creditsAwarded: 3 }] })
+		});
+	});
+	await page.route('**/api/deposits', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: depositId,
+				status: 'pending',
+				bolt11,
+				satsAmount: 1586,
+				usdAmount: 1,
+				expiresAt: Date.now() + 900_000
+			})
+		});
+	});
+	await page.route(`**/api/deposits/${depositId}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: depositId,
+				status: 'pending',
+				bolt11,
+				satsAmount: 1586,
+				usdAmount: 1,
+				expiresAt: Date.now() + 900_000
+			})
+		});
+	});
+
+	await page.goto('/');
+	await page.locator('button[aria-controls="auth-profile"]').click();
+	await page.getByRole('button', { name: 'Пополнить' }).click();
+	await dialog(page).locator('.package-grid button').first().click();
+	await dialog(page).getByRole('button', { name: 'Создать счёт' }).click();
+
+	await expect(dialog(page).getByText('Оплата через Lightning')).toBeVisible();
+	await dialog(page).getByRole('button', { name: 'Отменить и выбрать другой пакет' }).click();
+
+	await expect(dialog(page).getByText('Выберите пакет')).toBeVisible();
+	const persisted = await page.evaluate(
+		(key) => localStorage.getItem(key),
+		`cadbos.deposit.${pubkey}`
+	);
+	expect(persisted).toBeNull();
+});

@@ -125,6 +125,7 @@ export const en = {
 	'topUp.invoice.pending': 'Waiting for payment confirmation.',
 	'topUp.invoice.pollWarning': 'Connection interrupted. Payment checks continue automatically.',
 	'topUp.invoice.pollFailed': 'Could not check this payment.',
+	'topUp.invoice.cancel': 'Cancel and choose another package',
 	'topUp.paid.title': 'Payment received',
 	'topUp.paid.description': 'Your credits are ready to use.',
 	'topUp.paid.balance': 'New balance: {balance}',
