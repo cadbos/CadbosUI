@@ -534,7 +534,7 @@ describe('generated images', () => {
 });
 
 describe('findGenerationSourceByHash', () => {
-	it('returns the most recent source_url for a matching hash', async () => {
+	it('returns the most recent input URL for a matching hash', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedGenerationWithSource(
 			db,
@@ -609,11 +609,11 @@ describe('listDistinctSourceImages', () => {
 		});
 	});
 
-	// source_hash = '' means this row's source_url isn't something the user
+	// input_hash = '' means this row's input_url isn't something the user
 	// uploaded: #resolveSourceFor never attaches a hash for the
 	// 'current-result' source mode (edit/upscale always use it; the other
 	// tools do whenever "use the current result" is picked over a fresh
-	// photo), so source_url there is a previous generation's own *output*.
+	// photo), so input_url there is a previous generation's own *output*.
 	// Pre-migration rows share the same '' backfill and are indistinguishable
 	// from those — both are excluded, not just deduped away.
 	it('excludes rows whose source was a previous result, not an upload', async () => {
@@ -627,7 +627,7 @@ describe('listDistinctSourceImages', () => {
 			'hash-1',
 			500
 		);
-		// An edit continuing from a previous render result — source_hash is
+		// An edit continuing from a previous render result — input_hash is
 		// always '' for this mode, even though the row itself is recent.
 		seedGenerationWithSource(
 			db,

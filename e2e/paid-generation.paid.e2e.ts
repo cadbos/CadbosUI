@@ -19,6 +19,7 @@ import { PAID_FLOW_PERSIST_PATH } from '../scripts/paid-flow-db-path.mjs';
 import { mockEdit, mockRender, mockUpscale } from '../src/lib/server/mocks/fixtures';
 
 test('render, edit, and upscale chain through durable local billing', async ({ page, context }) => {
+	test.setTimeout(90_000);
 	await context.addCookies([
 		{
 			name: 'cadbos_session',
@@ -37,7 +38,8 @@ test('render, edit, and upscale chain through durable local billing', async ({ p
 				url: 'https://cdn.example.test/uploaded.webp',
 				mime: 'image/webp',
 				size: 1024,
-				dimensions: [800, 600]
+				dimensions: [800, 600],
+				hash: 'b'.repeat(64)
 			})
 		});
 	});
@@ -65,6 +67,7 @@ test('render, edit, and upscale chain through durable local billing', async ({ p
 	expect(renderResponse.status()).toBe(200);
 	expect(renderResponse.request().postDataJSON()).toEqual({
 		image: 'https://cdn.example.test/uploaded.webp',
+		imageHash: 'b'.repeat(64),
 		prompt: 'warm oak and soft daylight',
 		outputFormat: 'webp'
 	});

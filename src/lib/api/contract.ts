@@ -49,7 +49,7 @@ export interface RenderRequest {
 	image: string;
 	// SHA-256 hex digest of `image`'s bytes, from the /api/uploads response —
 	// omitted when `image` is a previous render/edit result rather than a
-	// fresh upload. Lets the server record generations.source_hash for future
+	// fresh upload. Lets the server record image_generation_details.input_hash for future
 	// upload dedup; never forwarded to the render provider.
 	imageHash?: string;
 	prompt: string;

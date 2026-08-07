@@ -278,7 +278,7 @@ before the Change Date. See LICENSE for complete terms.
 						<Images size={18} strokeWidth={1.8} aria-hidden="true" />
 						<span>{t('generatedImages.title')}</span>
 					</button>
-					<a class="resources-button" href={resolve('/resources', {})}>
+					<a class="resources-button" href={resolve('/resources')}>
 						<GalleryHorizontalEnd size={18} strokeWidth={1.8} aria-hidden="true" />
 						<span>{t('resources.title')}</span>
 					</a>

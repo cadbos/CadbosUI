@@ -51,7 +51,7 @@ before the Change Date. See LICENSE for complete terms.
 </svelte:head>
 
 <header class="app-header">
-	<a class="brand" href={resolve('/', {})}>
+	<a class="brand" href={resolve('/')}>
 		<img class="brand-mark" src={favicon} alt="" />
 		<div class="brand-copy">
 			<h1 class="brand-title">{t('app.title')}</h1>
