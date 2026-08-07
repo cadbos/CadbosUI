@@ -274,7 +274,7 @@ export async function findLnbitsInvoiceByAttempt(
 	return null;
 }
 
-export async function getLnbitsUsdPerBtc(config: LnbitsConfig): Promise<number> {
+export async function getLnbitsSatsPerUsd(config: LnbitsConfig): Promise<number> {
 	const parsed = exchangeRateSchema.safeParse(
 		await request(config, 'exchange_rate', 'api/v1/rate/USD')
 	);

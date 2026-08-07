@@ -367,3 +367,28 @@ describe('0011_ledgers migration', () => {
 		).toThrow('generation operations are immutable');
 	});
 });
+
+describe('0014_exchange_rate_cache_units migration', () => {
+	it('renames the cached rate unit without changing its value', () => {
+		const db = new DatabaseSync(':memory:');
+		db.exec('PRAGMA foreign_keys = ON');
+		applyPreLedgerMigrations(db);
+		db.exec(readMigration('0011_ledgers.sql'));
+		db.prepare(
+			"INSERT INTO exchange_rate_cache (currency, usd_per_btc, fetched_at, expires_at) VALUES ('USD', ?, ?, ?)"
+		).run(1_538.461_538, 1_000, 91_000);
+
+		db.exec(readMigration('0014_exchange_rate_cache_units.sql'));
+
+		expect(
+			db
+				.prepare(
+					"SELECT sats_per_usd, fetched_at, expires_at FROM exchange_rate_cache WHERE currency = 'USD'"
+				)
+				.get()
+		).toEqual({ sats_per_usd: 1_538.461_538, fetched_at: 1_000, expires_at: 91_000 });
+		expect(() => db.prepare('SELECT usd_per_btc FROM exchange_rate_cache').get()).toThrow(
+			'no such column: usd_per_btc'
+		);
+	});
+});

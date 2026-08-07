@@ -34,8 +34,12 @@ status lookup can also recognize a later payment, which is credited exactly once
 ## Failure recovery
 
 A deposit row and `attempt_created` event are persisted before any provider call.
-The USD/BTC rate and exact sat amount are then snapshotted before invoice
+The sats-per-USD rate and exact sat amount are then snapshotted before invoice
 creation. The LNbits invoice contains `extra.cadbos_attempt_id`.
+
+LNbits returns `rate` from `GET /api/v1/rate/USD` in sats per USD and `price` in
+USD per BTC. Cadbos uses `rate` directly and rounds the package's converted amount
+up to the next whole sat before creating the invoice.
 
 If invoice creation has an ambiguous result, Cadbos keeps every stored field and
 event. A retry searches LNbits payment history for that attempt ID before it may
