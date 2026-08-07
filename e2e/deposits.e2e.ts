@@ -139,7 +139,7 @@ test('cancels a pending invoice and returns to package selection', async ({ page
 	await expect(dialog(page).getByText('Оплата через Lightning')).toBeVisible();
 	await dialog(page).getByRole('button', { name: 'Отменить и выбрать другой пакет' }).click();
 
-	await expect(dialog(page).getByText('Выберите пакет')).toBeVisible();
+	await expect(dialog(page).getByRole('heading', { name: 'Выберите пакет' })).toBeVisible();
 	const persisted = await page.evaluate(
 		(key) => localStorage.getItem(key),
 		`cadbos.deposit.${pubkey}`
