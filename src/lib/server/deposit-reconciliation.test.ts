@@ -78,7 +78,7 @@ describe('deposit invoice creation', () => {
 		const createInvoice = vi.fn().mockResolvedValue(invoice);
 		const options = {
 			now: NOW,
-			getExchangeRate: vi.fn().mockResolvedValue({ usdPerBtc: 100_000, satsPerUsd: 1_200 }),
+			getExchangeRate: vi.fn().mockResolvedValue({ satsPerUsd: 1_200 }),
 			createInvoice,
 			findInvoiceByAttempt: vi.fn()
 		};
@@ -97,6 +97,37 @@ describe('deposit invoice creation', () => {
 		await expect(getDeposit(db, results[0].id)).resolves.toMatchObject({
 			status: 'pending',
 			paymentHash: PAYMENT_HASH
+		});
+	});
+
+	it('creates a 4,616-sat invoice for a $3 package when bitcoin is $65,000', async () => {
+		const satsPerUsd = 100_000_000 / 65_000;
+		const fetcher = vi
+			.fn<LnbitsFetch>()
+			.mockResolvedValue(Response.json({ rate: satsPerUsd, price: 65_000 }));
+		const threeDollarInvoice = { ...invoice, satsAmount: 4_616 };
+		const createInvoice = vi.fn().mockResolvedValue(threeDollarInvoice);
+
+		const result = await createOrResumeDeposit(
+			db,
+			'user-1',
+			{ requestId: crypto.randomUUID(), packageId: 'pkg-3' },
+			{ fetcher, invoiceKey: 'invoice-key' },
+			{ now: NOW, createInvoice }
+		);
+
+		expect(fetcher).toHaveBeenCalledWith(
+			new URL('http://localhost:5000/api/v1/rate/USD'),
+			expect.objectContaining({ headers: expect.objectContaining({ 'X-Api-Key': 'invoice-key' }) })
+		);
+		expect(createInvoice).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ satsAmount: 4_616 })
+		);
+		expect(result).toMatchObject({
+			status: 'pending',
+			satsPerUsdRate: satsPerUsd,
+			satsAmount: 4_616
 		});
 	});
 
@@ -133,7 +164,7 @@ describe('deposit invoice creation', () => {
 			.mockRejectedValueOnce(
 				new LnbitsError('create_invoice', 'ambiguous', 'response was lost after creation')
 			);
-		const getExchangeRate = vi.fn().mockResolvedValue({ usdPerBtc: 100_000, satsPerUsd: 1_200 });
+		const getExchangeRate = vi.fn().mockResolvedValue({ satsPerUsd: 1_200 });
 
 		await expect(
 			createOrResumeDeposit(db, 'user-1', { requestId, packageId: 'pkg-1' }, config, {

@@ -16,10 +16,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LnbitsFetch } from '$lib/server/lnbits';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 
-const lnbits = vi.hoisted(() => ({ getLnbitsUsdPerBtc: vi.fn() }));
+const lnbits = vi.hoisted(() => ({ getLnbitsSatsPerUsd: vi.fn() }));
 vi.mock('$lib/server/lnbits', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/server/lnbits')>()),
-	getLnbitsUsdPerBtc: lnbits.getLnbitsUsdPerBtc
+	getLnbitsSatsPerUsd: lnbits.getLnbitsSatsPerUsd
 }));
 
 const { getUsdExchangeRate } = await import('./exchange-rate');
@@ -27,58 +27,55 @@ const config = { fetcher: vi.fn<LnbitsFetch>(), invoiceKey: 'invoice-key' };
 const now = 1_800_000_000_000;
 
 beforeEach(() => {
-	lnbits.getLnbitsUsdPerBtc.mockReset();
+	lnbits.getLnbitsSatsPerUsd.mockReset();
 });
 
 describe('LNbits exchange-rate cache', () => {
 	it('uses an unexpired cached response without contacting LNbits', async () => {
 		const db = makeD1();
 		db.prepare(
-			"INSERT INTO exchange_rate_cache (currency, usd_per_btc, fetched_at, expires_at) VALUES ('USD', ?, ?, ?)"
+			"INSERT INTO exchange_rate_cache (currency, sats_per_usd, fetched_at, expires_at) VALUES ('USD', ?, ?, ?)"
 		)
-			.bind(100_000, now - 1_000, now + 1_000)
+			.bind(1_538.461_538, now - 1_000, now + 1_000)
 			.run();
 
 		await expect(getUsdExchangeRate(db, config, now)).resolves.toEqual({
-			usdPerBtc: 100_000,
-			satsPerUsd: 1_000
+			satsPerUsd: 1_538.461_538
 		});
-		expect(lnbits.getLnbitsUsdPerBtc).not.toHaveBeenCalled();
+		expect(lnbits.getLnbitsSatsPerUsd).not.toHaveBeenCalled();
 	});
 
 	it('refreshes an expired cache entry and stores the new expiry', async () => {
 		const db = makeD1();
 		db.prepare(
-			"INSERT INTO exchange_rate_cache (currency, usd_per_btc, fetched_at, expires_at) VALUES ('USD', ?, ?, ?)"
+			"INSERT INTO exchange_rate_cache (currency, sats_per_usd, fetched_at, expires_at) VALUES ('USD', ?, ?, ?)"
 		)
-			.bind(50_000, now - 100_000, now - 1)
+			.bind(2_000, now - 100_000, now - 1)
 			.run();
-		lnbits.getLnbitsUsdPerBtc.mockResolvedValueOnce(200_000);
+		lnbits.getLnbitsSatsPerUsd.mockResolvedValueOnce(500);
 
 		await expect(getUsdExchangeRate(db, config, now)).resolves.toEqual({
-			usdPerBtc: 200_000,
 			satsPerUsd: 500
 		});
 		expect(
 			await db
 				.prepare(
-					"SELECT usd_per_btc, fetched_at, expires_at FROM exchange_rate_cache WHERE currency = 'USD'"
+					"SELECT sats_per_usd, fetched_at, expires_at FROM exchange_rate_cache WHERE currency = 'USD'"
 				)
 				.first()
-		).toEqual({ usd_per_btc: 200_000, fetched_at: now, expires_at: now + 90_000 });
+		).toEqual({ sats_per_usd: 500, fetched_at: now, expires_at: now + 90_000 });
 	});
 
 	it('retries LNbits after a failed refresh without caching the failure', async () => {
 		const db = makeD1();
-		lnbits.getLnbitsUsdPerBtc
+		lnbits.getLnbitsSatsPerUsd
 			.mockRejectedValueOnce(new Error('timeout'))
-			.mockResolvedValueOnce(100_000);
+			.mockResolvedValueOnce(1_000);
 
 		await expect(getUsdExchangeRate(db, config, now)).rejects.toThrow('timeout');
 		await expect(getUsdExchangeRate(db, config, now + 1)).resolves.toEqual({
-			usdPerBtc: 100_000,
 			satsPerUsd: 1_000
 		});
-		expect(lnbits.getLnbitsUsdPerBtc).toHaveBeenCalledTimes(2);
+		expect(lnbits.getLnbitsSatsPerUsd).toHaveBeenCalledTimes(2);
 	});
 });

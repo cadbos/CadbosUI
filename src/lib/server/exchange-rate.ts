@@ -13,23 +13,17 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
-import { getLnbitsUsdPerBtc, type LnbitsConfig } from '$lib/server/lnbits';
+import { getLnbitsSatsPerUsd, type LnbitsConfig } from '$lib/server/lnbits';
 
-const SATS_PER_BTC = 100_000_000;
 const RATE_CACHE_MS = 90_000;
 
 interface RateRow {
-	usd_per_btc: number;
+	sats_per_usd: number;
 	expires_at: number;
 }
 
 export interface ExchangeRate {
-	usdPerBtc: number;
 	satsPerUsd: number;
-}
-
-function toRate(usdPerBtc: number): ExchangeRate {
-	return { usdPerBtc, satsPerUsd: SATS_PER_BTC / usdPerBtc };
 }
 
 export async function getUsdExchangeRate(
@@ -38,18 +32,18 @@ export async function getUsdExchangeRate(
 	now: number
 ): Promise<ExchangeRate> {
 	const cached = await db
-		.prepare("SELECT usd_per_btc, expires_at FROM exchange_rate_cache WHERE currency = 'USD'")
+		.prepare("SELECT sats_per_usd, expires_at FROM exchange_rate_cache WHERE currency = 'USD'")
 		.first<RateRow>();
-	if (cached && cached.expires_at > now) return toRate(cached.usd_per_btc);
+	if (cached && cached.expires_at > now) return { satsPerUsd: cached.sats_per_usd };
 
-	const usdPerBtc = await getLnbitsUsdPerBtc(config);
+	const satsPerUsd = await getLnbitsSatsPerUsd(config);
 	await db
 		.prepare(
-			"INSERT INTO exchange_rate_cache (currency, usd_per_btc, fetched_at, expires_at) VALUES ('USD', ?, ?, ?) " +
-				'ON CONFLICT (currency) DO UPDATE SET usd_per_btc = excluded.usd_per_btc, ' +
+			"INSERT INTO exchange_rate_cache (currency, sats_per_usd, fetched_at, expires_at) VALUES ('USD', ?, ?, ?) " +
+				'ON CONFLICT (currency) DO UPDATE SET sats_per_usd = excluded.sats_per_usd, ' +
 				'fetched_at = excluded.fetched_at, expires_at = excluded.expires_at'
 		)
-		.bind(usdPerBtc, now, now + RATE_CACHE_MS)
+		.bind(satsPerUsd, now, now + RATE_CACHE_MS)
 		.run();
-	return toRate(usdPerBtc);
+	return { satsPerUsd };
 }

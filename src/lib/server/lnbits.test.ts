@@ -16,7 +16,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	createLnbitsInvoice,
 	findLnbitsInvoiceByAttempt,
-	getLnbitsUsdPerBtc,
+	getLnbitsSatsPerUsd,
 	lookupLnbitsPayment,
 	type LnbitsConfig,
 	type LnbitsFetch
@@ -228,13 +228,18 @@ describe('LNbits client', () => {
 	});
 
 	it('accepts the current exchange-rate response and rejects malformed data', async () => {
+		const satsPerUsd = 100_000_000 / 65_000;
 		const valid = vi
 			.fn<LnbitsFetch>()
-			.mockResolvedValue(Response.json({ rate: 100_000, price: 0.00001 }));
-		await expect(getLnbitsUsdPerBtc(config(valid))).resolves.toBe(100_000);
+			.mockResolvedValue(Response.json({ rate: satsPerUsd, price: 65_000 }));
+		await expect(getLnbitsSatsPerUsd(config(valid))).resolves.toBe(satsPerUsd);
+		expect(valid).toHaveBeenCalledWith(
+			new URL('http://localhost:5000/api/v1/rate/USD'),
+			expect.objectContaining({ headers: expect.objectContaining({ 'X-Api-Key': 'invoice-key' }) })
+		);
 
 		const malformed = vi.fn<LnbitsFetch>().mockResolvedValue(Response.json({ rate: '100000' }));
-		await expect(getLnbitsUsdPerBtc(config(malformed))).rejects.toMatchObject({
+		await expect(getLnbitsSatsPerUsd(config(malformed))).rejects.toMatchObject({
 			operation: 'exchange_rate',
 			outcome: 'ambiguous'
 		});
@@ -244,18 +249,18 @@ describe('LNbits client', () => {
 		const timeout = vi
 			.fn<LnbitsFetch>()
 			.mockRejectedValue(new DOMException('timed out', 'TimeoutError'));
-		await expect(getLnbitsUsdPerBtc(config(timeout))).rejects.toMatchObject({
+		await expect(getLnbitsSatsPerUsd(config(timeout))).rejects.toMatchObject({
 			operation: 'exchange_rate',
 			outcome: 'ambiguous'
 		});
 
 		const serverError = vi.fn<LnbitsFetch>().mockResolvedValue(new Response(null, { status: 503 }));
-		await expect(getLnbitsUsdPerBtc(config(serverError))).rejects.toMatchObject({
+		await expect(getLnbitsSatsPerUsd(config(serverError))).rejects.toMatchObject({
 			outcome: 'ambiguous'
 		});
 
 		const clientError = vi.fn<LnbitsFetch>().mockResolvedValue(new Response(null, { status: 400 }));
-		await expect(getLnbitsUsdPerBtc(config(clientError))).rejects.toMatchObject({
+		await expect(getLnbitsSatsPerUsd(config(clientError))).rejects.toMatchObject({
 			outcome: 'explicit_failure'
 		});
 	});
