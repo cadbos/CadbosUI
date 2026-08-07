@@ -25,7 +25,7 @@ services:
     volumes:
       - ${LNBITS_DATA:-./ddata/lnbits}:/app/data
     env_file:
-      - ./.lnbits.env
+      - ${LNBITS_ENV_FILE:-./.lnbits.env}
     environment:
       - PORT=5000
     depends_on:
