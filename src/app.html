@@ -13,14 +13,336 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <!doctype html>
-<html lang="%lang%">
+<html lang="%lang%" data-client-integrity="%client.integrityState%" style="overflow: hidden">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
+		<script nonce="%sveltekit.nonce%">
+			(() => {
+				const loadingStateAttribute = 'data-client-load-state';
+				const readyEvent = 'cadbos:client-ready';
+				let complete = false;
+				let failed = false;
+
+				const removeLoadListeners = () => {
+					window.removeEventListener('error', failOnResourceError, true);
+					window.removeEventListener('unhandledrejection', fail);
+					window.removeEventListener(readyEvent, finish);
+				};
+
+				const failOnResourceError = (event) => {
+					const resource = event.target;
+					if (
+						(resource instanceof HTMLLinkElement || resource instanceof HTMLScriptElement) &&
+						resource.integrity
+					) {
+						fail();
+					}
+				};
+
+				const showFailure = () => {
+					const pending = document.getElementById('cadbos-client-load-pending');
+					const errorState = document.getElementById('cadbos-client-load-error-state');
+					const refresh = document.getElementById('cadbos-client-load-refresh');
+					pending?.setAttribute('hidden', '');
+					errorState?.removeAttribute('hidden');
+					refresh?.focus();
+				};
+
+				function fail() {
+					if (complete || failed) return;
+					failed = true;
+					window.clearTimeout(watchdog);
+					removeLoadListeners();
+					document.documentElement.removeAttribute(loadingStateAttribute);
+					if (document.readyState === 'loading') {
+						document.addEventListener('DOMContentLoaded', showFailure, { once: true });
+					} else {
+						showFailure();
+					}
+				}
+
+				function finish() {
+					if (complete || failed) return;
+					const app = document.getElementById('cadbos-client-app');
+					const overlay = document.getElementById('cadbos-client-loading');
+					if (!app || !overlay) {
+						fail();
+						return;
+					}
+
+					complete = true;
+					window.clearTimeout(watchdog);
+					removeLoadListeners();
+					document.documentElement.removeAttribute(loadingStateAttribute);
+					document.documentElement.style.removeProperty('overflow');
+					app.removeAttribute('inert');
+					app.removeAttribute('aria-hidden');
+					overlay.remove();
+				}
+
+				window.addEventListener('error', failOnResourceError, true);
+				window.addEventListener('unhandledrejection', fail);
+				window.addEventListener(readyEvent, finish);
+				const watchdog = window.setTimeout(fail, 30_000);
+
+				if (document.documentElement.dataset.clientIntegrity === 'failed') {
+					fail();
+				} else {
+					document.documentElement.setAttribute(loadingStateAttribute, 'loading');
+				}
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
-		<div style="display: contents">%sveltekit.body%</div>
+		<div
+			id="cadbos-client-loading"
+			style="
+				position: fixed;
+				inset: 0;
+				z-index: 2147483647;
+				display: grid;
+				box-sizing: border-box;
+				place-items: center;
+				padding: 1.5rem;
+				font-family:
+					Inter,
+					system-ui,
+					-apple-system,
+					'Segoe UI',
+					Roboto,
+					Helvetica,
+					Arial,
+					sans-serif;
+				color: #1d1d1f;
+				background: #f5f5f7;
+			"
+		>
+			<div
+				id="cadbos-client-load-pending"
+				hidden
+				role="status"
+				aria-live="polite"
+				aria-label="%client.loading%"
+			>
+				<div
+					id="cadbos-client-load-ribbon-stage"
+					style="width: 140px; height: 159px"
+					aria-hidden="true"
+				>
+					<svg
+						id="cadbos-client-load-ribbon"
+						viewBox="0 0 511 579"
+						fill="none"
+						style="width: 100%; height: 100%; overflow: visible"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<g class="cadbos-client-load-part-1">
+							<path
+								class="cadbos-client-load-fill"
+								d="M228.403 100.79L83.337 188.395V389.981L228.403 477.585V578.378L-0.499908 435.197V143.18L228.403 -0.00268555V100.79Z"
+								fill="#2F6F4F"
+								style="opacity: 0"
+							/>
+							<path
+								class="cadbos-client-load-stroke"
+								d="M228.403 100.79L83.337 188.395V389.981L228.403 477.585V578.378L-0.499908 435.197V143.18L228.403 -0.00268555V100.79Z"
+								stroke="#2F6F4F"
+								style="fill: none; stroke-width: 7; stroke-linejoin: round; stroke-linecap: round"
+							/>
+						</g>
+
+						<g class="cadbos-client-load-part-2">
+							<path
+								class="cadbos-client-load-fill"
+								d="M511 143.18V243.973L427.163 294.84V294.809L422.453 297.665V355.127L338.616 308.97V252.45L427.163 198.495V188.395L282.097 100.79V-0.00268555L511 143.18Z"
+								fill="#313A41"
+								style="opacity: 0"
+							/>
+							<path
+								class="cadbos-client-load-stroke"
+								d="M511 143.18V243.973L427.163 294.84V294.809L422.453 297.665V355.127L338.616 308.97V252.45L427.163 198.495V188.395L282.097 100.79V-0.00268555L511 143.18Z"
+								stroke="#313A41"
+								style="fill: none; stroke-width: 7; stroke-linejoin: round; stroke-linecap: round"
+							/>
+						</g>
+
+						<g class="cadbos-client-load-part-3">
+							<path
+								class="cadbos-client-load-fill"
+								d="M511 436.138V335.346L427.163 284.477V284.509L422.453 281.652V224.19L338.616 255.276V326.867L427.163 380.822V390.923L282.5 478.5V578.5L511 436.138Z"
+								fill="#313A41"
+								style="opacity: 0"
+							/>
+							<path
+								class="cadbos-client-load-stroke"
+								d="M511 436.138V335.346L427.163 284.477V284.509L422.453 281.652V224.19L338.616 255.276V326.867L427.163 380.822V390.923L282.5 478.5V578.5L511 436.138Z"
+								stroke="#313A41"
+								style="fill: none; stroke-width: 7; stroke-linejoin: round; stroke-linecap: round"
+							/>
+						</g>
+
+						<g class="cadbos-client-load-part-4">
+							<path
+								class="cadbos-client-load-fill"
+								d="M511 243.972V143.18L282.097 286.362L282.5 578.5L365.934 526.875V332.519L511 243.972Z"
+								fill="#9C9E9D"
+								style="opacity: 0"
+							/>
+							<path
+								class="cadbos-client-load-stroke"
+								d="M511 243.972V143.18L282.097 286.362L282.5 578.5L365.934 526.875V332.519L511 243.972Z"
+								stroke="#9C9E9D"
+								style="fill: none; stroke-width: 7; stroke-linejoin: round; stroke-linecap: round"
+							/>
+						</g>
+					</svg>
+				</div>
+			</div>
+			<div
+				id="cadbos-client-load-error-state"
+				style="
+					display: grid;
+					box-sizing: border-box;
+					justify-items: center;
+					width: min(100%, 28rem);
+					padding: 2rem;
+					text-align: center;
+					background: #ffffff;
+					border: 1px solid #e5e5e7;
+					border-radius: 16px;
+					box-shadow: 0 10px 24px -3px rgb(0 0 0 / 0.1);
+				"
+			>
+				<div
+					id="cadbos-client-load-error"
+					style="display: grid; justify-items: center; gap: 1.25rem"
+					role="alert"
+				>
+					<p style="margin: 0; font-size: 1rem; line-height: 1.5">%client.failed%</p>
+					<a
+						id="cadbos-client-load-refresh"
+						href=""
+						data-sveltekit-reload
+						style="
+							display: inline-grid;
+							box-sizing: border-box;
+							place-items: center;
+							min-height: 2.75rem;
+							padding: 0.625rem 1rem;
+							font: inherit;
+							font-weight: 600;
+							color: #ffffff;
+							text-decoration: none;
+							cursor: pointer;
+							background: #2f6f4f;
+							border: 0;
+							border-radius: 12px;
+						"
+					>
+						%client.refresh%
+					</a>
+				</div>
+			</div>
+		</div>
+		<script nonce="%sveltekit.nonce%">
+			if (document.documentElement.dataset.clientLoadState === 'loading') {
+				const ribbon = document.getElementById('cadbos-client-load-ribbon');
+				const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+				const strokeEasing = 'cubic-bezier(0.65, 0.05, 0.36, 1)';
+				const fillEasing = 'ease-in-out';
+
+				for (const [index, path] of Array.from(
+					ribbon?.querySelectorAll('.cadbos-client-load-stroke') ?? []
+				).entries()) {
+					const length = path.getTotalLength();
+					path.style.strokeDasharray = String(length);
+					path.style.strokeDashoffset = reducedMotion ? '0' : String(length);
+
+					if (!reducedMotion) {
+						path.animate(
+							[
+								{ offset: 0, strokeDashoffset: String(length), opacity: 1, easing: strokeEasing },
+								{ offset: 0.16, strokeDashoffset: '0', opacity: 1, easing: strokeEasing },
+								{ offset: 0.68, strokeDashoffset: '0', opacity: 1, easing: strokeEasing },
+								{ offset: 0.86, strokeDashoffset: '0', opacity: 0, easing: strokeEasing },
+								{ offset: 1, strokeDashoffset: String(length), opacity: 0 }
+							],
+							{ duration: 4_200, delay: index * 280, iterations: Infinity }
+						);
+					}
+				}
+
+				for (const [index, path] of Array.from(
+					ribbon?.querySelectorAll('.cadbos-client-load-fill') ?? []
+				).entries()) {
+					if (reducedMotion) {
+						path.style.opacity = '1';
+						continue;
+					}
+
+					path.animate(
+						[
+							{ offset: 0, opacity: 0, easing: fillEasing },
+							{ offset: 0.18, opacity: 0, easing: fillEasing },
+							{ offset: 0.26, opacity: 1, easing: fillEasing },
+							{ offset: 0.64, opacity: 1, easing: fillEasing },
+							{ offset: 0.76, opacity: 0, easing: fillEasing },
+							{ offset: 1, opacity: 0 }
+						],
+						{ duration: 4_200, delay: index * 280, iterations: Infinity }
+					);
+				}
+				document.getElementById('cadbos-client-load-pending')?.removeAttribute('hidden');
+				document.getElementById('cadbos-client-load-error-state')?.setAttribute('hidden', '');
+			}
+		</script>
+		<div id="cadbos-client-app" inert aria-hidden="true" style="display: contents">
+			%sveltekit.body%
+		</div>
+		<noscript>
+			<div
+				style="
+					position: fixed;
+					inset: 0;
+					z-index: 2147483647;
+					display: grid;
+					box-sizing: border-box;
+					place-items: center;
+					padding: 1.5rem;
+					font-family:
+						Inter,
+						system-ui,
+						-apple-system,
+						'Segoe UI',
+						Roboto,
+						Helvetica,
+						Arial,
+						sans-serif;
+					color: #1d1d1f;
+					background: #f5f5f7;
+				"
+				role="alert"
+			>
+				<div
+					style="
+						display: grid;
+						box-sizing: border-box;
+						justify-items: center;
+						width: min(100%, 28rem);
+						padding: 2rem;
+						text-align: center;
+						background: #ffffff;
+						border: 1px solid #e5e5e7;
+						border-radius: 16px;
+						box-shadow: 0 10px 24px -3px rgb(0 0 0 / 0.1);
+					"
+				>
+					<p style="margin: 0; font-size: 1rem; line-height: 1.5">%client.javascriptRequired%</p>
+				</div>
+			</div>
+		</noscript>
 	</body>
 </html>

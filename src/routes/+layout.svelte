@@ -39,6 +39,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	onMount(() => {
 		auth.loadSession();
+		window.dispatchEvent(new CustomEvent('cadbos:client-ready'));
 	});
 </script>
 

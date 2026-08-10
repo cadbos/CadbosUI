@@ -15,6 +15,10 @@
 export interface Dictionary {
 	'app.title': string;
 	'app.subtitle': string;
+	'clientLoad.loading': string;
+	'clientLoad.failed': string;
+	'clientLoad.refresh': string;
+	'clientLoad.javascriptRequired': string;
 	'mode.switcher.label': string;
 	'mode.render': string;
 	'mode.edit': string;

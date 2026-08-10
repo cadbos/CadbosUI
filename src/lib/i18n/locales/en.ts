@@ -17,6 +17,10 @@ import type { Dictionary } from '$lib/i18n/locales';
 export const en = {
 	'app.title': 'AI Design',
 	'app.subtitle': 'Create and edit interiors and exteriors from a photo and description.',
+	'clientLoad.loading': 'Loading the application…',
+	'clientLoad.failed': 'The application could not load completely. Refresh the page and try again.',
+	'clientLoad.refresh': 'Refresh page',
+	'clientLoad.javascriptRequired': 'JavaScript is required to use this application.',
 	'mode.switcher.label': 'Workflow',
 	'mode.render': 'Create',
 	'mode.edit': 'Edit',
