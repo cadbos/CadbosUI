@@ -14,10 +14,16 @@
 
 import { dev } from '$app/environment';
 import type { Handle } from '@sveltejs/kit';
-import { defaultLocale } from '$lib/i18n/index.svelte';
+import { defaultLocale, t } from '$lib/i18n/index.svelte';
 import { apiError } from '$lib/server/api';
 import { SESSION_COOKIE } from '$lib/server/auth/config';
 import { findValidSession, getDb } from '$lib/server/auth/repository';
+import {
+	addIntegrityToHtml,
+	addIntegrityToLinkHeader,
+	getClientIntegrityManifest,
+	type ClientIntegrityManifest
+} from '$lib/server/client-integrity';
 import { DEMO_SESSION_ID, DEMO_USER } from '$lib/server/demo';
 
 const securityHeaders: Record<string, string> = {
@@ -56,11 +62,41 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const blocked =
 		!event.locals.user && guardedPaths.some((path) => event.url.pathname.startsWith(path));
 
+	let integrityManifest: ClientIntegrityManifest | undefined;
+	let integrityState: 'disabled' | 'enabled' | 'failed' = dev ? 'disabled' : 'enabled';
+
 	const response = blocked
 		? apiError(401, 'unauthorized', 'Authentication required')
 		: await resolve(event, {
-				transformPageChunk: ({ html }) => html.replace('%lang%', defaultLocale)
+				transformPageChunk: async ({ html }) => {
+					if (!dev) {
+						try {
+							integrityManifest = await getClientIntegrityManifest(event);
+						} catch (error) {
+							integrityState = 'failed';
+							console.error(
+								JSON.stringify({
+									event: 'client_integrity_manifest_error',
+									message: safeErrorMessage(error)
+								})
+							);
+						}
+					}
+
+					const translated = translateAppTemplate(html, integrityState);
+					return integrityManifest
+						? addIntegrityToHtml(translated, event.url, integrityManifest)
+						: translated;
+				}
 			});
+
+	const linkHeader = response.headers.get('link');
+	if (linkHeader && integrityManifest) {
+		response.headers.set(
+			'link',
+			addIntegrityToLinkHeader(linkHeader, event.url, integrityManifest)
+		);
+	}
 
 	for (const [name, value] of Object.entries(securityHeaders)) {
 		response.headers.set(name, value);
@@ -68,3 +104,36 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	return response;
 };
+
+function translateAppTemplate(
+	html: string,
+	integrityState: 'disabled' | 'enabled' | 'failed'
+): string {
+	return html
+		.replace('%lang%', defaultLocale)
+		.replace('%client.integrityState%', integrityState)
+		.replace('%client.loading%', escapeHtml(t('clientLoad.loading')))
+		.replace('%client.failed%', escapeHtml(t('clientLoad.failed')))
+		.replace('%client.refresh%', escapeHtml(t('clientLoad.refresh')))
+		.replace('%client.javascriptRequired%', escapeHtml(t('clientLoad.javascriptRequired')));
+}
+
+function escapeHtml(value: string): string {
+	return value.replace(/[&<>"']/g, (character) => {
+		const entities: Record<string, string> = {
+			'&': '&amp;',
+			'<': '&lt;',
+			'>': '&gt;',
+			'"': '&quot;',
+			"'": '&#39;'
+		};
+		return entities[character];
+	});
+}
+
+function safeErrorMessage(
+	error: unknown,
+	defaultMessage: string = 'Unknown client integrity error'
+): string {
+	return error instanceof Error ? error.message : defaultMessage;
+}

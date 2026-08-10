@@ -18,12 +18,14 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
+import { clientIntegrityPlugin } from './config/client-integrity-plugin';
 // Relative import: the `$lib` alias is not resolved while Vite evaluates this config.
 import { heyApiOpenApiConfig } from './openapi-ts.config';
 import { NOSTR_CONNECT_RELAYS } from './src/lib/nostr/connect';
 
 export default defineConfig({
 	plugins: [
+		clientIntegrityPlugin(),
 		tailwindcss(),
 		heyApiPlugin({ config: heyApiOpenApiConfig }),
 		sveltekit({
@@ -86,7 +88,7 @@ export default defineConfig({
 				test: {
 					name: 'server',
 					environment: 'node',
-					include: ['src/**/*.{test,spec}.{js,ts}'],
+					include: ['src/**/*.{test,spec}.{js,ts}', 'config/**/*.{test,spec}.{js,ts}'],
 					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
 				}
 			}
