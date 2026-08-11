@@ -14,9 +14,17 @@
 
 import { defineConfig } from '@playwright/test';
 
+const buildMode = process.env.PLAYWRIGHT_BUILD_MODE;
+
+if (buildMode !== undefined && buildMode !== 'preview') {
+	throw new Error('PLAYWRIGHT_BUILD_MODE must be preview when provided');
+}
+
+const buildCommand = buildMode === 'preview' ? 'pnpm run build --mode preview' : 'pnpm run build';
+
 export default defineConfig({
 	webServer: {
-		command: 'pnpm run build && pnpm run preview',
+		command: `${buildCommand} && pnpm run preview`,
 		env: { PLAYWRIGHT_TEST: '1' },
 		port: 4173
 	},

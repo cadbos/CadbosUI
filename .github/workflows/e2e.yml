@@ -58,3 +58,9 @@ jobs:
         env:
           PLAYWRIGHT_TEST: '1'
         run: pnpm run e2e
+
+      - name: Test preview version page
+        env:
+          PLAYWRIGHT_BUILD_MODE: preview
+          PLAYWRIGHT_TEST: '1'
+        run: pnpm exec playwright test e2e/version.e2e.ts

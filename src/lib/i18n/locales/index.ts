@@ -207,6 +207,14 @@ export interface Dictionary {
 	'resources.imageAlt': string;
 	'resources.useImageAria': string;
 	'resources.createdAt': string;
+	'version.title': string;
+	'version.subtitle': string;
+	'version.current': string;
+	'version.package': string;
+	'version.stable': string;
+	'version.preview': string;
+	'version.buildRevision': string;
+	'version.builtAt': string;
 	'render.insufficientCredit': string;
 	'render.generationRestricted': string;
 	'styleTransfer.referenceImage': string;

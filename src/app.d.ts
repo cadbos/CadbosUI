@@ -18,6 +18,13 @@ import type { SessionUser } from '$lib/api/contract';
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
 declare global {
+	const __APP_BUILD_TIMESTAMP__: string;
+	const __APP_COMMIT_URL__: string;
+	const __APP_IS_PREVIEW__: boolean;
+	const __APP_NAME__: string;
+	const __APP_RELEASE_URL__: string;
+	const __APP_VERSION__: string;
+
 	namespace App {
 		// interface Error {}
 		interface Locals {
