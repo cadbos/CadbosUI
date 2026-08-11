@@ -25,6 +25,9 @@ export interface Dictionary {
 	'mode.styleTransfer': string;
 	'mode.objectReplacement': string;
 	'mode.textureReplacement': string;
+	'workspace.tabs.label': string;
+	'workspace.tabs.untitled': string;
+	'workspace.tabs.close': string;
 	'view.switcher.label': string;
 	'view.chat': string;
 	'view.keyValue': string;

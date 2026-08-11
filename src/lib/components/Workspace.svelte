@@ -27,6 +27,7 @@ before the Change Date. See LICENSE for complete terms.
 	import PromptViews from '$lib/components/PromptViews.svelte';
 	import ScenesDrawer from '$lib/components/ScenesDrawer.svelte';
 	import StyleTransferPanel from '$lib/components/StyleTransferPanel.svelte';
+	import WorkspaceTabBar from '$lib/components/WorkspaceTabBar.svelte';
 	import {
 		creditErrorKey,
 		extractApiErrorCode,
@@ -38,6 +39,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
+	import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import {
 		applyShareParams,
 		buildShareUrl,
@@ -98,6 +100,10 @@ before the Change Date. See LICENSE for complete terms.
 	});
 
 	const isAuthenticated = $derived(auth.status === 'authenticated');
+	// Only shown once the user has actually opened a project — a lone,
+	// never-touched scratch tab would just be noise for anyone who hasn't
+	// visited /projects yet.
+	const showWorkspaceTabs = $derived(workspaceTabs.tabs.some((tab) => tab.id !== SCRATCH_TAB_ID));
 	// Only reserves canvas space while the floating tools panel is both open
 	// and still sitting at its untouched default corner — the moment the user
 	// drags it elsewhere or collapses it, the canvas reclaims the full width
@@ -260,6 +266,10 @@ before the Change Date. See LICENSE for complete terms.
 			class="workspace-main"
 			style:--tools-panel-width={toolsPanel.width !== null ? `${toolsPanel.width}px` : undefined}
 		>
+			{#if isAuthenticated && showWorkspaceTabs}
+				<WorkspaceTabBar />
+			{/if}
+
 			<div class="workspace-topbar">
 				{#if isAuthenticated}
 					<button

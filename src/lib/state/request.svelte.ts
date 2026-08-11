@@ -362,6 +362,28 @@ function cloneRenderResult(render: RenderResult | undefined): RenderResult | und
 	};
 }
 
+function cloneActiveObjectReplacementJob(
+	job: ActiveObjectReplacementJob | undefined
+): ActiveObjectReplacementJob | undefined {
+	if (!job) return undefined;
+	return {
+		id: job.id,
+		instruction: job.instruction,
+		sourceRender: cloneRenderResult(job.sourceRender)
+	};
+}
+
+function cloneActiveTextureReplacementJob(
+	job: ActiveTextureReplacementJob | undefined
+): ActiveTextureReplacementJob | undefined {
+	if (!job) return undefined;
+	return {
+		id: job.id,
+		instruction: job.instruction,
+		sourceRender: cloneRenderResult(job.sourceRender)
+	};
+}
+
 function insertFragment(
 	fragments: PromptFragment[],
 	fragment: PromptFragment,
@@ -1314,6 +1336,62 @@ export class RequestState {
 		this.#renderHistory = [];
 		this.#historyIndex = -1;
 		this.status = 'idle';
+	}
+
+	// Lossless whole-state copy, used to freeze/thaw a workspace tab's data when
+	// switching between open projects (see workspace-tabs.svelte.ts). Unlike
+	// toJSON()/fromJSON() — which trim to the shareable-URL request model —
+	// this copies every field, including session-UI-only ones, so a tab that
+	// becomes inactive and later active again looks exactly as it was left.
+	copyFrom(source: RequestState): void {
+		this.id = source.id;
+		this.projectId = source.projectId;
+		this.sessionId = source.sessionId;
+		// image/pendingImageFile are mutually exclusive on any well-formed
+		// instance (setImage/setPendingImage each clear the other). Routing
+		// through setPendingImage() here — rather than copying
+		// pendingImagePreviewUrl's blob: URL string verbatim — means each
+		// instance owns and revokes its own preview, so one tab's later
+		// revoke (from a subsequent copyFrom into it) can't invalidate a blob
+		// URL another tab is still holding onto.
+		if (source.pendingImageFile) {
+			this.setPendingImage(source.pendingImageFile);
+		} else {
+			this.#clearPendingImagePreview();
+			this.pendingImageFile = undefined;
+			this.image = cloneImage(source.image);
+		}
+		this.styleReferenceImage = cloneImage(source.styleReferenceImage);
+		this.objectReferenceImage = cloneImage(source.objectReferenceImage);
+		this.textureReferenceImage = cloneImage(source.textureReferenceImage);
+		this.textureMaskImage = cloneImage(source.textureMaskImage);
+		this.textureMaskSourceUrl = source.textureMaskSourceUrl;
+		this.promptFragments = cloneFragments(source.promptFragments);
+		this.editPrompt = source.editPrompt;
+		this.outputFormat = source.outputFormat;
+		this.sceneType = source.sceneType;
+		this.styleTransferPrompt = source.styleTransferPrompt;
+		this.styleTransferStrength = source.styleTransferStrength;
+		this.styleNegativePrompt = source.styleNegativePrompt;
+		this.styleSourceMode = source.styleSourceMode;
+		this.objectReplacementObject = source.objectReplacementObject;
+		this.objectReplacementSourceMode = source.objectReplacementSourceMode;
+		this.activeObjectReplacementJob = cloneActiveObjectReplacementJob(
+			source.activeObjectReplacementJob
+		);
+		this.textureReplacementSurface = source.textureReplacementSurface;
+		this.textureReplacementSourceMode = source.textureReplacementSourceMode;
+		this.textureReplacementMasked = source.textureReplacementMasked;
+		this.textureMaskUploading = source.textureMaskUploading;
+		this.activeTextureReplacementJob = cloneActiveTextureReplacementJob(
+			source.activeTextureReplacementJob
+		);
+		this.textureReplacementResultReady = source.textureReplacementResultReady;
+		this.promptOverride = source.promptOverride;
+		this.currentRender = cloneRenderResult(source.currentRender);
+		this.previousRender = cloneRenderResult(source.previousRender);
+		this.undoneRender = cloneRenderResult(source.undoneRender);
+		this.status = source.status;
 	}
 }
 

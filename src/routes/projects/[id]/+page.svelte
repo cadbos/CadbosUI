@@ -22,6 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { projectDetail } from '$lib/state/project-detail.svelte';
 	import { request } from '$lib/state/request.svelte';
 	import { buildShareUrl } from '$lib/state/url-state';
+	import { workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError } from '$lib/utils';
 
 	const projectId = $derived(page.params.id);
@@ -85,18 +86,21 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function continueSession(session: ProjectSessionRecord): void {
-		if (!projectDetail.project) return;
+		const project = projectDetail.project;
+		if (!project) return;
 		const latest = session.generations[0];
-		request.setCurrentRender(undefined);
-		request.setProjectSession(projectDetail.project.id, session.id);
-		request.setStyleSourceMode('room-photo');
-		request.setObjectReplacementSourceMode('room-photo');
-		request.setTextureReplacementSourceMode('room-photo');
-		request.setTextureMaskImage(undefined);
-		request.setActiveObjectReplacementJobId(undefined);
-		request.setActiveTextureReplacementJobId(undefined);
-		request.setStatus('idle');
-		if (latest) request.setImage({ url: latest.url });
+		workspaceTabs.openProject(project.id, project.title, (state) => {
+			state.setCurrentRender(undefined);
+			state.setProjectSession(project.id, session.id);
+			state.setStyleSourceMode('room-photo');
+			state.setObjectReplacementSourceMode('room-photo');
+			state.setTextureReplacementSourceMode('room-photo');
+			state.setTextureMaskImage(undefined);
+			state.setActiveObjectReplacementJobId(undefined);
+			state.setActiveTextureReplacementJobId(undefined);
+			state.setStatus('idle');
+			if (latest) state.setImage({ url: latest.url });
+		});
 		goto(buildShareUrl('render', request, { view: 'chat' }), { replaceState: false }).catch(
 			(error: unknown) => logBoundaryError('projectDetailPage.continueSession', error)
 		);
