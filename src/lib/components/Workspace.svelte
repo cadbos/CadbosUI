@@ -258,6 +258,24 @@ before the Change Date. See LICENSE for complete terms.
 			err
 		);
 	}
+
+	// The floating tools panels (position: fixed, siblings deep inside
+	// .workspace-main) anchor their default corner just below this header —
+	// but "below" only means something if they know how tall it actually is.
+	// The tab bar row toggling on/off changes that height, so it's measured
+	// live and published as a CSS var (--workspace-header-bottom, read by
+	// FloatingToolsPanel.svelte) rather than assuming a fixed size.
+	let workspaceHeaderBottom = $state<number | null>(null);
+
+	function measureWorkspaceHeader(node: HTMLElement): () => void {
+		const update = () => {
+			workspaceHeaderBottom = node.getBoundingClientRect().bottom;
+		};
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(node);
+		return () => observer.disconnect();
+	}
 </script>
 
 <main class="page">
@@ -265,61 +283,66 @@ before the Change Date. See LICENSE for complete terms.
 		<div
 			class="workspace-main"
 			style:--tools-panel-width={toolsPanel.width !== null ? `${toolsPanel.width}px` : undefined}
+			style:--workspace-header-bottom={workspaceHeaderBottom !== null
+				? `${workspaceHeaderBottom}px`
+				: undefined}
 		>
-			{#if isAuthenticated && showWorkspaceTabs}
-				<WorkspaceTabBar />
-			{/if}
-
-			<div class="workspace-topbar">
-				{#if isAuthenticated}
-					<button
-						{@attach (node) => {
-							scenesTrigger = node as HTMLButtonElement;
-							return () => {
-								scenesTrigger = null;
-							};
-						}}
-						type="button"
-						class="scenes-button"
-						aria-expanded={scenesOpen}
-						aria-controls="scenes-drawer"
-						onclick={() => (scenesOpen = true)}
-					>
-						<Images size={18} strokeWidth={1.8} aria-hidden="true" />
-						<span>{t('generatedImages.title')}</span>
-					</button>
-					<a class="resources-button" href={resolve('/resources', {})}>
-						<GalleryHorizontalEnd size={18} strokeWidth={1.8} aria-hidden="true" />
-						<span>{t('resources.title')}</span>
-					</a>
-					<a class="resources-button" href={resolve('/projects', {})}>
-						<FolderKanban size={18} strokeWidth={1.8} aria-hidden="true" />
-						<span>{t('projects.navLabel')}</span>
-					</a>
+			<div class="workspace-header" {@attach measureWorkspaceHeader}>
+				{#if isAuthenticated && showWorkspaceTabs}
+					<WorkspaceTabBar />
 				{/if}
 
-				<nav class="mode-nav" aria-label={t('mode.switcher.label')}>
-					<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
-						{#each modes as modeOption, index (modeOption.id)}
-							<button
-								{@attach (node) => {
-									modeTabs[index] = node as HTMLElement;
-								}}
-								type="button"
-								role="tab"
-								id={`mode-tab-${modeOption.id}`}
-								aria-selected={mode === modeOption.id}
-								aria-controls={`mode-panel-${modeOption.id}`}
-								tabindex={mode === modeOption.id ? 0 : -1}
-								class:active={mode === modeOption.id}
-								onclick={() => modeTabController.activate(index)}
-								onkeydown={modeTabController.onKeydown}
-							>
-								<span>{t(modeOption.label)}</span>
-							</button>
-						{/each}
-					</div>
-				</nav>
+				<div class="workspace-topbar">
+					{#if isAuthenticated}
+						<button
+							{@attach (node) => {
+								scenesTrigger = node as HTMLButtonElement;
+								return () => {
+									scenesTrigger = null;
+								};
+							}}
+							type="button"
+							class="scenes-button"
+							aria-expanded={scenesOpen}
+							aria-controls="scenes-drawer"
+							onclick={() => (scenesOpen = true)}
+						>
+							<Images size={18} strokeWidth={1.8} aria-hidden="true" />
+							<span>{t('generatedImages.title')}</span>
+						</button>
+						<a class="resources-button" href={resolve('/resources', {})}>
+							<GalleryHorizontalEnd size={18} strokeWidth={1.8} aria-hidden="true" />
+							<span>{t('resources.title')}</span>
+						</a>
+						<a class="resources-button" href={resolve('/projects', {})}>
+							<FolderKanban size={18} strokeWidth={1.8} aria-hidden="true" />
+							<span>{t('projects.navLabel')}</span>
+						</a>
+					{/if}
+
+					<nav class="mode-nav" aria-label={t('mode.switcher.label')}>
+						<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
+							{#each modes as modeOption, index (modeOption.id)}
+								<button
+									{@attach (node) => {
+										modeTabs[index] = node as HTMLElement;
+									}}
+									type="button"
+									role="tab"
+									id={`mode-tab-${modeOption.id}`}
+									aria-selected={mode === modeOption.id}
+									aria-controls={`mode-panel-${modeOption.id}`}
+									tabindex={mode === modeOption.id ? 0 : -1}
+									class:active={mode === modeOption.id}
+									onclick={() => modeTabController.activate(index)}
+									onkeydown={modeTabController.onKeydown}
+								>
+									<span>{t(modeOption.label)}</span>
+								</button>
+							{/each}
+						</div>
+					</nav>
+				</div>
 			</div>
 
 			<!-- Each mode keeps its own persistent canvas-layout (hidden via CSS, not
@@ -577,6 +600,13 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		gap: 1.5rem;
 		min-width: 0;
+	}
+
+	.workspace-header {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
 	}
 
 	.workspace-topbar {
