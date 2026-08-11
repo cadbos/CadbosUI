@@ -255,7 +255,7 @@ before the Change Date. See LICENSE for complete terms.
 				</div>
 				<p class="status">{t('projects.detail.shareDescription')}</p>
 
-				<div aria-live="polite">
+				<div class="share-status" aria-live="polite">
 					{#if projectDetail.shareToken}
 						{@const token = projectDetail.shareToken}
 						<div class="share-link">
@@ -519,6 +519,20 @@ before the Change Date. See LICENSE for complete terms.
 		padding: 0;
 		margin: 0;
 		list-style: none;
+	}
+
+	.share-status {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	/* .share-link (input + action buttons) should still stretch to the full
+	   row width via the flex column's default stretch — only a lone button
+	   with no input alongside it (the "no share yet" state) needs to shrink
+	   back to its own content width instead of filling the row. */
+	.share-status > button {
+		align-self: flex-start;
 	}
 
 	.share-link {
