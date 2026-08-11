@@ -42,7 +42,14 @@ test('shows a shared project read-only, without auth, with no editing controls',
 				generations: [
 					{
 						id: '00000000-0000-4000-8000-000000000100',
-						url: 'https://cdn.example.test/render.webp',
+						url: 'https://cdn.example.test/render-2.webp',
+						sourceUrl: 'https://cdn.example.test/room.jpg',
+						kind: 'render',
+						createdAt: Date.UTC(2026, 0, 2)
+					},
+					{
+						id: '00000000-0000-4000-8000-000000000101',
+						url: 'https://cdn.example.test/render-1.webp',
 						sourceUrl: 'https://cdn.example.test/room.jpg',
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 1)
@@ -57,17 +64,39 @@ test('shows a shared project read-only, without auth, with no editing controls',
 	await expect(page).toHaveTitle('Living room');
 	await expect(page.getByRole('heading', { name: 'Living room' })).toBeVisible();
 	await expect(page.getByText('Main thread')).toBeVisible();
-	await expect(page.getByRole('img', { name: /Main thread/ })).toHaveAttribute(
+
+	// Every generation in the session is shown, not just the latest one — a
+	// share link is meant as a full, read-only demonstration of the project.
+	// The UI defaults to Russian, so the accessible names below are Russian
+	// too — see share.generationOpenAria / share.lightboxClose in ru.ts.
+	const firstThumb = page.getByRole('button', { name: /Открыть рендер 1 из сессии/ });
+	const secondThumb = page.getByRole('button', { name: /Открыть рендер 2 из сессии/ });
+	await expect(firstThumb).toBeVisible();
+	await expect(secondThumb).toBeVisible();
+	await expect(firstThumb.locator('img')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/render.webp'
+		'https://cdn.example.test/render-2.webp'
+	);
+	await expect(secondThumb.locator('img')).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/render-1.webp'
 	);
 
 	// Read-only: no rename form, no delete/share management controls exist on
 	// this page's own content — those only ever ship on the owner's
-	// /projects/[id]. Scoped to <main> since the layout's own header (sign-in
-	// button) is out of scope here.
+	// /projects/[id]. The only buttons here open a generation full-size.
 	await expect(page.locator('input')).toHaveCount(0);
-	await expect(page.locator('main').getByRole('button')).toHaveCount(0);
+	await expect(page.locator('main').getByRole('button')).toHaveCount(2);
+
+	// Clicking a thumbnail opens it full-size in a read-only lightbox.
+	await firstThumb.click();
+	const lightbox = page.getByRole('dialog');
+	await expect(lightbox.getByRole('img')).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/render-2.webp'
+	);
+	await lightbox.getByRole('button', { name: 'Закрыть полноразмерный просмотр' }).click();
+	await expect(lightbox).toBeHidden();
 });
 
 test('shows a not-found message for a revoked or unknown token', async ({ page }) => {
