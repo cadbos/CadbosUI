@@ -29,6 +29,7 @@ import {
 	RequestProjectSessionError,
 	RequestReorderError,
 	request,
+	RequestState,
 	type RenderResult
 } from '$lib/state/request.svelte';
 
@@ -305,6 +306,75 @@ describe('serialization', () => {
 		expect(nextSnapshot.promptFragments[0].text).toBe('Scandinavian ');
 		expect(nextSnapshot.image).not.toBe(AC9_IMAGE);
 		expect(nextSnapshot.image?.dimensions).not.toBe(AC9_IMAGE.dimensions);
+	});
+});
+
+describe('copyFrom', () => {
+	it('copies every field, including ones toJSON/fromJSON deliberately omit', () => {
+		applyAc9Fixture();
+		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
+		request.setActiveObjectReplacementJobId('123e4567-e89b-42d3-a456-426614174000');
+		request.setStatus('rendering');
+		request.setCurrentRender({
+			id: 'render-a',
+			outputUrls: ['https://example.test/a.webp'],
+			cost: 1,
+			balance: 24,
+			ts: 0
+		});
+		request.applyEditResult({
+			id: 'render-b',
+			outputUrls: ['https://example.test/b.webp'],
+			cost: 1,
+			balance: 23,
+			ts: 1
+		});
+
+		const other = new RequestState();
+		other.copyFrom(request);
+
+		expect(other.toJSON()).toEqual(request.toJSON());
+		expect(other.id).toBe(request.id);
+		expect(other.projectId).toBe(request.projectId);
+		expect(other.sessionId).toBe(request.sessionId);
+		expect(other.status).toBe('rendering');
+		expect(other.activeObjectReplacementJobId).toBe(request.activeObjectReplacementJobId);
+		expect(other.canUndoEdit).toBe(true);
+		expect(other.currentRender).toEqual(request.currentRender);
+	});
+
+	it('copies a pending, not-yet-uploaded image via its own File reference', () => {
+		const file = new File(['bytes'], 'room.jpg', { type: 'image/jpeg' });
+		request.setPendingImage(file);
+
+		const other = new RequestState();
+		other.copyFrom(request);
+
+		expect(other.pendingImageFile).toBe(file);
+		expect(other.pendingImagePreviewUrl).toBeDefined();
+		expect(other.image).toBeUndefined();
+	});
+
+	it('does not share mutable object references with the source', () => {
+		applyAc9Fixture();
+		const other = new RequestState();
+		other.copyFrom(request);
+
+		expect(other.promptFragments).not.toBe(request.promptFragments);
+		expect(other.image).not.toBe(request.image);
+
+		request.setEditPrompt('mutated after copy');
+		expect(other.editPrompt).not.toBe(request.editPrompt);
+	});
+
+	it('leaves the source instance untouched', () => {
+		applyAc9Fixture();
+		const snapshotBefore = request.toJSON();
+
+		const other = new RequestState();
+		other.copyFrom(request);
+
+		expect(request.toJSON()).toEqual(snapshotBefore);
 	});
 });
 
