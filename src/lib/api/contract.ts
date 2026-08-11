@@ -54,6 +54,9 @@ export interface RenderRequest {
 	imageHash?: string;
 	prompt: string;
 	outputFormat: OutputFormat;
+	// The project session this generation attaches to (Module 11) — the server
+	// verifies ownership before charging or calling the render provider.
+	sessionId: string;
 }
 
 // POST /api/edit — edit by prompt (no outputFormat; aspect ratio is preserved).
@@ -64,6 +67,7 @@ export interface EditRequest {
 	// yet (resolveEditSource), so `image` isn't always a previous result.
 	imageHash?: string;
 	prompt: string;
+	sessionId: string;
 }
 
 // POST /api/style-transfer — apply a reference image's style to a source image.
@@ -75,12 +79,14 @@ export interface StyleTransferRequest {
 	prompt?: string;
 	negativePrompt?: string;
 	styleTransferStrength?: number;
+	sessionId: string;
 }
 
 // POST /api/upscale — upscale an existing render/edit result to 4K.
 export interface UpscaleRequest {
 	image: string;
 	outputFormat?: OutputFormat;
+	sessionId: string;
 }
 
 export interface ObjectReplacementRequest {
@@ -88,6 +94,7 @@ export interface ObjectReplacementRequest {
 	imageHash?: string;
 	referenceImage: string;
 	replacementObject: string;
+	sessionId: string;
 }
 
 export interface ObjectReplacementProcessingResponse {
@@ -119,6 +126,7 @@ export interface AutomaticTextureReplacementRequest {
 	imageHash?: string;
 	referenceImage: string;
 	replacementSurface: string;
+	sessionId: string;
 }
 
 export interface MaskedTextureReplacementRequest {
@@ -126,6 +134,7 @@ export interface MaskedTextureReplacementRequest {
 	imageHash?: string;
 	referenceImage: string;
 	mask: string;
+	sessionId: string;
 }
 
 export type TextureReplacementRequest =
@@ -326,4 +335,113 @@ export interface CreditInfo {
 export interface MeResponse {
 	user: SessionUser;
 	credit?: CreditInfo;
+}
+
+// Module 11 — Projects: a project groups a user's source photos/rooms; a
+// session is one generation thread within it (forked by style-transfer,
+// continued in place by every other generation kind). No userId/pubkey field
+// is ever included — ownership is enforced server-side, never shown.
+
+export interface ProjectRecord {
+	id: string;
+	title: string;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface ProjectsResponse {
+	projects: ProjectRecord[];
+	pagination: {
+		offset: number;
+		size: number;
+		hasMore: boolean;
+	};
+}
+
+export interface CreateProjectRequest {
+	title: string;
+}
+
+export interface RenameProjectRequest {
+	title: string;
+}
+
+export interface SessionGenerationRecord {
+	id: string;
+	url: string;
+	sourceUrl: string;
+	kind: GenerationKind;
+	createdAt: number;
+}
+
+export interface ProjectSessionRecord {
+	id: string;
+	title: string;
+	parentSessionId: string | null;
+	forkedFromGenerationId: string | null;
+	createdAt: number;
+	updatedAt: number;
+	generations: SessionGenerationRecord[];
+}
+
+// GET /api/projects/[id] — a project's full session grid, each session's own
+// generation timeline included (the session grid needs each session's latest
+// generation for its thumbnail regardless, so this isn't paginated separately).
+export interface ProjectDetailResponse {
+	id: string;
+	title: string;
+	createdAt: number;
+	updatedAt: number;
+	// Whether an active (non-revoked) share link currently exists — never the
+	// token itself, which the server only ever returns once, at issuance.
+	shareActive: boolean;
+	sessions: ProjectSessionRecord[];
+}
+
+export interface CreateSessionRequest {
+	title?: string;
+}
+
+export interface CreateSessionResponse {
+	id: string;
+	title: string;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface RenameSessionRequest {
+	title: string;
+}
+
+// Deliberately not ProjectSessionRecord — a rename never touches lineage or
+// generations, so echoing those back (necessarily empty/stale from this
+// endpoint alone) would be misleading. Same minimal shape as
+// CreateSessionResponse.
+export interface RenameSessionResponse {
+	id: string;
+	title: string;
+	createdAt: number;
+	updatedAt: number;
+}
+
+// POST /api/projects/[id]/sessions/[sessionId]/fork — the style-transfer fork
+// point: branches a new session off an existing one at a specific generation.
+export interface ForkSessionRequest {
+	forkedFromGenerationId: string;
+	title?: string;
+}
+
+export interface ForkSessionResponse {
+	id: string;
+	title: string;
+	parentSessionId: string;
+	forkedFromGenerationId: string;
+	createdAt: number;
+	updatedAt: number;
+}
+
+// POST /api/projects/[id]/share — issuing a new token auto-revokes the
+// project's prior active one (one active share link per project at a time).
+export interface ShareTokenResponse {
+	token: string;
 }

@@ -15,8 +15,10 @@
 import { z } from 'zod';
 import {
 	OUTPUT_FORMATS,
+	type CreateSessionResponse,
 	type ObjectReplacementRequest,
 	type OutputFormat,
+	type ProjectRecord,
 	type RenderRequest,
 	type RenderResponse,
 	type StyleTransferRequest,
@@ -287,6 +289,13 @@ export class RequestImageUploadError extends Error {
 	}
 }
 
+export class RequestProjectSessionError extends Error {
+	constructor(message: string, options?: ErrorOptions) {
+		super(message, options);
+		this.name = 'RequestProjectSessionError';
+	}
+}
+
 function formatPromptFragment(fragment: PromptFragment): string {
 	const label = fragment.label?.trim();
 	if (!label) return fragment.text;
@@ -427,7 +436,22 @@ export class RequestState {
 	// submit's own resolution) share one POST /api/uploads instead of each
 	// firing a duplicate. Cleared once the upload settles, success or failure.
 	#pendingUpload: { file: File; promise: Promise<ImageInput | undefined> } | undefined;
+	// In-flight #ensureProjectSession() call, so concurrent toXRequest() calls
+	// (e.g. a fast double-submit) share one pair of POST calls instead of each
+	// creating its own project+session.
+	#pendingProjectSession: Promise<{ projectId: string; sessionId: string }> | undefined;
 	id = $state<string>(crypto.randomUUID());
+	// Module 11: which project/session a generation attaches to. Not part of
+	// toJSON()/fromJSON() (those have no production caller — see
+	// request-fixtures.ts) and not part of normalizeForComparison() (the
+	// three-UI identity guarantee is about prompt-building fidelity, not which
+	// session a request happens to be attached to). Deliberately never
+	// persisted to the URL either — see url-state.ts's buildShareUrl comment —
+	// so it only ever lives in this in-memory field, set either lazily by
+	// ensureProjectSession() or explicitly when continuing a session from the
+	// project page.
+	projectId = $state<string | undefined>(undefined);
+	sessionId = $state<string | undefined>(undefined);
 	image = $state<ImageInput | undefined>(undefined);
 	// The main photo, picked but not yet uploaded — set by ImageUpload.svelte
 	// (target 'room' only) instead of calling /api/uploads immediately, so a
@@ -578,6 +602,16 @@ export class RequestState {
 		this.image = cloneImage(optionalImageInputSchema.parse(image));
 		this.pendingImageFile = undefined;
 		this.#clearPendingImagePreview();
+	}
+
+	setProjectSession(projectId: string, sessionId: string): void {
+		this.projectId = projectId;
+		this.sessionId = sessionId;
+	}
+
+	clearProjectSession(): void {
+		this.projectId = undefined;
+		this.sessionId = undefined;
 	}
 
 	// Called by ImageUpload.svelte (target 'room') when the user picks a
@@ -917,6 +951,52 @@ export class RequestState {
 		return this.image;
 	}
 
+	// Lazily provisions a project+session the first time a generation call needs
+	// one — same "resolve on demand, cache the result" shape as
+	// #ensureImageUploaded(). A user who never visited a projects UI still gets a
+	// working, isolated session (an "Untitled" project) instead of every
+	// generation call failing for lack of one.
+	async ensureProjectSession(): Promise<{ projectId: string; sessionId: string }> {
+		if (this.projectId && this.sessionId) {
+			return { projectId: this.projectId, sessionId: this.sessionId };
+		}
+		if (this.#pendingProjectSession) return this.#pendingProjectSession;
+
+		const promise = this.#createProjectSession();
+		this.#pendingProjectSession = promise;
+		promise
+			.finally(() => {
+				if (this.#pendingProjectSession === promise) this.#pendingProjectSession = undefined;
+			})
+			.catch(() => {});
+		return promise;
+	}
+
+	async #createProjectSession(): Promise<{ projectId: string; sessionId: string }> {
+		const projectResponse = await fetch('/api/projects', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ title: 'Untitled' })
+		});
+		if (!projectResponse.ok) {
+			throw new RequestProjectSessionError('project creation failed');
+		}
+		const project = (await projectResponse.json()) as ProjectRecord;
+
+		const sessionResponse = await fetch(`/api/projects/${project.id}/sessions`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({})
+		});
+		if (!sessionResponse.ok) {
+			throw new RequestProjectSessionError('session creation failed');
+		}
+		const session = (await sessionResponse.json()) as CreateSessionResponse;
+
+		this.setProjectSession(project.id, session.id);
+		return { projectId: project.id, sessionId: session.id };
+	}
+
 	hasStyleTransferSource(): boolean {
 		return this.#hasSourceFor(this.styleSourceMode);
 	}
@@ -974,11 +1054,13 @@ export class RequestState {
 		if (!validation.valid) return null;
 		const image = await this.#ensureImageUploaded();
 		if (!image) return null;
+		const { sessionId } = await this.ensureProjectSession();
 		return {
 			image: image.url,
 			...(image.hash ? { imageHash: image.hash } : {}),
 			prompt: this.prompt,
-			outputFormat: this.outputFormat
+			outputFormat: this.outputFormat,
+			sessionId
 		};
 	}
 
@@ -987,6 +1069,7 @@ export class RequestState {
 		if (!validation.valid) return null;
 		const source = await this.#resolveSourceFor(this.styleSourceMode);
 		if (!source || !this.styleReferenceImage) return null;
+		const { sessionId } = await this.ensureProjectSession();
 		const prompt = this.styleTransferPrompt.trim();
 		const negativePrompt = this.styleNegativePrompt.trim();
 		return {
@@ -996,7 +1079,8 @@ export class RequestState {
 			outputFormat: this.outputFormat,
 			...(prompt ? { prompt } : {}),
 			...(negativePrompt ? { negativePrompt } : {}),
-			styleTransferStrength: this.styleTransferStrength
+			styleTransferStrength: this.styleTransferStrength,
+			sessionId
 		};
 	}
 
@@ -1005,11 +1089,13 @@ export class RequestState {
 		if (!validation.valid) return null;
 		const source = await this.#resolveSourceFor(this.objectReplacementSourceMode);
 		if (!source || !this.objectReferenceImage) return null;
+		const { sessionId } = await this.ensureProjectSession();
 		return {
 			image: source.url,
 			...(source.hash ? { imageHash: source.hash } : {}),
 			referenceImage: this.objectReferenceImage.url,
-			replacementObject: this.objectReplacementObject.trim()
+			replacementObject: this.objectReplacementObject.trim(),
+			sessionId
 		};
 	}
 
@@ -1018,20 +1104,23 @@ export class RequestState {
 		if (!validation.valid) return null;
 		const source = await this.#resolveSourceFor(this.textureReplacementSourceMode);
 		if (!source || !this.textureReferenceImage) return null;
+		const { sessionId } = await this.ensureProjectSession();
 		if (this.textureReplacementMasked) {
 			if (!this.textureMaskImage || !this.textureMaskMatchesSource()) return null;
 			return {
 				image: source.url,
 				...(source.hash ? { imageHash: source.hash } : {}),
 				referenceImage: this.textureReferenceImage.url,
-				mask: this.textureMaskImage.url
+				mask: this.textureMaskImage.url,
+				sessionId
 			};
 		}
 		return {
 			image: source.url,
 			...(source.hash ? { imageHash: source.hash } : {}),
 			referenceImage: this.textureReferenceImage.url,
-			replacementSurface: this.textureReplacementSurface.trim()
+			replacementSurface: this.textureReplacementSurface.trim(),
+			sessionId
 		};
 	}
 
@@ -1136,6 +1225,8 @@ export class RequestState {
 		this.textureMaskUploading = false;
 		this.textureReplacementResultReady = false;
 		this.id = crypto.randomUUID();
+		this.projectId = undefined;
+		this.sessionId = undefined;
 		this.image = undefined;
 		this.pendingImageFile = undefined;
 		this.#clearPendingImagePreview();

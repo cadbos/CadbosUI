@@ -28,6 +28,7 @@ import {
 	submitObjectReplacement
 } from '$lib/server/object-replacement';
 import { createObjectReplacementJob } from '$lib/server/object-replacement-jobs';
+import { assertSessionOwnedByUser } from '$lib/server/projects';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 
 const OBJECT_REPLACEMENT_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
@@ -119,6 +120,11 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			return apiError(429, 'rate_limited', 'Too many requests');
 		}
 
+		if (!(await assertSessionOwnedByUser(db, userId, parsed.data.sessionId))) {
+			logRejection(404, 'session_not_found');
+			return apiError(404, 'session_not_found', 'Session not found');
+		}
+
 		let cost: number;
 		try {
 			cost = objectReplacementCost(platform);
@@ -175,6 +181,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				comfyPromptId,
 				sceneUrl: parsed.data.image,
 				sceneHash: parsed.data.imageHash ?? '',
+				sessionId: parsed.data.sessionId,
 				referenceUrl: parsed.data.referenceImage,
 				replacementObject: parsed.data.replacementObject,
 				cost,

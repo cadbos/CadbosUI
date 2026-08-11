@@ -27,6 +27,7 @@ import {
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { renderExterior } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
+import { assertSessionOwnedByUser } from '$lib/server/projects';
 
 // Session is enforced centrally in hooks.server.ts (guardedPaths). Generation
 // itself is restricted further, by design: only accounts an admin has
@@ -68,6 +69,11 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		}
 	}
 
+	if (db && userId) {
+		const sessionOwned = await assertSessionOwnedByUser(db, userId, parsed.data.sessionId);
+		if (!sessionOwned) return apiError(404, 'session_not_found', 'Session not found');
+	}
+
 	let result: RenderResponse;
 	try {
 		result = await renderExterior(platform, parsed.data);
@@ -95,6 +101,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				url: result.outputUrl,
 				sourceUrl: parsed.data.image,
 				sourceHash: parsed.data.imageHash ?? '',
+				sessionId: parsed.data.sessionId,
 				prompt: parsed.data.prompt,
 				kind: 'render',
 				amount: result.cost

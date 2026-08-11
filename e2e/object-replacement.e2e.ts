@@ -41,6 +41,35 @@ async function authenticate(page: Page): Promise<void> {
 			body: JSON.stringify({ images: [], pagination: { offset: 0, size: 100, hasMore: false } })
 		});
 	});
+	// Every generate call lazily provisions a project+session on first use
+	// (RequestState#ensureProjectSession) — mocked here so submissions don't
+	// hang waiting on the real, unmocked /api/projects endpoints.
+	await page.route('**/api/projects', async (route) => {
+		if (route.request().method() !== 'POST') return route.fallback();
+		await route.fulfill({
+			status: 201,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: 'e2e-project',
+				title: 'Untitled',
+				createdAt: Date.now(),
+				updatedAt: Date.now()
+			})
+		});
+	});
+	await page.route('**/api/projects/e2e-project/sessions', async (route) => {
+		if (route.request().method() !== 'POST') return route.fallback();
+		await route.fulfill({
+			status: 201,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: 'e2e-session',
+				title: '',
+				createdAt: Date.now(),
+				updatedAt: Date.now()
+			})
+		});
+	});
 }
 
 async function uploadInputs(page: Page): Promise<void> {
@@ -146,7 +175,8 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 		image: 'https://cdn.example.test/scene.webp',
 		imageHash: 'scene-hash',
 		referenceImage: 'https://cdn.example.test/reference-chair.webp',
-		replacementObject: 'серый диван у окна'
+		replacementObject: 'серый диван у окна',
+		sessionId: 'e2e-session'
 	});
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();

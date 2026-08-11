@@ -38,6 +38,35 @@ async function authenticate(page: Page): Promise<void> {
 			body: JSON.stringify({ images: [], pagination: { offset: 0, size: 100, hasMore: false } })
 		});
 	});
+	// Every generate call lazily provisions a project+session on first use
+	// (RequestState#ensureProjectSession) — mocked here so submissions don't
+	// hang waiting on the real, unmocked /api/projects endpoints.
+	await page.route('**/api/projects', async (route) => {
+		if (route.request().method() !== 'POST') return route.fallback();
+		await route.fulfill({
+			status: 201,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: 'e2e-project',
+				title: 'Untitled',
+				createdAt: Date.now(),
+				updatedAt: Date.now()
+			})
+		});
+	});
+	await page.route('**/api/projects/e2e-project/sessions', async (route) => {
+		if (route.request().method() !== 'POST') return route.fallback();
+		await route.fulfill({
+			status: 201,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: 'e2e-session',
+				title: '',
+				createdAt: Date.now(),
+				updatedAt: Date.now()
+			})
+		});
+	});
 }
 
 async function openCreate(page: Page): Promise<void> {
@@ -241,7 +270,8 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 		outputFormat: 'webp',
 		prompt: 'keep layout, use warmer materials',
 		negativePrompt: 'people',
-		styleTransferStrength: 0.35
+		styleTransferStrength: 0.35,
+		sessionId: 'e2e-session'
 	});
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
@@ -335,7 +365,8 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		referenceImage: 'https://cdn.example.test/reference.webp',
 		outputFormat: 'webp',
 		prompt: 'style transfer guidance only',
-		styleTransferStrength: 0.7
+		styleTransferStrength: 0.7,
+		sessionId: 'e2e-session'
 	});
 
 	await page.getByRole('tab', { name: 'Создание' }).click();
@@ -348,7 +379,8 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		image: 'https://cdn.example.test/source.webp',
 		imageHash: 'source-hash',
 		prompt: 'render prompt for paid generation',
-		outputFormat: 'webp'
+		outputFormat: 'webp',
+		sessionId: 'e2e-session'
 	});
 });
 

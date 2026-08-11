@@ -39,6 +39,25 @@ function grantAccess(db: D1Database, userId: string, balance: number): void {
 		.run();
 }
 
+// Every generations row now has to attach to a session it belongs to — a minimal
+// project+session pair, direct SQL like the other seed helpers here.
+function seedSession(db: D1Database, userId: string): string {
+	const now = Date.now();
+	const projectId = crypto.randomUUID();
+	const sessionId = crypto.randomUUID();
+	db.prepare(
+		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind(projectId, userId, 'Test project', now, now)
+		.run();
+	db.prepare(
+		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind(sessionId, projectId, 'Test session', now, now)
+		.run();
+	return sessionId;
+}
+
 function seedGeneration(
 	db: D1Database,
 	id: string,
@@ -84,11 +103,13 @@ describe('recordGeneration', () => {
 	it('subtracts the real cost and records the image against the same row', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 5);
+		const sessionId = seedSession(db, 'user-1');
 
 		const result = await recordGeneration(db, 'user-1', {
 			url: 'https://cdn.example.test/out.webp',
 			sourceUrl: 'https://cdn.example.test/room.jpg',
 			sourceHash: 'hash-room',
+			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
 			amount: 1.5
@@ -111,11 +132,13 @@ describe('recordGeneration', () => {
 		seedUser(db, 'user-2', 'pubkey-2');
 		grantAccess(db, 'user-1', 5);
 		grantAccess(db, 'user-2', 5);
+		const sessionId = seedSession(db, 'user-1');
 
 		await recordGeneration(db, 'user-1', {
 			url: 'https://cdn.example.test/out.webp',
 			sourceUrl: 'https://cdn.example.test/room.jpg',
 			sourceHash: 'hash-room',
+			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
 			amount: 2
@@ -136,10 +159,12 @@ describe('listCreditHistory', () => {
 	it('orders entries most-recent first', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 5);
+		const sessionId = seedSession(db, 'user-1');
 		await recordGeneration(db, 'user-1', {
 			url: 'https://cdn.example.test/a.webp',
 			sourceUrl: 'https://cdn.example.test/room.jpg',
 			sourceHash: 'hash-room',
+			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
 			amount: 1
@@ -148,6 +173,7 @@ describe('listCreditHistory', () => {
 			url: 'https://cdn.example.test/b.webp',
 			sourceUrl: 'https://cdn.example.test/a.webp',
 			sourceHash: '',
+			sessionId,
 			prompt: 'change the sofa',
 			kind: 'edit',
 			amount: 2

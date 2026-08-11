@@ -16,7 +16,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
-	import type { OutputFormat, RenderResponse } from '$lib/api/contract';
+	import type { ForkSessionResponse, OutputFormat, RenderResponse } from '$lib/api/contract';
 	import {
 		creditErrorKey,
 		extractApiErrorCode,
@@ -140,6 +140,19 @@ before the Change Date. See LICENSE for complete terms.
 		request.setStatus('rendering');
 		const overlayId = generationOverlay.start('generationOverlay.styleTransfer');
 		try {
+			if (request.sessionId && request.currentRender) {
+				const forkResponse = await fetch(
+					`/api/projects/${request.projectId}/sessions/${request.sessionId}/fork`,
+					{
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ forkedFromGenerationId: request.currentRender.id })
+					}
+				);
+				if (!forkResponse.ok) throw new Error('style_transfer_fork_failed');
+				const forked = (await forkResponse.json()) as ForkSessionResponse;
+				request.setProjectSession(request.projectId as string, forked.id);
+			}
 			const body = await request.toStyleTransferRequest();
 			if (!body) {
 				request.setStatus('idle');
@@ -169,6 +182,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	function styleTransferErrorKey(err: unknown): TranslationKey {
 		if (err instanceof RequestImageUploadError) return 'upload.errorUpload';
+		if (err instanceof Error && err.message === 'style_transfer_fork_failed') {
+			return 'styleTransfer.forkFailed';
+		}
 		return creditErrorKey(
 			{
 				failed: 'styleTransfer.failed',

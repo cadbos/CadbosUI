@@ -22,6 +22,7 @@ export interface ObjectReplacementJob {
 	comfyPromptId: string;
 	sceneUrl: string;
 	sceneHash: string;
+	sessionId: string;
 	referenceUrl: string;
 	replacementObject: string;
 	cost: number;
@@ -40,6 +41,7 @@ interface ObjectReplacementJobRow {
 	comfy_prompt_id: string;
 	scene_url: string;
 	scene_hash: string;
+	session_id: string;
 	reference_url: string;
 	replacement_object: string;
 	cost: number;
@@ -64,6 +66,7 @@ function toObjectReplacementJob(row: ObjectReplacementJobRow): ObjectReplacement
 		comfyPromptId: row.comfy_prompt_id,
 		sceneUrl: row.scene_url,
 		sceneHash: row.scene_hash,
+		sessionId: row.session_id,
 		referenceUrl: row.reference_url,
 		replacementObject: row.replacement_object,
 		cost: row.cost,
@@ -85,6 +88,7 @@ export async function createObjectReplacementJob(
 		comfyPromptId: string;
 		sceneUrl: string;
 		sceneHash: string;
+		sessionId: string;
 		referenceUrl: string;
 		replacementObject: string;
 		cost: number;
@@ -94,8 +98,8 @@ export async function createObjectReplacementJob(
 	const row = await db
 		.prepare(
 			'INSERT INTO object_replacement_jobs ' +
-				'(id, user_id, comfy_prompt_id, scene_url, scene_hash, reference_url, replacement_object, cost, status, created_at, updated_at) ' +
-				"VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?) RETURNING *"
+				'(id, user_id, comfy_prompt_id, scene_url, scene_hash, session_id, reference_url, replacement_object, cost, status, created_at, updated_at) ' +
+				"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?) RETURNING *"
 		)
 		.bind(
 			input.id,
@@ -103,6 +107,7 @@ export async function createObjectReplacementJob(
 			input.comfyPromptId,
 			input.sceneUrl,
 			input.sceneHash,
+			input.sessionId,
 			input.referenceUrl,
 			input.replacementObject,
 			input.cost,
@@ -173,8 +178,8 @@ export async function completeObjectReplacementJob(
 		db
 			.prepare(
 				'INSERT INTO generations ' +
-					'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at) ' +
-					"SELECT j.id, j.user_id, ?, j.scene_url, j.scene_hash, j.replacement_object, 'object-replacement', j.cost, c.balance, ? " +
+					'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at, session_id) ' +
+					"SELECT j.id, j.user_id, ?, j.scene_url, j.scene_hash, j.replacement_object, 'object-replacement', j.cost, c.balance, ?, j.session_id " +
 					'FROM object_replacement_jobs j JOIN credits c ON c.user_id = j.user_id ' +
 					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
 			)

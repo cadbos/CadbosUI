@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { GalleryHorizontalEnd, Images } from '@lucide/svelte';
+	import { FolderKanban, GalleryHorizontalEnd, Images } from '@lucide/svelte';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -281,6 +281,10 @@ before the Change Date. See LICENSE for complete terms.
 					<a class="resources-button" href={resolve('/resources', {})}>
 						<GalleryHorizontalEnd size={18} strokeWidth={1.8} aria-hidden="true" />
 						<span>{t('resources.title')}</span>
+					</a>
+					<a class="resources-button" href={resolve('/projects', {})}>
+						<FolderKanban size={18} strokeWidth={1.8} aria-hidden="true" />
+						<span>{t('projects.navLabel')}</span>
 					</a>
 				{/if}
 

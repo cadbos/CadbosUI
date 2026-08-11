@@ -136,12 +136,14 @@ before the Change Date. See LICENSE for complete terms.
 		upscaleError = null;
 		const overlayId = generationOverlay.start('generationOverlay.upscale');
 		try {
+			const { sessionId } = await request.ensureProjectSession();
 			const response = await fetch('/api/upscale', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
 					image: sourceRender.outputUrls[0],
-					outputFormat: request.outputFormat
+					outputFormat: request.outputFormat,
+					sessionId
 				})
 			});
 			if (!response.ok) throw new Error('upscale failed');

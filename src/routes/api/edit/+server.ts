@@ -28,6 +28,7 @@ import {
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { editInterior } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
+import { assertSessionOwnedByUser } from '$lib/server/projects';
 
 // Anti-cost-abuse (FR-К5): each edit is its own paid call, so it gets its own
 // rate-limit bucket, bound to the authenticated pubkey rather than IP.
@@ -84,6 +85,11 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		}
 	}
 
+	if (db && userId) {
+		const sessionOwned = await assertSessionOwnedByUser(db, userId, parsed.data.sessionId);
+		if (!sessionOwned) return apiError(404, 'session_not_found', 'Session not found');
+	}
+
 	let result: RenderResponse;
 	try {
 		result = await editInterior(platform, parsed.data);
@@ -115,6 +121,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				// back to the room photo (resolveEditSource) — imageHash carries
 				// that fresh-upload hash through when that's the case.
 				sourceHash: parsed.data.imageHash ?? '',
+				sessionId: parsed.data.sessionId,
 				prompt: parsed.data.prompt,
 				kind: 'edit',
 				amount: result.cost

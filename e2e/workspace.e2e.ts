@@ -394,6 +394,35 @@ test('generating with the exterior scene type calls the exterior render route', 
 			})
 		});
 	});
+	// Every generate call lazily provisions a project+session on first use
+	// (RequestState#ensureProjectSession) — mocked here so submission doesn't
+	// hang waiting on the real, unmocked /api/projects endpoints.
+	await page.route('**/api/projects', async (route) => {
+		if (route.request().method() !== 'POST') return route.fallback();
+		await route.fulfill({
+			status: 201,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: 'e2e-project',
+				title: 'Untitled',
+				createdAt: Date.now(),
+				updatedAt: Date.now()
+			})
+		});
+	});
+	await page.route('**/api/projects/e2e-project/sessions', async (route) => {
+		if (route.request().method() !== 'POST') return route.fallback();
+		await route.fulfill({
+			status: 201,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: 'e2e-session',
+				title: '',
+				createdAt: Date.now(),
+				updatedAt: Date.now()
+			})
+		});
+	});
 	let calledExteriorRoute = false;
 	let capturedBody:
 		| { image: string; prompt: string; outputFormat: string; sceneType?: string }

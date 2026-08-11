@@ -62,6 +62,7 @@ before the Change Date. See LICENSE for complete terms.
 	function useImage(sourceUrl: string): void {
 		request.setImage({ url: sourceUrl });
 		request.setCurrentRender(undefined);
+		request.clearProjectSession();
 		request.setStyleSourceMode('room-photo');
 		request.setObjectReplacementSourceMode('room-photo');
 		request.setTextureReplacementSourceMode('room-photo');
