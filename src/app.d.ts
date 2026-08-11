@@ -40,6 +40,7 @@ declare global {
 				ASSETS?: Fetcher;
 				ARCHAI_API_KEY: string;
 				ARCHAI_API_URL: string;
+				HEALTH_CACHE_TTL_SECONDS?: string;
 				// VPC Service binding to the ComfyUI VPS (Cloudflare Tunnel
 				// `comfyui-equuleus` -> localhost:8188). Not a URL string — see
 				// wrangler.jsonc `vpc_services`.
