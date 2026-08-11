@@ -42,10 +42,17 @@ export const AC9_FRAGMENTS: PromptFragment[] = [
 
 export const AC9_PROMPT = 'Style: Scandinavian\nRoom: living room,\nLighting: warm light';
 
+// Matches the session request.test.ts's global beforeEach establishes via
+// request.setProjectSession() — every AC9 fixture request implicitly attaches
+// to this session unless a test explicitly clears/changes it.
+export const AC9_PROJECT_ID = 'ac9-fixture-project-0001';
+export const AC9_SESSION_ID = 'ac9-fixture-session-0001';
+
 export const AC9_RENDER_REQUEST = {
 	image: AC9_IMAGE.url,
 	prompt: AC9_PROMPT,
-	outputFormat: 'webp' as const
+	outputFormat: 'webp' as const,
+	sessionId: AC9_SESSION_ID
 };
 
 export const AC9_STYLE_TRANSFER_REQUEST: StyleTransferRequest = {
@@ -53,7 +60,8 @@ export const AC9_STYLE_TRANSFER_REQUEST: StyleTransferRequest = {
 	referenceImage: AC9_REFERENCE_IMAGE.url,
 	outputFormat: 'webp' as const,
 	prompt: AC9_PROMPT,
-	styleTransferStrength: 0.7
+	styleTransferStrength: 0.7,
+	sessionId: AC9_SESSION_ID
 };
 
 export function buildAc9RequestJSON(): RequestJSON {

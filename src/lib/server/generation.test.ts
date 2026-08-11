@@ -444,7 +444,8 @@ describe('replaceTexturesWithMask', () => {
 		const result = await replaceTexturesWithMask(withoutKey, {
 			image: 'https://example.test/room.jpg',
 			referenceImage: 'https://example.test/texture.jpg',
-			mask: 'https://example.test/mask.png'
+			mask: 'https://example.test/mask.png',
+			sessionId: 'test-session-id'
 		});
 
 		expect(result.outputUrl).toMatch(/^https:\/\//);
@@ -465,7 +466,8 @@ describe('replaceTexturesWithMask', () => {
 		const result = await replaceTexturesWithMask(withKey(bucket), {
 			image: 'https://example.test/room.jpg',
 			referenceImage: 'https://example.test/texture.jpg',
-			mask: 'https://example.test/mask.png'
+			mask: 'https://example.test/mask.png',
+			sessionId: 'test-session-id'
 		});
 
 		expect(archai.postChangeTextures.mock.calls[0][0].body).toEqual({
@@ -489,7 +491,8 @@ describe('replaceTexturesWithMask', () => {
 			replaceTexturesWithMask(withKey(), {
 				image: 'https://example.test/room.jpg',
 				referenceImage: 'https://example.test/texture.jpg',
-				mask: 'https://example.test/mask.png'
+				mask: 'https://example.test/mask.png',
+				sessionId: 'test-session-id'
 			})
 		).rejects.toThrow(/^Texture replacement failed$/);
 	});

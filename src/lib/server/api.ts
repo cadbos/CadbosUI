@@ -37,11 +37,17 @@ const optionalImageHash = z
 	.regex(/^[0-9a-f]{64}$/)
 	.optional();
 
+// The project-session a generation attaches to (Module 11) — ownership is
+// verified server-side (projects.ts' assertSessionOwnedByUser) before any paid
+// call, never trusted from the shape of the id alone.
+const sessionId = z.uuid();
+
 export const renderRequestSchema = z.object({
 	image: z.string().trim().min(1),
 	imageHash: optionalImageHash,
 	prompt: z.string().trim().default(''),
-	outputFormat
+	outputFormat,
+	sessionId
 });
 
 export const remoteImageUploadRequestSchema = z.object({
@@ -53,7 +59,8 @@ export const remoteImageUploadRequestSchema = z.object({
 export const editRequestSchema = z.object({
 	image: z.url().trim(),
 	imageHash: optionalImageHash,
-	prompt: z.string().trim().min(1)
+	prompt: z.string().trim().min(1),
+	sessionId
 });
 
 export const styleTransferRequestSchema = z.object({
@@ -63,19 +70,22 @@ export const styleTransferRequestSchema = z.object({
 	outputFormat,
 	prompt: optionalText,
 	negativePrompt: optionalText,
-	styleTransferStrength: z.number().min(0).max(1).optional()
+	styleTransferStrength: z.number().min(0).max(1).optional(),
+	sessionId
 });
 
 export const upscaleRequestSchema = z.object({
 	image: httpImageUrl,
-	outputFormat: outputFormat.optional()
+	outputFormat: outputFormat.optional(),
+	sessionId
 });
 
 export const objectReplacementRequestSchema = z.strictObject({
 	image: httpsImageUrl,
 	imageHash: optionalImageHash,
 	referenceImage: httpsImageUrl,
-	replacementObject: z.string().trim().min(1).max(200)
+	replacementObject: z.string().trim().min(1).max(200),
+	sessionId
 });
 
 export const textureReplacementRequestSchema = z.union([
@@ -83,15 +93,37 @@ export const textureReplacementRequestSchema = z.union([
 		image: httpsImageUrl,
 		imageHash: optionalImageHash,
 		referenceImage: httpsImageUrl,
-		replacementSurface: z.string().trim().min(1).max(200)
+		replacementSurface: z.string().trim().min(1).max(200),
+		sessionId
 	}),
 	z.strictObject({
 		image: httpsImageUrl,
 		imageHash: optionalImageHash,
 		referenceImage: httpsImageUrl,
-		mask: httpsImageUrl
+		mask: httpsImageUrl,
+		sessionId
 	})
 ]);
+
+// Module 11 — Projects. Same shape for a project title and an explicit session
+// rename (both required, non-empty); session *creation* leaves title optional
+// (defaults to '' — see createSession/forkSession), since the fork/new-session
+// flow never prompts for one up front.
+const requiredTitle = z.string().trim().min(1).max(200);
+const sessionTitle = z.string().trim().max(200).optional();
+
+export const createProjectRequestSchema = z.strictObject({ title: requiredTitle });
+
+export const renameProjectRequestSchema = z.strictObject({ title: requiredTitle });
+
+export const createSessionRequestSchema = z.strictObject({ title: sessionTitle });
+
+export const renameSessionRequestSchema = z.strictObject({ title: requiredTitle });
+
+export const forkSessionRequestSchema = z.strictObject({
+	forkedFromGenerationId: z.uuid(),
+	title: sessionTitle
+});
 
 // Nostr pubkey: 32-byte lowercase hex (x-only schnorr public key).
 export const challengeRequestSchema = z.object({

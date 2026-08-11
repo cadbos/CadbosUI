@@ -29,6 +29,7 @@ import {
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { upscale4k } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
+import { assertSessionOwnedByUser } from '$lib/server/projects';
 
 // Anti-cost-abuse: each upscale is its own paid call, mirroring /api/edit — its
 // own rate-limit bucket, bound to the authenticated pubkey rather than IP.
@@ -86,6 +87,11 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		}
 	}
 
+	if (db && userId) {
+		const sessionOwned = await assertSessionOwnedByUser(db, userId, parsed.data.sessionId);
+		if (!sessionOwned) return apiError(404, 'session_not_found', 'Session not found');
+	}
+
 	let result: RenderResponse;
 	try {
 		result = await upscale4k(platform, parsed.data);
@@ -115,6 +121,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				// upscale always operates on a previous render/edit result, never a
 				// fresh upload — nothing to dedup against.
 				sourceHash: '',
+				sessionId: parsed.data.sessionId,
 				prompt: '4k upscale',
 				kind: 'upscale',
 				amount: result.cost

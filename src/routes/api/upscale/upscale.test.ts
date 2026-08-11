@@ -16,6 +16,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
 // Lets a single test force recordBalance/recordGeneration to reject, to prove
@@ -53,9 +54,35 @@ vi.mock('$lib/server/generations', async (importOriginal) => {
 
 const { POST } = await import('./+server');
 
+// Deterministic, UUID-shaped (sessionId: z.uuid()) — keyed by pubkey since some
+// tests seed two users (two pubkeys) in the same db, so a single fixed id would
+// collide on the project_sessions primary key.
+const SESSION_IDS: Record<string, string> = {
+	['a'.repeat(64)]: '00000000-0000-4000-8000-000000000001',
+	'pubkey-1': '00000000-0000-4000-8000-000000000002',
+	['b'.repeat(64)]: '00000000-0000-4000-8000-000000000003'
+};
+const FALLBACK_SESSION_ID = '00000000-0000-4000-8000-0000000000ff';
+
+function sessionIdForPubkey(pubkey: string | undefined): string {
+	return (pubkey && SESSION_IDS[pubkey]) || FALLBACK_SESSION_ID;
+}
+
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
+		.run();
+	const now = Date.now();
+	const projectId = `project-${id}`;
+	db.prepare(
+		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind(projectId, id, 'Test project', now, now)
+		.run();
+	db.prepare(
+		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
 }
 
@@ -73,12 +100,12 @@ type UpscaleEvent = Parameters<typeof POST>[0];
 function call(
 	user: SessionUser | null,
 	platform: App.Platform,
-	body: unknown
+	body: Record<string, unknown>
 ): ReturnType<typeof POST> {
 	return POST({
 		request: new Request('https://cadbos.example/api/upscale', {
 			method: 'POST',
-			body: JSON.stringify(body)
+			body: JSON.stringify({ ...body, sessionId: sessionIdForPubkey(user?.pubkey) })
 		}),
 		platform,
 		locals: { sessionLookupUnavailable: false, user }
@@ -103,6 +130,27 @@ describe('POST /api/upscale — billing', () => {
 			image: 'not-a-url'
 		});
 		expect(response.status).toBe(400);
+	});
+
+	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', pubkey);
+		grantAccess(db, 'user-1', 12);
+		const foreignSessionId = seedForeignSession(db);
+
+		// call() forces sessionId to the caller's own session — bypass it here to
+		// submit someone else's session id instead.
+		const response = await POST({
+			request: new Request('https://cadbos.example/api/upscale', {
+				method: 'POST',
+				body: JSON.stringify({ ...body, sessionId: foreignSessionId })
+			}),
+			platform: { env: { DB: db } } as App.Platform,
+			locals: { user: { pubkey } }
+		} as UpscaleEvent);
+		expect(response.status).toBe(404);
+		const result = (await response.json()) as { error: { code: string } };
+		expect(result.error.code).toBe('session_not_found');
 	});
 
 	it('upscales the given image and returns a URL', async () => {

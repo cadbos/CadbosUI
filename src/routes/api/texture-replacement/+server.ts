@@ -30,6 +30,7 @@ import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { replaceTexturesWithMask } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
+import { assertSessionOwnedByUser } from '$lib/server/projects';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 import {
 	cancelTextureReplacement,
@@ -102,6 +103,11 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			return apiError(429, 'rate_limited', 'Too many requests');
 		}
 
+		if (!(await assertSessionOwnedByUser(db, userId, parsed.data.sessionId))) {
+			logRejection(404, 'session_not_found');
+			return apiError(404, 'session_not_found', 'Session not found');
+		}
+
 		const maskedRequest = 'mask' in parsed.data ? parsed.data : undefined;
 		const automaticRequest = 'replacementSurface' in parsed.data ? parsed.data : undefined;
 		let precheckBalance: number | undefined;
@@ -150,6 +156,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 					url: result.outputUrl,
 					sourceUrl: maskedRequest.image,
 					sourceHash: maskedRequest.imageHash ?? '',
+					sessionId: maskedRequest.sessionId,
 					prompt: '',
 					kind: 'texture-replacement',
 					amount: result.cost
@@ -206,6 +213,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				comfyPromptId,
 				sceneUrl: automaticRequest.image,
 				sceneHash: automaticRequest.imageHash ?? '',
+				sessionId: automaticRequest.sessionId,
 				referenceUrl: automaticRequest.referenceImage,
 				replacementSurface: automaticRequest.replacementSurface,
 				cost: comfyCost,

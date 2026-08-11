@@ -23,6 +23,7 @@ import {
 } from '$lib/server/object-replacement-jobs';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 
 const integration = vi.hoisted(() => ({
 	cancel: vi.fn(),
@@ -111,6 +112,19 @@ function expectSingleLog(messages: unknown[], expected: Record<string, unknown>)
 	expect(messages).toEqual([JSON.stringify(expected)]);
 }
 
+// Deterministic, UUID-shaped so the request schema's sessionId: z.uuid() accepts
+// it — a fixed id per pubkey, seeded alongside the user below so every
+// authenticated callPost() has an owned session by default.
+const SESSION_IDS: Record<string, string> = {
+	'pubkey-1': '00000000-0000-4000-8000-000000000001',
+	'pubkey-2': '00000000-0000-4000-8000-000000000002'
+};
+const FALLBACK_SESSION_ID = '00000000-0000-4000-8000-0000000000ff';
+
+function sessionIdForPubkey(pubkey: string | undefined): string {
+	return (pubkey && SESSION_IDS[pubkey]) || FALLBACK_SESSION_ID;
+}
+
 function seedUser(db: D1Database, balance?: number, userId = 'user-1', pubkey = 'pubkey-1'): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(userId, pubkey, Date.now())
@@ -120,6 +134,18 @@ function seedUser(db: D1Database, balance?: number, userId = 'user-1', pubkey = 
 			.bind(userId, balance, Date.now())
 			.run();
 	}
+	const now = Date.now();
+	const projectId = `project-${userId}`;
+	db.prepare(
+		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind(projectId, userId, 'Test project', now, now)
+		.run();
+	db.prepare(
+		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
+		.run();
 }
 
 function bucket(): { put: ReturnType<typeof vi.fn> } {
@@ -146,9 +172,14 @@ type GetEvent = Parameters<typeof GET>[0];
 function callPost(
 	user: SessionUser | null,
 	requestPlatform: App.Platform,
-	body: unknown = requestBody,
+	bodyOverrides: Record<string, unknown> = {},
 	sessionLookupUnavailable = false
 ): ReturnType<typeof POST> {
+	const body = {
+		...requestBody,
+		sessionId: sessionIdForPubkey(user?.pubkey),
+		...bodyOverrides
+	};
 	return POST({
 		request: new Request('https://cadbos.example/api/object-replacement', {
 			method: 'POST',
@@ -180,6 +211,7 @@ async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
 		comfyPromptId: 'prompt-1',
 		sceneUrl: requestBody.image,
 		sceneHash: 'hash-scene',
+		sessionId: sessionIdForPubkey('pubkey-1'),
 		referenceUrl: requestBody.referenceImage,
 		replacementObject: requestBody.replacementObject,
 		cost: 2,
@@ -238,6 +270,24 @@ describe('POST /api/object-replacement', () => {
 		expect(invalid.status).toBe(400);
 		expect(integration.submit).not.toHaveBeenCalled();
 		expect(consoleWarn).not.toHaveBeenCalled();
+	});
+
+	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const foreignSessionId = seedForeignSession(db);
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), {
+			sessionId: foreignSessionId
+		});
+
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({
+			error: { code: 'session_not_found', message: 'Session not found' }
+		});
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(404, 'session_not_found'));
+		expect(integration.submit).not.toHaveBeenCalled();
 	});
 
 	it('logs account lookup failures without user identifiers', async () => {
@@ -319,7 +369,7 @@ describe('POST /api/object-replacement', () => {
 		expect(result).toEqual({ id, status: 'processing' });
 		expect(integration.submit).toHaveBeenCalledWith(
 			expect.anything(),
-			requestBody,
+			{ ...requestBody, sessionId: sessionIdForPubkey('pubkey-1') },
 			'https://cadbos.example',
 			id
 		);

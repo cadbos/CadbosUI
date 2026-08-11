@@ -29,6 +29,16 @@ function seedAccount(db: D1Database, balance = 12): void {
 	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
 		.bind('user-1', balance, 1)
 		.run();
+	db.prepare(
+		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind('project-1', 'user-1', 'Test project', 1, 1)
+		.run();
+	db.prepare(
+		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind('session-1', 'project-1', 'Test session', 1, 1)
+		.run();
 }
 
 async function seedJob(db: D1Database, id = 'job-1') {
@@ -38,6 +48,7 @@ async function seedJob(db: D1Database, id = 'job-1') {
 		comfyPromptId: `prompt-${id}`,
 		sceneUrl: 'https://cdn.example.test/scene.jpg',
 		sceneHash: 'hash-scene',
+		sessionId: 'session-1',
 		referenceUrl: 'https://cdn.example.test/reference.jpg',
 		replacementObject: 'sofa',
 		cost: 2,

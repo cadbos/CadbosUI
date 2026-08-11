@@ -1,0 +1,243 @@
+/*
+ * Copyright (c) 2026 Cadbos company. All rights reserved.
+ *
+ * SPDX-License-Identifier: LicenseRef-Cadbos-BSL-1.1
+ *
+ * Cadbos Interior Design AI is licensed under the Business Source License 1.1.
+ * Access is limited to automated analysis tools for analysis of this repository.
+ * This code is not open for contribution or usage except under a separate
+ * written agreement with Cadbos company.
+ *
+ * Commercial use in Interior Design & AEC Generative AI Services is prohibited
+ * before the Change Date. See LICENSE for complete terms.
+ */
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ProjectDetailResponse } from '$lib/api/contract';
+import { projectDetail } from './project-detail.svelte';
+
+function detail(overrides: Partial<ProjectDetailResponse> = {}): ProjectDetailResponse {
+	return {
+		id: '00000000-0000-4000-8000-000000000001',
+		title: 'Living room',
+		createdAt: Date.UTC(2026, 0, 1),
+		updatedAt: Date.UTC(2026, 0, 1),
+		shareActive: false,
+		sessions: [],
+		...overrides
+	};
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+	return new Response(JSON.stringify(body), {
+		status,
+		headers: { 'content-type': 'application/json' }
+	});
+}
+
+beforeEach(() => {
+	projectDetail.clear();
+});
+
+afterEach(() => {
+	projectDetail.clear();
+	vi.unstubAllGlobals();
+});
+
+describe('projectDetail.load', () => {
+	it('loads a project detail', async () => {
+		const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(jsonResponse(detail())));
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+
+		expect(fetchMock).toHaveBeenCalledWith('/api/projects/00000000-0000-4000-8000-000000000001', {
+			signal: expect.any(AbortSignal)
+		});
+		expect(projectDetail.status).toBe('ready');
+		expect(projectDetail.project?.title).toBe('Living room');
+	});
+
+	it('surfaces a 404 as not-found, not a generic error', async () => {
+		const fetchMock = vi.fn<typeof fetch>(() =>
+			Promise.resolve(new Response(null, { status: 404 }))
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('unknown');
+
+		expect(projectDetail.status).toBe('not-found');
+		expect(projectDetail.project).toBeNull();
+	});
+});
+
+describe('projectDetail.rename', () => {
+	it('updates the in-memory title on success', async () => {
+		const fetchMock = vi.fn<typeof fetch>((input, init) => {
+			if (init?.method === 'PATCH') {
+				return Promise.resolve(
+					jsonResponse({ title: 'Bedroom', createdAt: detail().createdAt, updatedAt: Date.now() })
+				);
+			}
+			return Promise.resolve(jsonResponse(detail()));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		await projectDetail.rename('Bedroom');
+
+		expect(projectDetail.project?.title).toBe('Bedroom');
+		expect(projectDetail.renaming).toBe(false);
+	});
+});
+
+describe('projectDetail.createSession', () => {
+	it('prepends the new session without a reload', async () => {
+		const fetchMock = vi.fn<typeof fetch>((input) => {
+			const url = String(input);
+			if (url.endsWith('/sessions')) {
+				return Promise.resolve(
+					jsonResponse(
+						{
+							id: '00000000-0000-4000-8000-000000000099',
+							title: '',
+							createdAt: Date.now(),
+							updatedAt: Date.now()
+						},
+						201
+					)
+				);
+			}
+			return Promise.resolve(jsonResponse(detail()));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		const session = await projectDetail.createSession();
+
+		expect(session.id).toBe('00000000-0000-4000-8000-000000000099');
+		expect(projectDetail.project?.sessions.map((s) => s.id)).toEqual([session.id]);
+		expect(projectDetail.creatingSession).toBe(false);
+	});
+});
+
+describe('projectDetail share flow', () => {
+	it('issues then revokes the active token, without ever needing to pass the token back', async () => {
+		const fetchMock = vi.fn<typeof fetch>((input, init) => {
+			const url = String(input);
+			if (url.endsWith('/share') && init?.method === 'POST') {
+				return Promise.resolve(jsonResponse({ token: 'a-token' }, 201));
+			}
+			if (url.endsWith('/share') && init?.method === 'DELETE') {
+				return Promise.resolve(new Response(null, { status: 204 }));
+			}
+			return Promise.resolve(jsonResponse(detail()));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		const token = await projectDetail.issueShare();
+		expect(token).toBe('a-token');
+		expect(projectDetail.shareToken).toBe('a-token');
+		expect(projectDetail.shareStatus).toBe('active');
+
+		await projectDetail.revokeShare();
+		expect(projectDetail.shareToken).toBeNull();
+		expect(projectDetail.shareStatus).toBe('idle');
+		expect(projectDetail.project?.shareActive).toBe(false);
+	});
+
+	it('surfaces a failed issue as an error status and rethrows', async () => {
+		const fetchMock = vi.fn<typeof fetch>((input) => {
+			const url = String(input);
+			if (url.endsWith('/share')) return Promise.resolve(new Response(null, { status: 500 }));
+			return Promise.resolve(jsonResponse(detail()));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		await expect(projectDetail.issueShare()).rejects.toThrow('share link creation failed');
+		expect(projectDetail.shareStatus).toBe('error');
+	});
+
+	it('load() seeds shareStatus from the server-reported shareActive flag', async () => {
+		const fetchMock = vi.fn<typeof fetch>(() =>
+			Promise.resolve(jsonResponse(detail({ shareActive: true })))
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		expect(projectDetail.shareStatus).toBe('active');
+		expect(projectDetail.shareToken).toBeNull();
+	});
+});
+
+describe('projectDetail.renameSession', () => {
+	it('updates the session title in place', async () => {
+		const session = {
+			id: '00000000-0000-4000-8000-000000000050',
+			title: 'Main thread',
+			parentSessionId: null,
+			forkedFromGenerationId: null,
+			createdAt: Date.now(),
+			updatedAt: Date.now(),
+			generations: []
+		};
+		const fetchMock = vi.fn<typeof fetch>((input, init) => {
+			if (init?.method === 'PATCH') {
+				return Promise.resolve(jsonResponse({ title: 'Cozy corner', updatedAt: Date.now() }));
+			}
+			return Promise.resolve(jsonResponse(detail({ sessions: [session] })));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		await projectDetail.renameSession(session.id, 'Cozy corner');
+
+		expect(projectDetail.project?.sessions[0]?.title).toBe('Cozy corner');
+		expect(projectDetail.renamingSessionId).toBeNull();
+	});
+});
+
+describe('projectDetail.archiveSession', () => {
+	it('removes the session from the in-memory list', async () => {
+		const session = {
+			id: '00000000-0000-4000-8000-000000000050',
+			title: 'Main thread',
+			parentSessionId: null,
+			forkedFromGenerationId: null,
+			createdAt: Date.now(),
+			updatedAt: Date.now(),
+			generations: []
+		};
+		const fetchMock = vi.fn<typeof fetch>((input, init) => {
+			if (init?.method === 'DELETE') return Promise.resolve(new Response(null, { status: 204 }));
+			return Promise.resolve(jsonResponse(detail({ sessions: [session] })));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		await projectDetail.archiveSession(session.id);
+
+		expect(projectDetail.project?.sessions).toEqual([]);
+		expect(projectDetail.archivingSessionId).toBeNull();
+	});
+});
+
+describe('projectDetail.archiveProject', () => {
+	it('calls DELETE on the project and clears the archiving flag', async () => {
+		const fetchMock = vi.fn<typeof fetch>((input, init) => {
+			if (init?.method === 'DELETE') return Promise.resolve(new Response(null, { status: 204 }));
+			return Promise.resolve(jsonResponse(detail()));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		await projectDetail.archiveProject();
+
+		expect(fetchMock).toHaveBeenCalledWith('/api/projects/00000000-0000-4000-8000-000000000001', {
+			method: 'DELETE'
+		});
+		expect(projectDetail.archivingProject).toBe(false);
+	});
+});

@@ -15,15 +15,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	AC9_IMAGE,
+	AC9_PROJECT_ID,
 	AC9_PROMPT,
 	AC9_REFERENCE_IMAGE,
 	AC9_RENDER_REQUEST,
+	AC9_SESSION_ID,
 	AC9_STYLE_TRANSFER_REQUEST,
 	applyAc9Fixture,
 	buildAc9RequestJSON
 } from '$lib/state/request-fixtures';
 import {
 	RequestImageUploadError,
+	RequestProjectSessionError,
 	RequestReorderError,
 	request,
 	type RenderResult
@@ -31,6 +34,11 @@ import {
 
 beforeEach(() => {
 	request.reset();
+	// Most tests don't care about project/session assignment at all — pre-set
+	// one so every toXRequest() call's ensureProjectSession() resolves from
+	// state instead of hitting the network. Tests that actually exercise
+	// ensureProjectSession()'s own lazy-creation behavior clear it explicitly.
+	request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
 });
 
 afterEach(() => {
@@ -358,6 +366,7 @@ describe('normalizeForComparison', () => {
 		const automaticPayload = await request.toTextureReplacementRequest();
 
 		request.reset();
+		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
 		request.setTextureReplacementSourceMode('room-photo');
@@ -373,6 +382,7 @@ describe('normalizeForComparison', () => {
 		const maskedPayload = await request.toTextureReplacementRequest();
 
 		request.reset();
+		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
 		request.setTextureReplacementSourceMode('room-photo');
@@ -479,6 +489,73 @@ describe('toRenderRequest', () => {
 	});
 });
 
+describe('ensureProjectSession', () => {
+	it('reuses an already-set session without any network call', async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal('fetch', fetchMock);
+
+		const result = await request.ensureProjectSession();
+
+		expect(result).toEqual({ projectId: AC9_PROJECT_ID, sessionId: AC9_SESSION_ID });
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('lazily creates and caches an Untitled project+session when none is set', async () => {
+		request.clearProjectSession();
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url === '/api/projects') {
+				return {
+					ok: true,
+					json: () =>
+						Promise.resolve({ id: 'new-project', title: 'Untitled', createdAt: 0, updatedAt: 0 })
+				};
+			}
+			if (url === '/api/projects/new-project/sessions') {
+				return {
+					ok: true,
+					json: () => Promise.resolve({ id: 'new-session', title: '', createdAt: 0, updatedAt: 0 })
+				};
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const first = await request.ensureProjectSession();
+		expect(first).toEqual({ projectId: 'new-project', sessionId: 'new-session' });
+		expect(request.projectId).toBe('new-project');
+		expect(request.sessionId).toBe('new-session');
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+
+		const second = await request.ensureProjectSession();
+		expect(second).toEqual(first);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('throws RequestProjectSessionError when project creation fails', async () => {
+		request.clearProjectSession();
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+
+		await expect(request.ensureProjectSession()).rejects.toThrow(RequestProjectSessionError);
+	});
+
+	it('throws RequestProjectSessionError when session creation fails', async () => {
+		request.clearProjectSession();
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url === '/api/projects') {
+				return {
+					ok: true,
+					json: () =>
+						Promise.resolve({ id: 'new-project', title: 'Untitled', createdAt: 0, updatedAt: 0 })
+				};
+			}
+			return { ok: false };
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(request.ensureProjectSession()).rejects.toThrow(RequestProjectSessionError);
+	});
+});
+
 describe('toStyleTransferRequest', () => {
 	it('reports missing source and reference images when no state is set', () => {
 		expect(request.validateStyleTransfer()).toEqual({
@@ -532,7 +609,8 @@ describe('toStyleTransferRequest', () => {
 			image: AC9_IMAGE.url,
 			referenceImage: AC9_REFERENCE_IMAGE.url,
 			outputFormat: 'webp',
-			styleTransferStrength: 0.7
+			styleTransferStrength: 0.7,
+			sessionId: AC9_SESSION_ID
 		});
 	});
 
@@ -571,6 +649,7 @@ describe('toStyleTransferRequest', () => {
 		const snapshot = request.toJSON();
 
 		request.reset();
+		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
 		request.fromJSON(snapshot);
 
 		expect(request.toJSON()).toEqual(snapshot);
@@ -606,7 +685,8 @@ describe('toObjectReplacementRequest', () => {
 		expect(await request.toObjectReplacementRequest()).toEqual({
 			image: AC9_IMAGE.url,
 			referenceImage: objectReference.url,
-			replacementObject: 'gray sofa by the window'
+			replacementObject: 'gray sofa by the window',
+			sessionId: AC9_SESSION_ID
 		});
 	});
 
@@ -688,7 +768,8 @@ describe('toTextureReplacementRequest', () => {
 		expect(await request.toTextureReplacementRequest()).toEqual({
 			image: AC9_IMAGE.url,
 			referenceImage: textureReference.url,
-			replacementSurface: 'sofa upholstery'
+			replacementSurface: 'sofa upholstery',
+			sessionId: AC9_SESSION_ID
 		});
 	});
 
@@ -712,7 +793,8 @@ describe('toTextureReplacementRequest', () => {
 		expect(await request.toTextureReplacementRequest()).toEqual({
 			image: AC9_IMAGE.url,
 			referenceImage: textureReference.url,
-			mask: textureMask.url
+			mask: textureMask.url,
+			sessionId: AC9_SESSION_ID
 		});
 	});
 

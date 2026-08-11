@@ -17,6 +17,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { renderExterior } from '$lib/server/generation';
 
@@ -71,9 +72,25 @@ vi.mock('$lib/server/generations', async (importOriginal) => {
 
 const { POST } = await import('./+server');
 
+// Fixed, UUID-shaped (sessionId: z.uuid()) — every test seeds exactly one user
+// per db, so one constant session id, owned by that user, is enough everywhere.
+const TEST_SESSION_ID = '00000000-0000-4000-8000-000000000001';
+
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
+		.run();
+	const now = Date.now();
+	const projectId = `project-${id}`;
+	db.prepare(
+		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind(projectId, id, 'Test project', now, now)
+		.run();
+	db.prepare(
+		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind(TEST_SESSION_ID, projectId, 'Test session', now, now)
 		.run();
 }
 
@@ -107,7 +124,8 @@ function call(
 const body = {
 	image: 'https://example.test/facade.jpg',
 	prompt: 'modern facade with warm evening lights',
-	outputFormat: 'webp'
+	outputFormat: 'webp',
+	sessionId: TEST_SESSION_ID
 };
 const pubkey = 'a'.repeat(64);
 
@@ -139,6 +157,21 @@ describe('POST /api/render/exterior — billing', () => {
 				message: 'Authentication service temporarily unavailable'
 			}
 		});
+	});
+
+	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', pubkey);
+		grantAccess(db, 'user-1', 12);
+		const foreignSessionId = seedForeignSession(db);
+
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
+			...body,
+			sessionId: foreignSessionId
+		});
+		expect(response.status).toBe(404);
+		const result = (await response.json()) as { error: { code: string } };
+		expect(result.error.code).toBe('session_not_found');
 	});
 
 	it('renders an exterior image and returns a URL', async () => {

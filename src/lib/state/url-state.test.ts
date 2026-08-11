@@ -200,3 +200,41 @@ describe('texture replacement edit URL state', () => {
 		expect(isWorkspaceRoute('/texture-replacement')).toBe(false);
 	});
 });
+
+const PROJECT_ID = '223e4567-e89b-42d3-a456-426614174001';
+const SESSION_ID = '323e4567-e89b-42d3-a456-426614174002';
+
+// Module 11: project/session are a caller's own private session, never part
+// of the "shareable workspace URL" — see url-state.ts's buildShareUrl comment
+// for why (a recipient who isn't the same account can't own that session).
+describe('project/session are excluded from the shareable workspace URL', () => {
+	it('never includes project/session params, even when a session is attached', () => {
+		const state = new RequestState();
+		state.setProjectSession(PROJECT_ID, SESSION_ID);
+
+		const url = buildShareUrl('render', state, { view: 'chat' });
+		expect(url).toBe('/create/interior?view=chat&format=webp');
+		expect(url).not.toContain('project=');
+		expect(url).not.toContain('session=');
+	});
+
+	it('leaves an existing projectId/sessionId on request untouched, regardless of URL contents', () => {
+		const state = new RequestState();
+		state.setProjectSession(PROJECT_ID, SESSION_ID);
+
+		applyShareParams(
+			'render',
+			'interior',
+			new URLSearchParams({
+				view: 'chat',
+				format: 'webp',
+				project: '00000000-0000-4000-8000-000000000099',
+				session: '00000000-0000-4000-8000-000000000098'
+			}),
+			state
+		);
+
+		expect(state.projectId).toBe(PROJECT_ID);
+		expect(state.sessionId).toBe(SESSION_ID);
+	});
+});
