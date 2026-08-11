@@ -294,7 +294,10 @@ export interface Dictionary {
 	'share.sessionUntitled': string;
 	'share.sessionUpdatedAt': string;
 	'share.sessionForkedFrom': string;
-	'share.sessionThumbnailAlt': string;
+	'share.generationsLabel': string;
+	'share.generationAlt': string;
+	'share.generationOpenAria': string;
+	'share.lightboxClose': string;
 	'render.insufficientCredit': string;
 	'render.generationRestricted': string;
 	'styleTransfer.referenceImage': string;
