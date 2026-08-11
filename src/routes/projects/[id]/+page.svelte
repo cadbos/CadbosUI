@@ -439,7 +439,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.header-row {
 		display: flex;
-		align-items: flex-start;
+		align-items: stretch;
 		justify-content: space-between;
 		gap: 0.75rem;
 		flex-wrap: wrap;
@@ -465,7 +465,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.rename-form input {
-		font-size: clamp(1.25rem, 2vw, 1.5rem);
+		font-size: 1rem;
 		font-weight: 700;
 	}
 
