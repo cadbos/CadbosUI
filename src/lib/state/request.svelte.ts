@@ -1385,6 +1385,15 @@ export class RequestState {
 	// this copies every field, including session-UI-only ones, so a tab that
 	// becomes inactive and later active again looks exactly as it was left.
 	copyFrom(source: RequestState): void {
+		// Any project/session creation or texture-mask upload still in flight
+		// belongs to the pre-copy state — invalidate it so a late resolution
+		// can't overwrite the state being copied in now (same guard shape
+		// reset() uses).
+		this.#pendingProjectId = undefined;
+		this.#pendingProjectSession = undefined;
+		this.#projectSessionEpoch += 1;
+		this.#textureMaskUploadEpoch += 1;
+
 		this.id = source.id;
 		this.projectId = source.projectId;
 		this.sessionId = source.sessionId;
