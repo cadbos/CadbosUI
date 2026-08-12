@@ -13,10 +13,11 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { z } from 'zod';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
-	import type { ForkSessionResponse, OutputFormat, RenderResponse } from '$lib/api/contract';
+	import type { OutputFormat, RenderResponse } from '$lib/api/contract';
 	import {
 		creditErrorKey,
 		extractApiErrorCode,
@@ -133,6 +134,10 @@ before the Change Date. See LICENSE for complete terms.
 		return event.currentTarget instanceof HTMLTextAreaElement ? event.currentTarget.value : '';
 	}
 
+	// Only the new session id is ever read from the fork response, so that's
+	// all that's validated here.
+	const forkSessionSchema = z.object({ id: z.uuid() });
+
 	async function submit(): Promise<void> {
 		if (!canApply || !isAuthenticated) return;
 		applying = true;
@@ -150,8 +155,9 @@ before the Change Date. See LICENSE for complete terms.
 					}
 				);
 				if (!forkResponse.ok) throw new Error('style_transfer_fork_failed');
-				const forked = (await forkResponse.json()) as ForkSessionResponse;
-				request.setProjectSession(request.projectId as string, forked.id);
+				const parsed = forkSessionSchema.safeParse(await forkResponse.json().catch(() => null));
+				if (!parsed.success) throw new Error('style_transfer_fork_failed');
+				request.setProjectSession(request.projectId as string, parsed.data.id);
 			}
 			const body = await request.toStyleTransferRequest();
 			if (!body) {
