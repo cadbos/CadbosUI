@@ -53,6 +53,7 @@ export const healthSnapshotSchema = z
 				assets: serviceHealthSchema,
 				comfyui: serviceHealthSchema,
 				d1: serviceHealthSchema,
+				lnbits: serviceHealthSchema,
 				nostr: nostrHealthSchema,
 				r2: serviceHealthSchema
 			})

@@ -37,6 +37,7 @@ interface HealthyPlatform {
 	assetsFetch: ReturnType<typeof vi.fn>;
 	comfyuiFetch: ReturnType<typeof vi.fn>;
 	dbFirst: ReturnType<typeof vi.fn>;
+	lnbitsFetch: ReturnType<typeof vi.fn>;
 	r2List: ReturnType<typeof vi.fn>;
 }
 
@@ -67,6 +68,7 @@ function snapshot(status: 'healthy' | 'unhealthy' = 'healthy') {
 			assets: service(),
 			comfyui: service(),
 			d1: service(),
+			lnbits: service(),
 			nostr: { ...service(), reachable: 4, total: 4 },
 			r2: service(status === 'unhealthy' ? 'unhealthy' : 'healthy')
 		}
@@ -84,6 +86,9 @@ function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 	const assetsFetch = vi.fn(async () => new Response('<svg/>', { status: 200 }));
 	const comfyuiFetch = vi.fn(async () => Response.json({ system: {} }));
 	const dbFirst = vi.fn(async () => 1);
+	const lnbitsFetch = vi.fn(async () =>
+		Response.json({ server_time: 1_786_446_000, up_time: true })
+	);
 	const r2List = vi.fn(async () => ({ objects: [], truncated: false, delimitedPrefixes: [] }));
 	return {
 		platform: {
@@ -97,12 +102,14 @@ function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 					prepare: vi.fn(() => ({ first: dbFirst }))
 				} as unknown as D1Database,
 				...(ttl === undefined ? {} : { HEALTH_CACHE_TTL_SECONDS: ttl }),
+				LNBITS_VPC: { fetch: lnbitsFetch } as unknown as Fetcher,
 				UPLOADS_BUCKET: { list: r2List } as unknown as R2Bucket
 			}
 		} as App.Platform,
 		assetsFetch,
 		comfyuiFetch,
 		dbFirst,
+		lnbitsFetch,
 		r2List
 	};
 }
@@ -177,6 +184,7 @@ describe('GET /healthz', () => {
 		expect(healthy.assetsFetch).not.toHaveBeenCalled();
 		expect(healthy.comfyuiFetch).not.toHaveBeenCalled();
 		expect(healthy.dbFirst).not.toHaveBeenCalled();
+		expect(healthy.lnbitsFetch).not.toHaveBeenCalled();
 		expect(healthy.r2List).not.toHaveBeenCalled();
 		expect(fetcher).not.toHaveBeenCalled();
 	});
@@ -203,6 +211,7 @@ describe('GET /healthz', () => {
 				assets: { status: 'healthy', latencyMs: expect.any(Number) },
 				comfyui: { status: 'healthy', latencyMs: expect.any(Number) },
 				d1: { status: 'healthy', latencyMs: expect.any(Number) },
+				lnbits: { status: 'healthy', latencyMs: expect.any(Number) },
 				nostr: {
 					status: 'healthy',
 					latencyMs: expect.any(Number),
@@ -221,10 +230,13 @@ describe('GET /healthz', () => {
 		expect(healthy.r2List).toHaveBeenCalledWith({ limit: 1 });
 		expect(healthy.assetsFetch.mock.calls[0][0].url).toBe('https://assets.internal/favicon.svg');
 		expect(healthy.comfyuiFetch.mock.calls[0][0].url).toBe('http://localhost:8188/system_stats');
+		const lnbitsRequest = healthy.lnbitsFetch.mock.calls[0][0] as Request;
+		expect(lnbitsRequest.url).toBe('http://localhost:5000/api/v1/health');
+		expect(lnbitsRequest.headers.has('X-Api-Key')).toBe(false);
 		expect(fetcher).toHaveBeenCalledTimes(4);
 	});
 
-	it.each(['archai', 'assets', 'comfyui', 'd1', 'nostr', 'r2'] as const)(
+	it.each(['archai', 'assets', 'comfyui', 'd1', 'lnbits', 'nostr', 'r2'] as const)(
 		'caches an unhealthy response when %s fails',
 		async (failedService) => {
 			const cache = fakeCache();
@@ -242,6 +254,9 @@ describe('GET /healthz', () => {
 					break;
 				case 'd1':
 					healthy.dbFirst.mockRejectedValue(new Error('D1 unavailable'));
+					break;
+				case 'lnbits':
+					healthy.lnbitsFetch.mockRejectedValue(new Error('LNbits unavailable'));
 					break;
 				case 'nostr':
 					fetcher = relayFetch(0);
@@ -266,6 +281,37 @@ describe('GET /healthz', () => {
 			});
 		}
 	);
+
+	it.each([
+		['an unsuccessful response', new Response(null, { status: 503 })],
+		['a non-object JSON response', Response.json([])]
+	] as const)('reports LNbits as unhealthy for %s', async (_description, lnbitsResponse) => {
+		const cache = fakeCache();
+		const healthy = healthyPlatform(cache.storage);
+		healthy.lnbitsFetch.mockResolvedValue(lnbitsResponse);
+
+		const response = await callGet(healthy.platform, relayFetch());
+
+		expect(response.status).toBe(503);
+		expect(await response.json()).toMatchObject({
+			status: 'unhealthy',
+			services: { lnbits: { status: 'unhealthy' } }
+		});
+	});
+
+	it('reports LNbits as unhealthy when its VPC binding is missing', async () => {
+		const cache = fakeCache();
+		const healthy = healthyPlatform(cache.storage);
+		healthy.platform.env.LNBITS_VPC = undefined as unknown as Fetcher;
+
+		const response = await callGet(healthy.platform, relayFetch());
+
+		expect(response.status).toBe(503);
+		expect(await response.json()).toMatchObject({
+			status: 'unhealthy',
+			services: { lnbits: { status: 'unhealthy' } }
+		});
+	});
 
 	it('keeps Nostr healthy while at least one configured relay responds', async () => {
 		const cache = fakeCache();

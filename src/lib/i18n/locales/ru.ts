@@ -271,6 +271,7 @@ export const ru = {
 	'status.service.assets': 'Статические ресурсы',
 	'status.service.comfyui': 'ComfyUI',
 	'status.service.d1': 'База данных D1',
+	'status.service.lnbits': 'LNbits',
 	'status.service.nostr': 'Ретрансляторы Nostr',
 	'status.service.r2': 'Хранилище R2',
 	'version.title': 'Версия приложения',

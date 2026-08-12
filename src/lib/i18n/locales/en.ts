@@ -270,6 +270,7 @@ export const en = {
 	'status.service.assets': 'Static assets',
 	'status.service.comfyui': 'ComfyUI',
 	'status.service.d1': 'D1 database',
+	'status.service.lnbits': 'LNbits',
 	'status.service.nostr': 'Nostr relays',
 	'status.service.r2': 'R2 storage',
 	'version.title': 'Application version',

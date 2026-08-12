@@ -264,6 +264,7 @@ export interface Dictionary {
 	'status.service.assets': string;
 	'status.service.comfyui': string;
 	'status.service.d1': string;
+	'status.service.lnbits': string;
 	'status.service.nostr': string;
 	'status.service.r2': string;
 	'version.title': string;
