@@ -265,11 +265,19 @@ before the Change Date. See LICENSE for complete terms.
 	// The tab bar row toggling on/off changes that height, so it's measured
 	// live and published as a CSS var (--workspace-header-bottom, read by
 	// FloatingToolsPanel.svelte) rather than assuming a fixed size.
+	//
+	// getBoundingClientRect().bottom alone is viewport-relative — it shrinks
+	// as the page scrolls, which would drag a *fixed*-position panel up the
+	// screen on every scroll instead of leaving it where a floating panel
+	// belongs. Adding scrollY back converts it to the header's stable
+	// document-relative position, so the published value stays correct
+	// regardless of scroll offset at the moment a resize is observed (e.g.
+	// the tab bar appearing while the page happens to be scrolled).
 	let workspaceHeaderBottom = $state<number | null>(null);
 
 	function measureWorkspaceHeader(node: HTMLElement): () => void {
 		const update = () => {
-			workspaceHeaderBottom = node.getBoundingClientRect().bottom;
+			workspaceHeaderBottom = node.getBoundingClientRect().bottom + window.scrollY;
 		};
 		update();
 		const observer = new ResizeObserver(update);
