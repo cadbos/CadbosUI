@@ -266,7 +266,6 @@ export const ru = {
 	'projects.listLabel': 'Проекты, сначала недавно обновлённые',
 	'projects.updatedAt': 'Обновлён {date}',
 	'projects.openAria': 'Открыть проект {title}',
-	'projects.deleteButton': 'Удалить',
 	'projects.deleteButtonAria': 'Удалить проект {title}',
 	'projects.deleteConfirmTitle': 'Удалить этот проект?',
 	'projects.deleteConfirmDescription':
@@ -323,7 +322,7 @@ export const ru = {
 	'projects.detail.shareActiveUnknown':
 		'Ссылка активна, но её адрес показывается только один раз — сразу после создания.',
 	'projects.detail.shareCreateNew': 'Создать новую ссылку',
-	'projects.detail.shareLinkLabel': 'Ссылка для шаринга',
+	'projects.detail.shareLinkLabel': 'Ссылка на общий доступ',
 	'projects.detail.shareCopy': 'Скопировать ссылку',
 	'projects.detail.shareCopied': 'Скопировано!',
 	'projects.detail.shareRevoke': 'Отозвать ссылку',

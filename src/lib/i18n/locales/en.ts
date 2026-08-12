@@ -266,7 +266,6 @@ export const en = {
 	'projects.listLabel': 'Projects, most recently updated first',
 	'projects.updatedAt': 'Updated {date}',
 	'projects.openAria': 'Open project {title}',
-	'projects.deleteButton': 'Delete',
 	'projects.deleteButtonAria': 'Delete project {title}',
 	'projects.deleteConfirmTitle': 'Delete this project?',
 	'projects.deleteConfirmDescription':

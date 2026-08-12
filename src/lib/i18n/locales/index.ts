@@ -259,7 +259,6 @@ export interface Dictionary {
 	'projects.listLabel': string;
 	'projects.updatedAt': string;
 	'projects.openAria': string;
-	'projects.deleteButton': string;
 	'projects.deleteButtonAria': string;
 	'projects.deleteConfirmTitle': string;
 	'projects.deleteConfirmDescription': string;
