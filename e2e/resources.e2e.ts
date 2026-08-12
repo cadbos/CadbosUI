@@ -200,7 +200,7 @@ test('uses a resource photo to start a new generation', async ({ page }) => {
 test('using a resource photo while a project tab is open opens the scratch tab instead of hijacking it', async ({
 	page
 }) => {
-	const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
+	const projectId = '00000000-0000-4000-8000-000000000001';
 	await authenticate(page);
 	await page.route('**/api/generated-images**', async (route) => {
 		await route.fulfill({
@@ -217,7 +217,7 @@ test('using a resource photo while a project tab is open opens the scratch tab i
 			body: JSON.stringify({
 				projects: [
 					{
-						id: PROJECT_ID,
+						id: projectId,
 						title: 'Living room',
 						createdAt: Date.UTC(2026, 0, 1),
 						updatedAt: Date.UTC(2026, 0, 1)
@@ -227,13 +227,13 @@ test('using a resource photo while a project tab is open opens the scratch tab i
 			})
 		});
 	});
-	await page.route(`**/api/projects/${PROJECT_ID}`, async (route) => {
+	await page.route(`**/api/projects/${projectId}`, async (route) => {
 		if (route.request().method() !== 'GET') return route.fallback();
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				id: PROJECT_ID,
+				id: projectId,
 				title: 'Living room',
 				createdAt: Date.UTC(2026, 0, 1),
 				updatedAt: Date.UTC(2026, 0, 1),
@@ -267,7 +267,7 @@ test('using a resource photo while a project tab is open opens the scratch tab i
 		}
 	});
 
-	await page.goto(`/projects/${PROJECT_ID}`);
+	await page.goto(`/projects/${projectId}`);
 	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
 
 	const tabs = page.getByRole('navigation', { name: 'Открытые проекты' });
