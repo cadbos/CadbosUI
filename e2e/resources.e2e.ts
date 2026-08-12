@@ -196,3 +196,98 @@ test('uses a resource photo to start a new generation', async ({ page }) => {
 		'https://cdn.example.test/resource-photo.jpg'
 	);
 });
+
+test('using a resource photo while a project tab is open opens the scratch tab instead of hijacking it', async ({
+	page
+}) => {
+	const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
+	await authenticate(page);
+	await page.route('**/api/generated-images**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ images: [], pagination: { offset: 0, size: 100, hasMore: false } })
+		});
+	});
+	await page.route('**/api/projects?**', async (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				projects: [
+					{
+						id: PROJECT_ID,
+						title: 'Living room',
+						createdAt: Date.UTC(2026, 0, 1),
+						updatedAt: Date.UTC(2026, 0, 1)
+					}
+				],
+				pagination: { offset: 0, size: 20, hasMore: false }
+			})
+		});
+	});
+	await page.route(`**/api/projects/${PROJECT_ID}`, async (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: PROJECT_ID,
+				title: 'Living room',
+				createdAt: Date.UTC(2026, 0, 1),
+				updatedAt: Date.UTC(2026, 0, 1),
+				shareActive: false,
+				sessions: [
+					{
+						id: '00000000-0000-4000-8000-000000000010',
+						title: 'Main thread',
+						parentSessionId: null,
+						forkedFromGenerationId: null,
+						createdAt: Date.UTC(2026, 0, 1),
+						updatedAt: Date.UTC(2026, 0, 1),
+						generations: [
+							{
+								id: '00000000-0000-4000-8000-000000000100',
+								url: 'https://cdn.example.test/living-room.webp',
+								sourceUrl: 'https://cdn.example.test/room.jpg',
+								kind: 'render',
+								createdAt: Date.UTC(2026, 0, 1)
+							}
+						]
+					}
+				]
+			})
+		});
+	});
+	await mockResourcesPages(page, {
+		0: {
+			images: [{ sourceUrl: 'https://cdn.example.test/resource-photo.jpg', createdAt: 1 }],
+			hasMore: false
+		}
+	});
+
+	await page.goto(`/projects/${PROJECT_ID}`);
+	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
+
+	const tabs = page.getByRole('navigation', { name: 'Открытые проекты' });
+	await expect(tabs.getByRole('tab', { name: 'Living room' })).toBeVisible();
+
+	await page.getByRole('link', { name: 'Ресурсы', exact: true }).click();
+	await page.getByRole('button', { name: 'Использовать фото 1 для новой генерации' }).click();
+
+	// The picked photo lands on a fresh scratch tab — Living room's own tab
+	// (and the render it held) survives untouched.
+	await expect(tabs.getByRole('tab', { name: 'Без названия', selected: true })).toBeVisible();
+	await expect(tabs.getByRole('tab', { name: 'Living room' })).toBeVisible();
+	await expect(page.locator('#mode-panel-render .image-wrapper img')).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/resource-photo.jpg'
+	);
+
+	await tabs.getByRole('tab', { name: 'Living room' }).click();
+	await expect(page.locator('#mode-panel-render .image-wrapper img')).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/living-room.webp'
+	);
+});

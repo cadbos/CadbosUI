@@ -18,6 +18,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { resources } from '$lib/state/resources.svelte';
 	import { request } from '$lib/state/request.svelte';
 	import { buildShareUrl } from '$lib/state/url-state';
+	import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError } from '$lib/utils';
 
 	let loadMoreSentinel = $state<HTMLElement | null>(null);
@@ -60,6 +61,12 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function useImage(sourceUrl: string): void {
+		// A resource picked here is fresh, project-less work — it belongs on
+		// the scratch tab, not whatever project tab happened to be active.
+		// Without this, the mutations below would land on the shared `request`
+		// singleton while it's still standing in for that other tab, silently
+		// detaching *its* session and replacing its content with this image.
+		workspaceTabs.activate(SCRATCH_TAB_ID);
 		request.setImage({ url: sourceUrl });
 		request.setCurrentRender(undefined);
 		request.clearProjectSession();
