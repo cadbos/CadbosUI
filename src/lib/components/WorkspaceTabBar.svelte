@@ -36,6 +36,14 @@ before the Change Date. See LICENSE for complete terms.
 
 	function close(tab: WorkspaceTab): void {
 		workspaceTabs.close(tab.id);
+		// The closed tab's own button (which had focus, since that's the only
+		// way to reach it via keyboard) is gone from the DOM after this — move
+		// focus to the newly active tab once the #each block has re-rendered,
+		// rather than letting it silently fall back to <body>.
+		requestAnimationFrame(() => {
+			const activeIndex = workspaceTabs.tabs.findIndex((t) => t.id === workspaceTabs.activeTabId);
+			if (activeIndex !== -1) tabRefs[activeIndex]?.focus();
+		});
 	}
 </script>
 
