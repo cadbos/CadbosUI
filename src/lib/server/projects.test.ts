@@ -108,6 +108,24 @@ describe('projects repository', () => {
 		expect(denied).toBeNull();
 	});
 
+	it('attaches generations correctly for a project past the D1 100-param IN-clause limit', async () => {
+		const project = await createProject(db, 'user-1', 'Living room');
+		const sessionIds: string[] = [];
+		for (let i = 0; i < 150; i++) {
+			const session = await createSession(db, 'user-1', project.id, `Session ${i}`);
+			expect(session).not.toBeNull();
+			sessionIds.push(session!.id);
+			seedGeneration(db, `gen-${i}`, 'user-1', session!.id, Date.now());
+		}
+
+		const detail = await getProjectDetail(db, 'user-1', project.id);
+		expect(detail?.sessions).toHaveLength(150);
+		for (const session of detail!.sessions) {
+			const index = sessionIds.indexOf(session.id);
+			expect(session.generations.map((generation) => generation.id)).toEqual([`gen-${index}`]);
+		}
+	});
+
 	it('does not create a session in a project the caller does not own', async () => {
 		const project = await createProject(db, 'user-1', 'Living room');
 

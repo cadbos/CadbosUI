@@ -224,9 +224,14 @@ async function loadProjectDetail(db: D1Database, projectRow: ProjectRow): Promis
 	]);
 	const sessionRows = sessionResult.results ?? [];
 
+	// D1 caps bound parameters at 100 per query, so a project with a deep
+	// session history is queried in chunks rather than one IN (...) with an
+	// unbounded number of placeholders.
+	const D1_MAX_BOUND_PARAMS = 100;
 	const generationsBySession = new Map<string, SessionGeneration[]>();
-	if (sessionRows.length > 0) {
-		const placeholders = sessionRows.map(() => '?').join(', ');
+	for (let offset = 0; offset < sessionRows.length; offset += D1_MAX_BOUND_PARAMS) {
+		const chunk = sessionRows.slice(offset, offset + D1_MAX_BOUND_PARAMS);
+		const placeholders = chunk.map(() => '?').join(', ');
 		const generationRows =
 			(
 				await db
@@ -234,7 +239,7 @@ async function loadProjectDetail(db: D1Database, projectRow: ProjectRow): Promis
 						`SELECT id, session_id, url, source_url, kind, created_at FROM generations ` +
 							`WHERE session_id IN (${placeholders}) ORDER BY created_at DESC, id DESC`
 					)
-					.bind(...sessionRows.map((session) => session.id))
+					.bind(...chunk.map((session) => session.id))
 					.all<SessionGenerationRow & { session_id: string }>()
 			).results ?? [];
 		for (const row of generationRows) {
