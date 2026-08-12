@@ -104,6 +104,12 @@ class ProjectDetailState {
 	#archiveProjectCall = 0;
 	#renameSessionCall = 0;
 	#archiveSessionCall = 0;
+	// Shared by issueShare/revokeShare — they're mutually exclusive states of
+	// the same share link, so whichever of the two started most recently is
+	// the one allowed to write shareToken/shareStatus/project.shareActive. A
+	// stale issueShare response arriving after a revokeShare already ran would
+	// otherwise resurrect a token the user just revoked.
+	#shareCall = 0;
 
 	// Guards a mutation's late-arriving response against the project having
 	// changed underneath it — the user navigated away, or to a different
@@ -221,6 +227,7 @@ class ProjectDetailState {
 	async issueShare(): Promise<string> {
 		const project = this.project;
 		if (!project) throw new ProjectDetailActionError('no project loaded');
+		const call = ++this.#shareCall;
 		this.shareStatus = 'issuing';
 		try {
 			const response = await fetch(`/api/projects/${project.id}/share`, { method: 'POST' });
@@ -230,16 +237,20 @@ class ProjectDetailState {
 			if (!parsed.success) throw new ProjectDetailActionError('share link response invalid');
 
 			// A token belonging to a project the user has since navigated away
-			// from must never surface as if it were the *current* page's link.
+			// from — or a share operation since superseded by a newer one, e.g.
+			// a revoke that started after this issue and has already run — must
+			// never surface as if it were the *current* page's link.
 			const current = this.#currentProjectIfUnchanged(project);
-			if (current) {
+			if (current && this.#shareCall === call) {
 				this.shareToken = parsed.data.token;
 				this.shareStatus = 'active';
 				this.project = { ...current, shareActive: true };
 			}
 			return parsed.data.token;
 		} catch (error) {
-			if (this.#currentProjectIfUnchanged(project)) this.shareStatus = 'error';
+			if (this.#currentProjectIfUnchanged(project) && this.#shareCall === call) {
+				this.shareStatus = 'error';
+			}
 			throw error;
 		}
 	}
@@ -249,6 +260,7 @@ class ProjectDetailState {
 	async revokeShare(): Promise<void> {
 		const project = this.project;
 		if (!project) return;
+		const call = ++this.#shareCall;
 		this.shareStatus = 'revoking';
 		try {
 			const response = await fetch(`/api/projects/${project.id}/share`, { method: 'DELETE' });
@@ -256,13 +268,15 @@ class ProjectDetailState {
 				throw new ProjectDetailActionError('share link revoke failed');
 			}
 			const current = this.#currentProjectIfUnchanged(project);
-			if (current) {
+			if (current && this.#shareCall === call) {
 				this.shareToken = null;
 				this.shareStatus = 'idle';
 				this.project = { ...current, shareActive: false };
 			}
 		} catch (error) {
-			if (this.#currentProjectIfUnchanged(project)) this.shareStatus = 'error';
+			if (this.#currentProjectIfUnchanged(project) && this.#shareCall === call) {
+				this.shareStatus = 'error';
+			}
 			throw error;
 		}
 	}

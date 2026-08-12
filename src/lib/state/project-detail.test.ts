@@ -205,6 +205,38 @@ describe('projectDetail share flow', () => {
 		expect(projectDetail.shareStatus).toBe('error');
 	});
 
+	it('ignores a stale issue response that resolves after a newer revoke already ran', async () => {
+		let resolveIssue!: (response: Response) => void;
+		const issuePromise = new Promise<Response>((resolve) => {
+			resolveIssue = resolve;
+		});
+		const fetchMock = vi.fn<typeof fetch>((input, init) => {
+			const url = String(input);
+			if (url.endsWith('/share') && init?.method === 'POST') return issuePromise;
+			if (url.endsWith('/share') && init?.method === 'DELETE') {
+				return Promise.resolve(new Response(null, { status: 204 }));
+			}
+			return Promise.resolve(jsonResponse(detail()));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		const issue = projectDetail.issueShare();
+		expect(projectDetail.shareStatus).toBe('issuing');
+
+		// A revoke starts (and fully resolves) before the issue above settles.
+		await projectDetail.revokeShare();
+		expect(projectDetail.shareStatus).toBe('idle');
+
+		resolveIssue(jsonResponse({ token: 'stale-token' }, 201));
+		await issue;
+
+		// The stale issue must not resurrect a token the revoke already cleared.
+		expect(projectDetail.shareStatus).toBe('idle');
+		expect(projectDetail.shareToken).toBeNull();
+		expect(projectDetail.project?.shareActive).toBe(false);
+	});
+
 	it('load() seeds shareStatus from the server-reported shareActive flag', async () => {
 		const fetchMock = vi.fn<typeof fetch>(() =>
 			Promise.resolve(jsonResponse(detail({ shareActive: true })))
