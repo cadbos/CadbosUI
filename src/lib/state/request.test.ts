@@ -570,6 +570,9 @@ describe('ensureProjectSession', () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
+	const NEW_PROJECT_ID = '00000000-0000-4000-8000-000000000201';
+	const NEW_SESSION_ID = '00000000-0000-4000-8000-000000000202';
+
 	it('lazily creates and caches an Untitled project+session when none is set', async () => {
 		request.clearProjectSession();
 		const fetchMock = vi.fn(async (url: string) => {
@@ -577,13 +580,18 @@ describe('ensureProjectSession', () => {
 				return {
 					ok: true,
 					json: () =>
-						Promise.resolve({ id: 'new-project', title: 'Untitled', createdAt: 0, updatedAt: 0 })
+						Promise.resolve({
+							id: NEW_PROJECT_ID,
+							title: 'Untitled',
+							createdAt: 0,
+							updatedAt: 0
+						})
 				};
 			}
-			if (url === '/api/projects/new-project/sessions') {
+			if (url === `/api/projects/${NEW_PROJECT_ID}/sessions`) {
 				return {
 					ok: true,
-					json: () => Promise.resolve({ id: 'new-session', title: '', createdAt: 0, updatedAt: 0 })
+					json: () => Promise.resolve({ id: NEW_SESSION_ID, title: '', createdAt: 0, updatedAt: 0 })
 				};
 			}
 			throw new Error(`unexpected fetch: ${url}`);
@@ -591,9 +599,9 @@ describe('ensureProjectSession', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		const first = await request.ensureProjectSession();
-		expect(first).toEqual({ projectId: 'new-project', sessionId: 'new-session' });
-		expect(request.projectId).toBe('new-project');
-		expect(request.sessionId).toBe('new-session');
+		expect(first).toEqual({ projectId: NEW_PROJECT_ID, sessionId: NEW_SESSION_ID });
+		expect(request.projectId).toBe(NEW_PROJECT_ID);
+		expect(request.sessionId).toBe(NEW_SESSION_ID);
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 
 		const second = await request.ensureProjectSession();
@@ -601,9 +609,56 @@ describe('ensureProjectSession', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
+	it('dedupes two concurrent calls into a single project+session provisioning', async () => {
+		request.clearProjectSession();
+		let resolveProject!: (value: unknown) => void;
+		let resolveSession!: (value: unknown) => void;
+		const projectResponse = new Promise((resolve) => {
+			resolveProject = resolve;
+		});
+		const sessionResponse = new Promise((resolve) => {
+			resolveSession = resolve;
+		});
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url === '/api/projects') return { ok: true, json: () => projectResponse };
+			if (url === `/api/projects/${NEW_PROJECT_ID}/sessions`) {
+				return { ok: true, json: () => sessionResponse };
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		// Both calls start before either provisioning response resolves — the
+		// second must reuse the first's in-flight promise (#pendingProjectSession)
+		// instead of firing its own duplicate POSTs.
+		const firstCall = request.ensureProjectSession();
+		const secondCall = request.ensureProjectSession();
+
+		resolveProject({ id: NEW_PROJECT_ID, title: 'Untitled', createdAt: 0, updatedAt: 0 });
+		resolveSession({ id: NEW_SESSION_ID, title: '', createdAt: 0, updatedAt: 0 });
+
+		const [first, second] = await Promise.all([firstCall, secondCall]);
+		expect(first).toEqual({ projectId: NEW_PROJECT_ID, sessionId: NEW_SESSION_ID });
+		expect(second).toEqual(first);
+		expect(fetchMock.mock.calls.filter(([url]) => url === '/api/projects')).toHaveLength(1);
+		expect(
+			fetchMock.mock.calls.filter(([url]) => url === `/api/projects/${NEW_PROJECT_ID}/sessions`)
+		).toHaveLength(1);
+	});
+
 	it('throws RequestProjectSessionError when project creation fails', async () => {
 		request.clearProjectSession();
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+
+		await expect(request.ensureProjectSession()).rejects.toThrow(RequestProjectSessionError);
+	});
+
+	it('throws RequestProjectSessionError when the project creation response is malformed', async () => {
+		request.clearProjectSession();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: 'not-a-uuid' }) })
+		);
 
 		await expect(request.ensureProjectSession()).rejects.toThrow(RequestProjectSessionError);
 	});
@@ -615,7 +670,12 @@ describe('ensureProjectSession', () => {
 				return {
 					ok: true,
 					json: () =>
-						Promise.resolve({ id: 'new-project', title: 'Untitled', createdAt: 0, updatedAt: 0 })
+						Promise.resolve({
+							id: NEW_PROJECT_ID,
+							title: 'Untitled',
+							createdAt: 0,
+							updatedAt: 0
+						})
 				};
 			}
 			return { ok: false };

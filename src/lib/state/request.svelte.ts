@@ -15,17 +15,15 @@
 import { z } from 'zod';
 import {
 	OUTPUT_FORMATS,
-	type CreateSessionResponse,
 	type ObjectReplacementRequest,
 	type OutputFormat,
-	type ProjectRecord,
 	type RenderRequest,
 	type RenderResponse,
 	type StyleTransferRequest,
 	type TextureReplacementRequest,
 	uploadResultSchema
 } from '$lib/api/contract';
-import type { TranslationKey } from '$lib/i18n/index.svelte';
+import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 
 export type { OutputFormat };
 
@@ -425,6 +423,12 @@ export function renderResultFromResponse(
 }
 
 const apiErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
+
+// Narrow schemas for #createProjectSession's two responses — only the id is
+// ever read, so that's all that's validated (same principle as the rest of
+// this file's response schemas: assert only what's actually consumed).
+const projectCreationResponseSchema = z.object({ id: z.uuid() });
+const sessionCreationResponseSchema = z.object({ id: z.uuid() });
 
 // Shared by the render/edit call sites: a non-ok response's body is untrusted
 // input, so validate it at the boundary instead of reading `error.code` off an
@@ -1054,14 +1058,19 @@ export class RequestState {
 		const projectResponse = await fetch('/api/projects', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ title: 'Untitled' })
+			body: JSON.stringify({ title: t('workspace.tabs.untitled') })
 		});
 		if (!projectResponse.ok) {
 			throw new RequestProjectSessionError('project creation failed');
 		}
-		const project = (await projectResponse.json()) as ProjectRecord;
+		const parsedProject = projectCreationResponseSchema.safeParse(
+			await projectResponse.json().catch(() => null)
+		);
+		if (!parsedProject.success) {
+			throw new RequestProjectSessionError('project creation response invalid');
+		}
 
-		const sessionResponse = await fetch(`/api/projects/${project.id}/sessions`, {
+		const sessionResponse = await fetch(`/api/projects/${parsedProject.data.id}/sessions`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({})
@@ -1069,10 +1078,15 @@ export class RequestState {
 		if (!sessionResponse.ok) {
 			throw new RequestProjectSessionError('session creation failed');
 		}
-		const session = (await sessionResponse.json()) as CreateSessionResponse;
+		const parsedSession = sessionCreationResponseSchema.safeParse(
+			await sessionResponse.json().catch(() => null)
+		);
+		if (!parsedSession.success) {
+			throw new RequestProjectSessionError('session creation response invalid');
+		}
 
-		this.setProjectSession(project.id, session.id);
-		return { projectId: project.id, sessionId: session.id };
+		this.setProjectSession(parsedProject.data.id, parsedSession.data.id);
+		return { projectId: parsedProject.data.id, sessionId: parsedSession.data.id };
 	}
 
 	hasStyleTransferSource(): boolean {
