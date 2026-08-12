@@ -166,6 +166,28 @@ test('opens a tab per project continued into the workspace and preserves each on
 	);
 	// Switching tabs never navigates — still the same workspace route.
 	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
+
+	// The restored tab's request state must carry Living room's own session
+	// id, not Kitchen's — a generation submitted here has to attach to the
+	// right project even after switching away and back.
+	let renderBody: unknown;
+	await page.route('**/api/render', async (route) => {
+		renderBody = route.request().postDataJSON();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/render.webp',
+				cost: 5,
+				balance: 95
+			})
+		});
+	});
+	await Promise.all([
+		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
+		page.locator('#mode-panel-render').getByRole('button', { name: 'Сгенерировать' }).click()
+	]);
+	expect(renderBody).toMatchObject({ sessionId: SESSION_A });
 });
 
 test('closing a tab removes it and falls back to a neighboring project', async ({ page }) => {

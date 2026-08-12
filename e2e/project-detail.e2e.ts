@@ -253,14 +253,38 @@ test('continues a session into the render workspace with its latest render as th
 		]
 	});
 
+	let renderBody: unknown;
+	await page.route('**/api/render', async (route) => {
+		renderBody = route.request().postDataJSON();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/render.webp',
+				cost: 5,
+				balance: 95
+			})
+		});
+	});
+
 	await page.goto(`/projects/${PROJECT_ID}`);
 	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
 
 	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
-	await expect(page.locator('#mode-panel-render .image-wrapper img')).toHaveAttribute(
+	const renderPanel = page.locator('#mode-panel-render');
+	await expect(renderPanel.locator('.image-wrapper img')).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/latest-render.webp'
 	);
+
+	// A generation submitted after resuming must still carry the *original*
+	// session id — continuing a session reuses it rather than lazily
+	// provisioning a new one.
+	await Promise.all([
+		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
+		renderPanel.getByRole('button', { name: 'Сгенерировать' }).click()
+	]);
+	expect(renderBody).toMatchObject({ sessionId: SESSION_ID });
 });
 
 test('issues a share link and copies it, then revokes it after confirming', async ({
