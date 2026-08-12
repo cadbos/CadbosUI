@@ -202,9 +202,6 @@ export async function renderInterior(
 	);
 }
 
-// Post-MVP addition (docs/tz.md §8.2.2 lists render/exterior as out of the
-// documented MVP scope) — same request/response shape as renderInterior,
-// just a different archAI endpoint/model.
 export async function renderExterior(
 	platform: App.Platform | undefined,
 	params: { image: string; prompt: string; outputFormat: OutputFormat }
