@@ -725,6 +725,50 @@ describe('ensureProjectSession', () => {
 		expect(projectPosts).toBe(1);
 		expect(sessionAttempts).toBe(2);
 	});
+
+	it('ignores a session-creation response that resolves after reset() has already run', async () => {
+		request.clearProjectSession();
+		let resolveSession!: (response: unknown) => void;
+		const sessionPromise = new Promise((resolve) => {
+			resolveSession = resolve;
+		});
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url === '/api/projects') {
+				return {
+					ok: true,
+					json: () =>
+						Promise.resolve({
+							id: NEW_PROJECT_ID,
+							title: 'Untitled',
+							createdAt: 0,
+							updatedAt: 0
+						})
+				};
+			}
+			if (url === `/api/projects/${NEW_PROJECT_ID}/sessions`) {
+				return sessionPromise as Promise<{ ok: boolean; json: () => Promise<unknown> }>;
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const promise = request.ensureProjectSession();
+
+		// The user resets the request (e.g. starting fresh work) before the
+		// still-in-flight session POST above resolves.
+		request.reset();
+
+		resolveSession({
+			ok: true,
+			json: () => Promise.resolve({ id: NEW_SESSION_ID, title: '', createdAt: 0, updatedAt: 0 })
+		});
+		await expect(promise).rejects.toThrow(RequestProjectSessionError);
+
+		// The now-superseded response must not repopulate projectId/sessionId
+		// on what's supposed to be a freshly reset request.
+		expect(request.projectId).toBeUndefined();
+		expect(request.sessionId).toBeUndefined();
+	});
 });
 
 describe('toStyleTransferRequest', () => {

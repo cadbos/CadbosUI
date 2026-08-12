@@ -474,6 +474,11 @@ export class RequestState {
 	// already-created project instead of leaving it orphaned and creating
 	// another "Untitled" one on every failed attempt.
 	#pendingProjectId: string | undefined;
+	// Bumped by reset() — same guard shape as #textureMaskUploadEpoch. Without
+	// it, a #createProjectSession() call still in flight when reset() runs
+	// would call setProjectSession() after the reset, repopulating
+	// projectId/sessionId on what's supposed to be a freshly blank state.
+	#projectSessionEpoch = 0;
 	id = $state<string>(crypto.randomUUID());
 	// Module 11: which project/session a generation attaches to. Not part of
 	// toJSON()/fromJSON() (those have no production caller — see
@@ -1061,6 +1066,7 @@ export class RequestState {
 	}
 
 	async #createProjectSession(): Promise<{ projectId: string; sessionId: string }> {
+		const epoch = this.#projectSessionEpoch;
 		let projectId = this.#pendingProjectId;
 		if (!projectId) {
 			const projectResponse = await fetch('/api/projects', {
@@ -1094,6 +1100,9 @@ export class RequestState {
 		);
 		if (!parsedSession.success) {
 			throw new RequestProjectSessionError('session creation response invalid');
+		}
+		if (this.#projectSessionEpoch !== epoch) {
+			throw new RequestProjectSessionError('project session request superseded');
 		}
 
 		this.#pendingProjectId = undefined;
@@ -1336,6 +1345,8 @@ export class RequestState {
 		this.projectId = undefined;
 		this.sessionId = undefined;
 		this.#pendingProjectId = undefined;
+		this.#pendingProjectSession = undefined;
+		this.#projectSessionEpoch += 1;
 		this.image = undefined;
 		this.pendingImageFile = undefined;
 		this.#clearPendingImagePreview();
