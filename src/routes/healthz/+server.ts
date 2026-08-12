@@ -14,6 +14,7 @@
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import type { HealthSnapshot, NostrHealth, ServiceHealth } from '$lib/api/contract';
 import { NOSTR_PROFILE_BOOTSTRAP_RELAYS } from '$lib/nostr/connect';
 import { getWalletBalance } from '$lib/server/wallet';
 
@@ -21,29 +22,6 @@ const DEFAULT_HEALTH_CACHE_TTL_SECONDS = 30;
 const HEALTH_PROBE_TIMEOUT_MS = 10_000;
 const COMFYUI_SYSTEM_STATS_URL = 'http://localhost:8188/system_stats';
 const STATIC_ASSET_URL = 'https://assets.internal/favicon.svg';
-
-interface ServiceHealth {
-	status: 'healthy' | 'unhealthy';
-	latencyMs: number;
-}
-
-interface NostrHealth extends ServiceHealth {
-	reachable: number;
-	total: number;
-}
-
-interface HealthSnapshot {
-	status: 'healthy' | 'unhealthy';
-	timestamp: string;
-	services: {
-		archai: ServiceHealth;
-		assets: ServiceHealth;
-		comfyui: ServiceHealth;
-		d1: ServiceHealth;
-		nostr: NostrHealth;
-		r2: ServiceHealth;
-	};
-}
 
 interface HealthCache {
 	match(request: Request): Promise<Response | undefined>;

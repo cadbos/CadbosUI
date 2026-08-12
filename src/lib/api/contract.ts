@@ -27,6 +27,44 @@ export interface ApiError {
 	error: { code: string; message: string };
 }
 
+export const healthServiceStatusSchema = z.enum(['healthy', 'unhealthy']);
+
+export const serviceHealthSchema = z
+	.object({
+		status: healthServiceStatusSchema,
+		latencyMs: z.number().int().nonnegative()
+	})
+	.strict();
+
+export const nostrHealthSchema = serviceHealthSchema
+	.extend({
+		reachable: z.number().int().nonnegative(),
+		total: z.number().int().nonnegative()
+	})
+	.refine(({ reachable, total }) => reachable <= total);
+
+export const healthSnapshotSchema = z
+	.object({
+		status: healthServiceStatusSchema,
+		timestamp: z.iso.datetime(),
+		services: z
+			.object({
+				archai: serviceHealthSchema,
+				assets: serviceHealthSchema,
+				comfyui: serviceHealthSchema,
+				d1: serviceHealthSchema,
+				nostr: nostrHealthSchema,
+				r2: serviceHealthSchema
+			})
+			.strict()
+	})
+	.strict();
+
+export type HealthServiceStatus = z.infer<typeof healthServiceStatusSchema>;
+export type ServiceHealth = z.infer<typeof serviceHealthSchema>;
+export type NostrHealth = z.infer<typeof nostrHealthSchema>;
+export type HealthSnapshot = z.infer<typeof healthSnapshotSchema>;
+
 // POST /api/uploads (after UploadThing) → data for the image input.
 export const uploadResultSchema = z
 	.object({
