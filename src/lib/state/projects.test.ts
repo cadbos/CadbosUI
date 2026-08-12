@@ -77,7 +77,7 @@ describe('projects pagination', () => {
 		expect(projects.hasMore).toBe(true);
 	});
 
-	it('loads the next projects page on demand', async () => {
+	it('loads the next projects page on demand, requesting the next offset', async () => {
 		const fetchMock = mockProjectsFetch([
 			page([project(uuid1, 'Living room', Date.UTC(2026, 0, 1))], 0, true),
 			page([project(uuid2, 'Kitchen', Date.UTC(2026, 0, 2))], 1, false)
@@ -87,8 +87,25 @@ describe('projects pagination', () => {
 		await projects.load();
 		await projects.loadMore();
 
+		expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/projects?offset=1&size=20', {
+			signal: expect.any(AbortSignal)
+		});
 		expect(projects.projects.map((record) => record.id)).toEqual([uuid1, uuid2]);
 		expect(projects.hasMore).toBe(false);
+	});
+
+	it('fails loudly instead of looping forever when a page reports hasMore but returns nothing', async () => {
+		const fetchMock = mockProjectsFetch([
+			page([project(uuid1, 'Living room', Date.UTC(2026, 0, 1))], 0, true),
+			page([], 1, true)
+		]);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projects.load();
+		await projects.loadMore();
+
+		expect(projects.status).toBe('error');
+		expect(projects.error).toBe('ProjectsLoadError');
 	});
 
 	it('surfaces a failed projects request as a load error', async () => {
