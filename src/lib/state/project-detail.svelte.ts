@@ -91,6 +91,20 @@ class ProjectDetailState {
 	shareToken = $state<string | null>(null);
 	#abort: AbortController | null = null;
 
+	// One counter per busy flag below — each call increments its own before
+	// starting, and its `finally` only clears the flag if no *newer* call for
+	// that same operation has started since. Without this, starting a second
+	// rename/create/archive (a different project after navigating away with
+	// one still in flight, or a different session card — renamingSessionId
+	// has no per-session tracking of its own) lets the first call's finally
+	// clear a flag a second, still-in-flight call now owns, re-enabling its
+	// button before that call has actually finished.
+	#renameCall = 0;
+	#createSessionCall = 0;
+	#archiveProjectCall = 0;
+	#renameSessionCall = 0;
+	#archiveSessionCall = 0;
+
 	// Guards a mutation's late-arriving response against the project having
 	// changed underneath it — the user navigated away, or to a different
 	// project's detail page, while the request was still in flight. Returns
@@ -139,6 +153,7 @@ class ProjectDetailState {
 	async rename(title: string): Promise<void> {
 		const project = this.project;
 		if (!project) return;
+		const call = ++this.#renameCall;
 		this.renaming = true;
 		try {
 			const response = await fetch(`/api/projects/${project.id}`, {
@@ -156,7 +171,7 @@ class ProjectDetailState {
 				this.project = { ...current, title: parsed.data.title, updatedAt: parsed.data.updatedAt };
 			}
 		} finally {
-			this.renaming = false;
+			if (this.#renameCall === call) this.renaming = false;
 		}
 	}
 
@@ -167,6 +182,7 @@ class ProjectDetailState {
 	async createSession(title?: string): Promise<ProjectSessionRecord> {
 		const project = this.project;
 		if (!project) throw new ProjectDetailActionError('no project loaded');
+		const call = ++this.#createSessionCall;
 		this.creatingSession = true;
 		try {
 			const response = await fetch(`/api/projects/${project.id}/sessions`, {
@@ -195,7 +211,7 @@ class ProjectDetailState {
 			}
 			return session;
 		} finally {
-			this.creatingSession = false;
+			if (this.#createSessionCall === call) this.creatingSession = false;
 		}
 	}
 
@@ -215,9 +231,11 @@ class ProjectDetailState {
 
 			// A token belonging to a project the user has since navigated away
 			// from must never surface as if it were the *current* page's link.
-			if (this.#currentProjectIfUnchanged(project)) {
+			const current = this.#currentProjectIfUnchanged(project);
+			if (current) {
 				this.shareToken = parsed.data.token;
 				this.shareStatus = 'active';
+				this.project = { ...current, shareActive: true };
 			}
 			return parsed.data.token;
 		} catch (error) {
@@ -252,6 +270,7 @@ class ProjectDetailState {
 	async renameSession(sessionId: string, title: string): Promise<void> {
 		const project = this.project;
 		if (!project) return;
+		const call = ++this.#renameSessionCall;
 		this.renamingSessionId = sessionId;
 		try {
 			const response = await fetch(`/api/projects/${project.id}/sessions/${sessionId}`, {
@@ -276,7 +295,7 @@ class ProjectDetailState {
 				};
 			}
 		} finally {
-			this.renamingSessionId = null;
+			if (this.#renameSessionCall === call) this.renamingSessionId = null;
 		}
 	}
 
@@ -285,6 +304,7 @@ class ProjectDetailState {
 	async archiveSession(sessionId: string): Promise<void> {
 		const project = this.project;
 		if (!project) return;
+		const call = ++this.#archiveSessionCall;
 		this.archivingSessionId = sessionId;
 		try {
 			const response = await fetch(`/api/projects/${project.id}/sessions/${sessionId}`, {
@@ -300,7 +320,7 @@ class ProjectDetailState {
 				};
 			}
 		} finally {
-			this.archivingSessionId = null;
+			if (this.#archiveSessionCall === call) this.archivingSessionId = null;
 		}
 	}
 
@@ -310,12 +330,13 @@ class ProjectDetailState {
 	async archiveProject(): Promise<void> {
 		const project = this.project;
 		if (!project) return;
+		const call = ++this.#archiveProjectCall;
 		this.archivingProject = true;
 		try {
 			const response = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' });
 			if (!response.ok) throw new ProjectDetailActionError('project archive failed');
 		} finally {
-			this.archivingProject = false;
+			if (this.#archiveProjectCall === call) this.archivingProject = false;
 		}
 	}
 

@@ -89,6 +89,50 @@ describe('projectDetail.rename', () => {
 		expect(projectDetail.project?.title).toBe('Bedroom');
 		expect(projectDetail.renaming).toBe(false);
 	});
+
+	it('keeps a newer rename marked busy after an older, now-orphaned one resolves', async () => {
+		let resolveFirstPatch!: (response: Response) => void;
+		const firstPatchPromise = new Promise<Response>((resolve) => {
+			resolveFirstPatch = resolve;
+		});
+		let resolveSecondPatch!: (response: Response) => void;
+		const secondPatchPromise = new Promise<Response>((resolve) => {
+			resolveSecondPatch = resolve;
+		});
+		const otherProject = detail({ id: '00000000-0000-4000-8000-000000000002', title: 'Kitchen' });
+		let patchCount = 0;
+		const fetchMock = vi.fn<typeof fetch>((input, init) => {
+			const url = String(input);
+			if (init?.method === 'PATCH') {
+				patchCount += 1;
+				return patchCount === 1 ? firstPatchPromise : secondPatchPromise;
+			}
+			if (url.endsWith(otherProject.id)) return Promise.resolve(jsonResponse(otherProject));
+			return Promise.resolve(jsonResponse(detail()));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		const rename = projectDetail.rename('Bedroom');
+
+		// Navigate to a different project before the first rename resolves,
+		// then rename *it* before that original request settles.
+		await projectDetail.load(otherProject.id);
+		const otherRename = projectDetail.rename('Dining room');
+		expect(projectDetail.renaming).toBe(true);
+
+		resolveFirstPatch(jsonResponse({ title: 'Bedroom', updatedAt: Date.now() }));
+		await rename;
+
+		// The orphaned first rename's finally must not clear the second one's
+		// still-in-flight busy flag.
+		expect(projectDetail.renaming).toBe(true);
+		expect(projectDetail.project?.title).toBe('Kitchen');
+
+		resolveSecondPatch(jsonResponse({ title: 'Dining room', updatedAt: Date.now() }));
+		await otherRename;
+		expect(projectDetail.renaming).toBe(false);
+	});
 });
 
 describe('projectDetail.createSession', () => {
@@ -140,6 +184,7 @@ describe('projectDetail share flow', () => {
 		expect(token).toBe('a-token');
 		expect(projectDetail.shareToken).toBe('a-token');
 		expect(projectDetail.shareStatus).toBe('active');
+		expect(projectDetail.project?.shareActive).toBe(true);
 
 		await projectDetail.revokeShare();
 		expect(projectDetail.shareToken).toBeNull();
@@ -223,10 +268,10 @@ describe('projectDetail.renameSession', () => {
 		expect(projectDetail.project?.sessions[0]?.title).toBe('Main thread');
 	});
 
-	it('ignores a late response for a session rename issued against a project the user has since left', async () => {
-		let resolvePatch!: (response: Response) => void;
-		const patchPromise = new Promise<Response>((resolve) => {
-			resolvePatch = resolve;
+	it('ignores a late response for a session rename issued against a project the user has since left, and keeps the newer rename marked busy', async () => {
+		let resolveFirstPatch!: (response: Response) => void;
+		const firstPatchPromise = new Promise<Response>((resolve) => {
+			resolveFirstPatch = resolve;
 		});
 		const session = {
 			id: '00000000-0000-4000-8000-000000000050',
@@ -237,10 +282,28 @@ describe('projectDetail.renameSession', () => {
 			updatedAt: Date.now(),
 			generations: []
 		};
-		const otherProject = detail({ id: '00000000-0000-4000-8000-000000000002', title: 'Kitchen' });
+		const otherSession = {
+			id: '00000000-0000-4000-8000-000000000051',
+			title: 'Second thread',
+			parentSessionId: null,
+			forkedFromGenerationId: null,
+			createdAt: Date.now(),
+			updatedAt: Date.now(),
+			generations: []
+		};
+		const otherProject = detail({
+			id: '00000000-0000-4000-8000-000000000002',
+			title: 'Kitchen',
+			sessions: [otherSession]
+		});
+		let resolveSecondPatch!: (response: Response) => void;
+		const secondPatchPromise = new Promise<Response>((resolve) => {
+			resolveSecondPatch = resolve;
+		});
 		const fetchMock = vi.fn<typeof fetch>((input, init) => {
-			if (init?.method === 'PATCH') return patchPromise;
 			const url = String(input);
+			if (init?.method === 'PATCH' && url.includes(session.id)) return firstPatchPromise;
+			if (init?.method === 'PATCH' && url.includes(otherSession.id)) return secondPatchPromise;
 			if (url.endsWith(otherProject.id)) return Promise.resolve(jsonResponse(otherProject));
 			return Promise.resolve(jsonResponse(detail({ sessions: [session] })));
 		});
@@ -249,14 +312,23 @@ describe('projectDetail.renameSession', () => {
 		await projectDetail.load('00000000-0000-4000-8000-000000000001');
 		const rename = projectDetail.renameSession(session.id, 'Cozy corner');
 
-		// The user navigates to a different project before the rename resolves.
+		// The user navigates to a different project before the rename resolves,
+		// then starts renaming *its* session before the original request settles.
 		await projectDetail.load(otherProject.id);
+		const otherRename = projectDetail.renameSession(otherSession.id, 'Renamed');
+		expect(projectDetail.renamingSessionId).toBe(otherSession.id);
 
-		resolvePatch(jsonResponse({ title: 'Cozy corner', updatedAt: Date.now() }));
+		resolveFirstPatch(jsonResponse({ title: 'Cozy corner', updatedAt: Date.now() }));
 		await rename;
 
 		expect(projectDetail.project?.id).toBe(otherProject.id);
 		expect(projectDetail.project?.title).toBe('Kitchen');
+		// The stale rename's finally must not clear a still-in-flight newer one.
+		expect(projectDetail.renamingSessionId).toBe(otherSession.id);
+
+		resolveSecondPatch(jsonResponse({ title: 'Renamed', updatedAt: Date.now() }));
+		await otherRename;
+		expect(projectDetail.renamingSessionId).toBeNull();
 	});
 });
 
