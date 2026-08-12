@@ -404,13 +404,7 @@ export interface RenameProjectRequest {
 	title: string;
 }
 
-export interface SessionGenerationRecord {
-	id: string;
-	url: string;
-	sourceUrl: string;
-	kind: GenerationKind;
-	createdAt: number;
-}
+export type SessionGenerationRecord = GeneratedImageRecord;
 
 export interface ProjectSessionRecord {
 	id: string;
