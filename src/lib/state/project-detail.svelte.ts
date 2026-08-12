@@ -139,6 +139,7 @@ class ProjectDetailState {
 			if (!response.ok) throw new ProjectDetailLoadError('project detail request failed');
 
 			const parsed = projectDetailSchema.safeParse(await response.json().catch(() => null));
+			if (this.#abort !== controller) return;
 			if (!parsed.success) throw new ProjectDetailLoadError('project detail response invalid');
 
 			this.project = parsed.data;

@@ -69,6 +69,30 @@ describe('projectDetail.load', () => {
 		expect(projectDetail.status).toBe('not-found');
 		expect(projectDetail.project).toBeNull();
 	});
+
+	it('surfaces a non-404 failure response as a generic error', async () => {
+		const fetchMock = vi.fn<typeof fetch>(() =>
+			Promise.resolve(new Response(null, { status: 500 }))
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+
+		expect(projectDetail.status).toBe('error');
+		expect(projectDetail.error).toBeTruthy();
+		expect(projectDetail.project).toBeNull();
+	});
+
+	it('surfaces a malformed response body as a generic error', async () => {
+		const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(jsonResponse({ nonsense: true })));
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+
+		expect(projectDetail.status).toBe('error');
+		expect(projectDetail.error).toBeTruthy();
+		expect(projectDetail.project).toBeNull();
+	});
 });
 
 describe('projectDetail.rename', () => {
