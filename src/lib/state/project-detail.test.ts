@@ -197,6 +197,67 @@ describe('projectDetail.renameSession', () => {
 		expect(projectDetail.project?.sessions[0]?.title).toBe('Cozy corner');
 		expect(projectDetail.renamingSessionId).toBeNull();
 	});
+
+	it('resets renamingSessionId even when the request fails', async () => {
+		const session = {
+			id: '00000000-0000-4000-8000-000000000050',
+			title: 'Main thread',
+			parentSessionId: null,
+			forkedFromGenerationId: null,
+			createdAt: Date.now(),
+			updatedAt: Date.now(),
+			generations: []
+		};
+		const fetchMock = vi.fn<typeof fetch>((input, init) => {
+			if (init?.method === 'PATCH') return Promise.resolve(new Response(null, { status: 500 }));
+			return Promise.resolve(jsonResponse(detail({ sessions: [session] })));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		await expect(projectDetail.renameSession(session.id, 'Cozy corner')).rejects.toThrow(
+			'session rename failed'
+		);
+
+		expect(projectDetail.renamingSessionId).toBeNull();
+		expect(projectDetail.project?.sessions[0]?.title).toBe('Main thread');
+	});
+
+	it('ignores a late response for a session rename issued against a project the user has since left', async () => {
+		let resolvePatch!: (response: Response) => void;
+		const patchPromise = new Promise<Response>((resolve) => {
+			resolvePatch = resolve;
+		});
+		const session = {
+			id: '00000000-0000-4000-8000-000000000050',
+			title: 'Main thread',
+			parentSessionId: null,
+			forkedFromGenerationId: null,
+			createdAt: Date.now(),
+			updatedAt: Date.now(),
+			generations: []
+		};
+		const otherProject = detail({ id: '00000000-0000-4000-8000-000000000002', title: 'Kitchen' });
+		const fetchMock = vi.fn<typeof fetch>((input, init) => {
+			if (init?.method === 'PATCH') return patchPromise;
+			const url = String(input);
+			if (url.endsWith(otherProject.id)) return Promise.resolve(jsonResponse(otherProject));
+			return Promise.resolve(jsonResponse(detail({ sessions: [session] })));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		const rename = projectDetail.renameSession(session.id, 'Cozy corner');
+
+		// The user navigates to a different project before the rename resolves.
+		await projectDetail.load(otherProject.id);
+
+		resolvePatch(jsonResponse({ title: 'Cozy corner', updatedAt: Date.now() }));
+		await rename;
+
+		expect(projectDetail.project?.id).toBe(otherProject.id);
+		expect(projectDetail.project?.title).toBe('Kitchen');
+	});
 });
 
 describe('projectDetail.archiveSession', () => {
@@ -222,6 +283,31 @@ describe('projectDetail.archiveSession', () => {
 		expect(projectDetail.project?.sessions).toEqual([]);
 		expect(projectDetail.archivingSessionId).toBeNull();
 	});
+
+	it('resets archivingSessionId, and keeps the session listed, when the request fails', async () => {
+		const session = {
+			id: '00000000-0000-4000-8000-000000000050',
+			title: 'Main thread',
+			parentSessionId: null,
+			forkedFromGenerationId: null,
+			createdAt: Date.now(),
+			updatedAt: Date.now(),
+			generations: []
+		};
+		const fetchMock = vi.fn<typeof fetch>((input, init) => {
+			if (init?.method === 'DELETE') return Promise.resolve(new Response(null, { status: 500 }));
+			return Promise.resolve(jsonResponse(detail({ sessions: [session] })));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		await expect(projectDetail.archiveSession(session.id)).rejects.toThrow(
+			'session archive failed'
+		);
+
+		expect(projectDetail.archivingSessionId).toBeNull();
+		expect(projectDetail.project?.sessions).toEqual([session]);
+	});
 });
 
 describe('projectDetail.archiveProject', () => {
@@ -238,6 +324,19 @@ describe('projectDetail.archiveProject', () => {
 		expect(fetchMock).toHaveBeenCalledWith('/api/projects/00000000-0000-4000-8000-000000000001', {
 			method: 'DELETE'
 		});
+		expect(projectDetail.archivingProject).toBe(false);
+	});
+
+	it('resets archivingProject when the request fails', async () => {
+		const fetchMock = vi.fn<typeof fetch>((input, init) => {
+			if (init?.method === 'DELETE') return Promise.resolve(new Response(null, { status: 500 }));
+			return Promise.resolve(jsonResponse(detail()));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		await expect(projectDetail.archiveProject()).rejects.toThrow('project archive failed');
+
 		expect(projectDetail.archivingProject).toBe(false);
 	});
 });

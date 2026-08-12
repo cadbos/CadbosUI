@@ -46,6 +46,19 @@ const projectDetailSchema = z.object({
 	sessions: z.array(sessionSchema)
 });
 
+// Narrow response schemas for the action methods below — each only asserts
+// the fields that method actually reads, same principle as projectDetailSchema
+// above but scoped to a single mutation's response instead of the full detail
+// payload.
+const renameResponseSchema = z.object({ title: z.string(), updatedAt: z.number().int().min(0) });
+const createSessionResponseSchema = z.object({
+	id: z.uuid(),
+	title: z.string(),
+	createdAt: z.number().int().min(0),
+	updatedAt: z.number().int().min(0)
+});
+const issueShareResponseSchema = z.object({ token: z.string().min(1) });
+
 export class ProjectDetailLoadError extends Error {
 	constructor(message: string) {
 		super(message);
@@ -77,6 +90,16 @@ class ProjectDetailState {
 	// exists at all; this is purely the plaintext value for copying.
 	shareToken = $state<string | null>(null);
 	#abort: AbortController | null = null;
+
+	// Guards a mutation's late-arriving response against the project having
+	// changed underneath it — the user navigated away, or to a different
+	// project's detail page, while the request was still in flight. Returns
+	// the *current* project (not the stale one captured before the await) so
+	// a merge builds on whatever a concurrent, faster mutation already wrote,
+	// or null if it's no longer safe to write at all.
+	#currentProjectIfUnchanged(from: ProjectDetailResponse): ProjectDetailResponse | null {
+		return this.project && this.project.id === from.id ? this.project : null;
+	}
 
 	async load(id: string): Promise<void> {
 		this.#abort?.abort();
@@ -125,8 +148,13 @@ class ProjectDetailState {
 			});
 			if (!response.ok) throw new ProjectDetailActionError('project rename failed');
 
-			const body = (await response.json()) as { title: string; updatedAt: number };
-			this.project = { ...project, title: body.title, updatedAt: body.updatedAt };
+			const parsed = renameResponseSchema.safeParse(await response.json().catch(() => null));
+			if (!parsed.success) throw new ProjectDetailActionError('project rename response invalid');
+
+			const current = this.#currentProjectIfUnchanged(project);
+			if (current) {
+				this.project = { ...current, title: parsed.data.title, updatedAt: parsed.data.updatedAt };
+			}
 		} finally {
 			this.renaming = false;
 		}
@@ -148,22 +176,23 @@ class ProjectDetailState {
 			});
 			if (!response.ok) throw new ProjectDetailActionError('session creation failed');
 
-			const body = (await response.json()) as {
-				id: string;
-				title: string;
-				createdAt: number;
-				updatedAt: number;
-			};
+			const parsed = createSessionResponseSchema.safeParse(await response.json().catch(() => null));
+			if (!parsed.success) {
+				throw new ProjectDetailActionError('session creation response invalid');
+			}
 			const session: ProjectSessionRecord = {
-				id: body.id,
-				title: body.title,
+				id: parsed.data.id,
+				title: parsed.data.title,
 				parentSessionId: null,
 				forkedFromGenerationId: null,
-				createdAt: body.createdAt,
-				updatedAt: body.updatedAt,
+				createdAt: parsed.data.createdAt,
+				updatedAt: parsed.data.updatedAt,
 				generations: []
 			};
-			this.project = { ...project, sessions: [session, ...project.sessions] };
+			const current = this.#currentProjectIfUnchanged(project);
+			if (current) {
+				this.project = { ...current, sessions: [session, ...current.sessions] };
+			}
 			return session;
 		} finally {
 			this.creatingSession = false;
@@ -181,12 +210,18 @@ class ProjectDetailState {
 			const response = await fetch(`/api/projects/${project.id}/share`, { method: 'POST' });
 			if (!response.ok) throw new ProjectDetailActionError('share link creation failed');
 
-			const body = (await response.json()) as { token: string };
-			this.shareToken = body.token;
-			this.shareStatus = 'active';
-			return body.token;
+			const parsed = issueShareResponseSchema.safeParse(await response.json().catch(() => null));
+			if (!parsed.success) throw new ProjectDetailActionError('share link response invalid');
+
+			// A token belonging to a project the user has since navigated away
+			// from must never surface as if it were the *current* page's link.
+			if (this.#currentProjectIfUnchanged(project)) {
+				this.shareToken = parsed.data.token;
+				this.shareStatus = 'active';
+			}
+			return parsed.data.token;
 		} catch (error) {
-			this.shareStatus = 'error';
+			if (this.#currentProjectIfUnchanged(project)) this.shareStatus = 'error';
 			throw error;
 		}
 	}
@@ -202,11 +237,14 @@ class ProjectDetailState {
 			if (!response.ok && response.status !== 404) {
 				throw new ProjectDetailActionError('share link revoke failed');
 			}
-			this.shareToken = null;
-			this.shareStatus = 'idle';
-			this.project = { ...project, shareActive: false };
+			const current = this.#currentProjectIfUnchanged(project);
+			if (current) {
+				this.shareToken = null;
+				this.shareStatus = 'idle';
+				this.project = { ...current, shareActive: false };
+			}
 		} catch (error) {
-			this.shareStatus = 'error';
+			if (this.#currentProjectIfUnchanged(project)) this.shareStatus = 'error';
 			throw error;
 		}
 	}
@@ -223,15 +261,20 @@ class ProjectDetailState {
 			});
 			if (!response.ok) throw new ProjectDetailActionError('session rename failed');
 
-			const body = (await response.json()) as { title: string; updatedAt: number };
-			this.project = {
-				...project,
-				sessions: project.sessions.map((session) =>
-					session.id === sessionId
-						? { ...session, title: body.title, updatedAt: body.updatedAt }
-						: session
-				)
-			};
+			const parsed = renameResponseSchema.safeParse(await response.json().catch(() => null));
+			if (!parsed.success) throw new ProjectDetailActionError('session rename response invalid');
+
+			const current = this.#currentProjectIfUnchanged(project);
+			if (current) {
+				this.project = {
+					...current,
+					sessions: current.sessions.map((session) =>
+						session.id === sessionId
+							? { ...session, title: parsed.data.title, updatedAt: parsed.data.updatedAt }
+							: session
+					)
+				};
+			}
 		} finally {
 			this.renamingSessionId = null;
 		}
@@ -249,10 +292,13 @@ class ProjectDetailState {
 			});
 			if (!response.ok) throw new ProjectDetailActionError('session archive failed');
 
-			this.project = {
-				...project,
-				sessions: project.sessions.filter((session) => session.id !== sessionId)
-			};
+			const current = this.#currentProjectIfUnchanged(project);
+			if (current) {
+				this.project = {
+					...current,
+					sessions: current.sessions.filter((session) => session.id !== sessionId)
+				};
+			}
 		} finally {
 			this.archivingSessionId = null;
 		}
