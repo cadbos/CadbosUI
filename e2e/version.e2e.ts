@@ -13,7 +13,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 import packageMetadata from '../package.json' with { type: 'json' };
 

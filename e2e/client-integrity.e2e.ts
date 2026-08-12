@@ -12,7 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { expect, test } from './fixtures';
 import { ru } from '$lib/i18n/locales/ru';
 
 const javaScriptAsset = /\/_app\/immutable\/.*\.js(?:\?.*)?$/;

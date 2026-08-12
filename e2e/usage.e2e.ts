@@ -12,8 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test } from '@playwright/test';
 import { npubEncode } from 'nostr-tools/nip19';
+
+import { expect, test } from './fixtures';
 
 test('links usage pubkeys to Primal in a new tab by default', async ({ page }) => {
 	const pubkey = 'a'.repeat(64);

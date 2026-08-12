@@ -207,6 +207,8 @@ export interface Dictionary {
 	'resources.imageAlt': string;
 	'resources.useImageAria': string;
 	'resources.createdAt': string;
+	'health.warning': string;
+	'health.statusPage': string;
 	'status.title': string;
 	'status.subtitle': string;
 	'status.loading': string;

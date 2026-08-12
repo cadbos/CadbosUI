@@ -214,6 +214,8 @@ export const ru = {
 	'resources.imageAlt': 'Загруженное фото {order}',
 	'resources.useImageAria': 'Использовать фото {order} для новой генерации',
 	'resources.createdAt': 'Загружено {date} в {time}',
+	'health.warning': 'Некоторые функции недоступны из-за сбоя сторонних сервисов. Подробнее на',
+	'health.statusPage': 'странице состояния',
 	'status.title': 'Состояние сервисов',
 	'status.subtitle': 'Текущее состояние сервисов и инфраструктуры Cadbos.',
 	'status.loading': 'Загрузка состояния сервисов…',
