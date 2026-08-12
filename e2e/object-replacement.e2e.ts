@@ -15,7 +15,7 @@
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
-import { mockProjectSessionRoutes } from './helpers/project-session-routes';
+import { E2E_SESSION_ID, mockProjectSessionRoutes } from './helpers/project-session-routes';
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
 
@@ -151,7 +151,7 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 		imageHash: 'scene-hash',
 		referenceImage: 'https://cdn.example.test/reference-chair.webp',
 		replacementObject: 'серый диван у окна',
-		sessionId: 'e2e-session'
+		sessionId: E2E_SESSION_ID
 	});
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();

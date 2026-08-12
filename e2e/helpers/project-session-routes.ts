@@ -14,8 +14,11 @@
 
 import type { Page } from '@playwright/test';
 
-export const E2E_PROJECT_ID = 'e2e-project';
-export const E2E_SESSION_ID = 'e2e-session';
+// Real UUIDs, not readable placeholders — #createProjectSession validates the
+// provisioning response's id with z.uuid(), which a string like 'e2e-project'
+// fails.
+export const E2E_PROJECT_ID = '00000000-0000-4000-8000-000000000900';
+export const E2E_SESSION_ID = '00000000-0000-4000-8000-000000000901';
 
 // Every generate call lazily provisions a project+session on first use
 // (RequestState#ensureProjectSession) — mocked here so submissions don't hang

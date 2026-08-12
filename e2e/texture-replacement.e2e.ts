@@ -15,7 +15,7 @@
 import type { Page, Route } from '@playwright/test';
 
 import { expect, test } from './fixtures';
-import { mockProjectSessionRoutes } from './helpers/project-session-routes';
+import { E2E_SESSION_ID, mockProjectSessionRoutes } from './helpers/project-session-routes';
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -185,7 +185,7 @@ test('submits texture inputs and completes inside the nested edit tool', async (
 		imageHash: 'scene-hash',
 		referenceImage: 'https://cdn.example.test/reference-fabric.webp',
 		replacementSurface: 'обивка дивана',
-		sessionId: 'e2e-session'
+		sessionId: E2E_SESSION_ID
 	});
 });
 
@@ -341,7 +341,7 @@ test('uses the masked texture mode and applies the synchronous result without po
 		imageHash: 'scene-hash',
 		referenceImage: 'https://cdn.example.test/reference-fabric.webp',
 		mask: 'https://cdn.example.test/texture-mask.png',
-		sessionId: 'e2e-session'
+		sessionId: E2E_SESSION_ID
 	});
 	expect(pollCount).toBe(0);
 

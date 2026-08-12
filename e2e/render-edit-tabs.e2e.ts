@@ -15,7 +15,7 @@
 import type { Locator, Page, Route } from '@playwright/test';
 
 import { expect, test } from './fixtures';
-import { mockProjectSessionRoutes } from './helpers/project-session-routes';
+import { E2E_SESSION_ID, mockProjectSessionRoutes } from './helpers/project-session-routes';
 
 async function authenticate(page: Page): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
@@ -246,7 +246,7 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 		prompt: 'keep layout, use warmer materials',
 		negativePrompt: 'people',
 		styleTransferStrength: 0.35,
-		sessionId: 'e2e-session'
+		sessionId: E2E_SESSION_ID
 	});
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
@@ -341,7 +341,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		outputFormat: 'webp',
 		prompt: 'style transfer guidance only',
 		styleTransferStrength: 0.7,
-		sessionId: 'e2e-session'
+		sessionId: E2E_SESSION_ID
 	});
 
 	await page.getByRole('tab', { name: 'Создание' }).click();
@@ -355,7 +355,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		imageHash: 'source-hash',
 		prompt: 'render prompt for paid generation',
 		outputFormat: 'webp',
-		sessionId: 'e2e-session'
+		sessionId: E2E_SESSION_ID
 	});
 });
 
