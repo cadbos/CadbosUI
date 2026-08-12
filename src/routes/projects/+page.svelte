@@ -18,6 +18,7 @@ before the Change Date. See LICENSE for complete terms.
 	import type { ProjectRecord } from '$lib/api/contract';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 	import { projects } from '$lib/state/projects.svelte';
+	import { logBoundaryError } from '$lib/utils';
 
 	let loadMoreSentinel = $state<HTMLElement | null>(null);
 	let newTitle = $state('');
@@ -47,8 +48,9 @@ before the Change Date. See LICENSE for complete terms.
 		try {
 			await projects.archive(project.id);
 			deleteTarget = null;
-		} catch {
+		} catch (error) {
 			deleteError = t('projects.deleteFailed');
+			logBoundaryError('projectsPage.confirmDelete', error);
 		}
 	}
 
@@ -59,11 +61,24 @@ before the Change Date. See LICENSE for complete terms.
 
 	$effect(() => {
 		const sentinel = loadMoreSentinel;
-		if (!sentinel || !projects.hasMore) return;
+		if (!sentinel) return;
+
+		let intersecting = false;
+
+		async function maybeLoadMore(): Promise<void> {
+			if (!intersecting || !projects.hasMore || projects.loadingMore) return;
+			await projects.loadMore();
+			// A single page may not be enough to push the sentinel back out of
+			// view (few results, a tall viewport) — IntersectionObserver only
+			// fires on a *transition*, so re-check manually instead of waiting
+			// for a transition that may never come.
+			void maybeLoadMore();
+		}
 
 		const observer = new IntersectionObserver(
 			(entries) => {
-				if (entries.some((entry) => entry.isIntersecting)) void projects.loadMore();
+				intersecting = entries.some((entry) => entry.isIntersecting);
+				void maybeLoadMore();
 			},
 			{ root: null, rootMargin: '0px 0px 240px 0px' }
 		);
@@ -88,8 +103,9 @@ before the Change Date. See LICENSE for complete terms.
 		try {
 			await projects.create(title);
 			newTitle = '';
-		} catch {
+		} catch (error) {
 			createError = t('projects.createFailed');
+			logBoundaryError('projectsPage.createProject', error);
 		}
 	}
 </script>
