@@ -22,8 +22,8 @@ before the Change Date. See LICENSE for complete terms.
 	const serviceKeys: ServiceKey[] = ['archai', 'assets', 'comfyui', 'd1', 'nostr', 'r2'];
 
 	$effect(() => {
-		status.start();
-		return () => status.stop();
+		status.startPolling();
+		return () => status.stopPolling();
 	});
 
 	function serviceName(key: ServiceKey): string {

@@ -12,7 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 function promptPreview(page: Page): Locator {
 	return page.getByLabel('Итоговый промпт').filter({ visible: true });

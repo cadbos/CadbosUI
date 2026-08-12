@@ -12,7 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { expect, test } from './fixtures';
 
 async function authenticate(page: Page): Promise<void> {
 	await page.route('**/auth/me', async (route) => {

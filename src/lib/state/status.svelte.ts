@@ -46,32 +46,47 @@ class StatusState {
 	snapshot = $state.raw<HealthSnapshot | null>(null);
 	state = $state<StatusLoadState>('idle');
 	error = $state<string | null>(null);
-	#active = false;
+	#checked = false;
+	#polling = false;
 	#abort: AbortController | null = null;
+	#refreshPromise: Promise<void> | null = null;
 	#timer: ReturnType<typeof setTimeout> | null = null;
+	#pollInterval = DEFAULT_POLL_INTERVAL_MS;
 
-	start(): void {
-		this.stop();
-		this.#active = true;
-		this.state = 'loading';
+	checkOnce(): void {
+		if (this.#checked) return;
+		this.#checked = true;
+		if (this.snapshot === null) this.state = 'loading';
 		void this.#refresh();
 	}
 
-	stop(): void {
-		this.#active = false;
-		this.#abort?.abort();
-		this.#abort = null;
-		if (this.#timer !== null) clearTimeout(this.#timer);
-		this.#timer = null;
-		this.snapshot = null;
-		this.state = 'idle';
-		this.error = null;
+	startPolling(): void {
+		if (this.#polling) return;
+		this.#polling = true;
+		if (!this.#checked) {
+			this.checkOnce();
+			return;
+		}
+		if (this.#refreshPromise !== null) return;
+		this.#schedulePoll();
 	}
 
-	async #refresh(): Promise<void> {
+	stopPolling(): void {
+		this.#polling = false;
+		if (this.#timer !== null) clearTimeout(this.#timer);
+		this.#timer = null;
+	}
+
+	#refresh(): Promise<void> {
+		if (this.#refreshPromise !== null) return this.#refreshPromise;
+		this.#refreshPromise = this.#performRefresh();
+		return this.#refreshPromise;
+	}
+
+	async #performRefresh(): Promise<void> {
 		const controller = new AbortController();
 		this.#abort = controller;
-		let nextPoll = DEFAULT_POLL_INTERVAL_MS;
+		this.#pollInterval = DEFAULT_POLL_INTERVAL_MS;
 
 		try {
 			const response = await fetch('/healthz', { signal: controller.signal });
@@ -81,12 +96,12 @@ class StatusState {
 
 			const parsed = healthSnapshotSchema.safeParse(await response.json());
 			if (!parsed.success) throw new StatusLoadError('health response invalid');
-			if (!this.#active || this.#abort !== controller) return;
+			if (this.#abort !== controller) return;
 
 			this.snapshot = parsed.data;
 			this.state = 'ready';
 			this.error = null;
-			nextPoll = pollInterval(response);
+			this.#pollInterval = pollInterval(response);
 		} catch (error) {
 			if (controller.signal.aborted) return;
 			this.state = this.snapshot === null ? 'error' : 'ready';
@@ -97,13 +112,18 @@ class StatusState {
 			);
 		} finally {
 			if (this.#abort === controller) this.#abort = null;
+			this.#refreshPromise = null;
 		}
 
-		if (!this.#active) return;
+		this.#schedulePoll();
+	}
+
+	#schedulePoll(): void {
+		if (!this.#polling || this.#timer !== null) return;
 		this.#timer = setTimeout(() => {
 			this.#timer = null;
 			void this.#refresh();
-		}, nextPoll);
+		}, this.#pollInterval);
 	}
 }
 

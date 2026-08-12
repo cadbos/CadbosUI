@@ -13,6 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { ArrowUpRight } from '@lucide/svelte';
 	import { onMount, type Snippet } from 'svelte';
 	import '../app.css';
 	import { resolve } from '$app/paths';
@@ -23,6 +24,7 @@ before the Change Date. See LICENSE for complete terms.
 	import Workspace from '$lib/components/Workspace.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
+	import { status } from '$lib/state/status.svelte';
 	import { isWorkspaceRoute } from '$lib/state/url-state';
 
 	// children() renders whichever leaf +page.svelte matched the URL — those are
@@ -36,9 +38,13 @@ before the Change Date. See LICENSE for complete terms.
 	// 'render' for anything it doesn't recognize, and its URL-sync effect would
 	// then "correct" that unrecognized address back to /render/*.
 	const showWorkspace = $derived(isWorkspaceRoute(page.route.id));
+	const showHealthWarning = $derived(
+		page.route.id !== '/status' && status.snapshot?.status === 'unhealthy'
+	);
 
 	onMount(() => {
 		auth.loadSession();
+		void status.checkOnce();
 		window.dispatchEvent(new CustomEvent('cadbos:client-ready'));
 	});
 </script>
@@ -50,6 +56,18 @@ before the Change Date. See LICENSE for complete terms.
 	<link rel="manifest" href="/manifest.webmanifest" />
 	<meta name="theme-color" content="#2f6f4f" />
 </svelte:head>
+
+{#if showHealthWarning}
+	<div class="health-warning" role="alert">
+		<p>
+			{t('health.warning')}
+			<a href={resolve('/status', {})} target="_blank" rel="noopener noreferrer">
+				{t('health.statusPage')}
+				<ArrowUpRight size={16} strokeWidth={1.8} aria-hidden="true" />
+			</a>
+		</p>
+	</div>
+{/if}
 
 <header class="app-header">
 	<a class="brand" href={resolve('/', {})}>
@@ -71,6 +89,29 @@ before the Change Date. See LICENSE for complete terms.
 <GenerationOverlay />
 
 <style>
+	.health-warning {
+		width: 100%;
+		padding: 0.625rem clamp(1rem, 3vw, 2rem);
+		background: #ffcb56;
+		color: #251f12;
+		font-size: 0.875rem;
+		line-height: 1.4;
+		text-align: center;
+	}
+
+	.health-warning p {
+		margin: 0;
+	}
+
+	.health-warning a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		color: inherit;
+		font-weight: 700;
+		text-underline-offset: 0.15em;
+	}
+
 	.app-header {
 		position: sticky;
 		top: 0;

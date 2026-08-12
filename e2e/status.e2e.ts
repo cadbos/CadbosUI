@@ -12,8 +12,10 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
 import type { HealthSnapshot } from '$lib/api/contract';
+import { expect, test } from './fixtures';
 
 const FIRST_TIMESTAMP = '2026-08-12T10:00:00.000Z';
 const SECOND_TIMESTAMP = '2026-08-12T10:00:02.000Z';
@@ -37,9 +39,75 @@ function snapshot(
 	};
 }
 
-test('shows every health field and refreshes after the advertised cache lifetime', async ({
+async function mockHealth(
+	page: Page,
+	response: { status: number; body?: unknown; cacheControl?: string }
+): Promise<void> {
+	await page.route('**/healthz', async (route) => {
+		await route.fulfill({
+			status: response.status,
+			contentType: 'application/json',
+			headers: response.cacheControl ? { 'cache-control': response.cacheControl } : undefined,
+			body: response.body === undefined ? undefined : JSON.stringify(response.body)
+		});
+	});
+}
+
+test('shows the global service warning for a valid unhealthy snapshot', async ({ page }) => {
+	await mockHealth(page, { status: 503, body: snapshot('unhealthy', FIRST_TIMESTAMP) });
+
+	await page.goto('/version');
+
+	const warning = page.getByRole('alert');
+	const statusLink = warning.getByRole('link', { name: 'странице состояния' });
+	await expect(warning).toHaveText(
+		'Некоторые функции недоступны из-за сбоя сторонних сервисов. Подробнее на странице состояния'
+	);
+	await expect(warning).toHaveCSS('background-color', 'rgb(255, 203, 86)');
+	await expect(statusLink).toHaveAttribute('href', '/status');
+	await expect(statusLink).toHaveAttribute('target', '_blank');
+	await expect(statusLink).toHaveAttribute('rel', 'noopener noreferrer');
+	const icon = statusLink.locator('svg.lucide-arrow-up-right');
+	await expect(icon).toHaveAttribute('width', '16');
+	await expect(icon).toHaveAttribute('height', '16');
+	await expect(icon).toHaveAttribute('stroke-width', '1.8');
+});
+
+test('does not show the global warning for healthy, failed, or invalid health checks', async ({
 	page
 }) => {
+	for (const response of [
+		{ status: 200, body: snapshot('healthy', FIRST_TIMESTAMP) },
+		{ status: 502 },
+		{ status: 200, body: { status: 'healthy' } }
+	]) {
+		await mockHealth(page, response);
+		const healthResponse = page.waitForResponse('**/healthz');
+		await page.goto('/version');
+		await healthResponse;
+		await expect(page.getByRole('link', { name: 'странице состояния' })).toHaveCount(0);
+	}
+});
+
+test('checks health once across client-side navigation', async ({ page }) => {
+	let requests = 0;
+	await page.route('**/healthz', async (route) => {
+		requests += 1;
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify(snapshot('healthy', FIRST_TIMESTAMP))
+		});
+	});
+
+	await page.goto('/');
+	await expect.poll(() => requests).toBe(1);
+	await page.getByRole('tab', { name: 'Экстерьер' }).click();
+	await expect(page).toHaveURL(/\/create\/exterior/);
+	await expect.poll(() => requests).toBe(1);
+});
+
+test('deduplicates the direct status load and preserves cache-driven polling', async ({ page }) => {
 	await page.clock.install({ time: new Date(FIRST_TIMESTAMP) });
 	let requests = 0;
 	await page.route('**/healthz', async (route) => {
@@ -51,7 +119,7 @@ test('shows every health field and refreshes after the advertised cache lifetime
 		await route.fulfill({
 			status: body.status === 'healthy' ? 200 : 503,
 			contentType: 'application/json',
-			headers: { 'cache-control': 'public, max-age=2' },
+			headers: { 'cache-control': 'public, max-age=60' },
 			body: JSON.stringify(body)
 		});
 	});
@@ -73,7 +141,7 @@ test('shows every health field and refreshes after the advertised cache lifetime
 	await expect(page.getByRole('row', { name: /Хранилище R2 Работает 17 мс/ })).toBeVisible();
 	await expect.poll(() => requests).toBe(1);
 
-	await page.clock.fastForward(1_999);
+	await page.clock.fastForward(59_999);
 	expect(requests).toBe(1);
 	await page.clock.fastForward(1);
 

@@ -12,7 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Page, type Route } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
+
+import { expect, test } from './fixtures';
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);

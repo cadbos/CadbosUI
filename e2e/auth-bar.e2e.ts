@@ -12,7 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { expect, test } from './fixtures';
 import type { CreditInfo } from '$lib/api/contract';
 
 async function restoreApprovedSession(page: Page, credit: CreditInfo): Promise<void> {

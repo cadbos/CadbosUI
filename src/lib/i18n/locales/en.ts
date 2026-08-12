@@ -212,6 +212,9 @@ export const en = {
 	'resources.imageAlt': 'Uploaded photo {order}',
 	'resources.useImageAria': 'Use photo {order} for a new generation',
 	'resources.createdAt': 'Uploaded {date} at {time}',
+	'health.warning':
+		'Some functionality is unavailable because of a failure on third-party services. For more information visit',
+	'health.statusPage': 'status page',
 	'status.title': 'Service status',
 	'status.subtitle': 'Current health of Cadbos services and infrastructure.',
 	'status.loading': 'Loading service status…',
