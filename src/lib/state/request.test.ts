@@ -684,6 +684,47 @@ describe('ensureProjectSession', () => {
 
 		await expect(request.ensureProjectSession()).rejects.toThrow(RequestProjectSessionError);
 	});
+
+	it('reuses the already-created project when retrying after a session-creation failure', async () => {
+		request.clearProjectSession();
+		let projectPosts = 0;
+		let sessionAttempts = 0;
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url === '/api/projects') {
+				projectPosts += 1;
+				return {
+					ok: true,
+					json: () =>
+						Promise.resolve({
+							id: NEW_PROJECT_ID,
+							title: 'Untitled',
+							createdAt: 0,
+							updatedAt: 0
+						})
+				};
+			}
+			if (url === `/api/projects/${NEW_PROJECT_ID}/sessions`) {
+				sessionAttempts += 1;
+				if (sessionAttempts === 1) return { ok: false };
+				return {
+					ok: true,
+					json: () => Promise.resolve({ id: NEW_SESSION_ID, title: '', createdAt: 0, updatedAt: 0 })
+				};
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(request.ensureProjectSession()).rejects.toThrow(RequestProjectSessionError);
+
+		const result = await request.ensureProjectSession();
+		expect(result).toEqual({ projectId: NEW_PROJECT_ID, sessionId: NEW_SESSION_ID });
+		// The retry must not create a second "Untitled" project — only the
+		// session POST is retried, reusing the project the first attempt
+		// already created.
+		expect(projectPosts).toBe(1);
+		expect(sessionAttempts).toBe(2);
+	});
 });
 
 describe('toStyleTransferRequest', () => {

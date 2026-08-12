@@ -468,6 +468,12 @@ export class RequestState {
 	// (e.g. a fast double-submit) share one pair of POST calls instead of each
 	// creating its own project+session.
 	#pendingProjectSession: Promise<{ projectId: string; sessionId: string }> | undefined;
+	// Set once #createProjectSession's project POST succeeds, cleared once its
+	// session POST also succeeds. If the session POST fails (or the whole call
+	// throws and the caller retries), this survives so the retry reuses the
+	// already-created project instead of leaving it orphaned and creating
+	// another "Untitled" one on every failed attempt.
+	#pendingProjectId: string | undefined;
 	id = $state<string>(crypto.randomUUID());
 	// Module 11: which project/session a generation attaches to. Not part of
 	// toJSON()/fromJSON() (those have no production caller — see
@@ -1055,22 +1061,27 @@ export class RequestState {
 	}
 
 	async #createProjectSession(): Promise<{ projectId: string; sessionId: string }> {
-		const projectResponse = await fetch('/api/projects', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ title: t('workspace.tabs.untitled') })
-		});
-		if (!projectResponse.ok) {
-			throw new RequestProjectSessionError('project creation failed');
-		}
-		const parsedProject = projectCreationResponseSchema.safeParse(
-			await projectResponse.json().catch(() => null)
-		);
-		if (!parsedProject.success) {
-			throw new RequestProjectSessionError('project creation response invalid');
+		let projectId = this.#pendingProjectId;
+		if (!projectId) {
+			const projectResponse = await fetch('/api/projects', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ title: t('workspace.tabs.untitled') })
+			});
+			if (!projectResponse.ok) {
+				throw new RequestProjectSessionError('project creation failed');
+			}
+			const parsedProject = projectCreationResponseSchema.safeParse(
+				await projectResponse.json().catch(() => null)
+			);
+			if (!parsedProject.success) {
+				throw new RequestProjectSessionError('project creation response invalid');
+			}
+			projectId = parsedProject.data.id;
+			this.#pendingProjectId = projectId;
 		}
 
-		const sessionResponse = await fetch(`/api/projects/${parsedProject.data.id}/sessions`, {
+		const sessionResponse = await fetch(`/api/projects/${projectId}/sessions`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({})
@@ -1085,8 +1096,9 @@ export class RequestState {
 			throw new RequestProjectSessionError('session creation response invalid');
 		}
 
-		this.setProjectSession(parsedProject.data.id, parsedSession.data.id);
-		return { projectId: parsedProject.data.id, sessionId: parsedSession.data.id };
+		this.#pendingProjectId = undefined;
+		this.setProjectSession(projectId, parsedSession.data.id);
+		return { projectId, sessionId: parsedSession.data.id };
 	}
 
 	hasStyleTransferSource(): boolean {
@@ -1323,6 +1335,7 @@ export class RequestState {
 		this.id = crypto.randomUUID();
 		this.projectId = undefined;
 		this.sessionId = undefined;
+		this.#pendingProjectId = undefined;
 		this.image = undefined;
 		this.pendingImageFile = undefined;
 		this.#clearPendingImagePreview();
