@@ -307,6 +307,7 @@ export interface Dictionary {
 	'projects.detail.shareCreate': string;
 	'projects.detail.shareCreating': string;
 	'projects.detail.shareCreateFailed': string;
+	'projects.detail.shareCopyFailed': string;
 	'projects.detail.shareActiveHint': string;
 	'projects.detail.shareActiveUnknown': string;
 	'projects.detail.shareCreateNew': string;

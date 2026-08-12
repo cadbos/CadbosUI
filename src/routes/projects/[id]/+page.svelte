@@ -157,8 +157,14 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	async function copyShareLink(token: string): Promise<void> {
-		await navigator.clipboard.writeText(shareUrl(token));
-		shareCopied = true;
+		try {
+			await navigator.clipboard.writeText(shareUrl(token));
+			shareCopied = true;
+		} catch (error) {
+			shareCopied = false;
+			shareError = t('projects.detail.shareCopyFailed');
+			logBoundaryError('projectDetailPage.copyShareLink', error);
+		}
 	}
 </script>
 
@@ -281,11 +287,7 @@ before the Change Date. See LICENSE for complete terms.
 					{:else if projectDetail.shareStatus === 'active'}
 						<p class="status">{t('projects.detail.shareActiveUnknown')}</p>
 						<div class="share-link">
-							<button
-								type="button"
-								onclick={createShareLink}
-								disabled={projectDetail.shareStatus !== 'active'}
-							>
+							<button type="button" onclick={createShareLink}>
 								{t('projects.detail.shareCreateNew')}
 							</button>
 							<button type="button" class="danger" onclick={requestRevokeShare}>
