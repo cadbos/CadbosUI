@@ -14,18 +14,16 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { request } from '$lib/state/request.svelte';
-import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+import { MAX_TABS, SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 
 const PROJECT_A = '00000000-0000-4000-8000-000000000001';
 const PROJECT_B = '00000000-0000-4000-8000-000000000002';
 
 afterEach(() => {
 	// Reset back to a single scratch tab so state doesn't leak between tests.
+	// The scratch tab itself can never be closed, so this always terminates.
 	while (workspaceTabs.tabs.length > 1) {
 		workspaceTabs.close(workspaceTabs.tabs[workspaceTabs.tabs.length - 1].id);
-	}
-	if (workspaceTabs.tabs[0]?.id !== SCRATCH_TAB_ID) {
-		workspaceTabs.close(workspaceTabs.tabs[0].id);
 	}
 	request.reset();
 });
@@ -133,12 +131,18 @@ describe('workspaceTabs.close', () => {
 		expect(request.editPrompt).toBe('project A prompt');
 	});
 
-	it('closing the last remaining tab resets to a pristine scratch tab', () => {
+	it('never closes the scratch tab, even when it is the active tab', () => {
+		workspaceTabs.close(SCRATCH_TAB_ID);
+
+		expect(workspaceTabs.tabs).toEqual([{ id: SCRATCH_TAB_ID, title: null }]);
+		expect(workspaceTabs.activeTabId).toBe(SCRATCH_TAB_ID);
+	});
+
+	it('closing the last project tab falls back to the scratch tab, restoring its state', () => {
 		workspaceTabs.openProject(PROJECT_A, 'Living room', (state) => {
 			state.setProjectSession(PROJECT_A, 'session-a');
 			state.setEditPrompt('project A prompt');
 		});
-		workspaceTabs.close(SCRATCH_TAB_ID);
 
 		workspaceTabs.close(PROJECT_A);
 
@@ -146,5 +150,28 @@ describe('workspaceTabs.close', () => {
 		expect(workspaceTabs.activeTabId).toBe(SCRATCH_TAB_ID);
 		expect(request.projectId).toBeUndefined();
 		expect(request.editPrompt).toBe('');
+	});
+
+	it('never evicts the scratch tab to make room at capacity', () => {
+		// Fill every non-scratch slot up to the cap, then open one more —
+		// the oldest *project* tab should be evicted, never the scratch tab.
+		// IDs live in a distinct range from PROJECT_A/PROJECT_B so the extra
+		// tab opened below can't accidentally reuse one of these slots.
+		for (let i = 0; i < MAX_TABS - 1; i++) {
+			const projectId = `00000000-0000-4000-8000-0000000001${String(i).padStart(2, '0')}`;
+			workspaceTabs.openProject(projectId, `Project ${i}`, (state) => {
+				state.setProjectSession(projectId, `session-${i}`);
+			});
+		}
+		expect(workspaceTabs.tabs).toHaveLength(MAX_TABS);
+		const oldestProjectId = workspaceTabs.tabs[1].id;
+
+		workspaceTabs.openProject(PROJECT_B, 'Kitchen', (state) => {
+			state.setProjectSession(PROJECT_B, 'session-b');
+		});
+
+		expect(workspaceTabs.tabs).toHaveLength(MAX_TABS);
+		expect(workspaceTabs.tabs.map((tab) => tab.id)).toContain(SCRATCH_TAB_ID);
+		expect(workspaceTabs.tabs.map((tab) => tab.id)).not.toContain(oldestProjectId);
 	});
 });

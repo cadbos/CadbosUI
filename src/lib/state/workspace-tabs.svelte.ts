@@ -26,7 +26,7 @@ export interface WorkspaceTab {
 // lazy-create convention. Its id is a fixed sentinel, never a real project id.
 export const SCRATCH_TAB_ID = 'scratch';
 
-const MAX_TABS = 8;
+export const MAX_TABS = 8;
 
 // Browser-tab-style workspace state: each open project keeps its own
 // RequestState so switching between them is instant and lossless — uploaded
@@ -89,6 +89,11 @@ class WorkspaceTabsState {
 	}
 
 	close(tabId: string): void {
+		// The scratch tab is the always-present home for project-less work
+		// (see its own comment above) — closing it would leave no way back to
+		// that state short of a full page reload, so closing it is a no-op.
+		if (tabId === SCRATCH_TAB_ID) return;
+
 		const index = this.tabs.findIndex((tab) => tab.id === tabId);
 		if (index === -1) return;
 
@@ -115,12 +120,15 @@ class WorkspaceTabsState {
 		}
 	}
 
-	// Evicts the oldest tab that isn't the active one once the cap is
-	// exceeded — same simple bound the earlier project-visited-tabs store
-	// used, just applied to live workspace tabs now.
+	// Evicts the oldest tab that isn't the active one (and isn't the
+	// always-present scratch tab) once the cap is exceeded — same simple
+	// bound the earlier project-visited-tabs store used, just applied to live
+	// workspace tabs now.
 	#evictOldestInactiveIfAtCapacity(): void {
 		if (this.tabs.length < MAX_TABS) return;
-		const evictIndex = this.tabs.findIndex((tab) => tab.id !== this.activeTabId);
+		const evictIndex = this.tabs.findIndex(
+			(tab) => tab.id !== this.activeTabId && tab.id !== SCRATCH_TAB_ID
+		);
 		if (evictIndex === -1) return;
 		const evicted = this.tabs[evictIndex];
 		this.tabs = this.tabs.filter((_, index) => index !== evictIndex);
