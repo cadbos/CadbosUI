@@ -768,6 +768,17 @@ describe('ensureProjectSession', () => {
 		// on what's supposed to be a freshly reset request.
 		expect(request.projectId).toBeUndefined();
 		expect(request.sessionId).toBeUndefined();
+
+		// A retry must not reuse the abandoned, pre-reset project — reset()
+		// invalidated it, so this has to POST a brand new one.
+		const projectPostsBeforeRetry = fetchMock.mock.calls.filter(
+			([url]) => url === '/api/projects'
+		).length;
+		await request.ensureProjectSession();
+		const projectPostsAfterRetry = fetchMock.mock.calls.filter(
+			([url]) => url === '/api/projects'
+		).length;
+		expect(projectPostsAfterRetry).toBe(projectPostsBeforeRetry + 1);
 	});
 });
 

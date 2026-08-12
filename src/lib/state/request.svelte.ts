@@ -1080,6 +1080,9 @@ export class RequestState {
 			const parsedProject = projectCreationResponseSchema.safeParse(
 				await projectResponse.json().catch(() => null)
 			);
+			if (this.#projectSessionEpoch !== epoch) {
+				throw new RequestProjectSessionError('project session request superseded');
+			}
 			if (!parsedProject.success) {
 				throw new RequestProjectSessionError('project creation response invalid');
 			}
