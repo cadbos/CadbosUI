@@ -15,6 +15,7 @@
 import type { Page, Route } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { mockProjectSessionRoutes } from './helpers/project-session-routes';
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -63,35 +64,7 @@ async function authenticate(page: Page): Promise<void> {
 			body: JSON.stringify({ images: [], pagination: { offset: 0, size: 100, hasMore: false } })
 		});
 	});
-	// Every generate call lazily provisions a project+session on first use
-	// (RequestState#ensureProjectSession) — mocked here so submissions don't
-	// hang waiting on the real, unmocked /api/projects endpoints.
-	await page.route('**/api/projects', async (route) => {
-		if (route.request().method() !== 'POST') return route.fallback();
-		await route.fulfill({
-			status: 201,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				id: 'e2e-project',
-				title: 'Untitled',
-				createdAt: Date.now(),
-				updatedAt: Date.now()
-			})
-		});
-	});
-	await page.route('**/api/projects/e2e-project/sessions', async (route) => {
-		if (route.request().method() !== 'POST') return route.fallback();
-		await route.fulfill({
-			status: 201,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				id: 'e2e-session',
-				title: '',
-				createdAt: Date.now(),
-				updatedAt: Date.now()
-			})
-		});
-	});
+	await mockProjectSessionRoutes(page);
 }
 
 function textureUploadFixture(route: Route): { url: string; mime: string; hash: string } {
