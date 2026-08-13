@@ -66,6 +66,7 @@ export interface Dictionary {
 	'generationOverlay.textureReplacement': string;
 	'generationOverlay.upscale': string;
 	'auth.signIn': string;
+	'auth.restoring': string;
 	'auth.login.nip07': string;
 	'auth.login.nip46': string;
 	'auth.connect.scan': string;

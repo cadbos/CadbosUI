@@ -219,6 +219,8 @@ before the Change Date. See LICENSE for complete terms.
 				</button>
 			</div>
 		</div>
+	{:else if auth.status === 'restoring'}
+		<p class="restoring" role="status">{t('auth.restoring')}</p>
 	{:else}
 		<div
 			class="signin"
@@ -499,6 +501,12 @@ before the Change Date. See LICENSE for complete terms.
 	.error {
 		margin: 0;
 		color: var(--color-danger);
+		font-size: 0.9rem;
+	}
+
+	.restoring {
+		margin: 0;
+		color: var(--color-muted);
 		font-size: 0.9rem;
 	}
 

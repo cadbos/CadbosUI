@@ -71,6 +71,7 @@ export const ru = {
 	'generationOverlay.textureReplacement': 'Заменяем текстуру…',
 	'generationOverlay.upscale': 'Увеличиваем разрешение до 4K…',
 	'auth.signIn': 'Войти',
+	'auth.restoring': 'Восстанавливаем сессию…',
 	'auth.login.nip07': 'Расширение Nostr',
 	'auth.login.nip46': 'Nostr Connect (QR)',
 	'auth.connect.scan': 'Отсканируйте QR-код приложением-подписантом (Amber, nsec.app).',

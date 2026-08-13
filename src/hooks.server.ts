@@ -18,6 +18,7 @@ import { defaultLocale, t } from '$lib/i18n/index.svelte';
 import { apiError } from '$lib/server/api';
 import { SESSION_COOKIE } from '$lib/server/auth/config';
 import { findValidSession, getDb } from '$lib/server/auth/repository';
+import { clearSessionCookie } from '$lib/server/auth/session';
 import {
 	addIntegrityToHtml,
 	addIntegrityToLinkHeader,
@@ -48,47 +49,78 @@ const guardedPaths = [
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get(SESSION_COOKIE);
+	let sessionLookupUnavailable = false;
 
 	// Demo bypass: in dev mode a special session cookie skips D1 entirely so the
 	// showcase branch works without a local D1 database being configured.
 	if (dev && sessionId === DEMO_SESSION_ID) {
 		event.locals.user = DEMO_USER;
+	} else if (sessionId) {
+		try {
+			event.locals.user = await findValidSession(getDb(event.platform), sessionId, Date.now());
+		} catch (error) {
+			sessionLookupUnavailable = true;
+			event.locals.user = null;
+			console.error(
+				JSON.stringify({
+					level: 'error',
+					area: 'auth',
+					event: 'session_lookup_error',
+					method: event.request.method,
+					route: event.route.id,
+					message: safeErrorMessage(error, 'Unknown session lookup error').replaceAll(
+						sessionId,
+						'[redacted]'
+					)
+				})
+			);
+		}
+		if (!sessionLookupUnavailable && !event.locals.user) clearSessionCookie(event.cookies);
 	} else {
-		event.locals.user = sessionId
-			? await findValidSession(getDb(event.platform), sessionId, Date.now())
-			: null;
+		event.locals.user = null;
 	}
 
+	const authenticationServiceUnavailable =
+		sessionLookupUnavailable &&
+		(event.url.pathname === '/api' ||
+			event.url.pathname.startsWith('/api/') ||
+			((event.url.pathname === '/auth' || event.url.pathname.startsWith('/auth/')) &&
+				event.url.pathname !== '/auth/demo'));
 	const blocked =
 		!event.locals.user && guardedPaths.some((path) => event.url.pathname.startsWith(path));
 
 	let integrityManifest: ClientIntegrityManifest | undefined;
 	let integrityState: 'disabled' | 'enabled' | 'failed' = dev ? 'disabled' : 'enabled';
 
-	const response = blocked
-		? apiError(401, 'unauthorized', 'Authentication required')
-		: await resolve(event, {
-				transformPageChunk: async ({ html }) => {
-					if (!dev) {
-						try {
-							integrityManifest = await getClientIntegrityManifest(event);
-						} catch (error) {
-							integrityState = 'failed';
-							console.error(
-								JSON.stringify({
-									event: 'client_integrity_manifest_error',
-									message: safeErrorMessage(error)
-								})
-							);
+	const response = authenticationServiceUnavailable
+		? apiError(503, 'authentication_unavailable', 'Authentication service temporarily unavailable')
+		: blocked
+			? apiError(401, 'unauthorized', 'Authentication required')
+			: await resolve(event, {
+					transformPageChunk: async ({ html }) => {
+						if (!dev) {
+							try {
+								integrityManifest = await getClientIntegrityManifest(event);
+							} catch (error) {
+								integrityState = 'failed';
+								console.error(
+									JSON.stringify({
+										event: 'client_integrity_manifest_error',
+										message: safeErrorMessage(error)
+									})
+								);
+							}
 						}
-					}
 
-					const translated = translateAppTemplate(html, integrityState);
-					return integrityManifest
-						? addIntegrityToHtml(translated, event.url, integrityManifest)
-						: translated;
-				}
-			});
+						const translated = translateAppTemplate(html, integrityState);
+						return integrityManifest
+							? addIntegrityToHtml(translated, event.url, integrityManifest)
+							: translated;
+					}
+				});
+
+	if (sessionLookupUnavailable) response.headers.set('Cache-Control', 'no-store');
+	if (authenticationServiceUnavailable) response.headers.set('Retry-After', '5');
 
 	const linkHeader = response.headers.get('link');
 	if (linkHeader && integrityManifest) {

@@ -40,6 +40,9 @@ import { NOSTR_CONNECT_RELAYS } from '$lib/nostr/connect';
 
 // NIP-98 HTTP-Auth event kind — a protocol constant, mirrored on the server.
 const NIP98_KIND = 27235;
+const DEFAULT_SESSION_RETRY_DELAY_MS = 5_000;
+const MIN_SESSION_RETRY_DELAY_MS = 1_000;
+const MAX_SESSION_RETRY_DELAY_MS = 60_000;
 
 // Validate server responses at the boundary, so downstream consumers (npubEncode,
 // the session cookie, the UI) only ever see well-formed data. The pubkey/challenge
@@ -108,7 +111,7 @@ declare global {
 	}
 }
 
-export type AuthStatus = 'anonymous' | 'connecting' | 'authenticated';
+export type AuthStatus = 'restoring' | 'anonymous' | 'connecting' | 'authenticated';
 export type AuthError = 'extension_missing' | 'rejected' | 'failed';
 
 class AuthFlowError extends Error {
@@ -118,7 +121,7 @@ class AuthFlowError extends Error {
 }
 
 class AuthState {
-	status = $state<AuthStatus>('anonymous');
+	status = $state<AuthStatus>('restoring');
 	user = $state<SessionUser | null>(null);
 	credit = $state<CreditInfo | null>(null);
 	nostrProfile = $state<NostrProfile | null>(null);
@@ -132,6 +135,7 @@ class AuthState {
 
 	// Lets cancelNip46() abort an in-flight BunkerSigner.fromURI() wait.
 	#connectAbort: AbortController | null = null;
+	#sessionLoadAbort: AbortController | null = null;
 
 	get pubkey(): string | null {
 		return this.user?.pubkey ?? null;
@@ -143,19 +147,53 @@ class AuthState {
 
 	// Restore an existing server session (httpOnly cookie) on app load.
 	async loadSession(): Promise<void> {
+		this.#cancelSessionLoad();
+		const controller = new AbortController();
+		this.#sessionLoadAbort = controller;
+		this.status = 'restoring';
+		this.error = null;
+
 		try {
-			const response = await fetch('/auth/me');
-			if (!response.ok) return;
-			const data = await parseJsonOrFail(response, meResponseSchema);
-			this.#authenticate(data.user, data.credit ?? null);
-		} catch {
-			// Network hiccup or malformed response on load — stay anonymous, the user
-			// can sign in manually.
+			while (!controller.signal.aborted) {
+				const response = await fetch('/auth/me', { signal: controller.signal });
+				if (controller.signal.aborted) return;
+
+				if (response.status === 503) {
+					await waitForSessionRetry(sessionRetryDelay(response), controller.signal);
+					continue;
+				}
+
+				if (response.status === 401) {
+					this.#setAnonymous();
+					return;
+				}
+
+				if (!response.ok) {
+					console.error('Session restoration failed:', response.status);
+					this.#setAnonymous();
+					return;
+				}
+
+				const data = await parseJsonOrFail(response, meResponseSchema);
+				if (controller.signal.aborted) return;
+				this.#authenticate(data.user, data.credit ?? null);
+				return;
+			}
+		} catch (error) {
+			if (controller.signal.aborted) return;
+			console.error(
+				'Session restoration failed:',
+				error instanceof Error ? error.name : typeof error
+			);
+			this.#setAnonymous();
+		} finally {
+			if (this.#sessionLoadAbort === controller) this.#sessionLoadAbort = null;
 		}
 	}
 
 	async loginNip07(): Promise<void> {
 		if (this.status === 'connecting') return;
+		this.#cancelSessionLoad();
 		this.error = null;
 		this.status = 'connecting';
 
@@ -177,6 +215,7 @@ class AuthState {
 	// signs the challenge through it. cancelNip46() aborts the wait.
 	async loginNip46(): Promise<void> {
 		if (this.status === 'connecting') return;
+		this.#cancelSessionLoad();
 		this.error = null;
 		this.status = 'connecting';
 
@@ -249,25 +288,28 @@ class AuthState {
 	}
 
 	async logout(): Promise<void> {
+		const restoreInterrupted = this.status === 'restoring';
+		this.#cancelSessionLoad();
 		let response: Response;
 		try {
 			response = await fetch('/auth/logout', { method: 'POST' });
 		} catch {
 			// Couldn't reach the server: the httpOnly cookie and server session are
 			// still live, so keep the user signed in rather than show a false logout.
+			if (restoreInterrupted) void this.loadSession();
 			return;
 		}
-		if (!response.ok) return;
-		this.user = null;
-		this.credit = null;
-		this.nostrProfile = null;
-		this.#resetProfileDraft(null);
+		if (!response.ok) {
+			if (restoreInterrupted) void this.loadSession();
+			return;
+		}
+		this.#setAnonymous();
 		this.error = null;
-		this.status = 'anonymous';
 	}
 
 	async loginDemo(): Promise<void> {
 		if (this.status === 'connecting') return;
+		this.#cancelSessionLoad();
 		this.error = null;
 		this.status = 'connecting';
 		try {
@@ -362,10 +404,21 @@ class AuthState {
 	}
 
 	#fail(error: AuthError): void {
-		this.status = 'anonymous';
+		this.#setAnonymous();
+		this.error = error;
+	}
+
+	#setAnonymous(): void {
+		this.user = null;
+		this.credit = null;
 		this.nostrProfile = null;
 		this.#resetProfileDraft(null);
-		this.error = error;
+		this.status = 'anonymous';
+	}
+
+	#cancelSessionLoad(): void {
+		this.#sessionLoadAbort?.abort();
+		this.#sessionLoadAbort = null;
 	}
 
 	// `credit` is passed when the caller already has it from the same response
@@ -405,6 +458,27 @@ async function parseJsonOrFail<S extends z.ZodType>(
 	const result = schema.safeParse(await response.json().catch(() => null));
 	if (!result.success) throw new AuthFlowError('failed');
 	return result.data;
+}
+
+function sessionRetryDelay(response: Response): number {
+	const value = response.headers.get('retry-after');
+	if (value === null) return DEFAULT_SESSION_RETRY_DELAY_MS;
+	const seconds = Number(value);
+	const delay = Number.isFinite(seconds) ? seconds * 1_000 : Date.parse(value) - Date.now();
+	if (!Number.isFinite(delay)) return DEFAULT_SESSION_RETRY_DELAY_MS;
+	return Math.min(Math.max(delay, MIN_SESSION_RETRY_DELAY_MS), MAX_SESSION_RETRY_DELAY_MS);
+}
+
+function waitForSessionRetry(ms: number, signal: AbortSignal): Promise<void> {
+	return new Promise((resolve) => {
+		const timeout = setTimeout(done, ms);
+		function done(): void {
+			clearTimeout(timeout);
+			signal.removeEventListener('abort', done);
+			resolve();
+		}
+		signal.addEventListener('abort', done, { once: true });
+	});
 }
 
 // UTF-8-safe base64 for the Authorization header (mirrors the server's decode).

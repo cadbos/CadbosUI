@@ -87,3 +87,88 @@ test('shows restored texture-replacement credit history', async ({ page }) => {
 	await history.getByText('История трат').click();
 	await expect(history.getByText(/Замена текстуры/)).toBeVisible();
 });
+
+test('restores the existing session after authentication storage recovers', async ({ page }) => {
+	let attempts = 0;
+	await page.route('**/auth/me', async (route) => {
+		attempts += 1;
+		if (attempts === 1) {
+			await route.fulfill({
+				status: 503,
+				contentType: 'application/json',
+				headers: { 'retry-after': '0' },
+				body: JSON.stringify({
+					error: {
+						code: 'authentication_unavailable',
+						message: 'Authentication service temporarily unavailable'
+					}
+				})
+			});
+			return;
+		}
+
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				user: {
+					pubkey: '0'.repeat(64),
+					firstName: 'Ada',
+					lastName: 'Lovelace'
+				}
+			})
+		});
+	});
+	await page.route('**/auth/nostr-profile', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ profile: { name: 'Ada', relays: [] } })
+		});
+	});
+
+	await page.goto('/');
+
+	await expect(page.locator('.auth').getByRole('status')).toHaveText('Восстанавливаем сессию…');
+	await expect(page.getByRole('button', { name: 'Войти', exact: true })).toHaveCount(0);
+	await expect.poll(() => attempts).toBe(2);
+	await expect(page.locator('.profile-toggle')).toBeVisible();
+});
+
+test('shows sign-in only after session restoration receives an unauthorized response', async ({
+	page
+}) => {
+	let attempts = 0;
+	await page.route('**/auth/me', async (route) => {
+		attempts += 1;
+		if (attempts === 1) {
+			await route.fulfill({
+				status: 503,
+				contentType: 'application/json',
+				headers: { 'retry-after': '0' },
+				body: JSON.stringify({
+					error: {
+						code: 'authentication_unavailable',
+						message: 'Authentication service temporarily unavailable'
+					}
+				})
+			});
+			return;
+		}
+
+		await route.fulfill({
+			status: 401,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				error: { code: 'unauthorized', message: 'Authentication required' }
+			})
+		});
+	});
+
+	await page.goto('/');
+
+	await expect(page.locator('.auth').getByRole('status')).toHaveText('Восстанавливаем сессию…');
+	await expect(page.getByRole('button', { name: 'Войти', exact: true })).toHaveCount(0);
+	await expect.poll(() => attempts).toBe(2);
+	await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
+});
