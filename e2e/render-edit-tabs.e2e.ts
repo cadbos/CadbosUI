@@ -703,10 +703,10 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	const compareButton = page.getByRole('button', { name: 'Сравнить до/после' });
 	const upscaleButton = page.getByRole('button', { name: 'Улучшить до 4K' });
 
-	// Undo/redo have nothing to act on before any edit exists yet, but compare
-	// is available right away — it falls back to the originally uploaded photo
-	// as "before" when there's no edit chain.
-	await expect(undoButton).toBeDisabled();
+	// The originally uploaded photo is itself the root history step (FR-К6):
+	// undo can already step back to it right after the very first generation.
+	// Redo has nothing ahead of the current tip yet.
+	await expect(undoButton).toBeEnabled();
 	await expect(redoButton).toBeDisabled();
 	await expect(compareButton).toBeEnabled();
 
@@ -740,17 +740,99 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	);
 	await compareButton.click();
 
+	// Undo walks back through every step, not just the last one: the edit,
+	// then the generation, then the root (the originally uploaded photo).
 	await undoButton.click();
 	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render.webp');
-	await expect(undoButton).toBeDisabled();
+	await expect(undoButton).toBeEnabled();
 	await expect(redoButton).toBeEnabled();
 
+	await undoButton.click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/uploaded.webp');
+	await expect(undoButton).toBeDisabled();
+	await expect(redoButton).toBeEnabled();
+	// Nothing precedes the uploaded photo, so there's nothing left to compare
+	// it against.
+	await expect(compareButton).toBeDisabled();
+
+	await redoButton.click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render.webp');
 	await redoButton.click();
 	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/edited.webp');
 	await expect(redoButton).toBeDisabled();
 
 	await upscaleButton.click();
 	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/edited-4k.webp');
+});
+
+test('undo/redo navigate back and forth across multiple plain generations, not just edits', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockUpload(page);
+	let renders = 0;
+	await page.route('**/api/render', async (route) => {
+		renders += 1;
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: `https://cdn.example.test/render-${renders}.webp`,
+				cost: 5,
+				balance: 95 - renders
+			})
+		});
+	});
+
+	await openCreate(page);
+	await page.locator('#mode-panel-render input[type="file"]').setInputFiles({
+		name: 'room.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from('fake-image')
+	});
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
+		page.getByRole('button', { name: 'Сгенерировать' }).click()
+	]);
+
+	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-1.webp');
+
+	const undoButton = page.getByRole('button', { name: 'Отменить' });
+	const redoButton = page.getByRole('button', { name: 'Повторить' });
+	// The originally uploaded photo is itself the root history step, so undo
+	// is already enabled right after the very first generation.
+	await expect(undoButton).toBeEnabled();
+	await expect(redoButton).toBeDisabled();
+
+	// A second, unrelated "Generate" click (no edit involved) still lands on
+	// the same in-session history stack as the first — it isn't a new chain
+	// that discards the earlier step.
+	await Promise.all([
+		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
+		page.getByRole('button', { name: 'Сгенерировать' }).click()
+	]);
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-2.webp');
+	await expect(undoButton).toBeEnabled();
+	await expect(redoButton).toBeDisabled();
+
+	// Undo walks back through both generations, not just the last one.
+	await undoButton.click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-1.webp');
+	await expect(undoButton).toBeEnabled();
+	await expect(redoButton).toBeEnabled();
+
+	await undoButton.click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/uploaded.webp');
+	await expect(undoButton).toBeDisabled();
+	await expect(redoButton).toBeEnabled();
+
+	await redoButton.click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-1.webp');
+	await redoButton.click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-2.webp');
+	await expect(redoButton).toBeDisabled();
 });
 
 test('the Add Object tool applies a selected preset to the current image', async ({ page }) => {

@@ -832,23 +832,40 @@ describe('edit lifecycle (FR-К4/К6)', () => {
 		expect(request.currentRender?.id).toBe('gen-1');
 	});
 
-	it('only holds a single undo step — a second edit replaces the earlier one', () => {
+	it('every edit is its own undoable step — undo walks back through all of them', () => {
 		request.setCurrentRender(render('gen-1'));
 		request.applyEditResult(render('edit-1'));
 		request.applyEditResult(render('edit-2'));
 
 		request.undoLastEdit();
-
 		expect(request.currentRender?.id).toBe('edit-1');
+		expect(request.canUndoEdit).toBe(true);
+
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('gen-1');
 		expect(request.canUndoEdit).toBe(false);
 	});
 
-	it('a fresh generation clears any pending undo from a prior edit chain', () => {
+	it('a fresh generation is a new step onto the same chain, not a reset', () => {
 		request.setCurrentRender(render('gen-1'));
 		request.applyEditResult(render('edit-1'));
 
 		request.setCurrentRender(render('gen-2'));
 
+		expect(request.currentRender?.id).toBe('gen-2');
+		expect(request.canUndoEdit).toBe(true);
+
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('edit-1');
+	});
+
+	it('undoing a second generation restores the render from before it', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.setCurrentRender(render('gen-2'));
+
+		request.undoLastEdit();
+
+		expect(request.currentRender?.id).toBe('gen-1');
 		expect(request.canUndoEdit).toBe(false);
 	});
 
@@ -863,7 +880,7 @@ describe('edit lifecycle (FR-К4/К6)', () => {
 	});
 });
 
-describe('edit redo (symmetric one-step undo/redo, not a history tree — Д-16)', () => {
+describe('redo (multi-step history navigation, FR-К6)', () => {
 	function render(id: string): RenderResult {
 		return { id, outputUrls: [`https://example.test/${id}.jpg`], cost: 1, balance: 24, ts: 0 };
 	}
@@ -906,14 +923,53 @@ describe('edit redo (symmetric one-step undo/redo, not a history tree — Д-16)
 		expect(request.canRedoEdit).toBe(false);
 	});
 
-	it('a fresh generation clears any pending redo from a prior edit chain', () => {
+	it('a fresh generation after undo discards the abandoned redo branch, not the whole history', () => {
 		request.setCurrentRender(render('gen-1'));
 		request.applyEditResult(render('edit-1'));
 		request.undoLastEdit();
 
 		request.setCurrentRender(render('gen-2'));
 
+		expect(request.currentRender?.id).toBe('gen-2');
 		expect(request.canRedoEdit).toBe(false);
+		expect(request.canUndoEdit).toBe(true);
+
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('gen-1');
+	});
+
+	it('navigates back and forth across a long mixed chain of generations and edits', () => {
+		request.setCurrentRender(render('gen-1'));
+		request.setCurrentRender(render('gen-2'));
+		request.applyEditResult(render('edit-1'));
+		request.applyEditResult(render('edit-2'));
+
+		expect(request.currentRender?.id).toBe('edit-2');
+
+		request.undoLastEdit();
+		request.undoLastEdit();
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('gen-1');
+		expect(request.canUndoEdit).toBe(false);
+
+		request.redoEdit();
+		request.redoEdit();
+		request.redoEdit();
+		expect(request.currentRender?.id).toBe('edit-2');
+		expect(request.canRedoEdit).toBe(false);
+	});
+
+	it('an edit anchored at an older step truncates the branch after it, matching the async lineage-priority flow', () => {
+		request.setCurrentRender(render('gen-1'));
+		const sourceRender = render('gen-1');
+		request.setCurrentRender(render('gen-2'));
+
+		request.applyEditResult(render('edit-1'), sourceRender);
+
+		expect(request.currentRender?.id).toBe('edit-1');
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('gen-1');
+		expect(request.canUndoEdit).toBe(false);
 	});
 
 	it('reset() clears the redo target too', () => {
@@ -924,5 +980,43 @@ describe('edit redo (symmetric one-step undo/redo, not a history tree — Д-16)
 		request.reset();
 
 		expect(request.canRedoEdit).toBe(false);
+	});
+});
+
+describe('the originally uploaded photo as the root history step (FR-К6)', () => {
+	function render(id: string, cost = 5, balance = 95): RenderResult {
+		return { id, outputUrls: [`https://example.test/${id}.jpg`], cost, balance, ts: 0 };
+	}
+
+	it('undoing the first generation restores the originally uploaded photo', () => {
+		request.setImage({ url: 'https://example.test/uploaded.jpg' });
+		request.setCurrentRender(render('gen-1', 5, 95));
+
+		expect(request.canUndoEdit).toBe(true);
+		request.undoLastEdit();
+
+		expect(request.currentRender?.outputUrls[0]).toBe('https://example.test/uploaded.jpg');
+		expect(request.currentRender?.cost).toBe(0);
+		expect(request.currentRender?.balance).toBe(100);
+		expect(request.canUndoEdit).toBe(false);
+
+		request.redoEdit();
+		expect(request.currentRender?.id).toBe('gen-1');
+	});
+
+	it('there is no root step, and undo stays disabled, without an uploaded photo', () => {
+		request.setCurrentRender(render('gen-1'));
+
+		expect(request.canUndoEdit).toBe(false);
+	});
+
+	it('an edit applied directly to an uploaded photo (no prior render) still gets a root step', () => {
+		request.setImage({ url: 'https://example.test/uploaded.jpg' });
+		request.applyEditResult(render('edit-1', 3, 97));
+
+		expect(request.canUndoEdit).toBe(true);
+		request.undoLastEdit();
+		expect(request.currentRender?.outputUrls[0]).toBe('https://example.test/uploaded.jpg');
+		expect(request.currentRender?.balance).toBe(100);
 	});
 });

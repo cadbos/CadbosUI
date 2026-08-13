@@ -49,10 +49,10 @@ before the Change Date. See LICENSE for complete terms.
 
 	const render = $derived(request.currentRender);
 	const imageUrl = $derived(render?.outputUrls[0]);
-	// Falls back to the originally uploaded room photo when there's no prior
-	// edit yet, so comparing is available right after the very first
-	// generation, not only once an edit chain exists.
-	const beforeImageUrl = $derived(request.previousRender?.outputUrls[0] ?? request.image?.url);
+	// The originally uploaded photo is itself the root history step (FR-К6), so
+	// "before" is always the actual previous step — there's nothing to compare
+	// against only at that root step, where comparing is correctly disabled.
+	const beforeImageUrl = $derived(request.previousRender?.outputUrls[0]);
 	const canCompare = $derived(beforeImageUrl !== undefined);
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	// The render result doesn't carry its own format, so the current form setting
