@@ -107,6 +107,46 @@ test('checks health once across client-side navigation', async ({ page }) => {
 	await expect.poll(() => requests).toBe(1);
 });
 
+test('presents the initial status load as a separate loader region', async ({ page }) => {
+	let releaseResponse: (() => void) | undefined;
+	const responseGate = new Promise<void>((resolve) => {
+		releaseResponse = resolve;
+	});
+	let requests = 0;
+	await page.route('**/healthz', async (route) => {
+		requests += 1;
+		await responseGate;
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify(snapshot('healthy', FIRST_TIMESTAMP))
+		});
+	});
+
+	await page.goto('/status');
+	await expect.poll(() => requests).toBe(1);
+
+	const loader = page.getByRole('status');
+	await expect(loader).toHaveText('Загрузка состояния сервисов…');
+	await expect(loader).toHaveCSS('display', 'grid');
+	await expect(loader).toHaveCSS('align-items', 'center');
+	await expect(loader).toHaveCSS('justify-items', 'center');
+	await expect(loader).toHaveCSS('text-align', 'center');
+	expect(
+		await loader.evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop))
+	).toBeGreaterThanOrEqual(64);
+	await expect(
+		page.getByRole('table', { name: 'Состояние сервисов, используемых Cadbos' })
+	).toHaveCount(0);
+
+	releaseResponse?.();
+
+	await expect(loader).toHaveCount(0);
+	await expect(
+		page.getByRole('table', { name: 'Состояние сервисов, используемых Cadbos' })
+	).toBeVisible();
+});
+
 test('deduplicates the direct status load and preserves cache-driven polling', async ({ page }) => {
 	await page.clock.install({ time: new Date(FIRST_TIMESTAMP) });
 	let requests = 0;
