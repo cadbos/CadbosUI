@@ -54,7 +54,9 @@ before the Change Date. See LICENSE for complete terms.
 		</header>
 
 		{#if status.state === 'loading'}
-			<p class="message" role="status">{t('status.loading')}</p>
+			<div class="loader" role="status">
+				<p>{t('status.loading')}</p>
+			</div>
 		{:else if status.state === 'error' && status.snapshot === null}
 			<p class="message error" role="alert">{t('status.failed')}</p>
 		{:else if status.snapshot}
@@ -148,6 +150,7 @@ before the Change Date. See LICENSE for complete terms.
 	h1,
 	.status-header p,
 	.summary p,
+	.loader p,
 	.message {
 		margin: 0;
 	}
@@ -160,9 +163,17 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.status-header p,
+	.loader,
 	.message {
 		color: var(--color-muted);
 		font-size: 0.9375rem;
+	}
+
+	.loader {
+		display: grid;
+		place-items: center;
+		padding: clamp(4rem, 12vw, 8rem) 1rem;
+		text-align: center;
 	}
 
 	.message.error {
