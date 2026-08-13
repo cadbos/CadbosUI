@@ -770,6 +770,8 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 }) => {
 	await authenticate(page);
 	await mockUpload(page);
+	const startingBalance = 95;
+	const renderCost = 5;
 	let renders = 0;
 	await page.route('**/api/render', async (route) => {
 		renders += 1;
@@ -778,8 +780,8 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 			contentType: 'application/json',
 			body: JSON.stringify({
 				outputUrl: `https://cdn.example.test/render-${renders}.webp`,
-				cost: 5,
-				balance: 95 - renders
+				cost: renderCost,
+				balance: startingBalance - renderCost * renders
 			})
 		});
 	});

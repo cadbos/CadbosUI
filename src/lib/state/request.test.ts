@@ -1019,4 +1019,27 @@ describe('the originally uploaded photo as the root history step (FR-К6)', () =
 		expect(request.currentRender?.outputUrls[0]).toBe('https://example.test/uploaded.jpg');
 		expect(request.currentRender?.balance).toBe(100);
 	});
+
+	it('a late-arriving edit whose anchor fell out of history lands on the current tip instead of discarding it', () => {
+		request.setImage({ url: 'https://example.test/uploaded.jpg' });
+		request.setCurrentRender(render('gen-1', 5, 90));
+		request.applyEditResult(render('edit-1', 3, 87));
+		// Snapshot of the render an async job was requested against, taken
+		// before the branch it lives on gets abandoned below.
+		const staleAnchor = render('edit-1', 3, 87);
+
+		request.undoLastEdit();
+		request.setCurrentRender(render('gen-2', 5, 82));
+
+		request.applyEditResult(render('late-edit', 2, 80), staleAnchor);
+
+		expect(request.currentRender?.id).toBe('late-edit');
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('gen-2');
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('gen-1');
+		request.undoLastEdit();
+		expect(request.currentRender?.outputUrls[0]).toBe('https://example.test/uploaded.jpg');
+		expect(request.canUndoEdit).toBe(false);
+	});
 });

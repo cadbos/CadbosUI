@@ -338,6 +338,8 @@ function cloneEditOperation(editOp: EditOperation | undefined): EditOperation | 
 	return { type: editOp.type, instruction: editOp.instruction };
 }
 
+function cloneRenderResult(render: RenderResult): RenderResult;
+function cloneRenderResult(render: RenderResult | undefined): RenderResult | undefined;
 function cloneRenderResult(render: RenderResult | undefined): RenderResult | undefined {
 	if (!render) return undefined;
 	return {
@@ -781,20 +783,33 @@ export class RequestState {
 		};
 	}
 
+	// Starts a brand-new one-or-two-step history with `render` as the tip,
+	// rooted at the originally uploaded photo when one is available.
+	#seedHistory(render: RenderResult): void {
+		const original = this.#syntheticOriginalStep(render);
+		this.#renderHistory = original ? [original, render] : [render];
+		this.#historyIndex = this.#renderHistory.length - 1;
+	}
+
 	// Appends a render onto the history at the given anchor, discarding any
 	// steps that came after it (a new step abandons whatever redo branch was
 	// pending — it's a new step, not a continuation of what undo just left).
-	// `after === undefined` starts a brand-new history from scratch, rooted at
-	// the originally uploaded photo when one is available.
+	// An empty history seeds a brand-new one rooted at the uploaded photo. An
+	// anchor that's no longer in history (its own branch was since discarded
+	// by another push, e.g. a late-arriving async edit whose sourceRender
+	// snapshot fell out of the chain) lands on the current tip instead of
+	// discarding whatever happened in between.
 	#pushRender(render: RenderResult, after: RenderResult | undefined): void {
-		if (after === undefined) {
-			const original = this.#syntheticOriginalStep(render);
-			this.#renderHistory = original ? [original, render] : [render];
-			this.#historyIndex = this.#renderHistory.length - 1;
+		if (this.#renderHistory.length === 0) {
+			this.#seedHistory(render);
 			return;
 		}
-		const afterIndex = this.#renderHistory.findIndex((entry) => entry.id === after.id);
-		const base = afterIndex === -1 ? [after] : this.#renderHistory.slice(0, afterIndex + 1);
+		const afterIndex =
+			after !== undefined ? this.#renderHistory.findIndex((entry) => entry.id === after.id) : -1;
+		const base =
+			afterIndex === -1
+				? this.#renderHistory.slice(0, this.#historyIndex + 1)
+				: this.#renderHistory.slice(0, afterIndex + 1);
 		this.#renderHistory = [...base, render];
 		this.#historyIndex = this.#renderHistory.length - 1;
 	}
@@ -809,7 +824,7 @@ export class RequestState {
 			this.#historyIndex = -1;
 			return;
 		}
-		this.#pushRender(cloneRenderResult(render) as RenderResult, this.currentRender);
+		this.#pushRender(cloneRenderResult(render), this.currentRender);
 	}
 
 	// Applies the result of an edit (FR-К4) as a new history step, anchored at
@@ -820,7 +835,7 @@ export class RequestState {
 		render: RenderResult,
 		sourceRender: RenderResult | undefined = this.currentRender
 	): void {
-		this.#pushRender(cloneRenderResult(render) as RenderResult, cloneRenderResult(sourceRender));
+		this.#pushRender(cloneRenderResult(render), cloneRenderResult(sourceRender));
 	}
 
 	// Steps back to the previous render in history (FR-К6). No-op if already
@@ -1135,8 +1150,12 @@ export class RequestState {
 		this.activeTextureReplacementJob = undefined;
 		this.promptOverride = parsed.promptOverride;
 		const restoredRender = cloneRenderResult(parsed.currentRender);
-		this.#renderHistory = restoredRender ? [restoredRender] : [];
-		this.#historyIndex = restoredRender ? 0 : -1;
+		if (restoredRender) {
+			this.#seedHistory(restoredRender);
+		} else {
+			this.#renderHistory = [];
+			this.#historyIndex = -1;
+		}
 		this.status = parsed.status;
 	}
 
