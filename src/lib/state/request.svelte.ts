@@ -338,6 +338,8 @@ function cloneEditOperation(editOp: EditOperation | undefined): EditOperation | 
 	return { type: editOp.type, instruction: editOp.instruction };
 }
 
+function cloneRenderResult(render: RenderResult): RenderResult;
+function cloneRenderResult(render: RenderResult | undefined): RenderResult | undefined;
 function cloneRenderResult(render: RenderResult | undefined): RenderResult | undefined {
 	if (!render) return undefined;
 	return {
@@ -470,27 +472,35 @@ export class RequestState {
 	// textureMaskUploading above.
 	textureReplacementResultReady = $state(false);
 	promptOverride = $state<string | null>(null);
-	currentRender = $state<RenderResult | undefined>(undefined);
-	// Single-step undo/redo for the last edit (FR-К6) — in-session only, deliberately
-	// not part of toJSON()/fromJSON(): it's session UI state, not the request model.
-	// A symmetric one-step pair, not a full revision history/tree (still out of MVP
-	// scope per Д-16) — undoneRender only ever holds the one render undo just left.
-	previousRender = $state<RenderResult | undefined>(undefined);
-	undoneRender = $state<RenderResult | undefined>(undefined);
+	// In-session render history (FR-К6): every generation and edit result produced
+	// this session is a step, navigable back/forth via undo/redo. Deliberately not
+	// part of toJSON()/fromJSON() — it's session UI state, not the request model.
+	#renderHistory = $state<RenderResult[]>([]);
+	#historyIndex = $state(-1);
 	status = $state<RequestStatus>('idle');
 
 	prompt = $derived.by(() => derivePrompt(this.promptOverride, this.promptFragments));
+
+	get currentRender(): RenderResult | undefined {
+		return this.#historyIndex >= 0 ? this.#renderHistory[this.#historyIndex] : undefined;
+	}
+
+	// The step right before the current one, if any — the "before" side of the
+	// compare slider and the render an undo would restore.
+	get previousRender(): RenderResult | undefined {
+		return this.#historyIndex > 0 ? this.#renderHistory[this.#historyIndex - 1] : undefined;
+	}
 
 	get canSubmit(): boolean {
 		return this.validate().valid && this.status === 'idle';
 	}
 
 	get canUndoEdit(): boolean {
-		return this.previousRender !== undefined;
+		return this.#historyIndex > 0;
 	}
 
 	get canRedoEdit(): boolean {
-		return this.undoneRender !== undefined;
+		return this.#historyIndex >= 0 && this.#historyIndex < this.#renderHistory.length - 1;
 	}
 
 	get activeObjectReplacementJobId(): string | undefined {
@@ -757,43 +767,89 @@ export class RequestState {
 		this.promptOverride = null;
 	}
 
-	// A fresh generation (not an edit) starts a new edit chain — any pending
-	// undo/redo from a previous chain no longer applies.
-	setCurrentRender(render: RenderResult | undefined): void {
-		this.currentRender = cloneRenderResult(render);
-		this.previousRender = undefined;
-		this.undoneRender = undefined;
+	// The originally uploaded photo, synthesized as the root history step so
+	// it's reachable via undo alongside every generation/edit (FR-К6). Its
+	// balance is derived from the first real render's server-returned
+	// cost/balance (balance-after + cost-of-that-render), since no generation
+	// call was ever made for the upload itself.
+	#syntheticOriginalStep(firstRender: RenderResult): RenderResult | undefined {
+		if (!this.image) return undefined;
+		return {
+			id: `${this.id}:original`,
+			outputUrls: [this.image.url],
+			cost: 0,
+			balance: firstRender.balance + firstRender.cost,
+			ts: 0
+		};
 	}
 
-	// Applies the result of an edit (FR-К4): the prior currentRender becomes the
-	// one-step undo target (FR-К6), and the edit result becomes current. A new
-	// edit invalidates any pending redo — it's a new branch, not a continuation
-	// of whatever was just undone.
+	// Starts a brand-new one-or-two-step history with `render` as the tip,
+	// rooted at the originally uploaded photo when one is available.
+	#seedHistory(render: RenderResult): void {
+		const original = this.#syntheticOriginalStep(render);
+		this.#renderHistory = original ? [original, render] : [render];
+		this.#historyIndex = this.#renderHistory.length - 1;
+	}
+
+	// Appends a render onto the history at the given anchor, discarding any
+	// steps that came after it (a new step abandons whatever redo branch was
+	// pending — it's a new step, not a continuation of what undo just left).
+	// An empty history seeds a brand-new one rooted at the uploaded photo. An
+	// anchor that's no longer in history (its own branch was since discarded
+	// by another push, e.g. a late-arriving async edit whose sourceRender
+	// snapshot fell out of the chain) lands on the current tip instead of
+	// discarding whatever happened in between.
+	#pushRender(render: RenderResult, after: RenderResult | undefined): void {
+		if (this.#renderHistory.length === 0) {
+			this.#seedHistory(render);
+			return;
+		}
+		const afterIndex =
+			after !== undefined ? this.#renderHistory.findIndex((entry) => entry.id === after.id) : -1;
+		const base =
+			afterIndex === -1
+				? this.#renderHistory.slice(0, this.#historyIndex + 1)
+				: this.#renderHistory.slice(0, afterIndex + 1);
+		this.#renderHistory = [...base, render];
+		this.#historyIndex = this.#renderHistory.length - 1;
+	}
+
+	// A fresh generation is a new step in the same history as any prior
+	// generations/edits (FR-К6), so it stays reachable via undo/redo. Passing
+	// `undefined` clears the whole history — switching to a different base
+	// photo, or an explicit reset (see reset()).
+	setCurrentRender(render: RenderResult | undefined): void {
+		if (render === undefined) {
+			this.#renderHistory = [];
+			this.#historyIndex = -1;
+			return;
+		}
+		this.#pushRender(cloneRenderResult(render), this.currentRender);
+	}
+
+	// Applies the result of an edit (FR-К4) as a new history step, anchored at
+	// `sourceRender` (the render the edit was actually requested against —
+	// callers may snapshot this before an async call so a slow response still
+	// attaches to the right point even if the user has since navigated on).
 	applyEditResult(
 		render: RenderResult,
 		sourceRender: RenderResult | undefined = this.currentRender
 	): void {
-		this.previousRender = cloneRenderResult(sourceRender);
-		this.currentRender = cloneRenderResult(render);
-		this.undoneRender = undefined;
+		this.#pushRender(cloneRenderResult(render), cloneRenderResult(sourceRender));
 	}
 
-	// Rolls back to the render before the last edit (FR-К6). No-op if there's
-	// nothing to undo. Keeps the render it left as the one-step redo target.
+	// Steps back to the previous render in history (FR-К6). No-op if already
+	// at the first step.
 	undoLastEdit(): void {
-		if (this.previousRender === undefined) return;
-		this.undoneRender = cloneRenderResult(this.currentRender);
-		this.currentRender = cloneRenderResult(this.previousRender);
-		this.previousRender = undefined;
+		if (this.#historyIndex <= 0) return;
+		this.#historyIndex -= 1;
 	}
 
-	// Re-applies the edit that undoLastEdit() just reverted. No-op if there's
-	// nothing to redo.
+	// Steps forward to the render that undo just left. No-op if already at the
+	// most recent step.
 	redoEdit(): void {
-		if (this.undoneRender === undefined) return;
-		this.previousRender = cloneRenderResult(this.currentRender);
-		this.currentRender = cloneRenderResult(this.undoneRender);
-		this.undoneRender = undefined;
+		if (this.#historyIndex < 0 || this.#historyIndex >= this.#renderHistory.length - 1) return;
+		this.#historyIndex += 1;
 	}
 
 	setStatus(status: RequestStatus): void {
@@ -1093,10 +1149,14 @@ export class RequestState {
 		this.textureReplacementMasked = parsed.textureReplacementMasked;
 		this.activeTextureReplacementJob = undefined;
 		this.promptOverride = parsed.promptOverride;
-		this.currentRender = cloneRenderResult(parsed.currentRender);
+		const restoredRender = cloneRenderResult(parsed.currentRender);
+		if (restoredRender) {
+			this.#seedHistory(restoredRender);
+		} else {
+			this.#renderHistory = [];
+			this.#historyIndex = -1;
+		}
 		this.status = parsed.status;
-		this.previousRender = undefined;
-		this.undoneRender = undefined;
 	}
 
 	normalizeForComparison(): NormalizedRequest {
@@ -1160,9 +1220,8 @@ export class RequestState {
 		this.textureReplacementMasked = false;
 		this.activeTextureReplacementJob = undefined;
 		this.promptOverride = null;
-		this.currentRender = undefined;
-		this.previousRender = undefined;
-		this.undoneRender = undefined;
+		this.#renderHistory = [];
+		this.#historyIndex = -1;
 		this.status = 'idle';
 	}
 }
