@@ -281,6 +281,40 @@ it('restores a texture-replacement entry in credit state', async () => {
 	expect(auth.credit?.history).toEqual([expect.objectContaining({ kind: 'texture-replacement' })]);
 });
 
+it('ignores a stale session response after a newer restoration succeeds', async () => {
+	let meCalls = 0;
+	let resolveFirst!: (response: Response) => void;
+	vi.stubGlobal(
+		'fetch',
+		vi.fn((input: string) => {
+			if (input.endsWith('/auth/me')) {
+				meCalls += 1;
+				if (meCalls === 1) {
+					return new Promise<Response>((resolve) => {
+						resolveFirst = resolve;
+					});
+				}
+				return Promise.resolve(Response.json({ user: { pubkey: pk } }));
+			}
+			if (input.endsWith('/auth/nostr-profile')) {
+				return Promise.resolve(Response.json({ profile: { relays: [] } }));
+			}
+			return Promise.resolve(new Response(null, { status: 404 }));
+		})
+	);
+
+	const firstRestoration = auth.loadSession();
+	await expect.poll(() => meCalls).toBe(1);
+	const secondRestoration = auth.loadSession();
+	await secondRestoration;
+
+	resolveFirst(Response.json({ user: { pubkey: '1'.repeat(64) } }));
+	await firstRestoration;
+
+	expect(auth.status).toBe('authenticated');
+	expect(auth.pubkey).toBe(pk);
+});
+
 it('closes the sign-in menu on an outside click, and on Escape returns focus to the trigger', async () => {
 	mockFetch(() => Response.json({ user: { pubkey: pk } }));
 

@@ -360,7 +360,7 @@ export interface CreditInfo {
 	history: CreditTransaction[];
 }
 
-// GET /auth/me → 401 when no session.
+// GET /auth/me → 401 when no session; 503 with Retry-After when session storage is unavailable.
 export interface MeResponse {
 	user: SessionUser;
 	credit?: CreditInfo;
