@@ -193,6 +193,22 @@ before the Change Date. See LICENSE for complete terms.
 		});
 	}
 
+	// Applies the URL's project/session (if present and different from what's
+	// already active) on top of whatever's currently open — shared by the
+	// initial hydration below (after restoring persisted tabs) and every
+	// later popstate/link navigation, so a pasted/bookmarked link always wins
+	// over whatever was already open.
+	async function applyUrlTarget(searchParams: URLSearchParams): Promise<void> {
+		const target = projectSessionFromSearch(searchParams);
+		if (
+			target &&
+			(target.projectId !== workspaceTabs.activeTabId ||
+				target.sessionId !== workspaceTabs.activeTab.activeSessionTabId)
+		) {
+			await openFromUrl(target.projectId, target.sessionId);
+		}
+	}
+
 	// Runs once on the initial hard load: restores every previously open tab
 	// (restorePersistedTabs is idempotent and already kicked off by the root
 	// layout's own onMount, so this just awaits that same result — see there
@@ -202,14 +218,7 @@ before the Change Date. See LICENSE for complete terms.
 	// the rest of the restored tabs stay open in the background.
 	async function hydrateWorkspaceTabs(searchParams: URLSearchParams): Promise<void> {
 		await restorePersistedTabs();
-		const target = projectSessionFromSearch(searchParams);
-		if (
-			target &&
-			(target.projectId !== workspaceTabs.activeTabId ||
-				target.sessionId !== workspaceTabs.activeTab.activeSessionTabId)
-		) {
-			await openFromUrl(target.projectId, target.sessionId);
-		}
+		await applyUrlTarget(searchParams);
 	}
 
 	// afterNavigate also runs once when this component mounts (type 'enter'), so
@@ -229,16 +238,13 @@ before the Change Date. See LICENSE for complete terms.
 			// Only a genuine hard load restores the full tab set — an in-app
 			// 'popstate'/'link' navigation means workspaceTabs already has
 			// everything it should (see hydrateWorkspaceTabs's own comment).
-			void hydrateWorkspaceTabs(page.url.searchParams);
+			hydrateWorkspaceTabs(page.url.searchParams).catch((error: unknown) =>
+				logBoundaryError('workspace.hydrateWorkspaceTabs', error)
+			);
 		} else if (type === 'popstate' || type === 'link') {
-			const target = projectSessionFromSearch(page.url.searchParams);
-			if (
-				target &&
-				(target.projectId !== workspaceTabs.activeTabId ||
-					target.sessionId !== workspaceTabs.activeTab.activeSessionTabId)
-			) {
-				void openFromUrl(target.projectId, target.sessionId);
-			}
+			applyUrlTarget(page.url.searchParams).catch((error: unknown) =>
+				logBoundaryError('workspace.applyUrlTarget', error)
+			);
 		}
 		hydrated = true;
 	});
