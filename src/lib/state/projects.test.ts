@@ -120,6 +120,39 @@ describe('projects pagination', () => {
 		expect(projects.projects).toEqual([]);
 		expect(projects.error).toBe('ProjectsLoadError');
 	});
+
+	it('ignores a stale load() response that resolves after a newer load() already ran', async () => {
+		let resolveFirst!: (response: Response) => void;
+		const firstPromise = new Promise<Response>((resolve) => {
+			resolveFirst = resolve;
+		});
+		let resolveSecond!: (response: Response) => void;
+		const secondPromise = new Promise<Response>((resolve) => {
+			resolveSecond = resolve;
+		});
+		let callCount = 0;
+		const fetchMock = vi.fn<typeof fetch>(() => {
+			callCount += 1;
+			return callCount === 1 ? firstPromise : secondPromise;
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const first = projects.load();
+		const second = projects.load();
+
+		// The second, newer call settles first...
+		resolveSecond(jsonResponse(page([project(uuid2, 'Kitchen', Date.UTC(2026, 0, 2))], 0, false)));
+		await second;
+		expect(projects.projects.map((record) => record.id)).toEqual([uuid2]);
+
+		// ...and the first, now-stale call resolving afterward must not
+		// overwrite it (its own AbortController was already superseded).
+		resolveFirst(
+			jsonResponse(page([project(uuid1, 'Living room', Date.UTC(2026, 0, 1))], 0, false))
+		);
+		await first;
+		expect(projects.projects.map((record) => record.id)).toEqual([uuid2]);
+	});
 });
 
 describe('projects.create', () => {
@@ -149,6 +182,29 @@ describe('projects.create', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		await expect(projects.create('Living room')).rejects.toThrow('project creation failed');
+		expect(projects.creating).toBe(false);
+	});
+
+	it('ignores a create() response that resolves after clear() already reset the store', async () => {
+		let resolveCreate!: (response: Response) => void;
+		const createPromise = new Promise<Response>((resolve) => {
+			resolveCreate = resolve;
+		});
+		const fetchMock = vi.fn<typeof fetch>(() => createPromise);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const create = projects.create('Living room');
+		expect(projects.creating).toBe(true);
+
+		// The user navigates away from /projects (unmounting it) before the
+		// create call resolves.
+		projects.clear();
+		expect(projects.creating).toBe(false);
+
+		resolveCreate(jsonResponse(project(uuid1, 'Living room', Date.UTC(2026, 0, 1)), 201));
+		await create;
+
+		expect(projects.projects).toEqual([]);
 		expect(projects.creating).toBe(false);
 	});
 });
@@ -189,6 +245,49 @@ describe('projects.archive', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		await expect(projects.archive(uuid1)).rejects.toThrow('project archive failed');
+		expect(projects.archivingId).toBeNull();
+	});
+
+	it('ignores an archive() response that resolves after clear() already reset the store', async () => {
+		let resolveArchive!: (response: Response) => void;
+		const deferredArchive = new Promise<Response>((resolve) => {
+			resolveArchive = resolve;
+		});
+		const fetchMock = vi.fn<typeof fetch>((input, init) => {
+			if (init?.method === 'DELETE') return deferredArchive;
+			return Promise.resolve(
+				jsonResponse(
+					page(
+						[
+							project(uuid1, 'Living room', Date.UTC(2026, 0, 1)),
+							project(uuid2, 'Kitchen', Date.UTC(2026, 0, 2))
+						],
+						0,
+						false
+					)
+				)
+			);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projects.load();
+		const archive = projects.archive(uuid1);
+		expect(projects.archivingId).toBe(uuid1);
+
+		// The user navigates away, then straight back — a fresh load() (an
+		// empty list wouldn't exercise the guard: filtering nothing out of
+		// nothing trivially "passes" either way) happens to include uuid1
+		// again, e.g. the archive genuinely hadn't reached the server yet.
+		projects.clear();
+		await projects.load();
+		expect(projects.projects.map((record) => record.id)).toEqual([uuid1, uuid2]);
+
+		resolveArchive(new Response(null, { status: 204 }));
+		await archive;
+
+		// The stale archive's filter must not remove uuid1 from this newer,
+		// unrelated list.
+		expect(projects.projects.map((record) => record.id)).toEqual([uuid1, uuid2]);
 		expect(projects.archivingId).toBeNull();
 	});
 });

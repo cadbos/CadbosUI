@@ -66,6 +66,12 @@ class ProjectsState {
 	// Only ever one card's archive action in flight at a time from the UI.
 	archivingId = $state<string | null>(null);
 	#abort: AbortController | null = null;
+	// Bumped by clear() — create()/archive() capture it at the start and
+	// check it again once their fetch resolves, so a create/archive still in
+	// flight when the store is torn down (the user navigates away from
+	// /projects) can't write into — or clear a busy flag on — whatever
+	// unrelated state a later load() has since put here.
+	#generation = 0;
 	#nextOffset: number | null = null;
 
 	async load(): Promise<void> {
@@ -128,6 +134,7 @@ class ProjectsState {
 	// always the most recently updated one, so this matches what a reload
 	// would show without an extra round-trip.
 	async create(title: string): Promise<ProjectRecord> {
+		const generation = this.#generation;
 		this.creating = true;
 		try {
 			const response = await fetch('/api/projects', {
@@ -140,28 +147,32 @@ class ProjectsState {
 			const parsed = projectRecordSchema.safeParse(await response.json().catch(() => null));
 			if (!parsed.success) throw new ProjectCreateError('project creation response invalid');
 
-			this.projects = [...this.projects, parsed.data];
+			if (this.#generation === generation) this.projects = [...this.projects, parsed.data];
 			return parsed.data;
 		} finally {
-			this.creating = false;
+			if (this.#generation === generation) this.creating = false;
 		}
 	}
 
 	// Soft delete (projects.ts's archiveProject) — removes it from the
 	// in-memory list; its sessions/generations are untouched server-side.
 	async archive(id: string): Promise<void> {
+		const generation = this.#generation;
 		this.archivingId = id;
 		try {
 			const response = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
 			if (!response.ok) throw new ProjectArchiveError('project archive failed');
 
-			this.projects = this.projects.filter((project) => project.id !== id);
+			if (this.#generation === generation) {
+				this.projects = this.projects.filter((project) => project.id !== id);
+			}
 		} finally {
-			this.archivingId = null;
+			if (this.#generation === generation) this.archivingId = null;
 		}
 	}
 
 	clear(): void {
+		this.#generation += 1;
 		this.#abort?.abort();
 		this.#abort = null;
 		this.projects = [];
