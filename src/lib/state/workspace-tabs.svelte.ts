@@ -355,19 +355,31 @@ class WorkspaceTabsState {
 
 		const next = this.tabs[index] ?? this.tabs[index - 1];
 		if (!next) {
-			// No tabs left — recreate the scratch tab and reset the live
-			// singleton to a pristine state rather than leaving zero tabs.
-			request.reset();
-			this.tabs = [scratchTab()];
-			this.activeTabId = SCRATCH_TAB_ID;
-			this.#liveKey = SCRATCH_TAB_ID;
-			this.#frozen.clear();
-			this.#persist();
+			this.resetAll();
 			return;
 		}
 
 		this.activeTabId = next.id;
 		this.#swapTo(this.#keyFor(next));
+		this.#persist();
+	}
+
+	// Closes every open tab and wipes anything frozen or persisted for them,
+	// back to a single pristine scratch tab — called above when closing the
+	// last tab leaves none, and by auth.svelte.ts on logout. The latter
+	// matters even though logout already clears `request` and redirects to
+	// signed-out UI: without this, every *other* open tab's frozen
+	// RequestState — another project's uploaded photo, prompt, generated
+	// images — stays sitting in memory (and in localStorage) and reappears
+	// instantly, with no further fetch, for whoever signs in next in the same
+	// browser, since nothing here has ever checked that it's still the same
+	// account.
+	resetAll(): void {
+		request.reset();
+		this.tabs = [scratchTab()];
+		this.activeTabId = SCRATCH_TAB_ID;
+		this.#liveKey = SCRATCH_TAB_ID;
+		this.#frozen.clear();
 		this.#persist();
 	}
 

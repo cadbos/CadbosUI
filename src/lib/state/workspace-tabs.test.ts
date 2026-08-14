@@ -527,6 +527,70 @@ describe('workspaceTabs.close', () => {
 	});
 });
 
+describe('workspaceTabs.resetAll', () => {
+	it('closes every tab — including other, currently-inactive ones — and wipes their frozen drafts', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A1);
+				state.setEditPrompt('project A prompt');
+			}
+		});
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'Kitchen',
+			sessionId: SESSION_B1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_B, SESSION_B1);
+				state.setEditPrompt('project B prompt');
+			}
+		});
+
+		// auth.svelte.ts's logout() is the real caller — a signed-out user (or
+		// whoever signs in next in the same browser) must never be able to
+		// bring project A's draft back by reopening its tab, the way ordinary
+		// tab-switching would.
+		workspaceTabs.resetAll();
+
+		expect(workspaceTabs.tabs).toEqual([
+			{ id: SCRATCH_TAB_ID, title: null, sessionTabs: [], activeSessionTabId: null }
+		]);
+		expect(workspaceTabs.activeTabId).toBe(SCRATCH_TAB_ID);
+		expect(request.projectId).toBeUndefined();
+		expect(request.editPrompt).toBe('');
+
+		// Re-opening project A's exact session afterward must rebuild it from
+		// scratch (via `initialize`), not thaw a leftover frozen draft.
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+		expect(request.editPrompt).toBe('');
+	});
+
+	it('clears anything persisted to storage', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+		expect(workspaceTabs.readPersisted()).not.toBeNull();
+
+		workspaceTabs.resetAll();
+
+		expect(workspaceTabs.readPersisted()).toBeNull();
+	});
+});
+
 describe('workspaceTabs persistence', () => {
 	it('persists every open tab and the active one after opening, switching, and closing', () => {
 		workspaceTabs.openProject({
