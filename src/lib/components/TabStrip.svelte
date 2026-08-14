@@ -55,23 +55,21 @@ before the Change Date. See LICENSE for complete terms.
 		truncated = { ...truncated, [id]: value };
 	}
 
-	function clearTruncated(id: string): void {
-		if (!(id in truncated)) return;
-		const next = { ...truncated };
-		delete next[id];
-		truncated = next;
-	}
-
+	// Deliberately doesn't clear its own entry from `truncated` on teardown —
+	// `truncated` is a single shared object, so every tab's title binding
+	// depends on the whole reference, not just its own key. Writing to it from
+	// inside an attach's own teardown (e.g. every tab tearing down at once
+	// when the whole strip unmounts on navigation) re-triggers those title
+	// bindings while they're themselves mid-teardown, which spirals into
+	// Svelte's effect_update_depth_exceeded. A leftover entry for a dead tab
+	// id is harmless — ids are never reused, and nothing reads it again.
 	function measureTruncation(tab: TabStripItem): (node: HTMLElement) => () => void {
 		return (node: HTMLElement) => {
 			const update = () => setTruncated(tab.id, node.scrollWidth > node.clientWidth);
 			update();
 			const observer = new ResizeObserver(update);
 			observer.observe(node);
-			return () => {
-				observer.disconnect();
-				clearTruncated(tab.id);
-			};
+			return () => observer.disconnect();
 		};
 	}
 
