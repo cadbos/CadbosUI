@@ -516,7 +516,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.sessions-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
 		gap: 1rem;
 		padding: 0;
 		margin: 0;
