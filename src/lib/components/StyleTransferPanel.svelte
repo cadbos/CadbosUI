@@ -146,10 +146,11 @@ before the Change Date. See LICENSE for complete terms.
 		request.setStatus('rendering');
 		const overlayId = generationOverlay.start('generationOverlay.styleTransfer');
 		try {
-			if (request.sessionId && request.currentRender) {
+			if (request.projectId && request.sessionId && request.currentRender) {
+				const previousProjectId = request.projectId;
 				const previousSessionId = request.sessionId;
 				const forkResponse = await fetch(
-					`/api/projects/${request.projectId}/sessions/${previousSessionId}/fork`,
+					`/api/projects/${previousProjectId}/sessions/${previousSessionId}/fork`,
 					{
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
@@ -159,7 +160,7 @@ before the Change Date. See LICENSE for complete terms.
 				if (!forkResponse.ok) throw new Error('style_transfer_fork_failed');
 				const parsed = forkSessionSchema.safeParse(await forkResponse.json().catch(() => null));
 				if (!parsed.success) throw new Error('style_transfer_fork_failed');
-				request.setProjectSession(request.projectId as string, parsed.data.id);
+				request.setProjectSession(previousProjectId, parsed.data.id);
 				workspaceTabs.retargetSession(previousSessionId, parsed.data.id);
 			}
 			const body = await request.toStyleTransferRequest();
