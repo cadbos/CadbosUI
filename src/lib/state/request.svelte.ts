@@ -464,6 +464,12 @@ export class RequestState {
 	// submit's own resolution) share one POST /api/uploads instead of each
 	// firing a duplicate. Cleared once the upload settles, success or failure.
 	#pendingUpload: { file: File; promise: Promise<ImageInput | undefined> } | undefined;
+	// Bumped by reset()/copyFrom() — same guard shape as #textureMaskUploadEpoch.
+	// Without it, a main-photo upload still in flight when this instance gets
+	// frozen/thawed into a *different* session (see workspace-tabs.svelte.ts)
+	// would call setImage() after the swap, grafting the old session's photo
+	// onto whatever now lives here.
+	#imageUploadEpoch = 0;
 	// In-flight #ensureProjectSession() call, so concurrent toXRequest() calls
 	// (e.g. a fast double-submit) share one pair of POST calls instead of each
 	// creating its own project+session.
@@ -1020,6 +1026,7 @@ export class RequestState {
 	}
 
 	async #uploadPendingImage(file: File): Promise<ImageInput | undefined> {
+		const epoch = this.#imageUploadEpoch;
 		let uploaded: ImageInput;
 		try {
 			const formData = new FormData();
@@ -1038,6 +1045,13 @@ export class RequestState {
 		} catch (error) {
 			if (error instanceof RequestImageUploadError) throw error;
 			throw new RequestImageUploadError('upload failed', { cause: error });
+		}
+
+		// This instance was reset or frozen/thawed into a different session
+		// (see reset()/copyFrom()) while the upload was in flight — attaching
+		// the result now would silently graft it onto whatever now lives here.
+		if (this.#imageUploadEpoch !== epoch) {
+			throw new RequestImageUploadError('upload superseded');
 		}
 
 		this.setImage(uploaded);
@@ -1350,6 +1364,8 @@ export class RequestState {
 		this.#pendingProjectId = undefined;
 		this.#pendingProjectSession = undefined;
 		this.#projectSessionEpoch += 1;
+		this.#imageUploadEpoch += 1;
+		this.#pendingUpload = undefined;
 		this.image = undefined;
 		this.pendingImageFile = undefined;
 		this.#clearPendingImagePreview();
@@ -1385,14 +1401,16 @@ export class RequestState {
 	// this copies every field, including session-UI-only ones, so a tab that
 	// becomes inactive and later active again looks exactly as it was left.
 	copyFrom(source: RequestState): void {
-		// Any project/session creation or texture-mask upload still in flight
-		// belongs to the pre-copy state — invalidate it so a late resolution
-		// can't overwrite the state being copied in now (same guard shape
-		// reset() uses).
+		// Any project/session creation, main-photo upload, or texture-mask
+		// upload still in flight belongs to the pre-copy state — invalidate it
+		// so a late resolution can't overwrite the state being copied in now
+		// (same guard shape reset() uses).
 		this.#pendingProjectId = undefined;
 		this.#pendingProjectSession = undefined;
 		this.#projectSessionEpoch += 1;
 		this.#textureMaskUploadEpoch += 1;
+		this.#imageUploadEpoch += 1;
+		this.#pendingUpload = undefined;
 
 		this.id = source.id;
 		this.projectId = source.projectId;

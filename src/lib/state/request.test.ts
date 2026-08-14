@@ -557,6 +557,68 @@ describe('toRenderRequest', () => {
 
 		await expect(request.toRenderRequest()).rejects.toThrow(RequestImageUploadError);
 	});
+
+	it('ignores an upload response that resolves after reset() has already run', async () => {
+		const NEW_PROJECT_ID = '00000000-0000-4000-8000-000000000301';
+		const NEW_SESSION_ID = '00000000-0000-4000-8000-000000000302';
+		const file = new File(['bytes'], 'room.jpg', { type: 'image/jpeg' });
+		request.setPendingImage(file);
+		let resolveUpload!: (response: unknown) => void;
+		const uploadPromise = new Promise((resolve) => {
+			resolveUpload = resolve;
+		});
+		// reset() below drops the pre-set project/session, so toRenderRequest's
+		// own ensureProjectSession() call would otherwise need to provision a
+		// new one — give it somewhere valid to land so a passing run (with the
+		// fix) fails solely on the upload epoch check, never reaching this path.
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url === '/api/uploads') {
+				return uploadPromise as Promise<{ ok: boolean; json: () => Promise<unknown> }>;
+			}
+			if (url === '/api/projects') {
+				return {
+					ok: true,
+					json: () =>
+						Promise.resolve({
+							id: NEW_PROJECT_ID,
+							title: 'Untitled',
+							createdAt: 0,
+							updatedAt: 0
+						})
+				};
+			}
+			if (url === `/api/projects/${NEW_PROJECT_ID}/sessions`) {
+				return {
+					ok: true,
+					json: () => Promise.resolve({ id: NEW_SESSION_ID, title: '', createdAt: 0, updatedAt: 0 })
+				};
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const promise = request.toRenderRequest();
+
+		// The user resets the request (e.g. starting fresh work) before the
+		// still-in-flight upload above resolves.
+		request.reset();
+
+		resolveUpload({
+			ok: true,
+			json: () =>
+				Promise.resolve({
+					url: 'https://example.test/uploaded-room.webp',
+					mime: 'image/webp',
+					size: 1234,
+					hash: 'deadbeef'
+				})
+		});
+		await expect(promise).rejects.toThrow(RequestImageUploadError);
+
+		// The now-superseded response must not attach its image onto what's
+		// supposed to be a freshly reset request.
+		expect(request.image).toBeUndefined();
+	});
 });
 
 describe('ensureProjectSession', () => {
