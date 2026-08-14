@@ -32,6 +32,7 @@ before the Change Date. See LICENSE for complete terms.
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import { stylePresetsFor, type StylePreset } from '$lib/style-presets';
 	import { buildShareUrl, slugToReference, type ReferenceTab } from '$lib/state/url-state';
+	import { workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
 	const REFERENCE_TABS: { id: ReferenceTab; label: TranslationKey }[] = [
@@ -146,8 +147,9 @@ before the Change Date. See LICENSE for complete terms.
 		const overlayId = generationOverlay.start('generationOverlay.styleTransfer');
 		try {
 			if (request.sessionId && request.currentRender) {
+				const previousSessionId = request.sessionId;
 				const forkResponse = await fetch(
-					`/api/projects/${request.projectId}/sessions/${request.sessionId}/fork`,
+					`/api/projects/${request.projectId}/sessions/${previousSessionId}/fork`,
 					{
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
@@ -158,6 +160,7 @@ before the Change Date. See LICENSE for complete terms.
 				const parsed = forkSessionSchema.safeParse(await forkResponse.json().catch(() => null));
 				if (!parsed.success) throw new Error('style_transfer_fork_failed');
 				request.setProjectSession(request.projectId as string, parsed.data.id);
+				workspaceTabs.retargetSession(previousSessionId, parsed.data.id);
 			}
 			const body = await request.toStyleTransferRequest();
 			if (!body) {

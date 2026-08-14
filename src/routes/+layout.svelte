@@ -26,6 +26,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { status } from '$lib/state/status.svelte';
 	import { isWorkspaceRoute } from '$lib/state/url-state';
+	import { restorePersistedTabs } from '$lib/state/workspace-tabs.svelte';
 
 	// children() renders whichever leaf +page.svelte matched the URL — those are
 	// intentionally empty (see src/routes/create/[scene=scene]/+page.svelte): the
@@ -45,6 +46,11 @@ before the Change Date. See LICENSE for complete terms.
 	onMount(() => {
 		auth.loadSession();
 		void status.checkOnce();
+		// Started here, not in Workspace.svelte, so a reload on any route (not
+		// just /create|/edit|/style-transfer) re-opens every previously open
+		// project/session tab before the user can act on a stale, empty one —
+		// e.g. clicking "Continue" on /projects/[id] right after a reload.
+		void restorePersistedTabs();
 		window.dispatchEvent(new CustomEvent('cadbos:client-ready'));
 	});
 </script>

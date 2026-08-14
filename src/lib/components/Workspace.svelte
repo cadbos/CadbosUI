@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { FolderKanban, GalleryHorizontalEnd, Images } from '@lucide/svelte';
+	import { FolderKanban, GalleryHorizontalEnd, Images, Layers } from '@lucide/svelte';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -28,6 +28,7 @@ before the Change Date. See LICENSE for complete terms.
 	import ScenesDrawer from '$lib/components/ScenesDrawer.svelte';
 	import StyleTransferPanel from '$lib/components/StyleTransferPanel.svelte';
 	import WorkspaceTabBar from '$lib/components/WorkspaceTabBar.svelte';
+	import SessionTabBar from '$lib/components/SessionTabBar.svelte';
 	import {
 		creditErrorKey,
 		extractApiErrorCode,
@@ -39,13 +40,21 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
-	import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+	import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
+	import {
+		initializeSessionState,
+		restorePersistedTabs,
+		SCRATCH_TAB_ID,
+		workspaceTabs
+	} from '$lib/state/workspace-tabs.svelte';
 	import {
 		applyShareParams,
 		buildShareUrl,
+		projectSessionFromSearch,
 		routeIdToMode,
 		slugToTool,
 		subTabFromSearch,
+		withProjectSession,
 		type Mode
 	} from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
@@ -104,6 +113,12 @@ before the Change Date. See LICENSE for complete terms.
 	// never-touched scratch tab would just be noise for anyone who hasn't
 	// visited /projects yet.
 	const showWorkspaceTabs = $derived(workspaceTabs.tabs.some((tab) => tab.id !== SCRATCH_TAB_ID));
+	// The scratch tab never has sessions (see workspace-tabs.svelte.ts), and a
+	// just-opened project tab always carries at least one — so this is really
+	// just "is a real project the active tab", spelled out defensively.
+	const showSessionTabs = $derived(
+		workspaceTabs.activeTabId !== SCRATCH_TAB_ID && workspaceTabs.activeSessionTabs.length > 0
+	);
 	// Only reserves canvas space while the floating tools panel is both open
 	// and still sitting at its untouched default corner — the moment the user
 	// drags it elsewhere or collapses it, the canvas reclaims the full width
@@ -157,6 +172,46 @@ before the Change Date. See LICENSE for complete terms.
 	// initial hydration has run.
 	let hydrated = $state(false);
 
+	// Resolves a project/session pair carried in the URL (see url-state.ts's
+	// projectSessionFromSearch) into the matching open workspace tab — the
+	// same fetch-then-initialize continueSession (projects/[id]/+page.svelte)
+	// already does on a click, just triggered by a deep link instead. An id
+	// that's unowned, archived, or just wrong (fetchProjectDetail resolves to
+	// null on any failure) quietly leaves the workspace on whatever it
+	// already had open.
+	async function openFromUrl(projectId: string, sessionId: string): Promise<void> {
+		const project = await fetchProjectDetail(projectId);
+		if (!project) return;
+		const session = project.sessions.find((candidate) => candidate.id === sessionId);
+		if (!session) return;
+		workspaceTabs.openProject({
+			projectId: project.id,
+			projectTitle: project.title,
+			sessionId: session.id,
+			sessionTitle: session.title.trim() === '' ? null : session.title,
+			initialize: (state) => initializeSessionState(state, project.id, session)
+		});
+	}
+
+	// Runs once on the initial hard load: restores every previously open tab
+	// (restorePersistedTabs is idempotent and already kicked off by the root
+	// layout's own onMount, so this just awaits that same result — see there
+	// for why restoration can't wait for Workspace.svelte specifically to
+	// mount), then layers the URL's own project/session (if any) on top — a
+	// shared link should win over whatever was locally open before, while
+	// the rest of the restored tabs stay open in the background.
+	async function hydrateWorkspaceTabs(searchParams: URLSearchParams): Promise<void> {
+		await restorePersistedTabs();
+		const target = projectSessionFromSearch(searchParams);
+		if (
+			target &&
+			(target.projectId !== workspaceTabs.activeTabId ||
+				target.sessionId !== workspaceTabs.activeTab.activeSessionTabId)
+		) {
+			await openFromUrl(target.projectId, target.sessionId);
+		}
+	}
+
 	// afterNavigate also runs once when this component mounts (type 'enter'), so
 	// it covers both the initial load of a shared link and later browser
 	// back/forward or external-link navigation. It only ever fires client-side,
@@ -169,6 +224,21 @@ before the Change Date. See LICENSE for complete terms.
 	afterNavigate(({ type }) => {
 		if (type === 'enter' || type === 'popstate' || type === 'link') {
 			applyShareParams(mode, page.params.scene, page.url.searchParams, request);
+		}
+		if (type === 'enter') {
+			// Only a genuine hard load restores the full tab set — an in-app
+			// 'popstate'/'link' navigation means workspaceTabs already has
+			// everything it should (see hydrateWorkspaceTabs's own comment).
+			void hydrateWorkspaceTabs(page.url.searchParams);
+		} else if (type === 'popstate' || type === 'link') {
+			const target = projectSessionFromSearch(page.url.searchParams);
+			if (
+				target &&
+				(target.projectId !== workspaceTabs.activeTabId ||
+					target.sessionId !== workspaceTabs.activeTab.activeSessionTabId)
+			) {
+				void openFromUrl(target.projectId, target.sessionId);
+			}
 		}
 		hydrated = true;
 	});
@@ -190,12 +260,22 @@ before the Change Date. See LICENSE for complete terms.
 	// clicks the Graph tab) while a request-field debounce from a moment
 	// earlier is still pending — the timer would then fire with the *old*
 	// sub-tab and clobber the switch by navigating back to it.
+	//
+	// activeProjectId/activeSessionId are read synchronously too (alongside
+	// the buildShareUrl call above), for the same dependency-tracking reason:
+	// switching workspace tabs is a workspaceTabs mutation that buildShareUrl
+	// itself never reads (see its own doc comment), so without reading them
+	// here directly, switching tabs wouldn't re-schedule this effect at all.
 	$effect(() => {
 		if (!hydrated) return;
 		buildShareUrl(mode, request);
+		const activeProjectId =
+			workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
+		const activeSessionId = workspaceTabs.activeTab.activeSessionTabId ?? undefined;
 		const timer = setTimeout(() => {
 			const currentSearch = new URLSearchParams(window.location.search);
-			const url = buildShareUrl(mode, request, subTabFromSearch(mode, currentSearch));
+			const base = buildShareUrl(mode, request, subTabFromSearch(mode, currentSearch));
+			const url = withProjectSession(base, activeProjectId, activeSessionId);
 			if (`${window.location.pathname}${window.location.search}` !== url) {
 				goto(url, { replaceState: true, keepFocus: true, noScroll: true }).catch((error: unknown) =>
 					logBoundaryError('workspace.urlSync', error)
@@ -296,12 +376,15 @@ before the Change Date. See LICENSE for complete terms.
 				: undefined}
 		>
 			<div class="workspace-header" {@attach measureWorkspaceHeader}>
-				{#if isAuthenticated && showWorkspaceTabs}
-					<WorkspaceTabBar />
-				{/if}
-
-				<div class="workspace-topbar">
-					{#if isAuthenticated}
+				{#if isAuthenticated}
+					<div class="workspace-row">
+						<a class="resources-button" href={resolve('/projects', {})}>
+							<FolderKanban size={18} strokeWidth={1.8} aria-hidden="true" />
+							<span>{t('projects.navLabel')}</span>
+						</a>
+						{#if showWorkspaceTabs}
+							<WorkspaceTabBar />
+						{/if}
 						<button
 							{@attach (node) => {
 								scenesTrigger = node as HTMLButtonElement;
@@ -322,12 +405,10 @@ before the Change Date. See LICENSE for complete terms.
 							<GalleryHorizontalEnd size={18} strokeWidth={1.8} aria-hidden="true" />
 							<span>{t('resources.title')}</span>
 						</a>
-						<a class="resources-button" href={resolve('/projects', {})}>
-							<FolderKanban size={18} strokeWidth={1.8} aria-hidden="true" />
-							<span>{t('projects.navLabel')}</span>
-						</a>
-					{/if}
+					</div>
+				{/if}
 
+				<div class="workspace-row">
 					<nav class="mode-nav" aria-label={t('mode.switcher.label')}>
 						<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
 							{#each modes as modeOption, index (modeOption.id)}
@@ -350,6 +431,17 @@ before the Change Date. See LICENSE for complete terms.
 							{/each}
 						</div>
 					</nav>
+
+					{#if isAuthenticated && showSessionTabs}
+						<a
+							class="resources-button"
+							href={resolve('/projects/[id]', { id: workspaceTabs.activeTabId })}
+						>
+							<Layers size={18} strokeWidth={1.8} aria-hidden="true" />
+							<span>{t('workspace.sessionsButton')}</span>
+						</a>
+						<SessionTabBar />
+					{/if}
 				</div>
 			</div>
 
@@ -617,7 +709,7 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 1.5rem;
 	}
 
-	.workspace-topbar {
+	.workspace-row {
 		width: 100%;
 		display: flex;
 		align-items: stretch;
@@ -628,14 +720,12 @@ before the Change Date. See LICENSE for complete terms.
 	   one line — narrower than this, only that tab wrapped to two lines while
 	   its siblings stayed single-line, making the row look uneven. No longer
 	   tied to the removed panel-col's width now that the tools panel floats.
-	   margin-left: auto (rather than justify-content: space-between on the
-	   parent) keeps it pinned to the right even when the scenes button isn't
-	   rendered for a signed-out user, since space-between collapses a single
-	   remaining flex item to the start. */
+	   Leads its row now (Create/Edit/Style-transfer, then the Sessions button
+	   and its tab strip) rather than being pushed right, so no margin-left:
+	   auto here — see .scenes-button for that trick's other use. */
 	.mode-nav {
 		flex: 0 0 440px;
 		max-width: 100%;
-		margin-left: auto;
 		padding: 0.25rem;
 		background: #e9ece9;
 		border: 1px solid #d8ded8;
@@ -648,9 +738,15 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
+		/* Pins the Scenes+Resources pair to the right of the projects row even
+		   when the project tab strip before it isn't rendered (a signed-in user
+		   with no open project tabs yet) — margin-left: auto rather than
+		   justify-content: space-between on the parent, since space-between
+		   would collapse a single remaining flex item back to the start. */
+		margin-left: auto;
 		/* Matches .mode-nav's own (content-driven) height so the stretched
-		   .workspace-topbar row doesn't leave the mode tabs looking like
-		   they're floating in a taller pill with empty space below them. */
+		   .workspace-row row doesn't leave the mode tabs looking like they're
+		   floating in a taller pill with empty space below them. */
 		min-height: 2.5rem;
 		padding: 0.5rem 1rem;
 		border: 1px solid var(--color-border);
@@ -850,7 +946,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	@media (max-width: 440px) {
-		.workspace-topbar {
+		.workspace-row {
 			flex-direction: column;
 		}
 	}

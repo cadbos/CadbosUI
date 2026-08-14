@@ -7,17 +7,47 @@
  * Access is limited to automated analysis tools for analysis of this repository.
  * This code is not open for contribution or usage except under a separate
  * written agreement with Cadbos company.
- *
- * Commercial use in Interior Design & AEC Generative AI Services is prohibited
- * before the Change Date. See LICENSE for complete terms.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request } from '$lib/state/request.svelte';
-import { MAX_TABS, SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+import {
+	MAX_SESSION_TABS,
+	MAX_TABS,
+	SCRATCH_TAB_ID,
+	workspaceTabs
+} from '$lib/state/workspace-tabs.svelte';
 
 const PROJECT_A = '00000000-0000-4000-8000-000000000001';
 const PROJECT_B = '00000000-0000-4000-8000-000000000002';
+const SESSION_A1 = '00000000-0000-4000-8000-0000000000a1';
+const SESSION_A2 = '00000000-0000-4000-8000-0000000000a2';
+const SESSION_B1 = '00000000-0000-4000-8000-0000000000b1';
+
+// Node (this suite runs in the 'node' vitest environment, not jsdom) has no
+// global localStorage — a minimal in-memory stand-in, same Storage shape the
+// browser provides, is enough to exercise workspaceTabs' own persistence.
+function memoryLocalStorage(): Storage {
+	const store = new Map<string, string>();
+	return {
+		getItem: (key) => store.get(key) ?? null,
+		setItem: (key, value) => {
+			store.set(key, value);
+		},
+		removeItem: (key) => {
+			store.delete(key);
+		},
+		clear: () => store.clear(),
+		key: (index) => Array.from(store.keys())[index] ?? null,
+		get length() {
+			return store.size;
+		}
+	};
+}
+
+beforeEach(() => {
+	vi.stubGlobal('localStorage', memoryLocalStorage());
+});
 
 afterEach(() => {
 	// Reset back to a single scratch tab so state doesn't leak between tests.
@@ -26,29 +56,50 @@ afterEach(() => {
 		workspaceTabs.close(workspaceTabs.tabs[workspaceTabs.tabs.length - 1].id);
 	}
 	request.reset();
+	vi.unstubAllGlobals();
 });
 
 describe('workspaceTabs.openProject', () => {
-	it('opens a new tab, activates it, and initializes its request state', () => {
-		workspaceTabs.openProject(PROJECT_A, 'Living room', (state) => {
-			state.setProjectSession(PROJECT_A, 'session-a');
-			state.setEditPrompt('warm living room');
+	it('opens a new tab and session tab, activates them, and initializes request state', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A1);
+				state.setEditPrompt('warm living room');
+			}
 		});
 
 		expect(workspaceTabs.tabs.map((tab) => tab.id)).toEqual([SCRATCH_TAB_ID, PROJECT_A]);
 		expect(workspaceTabs.activeTabId).toBe(PROJECT_A);
+		expect(workspaceTabs.activeSessionTabs.map((session) => session.id)).toEqual([SESSION_A1]);
 		expect(request.projectId).toBe(PROJECT_A);
+		expect(request.sessionId).toBe(SESSION_A1);
 		expect(request.editPrompt).toBe('warm living room');
 	});
 
 	it('keeps each open project tab independent when switching between them', () => {
-		workspaceTabs.openProject(PROJECT_A, 'Living room', (state) => {
-			state.setProjectSession(PROJECT_A, 'session-a');
-			state.setEditPrompt('project A prompt');
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A1);
+				state.setEditPrompt('project A prompt');
+			}
 		});
-		workspaceTabs.openProject(PROJECT_B, 'Kitchen', (state) => {
-			state.setProjectSession(PROJECT_B, 'session-b');
-			state.setEditPrompt('project B prompt');
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'Kitchen',
+			sessionId: SESSION_B1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_B, SESSION_B1);
+				state.setEditPrompt('project B prompt');
+			}
 		});
 
 		expect(request.projectId).toBe(PROJECT_B);
@@ -65,31 +116,58 @@ describe('workspaceTabs.openProject', () => {
 		expect(request.editPrompt).toBe('project B prompt');
 	});
 
-	it('re-opening an already-open project reuses its tab and re-initializes in place', () => {
-		workspaceTabs.openProject(PROJECT_A, 'Living room', (state) => {
-			state.setProjectSession(PROJECT_A, 'session-a');
-			state.setEditPrompt('first visit');
+	it('opening a second session in an already-open project adds a session tab instead of overwriting it', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A1);
+				state.setEditPrompt('first visit');
+			}
 		});
-		workspaceTabs.openProject(PROJECT_B, 'Kitchen', (state) => {
-			state.setProjectSession(PROJECT_B, 'session-b');
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'Kitchen',
+			sessionId: SESSION_B1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_B, SESSION_B1)
 		});
 
-		workspaceTabs.openProject(PROJECT_A, 'Living room', (state) => {
-			state.setProjectSession(PROJECT_A, 'other-session');
-			state.setEditPrompt('second visit');
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A2,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A2);
+				state.setEditPrompt('second visit');
+			}
 		});
 
 		expect(workspaceTabs.tabs.map((tab) => tab.id)).toEqual([SCRATCH_TAB_ID, PROJECT_A, PROJECT_B]);
+		const projectATab = workspaceTabs.tabs.find((tab) => tab.id === PROJECT_A);
+		expect(projectATab?.sessionTabs.map((session) => session.id)).toEqual([SESSION_A1, SESSION_A2]);
 		expect(request.projectId).toBe(PROJECT_A);
-		expect(request.sessionId).toBe('other-session');
+		expect(request.sessionId).toBe(SESSION_A2);
 		expect(request.editPrompt).toBe('second visit');
+
+		// The first session's draft survived untouched under the first tab.
+		workspaceTabs.activateSession(PROJECT_A, SESSION_A1);
+		expect(request.sessionId).toBe(SESSION_A1);
+		expect(request.editPrompt).toBe('first visit');
 	});
 });
 
 describe('workspaceTabs.activate', () => {
 	it('is a no-op for an id that is not an open tab', () => {
-		workspaceTabs.openProject(PROJECT_A, 'Living room', (state) => {
-			state.setProjectSession(PROJECT_A, 'session-a');
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
 		});
 
 		workspaceTabs.activate('not-open');
@@ -98,14 +176,160 @@ describe('workspaceTabs.activate', () => {
 	});
 });
 
+describe('workspaceTabs.activateSession', () => {
+	it('switches sessions within the same project tab, preserving each draft independently', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A1);
+				state.setEditPrompt('session A1 prompt');
+			}
+		});
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A2,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A2);
+				state.setEditPrompt('session A2 prompt');
+			}
+		});
+
+		expect(request.sessionId).toBe(SESSION_A2);
+		expect(request.editPrompt).toBe('session A2 prompt');
+
+		workspaceTabs.activateSession(PROJECT_A, SESSION_A1);
+		expect(request.sessionId).toBe(SESSION_A1);
+		expect(request.editPrompt).toBe('session A1 prompt');
+
+		workspaceTabs.activateSession(PROJECT_A, SESSION_A2);
+		expect(request.sessionId).toBe(SESSION_A2);
+		expect(request.editPrompt).toBe('session A2 prompt');
+	});
+});
+
+describe('workspaceTabs.retargetSession', () => {
+	it('renames the live session tab in place, keeping its title', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: 'Main thread',
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+
+		// Mirrors StyleTransferPanel's own call order: the live RequestState is
+		// retargeted first (its own responsibility), then the tab bookkeeping.
+		request.setProjectSession(PROJECT_A, SESSION_A2);
+		workspaceTabs.retargetSession(SESSION_A1, SESSION_A2);
+
+		const projectATab = workspaceTabs.tabs.find((tab) => tab.id === PROJECT_A);
+		expect(projectATab?.sessionTabs.map((session) => session.id)).toEqual([SESSION_A2]);
+		expect(projectATab?.sessionTabs[0]?.title).toBe('Main thread');
+		expect(projectATab?.activeSessionTabId).toBe(SESSION_A2);
+
+		// The tab bookkeeping must resolve to the new id going forward, even
+		// after switching away and back.
+		workspaceTabs.activate(SCRATCH_TAB_ID);
+		workspaceTabs.activateSession(PROJECT_A, SESSION_A2);
+		expect(request.sessionId).toBe(SESSION_A2);
+	});
+});
+
+describe('workspaceTabs.closeSession', () => {
+	it('closing a background session tab leaves the active session untouched', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A2,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A2);
+				state.setEditPrompt('session A2 prompt');
+			}
+		});
+
+		workspaceTabs.closeSession(PROJECT_A, SESSION_A1);
+
+		const projectATab = workspaceTabs.tabs.find((tab) => tab.id === PROJECT_A);
+		expect(projectATab?.sessionTabs.map((session) => session.id)).toEqual([SESSION_A2]);
+		expect(request.sessionId).toBe(SESSION_A2);
+		expect(request.editPrompt).toBe('session A2 prompt');
+	});
+
+	it('closing the active session tab falls back to a neighboring session tab', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A1);
+				state.setEditPrompt('session A1 prompt');
+			}
+		});
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A2,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A2)
+		});
+
+		workspaceTabs.closeSession(PROJECT_A, SESSION_A2);
+
+		expect(request.sessionId).toBe(SESSION_A1);
+		expect(request.editPrompt).toBe('session A1 prompt');
+	});
+
+	it('closing the last session tab of a project closes the whole project tab', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+
+		workspaceTabs.closeSession(PROJECT_A, SESSION_A1);
+
+		expect(workspaceTabs.tabs).toEqual([
+			{ id: SCRATCH_TAB_ID, title: null, sessionTabs: [], activeSessionTabId: null }
+		]);
+		expect(workspaceTabs.activeTabId).toBe(SCRATCH_TAB_ID);
+		expect(request.projectId).toBeUndefined();
+	});
+});
+
 describe('workspaceTabs.close', () => {
 	it('closing a background tab leaves the active project untouched', () => {
-		workspaceTabs.openProject(PROJECT_A, 'Living room', (state) => {
-			state.setProjectSession(PROJECT_A, 'session-a');
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
 		});
-		workspaceTabs.openProject(PROJECT_B, 'Kitchen', (state) => {
-			state.setProjectSession(PROJECT_B, 'session-b');
-			state.setEditPrompt('project B prompt');
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'Kitchen',
+			sessionId: SESSION_B1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_B, SESSION_B1);
+				state.setEditPrompt('project B prompt');
+			}
 		});
 
 		workspaceTabs.close(PROJECT_A);
@@ -116,12 +340,22 @@ describe('workspaceTabs.close', () => {
 	});
 
 	it('closing the active tab falls back to a neighboring tab, restoring its state', () => {
-		workspaceTabs.openProject(PROJECT_A, 'Living room', (state) => {
-			state.setProjectSession(PROJECT_A, 'session-a');
-			state.setEditPrompt('project A prompt');
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A1);
+				state.setEditPrompt('project A prompt');
+			}
 		});
-		workspaceTabs.openProject(PROJECT_B, 'Kitchen', (state) => {
-			state.setProjectSession(PROJECT_B, 'session-b');
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'Kitchen',
+			sessionId: SESSION_B1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_B, SESSION_B1)
 		});
 
 		workspaceTabs.close(PROJECT_B);
@@ -134,19 +368,29 @@ describe('workspaceTabs.close', () => {
 	it('never closes the scratch tab, even when it is the active tab', () => {
 		workspaceTabs.close(SCRATCH_TAB_ID);
 
-		expect(workspaceTabs.tabs).toEqual([{ id: SCRATCH_TAB_ID, title: null }]);
+		expect(workspaceTabs.tabs).toEqual([
+			{ id: SCRATCH_TAB_ID, title: null, sessionTabs: [], activeSessionTabId: null }
+		]);
 		expect(workspaceTabs.activeTabId).toBe(SCRATCH_TAB_ID);
 	});
 
 	it('closing the last project tab falls back to the scratch tab, restoring its state', () => {
-		workspaceTabs.openProject(PROJECT_A, 'Living room', (state) => {
-			state.setProjectSession(PROJECT_A, 'session-a');
-			state.setEditPrompt('project A prompt');
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A1);
+				state.setEditPrompt('project A prompt');
+			}
 		});
 
 		workspaceTabs.close(PROJECT_A);
 
-		expect(workspaceTabs.tabs).toEqual([{ id: SCRATCH_TAB_ID, title: null }]);
+		expect(workspaceTabs.tabs).toEqual([
+			{ id: SCRATCH_TAB_ID, title: null, sessionTabs: [], activeSessionTabId: null }
+		]);
 		expect(workspaceTabs.activeTabId).toBe(SCRATCH_TAB_ID);
 		expect(request.projectId).toBeUndefined();
 		expect(request.editPrompt).toBe('');
@@ -159,19 +403,353 @@ describe('workspaceTabs.close', () => {
 		// tab opened below can't accidentally reuse one of these slots.
 		for (let i = 0; i < MAX_TABS - 1; i++) {
 			const projectId = `00000000-0000-4000-8000-0000000001${String(i).padStart(2, '0')}`;
-			workspaceTabs.openProject(projectId, `Project ${i}`, (state) => {
-				state.setProjectSession(projectId, `session-${i}`);
+			const sessionId = `00000000-0000-4000-8000-0000000002${String(i).padStart(2, '0')}`;
+			workspaceTabs.openProject({
+				projectId,
+				projectTitle: `Project ${i}`,
+				sessionId,
+				sessionTitle: null,
+				initialize: (state) => state.setProjectSession(projectId, sessionId)
 			});
 		}
 		expect(workspaceTabs.tabs).toHaveLength(MAX_TABS);
 		const oldestProjectId = workspaceTabs.tabs[1].id;
 
-		workspaceTabs.openProject(PROJECT_B, 'Kitchen', (state) => {
-			state.setProjectSession(PROJECT_B, 'session-b');
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'Kitchen',
+			sessionId: SESSION_B1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_B, SESSION_B1)
 		});
 
 		expect(workspaceTabs.tabs).toHaveLength(MAX_TABS);
 		expect(workspaceTabs.tabs.map((tab) => tab.id)).toContain(SCRATCH_TAB_ID);
 		expect(workspaceTabs.tabs.map((tab) => tab.id)).not.toContain(oldestProjectId);
+	});
+
+	it('releases every nested session tab’s frozen state when a project tab is evicted at capacity', () => {
+		// Open a project with two sessions FIRST, so it's the oldest tab, then
+		// MAX_TABS - 2 other projects to fill every remaining slot, then one
+		// more project to force the two-session project out at capacity — its
+		// second (inactive) session tab must not leak a frozen RequestState
+		// that a later, unrelated session id could collide with.
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A2,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A2);
+				state.setEditPrompt('leaked draft');
+			}
+		});
+		for (let i = 0; i < MAX_TABS - 2; i++) {
+			const projectId = `00000000-0000-4000-8000-0000000003${String(i).padStart(2, '0')}`;
+			const sessionId = `00000000-0000-4000-8000-0000000004${String(i).padStart(2, '0')}`;
+			workspaceTabs.openProject({
+				projectId,
+				projectTitle: `Project ${i}`,
+				sessionId,
+				sessionTitle: null,
+				initialize: (state) => state.setProjectSession(projectId, sessionId)
+			});
+		}
+		expect(workspaceTabs.tabs).toHaveLength(MAX_TABS);
+
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'Kitchen',
+			sessionId: SESSION_B1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_B, SESSION_B1)
+		});
+
+		expect(workspaceTabs.tabs.map((tab) => tab.id)).not.toContain(PROJECT_A);
+
+		// SESSION_A1's frozen state should be gone, not silently resurrected if
+		// a future session ever reused that id.
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'Kitchen',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_B, SESSION_A1);
+				state.setEditPrompt('');
+			}
+		});
+		expect(request.editPrompt).toBe('');
+	});
+
+	it('never evicts the active session tab to make room at capacity within a project', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+		for (let i = 0; i < MAX_SESSION_TABS - 1; i++) {
+			const sessionId = `00000000-0000-4000-8000-0000000005${String(i).padStart(2, '0')}`;
+			workspaceTabs.openProject({
+				projectId: PROJECT_A,
+				projectTitle: 'Living room',
+				sessionId,
+				sessionTitle: null,
+				initialize: (state) => state.setProjectSession(PROJECT_A, sessionId)
+			});
+		}
+		const projectATab = workspaceTabs.tabs.find((tab) => tab.id === PROJECT_A);
+		expect(projectATab?.sessionTabs).toHaveLength(MAX_SESSION_TABS);
+
+		// The active session tab (the most recently opened one) must survive
+		// the eviction triggered by opening one more.
+		const activeSessionId = projectATab?.activeSessionTabId;
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A2,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A2)
+		});
+
+		const updatedTab = workspaceTabs.tabs.find((tab) => tab.id === PROJECT_A);
+		expect(updatedTab?.sessionTabs).toHaveLength(MAX_SESSION_TABS);
+		expect(updatedTab?.sessionTabs.map((session) => session.id)).toContain(activeSessionId);
+	});
+});
+
+describe('workspaceTabs persistence', () => {
+	it('persists every open tab and the active one after opening, switching, and closing', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: 'Main thread',
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'Kitchen',
+			sessionId: SESSION_B1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_B, SESSION_B1)
+		});
+
+		let persisted = workspaceTabs.readPersisted();
+		expect(persisted?.activeTabId).toBe(PROJECT_B);
+		expect(persisted?.tabs.map((tab) => tab.id)).toEqual([PROJECT_A, PROJECT_B]);
+
+		workspaceTabs.activate(PROJECT_A);
+		persisted = workspaceTabs.readPersisted();
+		expect(persisted?.activeTabId).toBe(PROJECT_A);
+
+		workspaceTabs.close(PROJECT_B);
+		persisted = workspaceTabs.readPersisted();
+		expect(persisted?.tabs.map((tab) => tab.id)).toEqual([PROJECT_A]);
+	});
+
+	it('clears persisted state once every tab is closed', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+		expect(workspaceTabs.readPersisted()).not.toBeNull();
+
+		workspaceTabs.close(PROJECT_A);
+
+		expect(workspaceTabs.readPersisted()).toBeNull();
+	});
+
+	it('persists nested session tabs and survives a retarget', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: 'Main thread',
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A2,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A2)
+		});
+
+		let persisted = workspaceTabs.readPersisted();
+		expect(persisted?.tabs[0]?.sessionTabs.map((session) => session.id)).toEqual([
+			SESSION_A1,
+			SESSION_A2
+		]);
+		expect(persisted?.tabs[0]?.activeSessionTabId).toBe(SESSION_A2);
+
+		workspaceTabs.retargetSession(SESSION_A2, SESSION_B1);
+		persisted = workspaceTabs.readPersisted();
+		expect(persisted?.tabs[0]?.sessionTabs.map((session) => session.id)).toEqual([
+			SESSION_A1,
+			SESSION_B1
+		]);
+		expect(persisted?.tabs[0]?.activeSessionTabId).toBe(SESSION_B1);
+	});
+
+	it('returns null for missing, malformed, or invalid-shaped storage instead of throwing', () => {
+		expect(workspaceTabs.readPersisted()).toBeNull();
+
+		localStorage.setItem('cadbos.workspace-tabs.v1', 'not json');
+		expect(workspaceTabs.readPersisted()).toBeNull();
+
+		localStorage.setItem('cadbos.workspace-tabs.v1', JSON.stringify({ nonsense: true }));
+		expect(workspaceTabs.readPersisted()).toBeNull();
+	});
+});
+
+// restorePersistedTabs() caches its result for the page's lifetime (see its
+// own comment), so each of these gets a fresh module graph via
+// vi.resetModules() — otherwise the second test here would just observe the
+// first test's already-resolved restore and never call fetch again.
+describe('restorePersistedTabs', () => {
+	function projectDetailFixture(
+		id: string,
+		title: string,
+		sessions: { id: string; title: string }[]
+	) {
+		return {
+			id,
+			title,
+			createdAt: 0,
+			updatedAt: 0,
+			shareActive: false,
+			sessions: sessions.map((session) => ({
+				id: session.id,
+				title: session.title,
+				parentSessionId: null,
+				forkedFromGenerationId: null,
+				createdAt: 0,
+				updatedAt: 0,
+				generations: []
+			}))
+		};
+	}
+
+	function jsonResponse(body: unknown): Response {
+		return new Response(JSON.stringify(body), {
+			status: 200,
+			headers: { 'content-type': 'application/json' }
+		});
+	}
+
+	it('reopens every persisted tab and restores the previously active one', async () => {
+		vi.resetModules();
+		const fresh = await import('$lib/state/workspace-tabs.svelte');
+
+		localStorage.setItem(
+			'cadbos.workspace-tabs.v1',
+			JSON.stringify({
+				tabs: [
+					{
+						id: PROJECT_A,
+						title: 'Living room',
+						sessionTabs: [{ id: SESSION_A1, title: null }],
+						activeSessionTabId: SESSION_A1
+					},
+					{
+						id: PROJECT_B,
+						title: 'Kitchen',
+						sessionTabs: [{ id: SESSION_B1, title: null }],
+						activeSessionTabId: SESSION_B1
+					}
+				],
+				activeTabId: PROJECT_A
+			})
+		);
+
+		const fetchMock = vi.fn<typeof fetch>((input) => {
+			const url = String(input);
+			if (url.includes(PROJECT_A)) {
+				return Promise.resolve(
+					jsonResponse(
+						projectDetailFixture(PROJECT_A, 'Living room', [{ id: SESSION_A1, title: '' }])
+					)
+				);
+			}
+			return Promise.resolve(
+				jsonResponse(projectDetailFixture(PROJECT_B, 'Kitchen', [{ id: SESSION_B1, title: '' }]))
+			);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await fresh.restorePersistedTabs();
+
+		expect(fresh.workspaceTabs.tabs.map((tab) => tab.id)).toEqual([
+			SCRATCH_TAB_ID,
+			PROJECT_A,
+			PROJECT_B
+		]);
+		expect(fresh.workspaceTabs.activeTabId).toBe(PROJECT_A);
+		expect(fresh.workspaceTabs.activeTab.activeSessionTabId).toBe(SESSION_A1);
+	});
+
+	it('skips a project that no longer loads (deleted/unowned) without losing the others', async () => {
+		vi.resetModules();
+		const fresh = await import('$lib/state/workspace-tabs.svelte');
+
+		localStorage.setItem(
+			'cadbos.workspace-tabs.v1',
+			JSON.stringify({
+				tabs: [
+					{
+						id: PROJECT_A,
+						title: 'Living room',
+						sessionTabs: [{ id: SESSION_A1, title: null }],
+						activeSessionTabId: SESSION_A1
+					},
+					{
+						id: PROJECT_B,
+						title: 'Kitchen',
+						sessionTabs: [{ id: SESSION_B1, title: null }],
+						activeSessionTabId: SESSION_B1
+					}
+				],
+				activeTabId: PROJECT_B
+			})
+		);
+
+		const fetchMock = vi.fn<typeof fetch>((input) => {
+			const url = String(input);
+			if (url.includes(PROJECT_A)) return Promise.resolve(new Response(null, { status: 404 }));
+			return Promise.resolve(
+				jsonResponse(projectDetailFixture(PROJECT_B, 'Kitchen', [{ id: SESSION_B1, title: '' }]))
+			);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await fresh.restorePersistedTabs();
+
+		expect(fresh.workspaceTabs.tabs.map((tab) => tab.id)).toEqual([SCRATCH_TAB_ID, PROJECT_B]);
+		expect(fresh.workspaceTabs.activeTabId).toBe(PROJECT_B);
+	});
+
+	it('is a no-op with nothing persisted', async () => {
+		vi.resetModules();
+		const fresh = await import('$lib/state/workspace-tabs.svelte');
+		const fetchMock = vi.fn<typeof fetch>();
+		vi.stubGlobal('fetch', fetchMock);
+
+		await fresh.restorePersistedTabs();
+
+		expect(fresh.workspaceTabs.tabs.map((tab) => tab.id)).toEqual([SCRATCH_TAB_ID]);
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });

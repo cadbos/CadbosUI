@@ -66,6 +66,24 @@ export class ProjectDetailLoadError extends Error {
 	}
 }
 
+// A plain, one-off fetch — independent of the ProjectDetailState instance
+// below, whose own load() cancels any request already in flight when called
+// again. Callers that need several projects' details back-to-back (or
+// alongside whatever the /projects/[id] page itself is loading), such as
+// workspace-tabs.svelte.ts's tab restore, would otherwise race that shared
+// in-flight slot. Null on any failure — 404, network error, malformed body —
+// since every caller's response is "skip this one", not an error to surface.
+export async function fetchProjectDetail(id: string): Promise<ProjectDetailResponse | null> {
+	try {
+		const response = await fetch(`/api/projects/${id}`);
+		if (!response.ok) return null;
+		const parsed = projectDetailSchema.safeParse(await response.json().catch(() => null));
+		return parsed.success ? parsed.data : null;
+	} catch {
+		return null;
+	}
+}
+
 export class ProjectDetailActionError extends Error {
 	constructor(message: string) {
 		super(message);

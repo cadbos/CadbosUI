@@ -22,7 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { projectDetail } from '$lib/state/project-detail.svelte';
 	import { request } from '$lib/state/request.svelte';
 	import { buildShareUrl } from '$lib/state/url-state';
-	import { workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+	import { initializeSessionState, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError } from '$lib/utils';
 
 	const projectId = $derived(page.params.id);
@@ -88,18 +88,12 @@ before the Change Date. See LICENSE for complete terms.
 	function continueSession(session: ProjectSessionRecord): void {
 		const project = projectDetail.project;
 		if (!project) return;
-		const latest = session.generations[0];
-		workspaceTabs.openProject(project.id, project.title, (state) => {
-			state.setCurrentRender(undefined);
-			state.setProjectSession(project.id, session.id);
-			state.setStyleSourceMode('room-photo');
-			state.setObjectReplacementSourceMode('room-photo');
-			state.setTextureReplacementSourceMode('room-photo');
-			state.setTextureMaskImage(undefined);
-			state.setActiveObjectReplacementJobId(undefined);
-			state.setActiveTextureReplacementJobId(undefined);
-			state.setStatus('idle');
-			if (latest) state.setImage({ url: latest.url });
+		workspaceTabs.openProject({
+			projectId: project.id,
+			projectTitle: project.title,
+			sessionId: session.id,
+			sessionTitle: session.title.trim() === '' ? null : session.title,
+			initialize: (state) => initializeSessionState(state, project.id, session)
 		});
 		goto(buildShareUrl('render', request, { view: 'chat' }), { replaceState: false }).catch(
 			(error: unknown) => logBoundaryError('projectDetailPage.continueSession', error)

@@ -28,6 +28,9 @@ export interface Dictionary {
 	'workspace.tabs.label': string;
 	'workspace.tabs.untitled': string;
 	'workspace.tabs.close': string;
+	'workspace.sessionTabs.label': string;
+	'workspace.sessionTabs.close': string;
+	'workspace.sessionsButton': string;
 	'view.switcher.label': string;
 	'view.chat': string;
 	'view.keyValue': string;
