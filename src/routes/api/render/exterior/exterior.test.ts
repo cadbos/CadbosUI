@@ -15,8 +15,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
+import { getUserIdByPubkey } from '$lib/server/billing';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+import { renderExterior } from '$lib/server/generation';
 
 // Lets a single test force recordGeneration and/or the getCredit fallback to
 // reject, to prove the response never falls back to archAI's raw (shared) balance.
@@ -30,6 +32,7 @@ vi.mock('$lib/server/billing', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/billing')>();
 	return {
 		...actual,
+		getUserIdByPubkey: vi.fn(actual.getUserIdByPubkey),
 		recordBalance: vi.fn((...args: Parameters<typeof actual.recordBalance>) => {
 			if (billingMock.failNextRecordBalance) {
 				billingMock.failNextRecordBalance = false;
@@ -45,6 +48,11 @@ vi.mock('$lib/server/billing', async (importOriginal) => {
 			return actual.getCredit(...args);
 		})
 	};
+});
+
+vi.mock('$lib/server/generation', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/generation')>();
+	return { ...actual, renderExterior: vi.fn(actual.renderExterior) };
 });
 
 vi.mock('$lib/server/generations', async (importOriginal) => {
@@ -83,7 +91,8 @@ type ExteriorRenderEvent = Parameters<typeof POST>[0];
 function call(
 	user: SessionUser | null,
 	platform: App.Platform,
-	body: unknown
+	body: unknown,
+	sessionLookupUnavailable = false
 ): ReturnType<typeof POST> {
 	return POST({
 		request: new Request('https://cadbos.example/api/render/exterior', {
@@ -91,7 +100,7 @@ function call(
 			body: JSON.stringify(body)
 		}),
 		platform,
-		locals: { user }
+		locals: { sessionLookupUnavailable, user }
 	} as ExteriorRenderEvent);
 }
 
@@ -106,6 +115,30 @@ describe('POST /api/render/exterior — billing', () => {
 	it('rejects unauthenticated requests', async () => {
 		const response = await call(null, { env: { DB: makeD1() } } as App.Platform, body);
 		expect(response.status).toBe(401);
+	});
+
+	it('returns 503 without validation, billing, storage, provider, or render processing', async () => {
+		const requestJson = vi.spyOn(Request.prototype, 'json');
+		vi.mocked(getUserIdByPubkey).mockClear();
+		vi.mocked(renderExterior).mockClear();
+
+		const response = await call(null, { env: {} } as App.Platform, { invalid: true }, true);
+
+		try {
+			expect(response.status).toBe(503);
+			expect(response.headers.get('retry-after')).toBe('5');
+			expect(requestJson).not.toHaveBeenCalled();
+			expect(getUserIdByPubkey).not.toHaveBeenCalled();
+			expect(renderExterior).not.toHaveBeenCalled();
+		} finally {
+			requestJson.mockRestore();
+		}
+		expect(await response.json()).toEqual({
+			error: {
+				code: 'authentication_unavailable',
+				message: 'Authentication service temporarily unavailable'
+			}
+		});
 	});
 
 	it('renders an exterior image and returns a URL', async () => {

@@ -16,6 +16,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { RequestEvent, ResolveOptions } from '@sveltejs/kit';
 import { afterEach, expect, it, vi } from 'vitest';
 import { SESSION_COOKIE } from '$lib/server/auth/config';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 
 vi.mock('$app/environment', () => ({ dev: false }));
 
@@ -50,6 +51,15 @@ function sessionEvent(path: string, db: D1Database, sessionId: string = 'private
 
 function okResolve(): Parameters<typeof handle>[0]['resolve'] {
 	return vi.fn(async () => new Response('ok'));
+}
+
+function protectedResolve(): Parameters<typeof handle>[0]['resolve'] {
+	return vi.fn(async (event) => {
+		if (!event.locals.user) {
+			return authenticationRequiredResponse(event.locals.sessionLookupUnavailable);
+		}
+		return new Response('ok');
+	});
 }
 
 it('renders the failed integrity state when the asset manifest fetch stalls', async () => {
@@ -113,6 +123,7 @@ it('renders a public page anonymously and preserves the session when D1 is unava
 	expect(response.status).toBe(200);
 	expect(await response.text()).toBe('ok');
 	expect(event.locals.user).toBeNull();
+	expect(event.locals.sessionLookupUnavailable).toBe(true);
 	expect(resolve).toHaveBeenCalledOnce();
 	expect(deleteCookie).not.toHaveBeenCalled();
 	expect(response.headers.get('cache-control')).toBe('no-store');
@@ -140,20 +151,23 @@ it('lets the health endpoint report D1 availability when session lookup fails', 
 	expect(response.headers.get('cache-control')).toBe('no-store');
 });
 
-it('lets the demo auth route resolve when session lookup fails', async () => {
-	const { event } = sessionEvent(
-		'/auth/demo',
-		sessionDb(() => Promise.reject(new Error('D1_ERROR: internal error')))
-	);
-	const resolve = okResolve();
-	vi.spyOn(console, 'error').mockImplementation(() => undefined);
+it.each(['/auth/demo', '/auth/logout'])(
+	'lets the session-independent auth route %s resolve when session lookup fails',
+	async (path) => {
+		const { event } = sessionEvent(
+			path,
+			sessionDb(() => Promise.reject(new Error('D1_ERROR: internal error')))
+		);
+		const resolve = okResolve();
+		vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-	const response = await handle({ event, resolve });
+		const response = await handle({ event, resolve });
 
-	expect(response.status).toBe(200);
-	expect(resolve).toHaveBeenCalledOnce();
-	expect(response.headers.get('cache-control')).toBe('no-store');
-});
+		expect(response.status).toBe(200);
+		expect(resolve).toHaveBeenCalledOnce();
+		expect(response.headers.get('cache-control')).toBe('no-store');
+	}
+);
 
 it.each(['/api/render', '/auth/me'])(
 	'returns a non-cacheable service-unavailable response for %s when session lookup fails',
@@ -162,7 +176,7 @@ it.each(['/api/render', '/auth/me'])(
 			path,
 			sessionDb(() => Promise.reject(new Error('D1_ERROR: internal error')))
 		);
-		const resolve = okResolve();
+		const resolve = protectedResolve();
 		vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 		const response = await handle({ event, resolve });
@@ -177,7 +191,7 @@ it.each(['/api/render', '/auth/me'])(
 		expect(response.headers.get('retry-after')).toBe('5');
 		expect(response.headers.get('cache-control')).toBe('no-store');
 		expect(response.headers.get('x-content-type-options')).toBe('nosniff');
-		expect(resolve).not.toHaveBeenCalled();
+		expect(resolve).toHaveBeenCalledOnce();
 		expect(deleteCookie).not.toHaveBeenCalled();
 	}
 );
@@ -190,12 +204,13 @@ it.each([
 		path,
 		sessionDb(() => Promise.resolve(null))
 	);
-	const resolve = okResolve();
+	const resolve = status === 401 ? protectedResolve() : okResolve();
 
 	const response = await handle({ event, resolve });
 
 	expect(response.status).toBe(status);
 	expect(event.locals.user).toBeNull();
+	expect(event.locals.sessionLookupUnavailable).toBe(false);
 	expect(deleteCookie).toHaveBeenCalledWith(SESSION_COOKIE, { path: '/' });
 });
 
@@ -211,6 +226,7 @@ it('continues with the authenticated user after a successful session lookup', as
 
 	expect(response.status).toBe(200);
 	expect(event.locals.user).toEqual({ pubkey, firstName: 'Ada', lastName: 'Lovelace' });
+	expect(event.locals.sessionLookupUnavailable).toBe(false);
 	expect(deleteCookie).not.toHaveBeenCalled();
 });
 
@@ -225,13 +241,13 @@ it('treats a missing D1 binding as authentication service unavailability', async
 		route: { id: '/auth/me' },
 		url
 	} as unknown as RequestEvent;
-	const resolve = okResolve();
+	const resolve = protectedResolve();
 	vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 	const response = await handle({ event, resolve });
 
 	expect(response.status).toBe(503);
 	expect(response.headers.get('retry-after')).toBe('5');
-	expect(resolve).not.toHaveBeenCalled();
+	expect(resolve).toHaveBeenCalledOnce();
 	expect(deleteCookie).not.toHaveBeenCalled();
 });

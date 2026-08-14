@@ -16,6 +16,7 @@
 // The session id is rotated on every successful login (a fresh token is issued).
 
 import type { Cookies } from '@sveltejs/kit';
+import { apiError } from '$lib/server/api';
 import { SESSION_COOKIE } from './config';
 
 // 256 bits of CSPRNG entropy, hex-encoded. Used for both session ids and challenge
@@ -37,4 +38,18 @@ export function setSessionCookie(cookies: Cookies, id: string, expires: Date): v
 
 export function clearSessionCookie(cookies: Cookies): void {
 	cookies.delete(SESSION_COOKIE, { path: '/' });
+}
+
+export function authenticationRequiredResponse(sessionLookupUnavailable: boolean): Response {
+	if (!sessionLookupUnavailable) {
+		return apiError(401, 'unauthorized', 'Authentication required');
+	}
+
+	const response = apiError(
+		503,
+		'authentication_unavailable',
+		'Authentication service temporarily unavailable'
+	);
+	response.headers.set('Retry-After', '5');
+	return response;
 }

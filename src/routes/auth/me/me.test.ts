@@ -35,8 +35,12 @@ function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0
 
 type MeEvent = Parameters<typeof GET>[0];
 
-function call(user: SessionUser | null, platform: App.Platform): ReturnType<typeof GET> {
-	return GET({ platform, locals: { user } } as MeEvent);
+function call(
+	user: SessionUser | null,
+	platform: App.Platform,
+	sessionLookupUnavailable: boolean = false
+): ReturnType<typeof GET> {
+	return GET({ platform, locals: { sessionLookupUnavailable, user } } as MeEvent);
 }
 
 const pubkey = 'a'.repeat(64);
@@ -45,6 +49,18 @@ describe('GET /auth/me — generation access control', () => {
 	it('rejects unauthenticated requests', async () => {
 		const response = await call(null, { env: { DB: makeD1() } } as App.Platform);
 		expect(response.status).toBe(401);
+	});
+
+	it('returns service unavailable when session lookup fails', async () => {
+		const response = await call(null, { env: {} } as App.Platform, true);
+		expect(response.status).toBe(503);
+		expect(response.headers.get('retry-after')).toBe('5');
+		expect(await response.json()).toEqual({
+			error: {
+				code: 'authentication_unavailable',
+				message: 'Authentication service temporarily unavailable'
+			}
+		});
 	});
 
 	it('omits credit for an account no admin has approved', async () => {

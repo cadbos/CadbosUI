@@ -13,17 +13,21 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+import type { SessionUser } from '$lib/api/contract';
 import { GET } from './+server';
 
 type DownloadEvent = Parameters<typeof GET>[0];
 
 function call(
 	searchParams: Record<string, string>,
-	fetch: typeof globalThis.fetch
+	fetch: typeof globalThis.fetch,
+	user: SessionUser | null = { pubkey: 'a'.repeat(64) },
+	sessionLookupUnavailable: boolean = false
 ): ReturnType<typeof GET> {
 	return GET({
 		url: new URL(`https://cadbos.example/api/download?${new URLSearchParams(searchParams)}`),
-		fetch
+		fetch,
+		locals: { sessionLookupUnavailable, user }
 	} as DownloadEvent);
 }
 
@@ -32,6 +36,27 @@ function imageResponse(contentType: string, body = 'image-bytes'): Response {
 }
 
 describe('GET /api/download', () => {
+	it.each([
+		[false, 401, 'unauthorized'],
+		[true, 503, 'authentication_unavailable']
+	] as const)(
+		'rejects an unresolved session when lookup unavailability is %s',
+		async (sessionLookupUnavailable, status, code) => {
+			const fetch = vi.fn();
+			const response = await call(
+				{ url: 'https://cdn.example/render.webp' },
+				fetch,
+				null,
+				sessionLookupUnavailable
+			);
+
+			expect(response.status).toBe(status);
+			expect(await response.json()).toEqual({ error: expect.objectContaining({ code }) });
+			expect(response.headers.get('retry-after')).toBe(sessionLookupUnavailable ? '5' : null);
+			expect(fetch).not.toHaveBeenCalled();
+		}
+	);
+
 	it('streams the upstream image with a forced-download header', async () => {
 		const fetch = vi.fn(async () => imageResponse('image/webp'));
 

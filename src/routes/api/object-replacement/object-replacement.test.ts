@@ -59,7 +59,8 @@ vi.mock('$lib/server/object-replacement-jobs', async (importOriginal) => {
 				}
 				return actual.createObjectReplacementJob(...args);
 			}
-		)
+		),
+		getObjectReplacementJob: vi.fn(actual.getObjectReplacementJob)
 	};
 });
 
@@ -145,7 +146,8 @@ type GetEvent = Parameters<typeof GET>[0];
 function callPost(
 	user: SessionUser | null,
 	requestPlatform: App.Platform,
-	body: unknown = requestBody
+	body: unknown = requestBody,
+	sessionLookupUnavailable = false
 ): ReturnType<typeof POST> {
 	return POST({
 		request: new Request('https://cadbos.example/api/object-replacement', {
@@ -153,7 +155,7 @@ function callPost(
 			body: JSON.stringify(body)
 		}),
 		platform: requestPlatform,
-		locals: { user },
+		locals: { sessionLookupUnavailable, user },
 		url: new URL('https://cadbos.example/api/object-replacement')
 	} as PostEvent);
 }
@@ -161,12 +163,13 @@ function callPost(
 function callGet(
 	user: SessionUser | null,
 	requestPlatform: App.Platform,
-	id: string
+	id: string,
+	sessionLookupUnavailable = false
 ): ReturnType<typeof GET> {
 	return GET({
 		params: { id },
 		platform: requestPlatform,
-		locals: { user }
+		locals: { sessionLookupUnavailable, user }
 	} as GetEvent);
 }
 
@@ -208,6 +211,22 @@ describe('POST /api/object-replacement', () => {
 			error: { code: 'unauthorized', message: 'Authentication required' }
 		});
 		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(401, 'unauthorized'));
+		consoleWarn.mockClear();
+
+		const uploadsBucket = bucket();
+		const unavailable = await callPost(null, platform(db, uploadsBucket), requestBody, true);
+		expect(unavailable.status).toBe(503);
+		expect(unavailable.headers.get('retry-after')).toBe('5');
+		expect(await unavailable.json()).toEqual({
+			error: {
+				code: 'authentication_unavailable',
+				message: 'Authentication service temporarily unavailable'
+			}
+		});
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(503, 'authentication_unavailable'));
+		expect(integration.submit).not.toHaveBeenCalled();
+		expect(createObjectReplacementJob).not.toHaveBeenCalled();
+		expect(uploadsBucket.put).not.toHaveBeenCalled();
 		consoleWarn.mockClear();
 
 		seedUser(db, 12);
@@ -529,6 +548,25 @@ describe('POST /api/object-replacement', () => {
 });
 
 describe('GET /api/object-replacement/[id]', () => {
+	it('returns 503 without loading, polling, or storing a job when session lookup is unavailable', async () => {
+		const uploadsBucket = bucket();
+		vi.mocked(getObjectReplacementJob).mockClear();
+
+		const response = await callGet(null, platform(makeD1(), uploadsBucket), 'job-1', true);
+
+		expect(response.status).toBe(503);
+		expect(response.headers.get('retry-after')).toBe('5');
+		expect(await response.json()).toEqual({
+			error: {
+				code: 'authentication_unavailable',
+				message: 'Authentication service temporarily unavailable'
+			}
+		});
+		expect(getObjectReplacementJob).not.toHaveBeenCalled();
+		expect(integration.poll).not.toHaveBeenCalled();
+		expect(uploadsBucket.put).not.toHaveBeenCalled();
+	});
+
 	it('hides missing jobs and jobs owned by another account', async () => {
 		const db = makeD1();
 		seedUser(db, 12);

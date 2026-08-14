@@ -19,6 +19,7 @@ import type { RequestHandler } from './$types';
 import type { ResourcesResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { listDistinctSourceImages } from '$lib/server/generations';
@@ -38,7 +39,9 @@ const resourcesSearchParamsSchema = z.strictObject({
 });
 
 export const GET: RequestHandler = async ({ url, platform, locals }) => {
-	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!locals.user) {
+		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+	}
 
 	const parsed = resourcesSearchParamsSchema.safeParse(Object.fromEntries(url.searchParams));
 	if (!parsed.success) return apiError(400, 'invalid_request', 'Invalid search params');

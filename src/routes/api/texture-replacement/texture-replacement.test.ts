@@ -99,7 +99,10 @@ function callPost(
 			body: JSON.stringify(body)
 		}),
 		platform: requestPlatform,
-		locals: { user: pubkey === null ? null : { pubkey } },
+		locals: {
+			sessionLookupUnavailable: false,
+			user: pubkey === null ? null : { pubkey }
+		},
 		url: new URL('https://cadbos.example/api/texture-replacement')
 	} as PostEvent);
 }

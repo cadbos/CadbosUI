@@ -50,7 +50,7 @@ function call(
 			body: JSON.stringify(body)
 		}),
 		platform: platform(db, adminPubkeys),
-		locals: { user }
+		locals: { sessionLookupUnavailable: false, user }
 	} as ProfilesEvent);
 }
 

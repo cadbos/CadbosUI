@@ -19,6 +19,7 @@ import type { RenderResponse } from '$lib/api/contract';
 import { apiError, editRequestSchema, parseBody } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import {
 	assertGenerationAllowed,
 	getCredit,
@@ -33,12 +34,13 @@ import { recordGeneration } from '$lib/server/generations';
 // rate-limit bucket, bound to the authenticated pubkey rather than IP.
 const EDIT_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
 
-// Session is enforced centrally in hooks.server.ts (guardedPaths). Editing
-// itself is restricted further, by design: only accounts an admin has
+// Editing is restricted further, by design: only accounts an admin has
 // manually approved (a `credits` row, billing.ts) may edit at all — a fresh
 // Nostr login alone is not enough (mirrors /api/render).
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
-	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!locals.user) {
+		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+	}
 
 	const parsed = await parseBody(request, editRequestSchema);
 	if (!parsed.ok) return parsed.response;

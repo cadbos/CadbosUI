@@ -81,7 +81,7 @@ function call(
 			body: JSON.stringify(body)
 		}),
 		platform,
-		locals: { user }
+		locals: { sessionLookupUnavailable: false, user }
 	} as UpscaleEvent);
 }
 

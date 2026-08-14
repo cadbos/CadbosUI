@@ -14,11 +14,14 @@
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { apiError, parseBody, profileUpdateRequestSchema } from '$lib/server/api';
+import { parseBody, profileUpdateRequestSchema } from '$lib/server/api';
 import { getDb, updateUserProfile } from '$lib/server/auth/repository';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 
 export const PATCH: RequestHandler = async ({ request, platform, locals }) => {
-	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!locals.user) {
+		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+	}
 
 	const parsed = await parseBody(request, profileUpdateRequestSchema);
 	if (!parsed.ok) return parsed.response;

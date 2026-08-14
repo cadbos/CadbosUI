@@ -52,7 +52,7 @@ function call(
 		}),
 		platform: uploadPlatform,
 		url: new URL('https://cadbos.example/api/uploads'),
-		locals: { user }
+		locals: { sessionLookupUnavailable: false, user }
 	} as UploadEvent);
 }
 

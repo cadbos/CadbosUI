@@ -41,12 +41,13 @@ type DeleteGeneratedImageEvent = Parameters<typeof DELETE>[0];
 function call(
 	user: SessionUser | null,
 	platform: App.Platform,
-	search = ''
+	search = '',
+	sessionLookupUnavailable = false
 ): ReturnType<typeof GET> {
 	return GET({
 		url: new URL(`https://cadbos.example/api/generated-images${search}`),
 		platform,
-		locals: { user }
+		locals: { sessionLookupUnavailable, user }
 	} as GeneratedImagesEvent);
 }
 
@@ -62,7 +63,8 @@ function bucket(failDelete = false): Pick<R2Bucket, 'delete'> {
 function callDelete(
 	user: SessionUser | null,
 	platform: App.Platform,
-	body: unknown
+	body: unknown,
+	sessionLookupUnavailable = false
 ): ReturnType<typeof DELETE> {
 	return DELETE({
 		request: new Request('https://cadbos.example/api/generated-images', {
@@ -70,7 +72,7 @@ function callDelete(
 			body: JSON.stringify(body)
 		}),
 		platform,
-		locals: { user }
+		locals: { sessionLookupUnavailable, user }
 	} as DeleteGeneratedImageEvent);
 }
 
@@ -84,6 +86,19 @@ describe('GET /api/generated-images', () => {
 			error: {
 				code: 'unauthorized',
 				message: 'Authentication required'
+			}
+		});
+	});
+
+	it('returns 503 when session lookup is unavailable', async () => {
+		const response = await call(null, { env: {} } as App.Platform, '', true);
+
+		expect(response.status).toBe(503);
+		expect(response.headers.get('retry-after')).toBe('5');
+		expect(await response.json()).toEqual({
+			error: {
+				code: 'authentication_unavailable',
+				message: 'Authentication service temporarily unavailable'
 			}
 		});
 	});
@@ -185,6 +200,26 @@ describe('DELETE /api/generated-images', () => {
 		});
 
 		expect(response.status).toBe(401);
+	});
+
+	it('returns 503 without deleting from storage when session lookup is unavailable', async () => {
+		const uploadsBucket = bucket();
+		const response = await callDelete(
+			null,
+			{ env: { UPLOADS_BUCKET: uploadsBucket } } as App.Platform,
+			{ id: 'image-1' },
+			true
+		);
+
+		expect(response.status).toBe(503);
+		expect(response.headers.get('retry-after')).toBe('5');
+		expect(await response.json()).toEqual({
+			error: {
+				code: 'authentication_unavailable',
+				message: 'Authentication service temporarily unavailable'
+			}
+		});
+		expect(uploadsBucket.delete).not.toHaveBeenCalled();
 	});
 
 	it('rejects requests that do not name exactly one image id', async () => {

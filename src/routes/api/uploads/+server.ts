@@ -17,6 +17,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { apiError, remoteImageUploadRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { findGenerationSourceByHash } from '$lib/server/generations';
@@ -42,7 +43,9 @@ function remoteImportErrorResponse(error: RemoteImageImportError): Response {
 }
 
 export const POST: RequestHandler = async ({ request, platform, url, locals }) => {
-	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!locals.user) {
+		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+	}
 
 	// The demo session bypasses D1 entirely (hooks.server.ts) — no account row
 	// to dedup against, so uploads for it always go straight to R2.
