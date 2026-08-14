@@ -187,8 +187,11 @@ export async function renameProject(
 // share link from resolving (loadProjectDetail/getProjectDetailByShareToken both
 // filter on archived_at), but keeps every row underneath intact — generations are
 // real billed history, never destroyed by tidying up a project list. No restore UI
-// in v1 (see migrations/0012_project_archive.sql). Idempotent: archiving an
-// already-archived or foreign project is a no-op, not an error.
+// in v1 (see migrations/0012_project_archive.sql). Safe to call again on an
+// already-archived or foreign project — never throws, just reports whether *this*
+// call changed anything (result.meta.changes). That return value isn't itself
+// idempotent (true, then false on repeats) — the DELETE route turns a false into
+// a 404, so repeating the call isn't idempotent from the client's own view either.
 export async function archiveProject(
 	db: D1Database,
 	userId: string,
@@ -374,7 +377,8 @@ export async function renameSession(
 }
 
 // Soft delete, same shape as archiveProject: hides the session from the project
-// page without touching its generations. Idempotent.
+// page without touching its generations. Same repeat-call behavior too —
+// see archiveProject's own comment.
 export async function archiveSession(
 	db: D1Database,
 	userId: string,
@@ -498,8 +502,9 @@ export async function getActiveShareToken(
 // (see getActiveShareToken for recovering the value instead). Ownership and
 // revocation happen in the same statement (an EXISTS subquery against
 // projects) so there's no window between checking ownership and revoking.
-// Idempotent: revoking a project with no active token is a no-op, not an
-// error — returns whether this call actually changed anything.
+// Safe to call again with no active token to revoke — never throws, just
+// returns whether this call itself changed anything (true, then false on
+// repeats); the DELETE route turns a false into a 404, same as archiveProject.
 export async function revokeActiveShareToken(
 	db: D1Database,
 	userId: string,

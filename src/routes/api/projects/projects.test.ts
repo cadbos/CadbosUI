@@ -327,7 +327,7 @@ describe('POST /api/projects/[id]/sessions/[sessionId]/fork', () => {
 });
 
 describe('GET, POST /api/projects/[id]/share and DELETE /api/projects/[id]/share', () => {
-	it('issues a token, auto-revokes the prior one, and revoke (of whichever is active) is idempotent', async () => {
+	it('issues a token, auto-revokes the prior one, and revoke (of whichever is active) 404s on a repeat', async () => {
 		const db = makeD1();
 		await seedTwoUsers(db);
 		const createResponse = await createProject({
@@ -465,7 +465,7 @@ describe('PATCH /api/projects/[id]/sessions/[sessionId]', () => {
 });
 
 describe('DELETE /api/projects/[id]/sessions/[sessionId]', () => {
-	it('archives only when owned, hides the session from the project detail, is idempotent', async () => {
+	it('archives only when owned, hides the session from the project detail, and 404s on a repeat', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', owner.pubkey);
 		const createResponse = await createProject({
@@ -519,7 +519,7 @@ describe('DELETE /api/projects/[id]/sessions/[sessionId]', () => {
 });
 
 describe('DELETE /api/projects/[id]', () => {
-	it('archives only when owned, hides the project everywhere, is idempotent', async () => {
+	it('archives only when owned, hides the project everywhere, and 404s on a repeat', async () => {
 		const db = makeD1();
 		await seedTwoUsers(db);
 		const createResponse = await createProject({
