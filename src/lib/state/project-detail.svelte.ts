@@ -73,13 +73,32 @@ export class ProjectDetailLoadError extends Error {
 // workspace-tabs.svelte.ts's tab restore, would otherwise race that shared
 // in-flight slot. Null on any failure — 404, network error, malformed body —
 // since every caller's response is "skip this one", not an error to surface.
+// A fetch response's body isn't released just because it's never read —
+// cancel explicitly wherever a response is fetched but deliberately never
+// consumed, so the underlying stream/connection isn't left dangling.
+function discardBody(response: Response): void {
+	void response.body?.cancel().catch(() => {});
+}
+
 export async function fetchProjectDetail(id: string): Promise<ProjectDetailResponse | null> {
 	try {
 		const response = await fetch(`/api/projects/${id}`);
-		if (!response.ok) return null;
+		// A 404 (not found, or not owned by the caller) is an expected,
+		// unremarkable outcome here — every caller already treats it as
+		// "skip this one" — so only genuine failures are worth logging.
+		if (response.status === 404) return null;
+		if (!response.ok) {
+			console.error('fetchProjectDetail failed:', response.status);
+			return null;
+		}
 		const parsed = projectDetailSchema.safeParse(await response.json().catch(() => null));
-		return parsed.success ? parsed.data : null;
-	} catch {
+		if (!parsed.success) {
+			console.error('fetchProjectDetail: response failed schema validation');
+			return null;
+		}
+		return parsed.data;
+	} catch (error) {
+		console.error('fetchProjectDetail failed:', error);
 		return null;
 	}
 }
@@ -159,17 +178,31 @@ class ProjectDetailState {
 				fetch(`/api/projects/${id}`, { signal: controller.signal }),
 				fetch(`/api/projects/${id}/share`, { signal: controller.signal })
 			]);
-			if (this.#abort !== controller) return;
+			if (this.#abort !== controller) {
+				discardBody(detailResponse);
+				discardBody(shareResponse);
+				return;
+			}
 			if (detailResponse.status === 404) {
+				discardBody(shareResponse);
 				this.project = null;
 				this.status = 'not-found';
 				return;
 			}
-			if (!detailResponse.ok) throw new ProjectDetailLoadError('project detail request failed');
+			if (!detailResponse.ok) {
+				discardBody(shareResponse);
+				throw new ProjectDetailLoadError('project detail request failed');
+			}
 
 			const parsed = projectDetailSchema.safeParse(await detailResponse.json().catch(() => null));
-			if (this.#abort !== controller) return;
-			if (!parsed.success) throw new ProjectDetailLoadError('project detail response invalid');
+			if (this.#abort !== controller) {
+				discardBody(shareResponse);
+				return;
+			}
+			if (!parsed.success) {
+				discardBody(shareResponse);
+				throw new ProjectDetailLoadError('project detail response invalid');
+			}
 
 			this.project = parsed.data;
 			this.shareStatus = parsed.data.shareActive ? 'active' : 'idle';
@@ -179,6 +212,7 @@ class ProjectDetailState {
 				);
 				this.shareToken = shareParsed.success ? shareParsed.data.token : null;
 			} else {
+				discardBody(shareResponse);
 				this.shareToken = null;
 			}
 			this.status = 'ready';
