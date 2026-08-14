@@ -261,10 +261,38 @@ describe('projectDetail share flow', () => {
 		expect(projectDetail.project?.shareActive).toBe(false);
 	});
 
-	it('load() seeds shareStatus from the server-reported shareActive flag', async () => {
-		const fetchMock = vi.fn<typeof fetch>(() =>
-			Promise.resolve(jsonResponse(detail({ shareActive: true })))
-		);
+	it('load() hydrates shareToken from the parallel share fetch when a link is active', async () => {
+		const fetchMock = vi.fn<typeof fetch>((input) => {
+			const url = String(input);
+			if (url.endsWith('/share')) return Promise.resolve(jsonResponse({ token: 'existing-token' }));
+			return Promise.resolve(jsonResponse(detail({ shareActive: true })));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		expect(projectDetail.shareStatus).toBe('active');
+		expect(projectDetail.shareToken).toBe('existing-token');
+	});
+
+	it('load() leaves shareToken null when there is no active share', async () => {
+		const fetchMock = vi.fn<typeof fetch>((input) => {
+			const url = String(input);
+			if (url.endsWith('/share')) return Promise.resolve(new Response(null, { status: 404 }));
+			return Promise.resolve(jsonResponse(detail()));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await projectDetail.load('00000000-0000-4000-8000-000000000001');
+		expect(projectDetail.shareStatus).toBe('idle');
+		expect(projectDetail.shareToken).toBeNull();
+	});
+
+	it('load() falls back to a null shareToken when shareActive is true but the share fetch fails', async () => {
+		const fetchMock = vi.fn<typeof fetch>((input) => {
+			const url = String(input);
+			if (url.endsWith('/share')) return Promise.resolve(new Response(null, { status: 500 }));
+			return Promise.resolve(jsonResponse(detail({ shareActive: true })));
+		});
 		vi.stubGlobal('fetch', fetchMock);
 
 		await projectDetail.load('00000000-0000-4000-8000-000000000001');

@@ -471,14 +471,35 @@ export async function issueShareToken(
 	return token;
 }
 
+// Re-exposes whichever share token is currently active for the project, for
+// the owner only — lets the project page recover its existing link after a
+// reload instead of only offering "create new" (which would silently
+// invalidate a link the owner already handed out). Null when the project
+// isn't owned by userId or has no active link.
+export async function getActiveShareToken(
+	db: D1Database,
+	userId: string,
+	projectId: string
+): Promise<string | null> {
+	const row = await db
+		.prepare(
+			'SELECT ps.token FROM project_shares ps ' +
+				'JOIN projects p ON p.id = ps.project_id ' +
+				'WHERE ps.project_id = ? AND ps.revoked_at IS NULL ' +
+				'AND p.user_id = ? AND p.archived_at IS NULL'
+		)
+		.bind(projectId, userId)
+		.first<{ token: string }>();
+	return row?.token ?? null;
+}
+
 // Revokes whichever share token is currently active for the project — the
-// owner never needs to know the token value to revoke it (issueShareToken
-// only ever returns it once, at creation; the project page can't show it
-// again after a reload). Ownership and revocation happen in the same
-// statement (an EXISTS subquery against projects) so there's no window
-// between checking ownership and revoking. Idempotent: revoking a project
-// with no active token is a no-op, not an error — returns whether this call
-// actually changed anything.
+// caller never needs to pass the token value itself, just the project id
+// (see getActiveShareToken for recovering the value instead). Ownership and
+// revocation happen in the same statement (an EXISTS subquery against
+// projects) so there's no window between checking ownership and revoking.
+// Idempotent: revoking a project with no active token is a no-op, not an
+// error — returns whether this call actually changed anything.
 export async function revokeActiveShareToken(
 	db: D1Database,
 	userId: string,

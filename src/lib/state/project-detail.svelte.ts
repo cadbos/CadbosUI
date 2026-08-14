@@ -85,9 +85,11 @@ class ProjectDetailState {
 	renamingSessionId = $state<string | null>(null);
 	archivingSessionId = $state<string | null>(null);
 	shareStatus = $state<ShareStatus>('idle');
-	// Only known right after issuing — see issueShare(). project.shareActive
-	// (loaded from the server) is the source of truth for whether a link
-	// exists at all; this is purely the plaintext value for copying.
+	// Populated right after issuing (see issueShare()) or, when a link is
+	// already active, by load()'s parallel GET .../share fetch.
+	// project.shareActive (loaded from the server) is the source of truth for
+	// whether a link exists at all; this is purely the plaintext value for
+	// copying.
 	shareToken = $state<string | null>(null);
 	#abort: AbortController | null = null;
 
@@ -129,22 +131,38 @@ class ProjectDetailState {
 		this.error = null;
 
 		try {
-			const response = await fetch(`/api/projects/${id}`, { signal: controller.signal });
+			// Fetched alongside the detail request, not after it, even though
+			// whether it's needed depends on shareActive (only known once the
+			// detail response parses) — a 404 here (no active link) is the common
+			// case and cheap, and firing both up front means a share link that's
+			// already active shows up ready to copy on the very first paint
+			// instead of a beat later.
+			const [detailResponse, shareResponse] = await Promise.all([
+				fetch(`/api/projects/${id}`, { signal: controller.signal }),
+				fetch(`/api/projects/${id}/share`, { signal: controller.signal })
+			]);
 			if (this.#abort !== controller) return;
-			if (response.status === 404) {
+			if (detailResponse.status === 404) {
 				this.project = null;
 				this.status = 'not-found';
 				return;
 			}
-			if (!response.ok) throw new ProjectDetailLoadError('project detail request failed');
+			if (!detailResponse.ok) throw new ProjectDetailLoadError('project detail request failed');
 
-			const parsed = projectDetailSchema.safeParse(await response.json().catch(() => null));
+			const parsed = projectDetailSchema.safeParse(await detailResponse.json().catch(() => null));
 			if (this.#abort !== controller) return;
 			if (!parsed.success) throw new ProjectDetailLoadError('project detail response invalid');
 
 			this.project = parsed.data;
-			this.shareToken = null;
 			this.shareStatus = parsed.data.shareActive ? 'active' : 'idle';
+			if (parsed.data.shareActive && shareResponse.ok) {
+				const shareParsed = issueShareResponseSchema.safeParse(
+					await shareResponse.json().catch(() => null)
+				);
+				this.shareToken = shareParsed.success ? shareParsed.data.token : null;
+			} else {
+				this.shareToken = null;
+			}
 			this.status = 'ready';
 		} catch (error) {
 			if (controller.signal.aborted) return;

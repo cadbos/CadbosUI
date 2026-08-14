@@ -318,7 +318,8 @@ export const ru = {
 	'projects.detail.shareCreating': 'Создаём…',
 	'projects.detail.shareCreateFailed': 'Не удалось создать ссылку.',
 	'projects.detail.shareCopyFailed': 'Не удалось скопировать ссылку. Скопируйте её вручную.',
-	'projects.detail.shareActiveHint': 'Сохраните эту ссылку сейчас — повторно она не покажется.',
+	'projects.detail.shareActiveHint':
+		'Любой, у кого есть эта ссылка, может просматривать проект, пока вы её не отзовёте.',
 	'projects.detail.shareActiveUnknown':
 		'Ссылка активна, но её адрес показывается только один раз — сразу после создания.',
 	'projects.detail.shareCreateNew': 'Создать новую ссылку',

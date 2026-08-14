@@ -36,7 +36,11 @@ const { POST: createSession } = await import('./[id]/sessions/+server');
 const { PATCH: renameSession, DELETE: deleteSession } =
 	await import('./[id]/sessions/[sessionId]/+server');
 const { POST: forkSession } = await import('./[id]/sessions/[sessionId]/fork/+server');
-const { POST: issueShare, DELETE: revokeShare } = await import('./[id]/share/+server');
+const {
+	GET: getShare,
+	POST: issueShare,
+	DELETE: revokeShare
+} = await import('./[id]/share/+server');
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -322,7 +326,7 @@ describe('POST /api/projects/[id]/sessions/[sessionId]/fork', () => {
 	});
 });
 
-describe('POST /api/projects/[id]/share and DELETE /api/projects/[id]/share', () => {
+describe('GET, POST /api/projects/[id]/share and DELETE /api/projects/[id]/share', () => {
 	it('issues a token, auto-revokes the prior one, and revoke (of whichever is active) is idempotent', async () => {
 		const db = makeD1();
 		await seedTwoUsers(db);
@@ -336,6 +340,13 @@ describe('POST /api/projects/[id]/share and DELETE /api/projects/[id]/share', ()
 		} as Parameters<typeof createProject>[0]);
 		const project = (await createResponse.json()) as ProjectRecord;
 
+		const noShareYet = await getShare({
+			params: { id: project.id },
+			platform: platform(db),
+			locals: { user: owner }
+		} as Parameters<typeof getShare>[0]);
+		expect(noShareYet.status).toBe(404);
+
 		const firstShare = await issueShare({
 			params: { id: project.id },
 			platform: platform(db),
@@ -344,6 +355,23 @@ describe('POST /api/projects/[id]/share and DELETE /api/projects/[id]/share', ()
 		expect(firstShare.status).toBe(201);
 		const firstToken = (await firstShare.json()) as ShareTokenResponse;
 		expect(await getProjectDetailByShareToken(db, firstToken.token)).not.toBeNull();
+
+		// The owner can recover the token they were just handed (e.g. after a
+		// page reload) without reissuing it.
+		const getFirst = await getShare({
+			params: { id: project.id },
+			platform: platform(db),
+			locals: { user: owner }
+		} as Parameters<typeof getShare>[0]);
+		expect(getFirst.status).toBe(200);
+		expect(((await getFirst.json()) as ShareTokenResponse).token).toBe(firstToken.token);
+
+		const deniedGet = await getShare({
+			params: { id: project.id },
+			platform: platform(db),
+			locals: { user: intruder }
+		} as Parameters<typeof getShare>[0]);
+		expect(deniedGet.status).toBe(404);
 
 		const secondShare = await issueShare({
 			params: { id: project.id },
@@ -370,6 +398,13 @@ describe('POST /api/projects/[id]/share and DELETE /api/projects/[id]/share', ()
 		} as Parameters<typeof revokeShare>[0]);
 		expect(revoke.status).toBe(204);
 		expect(await getProjectDetailByShareToken(db, secondToken.token)).toBeNull();
+
+		const getAfterRevoke = await getShare({
+			params: { id: project.id },
+			platform: platform(db),
+			locals: { user: owner }
+		} as Parameters<typeof getShare>[0]);
+		expect(getAfterRevoke.status).toBe(404);
 
 		const revokeAgain = await revokeShare({
 			params: { id: project.id },

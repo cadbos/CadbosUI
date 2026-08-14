@@ -318,7 +318,8 @@ export const en = {
 	'projects.detail.shareCreating': 'Creating…',
 	'projects.detail.shareCreateFailed': 'Could not create a share link.',
 	'projects.detail.shareCopyFailed': 'Could not copy the link. Copy it manually instead.',
-	'projects.detail.shareActiveHint': 'Save this link now — it will not be shown again.',
+	'projects.detail.shareActiveHint':
+		'Anyone with this link can view the project until you revoke it.',
 	'projects.detail.shareActiveUnknown':
 		'A share link is active, but its address can only be shown once, right after it is created.',
 	'projects.detail.shareCreateNew': 'Generate a new link',

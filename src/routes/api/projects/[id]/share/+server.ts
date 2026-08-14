@@ -18,7 +18,22 @@ import type { ShareTokenResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { getUserIdByPubkey } from '$lib/server/billing';
-import { issueShareToken, revokeActiveShareToken } from '$lib/server/projects';
+import { getActiveShareToken, issueShareToken, revokeActiveShareToken } from '$lib/server/projects';
+
+// Lets the owner recover the currently active link (e.g. after a page
+// reload) without having to revoke and reissue it.
+export const GET: RequestHandler = async ({ params, platform, locals }) => {
+	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+
+	const db = getDb(platform);
+	const userId = await getUserIdByPubkey(db, locals.user.pubkey);
+	if (!userId) return apiError(500, 'account_error', 'Account record not found');
+
+	const token = await getActiveShareToken(db, userId, params.id);
+	if (!token) return apiError(404, 'share_not_found', 'Share link not found');
+
+	return json({ token } satisfies ShareTokenResponse, { status: 200 });
+};
 
 // Issuing a token auto-revokes the project's prior active one (projects.ts) —
 // one active share link per project at a time.
