@@ -181,21 +181,34 @@ class WorkspaceTabsState {
 		}
 	}
 
-	#swapTo(nextKey: string): void {
+	// `discardOutgoing` is for closeSession()/close(): when the tab being
+	// closed is the live one, its own tabs/sessionTabs entry is already gone
+	// by the time this runs, so the usual freeze-before-swap below would
+	// recreate a #frozen entry for a tab that no longer exists — orphaned,
+	// never released by #releaseFrozen (which only walks *current* tabs), and
+	// silently resurrected (stale editPrompt, stale image, everything) if a
+	// session ID is ever reused. Closing must discard that state instead.
+	#swapTo(nextKey: string, options: { discardOutgoing?: boolean } = {}): void {
 		if (nextKey === this.#liveKey) return;
 
-		let outgoing = this.#frozen.get(this.#liveKey);
-		if (!outgoing) {
-			outgoing = new RequestState();
-			this.#frozen.set(this.#liveKey, outgoing);
+		if (options.discardOutgoing) {
+			this.#frozen.delete(this.#liveKey);
+		} else {
+			let outgoing = this.#frozen.get(this.#liveKey);
+			if (!outgoing) {
+				outgoing = new RequestState();
+				this.#frozen.set(this.#liveKey, outgoing);
+			}
+			outgoing.copyFrom(request);
 		}
-		outgoing.copyFrom(request);
 
 		this.#liveKey = nextKey;
 		const incoming = this.#frozen.get(nextKey);
 		if (incoming) {
 			request.copyFrom(incoming);
 			this.#frozen.delete(nextKey);
+		} else if (options.discardOutgoing) {
+			request.reset();
 		}
 	}
 
@@ -332,7 +345,7 @@ class WorkspaceTabsState {
 			sessionTabs,
 			activeSessionTabId: nextActiveSessionId
 		});
-		this.#swapTo(nextActiveSessionId);
+		this.#swapTo(nextActiveSessionId, { discardOutgoing: true });
 		this.#persist();
 	}
 
@@ -360,7 +373,7 @@ class WorkspaceTabsState {
 		}
 
 		this.activeTabId = next.id;
-		this.#swapTo(this.#keyFor(next));
+		this.#swapTo(this.#keyFor(next), { discardOutgoing: true });
 		this.#persist();
 	}
 

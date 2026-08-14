@@ -293,6 +293,42 @@ describe('workspaceTabs.closeSession', () => {
 		expect(request.editPrompt).toBe('session A1 prompt');
 	});
 
+	it('does not resurrect a closed (and reused) session id’s old draft', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A2,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A2);
+				state.setEditPrompt('leaked draft');
+			}
+		});
+
+		// SESSION_A2 is the active (live) tab here — closing it must discard
+		// its draft outright instead of freezing it under its own, now-removed
+		// id, where it would sit forever unreleased and reappear the next time
+		// that id is opened.
+		workspaceTabs.closeSession(PROJECT_A, SESSION_A2);
+
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A2,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A2)
+		});
+
+		expect(request.editPrompt).toBe('');
+	});
+
 	it('closing the last session tab of a project closes the whole project tab', () => {
 		workspaceTabs.openProject({
 			projectId: PROJECT_A,
@@ -363,6 +399,40 @@ describe('workspaceTabs.close', () => {
 		expect(workspaceTabs.activeTabId).toBe(PROJECT_A);
 		expect(request.projectId).toBe(PROJECT_A);
 		expect(request.editPrompt).toBe('project A prompt');
+	});
+
+	it('does not resurrect a closed (and reused) project’s old draft', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'Kitchen',
+			sessionId: SESSION_B1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_B, SESSION_B1);
+				state.setEditPrompt('leaked draft');
+			}
+		});
+
+		// PROJECT_B is the active tab here — closing it must discard its draft
+		// outright instead of freezing it under its own, now-removed session id.
+		workspaceTabs.close(PROJECT_B);
+
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'Kitchen',
+			sessionId: SESSION_B1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_B, SESSION_B1)
+		});
+
+		expect(request.editPrompt).toBe('');
 	});
 
 	it('never closes the scratch tab, even when it is the active tab', () => {
@@ -474,17 +544,16 @@ describe('workspaceTabs.close', () => {
 
 		expect(workspaceTabs.tabs.map((tab) => tab.id)).not.toContain(PROJECT_A);
 
-		// SESSION_A1's frozen state should be gone, not silently resurrected if
-		// a future session ever reused that id.
+		// SESSION_A2's frozen state (the one actually holding 'leaked draft')
+		// should be gone, not silently resurrected if a future session ever
+		// reuses that id — initialize deliberately never touches editPrompt,
+		// so seeing the old value back here would mean the release failed.
 		workspaceTabs.openProject({
 			projectId: PROJECT_B,
 			projectTitle: 'Kitchen',
-			sessionId: SESSION_A1,
+			sessionId: SESSION_A2,
 			sessionTitle: null,
-			initialize: (state) => {
-				state.setProjectSession(PROJECT_B, SESSION_A1);
-				state.setEditPrompt('');
-			}
+			initialize: (state) => state.setProjectSession(PROJECT_B, SESSION_A2)
 		});
 		expect(request.editPrompt).toBe('');
 	});
