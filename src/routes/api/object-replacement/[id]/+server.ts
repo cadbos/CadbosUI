@@ -18,6 +18,7 @@ import type { RequestHandler } from './$types';
 import type { ObjectReplacementJobResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
@@ -68,7 +69,9 @@ function responseForJob(job: ObjectReplacementJob): Response {
 }
 
 export const GET: RequestHandler = async ({ params, platform, locals }) => {
-	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!locals.user) {
+		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+	}
 	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
 		return apiError(500, 'account_error', 'Account record not found');
 	}

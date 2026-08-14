@@ -15,8 +15,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
+import { getUserIdByPubkey } from '$lib/server/billing';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+import { editInterior } from '$lib/server/generation';
 
 // Lets a single test force recordBalance/recordGeneration to reject, to prove
 // a bookkeeping failure doesn't discard an already-successful, already-charged edit.
@@ -27,6 +29,7 @@ vi.mock('$lib/server/billing', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/billing')>();
 	return {
 		...actual,
+		getUserIdByPubkey: vi.fn(actual.getUserIdByPubkey),
 		recordBalance: vi.fn((...args: Parameters<typeof actual.recordBalance>) => {
 			if (billingMock.failNextRecordBalance) {
 				billingMock.failNextRecordBalance = false;
@@ -35,6 +38,11 @@ vi.mock('$lib/server/billing', async (importOriginal) => {
 			return actual.recordBalance(...args);
 		})
 	};
+});
+
+vi.mock('$lib/server/generation', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/generation')>();
+	return { ...actual, editInterior: vi.fn(actual.editInterior) };
 });
 
 vi.mock('$lib/server/generations', async (importOriginal) => {
@@ -73,7 +81,8 @@ type EditEvent = Parameters<typeof POST>[0];
 function call(
 	user: SessionUser | null,
 	platform: App.Platform,
-	body: unknown
+	body: unknown,
+	sessionLookupUnavailable = false
 ): ReturnType<typeof POST> {
 	return POST({
 		request: new Request('https://cadbos.example/api/edit', {
@@ -81,7 +90,7 @@ function call(
 			body: JSON.stringify(body)
 		}),
 		platform,
-		locals: { user }
+		locals: { sessionLookupUnavailable, user }
 	} as EditEvent);
 }
 
@@ -95,6 +104,30 @@ describe('POST /api/edit — billing', () => {
 	it('rejects unauthenticated requests', async () => {
 		const response = await call(null, { env: { DB: makeD1() } } as App.Platform, body);
 		expect(response.status).toBe(401);
+	});
+
+	it('returns 503 without validation, billing, storage, provider, or edit processing', async () => {
+		const requestJson = vi.spyOn(Request.prototype, 'json');
+		vi.mocked(getUserIdByPubkey).mockClear();
+		vi.mocked(editInterior).mockClear();
+
+		const response = await call(null, { env: {} } as App.Platform, { invalid: true }, true);
+
+		try {
+			expect(response.status).toBe(503);
+			expect(response.headers.get('retry-after')).toBe('5');
+			expect(requestJson).not.toHaveBeenCalled();
+			expect(getUserIdByPubkey).not.toHaveBeenCalled();
+			expect(editInterior).not.toHaveBeenCalled();
+		} finally {
+			requestJson.mockRestore();
+		}
+		expect(await response.json()).toEqual({
+			error: {
+				code: 'authentication_unavailable',
+				message: 'Authentication service temporarily unavailable'
+			}
+		});
 	});
 
 	it('rejects an empty instruction — edit-by-prompt has no enhance fallback', async () => {

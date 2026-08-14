@@ -28,6 +28,7 @@ declare global {
 	namespace App {
 		// interface Error {}
 		interface Locals {
+			sessionLookupUnavailable: boolean;
 			user: SessionUser | null;
 		}
 		// interface PageData {}

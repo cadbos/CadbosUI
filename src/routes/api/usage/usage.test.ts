@@ -59,7 +59,7 @@ function call(
 	return GET({
 		url: new URL(`https://cadbos.example/api/usage${search}`),
 		platform,
-		locals: { user }
+		locals: { sessionLookupUnavailable: false, user }
 	} as UsageEvent);
 }
 

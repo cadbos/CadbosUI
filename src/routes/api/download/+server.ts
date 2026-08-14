@@ -14,6 +14,7 @@
 
 import { error } from '@sveltejs/kit';
 import { imageExtensionFromMime } from '$lib/image-mime';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import type { RequestHandler } from './$types';
 
 // Forces a real download of a render/edit result hosted on archAI's external
@@ -22,11 +23,14 @@ import type { RequestHandler } from './$types';
 // discarding all client-side form state. Re-serving the image from our own
 // origin with Content-Disposition: attachment sidesteps that entirely.
 //
-// Session is enforced centrally in hooks.server.ts (guardedPaths). Render/edit
-// results aren't persisted server-side (post-MVP), so there's no server-side
+// Render/edit results aren't persisted server-side (post-MVP), so there's no server-side
 // record to validate the URL against — only https and an image/* response are
 // required, which keeps this from being usable as an open fetch-any-URL proxy.
-export const GET: RequestHandler = async ({ url, fetch }) => {
+export const GET: RequestHandler = async ({ url, fetch, locals }) => {
+	if (!locals.user) {
+		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+	}
+
 	const target = url.searchParams.get('url');
 	if (!target) throw error(400, 'Missing url parameter');
 

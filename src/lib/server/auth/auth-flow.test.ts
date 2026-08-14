@@ -172,7 +172,10 @@ describe('auth flow', () => {
 
 		// hooks.server.ts resolves the session into locals before the handler runs;
 		// logout mutates the DB only for this verified session.
-		const locals = { user: { pubkey: getPublicKey(sk) } };
+		const locals = {
+			sessionLookupUnavailable: false,
+			user: { pubkey: getPublicKey(sk) }
+		};
 		const response = await call(logoutPOST, { platform: platform(db), cookies, locals });
 		expect(response.status).toBe(204);
 		expect(cookies.get(SESSION_COOKIE)).toBeUndefined();
@@ -184,8 +187,41 @@ describe('auth flow', () => {
 		expect(cookies.deleteCalls[0].options.path).toBe('/');
 	});
 
+	it('logout clears the cookie when session lookup is unavailable', async () => {
+		const cookies = makeCookies();
+		cookies.set(SESSION_COOKIE, 'unresolved-session', { path: '/' });
+
+		const response = await call(logoutPOST, {
+			platform: platform(db),
+			cookies,
+			locals: { sessionLookupUnavailable: true, user: null }
+		});
+
+		expect(response.status).toBe(204);
+		expect(cookies.get(SESSION_COOKIE)).toBeUndefined();
+		expect(cookies.deleteCalls).toHaveLength(1);
+	});
+
 	it('me returns 401 without a session and the user + balance with one', async () => {
-		expect((await call(meGET, { locals: { user: null } })).status).toBe(401);
+		expect(
+			(
+				await call(meGET, {
+					locals: { sessionLookupUnavailable: false, user: null }
+				})
+			).status
+		).toBe(401);
+
+		const unavailable = await call(meGET, {
+			locals: { sessionLookupUnavailable: true, user: null }
+		});
+		expect(unavailable.status).toBe(503);
+		expect(unavailable.headers.get('retry-after')).toBe('5');
+		expect(await unavailable.json()).toEqual({
+			error: {
+				code: 'authentication_unavailable',
+				message: 'Authentication service temporarily unavailable'
+			}
+		});
 
 		// A real (non-demo) user is billing.ts-backed by D1 (Module 6), but there is
 		// nothing to show until they've generated at least once — no default balance
@@ -196,7 +232,7 @@ describe('auth flow', () => {
 		await verify(db, makeCookies(), signLogin(sk, challenge));
 
 		const response = await call(meGET, {
-			locals: { user: { pubkey } },
+			locals: { sessionLookupUnavailable: false, user: { pubkey } },
 			platform: platform(db)
 		});
 		expect(response.status).toBe(200);
@@ -219,9 +255,27 @@ describe('auth flow', () => {
 				body: JSON.stringify({ firstName: 'Ada', lastName: 'Lovelace' })
 			}),
 			platform: platform(db),
-			locals: { user: null }
+			locals: { sessionLookupUnavailable: false, user: null }
 		});
 		expect(unauthenticated.status).toBe(401);
+
+		const unavailable = await call(profilePATCH, {
+			request: new Request(VERIFY_URL, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ firstName: 'Ada', lastName: 'Lovelace' })
+			}),
+			platform: platform(db),
+			locals: { sessionLookupUnavailable: true, user: null }
+		});
+		expect(unavailable.status).toBe(503);
+		expect(unavailable.headers.get('retry-after')).toBe('5');
+		expect(await unavailable.json()).toEqual({
+			error: {
+				code: 'authentication_unavailable',
+				message: 'Authentication service temporarily unavailable'
+			}
+		});
 
 		const response = await call(profilePATCH, {
 			request: new Request(VERIFY_URL, {
@@ -230,7 +284,7 @@ describe('auth flow', () => {
 				body: JSON.stringify({ firstName: ' Ada ', lastName: ' Lovelace ' })
 			}),
 			platform: platform(db),
-			locals: { user: { pubkey } }
+			locals: { sessionLookupUnavailable: false, user: { pubkey } }
 		});
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({
@@ -249,7 +303,7 @@ describe('auth flow', () => {
 				body: JSON.stringify({ firstName: 'Grace' })
 			}),
 			platform: platform(db),
-			locals: { user: { pubkey } }
+			locals: { sessionLookupUnavailable: false, user: { pubkey } }
 		});
 		expect(await firstNameOnly.json()).toEqual({
 			user: { pubkey, firstName: 'Grace', lastName: 'Lovelace' }
@@ -262,7 +316,7 @@ describe('auth flow', () => {
 				body: JSON.stringify({ lastName: '' })
 			}),
 			platform: platform(db),
-			locals: { user: { pubkey } }
+			locals: { sessionLookupUnavailable: false, user: { pubkey } }
 		});
 		expect(await clearLastName.json()).toEqual({
 			user: { pubkey, firstName: 'Grace' }

@@ -19,6 +19,7 @@ import type { ObjectReplacementJobResponse } from '$lib/api/contract';
 import { apiError, objectReplacementRequestSchema, parseBody } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { assertGenerationAllowed, getUserIdByPubkey } from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
@@ -81,8 +82,12 @@ function remoteImageError(error: RemoteImageImportError): Response {
 
 export const POST: RequestHandler = async ({ request, platform, locals, url }) => {
 	if (!locals.user) {
-		logRejection(401, 'unauthorized');
-		return apiError(401, 'unauthorized', 'Authentication required');
+		const response = authenticationRequiredResponse(locals.sessionLookupUnavailable);
+		logRejection(
+			response.status,
+			locals.sessionLookupUnavailable ? 'authentication_unavailable' : 'unauthorized'
+		);
+		return response;
 	}
 	const parsed = await parseBody(request, objectReplacementRequestSchema);
 	if (!parsed.ok) return parsed.response;

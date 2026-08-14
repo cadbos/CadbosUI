@@ -34,7 +34,7 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 type BalanceEvent = Parameters<typeof GET>[0];
 
 function call(user: SessionUser | null, platform: App.Platform): ReturnType<typeof GET> {
-	return GET({ platform, locals: { user } } as BalanceEvent);
+	return GET({ platform, locals: { sessionLookupUnavailable: false, user } } as BalanceEvent);
 }
 
 function platform(db: D1Database, adminPubkeys = ADMIN_PUBKEY): App.Platform {

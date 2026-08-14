@@ -16,14 +16,16 @@ import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { MeResponse } from '$lib/api/contract';
-import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getCredit, getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { listCreditHistory } from '$lib/server/generations';
 
 export const GET: RequestHandler = async ({ locals, platform }) => {
-	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!locals.user) {
+		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+	}
 
 	// The demo session bypasses D1 entirely (hooks.server.ts) — no approved-account
 	// balance to show; real sessions are always backed by a D1 user row.

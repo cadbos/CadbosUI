@@ -18,6 +18,7 @@ import type { RenderResponse } from '$lib/api/contract';
 import { apiError, parseBody, styleTransferRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import {
 	assertGenerationAllowed,
 	getCredit,
@@ -30,7 +31,9 @@ import { recordGeneration } from '$lib/server/generations';
 const STYLE_TRANSFER_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
 
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
-	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!locals.user) {
+		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+	}
 
 	const parsed = await parseBody(request, styleTransferRequestSchema);
 	if (!parsed.ok) return parsed.response;

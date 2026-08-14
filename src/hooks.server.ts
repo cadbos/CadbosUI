@@ -15,7 +15,6 @@
 import { dev } from '$app/environment';
 import type { Handle } from '@sveltejs/kit';
 import { defaultLocale, t } from '$lib/i18n/index.svelte';
-import { apiError } from '$lib/server/api';
 import { SESSION_COOKIE } from '$lib/server/auth/config';
 import { findValidSession, getDb } from '$lib/server/auth/repository';
 import { clearSessionCookie } from '$lib/server/auth/session';
@@ -35,21 +34,9 @@ const securityHeaders: Record<string, string> = {
 	'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
 };
 
-// Endpoints that require an authenticated session (FR-И1, AC-11). Guarded centrally
-// so a new route under these prefixes can't accidentally ship unauthenticated.
-const guardedPaths = [
-	'/api/render',
-	'/api/edit',
-	'/api/upscale',
-	'/api/uploads',
-	'/api/download',
-	'/api/object-replacement',
-	'/api/texture-replacement'
-];
-
 export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get(SESSION_COOKIE);
-	let sessionLookupUnavailable = false;
+	event.locals.sessionLookupUnavailable = false;
 
 	// Demo bypass: in dev mode a special session cookie skips D1 entirely so the
 	// showcase branch works without a local D1 database being configured.
@@ -59,7 +46,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		try {
 			event.locals.user = await findValidSession(getDb(event.platform), sessionId, Date.now());
 		} catch (error) {
-			sessionLookupUnavailable = true;
+			event.locals.sessionLookupUnavailable = true;
 			event.locals.user = null;
 			console.error(
 				JSON.stringify({
@@ -75,52 +62,40 @@ export const handle: Handle = async ({ event, resolve }) => {
 				})
 			);
 		}
-		if (!sessionLookupUnavailable && !event.locals.user) clearSessionCookie(event.cookies);
+		if (!event.locals.sessionLookupUnavailable && !event.locals.user) {
+			clearSessionCookie(event.cookies);
+		}
 	} else {
 		event.locals.user = null;
 	}
 
-	const authenticationServiceUnavailable =
-		sessionLookupUnavailable &&
-		(event.url.pathname === '/api' ||
-			event.url.pathname.startsWith('/api/') ||
-			((event.url.pathname === '/auth' || event.url.pathname.startsWith('/auth/')) &&
-				event.url.pathname !== '/auth/demo'));
-	const blocked =
-		!event.locals.user && guardedPaths.some((path) => event.url.pathname.startsWith(path));
-
 	let integrityManifest: ClientIntegrityManifest | undefined;
 	let integrityState: 'disabled' | 'enabled' | 'failed' = dev ? 'disabled' : 'enabled';
 
-	const response = authenticationServiceUnavailable
-		? apiError(503, 'authentication_unavailable', 'Authentication service temporarily unavailable')
-		: blocked
-			? apiError(401, 'unauthorized', 'Authentication required')
-			: await resolve(event, {
-					transformPageChunk: async ({ html }) => {
-						if (!dev) {
-							try {
-								integrityManifest = await getClientIntegrityManifest(event);
-							} catch (error) {
-								integrityState = 'failed';
-								console.error(
-									JSON.stringify({
-										event: 'client_integrity_manifest_error',
-										message: safeErrorMessage(error)
-									})
-								);
-							}
-						}
+	const response = await resolve(event, {
+		transformPageChunk: async ({ html }) => {
+			if (!dev) {
+				try {
+					integrityManifest = await getClientIntegrityManifest(event);
+				} catch (error) {
+					integrityState = 'failed';
+					console.error(
+						JSON.stringify({
+							event: 'client_integrity_manifest_error',
+							message: safeErrorMessage(error)
+						})
+					);
+				}
+			}
 
-						const translated = translateAppTemplate(html, integrityState);
-						return integrityManifest
-							? addIntegrityToHtml(translated, event.url, integrityManifest)
-							: translated;
-					}
-				});
+			const translated = translateAppTemplate(html, integrityState);
+			return integrityManifest
+				? addIntegrityToHtml(translated, event.url, integrityManifest)
+				: translated;
+		}
+	});
 
-	if (sessionLookupUnavailable) response.headers.set('Cache-Control', 'no-store');
-	if (authenticationServiceUnavailable) response.headers.set('Retry-After', '5');
+	if (event.locals.sessionLookupUnavailable) response.headers.set('Cache-Control', 'no-store');
 
 	const linkHeader = response.headers.get('link');
 	if (linkHeader && integrityManifest) {

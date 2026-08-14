@@ -19,6 +19,7 @@ import type { RequestHandler } from './$types';
 import type { GeneratedImagesResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import {
@@ -51,7 +52,9 @@ function getGeneratedImageStorageKey(url: string, publicUrl: string): string | n
 }
 
 export const GET: RequestHandler = async ({ url, platform, locals }) => {
-	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!locals.user) {
+		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+	}
 
 	const parsed = generatedImagesSearchParamsSchema.safeParse(Object.fromEntries(url.searchParams));
 	if (!parsed.success) return apiError(400, 'invalid_request', 'Invalid search params');
@@ -82,7 +85,9 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 };
 
 export const DELETE: RequestHandler = async ({ request, platform, locals }) => {
-	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!locals.user) {
+		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+	}
 
 	const body = await request.json().catch(() => null);
 	const parsed = generatedImageDeleteSchema.safeParse(body);

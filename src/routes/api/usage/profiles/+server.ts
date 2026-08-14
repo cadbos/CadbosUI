@@ -16,7 +16,8 @@ import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import type { UsageProfile, UsageProfilesResponse } from '$lib/api/contract';
-import { apiError, parseBody } from '$lib/server/api';
+import { parseBody } from '$lib/server/api';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { fetchNostrProfile } from '$lib/nostr/profile';
 import { authorizeUsageViewer, getUsageViewerDb } from '$lib/server/usage';
 
@@ -29,7 +30,7 @@ const usageProfilesRequestSchema = z.object({
 
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	const user = locals.user;
-	if (!user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!user) return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 
 	const authorization = authorizeUsageViewer(platform, user);
 	if (authorization) return authorization;

@@ -19,6 +19,7 @@ import type { RenderResponse } from '$lib/api/contract';
 import { apiError, parseBody, upscaleRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import {
 	assertGenerationAllowed,
 	getCredit,
@@ -33,12 +34,13 @@ import { recordGeneration } from '$lib/server/generations';
 // own rate-limit bucket, bound to the authenticated pubkey rather than IP.
 const UPSCALE_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
 
-// Session is enforced centrally in hooks.server.ts (guardedPaths). Upscaling
-// itself is restricted further, by design: only accounts an admin has manually
+// Upscaling is restricted further, by design: only accounts an admin has manually
 // approved (a `credits` row, billing.ts) may upscale at all — a fresh Nostr
 // login alone is not enough (mirrors /api/render and /api/edit).
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
-	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!locals.user) {
+		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+	}
 
 	const parsed = await parseBody(request, upscaleRequestSchema);
 	if (!parsed.ok) return parsed.response;

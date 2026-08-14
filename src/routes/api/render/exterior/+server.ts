@@ -18,6 +18,7 @@ import type { RequestHandler } from './$types';
 import type { RenderResponse } from '$lib/api/contract';
 import { apiError, parseBody, renderRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import {
 	assertGenerationAllowed,
 	getCredit,
@@ -28,12 +29,13 @@ import { DEMO_PUBKEY } from '$lib/server/demo';
 import { renderExterior } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
 
-// Session is enforced centrally in hooks.server.ts (guardedPaths). Generation
-// itself is restricted further, by design: only accounts an admin has
+// Generation is restricted further, by design: only accounts an admin has
 // manually approved (a `credits` row, billing.ts) may render at all — a
 // fresh Nostr login alone is not enough (mirrors /api/render and /api/edit).
 export const POST: RequestHandler = async ({ request, platform, locals }) => {
-	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!locals.user) {
+		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+	}
 
 	const parsed = await parseBody(request, renderRequestSchema);
 	if (!parsed.ok) return parsed.response;

@@ -17,6 +17,7 @@ import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import type { UserUsageResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
+import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { listUserUsage } from '$lib/server/generations';
 import { authorizeUsageViewer, getUsageViewerDb } from '$lib/server/usage';
 
@@ -31,7 +32,7 @@ const usageSearchParamsSchema = z.strictObject({
 
 export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	const user = locals.user;
-	if (!user) return apiError(401, 'unauthorized', 'Authentication required');
+	if (!user) return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 
 	const authorization = authorizeUsageViewer(platform, user);
 	if (authorization) return authorization;
