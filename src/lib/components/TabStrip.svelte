@@ -14,6 +14,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { X } from '@lucide/svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 	import { createTabController } from '$lib/utils';
 
 	export interface TabStripItem {
@@ -34,30 +35,43 @@ before the Change Date. See LICENSE for complete terms.
 	let { tabs, activeId, ariaLabel, untitledLabel, closeLabel, onActivate, onClose }: Props =
 		$props();
 
-	let tabRefs = $state<HTMLElement[]>([]);
+	// Keyed by tab id rather than each-block index: a tab closing shifts
+	// every survivor's index, but its id never changes, so keying this way
+	// means the attach's own teardown (below) is enough to drop exactly the
+	// closed tab's entry — no separate effect needed to reconcile stale
+	// trailing slots against the current `tabs` length.
+	let tabRefs = new SvelteMap<string, HTMLElement>();
 	// Whether each tab's label is currently clipped by its own max-width —
 	// only then does it get a `title` tooltip, so hovering a short label that
 	// already fits doesn't pop up a redundant native tooltip.
-	let truncated = $state<boolean[]>([]);
+	let truncated = $state<Record<string, boolean>>({});
 
 	function tabTitle(tab: TabStripItem): string {
 		return tab.title ?? untitledLabel;
 	}
 
-	function setTruncated(index: number, value: boolean): void {
-		if (truncated[index] === value) return;
-		const next = [...truncated];
-		next[index] = value;
+	function setTruncated(id: string, value: boolean): void {
+		if (truncated[id] === value) return;
+		truncated = { ...truncated, [id]: value };
+	}
+
+	function clearTruncated(id: string): void {
+		if (!(id in truncated)) return;
+		const next = { ...truncated };
+		delete next[id];
 		truncated = next;
 	}
 
-	function measureTruncation(index: number): (node: HTMLElement) => () => void {
+	function measureTruncation(tab: TabStripItem): (node: HTMLElement) => () => void {
 		return (node: HTMLElement) => {
-			const update = () => setTruncated(index, node.scrollWidth > node.clientWidth);
+			const update = () => setTruncated(tab.id, node.scrollWidth > node.clientWidth);
 			update();
 			const observer = new ResizeObserver(update);
 			observer.observe(node);
-			return () => observer.disconnect();
+			return () => {
+				observer.disconnect();
+				clearTruncated(tab.id);
+			};
 		};
 	}
 
@@ -65,7 +79,7 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => tabs.length,
 		getActiveIndex: () => tabs.findIndex((tab) => tab.id === activeId),
 		setActiveIndex: (index) => onActivate(tabs[index].id),
-		focusTab: (index) => tabRefs[index]?.focus()
+		focusTab: (index) => tabRefs.get(tabs[index]?.id ?? '')?.focus()
 	});
 
 	function close(tab: TabStripItem): void {
@@ -75,8 +89,8 @@ before the Change Date. See LICENSE for complete terms.
 		// focus to the newly active tab once the #each block has re-rendered,
 		// rather than letting it silently fall back to <body>.
 		requestAnimationFrame(() => {
-			const activeIndex = tabs.findIndex((candidate) => candidate.id === activeId);
-			if (activeIndex !== -1) tabRefs[activeIndex]?.focus();
+			const next = tabs.find((candidate) => candidate.id === activeId);
+			if (next) tabRefs.get(next.id)?.focus();
 		});
 	}
 </script>
@@ -88,15 +102,18 @@ before the Change Date. See LICENSE for complete terms.
 			<div class="tab" class:active>
 				<button
 					{@attach (node) => {
-						tabRefs[index] = node as HTMLElement;
+						tabRefs.set(tab.id, node as HTMLElement);
+						return () => {
+							tabRefs.delete(tab.id);
+						};
 					}}
-					{@attach measureTruncation(index)}
+					{@attach measureTruncation(tab)}
 					type="button"
 					role="tab"
 					aria-selected={active}
 					tabindex={active ? 0 : -1}
 					class="tab-select"
-					title={truncated[index] ? tabTitle(tab) : undefined}
+					title={truncated[tab.id] ? tabTitle(tab) : undefined}
 					onclick={() => tabController.activate(index)}
 					onkeydown={tabController.onKeydown}
 				>
