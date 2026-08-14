@@ -263,7 +263,7 @@ export const en = {
 	'projects.empty': 'No projects yet — create one to get started.',
 	'projects.failed': 'Could not load projects.',
 	'projects.loadingMore': 'Loading more…',
-	'projects.listLabel': 'Projects, most recently updated first',
+	'projects.listLabel': 'Projects, oldest first',
 	'projects.updatedAt': 'Updated {date}',
 	'projects.openAria': 'Open project {title}',
 	'projects.deleteButtonAria': 'Delete project {title}',

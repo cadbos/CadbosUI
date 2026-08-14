@@ -160,7 +160,7 @@ describe('projectDetail.rename', () => {
 });
 
 describe('projectDetail.createSession', () => {
-	it('prepends the new session without a reload', async () => {
+	it('appends the new session without a reload', async () => {
 		const fetchMock = vi.fn<typeof fetch>((input) => {
 			const url = String(input);
 			if (url.endsWith('/sessions')) {

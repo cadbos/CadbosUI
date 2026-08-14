@@ -123,8 +123,8 @@ class ProjectsState {
 		}
 	}
 
-	// Creates a project on the server and prepends it to the in-memory list —
-	// listProjects orders by updated_at DESC, and a freshly created project is
+	// Creates a project on the server and appends it to the in-memory list —
+	// listProjects orders by updated_at ASC, and a freshly created project is
 	// always the most recently updated one, so this matches what a reload
 	// would show without an extra round-trip.
 	async create(title: string): Promise<ProjectRecord> {
@@ -140,7 +140,7 @@ class ProjectsState {
 			const parsed = projectRecordSchema.safeParse(await response.json().catch(() => null));
 			if (!parsed.success) throw new ProjectCreateError('project creation response invalid');
 
-			this.projects = [parsed.data, ...this.projects];
+			this.projects = [...this.projects, parsed.data];
 			return parsed.data;
 		} finally {
 			this.creating = false;

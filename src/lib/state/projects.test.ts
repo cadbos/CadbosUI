@@ -123,7 +123,7 @@ describe('projects pagination', () => {
 });
 
 describe('projects.create', () => {
-	it('creates a project and prepends it to the list', async () => {
+	it('creates a project and appends it to the list', async () => {
 		const fetchMock = vi.fn<typeof fetch>((input, init) => {
 			const url = String(input);
 			if (url === '/api/projects' && init?.method === 'POST') {

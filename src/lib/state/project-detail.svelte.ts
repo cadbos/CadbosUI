@@ -183,9 +183,9 @@ class ProjectDetailState {
 	}
 
 	// New session has no lineage and no generations yet — its shape is fully
-	// known client-side, so it's prepended without a round-trip reload. It's
+	// known client-side, so it's appended without a round-trip reload. It's
 	// also always the most recently updated session, matching the server's own
-	// updated_at DESC ordering.
+	// updated_at ASC ordering.
 	async createSession(title?: string): Promise<ProjectSessionRecord> {
 		const project = this.project;
 		if (!project) throw new ProjectDetailActionError('no project loaded');
@@ -214,7 +214,7 @@ class ProjectDetailState {
 			};
 			const current = this.#currentProjectIfUnchanged(project);
 			if (current) {
-				this.project = { ...current, sessions: [session, ...current.sessions] };
+				this.project = { ...current, sessions: [...current.sessions, session] };
 			}
 			return session;
 		} finally {

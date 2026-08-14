@@ -72,31 +72,31 @@ test('navigates from the workspace to the projects list', async ({ page }) => {
 	await expect(page.getByRole('heading', { name: 'Проекты' })).toBeVisible();
 });
 
-test('lists projects, most recently updated first, with their dates', async ({ page }) => {
+test('lists projects, oldest first, with their dates', async ({ page }) => {
 	await authenticate(page);
 	await mockProjectsList(page, [
-		{
-			id: '00000000-0000-4000-8000-000000000001',
-			title: 'Living room',
-			createdAt: Date.UTC(2026, 0, 1),
-			updatedAt: Date.UTC(2026, 0, 3)
-		},
 		{
 			id: '00000000-0000-4000-8000-000000000002',
 			title: 'Kitchen',
 			createdAt: Date.UTC(2026, 0, 1),
 			updatedAt: Date.UTC(2026, 0, 2)
+		},
+		{
+			id: '00000000-0000-4000-8000-000000000001',
+			title: 'Living room',
+			createdAt: Date.UTC(2026, 0, 1),
+			updatedAt: Date.UTC(2026, 0, 3)
 		}
 	]);
 
 	await page.goto('/projects');
 
-	const list = page.getByRole('list', { name: 'Проекты, сначала недавно обновлённые' });
+	const list = page.getByRole('list', { name: 'Проекты, сначала старые' });
 	await expect(list).toBeVisible();
 	const links = page.getByRole('link', { name: /Открыть проект/ });
 	await expect(links).toHaveCount(2);
-	await expect(links.nth(0)).toContainText('Living room');
-	await expect(links.nth(1)).toContainText('Kitchen');
+	await expect(links.nth(0)).toContainText('Kitchen');
+	await expect(links.nth(1)).toContainText('Living room');
 });
 
 test('shows an empty state when there are no projects', async ({ page }) => {

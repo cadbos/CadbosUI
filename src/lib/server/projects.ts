@@ -155,7 +155,7 @@ export async function listProjects(
 	const result = await db
 		.prepare(
 			'SELECT id, user_id, title, created_at, updated_at FROM projects ' +
-				'WHERE user_id = ? AND archived_at IS NULL ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?'
+				'WHERE user_id = ? AND archived_at IS NULL ORDER BY updated_at ASC, id ASC LIMIT ? OFFSET ?'
 		)
 		.bind(userId, size + 1, offset)
 		.all<ProjectRow>();
@@ -213,7 +213,7 @@ async function loadProjectDetail(db: D1Database, projectRow: ProjectRow): Promis
 			.prepare(
 				'SELECT id, project_id, title, parent_session_id, forked_from_generation_id, created_at, updated_at ' +
 					'FROM project_sessions WHERE project_id = ? AND archived_at IS NULL ' +
-					'ORDER BY updated_at DESC, id DESC'
+					'ORDER BY updated_at ASC, id ASC'
 			)
 			.bind(projectRow.id)
 			.all<ProjectSessionRow>(),

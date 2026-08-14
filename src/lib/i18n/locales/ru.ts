@@ -263,7 +263,7 @@ export const ru = {
 	'projects.empty': 'Проектов пока нет — создайте первый.',
 	'projects.failed': 'Не удалось загрузить проекты.',
 	'projects.loadingMore': 'Загружаем ещё…',
-	'projects.listLabel': 'Проекты, сначала недавно обновлённые',
+	'projects.listLabel': 'Проекты, сначала старые',
 	'projects.updatedAt': 'Обновлён {date}',
 	'projects.openAria': 'Открыть проект {title}',
 	'projects.deleteButtonAria': 'Удалить проект {title}',
