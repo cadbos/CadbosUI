@@ -1438,9 +1438,12 @@ export class RequestState {
 		);
 		this.textureReplacementResultReady = source.textureReplacementResultReady;
 		this.promptOverride = source.promptOverride;
-		this.currentRender = cloneRenderResult(source.currentRender);
-		this.previousRender = cloneRenderResult(source.previousRender);
-		this.undoneRender = cloneRenderResult(source.undoneRender);
+		// currentRender/previousRender are derived from the history stack, not
+		// settable fields — copy the stack itself (deep-cloned, so neither
+		// instance's later edits alias the other's) to preserve full undo/redo
+		// navigability across the swap, not just the current step.
+		this.#renderHistory = source.#renderHistory.map((render) => cloneRenderResult(render));
+		this.#historyIndex = source.#historyIndex;
 		this.status = source.status;
 	}
 }
