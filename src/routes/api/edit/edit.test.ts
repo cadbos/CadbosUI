@@ -108,7 +108,7 @@ type EditEvent = Parameters<typeof POST>[0];
 function call(
 	user: SessionUser | null,
 	platform: App.Platform,
-	body: unknown,
+	body: Record<string, unknown>,
 	sessionLookupUnavailable = false
 ): ReturnType<typeof POST> {
 	return POST({
