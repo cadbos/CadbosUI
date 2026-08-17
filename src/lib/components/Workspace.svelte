@@ -828,6 +828,8 @@ before the Change Date. See LICENSE for complete terms.
 		font-weight: 600;
 		line-height: 1.2;
 		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		text-align: center;
 		color: #3f4d43;
 		background: transparent;
@@ -947,6 +949,8 @@ before the Change Date. See LICENSE for complete terms.
 
 		.mode-nav {
 			flex-basis: auto;
+			flex-shrink: 1;
+			min-width: 0;
 			width: 100%;
 		}
 	}
