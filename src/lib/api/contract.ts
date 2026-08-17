@@ -53,6 +53,7 @@ export const healthSnapshotSchema = z
 				assets: serviceHealthSchema,
 				comfyui: serviceHealthSchema,
 				d1: serviceHealthSchema,
+				lnbits: serviceHealthSchema,
 				nostr: nostrHealthSchema,
 				r2: serviceHealthSchema
 			})
@@ -87,7 +88,7 @@ export interface RenderRequest {
 	image: string;
 	// SHA-256 hex digest of `image`'s bytes, from the /api/uploads response —
 	// omitted when `image` is a previous render/edit result rather than a
-	// fresh upload. Lets the server record generations.source_hash for future
+	// fresh upload. Lets the server record image_generation_details.input_hash for future
 	// upload dedup; never forwarded to the render provider.
 	imageHash?: string;
 	prompt: string;
@@ -286,6 +287,39 @@ export interface UsageProfilesResponse {
 	profiles: Record<string, UsageProfile>;
 }
 
+export const packageRecordSchema = z.strictObject({
+	id: z.string().min(1),
+	usdAmount: z.number().positive(),
+	creditsAwarded: z.number().positive()
+});
+
+export const packagesResponseSchema = z.strictObject({
+	packages: z.array(packageRecordSchema)
+});
+
+export const createDepositRequestSchema = z.strictObject({
+	requestId: z.uuid(),
+	packageId: z.string().trim().min(1).max(64)
+});
+
+export const depositIdSchema = z.uuid();
+export const depositStatusSchema = z.enum(['creating', 'pending', 'paid', 'expired', 'failed']);
+
+export const depositResponseSchema = z.strictObject({
+	id: depositIdSchema,
+	status: depositStatusSchema,
+	bolt11: z.string().min(1).optional(),
+	satsAmount: z.number().int().positive().optional(),
+	usdAmount: z.number().positive().optional(),
+	expiresAt: z.number().int().positive().optional(),
+	balance: z.number().optional()
+});
+
+export type PackageRecord = z.infer<typeof packageRecordSchema>;
+export type CreateDepositRequest = z.infer<typeof createDepositRequestSchema>;
+export type DepositStatus = z.infer<typeof depositStatusSchema>;
+export type DepositResponse = z.infer<typeof depositResponseSchema>;
+
 // Auth (Appendix B). The signed NIP-98 event travels in
 // `Authorization: Nostr <base64>`.
 export interface ChallengeRequest {
@@ -322,26 +356,16 @@ export interface NostrProfile {
 	relays: RelayInfo[];
 }
 
-// Real per-account balance as reported by archAI after the user's last
-// generation (Module 6) — mirrored server-side for ops visibility only
-// (billing.ts's `balances` table). Never sent to the client: it reflects the
-// one shared ARCHAI_API_KEY account, not anything personal to a given user.
-export interface Balance {
-	balance: number;
-	updatedAt: number;
-}
-
 // GET /api/usage/balance — the shared ARCHAI_API_KEY account's live balance,
-// fetched from archAI's own Check Balance endpoint (unlike `Balance` above,
-// which is a D1-cached mirror). Admin-only, shown on /usage (see
-// authorizeUsageViewer).
+// fetched from archAI's own Check Balance endpoint. Admin-only, shown on /usage
+// (see authorizeUsageViewer).
 export interface WalletBalanceResponse {
 	balance: number;
 }
 
-// A single deduction from an approved account's own limit (see CreditInfo
-// below). `amount` is the operation's provider-reported or configured charge.
-// `id` is stable for list rendering — createdAt can collide across concurrent calls.
+// A generation deduction from an approved account's app-credit ledger.
+// `amount` is the real cost archAI charged. `id` is a stable identifier for
+// list rendering — createdAt alone can collide across concurrent calls.
 export interface CreditTransaction {
 	id: string;
 	amount: number;
@@ -353,7 +377,7 @@ export interface CreditTransaction {
 // An account's own generation limit, set by an admin (billing.ts) — the only
 // balance a user is ever shown, both in their profile and after a render/edit
 // (see RenderResponse.balance). Present only once an admin has approved the
-// account (a `credits` row).
+// account (an enabled `generation_access` row with an app-credit ledger account).
 export interface CreditInfo {
 	balance: number;
 	updatedAt: number;

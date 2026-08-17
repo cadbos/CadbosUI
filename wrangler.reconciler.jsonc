@@ -1,0 +1,42 @@
+/*
+ * Copyright (c) 2026 Cadbos company. All rights reserved.
+ *
+ * SPDX-License-Identifier: LicenseRef-Cadbos-BSL-1.1
+ *
+ * Cadbos Interior Design AI is licensed under the Business Source License 1.1.
+ * Access is limited to automated analysis tools for analysis of this repository.
+ * This code is not open for contribution or usage except under a separate
+ * written agreement with Cadbos company.
+ *
+ * Commercial use in Interior Design & AEC Generative AI Services is prohibited
+ * before the Change Date. See LICENSE for complete terms.
+ */
+
+{
+	"name": "cadbos-deposit-reconciler",
+	"main": "src/workers/deposit-reconciler.ts",
+	"compatibility_date": "2026-06-26",
+	"compatibility_flags": ["nodejs_als", "nodejs_compat", "global_fetch_strictly_public"],
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1
+	},
+	"triggers": {
+		"crons": ["* * * * *"]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "cadbos-auth",
+			"database_id": "d1f2f49c-bb39-473c-ae35-2d78eebcbc53",
+			"migrations_dir": "migrations"
+		}
+	],
+	"vpc_services": [
+		{
+			"binding": "LNBITS_VPC",
+			"service_id": "019fd6e5-6967-7c41-9ef4-ec825404baf2",
+			"remote": true
+		}
+	]
+}

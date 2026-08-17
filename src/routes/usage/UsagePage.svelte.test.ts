@@ -216,5 +216,5 @@ it('renders each pubkey as an npub explorer link that opens in a new tab', async
 	await expect.element(link).toBeVisible();
 	await expect.element(link).toHaveAttribute('href', `https://explorer.example/p/${npub}`);
 	await expect.element(link).toHaveAttribute('target', '_blank');
-	await expect.element(link).toHaveAttribute('rel', 'noopener noreferrer');
+	await expect.element(link).toHaveAttribute('rel', 'external noopener noreferrer');
 });

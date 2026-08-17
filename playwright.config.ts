@@ -24,11 +24,18 @@ const buildCommand = buildMode === 'preview' ? 'pnpm run build --mode preview' :
 
 export default defineConfig({
 	webServer: {
-		command: `${buildCommand} && pnpm run preview`,
+		command: `${buildCommand} && pnpm run preview --host 127.0.0.1 --port 4174`,
 		env: { PLAYWRIGHT_TEST: '1' },
-		port: 4173
+		port: 4174,
+		timeout: 180_000
 	},
-	use: { baseURL: 'http://localhost:4173' },
+	use: { baseURL: 'http://127.0.0.1:4174' },
 	testDir: 'e2e',
-	testMatch: '**/*.e2e.{ts,js}'
+	projects: [
+		{
+			name: 'ui',
+			testMatch: '**/*.e2e.{ts,js}',
+			testIgnore: '**/*.paid.e2e.{ts,js}'
+		}
+	]
 });

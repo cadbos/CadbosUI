@@ -34,10 +34,11 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 	const db = getDb(platform);
 	const userId = await getUserIdByPubkey(db, locals.user.pubkey);
 
-	// Present only for an admin-approved account (a `credits` row) — absent for
+	// Present only for an admin-approved account with generation access and an
+	// app-credit ledger account — absent for
 	// every other login, same as before an admin ever approved anyone. This is
-	// the only balance ever sent to the client — archAI's own (shared) account
-	// balance is mirrored server-side (billing.ts) but never exposed here.
+	// the only balance ever sent to the client; the global archAI token ledger is
+	// never exposed here.
 	let credit: MeResponse['credit'];
 	if (userId) {
 		const approved = await getCredit(db, userId);

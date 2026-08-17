@@ -13,6 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { Download, ImagePlus, Redo, Sparkles, SquareSplitHorizontal, Undo } from '@lucide/svelte';
 	import CompareSlider from '$lib/components/CompareSlider.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
@@ -64,7 +65,9 @@ before the Change Date. See LICENSE for complete terms.
 	// Content-Disposition: attachment forces a real download with no navigation.
 	const downloadHref = $derived(
 		imageUrl
-			? `/api/download?url=${encodeURIComponent(imageUrl)}&filename=${encodeURIComponent(downloadName)}`
+			? resolve(
+					`/api/download?url=${encodeURIComponent(imageUrl)}&filename=${encodeURIComponent(downloadName)}`
+				)
 			: undefined
 	);
 
@@ -96,7 +99,6 @@ before the Change Date. See LICENSE for complete terms.
 			src = url;
 			clearTimer = () => {};
 			if (!url || !active()) return;
-
 			let attempt = 0;
 			let timer: ReturnType<typeof setTimeout>;
 			const arm = () => {
@@ -207,7 +209,6 @@ before the Change Date. See LICENSE for complete terms.
 				</button>
 
 				<span class="toolbar-sep" aria-hidden="true"></span>
-
 				<a
 					href={downloadHref}
 					download={downloadName}

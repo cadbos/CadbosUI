@@ -61,7 +61,7 @@ before the Change Date. See LICENSE for complete terms.
 	<div class="health-warning" role="alert">
 		<p>
 			{t('health.warning')}
-			<a href={resolve('/status', {})} target="_blank" rel="noopener noreferrer">
+			<a href={resolve('/status')} target="_blank" rel="noopener noreferrer">
 				{t('health.statusPage')}
 				<ArrowUpRight size={16} strokeWidth={1.8} aria-hidden="true" />
 			</a>
@@ -70,7 +70,7 @@ before the Change Date. See LICENSE for complete terms.
 {/if}
 
 <header class="app-header">
-	<a class="brand" href={resolve('/', {})}>
+	<a class="brand" href={resolve('/')}>
 		<img class="brand-mark" src={favicon} alt="" />
 		<div class="brand-copy">
 			<h1 class="brand-title">{t('app.title')}</h1>

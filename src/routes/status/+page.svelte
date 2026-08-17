@@ -19,7 +19,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	type ServiceKey = keyof HealthSnapshot['services'];
 
-	const serviceKeys: ServiceKey[] = ['archai', 'assets', 'comfyui', 'd1', 'nostr', 'r2'];
+	const serviceKeys: ServiceKey[] = ['archai', 'assets', 'comfyui', 'd1', 'lnbits', 'nostr', 'r2'];
 
 	$effect(() => {
 		status.startPolling();

@@ -126,6 +126,24 @@ afterEach(() => {
 	vi.clearAllMocks();
 });
 
+it('offers credit top-up to an authenticated user', async () => {
+	auth.status = 'authenticated';
+	auth.user = { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' };
+
+	const screen = render(AuthBar);
+
+	await expect.element(screen.getByRole('button', { name: 'Пополнить' })).toBeVisible();
+});
+
+it('does not offer credit top-up to the development demo user', () => {
+	auth.status = 'authenticated';
+	auth.user = { pubkey: '0'.repeat(64), firstName: 'Demo', lastName: 'User' };
+
+	const screen = render(AuthBar);
+
+	expect(screen.container.textContent).not.toContain('Пополнить');
+});
+
 it('signs in via NIP-07 (sends a Nostr authorization) and signs out', async () => {
 	let sentAuthHeader: string | null = null;
 	mockFetch((init) => {

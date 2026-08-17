@@ -12,6 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { resolve } from '$app/paths';
+import type { ResolvedPathname } from '$app/types';
 import { OUTPUT_FORMATS, type GenerationKind, type OutputFormat } from '$lib/api/contract';
 import {
 	SCENE_TYPES,
@@ -50,12 +52,6 @@ export interface WorkspaceDestination {
 	mode: Mode;
 	subTab: SubTab;
 }
-
-const MODE_PATHS: Record<Mode, string> = {
-	render: '/create',
-	edit: '/edit',
-	styleTransfer: '/style-transfer'
-};
 
 const VIEW_SLUGS: Record<ViewId, string> = {
 	chat: 'chat',
@@ -212,13 +208,17 @@ function parseFragments(raw: string): ParsedFragment[] {
 // of the query string when empty, since there's nothing to show for those. The
 // uploaded room photo and a custom (non-preset) style reference are never
 // included at all — see applyShareParams for why.
-export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab = {}): string {
+export function buildShareUrl(
+	mode: Mode,
+	request: RequestState,
+	subTab: SubTab = {}
+): ResolvedPathname {
 	const path =
 		mode === 'render'
-			? `${MODE_PATHS.render}/${request.sceneType}`
+			? resolve('/create/[scene=scene]', { scene: request.sceneType })
 			: mode === 'edit'
-				? MODE_PATHS.edit
-				: `${MODE_PATHS.styleTransfer}/${request.sceneType}`;
+				? resolve('/edit')
+				: resolve('/style-transfer/[scene=scene]', { scene: request.sceneType });
 
 	const params = new URLSearchParams();
 
@@ -287,7 +287,7 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 	}
 
 	const query = params.toString();
-	return query ? `${path}?${query}` : path;
+	return (query ? `${path}?${query}` : path) as ResolvedPathname;
 }
 
 // Reverse of buildShareUrl: applies every field explicitly (falling back to
