@@ -16,6 +16,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check src migrations scripts e2e && eslint",
+		"test:d1": "tsc --noEmit --project tsconfig.d1.json && vitest run --config vitest.d1.config.ts",
 		"format": "prettier --write src migrations scripts e2e",
 		"test:unit": "vitest",
 		"test": "pnpm run check && pnpm run lint && vitest run",
@@ -23,6 +24,7 @@
 		"e2e:server": "export CADBOS_PAID_FLOW_PERSIST_ROOT=$(node --input-type=module --eval=\"import { PAID_FLOW_PERSIST_ROOT } from './scripts/paid-flow-db-path.mjs'; process.stdout.write(PAID_FLOW_PERSIST_ROOT)\") && node scripts/reset-paid-flow-db.mjs && wrangler d1 migrations apply DB --local --persist-to \"$CADBOS_PAID_FLOW_PERSIST_ROOT\" && wrangler d1 execute DB --local --persist-to \"$CADBOS_PAID_FLOW_PERSIST_ROOT\" --file e2e/fixtures/paid-flow-seed.sql && PLAYWRIGHT_TEST=1 PLAYWRIGHT_PAID_FLOW=1 vite dev --host 127.0.0.1 --port 4175"
 	},
 	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "0.18.6",
 		"@cloudflare/workers-types": "^4.20260626.1",
 		"@eslint/js": "^10.0.1",
 		"@hey-api/openapi-ts": "0.99.0",
