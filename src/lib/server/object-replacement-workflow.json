@@ -1,0 +1,314 @@
+{
+	"1": {
+		"inputs": {
+			"image": "dd52cbd3-c458-4e60-a516-7588e86418b7-scene.webp"
+		},
+		"class_type": "LoadImage",
+		"_meta": {
+			"title": "1 · TARGET SCENE — position, direction, lighting"
+		}
+	},
+	"2": {
+		"inputs": {
+			"image": "stul-klassik_0-1000x1000.jpg"
+		},
+		"class_type": "LoadImage",
+		"_meta": {
+			"title": "2 · IDENTITY OBJECT — shape, color, texture"
+		}
+	},
+	"3": {
+		"inputs": {
+			"upscale_method": "lanczos",
+			"megapixels": 1,
+			"resolution_steps": 1,
+			"image": ["1", 0]
+		},
+		"class_type": "ImageScaleToTotalPixels",
+		"_meta": {
+			"title": "Target canvas · ~1 MP"
+		}
+	},
+	"4": {
+		"inputs": {
+			"upscale_method": "lanczos",
+			"megapixels": 1,
+			"resolution_steps": 1,
+			"image": ["2", 0]
+		},
+		"class_type": "ImageScaleToTotalPixels",
+		"_meta": {
+			"title": "Identity reference · ~1 MP"
+		}
+	},
+	"6": {
+		"inputs": {
+			"lora_name": "Qwen-Image-Edit-Lightning-8steps-V1.0-bf16.safetensors",
+			"strength_model": 1,
+			"model": ["39", 0]
+		},
+		"class_type": "LoraLoaderModelOnly",
+		"_meta": {
+			"title": "Lightning 4-step LoRA · strength 1.0"
+		}
+	},
+	"7": {
+		"inputs": {
+			"shift": 2.8,
+			"model": ["6", 0]
+		},
+		"class_type": "ModelSamplingAuraFlow",
+		"_meta": {
+			"title": "AuraFlow shift · 3.0"
+		}
+	},
+	"8": {
+		"inputs": {
+			"strength": 0.9,
+			"pre_cfg": true,
+			"model": ["7", 0]
+		},
+		"class_type": "CFGNorm",
+		"_meta": {
+			"title": "CFGNorm · 1.0"
+		}
+	},
+	"9": {
+		"inputs": {
+			"clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+			"type": "qwen_image",
+			"device": "default"
+		},
+		"class_type": "CLIPLoader",
+		"_meta": {
+			"title": "Qwen 2.5 VL text encoder"
+		}
+	},
+	"10": {
+		"inputs": {
+			"vae_name": "qwen_image_vae.safetensors"
+		},
+		"class_type": "VAELoader",
+		"_meta": {
+			"title": "Qwen Image VAE"
+		}
+	},
+	"11": {
+		"inputs": {
+			"prompt": ["26", 0],
+			"clip": ["9", 0],
+			"vae": ["10", 0],
+			"image1": ["3", 0],
+			"image2": ["4", 0]
+		},
+		"class_type": "TextEncodeQwenImageEditPlus",
+		"_meta": {
+			"title": "Positive prompt"
+		}
+	},
+	"13": {
+		"inputs": {
+			"pixels": ["3", 0],
+			"vae": ["10", 0]
+		},
+		"class_type": "VAEEncode",
+		"_meta": {
+			"title": "Image 1 becomes output canvas"
+		}
+	},
+	"17": {
+		"inputs": {
+			"filename_prefix": "obj-replacement",
+			"images": ["38", 0]
+		},
+		"class_type": "SaveImage",
+		"_meta": {
+			"title": "SAVE RESULT"
+		}
+	},
+	"18": {
+		"inputs": {
+			"add_noise": "enable",
+			"noise_seed": 154019080303809,
+			"steps": 7,
+			"cfg": 1,
+			"sampler_name": "euler",
+			"scheduler": "simple",
+			"start_at_step": 0,
+			"end_at_step": 10000,
+			"return_with_leftover_noise": "disable",
+			"preview_method": "none",
+			"vae_decode": "true",
+			"model": ["8", 0],
+			"positive": ["11", 0],
+			"negative": ["32", 0],
+			"latent_image": ["13", 0],
+			"optional_vae": ["10", 0]
+		},
+		"class_type": "KSampler Adv. (Efficient)",
+		"_meta": {
+			"title": "KSampler Adv. (Efficient)"
+		}
+	},
+	"19": {
+		"inputs": {
+			"value": "стул"
+		},
+		"class_type": "PrimitiveString",
+		"_meta": {
+			"title": "Target object"
+		}
+	},
+	"20": {
+		"inputs": {
+			"model": "Hy-MT2-1.8B-Q6_K.gguf",
+			"device": "cuda",
+			"n_gpu_layers": -1
+		},
+		"class_type": "GGUFLoader",
+		"_meta": {
+			"title": "GGUFLoader"
+		}
+	},
+	"21": {
+		"inputs": {
+			"prompt": ["19", 0],
+			"target_language": "English",
+			"auto_release": false,
+			"llama_model": ["20", 0]
+		},
+		"class_type": "PromptTranslatorNode",
+		"_meta": {
+			"title": "Prompt Translator (GGUF)"
+		}
+	},
+	"23": {
+		"inputs": {
+			"value": "This is a full object replacement. Do object swap by completely removing the {} in Image 1 and placing the object from Image 2 in the cleared space.\n\nThe inserted object must be an unaltered copy of Image 2's object: its shape, geometry, proportions, structure, materials, colors, textures, patterns, and every design detail must come 100% from Image 2. \n\nDo NOT preserve the shape, silhouette, geometry, or structural details of the original {} from Image 1 — even if Image 2's object is a different type, form, or size, the output must reflect Image 2's actual shape.\n\nFrom Image 1's original object, transfer ONLY: position, orientation, viewing angle, scale relative to the scene, perspective, placement, and the scene's lighting/shadow behavior as cast onto the new object.\n\nKeep everything else in Image 1 unchanged: background, camera, framing, architecture, and all unrelated elements.\n\nProduce a seamless, photorealistic result — as if Image 2's object had been physically placed and photographed in that exact spot."
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "Prompt template"
+		}
+	},
+	"25": {
+		"inputs": {
+			"string": ["21", 0],
+			"mode": "lowercase"
+		},
+		"class_type": "CaseConverter",
+		"_meta": {
+			"title": "Convert Text Case"
+		}
+	},
+	"26": {
+		"inputs": {
+			"string": ["23", 0],
+			"find": "{}",
+			"replace": ["25", 0]
+		},
+		"class_type": "StringReplace",
+		"_meta": {
+			"title": "Replace Text"
+		}
+	},
+	"28": {
+		"inputs": {
+			"stitch_mode": "right",
+			"match_image_size": true,
+			"megapixels": 0,
+			"max_width": 0,
+			"max_height": 0,
+			"upscale_method": "lanczos",
+			"spacing_width": 5,
+			"background_color": "#FFFFFF",
+			"image1": ["1", 0],
+			"image2": ["2", 0],
+			"image3": ["38", 0]
+		},
+		"class_type": "AILab_ImageStitch",
+		"_meta": {
+			"title": "Stitch all images for history"
+		}
+	},
+	"29": {
+		"inputs": {
+			"images": ["28", 0]
+		},
+		"class_type": "PreviewImage",
+		"_meta": {
+			"title": "Preview Image"
+		}
+	},
+	"32": {
+		"inputs": {
+			"prompt": "Recolor, retexture",
+			"clip": ["9", 0],
+			"vae": ["10", 0]
+		},
+		"class_type": "TextEncodeQwenImageEdit",
+		"_meta": {
+			"title": "Negative prompt"
+		}
+	},
+	"33": {
+		"inputs": {
+			"model_name": "4x-UltraSharp.pth"
+		},
+		"class_type": "UpscaleModelLoader",
+		"_meta": {
+			"title": "Load Upscale Model"
+		}
+	},
+	"34": {
+		"inputs": {
+			"upscale_model": ["33", 0],
+			"image": ["18", 5]
+		},
+		"class_type": "ImageUpscaleWithModel",
+		"_meta": {
+			"title": "Upscale Image (using Model)"
+		}
+	},
+	"36": {
+		"inputs": {
+			"resize_type": "scale total pixels",
+			"resize_type.megapixels": 2,
+			"scale_method": "area",
+			"input": ["34", 0]
+		},
+		"class_type": "ResizeImageMaskNode",
+		"_meta": {
+			"title": "Resize Image/Mask"
+		}
+	},
+	"38": {
+		"inputs": {
+			"seed": 951603265071001,
+			"strength": 0.02,
+			"image": ["36", 0]
+		},
+		"class_type": "ImageAddNoise",
+		"_meta": {
+			"title": "Add Noise to Image"
+		}
+	},
+	"39": {
+		"inputs": {
+			"unet_name": "qwen-image-edit-2511-Q8_0.gguf"
+		},
+		"class_type": "UnetLoaderGGUF",
+		"_meta": {
+			"title": "Unet Loader (GGUF)"
+		}
+	},
+	"40": {
+		"inputs": {
+			"source": ["26", 0]
+		},
+		"class_type": "PreviewAny",
+		"_meta": {
+			"title": "Positive prompt preview"
+		}
+	}
+}

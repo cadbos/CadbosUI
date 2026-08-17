@@ -121,7 +121,7 @@ describe('object replacement integration', () => {
 					JSON.stringify({
 						'prompt-1': {
 							outputs: {
-								'65': { images: [{ filename: 'final.png', subfolder: 'results', type: 'output' }] }
+								'17': { images: [{ filename: 'final.png', subfolder: 'results', type: 'output' }] }
 							},
 							status: { completed: true, status_str: 'success' }
 						}
