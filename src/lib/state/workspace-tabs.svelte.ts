@@ -92,6 +92,8 @@ const persistedStateSchema = z.object({
 });
 export type PersistedWorkspaceTabs = z.infer<typeof persistedStateSchema>;
 
+const renameResponseSchema = z.object({ title: z.string() });
+
 export interface OpenProjectParams {
 	projectId: string;
 	projectTitle: string;
@@ -273,6 +275,62 @@ class WorkspaceTabsState {
 		this.#frozen.set(sessionId, state);
 		this.activeTabId = projectId;
 		this.#swapTo(sessionId);
+		this.#persist();
+	}
+
+	// Unlike project-detail.svelte.ts's rename()/renameSession() (which guard
+	// re-entrancy with a shared call-token counter), these two don't: that
+	// pattern is correct there because that store only ever represents *one*
+	// project's detail page at a time, so a single counter can't confuse two
+	// unrelated entities. This store manages *many* open tabs at once, so a
+	// shared counter would be wrong — renaming project B while project A's
+	// request is still in flight would falsely mark A's response as stale and
+	// drop a legitimate write, even though A and B don't conflict. The
+	// re-entrancy that does need guarding — typing into the *same* tab's
+	// rename field twice before the first request resolves — is instead
+	// handled by the caller (TabStrip.svelte disables the input while a
+	// request for that specific tab is pending), so this layer can stay a
+	// plain fetch-validate-apply per call.
+	async renameProject(projectId: string, title: string): Promise<void> {
+		const response = await fetch(`/api/projects/${projectId}`, {
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ title })
+		});
+		if (!response.ok) throw new Error('workspace tab project rename failed');
+		const parsed = renameResponseSchema.safeParse(await response.json().catch(() => null));
+		if (!parsed.success) throw new Error('workspace tab project rename response invalid');
+
+		// No local tab left to reflect the rename in (closed while the request
+		// was in flight) — the rename still succeeded server-side, so this
+		// no-ops rather than throwing, same as openProject/retargetSession do
+		// for analogous races elsewhere in this file.
+		const index = this.tabs.findIndex((tab) => tab.id === projectId);
+		if (index === -1) return;
+		this.tabs = this.tabs.with(index, { ...this.tabs[index], title: parsed.data.title });
+		this.#persist();
+	}
+
+	async renameSession(projectId: string, sessionId: string, title: string): Promise<void> {
+		const response = await fetch(`/api/projects/${projectId}/sessions/${sessionId}`, {
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ title })
+		});
+		if (!response.ok) throw new Error('workspace tab session rename failed');
+		const parsed = renameResponseSchema.safeParse(await response.json().catch(() => null));
+		if (!parsed.success) throw new Error('workspace tab session rename response invalid');
+
+		const tabIndex = this.tabs.findIndex((tab) => tab.id === projectId);
+		if (tabIndex === -1) return;
+		const tab = this.tabs[tabIndex];
+		const sessionIndex = tab.sessionTabs.findIndex((session) => session.id === sessionId);
+		if (sessionIndex === -1) return;
+		const sessionTabs = tab.sessionTabs.with(sessionIndex, {
+			...tab.sessionTabs[sessionIndex],
+			title: parsed.data.title
+		});
+		this.tabs = this.tabs.with(tabIndex, { ...tab, sessionTabs });
 		this.#persist();
 	}
 
