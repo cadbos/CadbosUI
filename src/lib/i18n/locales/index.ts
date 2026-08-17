@@ -38,6 +38,7 @@ export interface Dictionary {
 	'workspace.sessionTabs.scrollNext': string;
 	'workspace.sessionTabs.rename': string;
 	'workspace.sessionTabs.renameFailed': string;
+	'workspace.shareButton': string;
 	'workspace.sessionsButton': string;
 	'view.switcher.label': string;
 	'view.chat': string;
@@ -314,6 +315,8 @@ export interface Dictionary {
 	'projects.detail.sessionDeleteFailed': string;
 	'projects.detail.shareTitle': string;
 	'projects.detail.shareDescription': string;
+	'projects.detail.shareDialogClose': string;
+	'projects.detail.shareLoading': string;
 	'projects.detail.shareCreate': string;
 	'projects.detail.shareCreating': string;
 	'projects.detail.shareCreateFailed': string;

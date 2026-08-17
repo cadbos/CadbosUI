@@ -41,6 +41,7 @@ export const ru = {
 	'workspace.sessionTabs.scrollNext': 'Прокрутить к следующим сессиям',
 	'workspace.sessionTabs.rename': 'Переименовать сессию «{title}»',
 	'workspace.sessionTabs.renameFailed': 'Не удалось переименовать сессию',
+	'workspace.shareButton': 'Поделиться',
 	'workspace.sessionsButton': 'Сессии',
 	'view.switcher.label': 'Способ ввода',
 	'view.chat': 'Чат',
@@ -325,6 +326,8 @@ export const ru = {
 	'projects.detail.shareTitle': 'Поделиться',
 	'projects.detail.shareDescription':
 		'Любой, у кого есть ссылка, сможет просмотреть проект — без редактирования и без аккаунта.',
+	'projects.detail.shareDialogClose': 'Закрыть окно доступа',
+	'projects.detail.shareLoading': 'Проверяем наличие ссылки…',
 	'projects.detail.shareCreate': 'Создать ссылку',
 	'projects.detail.shareCreating': 'Создаём…',
 	'projects.detail.shareCreateFailed': 'Не удалось создать ссылку.',

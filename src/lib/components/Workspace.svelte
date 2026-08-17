@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { FolderKanban, GalleryHorizontalEnd, Images, Layers } from '@lucide/svelte';
+	import { FolderKanban, GalleryHorizontalEnd, Images, Layers, Share2 } from '@lucide/svelte';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -26,6 +26,7 @@ before the Change Date. See LICENSE for complete terms.
 	import MaskEditor from '$lib/components/MaskEditor.svelte';
 	import PromptViews from '$lib/components/PromptViews.svelte';
 	import ScenesDrawer from '$lib/components/ScenesDrawer.svelte';
+	import ShareProjectDialog from '$lib/components/ShareProjectDialog.svelte';
 	import StyleTransferPanel from '$lib/components/StyleTransferPanel.svelte';
 	import WorkspaceTabBar from '$lib/components/WorkspaceTabBar.svelte';
 	import SessionTabBar from '$lib/components/SessionTabBar.svelte';
@@ -76,6 +77,8 @@ before the Change Date. See LICENSE for complete terms.
 	let sceneTypeTabs = $state<HTMLElement[]>([]);
 	let scenesOpen = $state(false);
 	let scenesTrigger: HTMLButtonElement | null = null;
+	let shareOpen = $state(false);
+	let shareTrigger: HTMLButtonElement | null = null;
 
 	// The URL is the source of truth for which mode is open — not local $state —
 	// so a shared link or a page reload always opens on the right tab.
@@ -119,6 +122,10 @@ before the Change Date. See LICENSE for complete terms.
 	const showSessionTabs = $derived(
 		workspaceTabs.activeTabId !== SCRATCH_TAB_ID && workspaceTabs.activeSessionTabs.length > 0
 	);
+	// Whether the active tab is a real project (not the scratch tab) — gates
+	// project-level actions like Share, which don't depend on a session
+	// existing yet, unlike showSessionTabs.
+	const hasActiveProject = $derived(workspaceTabs.activeTabId !== SCRATCH_TAB_ID);
 	// Only reserves canvas space while the floating tools panel is both open
 	// and still sitting at its untouched default corner — the moment the user
 	// drags it elsewhere or collapses it, the canvas reclaims the full width
@@ -164,6 +171,11 @@ before the Change Date. See LICENSE for complete terms.
 	function closeScenes(): void {
 		scenesOpen = false;
 		requestAnimationFrame(() => scenesTrigger?.focus());
+	}
+
+	function closeShare(): void {
+		shareOpen = false;
+		requestAnimationFrame(() => shareTrigger?.focus());
 	}
 
 	// True once the request store has been hydrated from the URL at least once
@@ -390,6 +402,23 @@ before the Change Date. See LICENSE for complete terms.
 						</a>
 						{#if showWorkspaceTabs}
 							<WorkspaceTabBar />
+						{/if}
+						{#if hasActiveProject}
+							<button
+								{@attach (node) => {
+									shareTrigger = node as HTMLButtonElement;
+									return () => {
+										shareTrigger = null;
+									};
+								}}
+								type="button"
+								class="resources-button"
+								aria-expanded={shareOpen}
+								onclick={() => (shareOpen = true)}
+							>
+								<Share2 size={18} strokeWidth={1.8} aria-hidden="true" />
+								<span>{t('workspace.shareButton')}</span>
+							</button>
 						{/if}
 						<button
 							{@attach (node) => {
@@ -669,6 +698,11 @@ before the Change Date. See LICENSE for complete terms.
 
 	{#if isAuthenticated}
 		<ScenesDrawer open={scenesOpen} onClose={closeScenes} />
+		<ShareProjectDialog
+			projectId={workspaceTabs.activeTabId}
+			open={shareOpen}
+			onClose={closeShare}
+		/>
 	{/if}
 </main>
 

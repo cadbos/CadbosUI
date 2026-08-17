@@ -40,6 +40,7 @@ export const en = {
 	'workspace.sessionTabs.scrollNext': 'Scroll to next sessions',
 	'workspace.sessionTabs.rename': 'Rename session {title}',
 	'workspace.sessionTabs.renameFailed': "Couldn't rename the session",
+	'workspace.shareButton': 'Share',
 	'workspace.sessionsButton': 'Sessions',
 	'view.switcher.label': 'Input method',
 	'view.chat': 'Chat',
@@ -325,6 +326,8 @@ export const en = {
 	'projects.detail.shareTitle': 'Share',
 	'projects.detail.shareDescription':
 		'Anyone with the link can view this project — no editing, no account needed.',
+	'projects.detail.shareDialogClose': 'Close share dialog',
+	'projects.detail.shareLoading': 'Checking for an existing link…',
 	'projects.detail.shareCreate': 'Create share link',
 	'projects.detail.shareCreating': 'Creating…',
 	'projects.detail.shareCreateFailed': 'Could not create a share link.',
