@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import workflowTemplate from '$lib/server/workflow-api.json';
+import workflowTemplate from '$lib/server/object-replacement-workflow.json';
 import {
 	ComfyUiError,
 	type ComfyDownloadedImage,
@@ -43,7 +43,7 @@ export type QueueObjectReplacementRequest = Omit<
 	'pollIntervalMs' | 'timeoutMs'
 >;
 
-const FINAL_OUTPUT_NODE_ID = '65';
+const FINAL_OUTPUT_NODE_ID = '17';
 
 function uploadedImagePath(image: ComfyImageDescriptor): string {
 	const subfolder = image.subfolder.replace(/^\/+|\/+$/g, '');
@@ -74,11 +74,11 @@ function objectReplacementWorkflow(
 	replacementObject: string
 ): ComfyWorkflow {
 	const workflow = structuredClone(workflowTemplate) as ComfyWorkflow;
-	setWorkflowInput(workflow, '4', 'LoadImage', 'image', uploadedImagePath(scene));
-	setWorkflowInput(workflow, '15', 'LoadImage', 'image', uploadedImagePath(reference));
-	setWorkflowInput(workflow, '30', 'PrimitiveString', 'value', replacementObject);
+	setWorkflowInput(workflow, '1', 'LoadImage', 'image', uploadedImagePath(scene));
+	setWorkflowInput(workflow, '2', 'LoadImage', 'image', uploadedImagePath(reference));
+	setWorkflowInput(workflow, '19', 'PrimitiveString', 'value', replacementObject);
 	const outputNode = workflow[FINAL_OUTPUT_NODE_ID];
-	if (!outputNode || outputNode.class_type !== 'PreviewImage') {
+	if (!outputNode || outputNode.class_type !== 'SaveImage') {
 		throw new ComfyUiError(
 			'invalid_configuration',
 			'workflow',
