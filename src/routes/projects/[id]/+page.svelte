@@ -20,10 +20,11 @@ before the Change Date. See LICENSE for complete terms.
 	import ProjectSessionCard from '$lib/components/ProjectSessionCard.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { projectDetail } from '$lib/state/project-detail.svelte';
+	import { projectShare } from '$lib/state/project-share.svelte';
 	import { request } from '$lib/state/request.svelte';
 	import { buildShareUrl } from '$lib/state/url-state';
 	import { initializeSessionState, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
-	import { logBoundaryError } from '$lib/utils';
+	import { logBoundaryError, openModal } from '$lib/utils';
 
 	const projectId = $derived(page.params.id);
 
@@ -45,13 +46,6 @@ before the Change Date. See LICENSE for complete terms.
 		void projectDetail.load(projectId);
 		return () => projectDetail.clear();
 	});
-
-	function openModal(dialog: HTMLDialogElement): () => void {
-		dialog.showModal();
-		return () => {
-			if (dialog.open) dialog.close();
-		};
-	}
 
 	function sessionTitle(session: ProjectSessionRecord): string {
 		return session.title.trim() !== '' ? session.title : t('projects.detail.sessionUntitled');
@@ -122,7 +116,7 @@ before the Change Date. See LICENSE for complete terms.
 		shareError = null;
 		shareCopied = false;
 		try {
-			await projectDetail.issueShare();
+			await projectShare.issueShare(projectId);
 		} catch {
 			shareError = t('projects.detail.shareCreateFailed');
 		}
@@ -139,7 +133,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function confirmRevokeShare(): Promise<void> {
 		try {
-			await projectDetail.revokeShare();
+			await projectShare.revokeShare(projectId);
 			revokeConfirmOpen = false;
 		} catch {
 			revokeError = t('projects.detail.shareRevokeFailed');
@@ -256,8 +250,8 @@ before the Change Date. See LICENSE for complete terms.
 				<p class="status">{t('projects.detail.shareDescription')}</p>
 
 				<div class="share-status" aria-live="polite">
-					{#if projectDetail.shareToken}
-						{@const token = projectDetail.shareToken}
+					{#if projectShare.token}
+						{@const token = projectShare.token}
 						<div class="share-link">
 							<label class="visually-hidden" for="share-link-url"
 								>{t('projects.detail.shareLinkLabel')}</label
@@ -270,15 +264,15 @@ before the Change Date. See LICENSE for complete terms.
 								type="button"
 								class="danger"
 								onclick={requestRevokeShare}
-								disabled={projectDetail.shareStatus === 'revoking'}
+								disabled={projectShare.status === 'revoking'}
 							>
-								{projectDetail.shareStatus === 'revoking'
+								{projectShare.status === 'revoking'
 									? t('projects.detail.shareRevoking')
 									: t('projects.detail.shareRevoke')}
 							</button>
 						</div>
 						<p class="status">{t('projects.detail.shareActiveHint')}</p>
-					{:else if projectDetail.shareStatus === 'active'}
+					{:else if projectShare.status === 'active'}
 						<p class="status">{t('projects.detail.shareActiveUnknown')}</p>
 						<div class="share-link">
 							<button type="button" onclick={createShareLink}>
@@ -292,9 +286,9 @@ before the Change Date. See LICENSE for complete terms.
 						<button
 							type="button"
 							onclick={createShareLink}
-							disabled={projectDetail.shareStatus === 'issuing'}
+							disabled={projectShare.status === 'issuing'}
 						>
-							{projectDetail.shareStatus === 'issuing'
+							{projectShare.status === 'issuing'
 								? t('projects.detail.shareCreating')
 								: t('projects.detail.shareCreate')}
 						</button>
@@ -365,7 +359,7 @@ before the Change Date. See LICENSE for complete terms.
 					<button
 						type="button"
 						class="primary-danger-button"
-						disabled={projectDetail.shareStatus === 'revoking'}
+						disabled={projectShare.status === 'revoking'}
 						onclick={confirmRevokeShare}
 					>
 						{t('projects.detail.shareRevokeConfirmConfirm')}

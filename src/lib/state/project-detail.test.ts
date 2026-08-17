@@ -15,6 +15,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectDetailResponse } from '$lib/api/contract';
 import { projectDetail } from './project-detail.svelte';
+import { projectShare } from './project-share.svelte';
 
 function detail(overrides: Partial<ProjectDetailResponse> = {}): ProjectDetailResponse {
 	return {
@@ -37,10 +38,12 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 beforeEach(() => {
 	projectDetail.clear();
+	projectShare.clear();
 });
 
 afterEach(() => {
 	projectDetail.clear();
+	projectShare.clear();
 	vi.unstubAllGlobals();
 });
 
@@ -189,79 +192,8 @@ describe('projectDetail.createSession', () => {
 	});
 });
 
-describe('projectDetail share flow', () => {
-	it('issues then revokes the active token, without ever needing to pass the token back', async () => {
-		const fetchMock = vi.fn<typeof fetch>((input, init) => {
-			const url = String(input);
-			if (url.endsWith('/share') && init?.method === 'POST') {
-				return Promise.resolve(jsonResponse({ token: 'a-token' }, 201));
-			}
-			if (url.endsWith('/share') && init?.method === 'DELETE') {
-				return Promise.resolve(new Response(null, { status: 204 }));
-			}
-			return Promise.resolve(jsonResponse(detail()));
-		});
-		vi.stubGlobal('fetch', fetchMock);
-
-		await projectDetail.load('00000000-0000-4000-8000-000000000001');
-		const token = await projectDetail.issueShare();
-		expect(token).toBe('a-token');
-		expect(projectDetail.shareToken).toBe('a-token');
-		expect(projectDetail.shareStatus).toBe('active');
-		expect(projectDetail.project?.shareActive).toBe(true);
-
-		await projectDetail.revokeShare();
-		expect(projectDetail.shareToken).toBeNull();
-		expect(projectDetail.shareStatus).toBe('idle');
-		expect(projectDetail.project?.shareActive).toBe(false);
-	});
-
-	it('surfaces a failed issue as an error status and rethrows', async () => {
-		const fetchMock = vi.fn<typeof fetch>((input) => {
-			const url = String(input);
-			if (url.endsWith('/share')) return Promise.resolve(new Response(null, { status: 500 }));
-			return Promise.resolve(jsonResponse(detail()));
-		});
-		vi.stubGlobal('fetch', fetchMock);
-
-		await projectDetail.load('00000000-0000-4000-8000-000000000001');
-		await expect(projectDetail.issueShare()).rejects.toThrow('share link creation failed');
-		expect(projectDetail.shareStatus).toBe('error');
-	});
-
-	it('ignores a stale issue response that resolves after a newer revoke already ran', async () => {
-		let resolveIssue!: (response: Response) => void;
-		const issuePromise = new Promise<Response>((resolve) => {
-			resolveIssue = resolve;
-		});
-		const fetchMock = vi.fn<typeof fetch>((input, init) => {
-			const url = String(input);
-			if (url.endsWith('/share') && init?.method === 'POST') return issuePromise;
-			if (url.endsWith('/share') && init?.method === 'DELETE') {
-				return Promise.resolve(new Response(null, { status: 204 }));
-			}
-			return Promise.resolve(jsonResponse(detail()));
-		});
-		vi.stubGlobal('fetch', fetchMock);
-
-		await projectDetail.load('00000000-0000-4000-8000-000000000001');
-		const issue = projectDetail.issueShare();
-		expect(projectDetail.shareStatus).toBe('issuing');
-
-		// A revoke starts (and fully resolves) before the issue above settles.
-		await projectDetail.revokeShare();
-		expect(projectDetail.shareStatus).toBe('idle');
-
-		resolveIssue(jsonResponse({ token: 'stale-token' }, 201));
-		await issue;
-
-		// The stale issue must not resurrect a token the revoke already cleared.
-		expect(projectDetail.shareStatus).toBe('idle');
-		expect(projectDetail.shareToken).toBeNull();
-		expect(projectDetail.project?.shareActive).toBe(false);
-	});
-
-	it('load() hydrates shareToken from the parallel share fetch when a link is active', async () => {
+describe('projectDetail.load() share hydration handoff', () => {
+	it('hydrates projectShare.token from the parallel share fetch when a link is active', async () => {
 		const fetchMock = vi.fn<typeof fetch>((input) => {
 			const url = String(input);
 			if (url.endsWith('/share')) return Promise.resolve(jsonResponse({ token: 'existing-token' }));
@@ -270,11 +202,11 @@ describe('projectDetail share flow', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		await projectDetail.load('00000000-0000-4000-8000-000000000001');
-		expect(projectDetail.shareStatus).toBe('active');
-		expect(projectDetail.shareToken).toBe('existing-token');
+		expect(projectShare.status).toBe('active');
+		expect(projectShare.token).toBe('existing-token');
 	});
 
-	it('load() leaves shareToken null when there is no active share', async () => {
+	it('leaves projectShare.token null when there is no active share', async () => {
 		const fetchMock = vi.fn<typeof fetch>((input) => {
 			const url = String(input);
 			if (url.endsWith('/share')) return Promise.resolve(new Response(null, { status: 404 }));
@@ -283,11 +215,11 @@ describe('projectDetail share flow', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		await projectDetail.load('00000000-0000-4000-8000-000000000001');
-		expect(projectDetail.shareStatus).toBe('idle');
-		expect(projectDetail.shareToken).toBeNull();
+		expect(projectShare.status).toBe('idle');
+		expect(projectShare.token).toBeNull();
 	});
 
-	it('load() falls back to a null shareToken when shareActive is true but the share fetch fails', async () => {
+	it('falls back to a null projectShare.token when shareActive is true but the share fetch fails', async () => {
 		const fetchMock = vi.fn<typeof fetch>((input) => {
 			const url = String(input);
 			if (url.endsWith('/share')) return Promise.resolve(new Response(null, { status: 500 }));
@@ -296,8 +228,8 @@ describe('projectDetail share flow', () => {
 		vi.stubGlobal('fetch', fetchMock);
 
 		await projectDetail.load('00000000-0000-4000-8000-000000000001');
-		expect(projectDetail.shareStatus).toBe('active');
-		expect(projectDetail.shareToken).toBeNull();
+		expect(projectShare.status).toBe('active');
+		expect(projectShare.token).toBeNull();
 	});
 });
 

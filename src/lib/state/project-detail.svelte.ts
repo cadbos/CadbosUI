@@ -15,9 +15,10 @@
 import { z } from 'zod';
 import { generationKinds } from '$lib/api/contract';
 import type { ProjectDetailResponse, ProjectSessionRecord } from '$lib/api/contract';
+import { projectShare } from './project-share.svelte';
+import { discardBody } from '$lib/utils';
 
 export type ProjectDetailStatus = 'idle' | 'loading' | 'ready' | 'error' | 'not-found';
-export type ShareStatus = 'idle' | 'issuing' | 'active' | 'revoking' | 'error';
 
 const sessionGenerationSchema = z.object({
 	id: z.uuid(),
@@ -57,7 +58,6 @@ const createSessionResponseSchema = z.object({
 	createdAt: z.number().int().min(0),
 	updatedAt: z.number().int().min(0)
 });
-const issueShareResponseSchema = z.object({ token: z.string().min(1) });
 
 export class ProjectDetailLoadError extends Error {
 	constructor(message: string) {
@@ -73,13 +73,6 @@ export class ProjectDetailLoadError extends Error {
 // workspace-tabs.svelte.ts's tab restore, would otherwise race that shared
 // in-flight slot. Null on any failure — 404, network error, malformed body —
 // since every caller's response is "skip this one", not an error to surface.
-// A fetch response's body isn't released just because it's never read —
-// cancel explicitly wherever a response is fetched but deliberately never
-// consumed, so the underlying stream/connection isn't left dangling.
-function discardBody(response: Response): void {
-	void response.body?.cancel().catch(() => {});
-}
-
 export async function fetchProjectDetail(id: string): Promise<ProjectDetailResponse | null> {
 	try {
 		const response = await fetch(`/api/projects/${id}`);
@@ -121,13 +114,6 @@ class ProjectDetailState {
 	// single id (rather than a Set) is enough to know which card is busy.
 	renamingSessionId = $state<string | null>(null);
 	archivingSessionId = $state<string | null>(null);
-	shareStatus = $state<ShareStatus>('idle');
-	// Populated right after issuing (see issueShare()) or, when a link is
-	// already active, by load()'s parallel GET .../share fetch.
-	// project.shareActive (loaded from the server) is the source of truth for
-	// whether a link exists at all; this is purely the plaintext value for
-	// copying.
-	shareToken = $state<string | null>(null);
 	#abort: AbortController | null = null;
 
 	// One counter per busy flag below — each call increments its own before
@@ -143,12 +129,6 @@ class ProjectDetailState {
 	#archiveProjectCall = 0;
 	#renameSessionCall = 0;
 	#archiveSessionCall = 0;
-	// Shared by issueShare/revokeShare — they're mutually exclusive states of
-	// the same share link, so whichever of the two started most recently is
-	// the one allowed to write shareToken/shareStatus/project.shareActive. A
-	// stale issueShare response arriving after a revokeShare already ran would
-	// otherwise resurrect a token the user just revoked.
-	#shareCall = 0;
 
 	// Guards a mutation's late-arriving response against the project having
 	// changed underneath it — the user navigated away, or to a different
@@ -205,16 +185,7 @@ class ProjectDetailState {
 			}
 
 			this.project = parsed.data;
-			this.shareStatus = parsed.data.shareActive ? 'active' : 'idle';
-			if (parsed.data.shareActive && shareResponse.ok) {
-				const shareParsed = issueShareResponseSchema.safeParse(
-					await shareResponse.json().catch(() => null)
-				);
-				this.shareToken = shareParsed.success ? shareParsed.data.token : null;
-			} else {
-				discardBody(shareResponse);
-				this.shareToken = null;
-			}
+			await projectShare.hydrate(id, parsed.data.shareActive, shareResponse);
 			this.status = 'ready';
 		} catch (error) {
 			if (controller.signal.aborted) return;
@@ -289,66 +260,6 @@ class ProjectDetailState {
 			return session;
 		} finally {
 			if (this.#createSessionCall === call) this.creatingSession = false;
-		}
-	}
-
-	// The token is only ever known at issuance — GET /api/projects/[id] never
-	// returns it (see projects.ts) — so this is the only way the owner sees
-	// the plaintext link, same as an API key reveal-once flow.
-	async issueShare(): Promise<string> {
-		const project = this.project;
-		if (!project) throw new ProjectDetailActionError('no project loaded');
-		const call = ++this.#shareCall;
-		this.shareStatus = 'issuing';
-		try {
-			const response = await fetch(`/api/projects/${project.id}/share`, { method: 'POST' });
-			if (!response.ok) throw new ProjectDetailActionError('share link creation failed');
-
-			const parsed = issueShareResponseSchema.safeParse(await response.json().catch(() => null));
-			if (!parsed.success) throw new ProjectDetailActionError('share link response invalid');
-
-			// A token belonging to a project the user has since navigated away
-			// from — or a share operation since superseded by a newer one, e.g.
-			// a revoke that started after this issue and has already run — must
-			// never surface as if it were the *current* page's link.
-			const current = this.#currentProjectIfUnchanged(project);
-			if (current && this.#shareCall === call) {
-				this.shareToken = parsed.data.token;
-				this.shareStatus = 'active';
-				this.project = { ...current, shareActive: true };
-			}
-			return parsed.data.token;
-		} catch (error) {
-			if (this.#currentProjectIfUnchanged(project) && this.#shareCall === call) {
-				this.shareStatus = 'error';
-			}
-			throw error;
-		}
-	}
-
-	// Always revokes whichever link is currently active — the caller never
-	// needs to have kept the token value (see revokeActiveShareToken).
-	async revokeShare(): Promise<void> {
-		const project = this.project;
-		if (!project) return;
-		const call = ++this.#shareCall;
-		this.shareStatus = 'revoking';
-		try {
-			const response = await fetch(`/api/projects/${project.id}/share`, { method: 'DELETE' });
-			if (!response.ok && response.status !== 404) {
-				throw new ProjectDetailActionError('share link revoke failed');
-			}
-			const current = this.#currentProjectIfUnchanged(project);
-			if (current && this.#shareCall === call) {
-				this.shareToken = null;
-				this.shareStatus = 'idle';
-				this.project = { ...current, shareActive: false };
-			}
-		} catch (error) {
-			if (this.#currentProjectIfUnchanged(project) && this.#shareCall === call) {
-				this.shareStatus = 'error';
-			}
-			throw error;
 		}
 	}
 
@@ -436,8 +347,7 @@ class ProjectDetailState {
 		this.archivingProject = false;
 		this.renamingSessionId = null;
 		this.archivingSessionId = null;
-		this.shareStatus = 'idle';
-		this.shareToken = null;
+		projectShare.clear();
 	}
 }
 

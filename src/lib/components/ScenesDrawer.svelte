@@ -33,7 +33,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { request } from '$lib/state/request.svelte';
 	import { buildShareUrl, destinationForGenerationKind } from '$lib/state/url-state';
-	import { logBoundaryError } from '$lib/utils';
+	import { logBoundaryError, openModal } from '$lib/utils';
 
 	const generationKindKeys: Record<GenerationKind, TranslationKey> = {
 		render: 'generatedImages.kind.render',
@@ -75,13 +75,6 @@ before the Change Date. See LICENSE for complete terms.
 	const isDeletingCandidate = $derived(
 		deleteCandidate ? generatedImages.deletingIds.has(deleteCandidate.id) : false
 	);
-
-	function openModal(dialog: HTMLDialogElement): () => void {
-		dialog.showModal();
-		return () => {
-			if (dialog.open) dialog.close();
-		};
-	}
 
 	const MIN_DRAWER_WIDTH = 320;
 	const RESIZE_STEP = 24;
