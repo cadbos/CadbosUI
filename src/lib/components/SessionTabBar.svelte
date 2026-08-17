@@ -26,6 +26,11 @@ before the Change Date. See LICENSE for complete terms.
 	ariaLabel={t('workspace.sessionTabs.label')}
 	untitledLabel={t('projects.detail.sessionUntitled')}
 	closeLabel={(title) => ti('workspace.sessionTabs.close', { title })}
+	scrollPrevLabel={t('workspace.sessionTabs.scrollPrev')}
+	scrollNextLabel={t('workspace.sessionTabs.scrollNext')}
+	renameLabel={(title) => ti('workspace.sessionTabs.rename', { title })}
+	renameFailedLabel={t('workspace.sessionTabs.renameFailed')}
 	onActivate={(id) => workspaceTabs.activateSession(projectId, id)}
 	onClose={(id) => workspaceTabs.closeSession(projectId, id)}
+	onRename={(id, title) => workspaceTabs.renameSession(projectId, id, title)}
 />

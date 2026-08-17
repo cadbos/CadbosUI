@@ -28,8 +28,16 @@ export interface Dictionary {
 	'workspace.tabs.label': string;
 	'workspace.tabs.untitled': string;
 	'workspace.tabs.close': string;
+	'workspace.tabs.scrollPrev': string;
+	'workspace.tabs.scrollNext': string;
+	'workspace.tabs.rename': string;
+	'workspace.tabs.renameFailed': string;
 	'workspace.sessionTabs.label': string;
 	'workspace.sessionTabs.close': string;
+	'workspace.sessionTabs.scrollPrev': string;
+	'workspace.sessionTabs.scrollNext': string;
+	'workspace.sessionTabs.rename': string;
+	'workspace.sessionTabs.renameFailed': string;
 	'workspace.sessionsButton': string;
 	'view.switcher.label': string;
 	'view.chat': string;
