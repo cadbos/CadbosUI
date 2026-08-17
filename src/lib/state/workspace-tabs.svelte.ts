@@ -67,10 +67,6 @@ export interface WorkspaceTab {
 // lazy-create convention. Its id is a fixed sentinel, never a real project id.
 export const SCRATCH_TAB_ID = 'scratch';
 
-export const MAX_TABS = 8;
-// Same cap as MAX_TABS, applied per project to its own open session tabs.
-export const MAX_SESSION_TABS = 8;
-
 function scratchTab(): WorkspaceTab {
 	return { id: SCRATCH_TAB_ID, title: null, sessionTabs: [], activeSessionTabId: null };
 }
@@ -249,7 +245,6 @@ class WorkspaceTabsState {
 
 		let tabIndex = this.tabs.findIndex((tab) => tab.id === projectId);
 		if (tabIndex === -1) {
-			this.#evictOldestInactiveProjectIfAtCapacity();
 			this.tabs = [
 				...this.tabs,
 				{ id: projectId, title: projectTitle, sessionTabs: [], activeSessionTabId: null }
@@ -263,10 +258,7 @@ class WorkspaceTabsState {
 		const sessionIndex = tab.sessionTabs.findIndex((session) => session.id === sessionId);
 		const sessionTabs =
 			sessionIndex === -1
-				? [
-						...this.#evictOldestInactiveSessionIfAtCapacity(tab),
-						{ id: sessionId, title: sessionTitle }
-					]
+				? [...tab.sessionTabs, { id: sessionId, title: sessionTitle }]
 				: tab.sessionTabs.with(sessionIndex, { id: sessionId, title: sessionTitle });
 		this.tabs = this.tabs.with(tabIndex, { ...tab, sessionTabs, activeSessionTabId: sessionId });
 
@@ -394,32 +386,6 @@ class WorkspaceTabsState {
 		this.#liveKey = SCRATCH_TAB_ID;
 		this.#frozen.clear();
 		this.#persist();
-	}
-
-	// Evicts the oldest tab that isn't the active one (and isn't the
-	// always-present scratch tab) once the cap is exceeded — same simple
-	// bound the earlier project-visited-tabs store used, just applied to live
-	// workspace tabs now.
-	#evictOldestInactiveProjectIfAtCapacity(): void {
-		if (this.tabs.length < MAX_TABS) return;
-		const evictIndex = this.tabs.findIndex(
-			(tab) => tab.id !== this.activeTabId && tab.id !== SCRATCH_TAB_ID
-		);
-		if (evictIndex === -1) return;
-		this.#releaseFrozen(this.tabs[evictIndex]);
-		this.tabs = this.tabs.filter((_, index) => index !== evictIndex);
-	}
-
-	// Same idea as #evictOldestInactiveProjectIfAtCapacity, one level down:
-	// never evicts the tab's own currently-active session.
-	#evictOldestInactiveSessionIfAtCapacity(tab: WorkspaceTab): SessionTab[] {
-		if (tab.sessionTabs.length < MAX_SESSION_TABS) return tab.sessionTabs;
-		const evictIndex = tab.sessionTabs.findIndex(
-			(session) => session.id !== tab.activeSessionTabId
-		);
-		if (evictIndex === -1) return tab.sessionTabs;
-		this.#frozen.delete(tab.sessionTabs[evictIndex].id);
-		return tab.sessionTabs.filter((_, index) => index !== evictIndex);
 	}
 
 	#releaseFrozen(tab: WorkspaceTab): void {

@@ -11,12 +11,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request } from '$lib/state/request.svelte';
-import {
-	MAX_SESSION_TABS,
-	MAX_TABS,
-	SCRATCH_TAB_ID,
-	workspaceTabs
-} from '$lib/state/workspace-tabs.svelte';
+import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 
 const PROJECT_A = '00000000-0000-4000-8000-000000000001';
 const PROJECT_B = '00000000-0000-4000-8000-000000000002';
@@ -464,135 +459,6 @@ describe('workspaceTabs.close', () => {
 		expect(workspaceTabs.activeTabId).toBe(SCRATCH_TAB_ID);
 		expect(request.projectId).toBeUndefined();
 		expect(request.editPrompt).toBe('');
-	});
-
-	it('never evicts the scratch tab to make room at capacity', () => {
-		// Fill every non-scratch slot up to the cap, then open one more —
-		// the oldest *project* tab should be evicted, never the scratch tab.
-		// IDs live in a distinct range from PROJECT_A/PROJECT_B so the extra
-		// tab opened below can't accidentally reuse one of these slots.
-		for (let i = 0; i < MAX_TABS - 1; i++) {
-			const projectId = `00000000-0000-4000-8000-0000000001${String(i).padStart(2, '0')}`;
-			const sessionId = `00000000-0000-4000-8000-0000000002${String(i).padStart(2, '0')}`;
-			workspaceTabs.openProject({
-				projectId,
-				projectTitle: `Project ${i}`,
-				sessionId,
-				sessionTitle: null,
-				initialize: (state) => state.setProjectSession(projectId, sessionId)
-			});
-		}
-		expect(workspaceTabs.tabs).toHaveLength(MAX_TABS);
-		const oldestProjectId = workspaceTabs.tabs[1].id;
-
-		workspaceTabs.openProject({
-			projectId: PROJECT_B,
-			projectTitle: 'Kitchen',
-			sessionId: SESSION_B1,
-			sessionTitle: null,
-			initialize: (state) => state.setProjectSession(PROJECT_B, SESSION_B1)
-		});
-
-		expect(workspaceTabs.tabs).toHaveLength(MAX_TABS);
-		expect(workspaceTabs.tabs.map((tab) => tab.id)).toContain(SCRATCH_TAB_ID);
-		expect(workspaceTabs.tabs.map((tab) => tab.id)).not.toContain(oldestProjectId);
-	});
-
-	it('releases every nested session tab’s frozen state when a project tab is evicted at capacity', () => {
-		// Open a project with two sessions FIRST, so it's the oldest tab, then
-		// MAX_TABS - 2 other projects to fill every remaining slot, then one
-		// more project to force the two-session project out at capacity — its
-		// second (inactive) session tab must not leak a frozen RequestState
-		// that a later, unrelated session id could collide with.
-		workspaceTabs.openProject({
-			projectId: PROJECT_A,
-			projectTitle: 'Living room',
-			sessionId: SESSION_A1,
-			sessionTitle: null,
-			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
-		});
-		workspaceTabs.openProject({
-			projectId: PROJECT_A,
-			projectTitle: 'Living room',
-			sessionId: SESSION_A2,
-			sessionTitle: null,
-			initialize: (state) => {
-				state.setProjectSession(PROJECT_A, SESSION_A2);
-				state.setEditPrompt('leaked draft');
-			}
-		});
-		for (let i = 0; i < MAX_TABS - 2; i++) {
-			const projectId = `00000000-0000-4000-8000-0000000003${String(i).padStart(2, '0')}`;
-			const sessionId = `00000000-0000-4000-8000-0000000004${String(i).padStart(2, '0')}`;
-			workspaceTabs.openProject({
-				projectId,
-				projectTitle: `Project ${i}`,
-				sessionId,
-				sessionTitle: null,
-				initialize: (state) => state.setProjectSession(projectId, sessionId)
-			});
-		}
-		expect(workspaceTabs.tabs).toHaveLength(MAX_TABS);
-
-		workspaceTabs.openProject({
-			projectId: PROJECT_B,
-			projectTitle: 'Kitchen',
-			sessionId: SESSION_B1,
-			sessionTitle: null,
-			initialize: (state) => state.setProjectSession(PROJECT_B, SESSION_B1)
-		});
-
-		expect(workspaceTabs.tabs.map((tab) => tab.id)).not.toContain(PROJECT_A);
-
-		// SESSION_A2's frozen state (the one actually holding 'leaked draft')
-		// should be gone, not silently resurrected if a future session ever
-		// reuses that id — initialize deliberately never touches editPrompt,
-		// so seeing the old value back here would mean the release failed.
-		workspaceTabs.openProject({
-			projectId: PROJECT_B,
-			projectTitle: 'Kitchen',
-			sessionId: SESSION_A2,
-			sessionTitle: null,
-			initialize: (state) => state.setProjectSession(PROJECT_B, SESSION_A2)
-		});
-		expect(request.editPrompt).toBe('');
-	});
-
-	it('never evicts the active session tab to make room at capacity within a project', () => {
-		workspaceTabs.openProject({
-			projectId: PROJECT_A,
-			projectTitle: 'Living room',
-			sessionId: SESSION_A1,
-			sessionTitle: null,
-			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
-		});
-		for (let i = 0; i < MAX_SESSION_TABS - 1; i++) {
-			const sessionId = `00000000-0000-4000-8000-0000000005${String(i).padStart(2, '0')}`;
-			workspaceTabs.openProject({
-				projectId: PROJECT_A,
-				projectTitle: 'Living room',
-				sessionId,
-				sessionTitle: null,
-				initialize: (state) => state.setProjectSession(PROJECT_A, sessionId)
-			});
-		}
-		const projectATab = workspaceTabs.tabs.find((tab) => tab.id === PROJECT_A);
-		expect(projectATab?.sessionTabs).toHaveLength(MAX_SESSION_TABS);
-
-		// The active session tab (the most recently opened one) must survive
-		// the eviction triggered by opening one more.
-		const activeSessionId = projectATab?.activeSessionTabId;
-		workspaceTabs.openProject({
-			projectId: PROJECT_A,
-			projectTitle: 'Living room',
-			sessionId: SESSION_A2,
-			sessionTitle: null,
-			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A2)
-		});
-
-		const updatedTab = workspaceTabs.tabs.find((tab) => tab.id === PROJECT_A);
-		expect(updatedTab?.sessionTabs).toHaveLength(MAX_SESSION_TABS);
-		expect(updatedTab?.sessionTabs.map((session) => session.id)).toContain(activeSessionId);
 	});
 });
 
