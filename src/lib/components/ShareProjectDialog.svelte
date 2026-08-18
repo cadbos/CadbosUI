@@ -151,24 +151,26 @@ before the Change Date. See LICENSE for complete terms.
 					>{t('projects.detail.shareLinkLabel')}</label
 				>
 				<input id="share-dialog-link-url" type="text" readonly value={shareUrl(token)} />
-				<button type="button" onclick={() => copyShareLink(token)}>
-					{shareCopied ? t('projects.detail.shareCopied') : t('projects.detail.shareCopy')}
-				</button>
-				<button
-					type="button"
-					class="danger"
-					onclick={requestRevokeShare}
-					disabled={projectShare.status === 'revoking'}
-				>
-					{projectShare.status === 'revoking'
-						? t('projects.detail.shareRevoking')
-						: t('projects.detail.shareRevoke')}
-				</button>
+				<div class="share-link-actions">
+					<button type="button" onclick={() => copyShareLink(token)}>
+						{shareCopied ? t('projects.detail.shareCopied') : t('projects.detail.shareCopy')}
+					</button>
+					<button
+						type="button"
+						class="danger"
+						onclick={requestRevokeShare}
+						disabled={projectShare.status === 'revoking'}
+					>
+						{projectShare.status === 'revoking'
+							? t('projects.detail.shareRevoking')
+							: t('projects.detail.shareRevoke')}
+					</button>
+				</div>
 			</div>
 			<p class="status">{t('projects.detail.shareActiveHint')}</p>
 		{:else if projectShare.status === 'active'}
 			<p class="status">{t('projects.detail.shareActiveUnknown')}</p>
-			<div class="share-link">
+			<div class="share-link-actions">
 				<button type="button" onclick={createShareLink}>
 					{t('projects.detail.shareCreateNew')}
 				</button>
@@ -330,18 +332,31 @@ before the Change Date. See LICENSE for complete terms.
 
 	.share-link {
 		display: flex;
+		flex-direction: column;
 		gap: 0.625rem;
-		flex-wrap: wrap;
 	}
 
 	.share-link input {
-		flex: 1 1 12rem;
+		width: 100%;
 		padding: 0.625rem 0.75rem;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);
 		background: var(--color-background);
 		color: var(--color-text);
 		font: inherit;
+	}
+
+	.share-link-actions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.625rem;
+	}
+
+	.share-link-actions button {
+		width: 100%;
+		padding-inline: 0.625rem;
+		white-space: normal;
+		text-align: center;
 	}
 
 	button {
