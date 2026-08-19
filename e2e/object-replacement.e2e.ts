@@ -15,6 +15,7 @@
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { E2E_SESSION_ID, mockProjectSessionRoutes } from './helpers/project-session-routes';
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
 
@@ -43,6 +44,7 @@ async function authenticate(page: Page): Promise<void> {
 			body: JSON.stringify({ images: [], pagination: { offset: 0, size: 100, hasMore: false } })
 		});
 	});
+	await mockProjectSessionRoutes(page);
 }
 
 async function uploadInputs(page: Page): Promise<void> {
@@ -148,7 +150,8 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 		image: 'https://cdn.example.test/scene.webp',
 		imageHash: 'scene-hash',
 		referenceImage: 'https://cdn.example.test/reference-chair.webp',
-		replacementObject: 'серый диван у окна'
+		replacementObject: 'серый диван у окна',
+		sessionId: E2E_SESSION_ID
 	});
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();

@@ -286,13 +286,15 @@ before the Change Date. See LICENSE for complete terms.
 
 	.floating-tools-panel.at-default-corner {
 		right: 1rem;
-		/* Clears .workspace-topbar (~200px tall at desktop widths) plus a margin,
-		   so the panel doesn't open on top of the mode switcher on first load. */
-		top: 13.5rem;
-		/* max-height above assumes a 1rem top offset; re-derive it here from the
-		   real default-corner offset so the panel's bottom edge (and controls
-		   like the generate button inside it) never falls below the viewport. */
-		max-height: calc(100dvh - 13.5rem - 1rem);
+		/* Anchored just below the workspace header (topbar, plus the project
+		   tab bar row whenever one is open) rather than a fixed height — the
+		   header's real height varies with that tab bar, so Workspace.svelte
+		   measures it live and publishes the bottom edge as
+		   --workspace-header-bottom on .workspace-main. 13.5rem (the header's
+		   typical height with no tab bar, plus a margin) is only the fallback
+		   for the instant before that measurement effect has run. */
+		top: calc(var(--workspace-header-bottom, 13.5rem) + 1rem);
+		max-height: calc(100dvh - var(--workspace-header-bottom, 13.5rem) - 2rem);
 	}
 
 	/* Desktop-only: a dragged position is stored/applied as pixel coordinates,

@@ -27,6 +27,16 @@ function seedAccount(db: D1Database): void {
 	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
 		.bind('user-1', 1, 1)
 		.run();
+	db.prepare(
+		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind('project-1', 'user-1', 'Test project', 1, 1)
+		.run();
+	db.prepare(
+		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind('session-1', 'project-1', 'Test session', 1, 1)
+		.run();
 }
 
 describe('texture replacement jobs', () => {
@@ -39,6 +49,7 @@ describe('texture replacement jobs', () => {
 			comfyPromptId: 'prompt-job-1',
 			sceneUrl: 'https://cdn.example.test/scene.jpg',
 			sceneHash: 'hash-scene',
+			sessionId: 'session-1',
 			referenceUrl: 'https://cdn.example.test/reference.jpg',
 			replacementSurface: 'oak flooring',
 			cost: 2,

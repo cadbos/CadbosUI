@@ -15,6 +15,7 @@
 import type { Locator, Page, Route } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { E2E_SESSION_ID, mockProjectSessionRoutes } from './helpers/project-session-routes';
 
 async function authenticate(page: Page): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
@@ -40,6 +41,7 @@ async function authenticate(page: Page): Promise<void> {
 			body: JSON.stringify({ images: [], pagination: { offset: 0, size: 100, hasMore: false } })
 		});
 	});
+	await mockProjectSessionRoutes(page);
 }
 
 async function openCreate(page: Page): Promise<void> {
@@ -243,7 +245,8 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 		outputFormat: 'webp',
 		prompt: 'keep layout, use warmer materials',
 		negativePrompt: 'people',
-		styleTransferStrength: 0.35
+		styleTransferStrength: 0.35,
+		sessionId: E2E_SESSION_ID
 	});
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
@@ -337,7 +340,8 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		referenceImage: 'https://cdn.example.test/reference.webp',
 		outputFormat: 'webp',
 		prompt: 'style transfer guidance only',
-		styleTransferStrength: 0.7
+		styleTransferStrength: 0.7,
+		sessionId: E2E_SESSION_ID
 	});
 
 	await page.getByRole('tab', { name: 'Создание' }).click();
@@ -350,7 +354,8 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		image: 'https://cdn.example.test/source.webp',
 		imageHash: 'source-hash',
 		prompt: 'render prompt for paid generation',
-		outputFormat: 'webp'
+		outputFormat: 'webp',
+		sessionId: E2E_SESSION_ID
 	});
 });
 

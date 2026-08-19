@@ -37,6 +37,7 @@ import type {
 } from '$lib/api/contract';
 import { t } from '$lib/i18n/index.svelte';
 import { NOSTR_CONNECT_RELAYS } from '$lib/nostr/connect';
+import { workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 
 // NIP-98 HTTP-Auth event kind — a protocol constant, mirrored on the server.
 const NIP98_KIND = 27235;
@@ -305,6 +306,11 @@ class AuthState {
 		}
 		this.#setAnonymous();
 		this.error = null;
+		// Every open workspace tab (not just the live one) can hold another
+		// account's uploaded photo, prompt, and generated images in memory —
+		// see workspaceTabs.resetAll's own comment for why this can't be left
+		// to whoever signs in next to discover.
+		workspaceTabs.resetAll();
 	}
 
 	async loginDemo(): Promise<void> {

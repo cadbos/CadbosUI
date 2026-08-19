@@ -23,7 +23,7 @@ import {
 	type TextureReplacementRequest,
 	uploadResultSchema
 } from '$lib/api/contract';
-import type { TranslationKey } from '$lib/i18n/index.svelte';
+import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 
 export type { OutputFormat };
 
@@ -287,6 +287,13 @@ export class RequestImageUploadError extends Error {
 	}
 }
 
+export class RequestProjectSessionError extends Error {
+	constructor(message: string, options?: ErrorOptions) {
+		super(message, options);
+		this.name = 'RequestProjectSessionError';
+	}
+}
+
 function formatPromptFragment(fragment: PromptFragment): string {
 	const label = fragment.label?.trim();
 	if (!label) return fragment.text;
@@ -353,6 +360,28 @@ function cloneRenderResult(render: RenderResult | undefined): RenderResult | und
 	};
 }
 
+function cloneActiveObjectReplacementJob(
+	job: ActiveObjectReplacementJob | undefined
+): ActiveObjectReplacementJob | undefined {
+	if (!job) return undefined;
+	return {
+		id: job.id,
+		instruction: job.instruction,
+		sourceRender: cloneRenderResult(job.sourceRender)
+	};
+}
+
+function cloneActiveTextureReplacementJob(
+	job: ActiveTextureReplacementJob | undefined
+): ActiveTextureReplacementJob | undefined {
+	if (!job) return undefined;
+	return {
+		id: job.id,
+		instruction: job.instruction,
+		sourceRender: cloneRenderResult(job.sourceRender)
+	};
+}
+
 function insertFragment(
 	fragments: PromptFragment[],
 	fragment: PromptFragment,
@@ -395,6 +424,12 @@ export function renderResultFromResponse(
 
 const apiErrorSchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
 
+// Narrow schemas for #createProjectSession's two responses — only the id is
+// ever read, so that's all that's validated (same principle as the rest of
+// this file's response schemas: assert only what's actually consumed).
+const projectCreationResponseSchema = z.object({ id: z.uuid() });
+const sessionCreationResponseSchema = z.object({ id: z.uuid() });
+
 // Shared by the render/edit call sites: a non-ok response's body is untrusted
 // input, so validate it at the boundary instead of reading `error.code` off an
 // implicit `any`. Falls back to `fallbackCode` for a malformed/missing body.
@@ -429,7 +464,39 @@ export class RequestState {
 	// submit's own resolution) share one POST /api/uploads instead of each
 	// firing a duplicate. Cleared once the upload settles, success or failure.
 	#pendingUpload: { file: File; promise: Promise<ImageInput | undefined> } | undefined;
+	// Bumped by reset()/copyFrom() — same guard shape as #textureMaskUploadEpoch.
+	// Without it, a main-photo upload still in flight when this instance gets
+	// frozen/thawed into a *different* session (see workspace-tabs.svelte.ts)
+	// would call setImage() after the swap, grafting the old session's photo
+	// onto whatever now lives here.
+	#imageUploadEpoch = 0;
+	// In-flight #ensureProjectSession() call, so concurrent toXRequest() calls
+	// (e.g. a fast double-submit) share one pair of POST calls instead of each
+	// creating its own project+session.
+	#pendingProjectSession: Promise<{ projectId: string; sessionId: string }> | undefined;
+	// Set once #createProjectSession's project POST succeeds, cleared once its
+	// session POST also succeeds. If the session POST fails (or the whole call
+	// throws and the caller retries), this survives so the retry reuses the
+	// already-created project instead of leaving it orphaned and creating
+	// another "Untitled" one on every failed attempt.
+	#pendingProjectId: string | undefined;
+	// Bumped by reset() — same guard shape as #textureMaskUploadEpoch. Without
+	// it, a #createProjectSession() call still in flight when reset() runs
+	// would call setProjectSession() after the reset, repopulating
+	// projectId/sessionId on what's supposed to be a freshly blank state.
+	#projectSessionEpoch = 0;
 	id = $state<string>(crypto.randomUUID());
+	// Module 11: which project/session a generation attaches to. Not part of
+	// toJSON()/fromJSON() (those have no production caller — see
+	// request-fixtures.ts) and not part of normalizeForComparison() (the
+	// three-UI identity guarantee is about prompt-building fidelity, not which
+	// session a request happens to be attached to). Deliberately never
+	// persisted to the URL either — see url-state.ts's buildShareUrl comment —
+	// so it only ever lives in this in-memory field, set either lazily by
+	// ensureProjectSession() or explicitly when continuing a session from the
+	// project page.
+	projectId = $state<string | undefined>(undefined);
+	sessionId = $state<string | undefined>(undefined);
 	image = $state<ImageInput | undefined>(undefined);
 	// The main photo, picked but not yet uploaded — set by ImageUpload.svelte
 	// (target 'room' only) instead of calling /api/uploads immediately, so a
@@ -588,6 +655,16 @@ export class RequestState {
 		this.image = cloneImage(optionalImageInputSchema.parse(image));
 		this.pendingImageFile = undefined;
 		this.#clearPendingImagePreview();
+	}
+
+	setProjectSession(projectId: string, sessionId: string): void {
+		this.projectId = projectId;
+		this.sessionId = sessionId;
+	}
+
+	clearProjectSession(): void {
+		this.projectId = undefined;
+		this.sessionId = undefined;
 	}
 
 	// Called by ImageUpload.svelte (target 'room') when the user picks a
@@ -949,6 +1026,7 @@ export class RequestState {
 	}
 
 	async #uploadPendingImage(file: File): Promise<ImageInput | undefined> {
+		const epoch = this.#imageUploadEpoch;
 		let uploaded: ImageInput;
 		try {
 			const formData = new FormData();
@@ -969,8 +1047,84 @@ export class RequestState {
 			throw new RequestImageUploadError('upload failed', { cause: error });
 		}
 
+		// This instance was reset or frozen/thawed into a different session
+		// (see reset()/copyFrom()) while the upload was in flight — attaching
+		// the result now would silently graft it onto whatever now lives here.
+		if (this.#imageUploadEpoch !== epoch) {
+			throw new RequestImageUploadError('upload superseded');
+		}
+
 		this.setImage(uploaded);
 		return this.image;
+	}
+
+	// Lazily provisions a project+session the first time a generation call needs
+	// one — same "resolve on demand, cache the result" shape as
+	// #ensureImageUploaded(). A user who never visited a projects UI still gets a
+	// working, isolated session (an "Untitled" project) instead of every
+	// generation call failing for lack of one.
+	async ensureProjectSession(): Promise<{ projectId: string; sessionId: string }> {
+		if (this.projectId && this.sessionId) {
+			return { projectId: this.projectId, sessionId: this.sessionId };
+		}
+		if (this.#pendingProjectSession) return this.#pendingProjectSession;
+
+		const promise = this.#createProjectSession();
+		this.#pendingProjectSession = promise;
+		promise
+			.finally(() => {
+				if (this.#pendingProjectSession === promise) this.#pendingProjectSession = undefined;
+			})
+			.catch(() => {});
+		return promise;
+	}
+
+	async #createProjectSession(): Promise<{ projectId: string; sessionId: string }> {
+		const epoch = this.#projectSessionEpoch;
+		let projectId = this.#pendingProjectId;
+		if (!projectId) {
+			const projectResponse = await fetch('/api/projects', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ title: t('workspace.tabs.untitled') })
+			});
+			if (!projectResponse.ok) {
+				throw new RequestProjectSessionError('project creation failed');
+			}
+			const parsedProject = projectCreationResponseSchema.safeParse(
+				await projectResponse.json().catch(() => null)
+			);
+			if (this.#projectSessionEpoch !== epoch) {
+				throw new RequestProjectSessionError('project session request superseded');
+			}
+			if (!parsedProject.success) {
+				throw new RequestProjectSessionError('project creation response invalid');
+			}
+			projectId = parsedProject.data.id;
+			this.#pendingProjectId = projectId;
+		}
+
+		const sessionResponse = await fetch(`/api/projects/${projectId}/sessions`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({})
+		});
+		if (!sessionResponse.ok) {
+			throw new RequestProjectSessionError('session creation failed');
+		}
+		const parsedSession = sessionCreationResponseSchema.safeParse(
+			await sessionResponse.json().catch(() => null)
+		);
+		if (!parsedSession.success) {
+			throw new RequestProjectSessionError('session creation response invalid');
+		}
+		if (this.#projectSessionEpoch !== epoch) {
+			throw new RequestProjectSessionError('project session request superseded');
+		}
+
+		this.#pendingProjectId = undefined;
+		this.setProjectSession(projectId, parsedSession.data.id);
+		return { projectId, sessionId: parsedSession.data.id };
 	}
 
 	hasStyleTransferSource(): boolean {
@@ -1030,11 +1184,13 @@ export class RequestState {
 		if (!validation.valid) return null;
 		const image = await this.#ensureImageUploaded();
 		if (!image) return null;
+		const { sessionId } = await this.ensureProjectSession();
 		return {
 			image: image.url,
 			...(image.hash ? { imageHash: image.hash } : {}),
 			prompt: this.prompt,
-			outputFormat: this.outputFormat
+			outputFormat: this.outputFormat,
+			sessionId
 		};
 	}
 
@@ -1043,6 +1199,7 @@ export class RequestState {
 		if (!validation.valid) return null;
 		const source = await this.#resolveSourceFor(this.styleSourceMode);
 		if (!source || !this.styleReferenceImage) return null;
+		const { sessionId } = await this.ensureProjectSession();
 		const prompt = this.styleTransferPrompt.trim();
 		const negativePrompt = this.styleNegativePrompt.trim();
 		return {
@@ -1052,7 +1209,8 @@ export class RequestState {
 			outputFormat: this.outputFormat,
 			...(prompt ? { prompt } : {}),
 			...(negativePrompt ? { negativePrompt } : {}),
-			styleTransferStrength: this.styleTransferStrength
+			styleTransferStrength: this.styleTransferStrength,
+			sessionId
 		};
 	}
 
@@ -1061,11 +1219,13 @@ export class RequestState {
 		if (!validation.valid) return null;
 		const source = await this.#resolveSourceFor(this.objectReplacementSourceMode);
 		if (!source || !this.objectReferenceImage) return null;
+		const { sessionId } = await this.ensureProjectSession();
 		return {
 			image: source.url,
 			...(source.hash ? { imageHash: source.hash } : {}),
 			referenceImage: this.objectReferenceImage.url,
-			replacementObject: this.objectReplacementObject.trim()
+			replacementObject: this.objectReplacementObject.trim(),
+			sessionId
 		};
 	}
 
@@ -1074,20 +1234,23 @@ export class RequestState {
 		if (!validation.valid) return null;
 		const source = await this.#resolveSourceFor(this.textureReplacementSourceMode);
 		if (!source || !this.textureReferenceImage) return null;
+		const { sessionId } = await this.ensureProjectSession();
 		if (this.textureReplacementMasked) {
 			if (!this.textureMaskImage || !this.textureMaskMatchesSource()) return null;
 			return {
 				image: source.url,
 				...(source.hash ? { imageHash: source.hash } : {}),
 				referenceImage: this.textureReferenceImage.url,
-				mask: this.textureMaskImage.url
+				mask: this.textureMaskImage.url,
+				sessionId
 			};
 		}
 		return {
 			image: source.url,
 			...(source.hash ? { imageHash: source.hash } : {}),
 			referenceImage: this.textureReferenceImage.url,
-			replacementSurface: this.textureReplacementSurface.trim()
+			replacementSurface: this.textureReplacementSurface.trim(),
+			sessionId
 		};
 	}
 
@@ -1196,6 +1359,13 @@ export class RequestState {
 		this.textureMaskUploading = false;
 		this.textureReplacementResultReady = false;
 		this.id = crypto.randomUUID();
+		this.projectId = undefined;
+		this.sessionId = undefined;
+		this.#pendingProjectId = undefined;
+		this.#pendingProjectSession = undefined;
+		this.#projectSessionEpoch += 1;
+		this.#imageUploadEpoch += 1;
+		this.#pendingUpload = undefined;
 		this.image = undefined;
 		this.pendingImageFile = undefined;
 		this.#clearPendingImagePreview();
@@ -1223,6 +1393,76 @@ export class RequestState {
 		this.#renderHistory = [];
 		this.#historyIndex = -1;
 		this.status = 'idle';
+	}
+
+	// Lossless whole-state copy, used to freeze/thaw a workspace tab's data when
+	// switching between open projects (see workspace-tabs.svelte.ts). Unlike
+	// toJSON()/fromJSON() — which trim to the shareable-URL request model —
+	// this copies every field, including session-UI-only ones, so a tab that
+	// becomes inactive and later active again looks exactly as it was left.
+	copyFrom(source: RequestState): void {
+		// Any project/session creation, main-photo upload, or texture-mask
+		// upload still in flight belongs to the pre-copy state — invalidate it
+		// so a late resolution can't overwrite the state being copied in now
+		// (same guard shape reset() uses).
+		this.#pendingProjectId = undefined;
+		this.#pendingProjectSession = undefined;
+		this.#projectSessionEpoch += 1;
+		this.#textureMaskUploadEpoch += 1;
+		this.#imageUploadEpoch += 1;
+		this.#pendingUpload = undefined;
+
+		this.id = source.id;
+		this.projectId = source.projectId;
+		this.sessionId = source.sessionId;
+		// image/pendingImageFile are mutually exclusive on any well-formed
+		// instance (setImage/setPendingImage each clear the other). Routing
+		// through setPendingImage() here — rather than copying
+		// pendingImagePreviewUrl's blob: URL string verbatim — means each
+		// instance owns and revokes its own preview, so one tab's later
+		// revoke (from a subsequent copyFrom into it) can't invalidate a blob
+		// URL another tab is still holding onto.
+		if (source.pendingImageFile) {
+			this.setPendingImage(source.pendingImageFile);
+		} else {
+			this.#clearPendingImagePreview();
+			this.pendingImageFile = undefined;
+			this.image = cloneImage(source.image);
+		}
+		this.styleReferenceImage = cloneImage(source.styleReferenceImage);
+		this.objectReferenceImage = cloneImage(source.objectReferenceImage);
+		this.textureReferenceImage = cloneImage(source.textureReferenceImage);
+		this.textureMaskImage = cloneImage(source.textureMaskImage);
+		this.textureMaskSourceUrl = source.textureMaskSourceUrl;
+		this.promptFragments = cloneFragments(source.promptFragments);
+		this.editPrompt = source.editPrompt;
+		this.outputFormat = source.outputFormat;
+		this.sceneType = source.sceneType;
+		this.styleTransferPrompt = source.styleTransferPrompt;
+		this.styleTransferStrength = source.styleTransferStrength;
+		this.styleNegativePrompt = source.styleNegativePrompt;
+		this.styleSourceMode = source.styleSourceMode;
+		this.objectReplacementObject = source.objectReplacementObject;
+		this.objectReplacementSourceMode = source.objectReplacementSourceMode;
+		this.activeObjectReplacementJob = cloneActiveObjectReplacementJob(
+			source.activeObjectReplacementJob
+		);
+		this.textureReplacementSurface = source.textureReplacementSurface;
+		this.textureReplacementSourceMode = source.textureReplacementSourceMode;
+		this.textureReplacementMasked = source.textureReplacementMasked;
+		this.textureMaskUploading = source.textureMaskUploading;
+		this.activeTextureReplacementJob = cloneActiveTextureReplacementJob(
+			source.activeTextureReplacementJob
+		);
+		this.textureReplacementResultReady = source.textureReplacementResultReady;
+		this.promptOverride = source.promptOverride;
+		// currentRender/previousRender are derived from the history stack, not
+		// settable fields — copy the stack itself (deep-cloned, so neither
+		// instance's later edits alias the other's) to preserve full undo/redo
+		// navigability across the swap, not just the current step.
+		this.#renderHistory = source.#renderHistory.map((render) => cloneRenderResult(render));
+		this.#historyIndex = source.#historyIndex;
+		this.status = source.status;
 	}
 }
 

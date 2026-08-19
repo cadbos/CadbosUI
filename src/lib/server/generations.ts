@@ -30,7 +30,7 @@ function isGenerationKind(kind: string): kind is GenerationKind {
 	return generationKinds.some((candidate) => candidate === kind);
 }
 
-function generationKindForRow(id: string, kind: string): GenerationKind {
+export function generationKindForRow(id: string, kind: string): GenerationKind {
 	if (isGenerationKind(kind)) return kind;
 	throw new Error(`generation ${id} has invalid kind`);
 }
@@ -96,6 +96,9 @@ function toBalance(row: BalanceRow): Balance {
 export interface RecordGenerationInput {
 	url: string;
 	sourceUrl: string;
+	// Ownership must already be verified by the caller (projects.ts'
+	// assertSessionOwnedByUser) before this is called — this function trusts it.
+	sessionId: string;
 	// SHA-256 hex digest of the source image's bytes, or '' when the source is
 	// a previous render/edit result rather than a fresh upload (e.g. edit,
 	// upscale, or a style-transfer/object-replacement/texture-replacement call
@@ -141,8 +144,8 @@ export async function recordGeneration(
 		db
 			.prepare(
 				'INSERT INTO generations ' +
-					'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at) ' +
-					'SELECT ?, ?, ?, ?, ?, ?, ?, ?, balance, ? FROM credits WHERE user_id = ?'
+					'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at, session_id) ' +
+					'SELECT ?, ?, ?, ?, ?, ?, ?, ?, balance, ?, ? FROM credits WHERE user_id = ?'
 			)
 			.bind(
 				crypto.randomUUID(),
@@ -154,6 +157,7 @@ export async function recordGeneration(
 				input.kind,
 				input.amount,
 				now,
+				input.sessionId,
 				userId
 			)
 	]);

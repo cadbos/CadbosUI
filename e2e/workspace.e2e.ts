@@ -13,7 +13,9 @@
  */
 
 import type { Locator, Page } from '@playwright/test';
+
 import { expect, test } from './fixtures';
+import { mockProjectSessionRoutes } from './helpers/project-session-routes';
 
 function promptPreview(page: Page): Locator {
 	return page.getByLabel('Итоговый промпт').filter({ visible: true });
@@ -395,6 +397,7 @@ test('generating with the exterior scene type calls the exterior render route', 
 			})
 		});
 	});
+	await mockProjectSessionRoutes(page);
 	let calledExteriorRoute = false;
 	let capturedBody:
 		| { image: string; prompt: string; outputFormat: string; sceneType?: string }

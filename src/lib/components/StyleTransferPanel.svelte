@@ -13,6 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { z } from 'zod';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -31,6 +32,7 @@ before the Change Date. See LICENSE for complete terms.
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import { stylePresetsFor, type StylePreset } from '$lib/style-presets';
 	import { buildShareUrl, slugToReference, type ReferenceTab } from '$lib/state/url-state';
+	import { workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
 	const REFERENCE_TABS: { id: ReferenceTab; label: TranslationKey }[] = [
@@ -133,6 +135,10 @@ before the Change Date. See LICENSE for complete terms.
 		return event.currentTarget instanceof HTMLTextAreaElement ? event.currentTarget.value : '';
 	}
 
+	// Only the new session id is ever read from the fork response, so that's
+	// all that's validated here.
+	const forkSessionSchema = z.object({ id: z.uuid() });
+
 	async function submit(): Promise<void> {
 		if (!canApply || !isAuthenticated) return;
 		applying = true;
@@ -140,6 +146,23 @@ before the Change Date. See LICENSE for complete terms.
 		request.setStatus('rendering');
 		const overlayId = generationOverlay.start('generationOverlay.styleTransfer');
 		try {
+			if (request.projectId && request.sessionId && request.currentRender) {
+				const previousProjectId = request.projectId;
+				const previousSessionId = request.sessionId;
+				const forkResponse = await fetch(
+					`/api/projects/${previousProjectId}/sessions/${previousSessionId}/fork`,
+					{
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ forkedFromGenerationId: request.currentRender.id })
+					}
+				);
+				if (!forkResponse.ok) throw new Error('style_transfer_fork_failed');
+				const parsed = forkSessionSchema.safeParse(await forkResponse.json().catch(() => null));
+				if (!parsed.success) throw new Error('style_transfer_fork_failed');
+				request.setProjectSession(previousProjectId, parsed.data.id);
+				workspaceTabs.retargetSession(previousSessionId, parsed.data.id);
+			}
 			const body = await request.toStyleTransferRequest();
 			if (!body) {
 				request.setStatus('idle');
@@ -169,6 +192,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	function styleTransferErrorKey(err: unknown): TranslationKey {
 		if (err instanceof RequestImageUploadError) return 'upload.errorUpload';
+		if (err instanceof Error && err.message === 'style_transfer_fork_failed') {
+			return 'styleTransfer.forkFailed';
+		}
 		return creditErrorKey(
 			{
 				failed: 'styleTransfer.failed',

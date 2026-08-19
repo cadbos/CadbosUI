@@ -12,6 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { z } from 'zod';
 import { OUTPUT_FORMATS, type GenerationKind, type OutputFormat } from '$lib/api/contract';
 import {
 	SCENE_TYPES,
@@ -212,6 +213,27 @@ function parseFragments(raw: string): ParsedFragment[] {
 // of the query string when empty, since there's nothing to show for those. The
 // uploaded room photo and a custom (non-preset) style reference are never
 // included at all — see applyShareParams for why.
+//
+// request.projectId/sessionId are deliberately never part of *this* URL
+// (Module 11): they're the caller's own private session, not something this
+// "share what's on screen" link should hand to whoever opens it — a
+// recipient who isn't the same account can't own that session, so restoring
+// it would just fail their next generation call. Real project sharing goes
+// through the dedicated, revocable /share/[token] link instead (see
+// projects.ts's issueShareToken/getProjectDetailByShareToken). Continuing a
+// session from the project page sets projectId/sessionId on `request`
+// in-memory just before navigating — that survives the `goto()` this
+// triggers, since only 'enter'/'popstate'/'link' navigations re-parse the
+// URL (see Workspace.svelte's afterNavigate).
+//
+// Separately, Workspace.svelte's own address-bar sync layers `project`/
+// `session` query params on top of this function's output via
+// withProjectSession() below — an authenticated deep link back into the
+// *browser's own address bar* (bookmark it, reload, hand it to your other
+// device), gated by the same ownership check /projects/[id] already
+// enforces. That's a different guarantee than this "copy what's on screen"
+// link makes, so it stays a separate mechanism rather than changing what
+// buildShareUrl itself produces.
 export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab = {}): string {
 	const path =
 		mode === 'render'
@@ -290,6 +312,47 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 	return query ? `${path}?${query}` : path;
 }
 
+// Appends the authenticated deep-link pair described above onto an already-
+// built buildShareUrl() result — omitted entirely on the scratch tab (no
+// project/session to point at). Kept as a separate append step, rather than
+// a buildShareUrl parameter, so it can never accidentally leak into the
+// public "copy what's on screen" link this same builder also produces.
+export function withProjectSession(
+	url: string,
+	projectId: string | undefined,
+	sessionId: string | undefined
+): string {
+	if (!projectId || !sessionId) return url;
+	const [path, query = ''] = url.split('?');
+	const params = new URLSearchParams(query);
+	params.set('project', projectId);
+	params.set('session', sessionId);
+	return `${path}?${params.toString()}`;
+}
+
+// Reverse of withProjectSession — read off the *current* query string (see
+// subTabFromSearch for why there's no backing store field to apply this to
+// directly). Ownership of the referenced project is enforced server-side,
+// the same way a direct visit to /projects/[id] already is; an id that
+// doesn't parse as a UUID is treated as absent rather than trusted verbatim.
+const projectSessionIdSchema = z.uuid();
+
+export function projectSessionFromSearch(
+	searchParams: URLSearchParams
+): { projectId: string; sessionId: string } | null {
+	const projectId = searchParams.get('project');
+	const sessionId = searchParams.get('session');
+	if (
+		!projectId ||
+		!sessionId ||
+		!projectSessionIdSchema.safeParse(projectId).success ||
+		!projectSessionIdSchema.safeParse(sessionId).success
+	) {
+		return null;
+	}
+	return { projectId, sessionId };
+}
+
 // Reverse of buildShareUrl: applies every field explicitly (falling back to
 // defaults when a param/path segment is absent) so a given URL always maps to
 // the same request state. `sceneParam` is `page.params.scene` (present only
@@ -306,7 +369,8 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 // param would skip all of that: a crafted link could silently swap in an
 // unvalidated URL ahead of a paid render/style-transfer call. A preset id is
 // safe to restore since it's just a lookup into our own static preset list,
-// never an arbitrary URL.
+// never an arbitrary URL. request.projectId/sessionId are left untouched for
+// the same reason they're never written by buildShareUrl — see there.
 export function applyShareParams(
 	mode: Mode,
 	sceneParam: string | undefined,

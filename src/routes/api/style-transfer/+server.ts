@@ -27,6 +27,7 @@ import {
 } from '$lib/server/billing';
 import { styleTransferInterior } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
+import { assertSessionOwnedByUser } from '$lib/server/projects';
 
 const STYLE_TRANSFER_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
 
@@ -69,6 +70,11 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		}
 	}
 
+	if (db && userId) {
+		const sessionOwned = await assertSessionOwnedByUser(db, userId, parsed.data.sessionId);
+		if (!sessionOwned) return apiError(404, 'session_not_found', 'Session not found');
+	}
+
 	let result: RenderResponse;
 	try {
 		result = await styleTransferInterior(platform, parsed.data);
@@ -88,6 +94,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				url: result.outputUrl,
 				sourceUrl: parsed.data.image,
 				sourceHash: parsed.data.imageHash ?? '',
+				sessionId: parsed.data.sessionId,
 				prompt: parsed.data.prompt ?? '',
 				kind: 'style-transfer',
 				amount: result.cost

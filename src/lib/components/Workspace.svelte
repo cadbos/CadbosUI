@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { GalleryHorizontalEnd, Images } from '@lucide/svelte';
+	import { FolderKanban, GalleryHorizontalEnd, Images, Layers, Share2 } from '@lucide/svelte';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -26,7 +26,10 @@ before the Change Date. See LICENSE for complete terms.
 	import MaskEditor from '$lib/components/MaskEditor.svelte';
 	import PromptViews from '$lib/components/PromptViews.svelte';
 	import ScenesDrawer from '$lib/components/ScenesDrawer.svelte';
+	import ShareProjectDialog from '$lib/components/ShareProjectDialog.svelte';
 	import StyleTransferPanel from '$lib/components/StyleTransferPanel.svelte';
+	import WorkspaceTabBar from '$lib/components/WorkspaceTabBar.svelte';
+	import SessionTabBar from '$lib/components/SessionTabBar.svelte';
 	import {
 		creditErrorKey,
 		extractApiErrorCode,
@@ -38,12 +41,21 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
+	import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
+	import {
+		initializeSessionState,
+		restorePersistedTabs,
+		SCRATCH_TAB_ID,
+		workspaceTabs
+	} from '$lib/state/workspace-tabs.svelte';
 	import {
 		applyShareParams,
 		buildShareUrl,
+		projectSessionFromSearch,
 		routeIdToMode,
 		slugToTool,
 		subTabFromSearch,
+		withProjectSession,
 		type Mode
 	} from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
@@ -65,6 +77,8 @@ before the Change Date. See LICENSE for complete terms.
 	let sceneTypeTabs = $state<HTMLElement[]>([]);
 	let scenesOpen = $state(false);
 	let scenesTrigger: HTMLButtonElement | null = null;
+	let shareOpen = $state(false);
+	let shareTrigger: HTMLButtonElement | null = null;
 
 	// The URL is the source of truth for which mode is open — not local $state —
 	// so a shared link or a page reload always opens on the right tab.
@@ -98,6 +112,20 @@ before the Change Date. See LICENSE for complete terms.
 	});
 
 	const isAuthenticated = $derived(auth.status === 'authenticated');
+	// Only shown once the user has actually opened a project — a lone,
+	// never-touched scratch tab would just be noise for anyone who hasn't
+	// visited /projects yet.
+	const showWorkspaceTabs = $derived(workspaceTabs.tabs.some((tab) => tab.id !== SCRATCH_TAB_ID));
+	// The scratch tab never has sessions (see workspace-tabs.svelte.ts), and a
+	// just-opened project tab always carries at least one — so this is really
+	// just "is a real project the active tab", spelled out defensively.
+	const showSessionTabs = $derived(
+		workspaceTabs.activeTabId !== SCRATCH_TAB_ID && workspaceTabs.activeSessionTabs.length > 0
+	);
+	// Whether the active tab is a real project (not the scratch tab) — gates
+	// project-level actions like Share, which don't depend on a session
+	// existing yet, unlike showSessionTabs.
+	const hasActiveProject = $derived(workspaceTabs.activeTabId !== SCRATCH_TAB_ID);
 	// Only reserves canvas space while the floating tools panel is both open
 	// and still sitting at its untouched default corner — the moment the user
 	// drags it elsewhere or collapses it, the canvas reclaims the full width
@@ -145,11 +173,65 @@ before the Change Date. See LICENSE for complete terms.
 		requestAnimationFrame(() => scenesTrigger?.focus());
 	}
 
+	function closeShare(): void {
+		shareOpen = false;
+		requestAnimationFrame(() => shareTrigger?.focus());
+	}
+
 	// True once the request store has been hydrated from the URL at least once
 	// (see afterNavigate below). Gates the write-sync effect so it can't fire —
 	// and overwrite the shared link's query string with defaults — before that
 	// initial hydration has run.
 	let hydrated = $state(false);
+
+	// Resolves a project/session pair carried in the URL (see url-state.ts's
+	// projectSessionFromSearch) into the matching open workspace tab — the
+	// same fetch-then-initialize continueSession (projects/[id]/+page.svelte)
+	// already does on a click, just triggered by a deep link instead. An id
+	// that's unowned, archived, or just wrong (fetchProjectDetail resolves to
+	// null on any failure) quietly leaves the workspace on whatever it
+	// already had open.
+	async function openFromUrl(projectId: string, sessionId: string): Promise<void> {
+		const project = await fetchProjectDetail(projectId);
+		if (!project) return;
+		const session = project.sessions.find((candidate) => candidate.id === sessionId);
+		if (!session) return;
+		workspaceTabs.openProject({
+			projectId: project.id,
+			projectTitle: project.title,
+			sessionId: session.id,
+			sessionTitle: session.title.trim() === '' ? null : session.title,
+			initialize: (state) => initializeSessionState(state, project.id, session)
+		});
+	}
+
+	// Applies the URL's project/session (if present and different from what's
+	// already active) on top of whatever's currently open — shared by the
+	// initial hydration below (after restoring persisted tabs) and every
+	// later popstate/link navigation, so a pasted/bookmarked link always wins
+	// over whatever was already open.
+	async function applyUrlTarget(searchParams: URLSearchParams): Promise<void> {
+		const target = projectSessionFromSearch(searchParams);
+		if (
+			target &&
+			(target.projectId !== workspaceTabs.activeTabId ||
+				target.sessionId !== workspaceTabs.activeTab.activeSessionTabId)
+		) {
+			await openFromUrl(target.projectId, target.sessionId);
+		}
+	}
+
+	// Runs once on the initial hard load: restores every previously open tab
+	// (restorePersistedTabs is idempotent and already kicked off by the root
+	// layout's own onMount, so this just awaits that same result — see there
+	// for why restoration can't wait for Workspace.svelte specifically to
+	// mount), then layers the URL's own project/session (if any) on top — a
+	// shared link should win over whatever was locally open before, while
+	// the rest of the restored tabs stay open in the background.
+	async function hydrateWorkspaceTabs(searchParams: URLSearchParams): Promise<void> {
+		await restorePersistedTabs();
+		await applyUrlTarget(searchParams);
+	}
 
 	// afterNavigate also runs once when this component mounts (type 'enter'), so
 	// it covers both the initial load of a shared link and later browser
@@ -163,6 +245,18 @@ before the Change Date. See LICENSE for complete terms.
 	afterNavigate(({ type }) => {
 		if (type === 'enter' || type === 'popstate' || type === 'link') {
 			applyShareParams(mode, page.params.scene, page.url.searchParams, request);
+		}
+		if (type === 'enter') {
+			// Only a genuine hard load restores the full tab set — an in-app
+			// 'popstate'/'link' navigation means workspaceTabs already has
+			// everything it should (see hydrateWorkspaceTabs's own comment).
+			hydrateWorkspaceTabs(page.url.searchParams).catch((error: unknown) =>
+				logBoundaryError('workspace.hydrateWorkspaceTabs', error)
+			);
+		} else if (type === 'popstate' || type === 'link') {
+			applyUrlTarget(page.url.searchParams).catch((error: unknown) =>
+				logBoundaryError('workspace.applyUrlTarget', error)
+			);
 		}
 		hydrated = true;
 	});
@@ -184,12 +278,22 @@ before the Change Date. See LICENSE for complete terms.
 	// clicks the Graph tab) while a request-field debounce from a moment
 	// earlier is still pending — the timer would then fire with the *old*
 	// sub-tab and clobber the switch by navigating back to it.
+	//
+	// activeProjectId/activeSessionId are read synchronously too (alongside
+	// the buildShareUrl call above), for the same dependency-tracking reason:
+	// switching workspace tabs is a workspaceTabs mutation that buildShareUrl
+	// itself never reads (see its own doc comment), so without reading them
+	// here directly, switching tabs wouldn't re-schedule this effect at all.
 	$effect(() => {
 		if (!hydrated) return;
 		buildShareUrl(mode, request);
+		const activeProjectId =
+			workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
+		const activeSessionId = workspaceTabs.activeTab.activeSessionTabId ?? undefined;
 		const timer = setTimeout(() => {
 			const currentSearch = new URLSearchParams(window.location.search);
-			const url = buildShareUrl(mode, request, subTabFromSearch(mode, currentSearch));
+			const base = buildShareUrl(mode, request, subTabFromSearch(mode, currentSearch));
+			const url = withProjectSession(base, activeProjectId, activeSessionId);
 			if (`${window.location.pathname}${window.location.search}` !== url) {
 				goto(url, { replaceState: true, keepFocus: true, noScroll: true }).catch((error: unknown) =>
 					logBoundaryError('workspace.urlSync', error)
@@ -252,6 +356,32 @@ before the Change Date. See LICENSE for complete terms.
 			err
 		);
 	}
+
+	// The floating tools panels (position: fixed, siblings deep inside
+	// .workspace-main) anchor their default corner just below this header —
+	// but "below" only means something if they know how tall it actually is.
+	// The tab bar row toggling on/off changes that height, so it's measured
+	// live and published as a CSS var (--workspace-header-bottom, read by
+	// FloatingToolsPanel.svelte) rather than assuming a fixed size.
+	//
+	// getBoundingClientRect().bottom alone is viewport-relative — it shrinks
+	// as the page scrolls, which would drag a *fixed*-position panel up the
+	// screen on every scroll instead of leaving it where a floating panel
+	// belongs. Adding scrollY back converts it to the header's stable
+	// document-relative position, so the published value stays correct
+	// regardless of scroll offset at the moment a resize is observed (e.g.
+	// the tab bar appearing while the page happens to be scrolled).
+	let workspaceHeaderBottom = $state<number | null>(null);
+
+	function measureWorkspaceHeader(node: HTMLElement): () => void {
+		const update = () => {
+			workspaceHeaderBottom = node.getBoundingClientRect().bottom + window.scrollY;
+		};
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(node);
+		return () => observer.disconnect();
+	}
 </script>
 
 <main class="page">
@@ -259,53 +389,95 @@ before the Change Date. See LICENSE for complete terms.
 		<div
 			class="workspace-main"
 			style:--tools-panel-width={toolsPanel.width !== null ? `${toolsPanel.width}px` : undefined}
+			style:--workspace-header-bottom={workspaceHeaderBottom !== null
+				? `${workspaceHeaderBottom}px`
+				: undefined}
 		>
-			<div class="workspace-topbar">
+			<div class="workspace-header" {@attach measureWorkspaceHeader}>
 				{#if isAuthenticated}
-					<button
-						{@attach (node) => {
-							scenesTrigger = node as HTMLButtonElement;
-							return () => {
-								scenesTrigger = null;
-							};
-						}}
-						type="button"
-						class="scenes-button"
-						aria-expanded={scenesOpen}
-						aria-controls="scenes-drawer"
-						onclick={() => (scenesOpen = true)}
-					>
-						<Images size={18} strokeWidth={1.8} aria-hidden="true" />
-						<span>{t('generatedImages.title')}</span>
-					</button>
-					<a class="resources-button" href={resolve('/resources', {})}>
-						<GalleryHorizontalEnd size={18} strokeWidth={1.8} aria-hidden="true" />
-						<span>{t('resources.title')}</span>
-					</a>
-				{/if}
-
-				<nav class="mode-nav" aria-label={t('mode.switcher.label')}>
-					<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
-						{#each modes as modeOption, index (modeOption.id)}
+					<div class="workspace-row">
+						<a class="resources-button" href={resolve('/projects', {})}>
+							<FolderKanban size={18} strokeWidth={1.8} aria-hidden="true" />
+							<span>{t('projects.navLabel')}</span>
+						</a>
+						{#if showWorkspaceTabs}
+							<WorkspaceTabBar />
+						{/if}
+						{#if hasActiveProject}
 							<button
 								{@attach (node) => {
-									modeTabs[index] = node as HTMLElement;
+									shareTrigger = node as HTMLButtonElement;
+									return () => {
+										shareTrigger = null;
+									};
 								}}
 								type="button"
-								role="tab"
-								id={`mode-tab-${modeOption.id}`}
-								aria-selected={mode === modeOption.id}
-								aria-controls={`mode-panel-${modeOption.id}`}
-								tabindex={mode === modeOption.id ? 0 : -1}
-								class:active={mode === modeOption.id}
-								onclick={() => modeTabController.activate(index)}
-								onkeydown={modeTabController.onKeydown}
+								class="resources-button"
+								aria-expanded={shareOpen}
+								onclick={() => (shareOpen = true)}
 							>
-								<span>{t(modeOption.label)}</span>
+								<Share2 size={18} strokeWidth={1.8} aria-hidden="true" />
+								<span>{t('workspace.shareButton')}</span>
 							</button>
-						{/each}
+						{/if}
+						<button
+							{@attach (node) => {
+								scenesTrigger = node as HTMLButtonElement;
+								return () => {
+									scenesTrigger = null;
+								};
+							}}
+							type="button"
+							class="scenes-button"
+							aria-expanded={scenesOpen}
+							aria-controls="scenes-drawer"
+							onclick={() => (scenesOpen = true)}
+						>
+							<Images size={18} strokeWidth={1.8} aria-hidden="true" />
+							<span>{t('generatedImages.title')}</span>
+						</button>
+						<a class="resources-button" href={resolve('/resources', {})}>
+							<GalleryHorizontalEnd size={18} strokeWidth={1.8} aria-hidden="true" />
+							<span>{t('resources.title')}</span>
+						</a>
 					</div>
-				</nav>
+				{/if}
+
+				<div class="workspace-row">
+					<nav class="mode-nav" aria-label={t('mode.switcher.label')}>
+						<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
+							{#each modes as modeOption, index (modeOption.id)}
+								<button
+									{@attach (node) => {
+										modeTabs[index] = node as HTMLElement;
+									}}
+									type="button"
+									role="tab"
+									id={`mode-tab-${modeOption.id}`}
+									aria-selected={mode === modeOption.id}
+									aria-controls={`mode-panel-${modeOption.id}`}
+									tabindex={mode === modeOption.id ? 0 : -1}
+									class:active={mode === modeOption.id}
+									onclick={() => modeTabController.activate(index)}
+									onkeydown={modeTabController.onKeydown}
+								>
+									<span>{t(modeOption.label)}</span>
+								</button>
+							{/each}
+						</div>
+					</nav>
+
+					{#if isAuthenticated && showSessionTabs}
+						<a
+							class="resources-button"
+							href={resolve('/projects/[id]', { id: workspaceTabs.activeTabId })}
+						>
+							<Layers size={18} strokeWidth={1.8} aria-hidden="true" />
+							<span>{t('workspace.sessionsButton')}</span>
+						</a>
+						<SessionTabBar />
+					{/if}
+				</div>
 			</div>
 
 			<!-- Each mode keeps its own persistent canvas-layout (hidden via CSS, not
@@ -526,6 +698,11 @@ before the Change Date. See LICENSE for complete terms.
 
 	{#if isAuthenticated}
 		<ScenesDrawer open={scenesOpen} onClose={closeScenes} />
+		<ShareProjectDialog
+			projectId={workspaceTabs.activeTabId}
+			open={shareOpen}
+			onClose={closeShare}
+		/>
 	{/if}
 </main>
 
@@ -565,7 +742,14 @@ before the Change Date. See LICENSE for complete terms.
 		min-width: 0;
 	}
 
-	.workspace-topbar {
+	.workspace-header {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
+
+	.workspace-row {
 		width: 100%;
 		display: flex;
 		align-items: stretch;
@@ -576,14 +760,12 @@ before the Change Date. See LICENSE for complete terms.
 	   one line — narrower than this, only that tab wrapped to two lines while
 	   its siblings stayed single-line, making the row look uneven. No longer
 	   tied to the removed panel-col's width now that the tools panel floats.
-	   margin-left: auto (rather than justify-content: space-between on the
-	   parent) keeps it pinned to the right even when the scenes button isn't
-	   rendered for a signed-out user, since space-between collapses a single
-	   remaining flex item to the start. */
+	   Leads its row now (Create/Edit/Style-transfer, then the Sessions button
+	   and its tab strip) rather than being pushed right, so no margin-left:
+	   auto here — see .scenes-button for that trick's other use. */
 	.mode-nav {
 		flex: 0 0 440px;
 		max-width: 100%;
-		margin-left: auto;
 		padding: 0.25rem;
 		background: #e9ece9;
 		border: 1px solid #d8ded8;
@@ -596,9 +778,15 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
+		/* Pins the Scenes+Resources pair to the right of the projects row even
+		   when the project tab strip before it isn't rendered (a signed-in user
+		   with no open project tabs yet) — margin-left: auto rather than
+		   justify-content: space-between on the parent, since space-between
+		   would collapse a single remaining flex item back to the start. */
+		margin-left: auto;
 		/* Matches .mode-nav's own (content-driven) height so the stretched
-		   .workspace-topbar row doesn't leave the mode tabs looking like
-		   they're floating in a taller pill with empty space below them. */
+		   .workspace-row row doesn't leave the mode tabs looking like they're
+		   floating in a taller pill with empty space below them. */
 		min-height: 2.5rem;
 		padding: 0.5rem 1rem;
 		border: 1px solid var(--color-border);
@@ -674,6 +862,8 @@ before the Change Date. See LICENSE for complete terms.
 		font-weight: 600;
 		line-height: 1.2;
 		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		text-align: center;
 		color: #3f4d43;
 		background: transparent;
@@ -793,12 +983,14 @@ before the Change Date. See LICENSE for complete terms.
 
 		.mode-nav {
 			flex-basis: auto;
+			flex-shrink: 1;
+			min-width: 0;
 			width: 100%;
 		}
 	}
 
 	@media (max-width: 440px) {
-		.workspace-topbar {
+		.workspace-row {
 			flex-direction: column;
 		}
 	}

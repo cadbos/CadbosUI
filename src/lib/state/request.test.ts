@@ -15,22 +15,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	AC9_IMAGE,
+	AC9_PROJECT_ID,
 	AC9_PROMPT,
 	AC9_REFERENCE_IMAGE,
 	AC9_RENDER_REQUEST,
+	AC9_SESSION_ID,
 	AC9_STYLE_TRANSFER_REQUEST,
 	applyAc9Fixture,
 	buildAc9RequestJSON
 } from '$lib/state/request-fixtures';
 import {
 	RequestImageUploadError,
+	RequestProjectSessionError,
 	RequestReorderError,
 	request,
+	RequestState,
 	type RenderResult
 } from '$lib/state/request.svelte';
 
 beforeEach(() => {
 	request.reset();
+	// Most tests don't care about project/session assignment at all — pre-set
+	// one so every toXRequest() call's ensureProjectSession() resolves from
+	// state instead of hitting the network. Tests that actually exercise
+	// ensureProjectSession()'s own lazy-creation behavior clear it explicitly.
+	request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
 });
 
 afterEach(() => {
@@ -300,6 +309,75 @@ describe('serialization', () => {
 	});
 });
 
+describe('copyFrom', () => {
+	it('copies every field, including ones toJSON/fromJSON deliberately omit', () => {
+		applyAc9Fixture();
+		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
+		request.setActiveObjectReplacementJobId('123e4567-e89b-42d3-a456-426614174000');
+		request.setStatus('rendering');
+		request.setCurrentRender({
+			id: 'render-a',
+			outputUrls: ['https://example.test/a.webp'],
+			cost: 1,
+			balance: 24,
+			ts: 0
+		});
+		request.applyEditResult({
+			id: 'render-b',
+			outputUrls: ['https://example.test/b.webp'],
+			cost: 1,
+			balance: 23,
+			ts: 1
+		});
+
+		const other = new RequestState();
+		other.copyFrom(request);
+
+		expect(other.toJSON()).toEqual(request.toJSON());
+		expect(other.id).toBe(request.id);
+		expect(other.projectId).toBe(request.projectId);
+		expect(other.sessionId).toBe(request.sessionId);
+		expect(other.status).toBe('rendering');
+		expect(other.activeObjectReplacementJobId).toBe(request.activeObjectReplacementJobId);
+		expect(other.canUndoEdit).toBe(true);
+		expect(other.currentRender).toEqual(request.currentRender);
+	});
+
+	it('copies a pending, not-yet-uploaded image via its own File reference', () => {
+		const file = new File(['bytes'], 'room.jpg', { type: 'image/jpeg' });
+		request.setPendingImage(file);
+
+		const other = new RequestState();
+		other.copyFrom(request);
+
+		expect(other.pendingImageFile).toBe(file);
+		expect(other.pendingImagePreviewUrl).toBeDefined();
+		expect(other.image).toBeUndefined();
+	});
+
+	it('does not share mutable object references with the source', () => {
+		applyAc9Fixture();
+		const other = new RequestState();
+		other.copyFrom(request);
+
+		expect(other.promptFragments).not.toBe(request.promptFragments);
+		expect(other.image).not.toBe(request.image);
+
+		request.setEditPrompt('mutated after copy');
+		expect(other.editPrompt).not.toBe(request.editPrompt);
+	});
+
+	it('leaves the source instance untouched', () => {
+		applyAc9Fixture();
+		const snapshotBefore = request.toJSON();
+
+		const other = new RequestState();
+		other.copyFrom(request);
+
+		expect(request.toJSON()).toEqual(snapshotBefore);
+	});
+});
+
 describe('normalizeForComparison', () => {
 	it('ignores request id and status', () => {
 		applyAc9Fixture();
@@ -358,6 +436,7 @@ describe('normalizeForComparison', () => {
 		const automaticPayload = await request.toTextureReplacementRequest();
 
 		request.reset();
+		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
 		request.setTextureReplacementSourceMode('room-photo');
@@ -373,6 +452,7 @@ describe('normalizeForComparison', () => {
 		const maskedPayload = await request.toTextureReplacementRequest();
 
 		request.reset();
+		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
 		request.setTextureReplacementSourceMode('room-photo');
@@ -477,6 +557,291 @@ describe('toRenderRequest', () => {
 
 		await expect(request.toRenderRequest()).rejects.toThrow(RequestImageUploadError);
 	});
+
+	it('ignores an upload response that resolves after reset() has already run', async () => {
+		const NEW_PROJECT_ID = '00000000-0000-4000-8000-000000000301';
+		const NEW_SESSION_ID = '00000000-0000-4000-8000-000000000302';
+		const file = new File(['bytes'], 'room.jpg', { type: 'image/jpeg' });
+		request.setPendingImage(file);
+		let resolveUpload!: (response: unknown) => void;
+		const uploadPromise = new Promise((resolve) => {
+			resolveUpload = resolve;
+		});
+		// reset() below drops the pre-set project/session, so toRenderRequest's
+		// own ensureProjectSession() call would otherwise need to provision a
+		// new one — give it somewhere valid to land so a passing run (with the
+		// fix) fails solely on the upload epoch check, never reaching this path.
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url === '/api/uploads') {
+				return uploadPromise as Promise<{ ok: boolean; json: () => Promise<unknown> }>;
+			}
+			if (url === '/api/projects') {
+				return {
+					ok: true,
+					json: () =>
+						Promise.resolve({
+							id: NEW_PROJECT_ID,
+							title: 'Untitled',
+							createdAt: 0,
+							updatedAt: 0
+						})
+				};
+			}
+			if (url === `/api/projects/${NEW_PROJECT_ID}/sessions`) {
+				return {
+					ok: true,
+					json: () => Promise.resolve({ id: NEW_SESSION_ID, title: '', createdAt: 0, updatedAt: 0 })
+				};
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const promise = request.toRenderRequest();
+
+		// The user resets the request (e.g. starting fresh work) before the
+		// still-in-flight upload above resolves.
+		request.reset();
+
+		resolveUpload({
+			ok: true,
+			json: () =>
+				Promise.resolve({
+					url: 'https://example.test/uploaded-room.webp',
+					mime: 'image/webp',
+					size: 1234,
+					hash: 'deadbeef'
+				})
+		});
+		await expect(promise).rejects.toThrow(RequestImageUploadError);
+
+		// The now-superseded response must not attach its image onto what's
+		// supposed to be a freshly reset request.
+		expect(request.image).toBeUndefined();
+	});
+});
+
+describe('ensureProjectSession', () => {
+	it('reuses an already-set session without any network call', async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal('fetch', fetchMock);
+
+		const result = await request.ensureProjectSession();
+
+		expect(result).toEqual({ projectId: AC9_PROJECT_ID, sessionId: AC9_SESSION_ID });
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	const NEW_PROJECT_ID = '00000000-0000-4000-8000-000000000201';
+	const NEW_SESSION_ID = '00000000-0000-4000-8000-000000000202';
+
+	it('lazily creates and caches an Untitled project+session when none is set', async () => {
+		request.clearProjectSession();
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url === '/api/projects') {
+				return {
+					ok: true,
+					json: () =>
+						Promise.resolve({
+							id: NEW_PROJECT_ID,
+							title: 'Untitled',
+							createdAt: 0,
+							updatedAt: 0
+						})
+				};
+			}
+			if (url === `/api/projects/${NEW_PROJECT_ID}/sessions`) {
+				return {
+					ok: true,
+					json: () => Promise.resolve({ id: NEW_SESSION_ID, title: '', createdAt: 0, updatedAt: 0 })
+				};
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const first = await request.ensureProjectSession();
+		expect(first).toEqual({ projectId: NEW_PROJECT_ID, sessionId: NEW_SESSION_ID });
+		expect(request.projectId).toBe(NEW_PROJECT_ID);
+		expect(request.sessionId).toBe(NEW_SESSION_ID);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+
+		const second = await request.ensureProjectSession();
+		expect(second).toEqual(first);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('dedupes two concurrent calls into a single project+session provisioning', async () => {
+		request.clearProjectSession();
+		let resolveProject!: (value: unknown) => void;
+		let resolveSession!: (value: unknown) => void;
+		const projectResponse = new Promise((resolve) => {
+			resolveProject = resolve;
+		});
+		const sessionResponse = new Promise((resolve) => {
+			resolveSession = resolve;
+		});
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url === '/api/projects') return { ok: true, json: () => projectResponse };
+			if (url === `/api/projects/${NEW_PROJECT_ID}/sessions`) {
+				return { ok: true, json: () => sessionResponse };
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		// Both calls start before either provisioning response resolves — the
+		// second must reuse the first's in-flight promise (#pendingProjectSession)
+		// instead of firing its own duplicate POSTs.
+		const firstCall = request.ensureProjectSession();
+		const secondCall = request.ensureProjectSession();
+
+		resolveProject({ id: NEW_PROJECT_ID, title: 'Untitled', createdAt: 0, updatedAt: 0 });
+		resolveSession({ id: NEW_SESSION_ID, title: '', createdAt: 0, updatedAt: 0 });
+
+		const [first, second] = await Promise.all([firstCall, secondCall]);
+		expect(first).toEqual({ projectId: NEW_PROJECT_ID, sessionId: NEW_SESSION_ID });
+		expect(second).toEqual(first);
+		expect(fetchMock.mock.calls.filter(([url]) => url === '/api/projects')).toHaveLength(1);
+		expect(
+			fetchMock.mock.calls.filter(([url]) => url === `/api/projects/${NEW_PROJECT_ID}/sessions`)
+		).toHaveLength(1);
+	});
+
+	it('throws RequestProjectSessionError when project creation fails', async () => {
+		request.clearProjectSession();
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+
+		await expect(request.ensureProjectSession()).rejects.toThrow(RequestProjectSessionError);
+	});
+
+	it('throws RequestProjectSessionError when the project creation response is malformed', async () => {
+		request.clearProjectSession();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: 'not-a-uuid' }) })
+		);
+
+		await expect(request.ensureProjectSession()).rejects.toThrow(RequestProjectSessionError);
+	});
+
+	it('throws RequestProjectSessionError when session creation fails', async () => {
+		request.clearProjectSession();
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url === '/api/projects') {
+				return {
+					ok: true,
+					json: () =>
+						Promise.resolve({
+							id: NEW_PROJECT_ID,
+							title: 'Untitled',
+							createdAt: 0,
+							updatedAt: 0
+						})
+				};
+			}
+			return { ok: false };
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(request.ensureProjectSession()).rejects.toThrow(RequestProjectSessionError);
+	});
+
+	it('reuses the already-created project when retrying after a session-creation failure', async () => {
+		request.clearProjectSession();
+		let projectPosts = 0;
+		let sessionAttempts = 0;
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url === '/api/projects') {
+				projectPosts += 1;
+				return {
+					ok: true,
+					json: () =>
+						Promise.resolve({
+							id: NEW_PROJECT_ID,
+							title: 'Untitled',
+							createdAt: 0,
+							updatedAt: 0
+						})
+				};
+			}
+			if (url === `/api/projects/${NEW_PROJECT_ID}/sessions`) {
+				sessionAttempts += 1;
+				if (sessionAttempts === 1) return { ok: false };
+				return {
+					ok: true,
+					json: () => Promise.resolve({ id: NEW_SESSION_ID, title: '', createdAt: 0, updatedAt: 0 })
+				};
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(request.ensureProjectSession()).rejects.toThrow(RequestProjectSessionError);
+
+		const result = await request.ensureProjectSession();
+		expect(result).toEqual({ projectId: NEW_PROJECT_ID, sessionId: NEW_SESSION_ID });
+		// The retry must not create a second "Untitled" project — only the
+		// session POST is retried, reusing the project the first attempt
+		// already created.
+		expect(projectPosts).toBe(1);
+		expect(sessionAttempts).toBe(2);
+	});
+
+	it('ignores a session-creation response that resolves after reset() has already run', async () => {
+		request.clearProjectSession();
+		let resolveSession!: (response: unknown) => void;
+		const sessionPromise = new Promise((resolve) => {
+			resolveSession = resolve;
+		});
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url === '/api/projects') {
+				return {
+					ok: true,
+					json: () =>
+						Promise.resolve({
+							id: NEW_PROJECT_ID,
+							title: 'Untitled',
+							createdAt: 0,
+							updatedAt: 0
+						})
+				};
+			}
+			if (url === `/api/projects/${NEW_PROJECT_ID}/sessions`) {
+				return sessionPromise as Promise<{ ok: boolean; json: () => Promise<unknown> }>;
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		const promise = request.ensureProjectSession();
+
+		// The user resets the request (e.g. starting fresh work) before the
+		// still-in-flight session POST above resolves.
+		request.reset();
+
+		resolveSession({
+			ok: true,
+			json: () => Promise.resolve({ id: NEW_SESSION_ID, title: '', createdAt: 0, updatedAt: 0 })
+		});
+		await expect(promise).rejects.toThrow(RequestProjectSessionError);
+
+		// The now-superseded response must not repopulate projectId/sessionId
+		// on what's supposed to be a freshly reset request.
+		expect(request.projectId).toBeUndefined();
+		expect(request.sessionId).toBeUndefined();
+
+		// A retry must not reuse the abandoned, pre-reset project — reset()
+		// invalidated it, so this has to POST a brand new one.
+		const projectPostsBeforeRetry = fetchMock.mock.calls.filter(
+			([url]) => url === '/api/projects'
+		).length;
+		await request.ensureProjectSession();
+		const projectPostsAfterRetry = fetchMock.mock.calls.filter(
+			([url]) => url === '/api/projects'
+		).length;
+		expect(projectPostsAfterRetry).toBe(projectPostsBeforeRetry + 1);
+	});
 });
 
 describe('toStyleTransferRequest', () => {
@@ -532,7 +897,8 @@ describe('toStyleTransferRequest', () => {
 			image: AC9_IMAGE.url,
 			referenceImage: AC9_REFERENCE_IMAGE.url,
 			outputFormat: 'webp',
-			styleTransferStrength: 0.7
+			styleTransferStrength: 0.7,
+			sessionId: AC9_SESSION_ID
 		});
 	});
 
@@ -571,6 +937,7 @@ describe('toStyleTransferRequest', () => {
 		const snapshot = request.toJSON();
 
 		request.reset();
+		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
 		request.fromJSON(snapshot);
 
 		expect(request.toJSON()).toEqual(snapshot);
@@ -606,7 +973,8 @@ describe('toObjectReplacementRequest', () => {
 		expect(await request.toObjectReplacementRequest()).toEqual({
 			image: AC9_IMAGE.url,
 			referenceImage: objectReference.url,
-			replacementObject: 'gray sofa by the window'
+			replacementObject: 'gray sofa by the window',
+			sessionId: AC9_SESSION_ID
 		});
 	});
 
@@ -688,7 +1056,8 @@ describe('toTextureReplacementRequest', () => {
 		expect(await request.toTextureReplacementRequest()).toEqual({
 			image: AC9_IMAGE.url,
 			referenceImage: textureReference.url,
-			replacementSurface: 'sofa upholstery'
+			replacementSurface: 'sofa upholstery',
+			sessionId: AC9_SESSION_ID
 		});
 	});
 
@@ -712,7 +1081,8 @@ describe('toTextureReplacementRequest', () => {
 		expect(await request.toTextureReplacementRequest()).toEqual({
 			image: AC9_IMAGE.url,
 			referenceImage: textureReference.url,
-			mask: textureMask.url
+			mask: textureMask.url,
+			sessionId: AC9_SESSION_ID
 		});
 	});
 

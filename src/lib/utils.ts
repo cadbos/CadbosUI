@@ -54,6 +54,22 @@ export function logBoundaryError(scope: string, error: unknown): void {
 	console.error('Component boundary failed:', toBoundaryErrorLog(scope, error));
 }
 
+// discardBody — a fetch response's body isn't released just because it's
+// never read — cancel explicitly wherever a response is fetched but
+// deliberately never consumed.
+export function discardBody(response: Response): void {
+	void response.body?.cancel().catch(() => {});
+}
+
+// openModal — attach helper for native <dialog> elements: opens the dialog
+// as a modal and returns a cleanup that closes it if still open.
+export function openModal(dialog: HTMLDialogElement): () => void {
+	dialog.showModal();
+	return () => {
+		if (dialog.open) dialog.close();
+	};
+}
+
 export interface TabController {
 	activate: (index: number) => void;
 	onKeydown: (event: KeyboardEvent) => void;

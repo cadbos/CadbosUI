@@ -113,13 +113,15 @@ before the Change Date. See LICENSE for complete terms.
 		try {
 			const source = await request.resolveEditSource();
 			if (!source) return;
+			const { sessionId } = await request.ensureProjectSession();
 			const response = await fetch('/api/edit', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
 					image: source.url,
 					...(source.hash ? { imageHash: source.hash } : {}),
-					prompt: trimmed
+					prompt: trimmed,
+					sessionId
 				})
 			});
 			if (!response.ok) {

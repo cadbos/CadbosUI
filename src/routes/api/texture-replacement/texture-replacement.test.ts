@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 
 const integration = vi.hoisted(() => ({
 	cancel: vi.fn(),
@@ -66,6 +67,19 @@ function expectSingleLog(messages: unknown[], expected: Record<string, unknown>)
 	expect(messages).toEqual([JSON.stringify(expected)]);
 }
 
+// Deterministic, UUID-shaped so the request schema's sessionId: z.uuid() accepts
+// it — a fixed id per pubkey, seeded alongside the user below so every
+// authenticated callPost() has an owned session by default.
+const SESSION_IDS: Record<string, string> = {
+	'pubkey-1': '00000000-0000-4000-8000-000000000001',
+	'pubkey-2': '00000000-0000-4000-8000-000000000002'
+};
+const FALLBACK_SESSION_ID = '00000000-0000-4000-8000-0000000000ff';
+
+function sessionIdForPubkey(pubkey: string | null | undefined): string {
+	return (pubkey && SESSION_IDS[pubkey]) || FALLBACK_SESSION_ID;
+}
+
 function seedUser(
 	db: D1Database,
 	id = 'user-1',
@@ -80,6 +94,18 @@ function seedUser(
 			.bind(id, balance, Date.now())
 			.run();
 	}
+	const now = Date.now();
+	const projectId = `project-${id}`;
+	db.prepare(
+		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind(projectId, id, 'Test project', now, now)
+		.run();
+	db.prepare(
+		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
+		.run();
 }
 
 function platform(db: D1Database): App.Platform {
@@ -91,8 +117,12 @@ type PostEvent = Parameters<typeof POST>[0];
 function callPost(
 	requestPlatform: App.Platform,
 	pubkey: string | null = 'pubkey-1',
-	body: unknown = requestBody
+	requestBodyOverride: Record<string, unknown> = requestBody
 ): ReturnType<typeof POST> {
+	// A full replacement, not a merge onto requestBody: the masked and automatic
+	// variants are mutually exclusive union members (mask vs. replacementSurface),
+	// so merging would leave both fields set and fail validation.
+	const body = { ...requestBodyOverride, sessionId: sessionIdForPubkey(pubkey) };
 	return POST({
 		request: new Request('https://cadbos.example/api/texture-replacement', {
 			method: 'POST',
@@ -123,6 +153,31 @@ afterEach(() => {
 });
 
 describe('POST /api/texture-replacement', () => {
+	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
+		const db = makeD1();
+		seedUser(db);
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const foreignSessionId = seedForeignSession(db);
+
+		// callPost() forces sessionId to the caller's own session — bypass it here
+		// to submit someone else's session id instead.
+		const response = await POST({
+			request: new Request('https://cadbos.example/api/texture-replacement', {
+				method: 'POST',
+				body: JSON.stringify({ ...requestBody, sessionId: foreignSessionId })
+			}),
+			platform: platform(db),
+			locals: { user: { pubkey: 'pubkey-1' } },
+			url: new URL('https://cadbos.example/api/texture-replacement')
+		} as PostEvent);
+
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({
+			error: { code: 'session_not_found', message: 'Session not found' }
+		});
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(404, 'session_not_found'));
+	});
+
 	it('uses ArchAI for a masked request and completes without creating a ComfyUI job', async () => {
 		const db = makeD1();
 		seedUser(db);
@@ -144,7 +199,7 @@ describe('POST /api/texture-replacement', () => {
 		});
 		expect(archai.replaceTexturesWithMask).toHaveBeenCalledWith(
 			expect.objectContaining({ env: expect.objectContaining({ DB: db }) }),
-			maskedRequest
+			{ ...maskedRequest, sessionId: sessionIdForPubkey('pubkey-1') }
 		);
 		expect(integration.submit).not.toHaveBeenCalled();
 		expect(jobs.create).not.toHaveBeenCalled();
