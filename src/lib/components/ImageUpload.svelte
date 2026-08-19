@@ -13,6 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { Import } from '@lucide/svelte';
 	import { uploadResultSchema } from '$lib/api/contract';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { normalizeImageContentType } from '$lib/image-mime';
@@ -504,10 +505,11 @@ before the Change Date. See LICENSE for complete terms.
 				</label>
 				<button
 					type="submit"
-					aria-label={`${t('upload.import')}: ${controlLabel}`}
+					class="import-btn"
+					aria-label={`${uploading ? t('upload.importing') : t('upload.import')}: ${controlLabel}`}
 					disabled={uploading || disabled || remoteUrl.trim().length === 0}
 				>
-					{uploading ? t('upload.importing') : t('upload.import')}
+					<Import size={16} aria-hidden="true" />
 				</button>
 			</form>
 		</div>
@@ -719,6 +721,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.url-label input {
 		width: 100%;
+		height: 2.5rem;
 		box-sizing: border-box;
 		padding: 0.5rem 0.625rem;
 		border: 1px solid var(--color-muted-strong);
@@ -728,18 +731,23 @@ before the Change Date. See LICENSE for complete terms.
 		font: inherit;
 	}
 
-	.url-form button {
+	.import-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		align-self: end;
-		padding: 0.5rem 0.875rem;
+		flex-shrink: 0;
+		width: 2.5rem;
+		height: 2.5rem;
+		padding: 0;
 		border: 1px solid var(--color-accent);
 		border-radius: var(--radius);
 		background: var(--color-accent);
 		color: #fff;
-		font: inherit;
 		cursor: pointer;
 	}
 
-	.url-form button:disabled,
+	.import-btn:disabled,
 	.url-label input:disabled {
 		opacity: 0.6;
 		cursor: not-allowed;
@@ -761,10 +769,6 @@ before the Change Date. See LICENSE for complete terms.
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
-	}
-
-	.compact .empty-state {
-		max-width: 22rem;
 	}
 
 	.compact .drop-zone {
@@ -790,7 +794,6 @@ before the Change Date. See LICENSE for complete terms.
 	.compact .image-wrapper {
 		width: 100%;
 		aspect-ratio: 16 / 9;
-		max-width: 22rem;
 		min-width: 0;
 		min-height: 0;
 		resize: none;
@@ -814,14 +817,6 @@ before the Change Date. See LICENSE for complete terms.
 		display: none;
 	}
 
-	.compact .url-form {
-		flex-direction: column;
-	}
-
-	.compact .url-form button {
-		align-self: stretch;
-	}
-
 	@media (hover: hover) and (pointer: fine) {
 		.image-overlay {
 			opacity: 0;
@@ -836,10 +831,6 @@ before the Change Date. See LICENSE for complete terms.
 	@media (max-width: 36rem) {
 		.url-form {
 			flex-direction: column;
-		}
-
-		.url-form button {
-			align-self: stretch;
 		}
 	}
 </style>
