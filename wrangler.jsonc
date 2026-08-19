@@ -30,16 +30,11 @@
 	// the production id is created with `wrangler d1 create cadbos-auth` and set here
 	// before deploy. Apply the schema locally with:
 	//   wrangler d1 migrations apply DB --local
-	//
-	// TESTING (branch feat/workspace-projects only): binding points at cadbos-projects,
-	// a scratch D1 seeded from a cadbos-auth backup, so the 0011/0012 migrations can be
-	// exercised against real data on the preview URL without touching production. Revert
-	// to cadbos-auth (database_id d1f2f49c-bb39-473c-ae35-2d78eebcbc53) before merging.
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "cadbos-projects",
-			"database_id": "a747fc6f-6197-4a0d-812d-04a3fbf890f9",
+			"database_name": "cadbos-auth",
+			"database_id": "d1f2f49c-bb39-473c-ae35-2d78eebcbc53",
 			"migrations_dir": "migrations"
 		}
 	],
