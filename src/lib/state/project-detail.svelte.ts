@@ -25,7 +25,9 @@ const sessionGenerationSchema = z.object({
 	url: z.url(),
 	sourceUrl: z.url(),
 	kind: z.enum(generationKinds),
-	createdAt: z.number().int().min(0)
+	createdAt: z.number().int().min(0),
+	amount: z.number(),
+	balanceAfter: z.number()
 });
 
 const sessionSchema = z.object({

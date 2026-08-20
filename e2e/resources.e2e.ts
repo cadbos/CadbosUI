@@ -252,7 +252,9 @@ test('using a resource photo while a project tab is open opens the scratch tab i
 								url: 'https://cdn.example.test/living-room.webp',
 								sourceUrl: 'https://cdn.example.test/room.jpg',
 								kind: 'render',
-								createdAt: Date.UTC(2026, 0, 1)
+								createdAt: Date.UTC(2026, 0, 1),
+								amount: 5,
+								balanceAfter: 95
 							}
 						]
 					}

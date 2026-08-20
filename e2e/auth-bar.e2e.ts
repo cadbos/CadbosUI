@@ -51,7 +51,9 @@ test('shows rounded object-replacement credit history on the expenses page', asy
 				amount: 0.06,
 				balanceAfter: 4.9399999999999995,
 				kind: 'object-replacement',
-				createdAt: 1
+				createdAt: 1,
+				sessionId: null,
+				projectId: null
 			}
 		]
 	});
@@ -78,7 +80,9 @@ test('shows restored texture-replacement credit history on the expenses page', a
 				amount: 1.2,
 				balanceAfter: 10,
 				kind: 'texture-replacement',
-				createdAt: 2
+				createdAt: 2,
+				sessionId: null,
+				projectId: null
 			}
 		]
 	});

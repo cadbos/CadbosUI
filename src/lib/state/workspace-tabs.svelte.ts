@@ -13,7 +13,7 @@
  */
 
 import { z } from 'zod';
-import type { ProjectSessionRecord } from '$lib/api/contract';
+import type { ProjectSessionRecord, SessionGenerationRecord } from '$lib/api/contract';
 import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
 import { request, RequestState } from '$lib/state/request.svelte';
 
@@ -38,6 +38,45 @@ export function initializeSessionState(
 	state.setStatus('idle');
 	const latest = session.generations[0];
 	if (latest) state.setImage({ url: latest.url });
+}
+
+// Seeds the workspace with one specific past generation's before/after —
+// shared by the /expenses row click and a `?generation=` URL anchor
+// (Workspace.svelte's openFromUrl). Unlike initializeSessionState (which
+// leaves history empty, ready for a fresh generation), this seeds it with the
+// clicked generation as the "after" step: setCurrentRender() derives the
+// "before" step automatically from state.image.url (just set to the
+// generation's own sourceUrl), the same synthetic-original-step mechanism a
+// real first generation gets — so RenderResult.svelte's Compare toggle works
+// exactly as if this generation had just happened.
+export function initializeGenerationPreview(
+	state: RequestState,
+	projectId: string,
+	session: ProjectSessionRecord,
+	generation: SessionGenerationRecord
+): void {
+	state.setCurrentRender(undefined);
+	state.setProjectSession(projectId, session.id);
+	state.setStyleSourceMode('room-photo');
+	state.setObjectReplacementSourceMode('room-photo');
+	state.setTextureReplacementSourceMode('room-photo');
+	state.setTextureMaskImage(undefined);
+	state.setActiveObjectReplacementJobId(undefined);
+	state.setActiveTextureReplacementJobId(undefined);
+	state.setStatus('idle');
+	state.setImage({ url: generation.sourceUrl });
+	state.setCurrentRender({
+		id: generation.id,
+		outputUrls: [generation.url],
+		// Only ever undefined for a generation resolved through the public
+		// /share/[token] viewer's response shape, which deliberately strips
+		// these — this function is never called on that path today, but stays
+		// defensive rather than asserting a value that type isn't guaranteed.
+		cost: generation.amount ?? 0,
+		balance: generation.balanceAfter ?? 0,
+		ts: generation.createdAt
+	});
+	state.setViewingGenerationId(generation.id);
 }
 
 export interface SessionTab {
@@ -275,6 +314,40 @@ class WorkspaceTabsState {
 		this.#frozen.set(sessionId, state);
 		this.activeTabId = projectId;
 		this.#swapTo(sessionId);
+		this.#persist();
+	}
+
+	// ensureProjectSession() (request.svelte.ts) can lazily create a real
+	// project+session while the scratch tab is live, but only ever tells
+	// `request` about it — nothing here learns the scratch tab now represents
+	// a real project, so the URL-sync effect (Workspace.svelte) keeps
+	// computing activeProjectId/activeSessionId as undefined and the new ids
+	// silently never make it into the address bar. Called reactively from
+	// Workspace.svelte whenever that happens; a no-op once scratch is no
+	// longer the live tab (including on every later call for the same
+	// promotion, so callers don't need to guard re-invocation themselves).
+	adoptScratchSession(
+		projectId: string,
+		projectTitle: string,
+		sessionId: string,
+		sessionTitle: string | null
+	): void {
+		if (this.#liveKey !== SCRATCH_TAB_ID) return;
+		// The scratch tab must stay present and blank for future project-less
+		// work — pre-freeze an empty state under its key so switching back to
+		// it later doesn't show the content that's being promoted below.
+		this.#frozen.set(SCRATCH_TAB_ID, new RequestState());
+		this.tabs = [
+			...this.tabs,
+			{
+				id: projectId,
+				title: projectTitle,
+				sessionTabs: [{ id: sessionId, title: sessionTitle }],
+				activeSessionTabId: sessionId
+			}
+		];
+		this.activeTabId = projectId;
+		this.#liveKey = sessionId;
 		this.#persist();
 	}
 

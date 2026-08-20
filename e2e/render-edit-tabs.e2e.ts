@@ -15,7 +15,11 @@
 import type { Locator, Page, Route } from '@playwright/test';
 
 import { expect, test } from './fixtures';
-import { E2E_SESSION_ID, mockProjectSessionRoutes } from './helpers/project-session-routes';
+import {
+	E2E_PROJECT_ID,
+	E2E_SESSION_ID,
+	mockProjectSessionRoutes
+} from './helpers/project-session-routes';
 
 async function authenticate(page: Page): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
@@ -639,6 +643,47 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 
 	await editTab.click();
 	await expect(page.getByLabel('Инструкция для правки')).toBeVisible();
+});
+
+// Regression test: ensureProjectSession() (request.svelte.ts) lazily creates a
+// project+session on the scratch tab's first generation, but only ever told
+// `request` about it, not workspaceTabs — so the URL-sync effect kept
+// computing the address bar's project/session as absent even though a real
+// one now existed. workspaceTabs.adoptScratchSession (called reactively from
+// Workspace.svelte) fixes that; this asserts the ids actually land in the URL.
+test('generating from the scratch tab adds the lazily-created project/session to the URL', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockUpload(page);
+	await page.route('**/api/render', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				outputUrl: 'https://cdn.example.test/render.webp',
+				cost: 5,
+				balance: 95
+			})
+		});
+	});
+
+	await openCreate(page);
+	await expect(page).not.toHaveURL(/project=/);
+
+	const renderPanel = page.locator('#mode-panel-render');
+	await renderPanel
+		.locator('input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+
+	await Promise.all([
+		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
+		page.getByRole('button', { name: 'Сгенерировать' }).click()
+	]);
+	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toBeVisible();
+
+	await expect(page).toHaveURL(new RegExp(`project=${E2E_PROJECT_ID}`));
+	await expect(page).toHaveURL(new RegExp(`session=${E2E_SESSION_ID}`));
 });
 
 test('the result toolbar supports undo/redo, comparing before/after, and upscaling to 4K', async ({

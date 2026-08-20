@@ -330,6 +330,8 @@ interface CreditTransactionRow {
 	balance_after: number;
 	kind: string;
 	created_at: number;
+	session_id: string | null;
+	project_id: string | null;
 }
 
 function toCreditTransaction(row: CreditTransactionRow): CreditTransaction {
@@ -338,7 +340,9 @@ function toCreditTransaction(row: CreditTransactionRow): CreditTransaction {
 		amount: row.amount,
 		balanceAfter: row.balance_after,
 		kind: generationKindForRow(row.id, row.kind),
-		createdAt: row.created_at
+		createdAt: row.created_at,
+		sessionId: row.session_id,
+		projectId: row.project_id
 	};
 }
 
@@ -348,11 +352,16 @@ export async function listCreditHistory(
 	limit = 50
 ): Promise<CreditTransaction[]> {
 	// rowid as a tiebreaker: two deductions within the same millisecond would
-	// otherwise sort arbitrarily on created_at alone.
+	// otherwise sort arbitrarily on created_at alone. LEFT JOIN (not INNER):
+	// generations.session_id is nullable at the DB level (migrations/0011), so
+	// a row without one must still appear in the history, just without a
+	// session/project to link it to.
 	const { results } = await db
 		.prepare(
-			'SELECT id, amount, balance_after, kind, created_at FROM generations ' +
-				'WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?'
+			'SELECT g.id, g.amount, g.balance_after, g.kind, g.created_at, ' +
+				'g.session_id, ps.project_id FROM generations g ' +
+				'LEFT JOIN project_sessions ps ON ps.id = g.session_id ' +
+				'WHERE g.user_id = ? ORDER BY g.created_at DESC, g.rowid DESC LIMIT ?'
 		)
 		.bind(userId, limit)
 		.all<CreditTransactionRow>();

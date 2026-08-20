@@ -66,7 +66,9 @@ const creditTransactionSchema = z.object({
 		'texture-replacement',
 		'upscale'
 	]),
-	createdAt: z.number()
+	createdAt: z.number(),
+	sessionId: z.uuid().nullable(),
+	projectId: z.uuid().nullable()
 });
 const creditSchema = z.object({
 	balance: z.number(),

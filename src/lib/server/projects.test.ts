@@ -103,6 +103,12 @@ describe('projects repository', () => {
 		const detail = await getProjectDetail(db, 'user-1', project.id);
 		expect(detail?.sessions).toHaveLength(1);
 		expect(detail?.sessions[0]?.generations.map((generation) => generation.id)).toEqual(['gen-1']);
+		// Needed to reconstruct a past generation's cost/balance when the
+		// workspace opens it from an expenses-page click (see
+		// workspace-tabs.svelte.ts's initializeGenerationPreview).
+		expect(detail?.sessions[0]?.generations[0]).toEqual(
+			expect.objectContaining({ amount: 1, balanceAfter: 10 })
+		);
 
 		const denied = await getProjectDetail(db, 'user-2', project.id);
 		expect(denied).toBeNull();

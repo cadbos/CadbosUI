@@ -351,12 +351,19 @@ export interface WalletBalanceResponse {
 // A single deduction from an approved account's own limit (see CreditInfo
 // below). `amount` is the operation's provider-reported or configured charge.
 // `id` is stable for list rendering — createdAt can collide across concurrent calls.
+// `id` doubles as the underlying generations.id — the same id a project
+// session's own generation list (SessionGenerationRecord) uses, so a client
+// can resolve one back to the other. `sessionId`/`projectId` are null only for
+// the — post-Module-11-backfill, essentially unreachable — case of a
+// generation with no session attached.
 export interface CreditTransaction {
 	id: string;
 	amount: number;
 	balanceAfter: number;
 	kind: GenerationKind;
 	createdAt: number;
+	sessionId: string | null;
+	projectId: string | null;
 }
 
 // An account's own generation limit, set by an admin (billing.ts) — the only
@@ -404,7 +411,16 @@ export interface RenameProjectRequest {
 	title: string;
 }
 
-export type SessionGenerationRecord = GeneratedImageRecord;
+// Extends GeneratedImageRecord with the cost/balance data a project session's
+// own owner is allowed to see. Optional — not just possibly absent but
+// deliberately withheld — because ProjectDetailResponse (via
+// ProjectSessionRecord) is shared with the public /share/[token] viewer,
+// which strips both fields (see that route's own explicit field whitelist);
+// only the authenticated GET /api/projects/[id] response ever populates them.
+export interface SessionGenerationRecord extends GeneratedImageRecord {
+	amount?: number;
+	balanceAfter?: number;
+}
 
 export interface ProjectSessionRecord {
 	id: string;

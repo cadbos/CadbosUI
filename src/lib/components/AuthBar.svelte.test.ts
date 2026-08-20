@@ -283,7 +283,9 @@ it('loads approved-account credit after sign-in', async () => {
 				amount: 0.06,
 				balanceAfter: 4.9399999999999995,
 				kind: 'object-replacement' as const,
-				createdAt: 1
+				createdAt: 1,
+				sessionId: null,
+				projectId: null
 			}
 		]
 	};
@@ -314,7 +316,9 @@ it('restores a texture-replacement entry in credit state', async () => {
 							amount: 1.2,
 							balanceAfter: 10,
 							kind: 'texture-replacement',
-							createdAt: 2
+							createdAt: 2,
+							sessionId: null,
+							projectId: null
 						}
 					]
 				}

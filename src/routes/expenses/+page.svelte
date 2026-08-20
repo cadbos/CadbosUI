@@ -13,10 +13,19 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import type { CreditTransaction } from '$lib/api/contract';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
-	import { formatCredit } from '$lib/utils';
+	import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
+	import { request } from '$lib/state/request.svelte';
+	import {
+		buildShareUrl,
+		destinationForGenerationKind,
+		withProjectSession
+	} from '$lib/state/url-state';
+	import { initializeGenerationPreview, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+	import { formatCredit, logBoundaryError } from '$lib/utils';
 
 	const creditEntryKeys: Record<CreditTransaction['kind'], TranslationKey> = {
 		render: 'auth.credit.entryRender',
@@ -33,6 +42,46 @@ before the Change Date. See LICENSE for complete terms.
 			amount: formatCredit(entry.amount),
 			balance: formatCredit(entry.balanceAfter)
 		});
+	}
+
+	// Opens the workspace on the exact project/session/generation this expense
+	// row paid for, seeded with its before/after (see
+	// workspace-tabs.svelte.ts's initializeGenerationPreview). A project,
+	// session, or generation that no longer resolves (e.g. an archived
+	// project) quietly does nothing — the same unremarkable "not found"
+	// degrade Workspace.svelte's openFromUrl already uses, not a bug to
+	// surface here.
+	async function openGeneration(entry: CreditTransaction): Promise<void> {
+		if (!entry.projectId || !entry.sessionId) return;
+		try {
+			const project = await fetchProjectDetail(entry.projectId);
+			if (!project) return;
+			const session = project.sessions.find((candidate) => candidate.id === entry.sessionId);
+			if (!session) return;
+			const generation = session.generations.find((candidate) => candidate.id === entry.id);
+			if (!generation) return;
+
+			workspaceTabs.openProject({
+				projectId: project.id,
+				projectTitle: project.title,
+				sessionId: session.id,
+				sessionTitle: session.title.trim() === '' ? null : session.title,
+				initialize: (state) => initializeGenerationPreview(state, project.id, session, generation)
+			});
+
+			const destination = destinationForGenerationKind(generation.kind);
+			await goto(
+				withProjectSession(
+					buildShareUrl(destination.mode, request, destination.subTab),
+					project.id,
+					session.id,
+					generation.id
+				),
+				{ replaceState: false }
+			);
+		} catch (error) {
+			logBoundaryError('expensesPage.openGeneration', error);
+		}
 	}
 </script>
 
@@ -56,7 +105,15 @@ before the Change Date. See LICENSE for complete terms.
 			{:else}
 				<ul class="history-list" aria-label={t('auth.credit.history')}>
 					{#each credit.history as entry (entry.id)}
-						<li>{creditEntryText(entry)}</li>
+						<li>
+							{#if entry.projectId && entry.sessionId}
+								<button type="button" class="history-entry" onclick={() => openGeneration(entry)}>
+									{creditEntryText(entry)}
+								</button>
+							{:else}
+								<span class="history-entry">{creditEntryText(entry)}</span>
+							{/if}
+						</li>
 					{/each}
 				</ul>
 			{/if}
@@ -119,12 +176,33 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.history-list li {
+		display: flex;
+	}
+
+	.history-entry {
+		display: block;
+		width: 100%;
 		padding: 0.75rem;
 		color: var(--color-text);
 		font-size: 0.875rem;
+		font: inherit;
+		text-align: left;
 		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-sm);
+	}
+
+	button.history-entry {
+		cursor: pointer;
+		transition:
+			border-color 0.15s,
+			background 0.15s;
+	}
+
+	button.history-entry:hover,
+	button.history-entry:focus-visible {
+		border-color: var(--color-accent);
+		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
 	}
 
 	@media (max-width: 720px) {

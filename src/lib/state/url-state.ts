@@ -320,13 +320,16 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 export function withProjectSession(
 	url: string,
 	projectId: string | undefined,
-	sessionId: string | undefined
+	sessionId: string | undefined,
+	generationId?: string
 ): string {
 	if (!projectId || !sessionId) return url;
 	const [path, query = ''] = url.split('?');
 	const params = new URLSearchParams(query);
 	params.set('project', projectId);
 	params.set('session', sessionId);
+	if (generationId) params.set('generation', generationId);
+	else params.delete('generation');
 	return `${path}?${params.toString()}`;
 }
 
@@ -351,6 +354,18 @@ export function projectSessionFromSearch(
 		return null;
 	}
 	return { projectId, sessionId };
+}
+
+// The generation-preview anchor (see workspace-tabs.svelte.ts's
+// initializeGenerationPreview) — only meaningful alongside a valid
+// project/session pair, but read independently since a caller may want to
+// resolve it only once it already has both. Same "not a UUID → treat as
+// absent" rule as projectSessionFromSearch.
+export function generationIdFromSearch(searchParams: URLSearchParams): string | null {
+	const generationId = searchParams.get('generation');
+	return generationId && projectSessionIdSchema.safeParse(generationId).success
+		? generationId
+		: null;
 }
 
 // Reverse of buildShareUrl: applies every field explicitly (falling back to
