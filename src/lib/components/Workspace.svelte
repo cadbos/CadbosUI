@@ -52,6 +52,7 @@ before the Change Date. See LICENSE for complete terms.
 	import {
 		applyShareParams,
 		buildShareUrl,
+		buildWorkspaceUrl,
 		generationIdFromSearch,
 		projectSessionFromSearch,
 		routeIdToMode,
@@ -95,7 +96,11 @@ before the Change Date. See LICENSE for complete terms.
 			// Pushes a history entry (unlike the sub-tab/settings navigations
 			// below) so Back/Forward actually steps through Create/Edit/Style
 			// transfer/Object replacement, matching what a dedicated URL per mode implies.
-			return goto(buildShareUrl(modes[index].id, request), {
+			// buildWorkspaceUrl carries project/session/generation over explicitly
+			// (see its own doc comment) instead of navigating to the bare
+			// buildShareUrl() result first and letting the debounced URL-sync
+			// effect below patch them back in a moment later.
+			return goto(buildWorkspaceUrl(modes[index].id, request), {
 				replaceState: false,
 				keepFocus: true,
 				noScroll: true

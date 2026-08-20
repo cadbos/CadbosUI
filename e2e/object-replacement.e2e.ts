@@ -15,7 +15,11 @@
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
-import { E2E_SESSION_ID, mockProjectSessionRoutes } from './helpers/project-session-routes';
+import {
+	E2E_PROJECT_ID,
+	E2E_SESSION_ID,
+	mockProjectSessionRoutes
+} from './helpers/project-session-routes';
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
 
@@ -492,7 +496,12 @@ test('does not navigate back when an accepted submission finishes after a mode s
 	await page.getByRole('tab', { name: 'Редактирование' }).focus();
 	await page.keyboard.press('Enter');
 	releaseResponse?.();
-	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+	// The submission above lazily provisioned a project/session (see
+	// mockProjectSessionRoutes) — the mode switch carries that forward instead
+	// of dropping it (see buildWorkspaceUrl in url-state.ts).
+	await expect(page).toHaveURL(
+		new RegExp(`/edit\\?tool=freeform&project=${E2E_PROJECT_ID}&session=${E2E_SESSION_ID}$`)
+	);
 	await expect(page).not.toHaveURL(/tool=object-replacement/);
 });
 

@@ -22,6 +22,7 @@ import {
 	type RequestState,
 	type SceneType
 } from '$lib/state/request.svelte';
+import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 import { STYLE_PRESETS } from '$lib/style-presets';
 
 export type Mode = 'render' | 'edit' | 'styleTransfer';
@@ -310,6 +311,31 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 
 	const query = params.toString();
 	return query ? `${path}?${query}` : path;
+}
+
+// buildShareUrl + withProjectSession in one call, reading the project/
+// session/generation anchor straight off workspaceTabs/request — for every
+// in-workspace navigation that switches sub-tab/tool/reference within a mode
+// that's already open (edit tool tabs, style-transfer reference tabs, an
+// async job's own URL refresh, …). Using plain buildShareUrl for one of these
+// and navigating to its bare result first — relying on the debounced
+// URL-sync effect in Workspace.svelte to patch project/session/generation
+// back in a moment later — is exactly the bug this exists to prevent: the
+// address bar would go through a real, visible instant with none of them.
+// Not appropriate for a navigation that's meant to leave the current project
+// behind on purpose (e.g. picking a Resources photo opens a fresh scratch
+// tab) or the very first navigation into a just-opened project/session
+// (that one's project/session aren't in `workspaceTabs` yet at call time).
+export function buildWorkspaceUrl(mode: Mode, request: RequestState, subTab: SubTab = {}): string {
+	const activeProjectId =
+		workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
+	const activeSessionId = workspaceTabs.activeTab.activeSessionTabId ?? undefined;
+	return withProjectSession(
+		buildShareUrl(mode, request, subTab),
+		activeProjectId,
+		activeSessionId,
+		request.viewingGenerationId
+	);
 }
 
 // Appends the authenticated deep-link pair described above onto an already-

@@ -26,7 +26,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import { extractApiErrorCode, request, RequestImageUploadError } from '$lib/state/request.svelte';
-	import { buildShareUrl, isEditToolRoute } from '$lib/state/url-state';
+	import { buildWorkspaceUrl, isEditToolRoute } from '$lib/state/url-state';
 	import { logBoundaryError } from '$lib/utils';
 
 	const MAX_TRANSIENT_FAILURES = 5;
@@ -314,7 +314,7 @@ before the Change Date. See LICENSE for complete terms.
 				return;
 			}
 			try {
-				await goto(buildShareUrl('edit', request, { tool: 'object-replacement' }), {
+				await goto(buildWorkspaceUrl('edit', request, { tool: 'object-replacement' }), {
 					replaceState: true,
 					keepFocus: true,
 					noScroll: true
@@ -350,7 +350,7 @@ before the Change Date. See LICENSE for complete terms.
 		terminalError = null;
 		pollFailure = null;
 		window.scrollTo({ top: 0, behavior: 'smooth' });
-		await goto(buildShareUrl('edit', request, { tool: 'object-replacement' }), {
+		await goto(buildWorkspaceUrl('edit', request, { tool: 'object-replacement' }), {
 			replaceState: true,
 			keepFocus: true,
 			noScroll: true

@@ -31,7 +31,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import { stylePresetsFor, type StylePreset } from '$lib/style-presets';
-	import { buildShareUrl, slugToReference, type ReferenceTab } from '$lib/state/url-state';
+	import { buildWorkspaceUrl, slugToReference, type ReferenceTab } from '$lib/state/url-state';
 	import { workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
@@ -86,7 +86,7 @@ before the Change Date. See LICENSE for complete terms.
 		setActiveIndex: (index) => {
 			const nextTab = REFERENCE_TABS[index].id;
 			if (nextTab !== referenceTab) clearReferenceSelection();
-			return goto(buildShareUrl('styleTransfer', request, { reference: nextTab }), {
+			return goto(buildWorkspaceUrl('styleTransfer', request, { reference: nextTab }), {
 				replaceState: true,
 				keepFocus: true,
 				noScroll: true

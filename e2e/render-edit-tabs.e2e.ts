@@ -16,6 +16,7 @@ import type { Locator, Page, Route } from '@playwright/test';
 
 import { expect, test } from './fixtures';
 import {
+	E2E_GENERATION_ID,
 	E2E_PROJECT_ID,
 	E2E_SESSION_ID,
 	mockProjectSessionRoutes
@@ -85,6 +86,73 @@ function styleTransferUploadUrl(route: Route): string {
 	if (body.includes(Buffer.from('room'))) return 'https://cdn.example.test/source.webp';
 	if (body.includes(Buffer.from('reference'))) return 'https://cdn.example.test/reference.webp';
 	throw new Error('Upload request body does not match the style transfer fixtures');
+}
+
+// Records every history.pushState/replaceState URL from page load onward, so
+// a test can assert none of them ever dropped project/session/generation —
+// unlike expect(page).toHaveURL(), which auto-retries and would silently
+// tolerate a transient bad URL that later gets corrected.
+async function installUrlHistoryRecorder(page: Page): Promise<void> {
+	await page.addInitScript(() => {
+		const history = window.history;
+		const observed: string[] = [];
+		(window as unknown as { __urlHistory: string[] }).__urlHistory = observed;
+		const record = (): void => {
+			observed.push(window.location.pathname + window.location.search);
+		};
+		const originalPushState = history.pushState.bind(history);
+		history.pushState = (...args: Parameters<typeof originalPushState>) => {
+			originalPushState(...args);
+			record();
+		};
+		const originalReplaceState = history.replaceState.bind(history);
+		history.replaceState = (...args: Parameters<typeof originalReplaceState>) => {
+			originalReplaceState(...args);
+			record();
+		};
+	});
+}
+
+async function readUrlHistory(page: Page): Promise<string[]> {
+	return page.evaluate(() => (window as unknown as { __urlHistory: string[] }).__urlHistory);
+}
+
+async function mockProjectWithGeneration(page: Page): Promise<void> {
+	await page.route(`**/api/projects/${E2E_PROJECT_ID}`, async (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: E2E_PROJECT_ID,
+				title: 'Living room',
+				createdAt: Date.UTC(2026, 0, 1),
+				updatedAt: Date.UTC(2026, 0, 1),
+				shareActive: false,
+				sessions: [
+					{
+						id: E2E_SESSION_ID,
+						title: 'Main thread',
+						parentSessionId: null,
+						forkedFromGenerationId: null,
+						createdAt: Date.UTC(2026, 0, 1),
+						updatedAt: Date.UTC(2026, 0, 1),
+						generations: [
+							{
+								id: E2E_GENERATION_ID,
+								url: 'https://cdn.example.test/after.webp',
+								sourceUrl: 'https://cdn.example.test/before.webp',
+								kind: 'render',
+								createdAt: Date.UTC(2026, 0, 1),
+								amount: 1.5,
+								balanceAfter: 8.5
+							}
+						]
+					}
+				]
+			})
+		});
+	});
 }
 
 function styleTransferUploadHash(route: Route): string {
@@ -684,6 +752,75 @@ test('generating from the scratch tab adds the lazily-created project/session to
 
 	await expect(page).toHaveURL(new RegExp(`project=${E2E_PROJECT_ID}`));
 	await expect(page).toHaveURL(new RegExp(`session=${E2E_SESSION_ID}`));
+});
+
+// Regression test: switching mode tabs used to navigate to the bare
+// buildShareUrl() result first (no project/session/generation at all), relying
+// on the debounced URL-sync effect to patch them back in ~400ms later — so
+// every mode switch briefly erased them from the address bar. The mode-tab
+// handler now carries them over itself. `expect(page).toHaveURL()` has
+// built-in retry, which would silently tolerate that transient bad state, so
+// this records every history push/replace instead of just the settled URL.
+test('switching mode tabs never drops project/session/generation from the URL, even momentarily', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockProjectWithGeneration(page);
+	await installUrlHistoryRecorder(page);
+
+	await page.goto(
+		`/create/interior?view=chat&format=webp&project=${E2E_PROJECT_ID}&session=${E2E_SESSION_ID}&generation=${E2E_GENERATION_ID}`
+	);
+	await expect(page.getByRole('button', { name: 'Сравнить до/после' })).toBeEnabled();
+
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
+	await expect(page.getByRole('tab', { name: 'Редактирование' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await page.waitForTimeout(600); // let the debounced URL-sync effect settle too
+
+	const urlHistory = await readUrlHistory(page);
+	expect(urlHistory.length).toBeGreaterThan(0);
+	for (const url of urlHistory) {
+		expect(url).toContain(`project=${E2E_PROJECT_ID}`);
+		expect(url).toContain(`session=${E2E_SESSION_ID}`);
+		expect(url).toContain(`generation=${E2E_GENERATION_ID}`);
+	}
+});
+
+// Regression test for the exact report: viewing a past generation via
+// /edit?tool=freeform, then switching to a different edit tool (e.g. Remove
+// object), used to wipe project/session/generation from the URL entirely —
+// same root cause as the mode-tab bug above, but in EditPanel's own tool
+// sub-tab switcher, which built its URL with plain buildShareUrl() instead of
+// buildWorkspaceUrl().
+test('switching edit tools never drops project/session/generation from the URL, even momentarily', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockProjectWithGeneration(page);
+	await installUrlHistoryRecorder(page);
+
+	await page.goto(
+		`/edit?tool=freeform&project=${E2E_PROJECT_ID}&session=${E2E_SESSION_ID}&generation=${E2E_GENERATION_ID}`
+	);
+	await expect(page.getByLabel('Инструкция для правки')).toBeVisible();
+
+	await page.getByRole('tab', { name: 'Удалить объект' }).click();
+	await expect(page.getByRole('tab', { name: 'Удалить объект' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await page.waitForTimeout(600);
+
+	const urlHistory = await readUrlHistory(page);
+	expect(urlHistory.length).toBeGreaterThan(0);
+	for (const url of urlHistory) {
+		expect(url).toContain(`project=${E2E_PROJECT_ID}`);
+		expect(url).toContain(`session=${E2E_SESSION_ID}`);
+		expect(url).toContain(`generation=${E2E_GENERATION_ID}`);
+	}
 });
 
 test('the result toolbar supports undo/redo, comparing before/after, and upscaling to 4K', async ({

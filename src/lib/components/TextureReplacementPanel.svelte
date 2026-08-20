@@ -32,7 +32,7 @@ before the Change Date. See LICENSE for complete terms.
 		RequestImageUploadError,
 		type ActiveTextureReplacementJob
 	} from '$lib/state/request.svelte';
-	import { buildShareUrl, isEditToolRoute } from '$lib/state/url-state';
+	import { buildWorkspaceUrl, isEditToolRoute } from '$lib/state/url-state';
 	import { logBoundaryError } from '$lib/utils';
 
 	const MAX_TRANSIENT_FAILURES = 5;
@@ -355,7 +355,7 @@ before the Change Date. See LICENSE for complete terms.
 				return;
 			}
 			try {
-				await goto(buildShareUrl('edit', request, { tool: 'texture-replacement' }), {
+				await goto(buildWorkspaceUrl('edit', request, { tool: 'texture-replacement' }), {
 					replaceState: true,
 					keepFocus: true,
 					noScroll: true
@@ -395,7 +395,7 @@ before the Change Date. See LICENSE for complete terms.
 		pollFailure = null;
 		const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
-		await goto(buildShareUrl('edit', request, { tool: 'texture-replacement' }), {
+		await goto(buildWorkspaceUrl('edit', request, { tool: 'texture-replacement' }), {
 			replaceState: true,
 			noScroll: true
 		}).catch((error: unknown) => logBoundaryError('textureReplacement.clearJobNavigation', error));
