@@ -96,9 +96,12 @@ export interface Dictionary {
 	'auth.profile.completeHint': string;
 	'auth.profile.firstName': string;
 	'auth.profile.lastName': string;
-	'auth.profile.save': string;
 	'auth.profile.saving': string;
 	'auth.profile.saveError': string;
+	'auth.profile.npubCopy': string;
+	'auth.profile.npubCopied': string;
+	'auth.profile.npubCopyFailed': string;
+	'auth.profile.viewOnPrimal': string;
 	'auth.error.extensionMissing': string;
 	'auth.error.rejected': string;
 	'auth.error.failed': string;
@@ -223,6 +226,9 @@ export interface Dictionary {
 	'resources.imageAlt': string;
 	'resources.useImageAria': string;
 	'resources.createdAt': string;
+	'expenses.title': string;
+	'expenses.subtitle': string;
+	'expenses.signInRequired': string;
 	'health.warning': string;
 	'health.statusPage': string;
 	'status.title': string;

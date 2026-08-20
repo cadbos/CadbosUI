@@ -13,12 +13,13 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { ArrowUpRight, Check, ChevronRight, Copy, LogOut } from '@lucide/svelte';
 	import { dev } from '$app/environment';
+	import { resolve } from '$app/paths';
 	import { npubEncode } from 'nostr-tools/nip19';
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
-	import type { CreditTransaction } from '$lib/api/contract';
-	import { formatCredit } from '$lib/utils';
+	import { formatCredit, logBoundaryError } from '$lib/utils';
 	import QrCode from './QrCode.svelte';
 
 	const errorKeys: Record<AuthError, TranslationKey> = {
@@ -26,20 +27,10 @@ before the Change Date. See LICENSE for complete terms.
 		rejected: 'auth.error.rejected',
 		failed: 'auth.error.failed'
 	};
-	const creditEntryKeys: Record<CreditTransaction['kind'], TranslationKey> = {
-		render: 'auth.credit.entryRender',
-		edit: 'auth.credit.entryEdit',
-		'style-transfer': 'auth.credit.entryStyleTransfer',
-		'object-replacement': 'auth.credit.entryObjectReplacement',
-		'texture-replacement': 'auth.credit.entryTextureReplacement',
-		upscale: 'auth.credit.entryUpscale'
-	};
 
-	const shortNpub = $derived.by(() => {
-		if (!auth.pubkey) return '';
-		const npub = npubEncode(auth.pubkey);
-		return `${npub.slice(0, 12)}…${npub.slice(-6)}`;
-	});
+	const npub = $derived(auth.pubkey ? npubEncode(auth.pubkey) : null);
+	const shortNpub = $derived(npub ? `${npub.slice(0, 12)}…${npub.slice(-6)}` : '');
+	const primalUrl = $derived(npub ? `https://primal.net/profile/${npub}` : null);
 
 	let menuOpen = $state(false);
 	// 'auto' = open iff missingCadbosName; 'open'/'closed' = user overrode.
@@ -75,12 +66,22 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
-	function creditEntryText(entry: CreditTransaction): string {
-		return ti(creditEntryKeys[entry.kind], {
-			date: new Date(entry.createdAt).toLocaleString(),
-			amount: formatCredit(entry.amount),
-			balance: formatCredit(entry.balanceAfter)
-		});
+	let npubCopied = $state(false);
+	let npubCopyError = $state<string | null>(null);
+	let npubCopyResetTimer: ReturnType<typeof setTimeout> | undefined;
+
+	async function copyNpub(value: string): Promise<void> {
+		npubCopyError = null;
+		try {
+			await navigator.clipboard.writeText(value);
+			npubCopied = true;
+			clearTimeout(npubCopyResetTimer);
+			npubCopyResetTimer = setTimeout(() => (npubCopied = false), 2000);
+		} catch (error) {
+			npubCopied = false;
+			npubCopyError = t('auth.profile.npubCopyFailed');
+			logBoundaryError('authBar.copyNpub', error);
+		}
 	}
 
 	function choose(method: () => Promise<void>): void {
@@ -93,12 +94,17 @@ before the Change Date. See LICENSE for complete terms.
 		saveError = null;
 		try {
 			await auth.saveProfile();
-			profileState = 'closed';
 		} catch {
 			saveError = t('auth.profile.saveError');
 		} finally {
 			savingProfile = false;
 		}
+	}
+
+	// Commit the field immediately on Enter instead of waiting for blur — blurring
+	// fires the native 'change' event, which is what triggers the autosave below.
+	function commitOnEnter(event: KeyboardEvent): void {
+		if (event.key === 'Enter') (event.currentTarget as HTMLInputElement).blur();
 	}
 
 	// Dismiss an open panel on an outside pointer press or Escape. An attachment
@@ -131,74 +137,128 @@ before the Change Date. See LICENSE for complete terms.
 			{@attach dismissable(
 				() => profileOpen,
 				() => (profileState = 'closed'),
-				'.profile-toggle'
+				'.chip-toggle'
 			)}
 		>
-			<button
-				type="button"
-				class="profile-toggle"
-				aria-expanded={profileOpen}
-				aria-controls="auth-profile"
-				onclick={() => (profileState = profileOpen ? 'closed' : 'open')}
-			>
-				{#if auth.nostrProfile?.picture}
-					<img src={auth.nostrProfile.picture} alt="" />
-				{:else}
-					<span class="avatar" aria-hidden="true">{displayName.slice(0, 1).toUpperCase()}</span>
-				{/if}
-				<span class="identity">
-					{#if dev && auth.user?.pubkey?.startsWith('000000')}
-						<span class="demo-badge">{t('auth.demo.badge')}</span>
+			<div class="profile-chip">
+				<button
+					type="button"
+					class="chip-toggle"
+					aria-expanded={profileOpen}
+					aria-controls="auth-profile"
+					onclick={() => (profileState = profileOpen ? 'closed' : 'open')}
+				>
+					{#if auth.nostrProfile?.picture}
+						<img src={auth.nostrProfile.picture} alt="" />
+					{:else}
+						<span class="avatar" aria-hidden="true">{displayName.slice(0, 1).toUpperCase()}</span>
 					{/if}
-					<span class="display">{displayName}</span>
-					<span class="who" title={auth.pubkey ?? ''}>{shortNpub}</span>
-				</span>
-			</button>
-			<div id="auth-profile" class="profile-panel" hidden={!profileOpen}>
-				<div class="profile-meta">
-					<span>{ti('auth.profile.relayCount', { count: relayCount })}</span>
-					{#if auth.credit}
-						<span class="balance">
-							{ti('auth.credit.balance', { balance: formatCredit(auth.credit.balance) })}
+					<span class="identity">
+						{#if dev && auth.user?.pubkey?.startsWith('000000')}
+							<span class="demo-badge">{t('auth.demo.badge')}</span>
+						{/if}
+						<span class="display">{displayName}</span>
+						<span class="who" title={auth.pubkey ?? ''}>{shortNpub}</span>
+					</span>
+				</button>
+				<div class="chip-actions">
+					{#if primalUrl}
+						<a
+							class="chip-action"
+							href={primalUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							title={t('auth.profile.viewOnPrimal')}
+						>
+							<ArrowUpRight size={13} strokeWidth={1.8} aria-hidden="true" />
+							<span class="visually-hidden">{t('auth.profile.viewOnPrimal')}</span>
+						</a>
+					{/if}
+					<button
+						type="button"
+						class="chip-action"
+						class:chip-action-error={npubCopyError !== null}
+						title={npubCopyError ??
+							(npubCopied ? t('auth.profile.npubCopied') : t('auth.profile.npubCopy'))}
+						onclick={() => npub && copyNpub(npub)}
+					>
+						{#if npubCopied}
+							<Check size={13} strokeWidth={2} aria-hidden="true" />
+						{:else}
+							<Copy size={13} strokeWidth={1.8} aria-hidden="true" />
+						{/if}
+						<span class="visually-hidden" aria-live="polite">
+							{npubCopyError ??
+								(npubCopied ? t('auth.profile.npubCopied') : t('auth.profile.npubCopy'))}
 						</span>
-						<details class="credit-history">
-							<summary>{t('auth.credit.history')}</summary>
-							{#if auth.credit.history.length === 0}
-								<p class="history-empty">{t('auth.credit.historyEmpty')}</p>
-							{:else}
-								<ul>
-									{#each auth.credit.history as entry (entry.id)}
-										<li>{creditEntryText(entry)}</li>
-									{/each}
-								</ul>
-							{/if}
-						</details>
-					{/if}
-					{#if missingCadbosName}
-						<span class="notice">{t('auth.profile.completeHint')}</span>
-					{/if}
+					</button>
 				</div>
-				<form onsubmit={(event) => void (event.preventDefault(), saveProfile())}>
-					<label>
-						<span>{t('auth.profile.firstName')}</span>
-						<input autocomplete="given-name" bind:value={auth.profileDraft.firstName} />
+			</div>
+			<div id="auth-profile" class="profile-panel" hidden={!profileOpen}>
+				{#if auth.nostrProfile?.about}
+					<p class="bio">{auth.nostrProfile.about}</p>
+				{/if}
+
+				{#if missingCadbosName}
+					<span class="notice">{t('auth.profile.completeHint')}</span>
+				{/if}
+
+				<div class="profile-fields">
+					<label class="airy-field">
+						<span class="visually-hidden">{t('auth.profile.firstName')}</span>
+						<input
+							class="airy-input"
+							autocomplete="given-name"
+							placeholder={t('auth.profile.firstName')}
+							bind:value={auth.profileDraft.firstName}
+							onchange={saveProfile}
+							onkeydown={commitOnEnter}
+						/>
 					</label>
-					<label>
-						<span>{t('auth.profile.lastName')}</span>
-						<input autocomplete="family-name" bind:value={auth.profileDraft.lastName} />
+					<label class="airy-field">
+						<span class="visually-hidden">{t('auth.profile.lastName')}</span>
+						<input
+							class="airy-input"
+							autocomplete="family-name"
+							placeholder={t('auth.profile.lastName')}
+							bind:value={auth.profileDraft.lastName}
+							onchange={saveProfile}
+							onkeydown={commitOnEnter}
+						/>
 					</label>
-					<div class="profile-actions">
-						<button type="submit" disabled={savingProfile}>
-							{savingProfile ? t('auth.profile.saving') : t('auth.profile.save')}
-						</button>
-						<button type="button" class="secondary" onclick={() => auth.logout()}>
-							{t('auth.logout')}
-						</button>
-					</div>
+					{#if savingProfile}
+						<p class="saving-hint" aria-live="polite">{t('auth.profile.saving')}</p>
+					{/if}
 					{#if saveError}
 						<p class="error" role="alert">{saveError}</p>
 					{/if}
-				</form>
+				</div>
+
+				<div class="bottom-row">
+					<a
+						class="balance-link"
+						href={resolve('/expenses', {})}
+						onclick={() => (profileState = 'closed')}
+					>
+						<span
+							>{ti('auth.credit.balance', {
+								balance: formatCredit(auth.credit?.balance ?? 0)
+							})}</span
+						>
+						<ChevronRight size={14} strokeWidth={1.8} aria-hidden="true" />
+					</a>
+					<button
+						type="button"
+						class="logout-button"
+						title={t('auth.logout')}
+						onclick={() => auth.logout()}
+					>
+						<LogOut size={16} strokeWidth={1.8} aria-hidden="true" />
+						<span class="visually-hidden">{t('auth.logout')}</span>
+					</button>
+				</div>
+
+				<p class="relay-count">{ti('auth.profile.relayCount', { count: relayCount })}</p>
 			</div>
 		</div>
 	{:else if auth.connectUri}
@@ -282,17 +342,28 @@ before the Change Date. See LICENSE for complete terms.
 		position: relative;
 	}
 
-	button.profile-toggle {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-1);
+	.profile-chip {
+		display: flex;
+		align-items: stretch;
 		padding: var(--space-1);
 		color: var(--color-text);
 		background: var(--color-surface);
-		border-color: var(--color-border);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
 	}
 
-	.profile-toggle img,
+	.chip-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		min-width: 0;
+		padding: 0;
+		color: inherit;
+		background: transparent;
+		border: none;
+	}
+
+	.chip-toggle img,
 	.avatar {
 		width: 2rem;
 		height: 2rem;
@@ -300,8 +371,40 @@ before the Change Date. See LICENSE for complete terms.
 		flex: 0 0 auto;
 	}
 
-	.profile-toggle img {
+	.chip-toggle img {
 		object-fit: cover;
+	}
+
+	.chip-actions {
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+		margin-left: var(--space-1);
+	}
+
+	.chip-action {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.4rem;
+		height: 1.4rem;
+		padding: 0;
+		color: var(--color-muted);
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: var(--radius-sm);
+	}
+
+	.chip-action:hover,
+	.chip-action:focus-visible {
+		color: var(--color-accent);
+		background: var(--color-bg);
+		border-color: var(--color-border);
+	}
+
+	.chip-action-error {
+		color: var(--color-danger);
+		border-color: var(--color-danger);
 	}
 
 	.avatar {
@@ -332,6 +435,9 @@ before the Change Date. See LICENSE for complete terms.
 		right: 0;
 		top: calc(100% + var(--space-1));
 		z-index: 2;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 		width: min(22rem, calc(100vw - var(--space-4)));
 		padding: var(--space-2);
 		background: var(--color-surface);
@@ -344,51 +450,20 @@ before the Change Date. See LICENSE for complete terms.
 		display: none;
 	}
 
-	.profile-meta {
-		display: grid;
-		gap: var(--space-1);
-		margin-bottom: var(--space-2);
-		font-size: 0.85rem;
-		color: var(--color-muted);
-	}
-
 	.notice {
-		color: var(--color-text);
-	}
-
-	form {
-		display: grid;
-		gap: var(--space-2);
-	}
-
-	label {
-		display: grid;
-		gap: 0.35rem;
 		font-size: 0.85rem;
-		color: var(--color-muted);
-	}
-
-	input {
-		width: 100%;
-		box-sizing: border-box;
-		padding: var(--space-1) var(--space-2);
-		font: inherit;
 		color: var(--color-text);
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius);
 	}
 
-	.profile-actions {
-		display: flex;
+	.profile-fields {
+		display: grid;
 		gap: var(--space-2);
-		justify-content: flex-end;
 	}
 
-	button.secondary {
-		color: var(--color-text);
-		background: var(--color-surface);
-		border-color: var(--color-border);
+	.saving-hint {
+		margin: 0;
+		color: var(--color-muted);
+		font-size: 0.85rem;
 	}
 
 	.signin {
@@ -529,35 +604,91 @@ before the Change Date. See LICENSE for complete terms.
 		vertical-align: middle;
 	}
 
-	.balance {
-		font-size: 0.8rem;
+	.bio {
+		margin: 0;
+		color: var(--color-muted-strong);
+		font-size: 0.85rem;
+		line-height: 1.4;
+	}
+
+	.bottom-row {
+		display: flex;
+		align-items: stretch;
+		gap: var(--space-1);
+	}
+
+	.balance-link {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		justify-content: space-between;
+		min-width: 0;
+		padding: 0.4rem 0.75rem;
 		color: var(--color-text);
-		font-weight: 500;
+		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.9rem;
+		font-weight: 600;
+		text-decoration: none;
+		transition:
+			border-color 0.15s,
+			background 0.15s;
 	}
 
-	.credit-history {
-		font-size: 0.8rem;
+	.logout-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.2rem;
+		padding: 0;
+		color: var(--color-muted);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+	}
+
+	.logout-button:hover,
+	.logout-button:focus-visible {
+		color: var(--color-danger);
+		background: var(--color-danger-bg);
+		border-color: var(--color-danger);
+	}
+
+	.balance-link:hover,
+	.balance-link:focus-visible {
+		border-color: var(--color-accent);
+		background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+	}
+
+	.airy-field {
+		display: block;
+	}
+
+	.airy-input {
+		width: 100%;
+		box-sizing: border-box;
+		padding: 0.35rem 0;
+		font: inherit;
 		color: var(--color-text);
+		background: transparent;
+		border: none;
+		border-bottom: 1px solid var(--color-border);
+		border-radius: 0;
 	}
 
-	.credit-history summary {
-		cursor: pointer;
-		color: var(--color-accent);
-	}
-
-	.credit-history ul {
-		margin: var(--space-1) 0 0;
-		padding-left: 1.1rem;
-		max-height: 8rem;
-		overflow-y: auto;
-	}
-
-	.credit-history li {
+	.airy-input::placeholder {
 		color: var(--color-muted);
 	}
 
-	.history-empty {
-		margin: var(--space-1) 0 0;
+	.airy-input:focus-visible {
+		outline: none;
+		border-bottom-color: var(--color-accent);
+	}
+
+	.relay-count {
+		margin: 0;
 		color: var(--color-muted);
+		font-size: 0.78rem;
 	}
 </style>

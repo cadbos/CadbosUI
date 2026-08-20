@@ -17,7 +17,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import type { CreditInfo } from '$lib/api/contract';
 
-async function restoreApprovedSession(page: Page, credit: CreditInfo): Promise<void> {
+async function restoreApprovedSession(page: Page, credit?: CreditInfo): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -41,7 +41,7 @@ async function restoreApprovedSession(page: Page, credit: CreditInfo): Promise<v
 	});
 }
 
-test('shows rounded object-replacement credit history', async ({ page }) => {
+test('shows rounded object-replacement credit history on the expenses page', async ({ page }) => {
 	await restoreApprovedSession(page, {
 		balance: 4.9399999999999995,
 		updatedAt: 3,
@@ -57,16 +57,18 @@ test('shows rounded object-replacement credit history', async ({ page }) => {
 	});
 	await page.goto('/');
 
-	await page.locator('.profile-toggle').click();
+	await page.locator('.chip-toggle').click();
 	const profile = page.locator('#auth-profile');
-	const history = profile.locator('.credit-history');
-	await expect(profile.getByText('Баланс: 4.94')).toBeVisible();
-	await history.getByText('История трат').click();
-	await expect(history.getByText(/Замена объекта/)).toBeVisible();
-	await expect(history.getByText(/−0\.06 → 4\.94/)).toBeVisible();
+	const balanceLink = profile.getByRole('link', { name: /Баланс: 4\.94/ });
+	await expect(balanceLink).toBeVisible();
+	await balanceLink.click();
+
+	await expect(page).toHaveURL('/expenses');
+	await expect(page.getByText(/Замена объекта/)).toBeVisible();
+	await expect(page.getByText(/−0\.06 → 4\.94/)).toBeVisible();
 });
 
-test('shows restored texture-replacement credit history', async ({ page }) => {
+test('shows restored texture-replacement credit history on the expenses page', async ({ page }) => {
 	await restoreApprovedSession(page, {
 		balance: 10,
 		updatedAt: 4,
@@ -80,12 +82,20 @@ test('shows restored texture-replacement credit history', async ({ page }) => {
 			}
 		]
 	});
+	await page.goto('/expenses');
+
+	await expect(page.getByText(/Замена текстуры/)).toBeVisible();
+});
+
+test('shows a zero balance and links to the expenses page for an unapproved account', async ({
+	page
+}) => {
+	await restoreApprovedSession(page);
 	await page.goto('/');
 
-	await page.locator('.profile-toggle').click();
-	const history = page.locator('#auth-profile .credit-history');
-	await history.getByText('История трат').click();
-	await expect(history.getByText(/Замена текстуры/)).toBeVisible();
+	await page.locator('.chip-toggle').click();
+	const profile = page.locator('#auth-profile');
+	await expect(profile.getByRole('link', { name: /Баланс: 0\.00/ })).toBeVisible();
 });
 
 test('restores the existing session after authentication storage recovers', async ({ page }) => {
@@ -132,7 +142,7 @@ test('restores the existing session after authentication storage recovers', asyn
 	await expect(page.locator('.auth').getByRole('status')).toHaveText('Восстанавливаем сессию…');
 	await expect(page.getByRole('button', { name: 'Войти', exact: true })).toHaveCount(0);
 	await expect.poll(() => attempts).toBe(2);
-	await expect(page.locator('.profile-toggle')).toBeVisible();
+	await expect(page.locator('.chip-toggle')).toBeVisible();
 });
 
 test('shows sign-in only after session restoration receives an unauthorized response', async ({

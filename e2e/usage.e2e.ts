@@ -92,7 +92,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	await expect(page.getByText('Баланс кошелька: 250.00 $')).toBeVisible();
 	await expect(user.locator('img')).toHaveAttribute('src', 'https://avatar.example/alice.svg');
 	await expect(userWithoutPicture.locator('.avatar')).toHaveText('B');
-	await expect(link).toHaveAttribute('href', `https://primal.net/p/${npub}`);
+	await expect(link).toHaveAttribute('href', `https://primal.net/profile/${npub}`);
 	await expect(link).toHaveAttribute('target', '_blank');
 	await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
 });

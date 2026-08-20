@@ -34,12 +34,12 @@ describe('usage page viewer configuration', () => {
 	});
 
 	it('uses Primal when the viewer is not configured', () => {
-		expect(call()).toEqual({ pubkeyViewer: 'https://primal.net/p/{}' });
+		expect(call()).toEqual({ pubkeyViewer: 'https://primal.net/profile/{}' });
 	});
 
 	it('uses Primal when the configured viewer has no pubkey placeholder', () => {
 		expect(call('https://explorer.example/p')).toEqual({
-			pubkeyViewer: 'https://primal.net/p/{}'
+			pubkeyViewer: 'https://primal.net/profile/{}'
 		});
 	});
 });
