@@ -82,7 +82,7 @@ export const ru = {
 	'generationOverlay.edit': 'Применяем изменения…',
 	'generationOverlay.styleTransfer': 'Переносим стиль…',
 	'generationOverlay.objectReplacement': 'Заменяем объект…',
-	'generationOverlay.objectReplacementDetail': 'Обычно это занимает 4–6 минут',
+	'generationOverlay.objectReplacementDetail': 'Обычно это занимает около минуты',
 	'generationOverlay.textureReplacement': 'Заменяем текстуру…',
 	'generationOverlay.upscale': 'Увеличиваем разрешение до 4K…',
 	'auth.signIn': 'Войти',
