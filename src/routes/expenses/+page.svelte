@@ -15,7 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { CreditTransaction } from '$lib/api/contract';
-	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { getLocale, t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
 	import { request } from '$lib/state/request.svelte';
@@ -27,21 +27,32 @@ before the Change Date. See LICENSE for complete terms.
 	import { initializeGenerationPreview, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import { formatCredit, logBoundaryError } from '$lib/utils';
 
-	const creditEntryKeys: Record<CreditTransaction['kind'], TranslationKey> = {
-		render: 'auth.credit.entryRender',
-		edit: 'auth.credit.entryEdit',
-		'style-transfer': 'auth.credit.entryStyleTransfer',
-		'object-replacement': 'auth.credit.entryObjectReplacement',
-		'texture-replacement': 'auth.credit.entryTextureReplacement',
-		upscale: 'auth.credit.entryUpscale'
+	// No currency switcher yet; header defaults to USD until one exists.
+	const currencySymbol = '$';
+
+	const generationKindKeys: Record<CreditTransaction['kind'], TranslationKey> = {
+		render: 'generatedImages.kind.render',
+		edit: 'generatedImages.kind.edit',
+		'style-transfer': 'generatedImages.kind.styleTransfer',
+		'object-replacement': 'generatedImages.kind.objectReplacement',
+		'texture-replacement': 'generatedImages.kind.textureReplacement',
+		upscale: 'generatedImages.kind.upscale'
 	};
 
-	function creditEntryText(entry: CreditTransaction): string {
-		return ti(creditEntryKeys[entry.kind], {
-			date: new Date(entry.createdAt).toLocaleString(),
-			amount: formatCredit(entry.amount),
-			balance: formatCredit(entry.balanceAfter)
-		});
+	function formatDate(createdAt: number): string {
+		return new Intl.DateTimeFormat(getLocale(), {
+			day: 'numeric',
+			month: 'short',
+			year: 'numeric'
+		}).format(new Date(createdAt));
+	}
+
+	function formatTime(createdAt: number): string {
+		return new Intl.DateTimeFormat(getLocale(), {
+			hour: '2-digit',
+			minute: '2-digit',
+			hourCycle: 'h23'
+		}).format(new Date(createdAt));
 	}
 
 	// Opens the workspace on the exact project/session/generation this expense
@@ -103,15 +114,30 @@ before the Change Date. See LICENSE for complete terms.
 			{#if !credit || credit.history.length === 0}
 				<p class="status">{t('auth.credit.historyEmpty')}</p>
 			{:else}
+				<div class="expenses-columns-header">
+					<span>{t('expenses.column.date')}</span>
+					<span>{t('expenses.column.time')}</span>
+					<span class="value-cell">{t('expenses.column.value')} {currencySymbol}</span>
+					<span>{t('expenses.column.action')}</span>
+				</div>
+
 				<ul class="history-list" aria-label={t('auth.credit.history')}>
 					{#each credit.history as entry (entry.id)}
 						<li>
 							{#if entry.projectId && entry.sessionId}
 								<button type="button" class="history-entry" onclick={() => openGeneration(entry)}>
-									{creditEntryText(entry)}
+									<span class="cell">{formatDate(entry.createdAt)}</span>
+									<span class="cell">{formatTime(entry.createdAt)}</span>
+									<span class="cell value-cell">{formatCredit(entry.amount)}</span>
+									<span class="cell">{t(generationKindKeys[entry.kind])}</span>
 								</button>
 							{:else}
-								<span class="history-entry">{creditEntryText(entry)}</span>
+								<span class="history-entry">
+									<span class="cell">{formatDate(entry.createdAt)}</span>
+									<span class="cell">{formatTime(entry.createdAt)}</span>
+									<span class="cell value-cell">{formatCredit(entry.amount)}</span>
+									<span class="cell">{t(generationKindKeys[entry.kind])}</span>
+								</span>
 							{/if}
 						</li>
 					{/each}
@@ -166,10 +192,39 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 0.9375rem;
 	}
 
+	.expenses-columns-header {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		display: grid;
+		grid-template-columns: minmax(7rem, 1.4fr) minmax(5rem, 0.9fr) minmax(5rem, 0.9fr) minmax(
+				8rem,
+				1.8fr
+			);
+		align-items: center;
+		gap: 2rem;
+		padding: 0 0.75rem 0.5rem;
+		background: var(--color-surface);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.expenses-columns-header span {
+		color: var(--color-muted);
+		font-size: 0.6875rem;
+		font-weight: 650;
+		letter-spacing: 0.045em;
+		white-space: nowrap;
+		text-transform: uppercase;
+	}
+
+	.expenses-columns-header .value-cell {
+		text-align: right;
+	}
+
 	.history-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.625rem;
+		gap: 0.875rem;
 		margin: 0;
 		padding: 0;
 		list-style: none;
@@ -180,16 +235,38 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.history-entry {
-		display: block;
+		display: grid;
+		grid-template-columns: minmax(7rem, 1.4fr) minmax(5rem, 0.9fr) minmax(5rem, 0.9fr) minmax(
+				8rem,
+				1.8fr
+			);
+		align-items: center;
+		gap: 2rem;
 		width: 100%;
-		padding: 0.75rem;
-		color: var(--color-text);
-		font-size: 0.875rem;
+		padding: 0.875rem 0.75rem;
 		font: inherit;
 		text-align: left;
 		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius);
+	}
+
+	.cell {
+		overflow: hidden;
+		color: var(--color-muted);
+		font-size: 0.875rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.value-cell {
+		color: var(--color-text);
+		font-weight: 650;
+		text-align: right;
+	}
+
+	.history-entry .cell:last-child {
+		color: var(--color-text);
 	}
 
 	button.history-entry {
@@ -213,6 +290,16 @@ before the Change Date. See LICENSE for complete terms.
 		.expenses-shell {
 			padding: 1rem;
 			border-radius: var(--radius);
+		}
+
+		.expenses-columns-header,
+		.history-entry {
+			grid-template-columns: 5.5rem 4rem minmax(4.5rem, 0.9fr) minmax(0, 1.2fr);
+			gap: 0.75rem;
+		}
+
+		.expenses-columns-header span {
+			white-space: normal;
 		}
 	}
 </style>

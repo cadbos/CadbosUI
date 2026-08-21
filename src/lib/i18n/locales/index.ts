@@ -110,12 +110,6 @@ export interface Dictionary {
 	'auth.credit.balance': string;
 	'auth.credit.history': string;
 	'auth.credit.historyEmpty': string;
-	'auth.credit.entryRender': string;
-	'auth.credit.entryEdit': string;
-	'auth.credit.entryStyleTransfer': string;
-	'auth.credit.entryObjectReplacement': string;
-	'auth.credit.entryTextureReplacement': string;
-	'auth.credit.entryUpscale': string;
 	'upload.label': string;
 	'upload.button': string;
 	'upload.dropHint': string;
@@ -229,6 +223,10 @@ export interface Dictionary {
 	'expenses.title': string;
 	'expenses.subtitle': string;
 	'expenses.signInRequired': string;
+	'expenses.column.date': string;
+	'expenses.column.time': string;
+	'expenses.column.value': string;
+	'expenses.column.action': string;
 	'health.warning': string;
 	'health.statusPage': string;
 	'status.title': string;
