@@ -52,22 +52,34 @@ before the Change Date. See LICENSE for complete terms.
 		}).format(new Date(createdAt));
 	}
 
+	let openError = $state<string | null>(null);
+
 	// Opens the workspace on the exact project/session/generation this expense
 	// row paid for, seeded with its before/after (see
 	// workspace-tabs.svelte.ts's initializeGenerationPreview). A project,
 	// session, or generation that no longer resolves (e.g. an archived
-	// project) quietly does nothing — the same unremarkable "not found"
-	// degrade Workspace.svelte's openFromUrl already uses, not a bug to
-	// surface here.
+	// project) surfaces openError instead of silently doing nothing — the
+	// underlying record is still real billed history, so the row itself
+	// stays in the list; only the "open it" affordance can fail.
 	async function openGeneration(entry: CreditTransaction): Promise<void> {
 		if (!entry.projectId || !entry.sessionId) return;
+		openError = null;
 		try {
 			const project = await fetchProjectDetail(entry.projectId);
-			if (!project) return;
+			if (!project) {
+				openError = t('expenses.openFailed');
+				return;
+			}
 			const session = project.sessions.find((candidate) => candidate.id === entry.sessionId);
-			if (!session) return;
+			if (!session) {
+				openError = t('expenses.openFailed');
+				return;
+			}
 			const generation = session.generations.find((candidate) => candidate.id === entry.id);
-			if (!generation) return;
+			if (!generation) {
+				openError = t('expenses.openFailed');
+				return;
+			}
 
 			workspaceTabs.openProject({
 				projectId: project.id,
@@ -88,6 +100,7 @@ before the Change Date. See LICENSE for complete terms.
 				{ replaceState: false }
 			);
 		} catch (error) {
+			openError = t('expenses.openFailed');
 			logBoundaryError('expensesPage.openGeneration', error);
 		}
 	}
@@ -102,6 +115,9 @@ before the Change Date. See LICENSE for complete terms.
 		<header class="expenses-header">
 			<h1 id="expenses-title">{t('expenses.title')}</h1>
 			<p>{t('expenses.subtitle')}</p>
+			{#if openError}
+				<p class="status error" role="alert">{openError}</p>
+			{/if}
 		</header>
 
 		{#if auth.status !== 'authenticated'}
@@ -187,6 +203,10 @@ before the Change Date. See LICENSE for complete terms.
 	.status {
 		color: var(--color-muted);
 		font-size: 0.9375rem;
+	}
+
+	.status.error {
+		color: var(--color-danger);
 	}
 
 	.expenses-columns-header {

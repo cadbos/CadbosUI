@@ -155,3 +155,23 @@ test('reloading a URL with a generation anchor reconstructs the same before/afte
 	await expect(page.getByAltText('После', { exact: true })).toHaveAttribute('src', AFTER_URL);
 	await expect(page.getByAltText('До', { exact: true })).toHaveAttribute('src', BEFORE_URL);
 });
+
+test('surfaces an error and stays on the expenses page when the row’s project is gone', async ({
+	page
+}) => {
+	await authenticateWithExpenseHistory(page);
+	await page.route(`**/api/projects/${PROJECT_ID}`, async (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		await route.fulfill({
+			status: 404,
+			contentType: 'application/json',
+			body: JSON.stringify({ error: { code: 'project_not_found', message: 'Project not found' } })
+		});
+	});
+	await page.goto('/expenses');
+
+	await page.locator('button.history-entry').click();
+
+	await expect(page.getByRole('alert')).toBeVisible();
+	await expect(page).toHaveURL('/expenses');
+});

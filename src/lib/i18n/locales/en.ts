@@ -228,6 +228,7 @@ export const en = {
 	'expenses.title': 'Spending',
 	'expenses.subtitle': 'A history of what has been deducted from your balance.',
 	'expenses.signInRequired': 'Sign in to see your spending history.',
+	'expenses.openFailed': "Couldn't open this — the project it belongs to was deleted.",
 	'expenses.column.date': 'Date',
 	'expenses.column.time': 'Time',
 	'expenses.column.value': 'Value $',

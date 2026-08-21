@@ -230,6 +230,7 @@ export const ru = {
 	'expenses.title': 'Траты',
 	'expenses.subtitle': 'История списаний с вашего баланса.',
 	'expenses.signInRequired': 'Войдите, чтобы увидеть историю трат.',
+	'expenses.openFailed': 'Не удалось открыть — проект, к которому это относится, был удалён.',
 	'expenses.column.date': 'Дата',
 	'expenses.column.time': 'Время',
 	'expenses.column.value': 'Стоимость $',

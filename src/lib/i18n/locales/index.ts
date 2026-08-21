@@ -223,6 +223,7 @@ export interface Dictionary {
 	'expenses.title': string;
 	'expenses.subtitle': string;
 	'expenses.signInRequired': string;
+	'expenses.openFailed': string;
 	'expenses.column.date': string;
 	'expenses.column.time': string;
 	'expenses.column.value': string;
