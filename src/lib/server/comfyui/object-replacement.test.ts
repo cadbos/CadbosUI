@@ -128,17 +128,15 @@ describe('runObjectReplacement', () => {
 		expectedWorkflow['2'].inputs.image = 'reference.png';
 		expectedWorkflow['19'].inputs.value = 'компьютерный стул';
 		expect(queuedWorkflow).toEqual(expectedWorkflow);
-		expect(workflowTemplate['1'].inputs.image).toBe(
-			'dd52cbd3-c458-4e60-a516-7588e86418b7-scene.webp'
-		);
-		expect(workflowTemplate['2'].inputs.image).toBe('stul-klassik_0-1000x1000.jpg');
-		expect(workflowTemplate['19'].inputs.value).toBe('стул');
+		expect(workflowTemplate['1'].inputs.image).toBe('001 - Swap Before.webp');
+		expect(workflowTemplate['2'].inputs.image).toBe('i0000382575-detail.jpeg');
+		expect(workflowTemplate['19'].inputs.value).toBe('диван');
 		expect(queuedWorkflow?.['11'].inputs.image1).toEqual(['3', 0]);
 		expect(queuedWorkflow?.['11'].inputs.image2).toEqual(['4', 0]);
 		expect(queuedWorkflow?.['21'].inputs.prompt).toEqual(['19', 0]);
 		expect(queuedWorkflow?.['26'].inputs.replace).toEqual(['25', 0]);
 		expect(queuedWorkflow?.['17']).toEqual({
-			inputs: { filename_prefix: 'obj-replacement', images: ['38', 0] },
+			inputs: { filename_prefix: 'obj-replace-v23', images: ['38', 0] },
 			class_type: 'SaveImage',
 			_meta: { title: 'SAVE RESULT' }
 		});

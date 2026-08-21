@@ -1,7 +1,7 @@
 {
 	"1": {
 		"inputs": {
-			"image": "dd52cbd3-c458-4e60-a516-7588e86418b7-scene.webp"
+			"image": "001 - Swap Before.webp"
 		},
 		"class_type": "LoadImage",
 		"_meta": {
@@ -10,7 +10,7 @@
 	},
 	"2": {
 		"inputs": {
-			"image": "stul-klassik_0-1000x1000.jpg"
+			"image": "i0000382575-detail.jpeg"
 		},
 		"class_type": "LoadImage",
 		"_meta": {
@@ -59,7 +59,7 @@
 		},
 		"class_type": "ModelSamplingAuraFlow",
 		"_meta": {
-			"title": "AuraFlow shift · 3.0"
+			"title": "AuraFlow shift · 2.8"
 		}
 	},
 	"8": {
@@ -95,7 +95,7 @@
 	},
 	"11": {
 		"inputs": {
-			"prompt": ["26", 0],
+			"prompt": ["47", 0],
 			"clip": ["9", 0],
 			"vae": ["10", 0],
 			"image1": ["3", 0],
@@ -118,7 +118,7 @@
 	},
 	"17": {
 		"inputs": {
-			"filename_prefix": "obj-replacement",
+			"filename_prefix": "obj-replace-v23",
 			"images": ["38", 0]
 		},
 		"class_type": "SaveImage",
@@ -129,8 +129,8 @@
 	"18": {
 		"inputs": {
 			"add_noise": "enable",
-			"noise_seed": 154019080303809,
-			"steps": 7,
+			"noise_seed": 42,
+			"steps": 8,
 			"cfg": 1,
 			"sampler_name": "euler",
 			"scheduler": "simple",
@@ -152,7 +152,7 @@
 	},
 	"19": {
 		"inputs": {
-			"value": "стул"
+			"value": "диван"
 		},
 		"class_type": "PrimitiveString",
 		"_meta": {
@@ -184,7 +184,7 @@
 	},
 	"23": {
 		"inputs": {
-			"value": "This is a full object replacement. Do object swap by completely removing the {} in Image 1 and placing the object from Image 2 in the cleared space.\n\nThe inserted object must be an unaltered copy of Image 2's object: its shape, geometry, proportions, structure, materials, colors, textures, patterns, and every design detail must come 100% from Image 2. \n\nDo NOT preserve the shape, silhouette, geometry, or structural details of the original {} from Image 1 — even if Image 2's object is a different type, form, or size, the output must reflect Image 2's actual shape.\n\nFrom Image 1's original object, transfer ONLY: position, orientation, viewing angle, scale relative to the scene, perspective, placement, and the scene's lighting/shadow behavior as cast onto the new object.\n\nKeep everything else in Image 1 unchanged: background, camera, framing, architecture, and all unrelated elements.\n\nProduce a seamless, photorealistic result — as if Image 2's object had been physically placed and photographed in that exact spot."
+			"value": "Picture 1 is the scene. Picture 2 is the replacement object.\n\nReplace the {} in Picture 1 with the object from Picture 2.\n\nThe identity of the new object comes entirely from Picture 2: its shape, silhouette, geometry, proportions, structure, materials, colors, textures, patterns and every design detail are copied from Picture 2 exactly as they are. The output shows Picture 2's own form, whatever type, shape or size that object has.\n\nFrom Picture 1 the new object inherits only its placement: the same position in the frame, the same orientation and viewing angle, the same scale relative to the room, the same contact points with the floor and surrounding surfaces, the same perspective, and the scene's lighting with matching cast shadows.\n\nEverything else in Picture 1 stays pixel-identical: background, walls, floor, ceiling, windows, camera position, framing, and every other object and piece of furniture remains exactly where and as it is.\n\nPhotorealistic and seamless, as if Picture 2's object had been physically placed in that spot and photographed with the same camera."
 		},
 		"class_type": "PrimitiveStringMultiline",
 		"_meta": {
@@ -242,7 +242,7 @@
 	},
 	"32": {
 		"inputs": {
-			"prompt": "Recolor, retexture",
+			"prompt": "deformed geometry, distorted proportions, duplicated objects, missing furniture, altered background, changed camera angle, blurry, low quality, watermark, text",
 			"clip": ["9", 0],
 			"vae": ["10", 0]
 		},
@@ -284,7 +284,7 @@
 	},
 	"38": {
 		"inputs": {
-			"seed": 951603265071001,
+			"seed": 26579493251002,
 			"strength": 0.02,
 			"image": ["36", 0]
 		},
@@ -304,11 +304,31 @@
 	},
 	"40": {
 		"inputs": {
-			"source": ["26", 0]
+			"source": ["47", 0]
 		},
 		"class_type": "PreviewAny",
 		"_meta": {
 			"title": "Positive prompt preview"
+		}
+	},
+	"47": {
+		"inputs": {
+			"string_a": ["26", 0],
+			"string_b": "",
+			"delimiter": "\n"
+		},
+		"class_type": "StringConcatenate",
+		"_meta": {
+			"title": "Concatenate Text"
+		}
+	},
+	"49": {
+		"inputs": {
+			"source": ["25", 0]
+		},
+		"class_type": "PreviewAny",
+		"_meta": {
+			"title": "Translated object name preview"
 		}
 	}
 }
