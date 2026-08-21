@@ -81,7 +81,7 @@ export const en = {
 	'generationOverlay.edit': 'Applying your edits…',
 	'generationOverlay.styleTransfer': 'Applying the style…',
 	'generationOverlay.objectReplacement': 'Replacing the object…',
-	'generationOverlay.objectReplacementDetail': 'This usually takes 4–6 minutes',
+	'generationOverlay.objectReplacementDetail': 'This usually takes about a minute',
 	'generationOverlay.textureReplacement': 'Replacing the texture…',
 	'generationOverlay.upscale': 'Upscaling to 4K…',
 	'auth.signIn': 'Sign in',
