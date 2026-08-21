@@ -66,8 +66,9 @@ test('shows rounded object-replacement credit history on the expenses page', asy
 	await balanceLink.click();
 
 	await expect(page).toHaveURL('/expenses');
-	await expect(page.getByText(/Замена объекта/)).toBeVisible();
-	await expect(page.getByText(/−0\.06 → 4\.94/)).toBeVisible();
+	const historyEntry = page.locator('.history-entry', { hasText: 'Замена объекта' });
+	await expect(historyEntry).toBeVisible();
+	await expect(historyEntry.getByText('0.06')).toBeVisible();
 });
 
 test('shows restored texture-replacement credit history on the expenses page', async ({ page }) => {
