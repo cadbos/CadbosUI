@@ -11,7 +11,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request } from '$lib/state/request.svelte';
-import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+import {
+	initializeGenerationPreview,
+	SCRATCH_TAB_ID,
+	workspaceTabs
+} from '$lib/state/workspace-tabs.svelte';
 
 const PROJECT_A = '00000000-0000-4000-8000-000000000001';
 const PROJECT_B = '00000000-0000-4000-8000-000000000002';
@@ -152,6 +156,70 @@ describe('workspaceTabs.openProject', () => {
 		workspaceTabs.activateSession(PROJECT_A, SESSION_A1);
 		expect(request.sessionId).toBe(SESSION_A1);
 		expect(request.editPrompt).toBe('first visit');
+	});
+});
+
+describe('initializeGenerationPreview', () => {
+	it('seeds the generation as the after step and its sourceUrl as the synthetic before', () => {
+		const session = {
+			id: SESSION_A1,
+			title: 'Main thread',
+			parentSessionId: null,
+			forkedFromGenerationId: null,
+			createdAt: 0,
+			updatedAt: 0,
+			generations: []
+		};
+		const generation = {
+			id: 'gen-1',
+			url: 'https://example.test/after.webp',
+			sourceUrl: 'https://example.test/before.webp',
+			kind: 'render' as const,
+			createdAt: 1000,
+			amount: 1.5,
+			balanceAfter: 8.5
+		};
+
+		initializeGenerationPreview(request, PROJECT_A, session, generation);
+
+		expect(request.projectId).toBe(PROJECT_A);
+		expect(request.sessionId).toBe(SESSION_A1);
+		expect(request.image?.url).toBe(generation.sourceUrl);
+		expect(request.currentRender?.outputUrls).toEqual([generation.url]);
+		expect(request.currentRender?.cost).toBe(1.5);
+		expect(request.currentRender?.balance).toBe(8.5);
+		expect(request.previousRender?.outputUrls).toEqual([generation.sourceUrl]);
+		expect(request.viewingGenerationId).toBe('gen-1');
+	});
+});
+
+describe('workspaceTabs.adoptScratchSession', () => {
+	it('promotes the live scratch tab into a real project tab without losing its content', () => {
+		request.setEditPrompt('in-progress scratch work');
+
+		workspaceTabs.adoptScratchSession(PROJECT_A, 'Untitled', SESSION_A1, null);
+
+		expect(workspaceTabs.tabs.map((tab) => tab.id)).toEqual([SCRATCH_TAB_ID, PROJECT_A]);
+		expect(workspaceTabs.activeTabId).toBe(PROJECT_A);
+		expect(workspaceTabs.activeTab.activeSessionTabId).toBe(SESSION_A1);
+		expect(request.editPrompt).toBe('in-progress scratch work');
+	});
+
+	it('is a no-op once the live tab is no longer scratch', () => {
+		workspaceTabs.adoptScratchSession(PROJECT_A, 'Untitled', SESSION_A1, null);
+		workspaceTabs.adoptScratchSession(PROJECT_B, 'Untitled', SESSION_B1, null);
+
+		expect(workspaceTabs.tabs.map((tab) => tab.id)).toEqual([SCRATCH_TAB_ID, PROJECT_A]);
+	});
+
+	it('leaves a fresh, blank state behind on the scratch tab', () => {
+		request.setEditPrompt('in-progress scratch work');
+		workspaceTabs.adoptScratchSession(PROJECT_A, 'Untitled', SESSION_A1, null);
+
+		workspaceTabs.activate(SCRATCH_TAB_ID);
+
+		expect(request.editPrompt).toBe('');
+		expect(request.projectId).toBeUndefined();
 	});
 });
 

@@ -14,7 +14,7 @@
 
 import type { PageServerLoad } from './$types';
 
-const DEFAULT_PUBKEY_VIEWER = 'https://primal.net/p/{}';
+const DEFAULT_PUBKEY_VIEWER = 'https://primal.net/profile/{}';
 
 export const load: PageServerLoad = ({ platform }) => {
 	const pubkeyViewer = platform?.env?.PUBKEY_VIEWER;

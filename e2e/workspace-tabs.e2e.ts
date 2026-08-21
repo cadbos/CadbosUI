@@ -99,7 +99,9 @@ async function mockProjectDetail(
 								url: renderUrl,
 								sourceUrl: 'https://cdn.example.test/room.jpg',
 								kind: 'render',
-								createdAt: Date.UTC(2026, 0, 1)
+								createdAt: Date.UTC(2026, 0, 1),
+								amount: 5,
+								balanceAfter: 95
 							}
 						]
 					}

@@ -145,7 +145,7 @@ it('signs in via NIP-07 (sends a Nostr authorization) and signs out', async () =
 	await expect.element(screen.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
 });
 
-it('offers to complete Cadbos profile fields after sign-in', async () => {
+it('autosaves a profile field on blur, with no save button to click', async () => {
 	let profileRequest: unknown = null;
 	mockFetch(
 		() => Response.json({ user: { pubkey: pk } }),
@@ -161,9 +161,13 @@ it('offers to complete Cadbos profile fields after sign-in', async () => {
 
 	await expect.element(screen.getByText('Заполните имя и фамилию для профиля.')).toBeVisible();
 	await screen.getByLabelText('Имя').fill('  Ada  ');
-	await screen.getByLabelText('Фамилия').fill('   ');
-	await screen.getByRole('button', { name: 'Сохранить' }).click();
+	const lastNameField = screen.getByLabelText('Фамилия');
+	await lastNameField.fill('   ');
+	// No save button anymore — blurring the field (like a user tabbing away) is
+	// what fires the native 'change' event the autosave listens for.
+	lastNameField.element().blur();
 
+	await expect.poll(() => profileRequest !== null).toBe(true);
 	expect(new Headers((profileRequest as RequestInit).headers).get('content-type')).toBe(
 		'application/json'
 	);
@@ -171,7 +175,50 @@ it('offers to complete Cadbos profile fields after sign-in', async () => {
 		firstName: 'Ada',
 		lastName: null
 	});
-	await expect.element(screen.getByText('Заполните имя и фамилию для профиля.')).not.toBeVisible();
+	// lastName is still blank (normalized to null), so the hint correctly stays up —
+	// the panel no longer auto-closes on save, unlike the old explicit Save button.
+	await expect.element(screen.getByText('Заполните имя и фамилию для профиля.')).toBeVisible();
+});
+
+it('hides the completion hint once both name fields have been autosaved', async () => {
+	let saveCount = 0;
+	let lastSavedBody: { firstName?: string | null; lastName?: string | null } = {};
+	mockFetch(
+		() => Response.json({ user: { pubkey: pk } }),
+		(init) => {
+			saveCount += 1;
+			lastSavedBody = JSON.parse(String(init?.body ?? '{}'));
+			return Response.json({
+				user: {
+					pubkey: pk,
+					...(lastSavedBody.firstName ? { firstName: lastSavedBody.firstName } : {}),
+					...(lastSavedBody.lastName ? { lastName: lastSavedBody.lastName } : {})
+				}
+			});
+		}
+	);
+
+	const screen = render(AuthBar);
+	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
+	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
+
+	await expect.element(screen.getByText('Заполните имя и фамилию для профиля.')).toBeVisible();
+
+	// Set the draft directly rather than filling the field through the DOM — filling
+	// it would focus (and so blur) it a second time once the last name field is
+	// focused next, firing its own intermediate autosave that could race the final one.
+	auth.profileDraft.firstName = 'Ada';
+	const lastNameField = screen.getByLabelText('Фамилия');
+	await lastNameField.fill('Lovelace');
+	lastNameField.element().blur();
+
+	await expect.poll(() => auth.user?.lastName).toBe('Lovelace');
+	expect(saveCount).toBe(1);
+	expect(lastSavedBody).toEqual({ firstName: 'Ada', lastName: 'Lovelace' });
+	// The hint is removed outright (not just hidden) once the profile is complete —
+	// a role/text query can't observe an absent element the way `.not.toBeVisible()`
+	// expects, so poll the DOM directly instead (see the sign-in menu test above).
+	await expect.poll(() => screen.container.querySelector('.notice')).toBe(null);
 });
 
 it('shows an error when no Nostr extension is present', async () => {
@@ -236,7 +283,9 @@ it('loads approved-account credit after sign-in', async () => {
 				amount: 0.06,
 				balanceAfter: 4.9399999999999995,
 				kind: 'object-replacement' as const,
-				createdAt: 1
+				createdAt: 1,
+				sessionId: null,
+				projectId: null
 			}
 		]
 	};
@@ -267,7 +316,9 @@ it('restores a texture-replacement entry in credit state', async () => {
 							amount: 1.2,
 							balanceAfter: 10,
 							kind: 'texture-replacement',
-							createdAt: 2
+							createdAt: 2,
+							sessionId: null,
+							projectId: null
 						}
 					]
 				}
@@ -363,8 +414,8 @@ it('closes the profile panel on an outside click, and on Escape returns focus to
 	const logoutButton = screen.getByRole('button', { name: 'Выйти' });
 	// The panel starts closed, so wait on the always-visible toggle rather than on
 	// panel content to know the authenticated view has actually rendered.
-	await expect.poll(() => screen.container.querySelector('.profile-toggle')).not.toBeNull();
-	const profileToggle = screen.container.querySelector<HTMLButtonElement>('.profile-toggle');
+	await expect.poll(() => screen.container.querySelector('.chip-toggle')).not.toBeNull();
+	const profileToggle = screen.container.querySelector<HTMLButtonElement>('.chip-toggle');
 	if (!profileToggle) throw new Error('profile toggle not rendered');
 	const profilePanel = screen.container.querySelector<HTMLElement>('#auth-profile');
 	if (!profilePanel) throw new Error('profile panel not rendered');

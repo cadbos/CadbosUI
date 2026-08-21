@@ -378,6 +378,82 @@ describe('copyFrom', () => {
 	});
 });
 
+describe('viewingGenerationId', () => {
+	it('is undefined until explicitly set', () => {
+		expect(request.viewingGenerationId).toBeUndefined();
+	});
+
+	it('is cleared by any real setCurrentRender, but not by the seeded synthetic-original step it derives', () => {
+		request.setViewingGenerationId('gen-1');
+		request.setCurrentRender({
+			id: 'render-a',
+			outputUrls: ['https://example.test/a.webp'],
+			cost: 1,
+			balance: 24,
+			ts: 0
+		});
+
+		expect(request.viewingGenerationId).toBeUndefined();
+	});
+
+	it('survives copyFrom', () => {
+		request.setViewingGenerationId('gen-1');
+
+		const other = new RequestState();
+		other.copyFrom(request);
+
+		expect(other.viewingGenerationId).toBe('gen-1');
+	});
+
+	it('is cleared by reset()', () => {
+		request.setViewingGenerationId('gen-1');
+		request.reset();
+
+		expect(request.viewingGenerationId).toBeUndefined();
+	});
+
+	it('is cleared by applyEditResult', () => {
+		request.setCurrentRender({
+			id: 'render-a',
+			outputUrls: ['https://example.test/a.webp'],
+			cost: 1,
+			balance: 24,
+			ts: 0
+		});
+		request.setViewingGenerationId('gen-1');
+		request.applyEditResult({
+			id: 'render-b',
+			outputUrls: ['https://example.test/b.webp'],
+			cost: 1,
+			balance: 23,
+			ts: 1
+		});
+
+		expect(request.viewingGenerationId).toBeUndefined();
+	});
+
+	it('is cleared by undoLastEdit', () => {
+		request.setCurrentRender({
+			id: 'render-a',
+			outputUrls: ['https://example.test/a.webp'],
+			cost: 1,
+			balance: 24,
+			ts: 0
+		});
+		request.applyEditResult({
+			id: 'render-b',
+			outputUrls: ['https://example.test/b.webp'],
+			cost: 1,
+			balance: 23,
+			ts: 1
+		});
+		request.setViewingGenerationId('gen-1');
+		request.undoLastEdit();
+
+		expect(request.viewingGenerationId).toBeUndefined();
+	});
+});
+
 describe('normalizeForComparison', () => {
 	it('ignores request id and status', () => {
 		applyAc9Fixture();

@@ -48,7 +48,9 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 				url: generation.url,
 				sourceUrl: generation.sourceUrl,
 				kind: generation.kind,
-				createdAt: generation.createdAt
+				createdAt: generation.createdAt,
+				amount: generation.amount,
+				balanceAfter: generation.balanceAfter
 			}))
 		}))
 	} satisfies ProjectDetailResponse);

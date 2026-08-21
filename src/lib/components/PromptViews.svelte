@@ -21,7 +21,7 @@ before the Change Date. See LICENSE for complete terms.
 	import KeyValueView from '$lib/components/KeyValueView.svelte';
 	import GraphView from '$lib/components/GraphView.svelte';
 	import { request } from '$lib/state/request.svelte';
-	import { buildShareUrl, slugToView, type ViewId } from '$lib/state/url-state';
+	import { buildWorkspaceUrl, slugToView, type ViewId } from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
 	interface Props {
@@ -55,7 +55,7 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => views.length,
 		getActiveIndex: () => activeIndex,
 		setActiveIndex: (index) => {
-			return goto(buildShareUrl('render', request, { view: views[index].id }), {
+			return goto(buildWorkspaceUrl('render', request, { view: views[index].id }), {
 				replaceState: true,
 				keepFocus: true,
 				noScroll: true

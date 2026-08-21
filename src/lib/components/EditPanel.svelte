@@ -28,7 +28,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
-	import { buildShareUrl, slugToTool, type ToolId } from '$lib/state/url-state';
+	import { buildWorkspaceUrl, slugToTool, type ToolId } from '$lib/state/url-state';
 	import { createTabController, formatCredit, logBoundaryError } from '$lib/utils';
 	import EditAddObjectTool from '$lib/components/EditAddObjectTool.svelte';
 	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
@@ -80,7 +80,7 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => TOOLS.length,
 		getActiveIndex: () => TOOLS.findIndex((tool) => tool.id === activeTool),
 		setActiveIndex: (index) => {
-			return goto(buildShareUrl('edit', request, { tool: TOOLS[index].id }), {
+			return goto(buildWorkspaceUrl('edit', request, { tool: TOOLS[index].id }), {
 				replaceState: true,
 				keepFocus: true,
 				noScroll: true

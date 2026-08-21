@@ -32,7 +32,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { request } from '$lib/state/request.svelte';
-	import { buildShareUrl, destinationForGenerationKind } from '$lib/state/url-state';
+	import { buildWorkspaceUrl, destinationForGenerationKind } from '$lib/state/url-state';
 	import { logBoundaryError, openModal } from '$lib/utils';
 
 	const generationKindKeys: Record<GenerationKind, TranslationKey> = {
@@ -289,7 +289,7 @@ before the Change Date. See LICENSE for complete terms.
 		request.setStatus('idle');
 		const destination = destinationForGenerationKind(kind);
 		onClose();
-		goto(buildShareUrl(destination.mode, request, destination.subTab), {
+		goto(buildWorkspaceUrl(destination.mode, request, destination.subTab), {
 			replaceState: false
 		}).catch((error: unknown) => logBoundaryError('scenesDrawer.imageNavigation', error));
 	}

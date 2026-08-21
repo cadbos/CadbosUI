@@ -57,6 +57,8 @@ export interface SessionGeneration {
 	sourceUrl: string;
 	kind: GenerationKind;
 	createdAt: number;
+	amount: number;
+	balanceAfter: number;
 }
 
 export interface ProjectSessionDetail extends ProjectSession {
@@ -118,6 +120,8 @@ interface SessionGenerationRow {
 	source_url: string;
 	kind: string;
 	created_at: number;
+	amount: number;
+	balance_after: number;
 }
 
 function toSessionGeneration(row: SessionGenerationRow): SessionGeneration {
@@ -126,7 +130,9 @@ function toSessionGeneration(row: SessionGenerationRow): SessionGeneration {
 		url: row.url,
 		sourceUrl: row.source_url,
 		kind: generationKindForRow(row.id, row.kind),
-		createdAt: row.created_at
+		createdAt: row.created_at,
+		amount: row.amount,
+		balanceAfter: row.balance_after
 	};
 }
 
@@ -239,8 +245,9 @@ async function loadProjectDetail(db: D1Database, projectRow: ProjectRow): Promis
 			(
 				await db
 					.prepare(
-						`SELECT id, session_id, url, source_url, kind, created_at FROM generations ` +
-							`WHERE session_id IN (${placeholders}) ORDER BY created_at DESC, id DESC`
+						`SELECT id, session_id, url, source_url, kind, created_at, amount, balance_after ` +
+							`FROM generations WHERE session_id IN (${placeholders}) ` +
+							`ORDER BY created_at DESC, id DESC`
 					)
 					.bind(...chunk.map((session) => session.id))
 					.all<SessionGenerationRow & { session_id: string }>()

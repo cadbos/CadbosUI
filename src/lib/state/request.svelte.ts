@@ -497,6 +497,13 @@ export class RequestState {
 	// project page.
 	projectId = $state<string | undefined>(undefined);
 	sessionId = $state<string | undefined>(undefined);
+	// The generation currently being previewed (see
+	// workspace-tabs.svelte.ts's initializeGenerationPreview) — url-state.ts's
+	// withProjectSession reads this to keep a `?generation=` URL anchor in
+	// sync. setCurrentRender() clears it on every *real* render/edit, since
+	// that means the on-screen result is no longer the one being anchored to;
+	// initializeGenerationPreview re-sets it right after seeding history.
+	viewingGenerationId = $state<string | undefined>(undefined);
 	image = $state<ImageInput | undefined>(undefined);
 	// The main photo, picked but not yet uploaded — set by ImageUpload.svelte
 	// (target 'room' only) instead of calling /api/uploads immediately, so a
@@ -665,6 +672,10 @@ export class RequestState {
 	clearProjectSession(): void {
 		this.projectId = undefined;
 		this.sessionId = undefined;
+	}
+
+	setViewingGenerationId(id: string | undefined): void {
+		this.viewingGenerationId = id;
 	}
 
 	// Called by ImageUpload.svelte (target 'room') when the user picks a
@@ -896,6 +907,7 @@ export class RequestState {
 	// `undefined` clears the whole history — switching to a different base
 	// photo, or an explicit reset (see reset()).
 	setCurrentRender(render: RenderResult | undefined): void {
+		this.viewingGenerationId = undefined;
 		if (render === undefined) {
 			this.#renderHistory = [];
 			this.#historyIndex = -1;
@@ -912,6 +924,7 @@ export class RequestState {
 		render: RenderResult,
 		sourceRender: RenderResult | undefined = this.currentRender
 	): void {
+		this.viewingGenerationId = undefined;
 		this.#pushRender(cloneRenderResult(render), cloneRenderResult(sourceRender));
 	}
 
@@ -919,6 +932,7 @@ export class RequestState {
 	// at the first step.
 	undoLastEdit(): void {
 		if (this.#historyIndex <= 0) return;
+		this.viewingGenerationId = undefined;
 		this.#historyIndex -= 1;
 	}
 
@@ -1361,6 +1375,7 @@ export class RequestState {
 		this.id = crypto.randomUUID();
 		this.projectId = undefined;
 		this.sessionId = undefined;
+		this.viewingGenerationId = undefined;
 		this.#pendingProjectId = undefined;
 		this.#pendingProjectSession = undefined;
 		this.#projectSessionEpoch += 1;
@@ -1415,6 +1430,7 @@ export class RequestState {
 		this.id = source.id;
 		this.projectId = source.projectId;
 		this.sessionId = source.sessionId;
+		this.viewingGenerationId = source.viewingGenerationId;
 		// image/pendingImageFile are mutually exclusive on any well-formed
 		// instance (setImage/setPendingImage each clear the other). Routing
 		// through setPendingImage() here — rather than copying

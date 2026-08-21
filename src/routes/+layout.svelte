@@ -124,7 +124,10 @@ before the Change Date. See LICENSE for complete terms.
 	.app-header {
 		position: sticky;
 		top: 0;
-		z-index: 10;
+		/* Above the workspace's floating panels (--z-tools-panel: 10,
+		   --z-scenes-panel: 20) so header dropdowns (e.g. the auth profile
+		   panel) are never occluded by workspace content underneath. */
+		z-index: 30;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;

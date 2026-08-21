@@ -22,6 +22,7 @@ import {
 	type RequestState,
 	type SceneType
 } from '$lib/state/request.svelte';
+import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 import { STYLE_PRESETS } from '$lib/style-presets';
 
 export type Mode = 'render' | 'edit' | 'styleTransfer';
@@ -312,6 +313,31 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 	return query ? `${path}?${query}` : path;
 }
 
+// buildShareUrl + withProjectSession in one call, reading the project/
+// session/generation anchor straight off workspaceTabs/request — for every
+// in-workspace navigation that switches sub-tab/tool/reference within a mode
+// that's already open (edit tool tabs, style-transfer reference tabs, an
+// async job's own URL refresh, …). Using plain buildShareUrl for one of these
+// and navigating to its bare result first — relying on the debounced
+// URL-sync effect in Workspace.svelte to patch project/session/generation
+// back in a moment later — is exactly the bug this exists to prevent: the
+// address bar would go through a real, visible instant with none of them.
+// Not appropriate for a navigation that's meant to leave the current project
+// behind on purpose (e.g. picking a Resources photo opens a fresh scratch
+// tab) or the very first navigation into a just-opened project/session
+// (that one's project/session aren't in `workspaceTabs` yet at call time).
+export function buildWorkspaceUrl(mode: Mode, request: RequestState, subTab: SubTab = {}): string {
+	const activeProjectId =
+		workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
+	const activeSessionId = workspaceTabs.activeTab.activeSessionTabId ?? undefined;
+	return withProjectSession(
+		buildShareUrl(mode, request, subTab),
+		activeProjectId,
+		activeSessionId,
+		request.viewingGenerationId
+	);
+}
+
 // Appends the authenticated deep-link pair described above onto an already-
 // built buildShareUrl() result — omitted entirely on the scratch tab (no
 // project/session to point at). Kept as a separate append step, rather than
@@ -320,13 +346,16 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 export function withProjectSession(
 	url: string,
 	projectId: string | undefined,
-	sessionId: string | undefined
+	sessionId: string | undefined,
+	generationId?: string
 ): string {
 	if (!projectId || !sessionId) return url;
 	const [path, query = ''] = url.split('?');
 	const params = new URLSearchParams(query);
 	params.set('project', projectId);
 	params.set('session', sessionId);
+	if (generationId) params.set('generation', generationId);
+	else params.delete('generation');
 	return `${path}?${params.toString()}`;
 }
 
@@ -351,6 +380,18 @@ export function projectSessionFromSearch(
 		return null;
 	}
 	return { projectId, sessionId };
+}
+
+// The generation-preview anchor (see workspace-tabs.svelte.ts's
+// initializeGenerationPreview) — only meaningful alongside a valid
+// project/session pair, but read independently since a caller may want to
+// resolve it only once it already has both. Same "not a UUID → treat as
+// absent" rule as projectSessionFromSearch.
+export function generationIdFromSearch(searchParams: URLSearchParams): string | null {
+	const generationId = searchParams.get('generation');
+	return generationId && projectSessionIdSchema.safeParse(generationId).success
+		? generationId
+		: null;
 }
 
 // Reverse of buildShareUrl: applies every field explicitly (falling back to

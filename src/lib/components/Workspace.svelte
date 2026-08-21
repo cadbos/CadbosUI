@@ -43,6 +43,7 @@ before the Change Date. See LICENSE for complete terms.
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
 	import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
 	import {
+		initializeGenerationPreview,
 		initializeSessionState,
 		restorePersistedTabs,
 		SCRATCH_TAB_ID,
@@ -51,6 +52,8 @@ before the Change Date. See LICENSE for complete terms.
 	import {
 		applyShareParams,
 		buildShareUrl,
+		buildWorkspaceUrl,
+		generationIdFromSearch,
 		projectSessionFromSearch,
 		routeIdToMode,
 		slugToTool,
@@ -93,7 +96,11 @@ before the Change Date. See LICENSE for complete terms.
 			// Pushes a history entry (unlike the sub-tab/settings navigations
 			// below) so Back/Forward actually steps through Create/Edit/Style
 			// transfer/Object replacement, matching what a dedicated URL per mode implies.
-			return goto(buildShareUrl(modes[index].id, request), {
+			// buildWorkspaceUrl carries project/session/generation over explicitly
+			// (see its own doc comment) instead of navigating to the bare
+			// buildShareUrl() result first and letting the debounced URL-sync
+			// effect below patch them back in a moment later.
+			return goto(buildWorkspaceUrl(modes[index].id, request), {
 				replaceState: false,
 				keepFocus: true,
 				noScroll: true
@@ -184,6 +191,11 @@ before the Change Date. See LICENSE for complete terms.
 	// initial hydration has run.
 	let hydrated = $state(false);
 
+	// Bumped at the start of every applyUrlTarget call so a slower-resolving
+	// openFromUrl from an earlier navigation can't clobber a faster-resolving
+	// later one — same guard shape as request.svelte.ts's #projectSessionEpoch.
+	let urlTargetEpoch = 0;
+
 	// Resolves a project/session pair carried in the URL (see url-state.ts's
 	// projectSessionFromSearch) into the matching open workspace tab — the
 	// same fetch-then-initialize continueSession (projects/[id]/+page.svelte)
@@ -191,17 +203,34 @@ before the Change Date. See LICENSE for complete terms.
 	// that's unowned, archived, or just wrong (fetchProjectDetail resolves to
 	// null on any failure) quietly leaves the workspace on whatever it
 	// already had open.
-	async function openFromUrl(projectId: string, sessionId: string): Promise<void> {
+	async function openFromUrl(
+		projectId: string,
+		sessionId: string,
+		generationId: string | null,
+		epoch: number
+	): Promise<void> {
 		const project = await fetchProjectDetail(projectId);
+		if (urlTargetEpoch !== epoch) return;
 		if (!project) return;
 		const session = project.sessions.find((candidate) => candidate.id === sessionId);
 		if (!session) return;
+		const sessionTitle = session.title.trim() === '' ? null : session.title;
+		// A generation id that's absent, stale, or from a different session
+		// than the one in the URL degrades to the normal "open at the
+		// session's latest state" behavior, same as an unresolvable
+		// project/session id already does above.
+		const generation = generationId
+			? session.generations.find((candidate) => candidate.id === generationId)
+			: undefined;
 		workspaceTabs.openProject({
 			projectId: project.id,
 			projectTitle: project.title,
 			sessionId: session.id,
-			sessionTitle: session.title.trim() === '' ? null : session.title,
-			initialize: (state) => initializeSessionState(state, project.id, session)
+			sessionTitle,
+			initialize: (state) =>
+				generation
+					? initializeGenerationPreview(state, project.id, session, generation)
+					: initializeSessionState(state, project.id, session)
 		});
 	}
 
@@ -211,14 +240,19 @@ before the Change Date. See LICENSE for complete terms.
 	// later popstate/link navigation, so a pasted/bookmarked link always wins
 	// over whatever was already open.
 	async function applyUrlTarget(searchParams: URLSearchParams): Promise<void> {
+		urlTargetEpoch += 1;
+		const epoch = urlTargetEpoch;
 		const target = projectSessionFromSearch(searchParams);
-		if (
-			target &&
-			(target.projectId !== workspaceTabs.activeTabId ||
-				target.sessionId !== workspaceTabs.activeTab.activeSessionTabId)
-		) {
-			await openFromUrl(target.projectId, target.sessionId);
-		}
+		if (!target) return;
+		const generationId = generationIdFromSearch(searchParams);
+		const alreadyActive =
+			target.projectId === workspaceTabs.activeTabId &&
+			target.sessionId === workspaceTabs.activeTab.activeSessionTabId;
+		// Still re-applies when only the generation anchor changed (e.g. the URL
+		// was hand-edited to a different `?generation=` within the same
+		// project/session) — not just when the project/session pair itself did.
+		if (alreadyActive && generationId === (request.viewingGenerationId ?? null)) return;
+		await openFromUrl(target.projectId, target.sessionId, generationId, epoch);
 	}
 
 	// Runs once on the initial hard load: restores every previously open tab
@@ -284,16 +318,22 @@ before the Change Date. See LICENSE for complete terms.
 	// switching workspace tabs is a workspaceTabs mutation that buildShareUrl
 	// itself never reads (see its own doc comment), so without reading them
 	// here directly, switching tabs wouldn't re-schedule this effect at all.
+	// viewingGenerationId rides along the same way, so the `?generation=`
+	// anchor (see request.svelte.ts) stays in the address bar for as long as
+	// what's on screen is still that generation's before/after, and drops out
+	// the moment it isn't (setCurrentRender clears the field on every real
+	// render/edit).
 	$effect(() => {
 		if (!hydrated) return;
 		buildShareUrl(mode, request);
 		const activeProjectId =
 			workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
 		const activeSessionId = workspaceTabs.activeTab.activeSessionTabId ?? undefined;
+		const viewingGenerationId = request.viewingGenerationId;
 		const timer = setTimeout(() => {
 			const currentSearch = new URLSearchParams(window.location.search);
 			const base = buildShareUrl(mode, request, subTabFromSearch(mode, currentSearch));
-			const url = withProjectSession(base, activeProjectId, activeSessionId);
+			const url = withProjectSession(base, activeProjectId, activeSessionId, viewingGenerationId);
 			if (`${window.location.pathname}${window.location.search}` !== url) {
 				goto(url, { replaceState: true, keepFocus: true, noScroll: true }).catch((error: unknown) =>
 					logBoundaryError('workspace.urlSync', error)
@@ -301,6 +341,24 @@ before the Change Date. See LICENSE for complete terms.
 			}
 		}, 400);
 		return () => clearTimeout(timer);
+	});
+
+	// ensureProjectSession() (request.svelte.ts) can lazily create a real
+	// project+session while the scratch tab is live (the first generation from
+	// a never-visited project), but only ever updates `request` — nothing
+	// tells workspaceTabs, so the URL-sync effect above keeps treating the
+	// live tab as scratch and never writes the new ids into the address bar.
+	// Promotes the scratch tab into a real project tab the moment that
+	// happens; a no-op once it already has (see adoptScratchSession).
+	$effect(() => {
+		if (workspaceTabs.activeTabId === SCRATCH_TAB_ID && request.projectId && request.sessionId) {
+			workspaceTabs.adoptScratchSession(
+				request.projectId,
+				t('workspace.tabs.untitled'),
+				request.sessionId,
+				null
+			);
+		}
 	});
 
 	async function generate(): Promise<void> {

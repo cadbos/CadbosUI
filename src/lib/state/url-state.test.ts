@@ -18,10 +18,12 @@ import {
 	applyShareParams,
 	buildShareUrl,
 	destinationForGenerationKind,
+	generationIdFromSearch,
 	isEditToolRoute,
 	isWorkspaceRoute,
 	slugToTool,
-	subTabFromSearch
+	subTabFromSearch,
+	withProjectSession
 } from '$lib/state/url-state';
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
@@ -236,5 +238,48 @@ describe('project/session are excluded from the shareable workspace URL', () => 
 
 		expect(state.projectId).toBe(PROJECT_ID);
 		expect(state.sessionId).toBe(SESSION_ID);
+	});
+});
+
+const GENERATION_ID = '423e4567-e89b-42d3-a456-426614174003';
+
+describe('withProjectSession/generationIdFromSearch (the address-bar-only generation anchor)', () => {
+	it('appends project/session/generation on top of a share URL', () => {
+		const url = withProjectSession(
+			'/create/interior?view=chat',
+			PROJECT_ID,
+			SESSION_ID,
+			GENERATION_ID
+		);
+		const params = new URL(url, 'https://example.test').searchParams;
+		expect(params.get('project')).toBe(PROJECT_ID);
+		expect(params.get('session')).toBe(SESSION_ID);
+		expect(params.get('generation')).toBe(GENERATION_ID);
+	});
+
+	it('omits generation when not given, and drops one already on the URL', () => {
+		const withGeneration = withProjectSession(
+			'/create/interior?view=chat&generation=stale',
+			PROJECT_ID,
+			SESSION_ID
+		);
+		expect(withGeneration).not.toContain('generation=');
+	});
+
+	it('no-ops (generation included) when project or session is missing', () => {
+		const url = '/create/interior?view=chat';
+		expect(withProjectSession(url, undefined, SESSION_ID, GENERATION_ID)).toBe(url);
+		expect(withProjectSession(url, PROJECT_ID, undefined, GENERATION_ID)).toBe(url);
+	});
+
+	it('reads a valid generation id back off the query string', () => {
+		expect(generationIdFromSearch(new URLSearchParams({ generation: GENERATION_ID }))).toBe(
+			GENERATION_ID
+		);
+	});
+
+	it('treats a missing or non-UUID generation param as absent', () => {
+		expect(generationIdFromSearch(new URLSearchParams())).toBeNull();
+		expect(generationIdFromSearch(new URLSearchParams({ generation: 'not-a-uuid' }))).toBeNull();
 	});
 });

@@ -191,6 +191,43 @@ describe('listCreditHistory', () => {
 			'generation invalid-kind has invalid kind'
 		);
 	});
+
+	// The expenses page (routes/expenses/+page.svelte) resolves a clicked row
+	// straight back to its project/session via these two fields.
+	it('joins the owning session and project id for each entry', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 5);
+		const sessionId = seedSession(db, 'user-1');
+		const projectId = (
+			await db
+				.prepare('SELECT project_id FROM project_sessions WHERE id = ?')
+				.bind(sessionId)
+				.first<{ project_id: string }>()
+		)?.project_id;
+		await recordGeneration(db, 'user-1', {
+			url: 'https://cdn.example.test/out.webp',
+			sourceUrl: 'https://cdn.example.test/room.jpg',
+			sourceHash: 'hash-room',
+			sessionId,
+			prompt: 'cozy',
+			kind: 'render',
+			amount: 1
+		});
+
+		const history = await listCreditHistory(db, 'user-1');
+		expect(history).toEqual([expect.objectContaining({ sessionId, projectId })]);
+	});
+
+	// A generation predating Module 11 (or otherwise never attached to a
+	// session) must not disappear from the history — it just can't be
+	// resolved back to a project/session.
+	it('leaves sessionId/projectId null for a generation with no session', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneration(db, 'no-session', 'user-1', 1000);
+
+		const history = await listCreditHistory(db, 'user-1');
+		expect(history).toEqual([expect.objectContaining({ sessionId: null, projectId: null })]);
+	});
 });
 
 describe('getGeneratedImageForUser', () => {

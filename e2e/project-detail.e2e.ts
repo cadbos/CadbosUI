@@ -24,7 +24,15 @@ interface SessionFixture {
 	forkedFromGenerationId: string | null;
 	createdAt: number;
 	updatedAt: number;
-	generations: { id: string; url: string; sourceUrl: string; kind: string; createdAt: number }[];
+	generations: {
+		id: string;
+		url: string;
+		sourceUrl: string;
+		kind: string;
+		createdAt: number;
+		amount: number;
+		balanceAfter: number;
+	}[];
 }
 
 function session(overrides: Partial<SessionFixture> = {}): SessionFixture {
@@ -246,7 +254,9 @@ test('continues a session into the render workspace with its latest render as th
 						url: 'https://cdn.example.test/latest-render.webp',
 						sourceUrl: 'https://cdn.example.test/room.jpg',
 						kind: 'render',
-						createdAt: Date.UTC(2026, 0, 1)
+						createdAt: Date.UTC(2026, 0, 1),
+						amount: 5,
+						balanceAfter: 95
 					}
 				]
 			})
