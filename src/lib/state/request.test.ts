@@ -411,6 +411,47 @@ describe('viewingGenerationId', () => {
 
 		expect(request.viewingGenerationId).toBeUndefined();
 	});
+
+	it('is cleared by applyEditResult', () => {
+		request.setCurrentRender({
+			id: 'render-a',
+			outputUrls: ['https://example.test/a.webp'],
+			cost: 1,
+			balance: 24,
+			ts: 0
+		});
+		request.setViewingGenerationId('gen-1');
+		request.applyEditResult({
+			id: 'render-b',
+			outputUrls: ['https://example.test/b.webp'],
+			cost: 1,
+			balance: 23,
+			ts: 1
+		});
+
+		expect(request.viewingGenerationId).toBeUndefined();
+	});
+
+	it('is cleared by undoLastEdit', () => {
+		request.setCurrentRender({
+			id: 'render-a',
+			outputUrls: ['https://example.test/a.webp'],
+			cost: 1,
+			balance: 24,
+			ts: 0
+		});
+		request.applyEditResult({
+			id: 'render-b',
+			outputUrls: ['https://example.test/b.webp'],
+			cost: 1,
+			balance: 23,
+			ts: 1
+		});
+		request.setViewingGenerationId('gen-1');
+		request.undoLastEdit();
+
+		expect(request.viewingGenerationId).toBeUndefined();
+	});
 });
 
 describe('normalizeForComparison', () => {

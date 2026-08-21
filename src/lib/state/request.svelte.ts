@@ -924,6 +924,7 @@ export class RequestState {
 		render: RenderResult,
 		sourceRender: RenderResult | undefined = this.currentRender
 	): void {
+		this.viewingGenerationId = undefined;
 		this.#pushRender(cloneRenderResult(render), cloneRenderResult(sourceRender));
 	}
 
@@ -931,6 +932,7 @@ export class RequestState {
 	// at the first step.
 	undoLastEdit(): void {
 		if (this.#historyIndex <= 0) return;
+		this.viewingGenerationId = undefined;
 		this.#historyIndex -= 1;
 	}
 
