@@ -191,6 +191,11 @@ before the Change Date. See LICENSE for complete terms.
 	// initial hydration has run.
 	let hydrated = $state(false);
 
+	// Bumped at the start of every applyUrlTarget call so a slower-resolving
+	// openFromUrl from an earlier navigation can't clobber a faster-resolving
+	// later one — same guard shape as request.svelte.ts's #projectSessionEpoch.
+	let urlTargetEpoch = 0;
+
 	// Resolves a project/session pair carried in the URL (see url-state.ts's
 	// projectSessionFromSearch) into the matching open workspace tab — the
 	// same fetch-then-initialize continueSession (projects/[id]/+page.svelte)
@@ -201,9 +206,11 @@ before the Change Date. See LICENSE for complete terms.
 	async function openFromUrl(
 		projectId: string,
 		sessionId: string,
-		generationId: string | null
+		generationId: string | null,
+		epoch: number
 	): Promise<void> {
 		const project = await fetchProjectDetail(projectId);
+		if (urlTargetEpoch !== epoch) return;
 		if (!project) return;
 		const session = project.sessions.find((candidate) => candidate.id === sessionId);
 		if (!session) return;
@@ -233,6 +240,8 @@ before the Change Date. See LICENSE for complete terms.
 	// later popstate/link navigation, so a pasted/bookmarked link always wins
 	// over whatever was already open.
 	async function applyUrlTarget(searchParams: URLSearchParams): Promise<void> {
+		urlTargetEpoch += 1;
+		const epoch = urlTargetEpoch;
 		const target = projectSessionFromSearch(searchParams);
 		if (!target) return;
 		const generationId = generationIdFromSearch(searchParams);
@@ -243,7 +252,7 @@ before the Change Date. See LICENSE for complete terms.
 		// was hand-edited to a different `?generation=` within the same
 		// project/session) — not just when the project/session pair itself did.
 		if (alreadyActive && generationId === (request.viewingGenerationId ?? null)) return;
-		await openFromUrl(target.projectId, target.sessionId, generationId);
+		await openFromUrl(target.projectId, target.sessionId, generationId, epoch);
 	}
 
 	// Runs once on the initial hard load: restores every previously open tab
