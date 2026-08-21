@@ -232,7 +232,7 @@ export const ru = {
 	'expenses.signInRequired': 'Войдите, чтобы увидеть историю трат.',
 	'expenses.column.date': 'Дата',
 	'expenses.column.time': 'Время',
-	'expenses.column.value': 'Стоимость',
+	'expenses.column.value': 'Стоимость $',
 	'expenses.column.action': 'Действие',
 	'health.warning': 'Некоторые функции недоступны из-за сбоя сторонних сервисов. Подробнее на',
 	'health.statusPage': 'странице состояния',

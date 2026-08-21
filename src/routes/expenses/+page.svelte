@@ -27,9 +27,6 @@ before the Change Date. See LICENSE for complete terms.
 	import { initializeGenerationPreview, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import { formatCredit, logBoundaryError } from '$lib/utils';
 
-	// No currency switcher yet; header defaults to USD until one exists.
-	const currencySymbol = '$';
-
 	const generationKindKeys: Record<CreditTransaction['kind'], TranslationKey> = {
 		render: 'generatedImages.kind.render',
 		edit: 'generatedImages.kind.edit',
@@ -117,7 +114,7 @@ before the Change Date. See LICENSE for complete terms.
 				<div class="expenses-columns-header">
 					<span>{t('expenses.column.date')}</span>
 					<span>{t('expenses.column.time')}</span>
-					<span class="value-cell">{t('expenses.column.value')} {currencySymbol}</span>
+					<span class="value-cell">{t('expenses.column.value')}</span>
 					<span>{t('expenses.column.action')}</span>
 				</div>
 

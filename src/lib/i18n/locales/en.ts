@@ -230,7 +230,7 @@ export const en = {
 	'expenses.signInRequired': 'Sign in to see your spending history.',
 	'expenses.column.date': 'Date',
 	'expenses.column.time': 'Time',
-	'expenses.column.value': 'Value',
+	'expenses.column.value': 'Value $',
 	'expenses.column.action': 'Action',
 	'health.warning':
 		'Some functionality is unavailable because of a failure on third-party services. For more information visit',
