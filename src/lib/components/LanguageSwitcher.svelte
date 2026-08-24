@@ -75,6 +75,7 @@ before the Change Date. See LICENSE for complete terms.
 		justify-content: center;
 		gap: var(--space-1);
 		min-height: 2.2rem;
+		width: 4.5rem;
 		padding: 0.4rem 0.65rem;
 		font: inherit;
 		font-weight: 500;
