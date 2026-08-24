@@ -17,6 +17,9 @@ import type { Dictionary } from '$lib/i18n/locales';
 export const en = {
 	'app.title': 'AI Design',
 	'app.subtitle': 'Create and edit interiors and exteriors from a photo and description.',
+	'language.switcher.label': 'Interface language',
+	'language.ru': 'Русский',
+	'language.en': 'English',
 	'clientLoad.loading': 'Loading the application…',
 	'clientLoad.failed': 'The application could not load completely. Refresh the page and try again.',
 	'clientLoad.refresh': 'Refresh page',

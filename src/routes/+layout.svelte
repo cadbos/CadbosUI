@@ -21,8 +21,9 @@ before the Change Date. See LICENSE for complete terms.
 	import favicon from '$lib/assets/favicon.svg';
 	import AuthBar from '$lib/components/AuthBar.svelte';
 	import GenerationOverlay from '$lib/components/GenerationOverlay.svelte';
+	import LanguageSwitcher from '$lib/components/LanguageSwitcher.svelte';
 	import Workspace from '$lib/components/Workspace.svelte';
-	import { t } from '$lib/i18n/index.svelte';
+	import { hydrateLocale, t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { status } from '$lib/state/status.svelte';
 	import { isWorkspaceRoute } from '$lib/state/url-state';
@@ -47,6 +48,7 @@ before the Change Date. See LICENSE for complete terms.
 	onMount(() => {
 		auth.loadSession();
 		void status.checkOnce();
+		hydrateLocale();
 		// Started here, not in Workspace.svelte, so a reload on any route (not
 		// just /create|/edit|/style-transfer) re-opens every previously open
 		// project/session tab before the user can act on a stale, empty one —
@@ -86,7 +88,10 @@ before the Change Date. See LICENSE for complete terms.
 			<p class="brand-subtitle">{t('app.subtitle')}</p>
 		</div>
 	</a>
-	<AuthBar />
+	<div class="header-actions">
+		<AuthBar />
+		<LanguageSwitcher />
+	</div>
 </header>
 
 {#if showWorkspace}
@@ -159,6 +164,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	.brand-copy {
 		min-width: 0;
+	}
+
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
 	}
 
 	.brand-title,

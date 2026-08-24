@@ -15,6 +15,9 @@
 export interface Dictionary {
 	'app.title': string;
 	'app.subtitle': string;
+	'language.switcher.label': string;
+	'language.ru': string;
+	'language.en': string;
 	'clientLoad.loading': string;
 	'clientLoad.failed': string;
 	'clientLoad.refresh': string;

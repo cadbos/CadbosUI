@@ -17,6 +17,9 @@ import type { Dictionary } from '$lib/i18n/locales';
 export const ru = {
 	'app.title': 'ИИ – дизайн',
 	'app.subtitle': 'Создавайте и редактируйте интерьеры и экстерьеры по фото и описанию.',
+	'language.switcher.label': 'Язык интерфейса',
+	'language.ru': 'Русский',
+	'language.en': 'English',
 	'clientLoad.loading': 'Загружаем приложение…',
 	'clientLoad.failed':
 		'Не удалось полностью загрузить приложение. Обновите страницу и попробуйте снова.',
