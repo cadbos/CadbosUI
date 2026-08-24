@@ -53,6 +53,10 @@ const requestBody = {
 	replacementSurface: 'floor'
 };
 
+function submission(comfyPromptId = 'prompt-1', sceneHash = 'server-scene-hash') {
+	return { comfyPromptId, sceneHash };
+}
+
 function rejectionLog(status: number, reason: string): Record<string, unknown> {
 	return {
 		level: 'warn',
@@ -144,7 +148,7 @@ beforeEach(() => {
 		balance: 100
 	});
 	integration.cancel.mockReset().mockResolvedValue(undefined);
-	integration.submit.mockReset().mockResolvedValue('prompt-1');
+	integration.submit.mockReset().mockResolvedValue(submission());
 	jobs.create.mockReset().mockResolvedValue(undefined);
 });
 
@@ -321,10 +325,10 @@ describe('POST /api/texture-replacement', () => {
 		const db = makeD1();
 		seedUser(db);
 		seedUser(db, 'user-2', 'pubkey-2');
-		let resolveSubmission!: (promptId: string) => void;
+		let resolveSubmission!: (result: ReturnType<typeof submission>) => void;
 		integration.submit.mockImplementationOnce(
 			() =>
-				new Promise<string>((resolve) => {
+				new Promise<ReturnType<typeof submission>>((resolve) => {
 					resolveSubmission = resolve;
 				})
 		);
@@ -351,7 +355,7 @@ describe('POST /api/texture-replacement', () => {
 		const otherAccount = await callPost(requestPlatform, 'pubkey-2');
 		expect(otherAccount.status).toBe(202);
 
-		resolveSubmission('prompt-1');
+		resolveSubmission(submission('prompt-1'));
 		expect((await first).status).toBe(202);
 		expect((await callPost(requestPlatform)).status).toBe(202);
 	});
@@ -362,7 +366,7 @@ describe('POST /api/texture-replacement', () => {
 		let rejectSubmission!: (error: Error) => void;
 		integration.submit.mockImplementationOnce(
 			() =>
-				new Promise<string>((_resolve, reject) => {
+				new Promise<ReturnType<typeof submission>>((_resolve, reject) => {
 					rejectSubmission = reject;
 				})
 		);
@@ -386,6 +390,26 @@ describe('POST /api/texture-replacement', () => {
 
 		expect(response.status).toBe(202);
 		expect(integration.cancel).not.toHaveBeenCalled();
+	});
+
+	it('persists the server-computed scene hash instead of client hash metadata', async () => {
+		const db = makeD1();
+		seedUser(db);
+		integration.submit.mockResolvedValue(submission('prompt-1', 'computed-from-scene-bytes'));
+
+		const response = await callPost(platform(db), 'pubkey-1', {
+			...requestBody,
+			imageHash: 'a'.repeat(64)
+		});
+
+		expect(response.status).toBe(202);
+		expect(jobs.create).toHaveBeenCalledWith(
+			db,
+			expect.objectContaining({
+				comfyPromptId: 'prompt-1',
+				sceneHash: 'computed-from-scene-bytes'
+			})
+		);
 	});
 
 	it('preserves submission errors without attempting cleanup', async () => {

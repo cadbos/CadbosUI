@@ -66,6 +66,7 @@ describe('object replacement jobs', () => {
 		await expect(getObjectReplacementJob(db, 'user-1', 'job-1')).resolves.toMatchObject({
 			comfyPromptId: 'prompt-job-1',
 			sceneUrl: 'https://cdn.example.test/scene.jpg',
+			sceneHash: 'hash-scene',
 			referenceUrl: 'https://cdn.example.test/reference.jpg',
 			replacementObject: 'sofa',
 			cost: 2,
@@ -88,11 +89,12 @@ describe('object replacement jobs', () => {
 
 		expect(job).toMatchObject({ status: 'completed', balanceAfter: 10, cost: 2 });
 		const generation = await db
-			.prepare('SELECT id, kind, amount, balance_after FROM generations WHERE id = ?')
+			.prepare('SELECT id, source_hash, kind, amount, balance_after FROM generations WHERE id = ?')
 			.bind('job-1')
 			.first();
 		expect(generation).toEqual({
 			id: 'job-1',
+			source_hash: 'hash-scene',
 			kind: 'object-replacement',
 			amount: 2,
 			balance_after: 10

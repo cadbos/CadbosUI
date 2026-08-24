@@ -186,9 +186,9 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		}
 
 		const id = crypto.randomUUID();
-		let comfyPromptId: string;
+		let submission: Awaited<ReturnType<typeof submitTextureReplacement>>;
 		try {
-			comfyPromptId = await submitTextureReplacement(platform, automaticRequest, url.origin, id);
+			submission = await submitTextureReplacement(platform, automaticRequest, url.origin, id);
 		} catch (error) {
 			if (error instanceof RemoteImageImportError) return remoteImageError(error);
 			if (error instanceof ComfyUiError) {
@@ -210,9 +210,9 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			await createTextureReplacementJob(db, {
 				id,
 				userId,
-				comfyPromptId,
+				comfyPromptId: submission.comfyPromptId,
 				sceneUrl: automaticRequest.image,
-				sceneHash: automaticRequest.imageHash ?? '',
+				sceneHash: submission.sceneHash,
 				sessionId: automaticRequest.sessionId,
 				referenceUrl: automaticRequest.referenceImage,
 				replacementSurface: automaticRequest.replacementSurface,
@@ -222,7 +222,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		} catch {
 			console.error('Texture replacement job persistence failed');
 			try {
-				await cancelTextureReplacement(platform, comfyPromptId);
+				await cancelTextureReplacement(platform, submission.comfyPromptId);
 			} catch (cleanupError) {
 				if (cleanupError instanceof ComfyUiError) {
 					console.error('ComfyUI texture replacement cleanup failed:', {

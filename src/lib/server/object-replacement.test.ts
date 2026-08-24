@@ -29,6 +29,13 @@ function vpcService(fetchImpl: typeof fetch): Fetcher {
 	return { fetch: fetchImpl } as unknown as Fetcher;
 }
 
+async function sha256Hex(value: string): Promise<string> {
+	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+	return Array.from(new Uint8Array(digest))
+		.map((byte) => byte.toString(16).padStart(2, '0'))
+		.join('');
+}
+
 describe('object replacement integration', () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
@@ -62,8 +69,9 @@ describe('object replacement integration', () => {
 	});
 
 	it('fetches validated inputs and submits over the ComfyUI VPC service, unauthenticated', async () => {
-		const imageFetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
-			return new Response('image-bytes', { headers: { 'content-type': 'image/png' } });
+		const imageFetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+			const body = input.toString().includes('/scene.png') ? 'scene-bytes' : 'reference-bytes';
+			return new Response(body, { headers: { 'content-type': 'image/png' } });
 		});
 
 		let uploadCount = 0;
@@ -90,19 +98,23 @@ describe('object replacement integration', () => {
 			throw new Error(`Unexpected URL: ${url}`);
 		});
 
-		await expect(
-			submitObjectReplacement(
-				platform({ COMFYUI_BASE_URL: vpcService(vpcFetch) }),
-				{
-					image: 'https://images.example.test/scene.png',
-					referenceImage: 'https://images.example.test/reference.png',
-					replacementObject: 'sofa',
-					sessionId: 'test-session-id'
-				},
-				'https://cadbos.example',
-				'job-1'
-			)
-		).resolves.toBe('prompt-1');
+		const submission = await submitObjectReplacement(
+			platform({ COMFYUI_BASE_URL: vpcService(vpcFetch) }),
+			{
+				image: 'https://images.example.test/scene.png',
+				referenceImage: 'https://images.example.test/reference.png',
+				replacementObject: 'sofa',
+				sessionId: 'test-session-id'
+			},
+			'https://cadbos.example',
+			'job-1'
+		);
+
+		expect(submission).toEqual({
+			comfyPromptId: 'prompt-1',
+			sceneHash: await sha256Hex('scene-bytes')
+		});
+		expect(submission.sceneHash).not.toBe(await sha256Hex('reference-bytes'));
 		expect(imageFetcher).toHaveBeenCalledTimes(2);
 		expect(vpcFetch).toHaveBeenCalledTimes(3);
 	});
