@@ -263,7 +263,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.preset.selected {
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
 		border-color: var(--color-accent);
 	}

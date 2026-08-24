@@ -935,7 +935,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.mode-tabs button:hover:not(.active) {
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 		background: color-mix(in srgb, var(--color-surface) 70%, transparent);
 	}
 

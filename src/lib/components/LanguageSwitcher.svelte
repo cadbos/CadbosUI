@@ -21,10 +21,12 @@ before the Change Date. See LICENSE for complete terms.
 	const flags = { ru: '🇷🇺', en: '🇬🇧' } as const;
 
 	let open = $state(false);
+	let triggerEl: HTMLButtonElement | undefined;
 
 	function choose(code: (typeof locales)[number]): void {
 		setLocale(code);
 		open = false;
+		triggerEl?.focus();
 	}
 </script>
 
@@ -39,6 +41,7 @@ before the Change Date. See LICENSE for complete terms.
 	)}
 >
 	<button
+		bind:this={triggerEl}
 		type="button"
 		class="language-trigger"
 		aria-expanded={open}

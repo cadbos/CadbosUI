@@ -28,10 +28,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	let open = $state(false);
 	let CurrentIcon = $derived(icons[theme.mode]);
+	let triggerEl: HTMLButtonElement | undefined;
 
 	function choose(mode: ThemeMode): void {
 		theme.setMode(mode);
 		open = false;
+		triggerEl?.focus();
 	}
 </script>
 
@@ -46,6 +48,7 @@ before the Change Date. See LICENSE for complete terms.
 	)}
 >
 	<button
+		bind:this={triggerEl}
 		type="button"
 		class="theme-trigger"
 		aria-expanded={open}
