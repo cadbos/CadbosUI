@@ -415,6 +415,15 @@ it('closes the auth panel on an outside click, and on Escape returns focus to th
 	}
 });
 
+it('shows the balance and relay count in the anonymous panel, but no logout button', async () => {
+	const screen = render(AuthBar);
+	await screen.getByRole('button', { name: 'Гость' }).click();
+
+	await expect.element(screen.getByText('Баланс: 0.00')).toBeVisible();
+	await expect.element(screen.getByText('Релеев: 0')).toBeVisible();
+	expect(screen.container.querySelector('.logout-button')).toBeNull();
+});
+
 it('cancelling after the signer connects but before verification stays anonymous', async () => {
 	let verifyCalled = false;
 	mockFetch(() => {

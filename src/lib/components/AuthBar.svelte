@@ -217,32 +217,6 @@ before the Change Date. See LICENSE for complete terms.
 						<p class="error" role="alert">{saveError}</p>
 					{/if}
 				</div>
-
-				<div class="bottom-row">
-					<a
-						class="balance-link"
-						href={resolve('/expenses', {})}
-						onclick={() => (profileState = 'closed')}
-					>
-						<span
-							>{ti('auth.credit.balance', {
-								balance: formatCredit(auth.credit?.balance ?? 0)
-							})}</span
-						>
-						<ChevronRight size={14} strokeWidth={1.8} aria-hidden="true" />
-					</a>
-					<button
-						type="button"
-						class="logout-button"
-						title={t('auth.logout')}
-						onclick={() => auth.logout()}
-					>
-						<LogOut size={16} strokeWidth={1.8} aria-hidden="true" />
-						<span class="visually-hidden">{t('auth.logout')}</span>
-					</button>
-				</div>
-
-				<p class="relay-count">{ti('auth.profile.relayCount', { count: relayCount })}</p>
 			{:else if auth.connectUri}
 				<div class="connect">
 					<p class="hint">{t('auth.connect.scan')}</p>
@@ -288,6 +262,34 @@ before the Change Date. See LICENSE for complete terms.
 				{/if}
 			{/if}
 
+			<div class="bottom-row">
+				<a
+					class="balance-link"
+					href={resolve('/expenses', {})}
+					onclick={() => (profileState = 'closed')}
+				>
+					<span
+						>{ti('auth.credit.balance', {
+							balance: formatCredit(auth.credit?.balance ?? 0)
+						})}</span
+					>
+					<ChevronRight size={14} strokeWidth={1.8} aria-hidden="true" />
+				</a>
+				{#if auth.status === 'authenticated'}
+					<button
+						type="button"
+						class="logout-button"
+						title={t('auth.logout')}
+						onclick={() => auth.logout()}
+					>
+						<LogOut size={16} strokeWidth={1.8} aria-hidden="true" />
+						<span class="visually-hidden">{t('auth.logout')}</span>
+					</button>
+				{/if}
+			</div>
+
+			<p class="relay-count">{ti('auth.profile.relayCount', { count: relayCount })}</p>
+
 			<div class="settings-row">
 				<LanguageSwitcher />
 				<ThemeToggle />
@@ -318,6 +320,7 @@ before the Change Date. See LICENSE for complete terms.
 	.profile-chip {
 		display: flex;
 		align-items: stretch;
+		min-width: 16.53rem;
 		padding: var(--space-1);
 		color: var(--color-text);
 		background: var(--color-surface);
