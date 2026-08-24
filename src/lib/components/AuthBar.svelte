@@ -421,7 +421,7 @@ before the Change Date. See LICENSE for complete terms.
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);
-		box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+		box-shadow: var(--shadow-lg);
 	}
 
 	.profile-panel[hidden] {
@@ -483,7 +483,7 @@ before the Change Date. See LICENSE for complete terms.
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);
-		box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+		box-shadow: var(--shadow-lg);
 	}
 
 	.menu[hidden] {
@@ -527,7 +527,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.approve {
 		text-align: center;
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.connect-actions {

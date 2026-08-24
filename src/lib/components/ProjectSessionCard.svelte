@@ -397,7 +397,7 @@ before the Change Date. See LICENSE for complete terms.
 	.secondary-button:hover {
 		background: var(--color-surface-hover);
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.primary-danger-button {

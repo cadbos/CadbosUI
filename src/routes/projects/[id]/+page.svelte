@@ -389,7 +389,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.back-link:hover,
 	.back-link:focus-visible {
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.project-shell {
@@ -605,7 +605,7 @@ before the Change Date. See LICENSE for complete terms.
 	.secondary-button:hover {
 		background: var(--color-surface-hover);
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.primary-danger-button {

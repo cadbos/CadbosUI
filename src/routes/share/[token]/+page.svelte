@@ -323,7 +323,7 @@ before the Change Date. See LICENSE for complete terms.
 	.lightbox-close:hover,
 	.lightbox-close:focus-visible {
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	@media (max-width: 720px) {

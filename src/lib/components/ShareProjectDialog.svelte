@@ -291,7 +291,7 @@ before the Change Date. See LICENSE for complete terms.
 	.close-button:hover {
 		background: var(--color-surface-hover);
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.visually-hidden {
@@ -443,7 +443,7 @@ before the Change Date. See LICENSE for complete terms.
 	.secondary-button:hover {
 		background: var(--color-surface-hover);
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.primary-danger-button {

@@ -185,7 +185,7 @@ before the Change Date. See LICENSE for complete terms.
 	.tab-item button.active {
 		background: var(--color-surface);
 		color: var(--color-text);
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+		box-shadow: var(--shadow);
 	}
 
 	.panel {

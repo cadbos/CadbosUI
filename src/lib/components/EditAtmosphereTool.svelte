@@ -211,7 +211,7 @@ before the Change Date. See LICENSE for complete terms.
 	.scene-toggle button.active {
 		background: var(--color-surface);
 		color: var(--color-text);
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+		box-shadow: var(--shadow);
 	}
 
 	.scene-toggle button:disabled {
@@ -264,7 +264,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.preset.selected {
 		color: var(--color-accent);
-		background: color-mix(in srgb, var(--color-accent) 8%, white);
+		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
 		border-color: var(--color-accent);
 	}
 

@@ -306,7 +306,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.pubkey a {
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 		text-decoration: underline;
 		text-underline-offset: 0.15em;
 	}

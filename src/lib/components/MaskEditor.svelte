@@ -530,7 +530,7 @@ before the Change Date. See LICENSE for complete terms.
 	.toolbar button.active {
 		border-color: var(--color-accent);
 		background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.toolbar button:disabled,
