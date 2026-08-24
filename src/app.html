@@ -20,6 +20,24 @@ before the Change Date. See LICENSE for complete terms.
 		<meta name="text-scale" content="scale" />
 		<script nonce="%sveltekit.nonce%">
 			(() => {
+				// Runs synchronously, before the stylesheet or any Svelte code, so an
+				// explicit light/dark choice applies from the very first paint — the
+				// reactive theme store (src/lib/state/theme.svelte.ts) can only apply
+				// data-theme after hydration, which would otherwise flash the light
+				// palette first. 'system' needs no attribute: app.css's
+				// prefers-color-scheme block already handles it without JS.
+				try {
+					const stored = JSON.parse(localStorage.getItem('cadbos.theme.v1') ?? 'null');
+					if (stored?.mode === 'light' || stored?.mode === 'dark') {
+						document.documentElement.dataset.theme = stored.mode;
+					}
+				} catch {
+					// Corrupt/inaccessible storage: fall back to 'system' (no attribute).
+				}
+			})();
+		</script>
+		<script nonce="%sveltekit.nonce%">
+			(() => {
 				const loadingStateAttribute = 'data-client-load-state';
 				const readyEvent = 'cadbos:client-ready';
 				let complete = false;

@@ -20,6 +20,10 @@ export const ru = {
 	'language.switcher.label': 'Язык интерфейса',
 	'language.ru': 'Русский',
 	'language.en': 'English',
+	'theme.label': 'Тема оформления',
+	'theme.light': 'Светлая',
+	'theme.dark': 'Тёмная',
+	'theme.system': 'Системная',
 	'clientLoad.loading': 'Загружаем приложение…',
 	'clientLoad.failed':
 		'Не удалось полностью загрузить приложение. Обновите страницу и попробуйте снова.',

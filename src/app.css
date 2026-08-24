@@ -27,8 +27,18 @@
 	--color-accent: #2f6f4f;
 	--color-accent-hover: #256041;
 	--color-accent-contrast: #ffffff;
+	/* Text/icon-on-background accent color, distinct from --color-accent (used
+	   for button fills paired with --color-accent-contrast text). In light
+	   mode a single green works for both roles; in the dark override below it
+	   doesn't — a fill dark enough for 4.5:1 white button text is too dark to
+	   itself read at 4.5:1 as text against the near-black background, so the
+	   two roles split into separate tokens there. Kept equal to --color-accent
+	   here so light-mode rendering is unchanged. */
+	--color-accent-text: #2f6f4f;
 	--color-danger: #b00020;
 	--color-danger-bg: #fff0f0;
+	--color-warning-bg: #ffcb56;
+	--color-warning-text: #251f12;
 
 	--radius-sm: 8px;
 	--radius: 12px;
@@ -66,6 +76,56 @@
 	--radius: 12px;
 }
 
+/* Dark theme: overrides the same --color-* custom properties the light
+   palette declares above, so every component that already consumes
+   var(--color-*) picks it up with no per-component changes. Applies when the
+   OS prefers dark and the user hasn't explicitly chosen 'light' (ThemeToggle
+   sets data-theme on <html> via src/lib/state/theme.svelte.ts), then again,
+   unconditionally, when the user has explicitly chosen 'dark'. Light palette
+   values are intentionally left untouched. */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		--color-background: #1c1c1e;
+		--color-surface: #26262a;
+		--color-surface-hover: #2f2f34;
+		--color-border: #70707b;
+		--color-border-focus: #4caf7d;
+		--color-text: #f2f2f3;
+		--color-muted: #9a9a9f;
+		--color-muted-strong: #b7b7bc;
+		/* Darker than the light-theme accent on purpose: this is the button-fill
+		   color paired with white text (--color-accent-contrast), and needs to
+		   stay dark enough for that pairing to clear 4.5:1. See
+		   --color-accent-text below for the lighter value used when accent
+		   appears as text/icon color directly on the page background. */
+		--color-accent: #387f5b;
+		--color-accent-hover: #2f6f4f;
+		--color-accent-text: #48a374;
+		--color-danger: #ff6b6b;
+		--color-danger-bg: #3a1f22;
+		--color-warning-bg: #4a3a12;
+		--color-warning-text: #ffd989;
+	}
+}
+
+:root[data-theme='dark'] {
+	--color-background: #1c1c1e;
+	--color-surface: #26262a;
+	--color-surface-hover: #2f2f34;
+	--color-border: #70707b;
+	--color-border-focus: #4caf7d;
+	--color-text: #f2f2f3;
+	--color-muted: #9a9a9f;
+	--color-muted-strong: #b7b7bc;
+	--color-accent: #387f5b;
+	--color-accent-hover: #2f6f4f;
+	--color-accent-text: #48a374;
+	--color-danger: #ff6b6b;
+	--color-danger-bg: #3a1f22;
+	--color-warning-bg: #4a3a12;
+	--color-warning-text: #ffd989;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	.spinner {
 		animation: none;
@@ -77,7 +137,15 @@
 }
 
 html {
+	color-scheme: light dark;
+}
+
+:root[data-theme='light'] {
 	color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
 }
 
 body {

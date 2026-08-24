@@ -18,6 +18,10 @@ export interface Dictionary {
 	'language.switcher.label': string;
 	'language.ru': string;
 	'language.en': string;
+	'theme.label': string;
+	'theme.light': string;
+	'theme.dark': string;
+	'theme.system': string;
 	'clientLoad.loading': string;
 	'clientLoad.failed': string;
 	'clientLoad.refresh': string;
