@@ -17,32 +17,37 @@ import { clampToolsPanelPosition, toolsPanel } from './tools-panel.svelte';
 
 describe('clampToolsPanelPosition', () => {
 	it('keeps a position that already fits unchanged', () => {
-		expect(clampToolsPanelPosition(200, 150, 360, 400, 1280, 800, 16)).toEqual({
+		expect(clampToolsPanelPosition(200, 250, 360, 40, 1280, 800, 180, 16)).toEqual({
 			x: 200,
-			y: 150
+			y: 250
 		});
 	});
 
-	it('clamps a position dragged past the right/bottom edge', () => {
-		expect(clampToolsPanelPosition(5000, 5000, 360, 400, 1280, 800, 16)).toEqual({
+	it('clamps the bar past the right and bottom edges', () => {
+		expect(clampToolsPanelPosition(5000, 5000, 360, 40, 1280, 800, 180, 16)).toEqual({
 			x: 1280 - 360 - 16,
-			y: 800 - 400 - 16
+			y: 800 - 40 - 16
 		});
 	});
 
-	it('clamps a position dragged past the left/top edge', () => {
-		expect(clampToolsPanelPosition(-500, -500, 360, 400, 1280, 800, 16)).toEqual({
+	it('clamps the bar past the left edge and workspace header', () => {
+		expect(clampToolsPanelPosition(-500, -500, 360, 40, 1280, 800, 180, 16)).toEqual({
 			x: 16,
-			y: 16
+			y: 196
 		});
 	});
 
-	it('falls back to the margin when the panel is wider than the viewport', () => {
-		// A panel wider than the viewport minus margins has no valid "fits fully
-		// inside" position — clamp to the margin instead of an inverted range.
-		expect(clampToolsPanelPosition(100, 100, 2000, 2000, 800, 600, 16)).toEqual({
+	it('uses the workspace top when the remaining working area is shorter than the bar', () => {
+		expect(clampToolsPanelPosition(100, 100, 360, 400, 800, 500, 180, 16)).toEqual({
+			x: 100,
+			y: 196
+		});
+	});
+
+	it('keeps the horizontal margin when the bar is wider than the viewport', () => {
+		expect(clampToolsPanelPosition(100, 250, 2000, 200, 800, 600, 180, 16)).toEqual({
 			x: 16,
-			y: 16
+			y: 250
 		});
 	});
 });

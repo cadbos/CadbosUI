@@ -25,6 +25,17 @@ async function openCreate(page: Page): Promise<void> {
 	await page.goto('/create/interior?view=chat&format=webp');
 }
 
+async function dragBy(page: Page, locator: Locator, deltaX: number, deltaY: number): Promise<void> {
+	const bounds = await locator.boundingBox();
+	if (!bounds) throw new Error('drag target bounds missing');
+	const startX = bounds.x + bounds.width / 2;
+	const startY = bounds.y + bounds.height / 2;
+	await page.mouse.move(startX, startY);
+	await page.mouse.down();
+	await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 5 });
+	await page.mouse.up();
+}
+
 function localDateLabel(createdAt: number): string {
 	const parts = new Intl.DateTimeFormat('ru', {
 		day: 'numeric',
@@ -58,6 +69,93 @@ test('hides scenes for anonymous users', async ({ page }) => {
 	await openCreate(page);
 
 	await expect(page.getByRole('button', { name: 'Сцены' })).toHaveCount(0);
+});
+
+test('keeps the default tools panel usable inside the viewport', async ({ page }) => {
+	await page.setViewportSize({ width: 1280, height: 600 });
+	await openCreate(page);
+
+	const panel = page.locator('.floating-tools-panel').filter({ visible: true });
+	const panelBar = panel.locator('.panel-bar');
+	const workspaceHeader = page.locator('.workspace-header');
+	await expect(panelBar).toHaveAttribute('aria-expanded', 'true');
+
+	const headerBounds = await workspaceHeader.boundingBox();
+	const barBounds = await panelBar.boundingBox();
+	const panelBounds = await panel.boundingBox();
+	if (!headerBounds || !barBounds || !panelBounds) throw new Error('workspace bounds missing');
+	expect(barBounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height + 16);
+	expect(barBounds.y + barBounds.height).toBeLessThanOrEqual(600 - 16);
+	expect(panelBounds.y + panelBounds.height).toBeLessThanOrEqual(600 - 16);
+});
+
+test('keeps the tools panel bar recoverable while the body extends below the viewport', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await page.addInitScript(() => {
+		localStorage.setItem(
+			'cadbos.toolsPanel.v1',
+			JSON.stringify({ open: false, position: { x: 100, y: 0 }, width: null })
+		);
+	});
+	await openCreate(page);
+
+	const panel = page.locator('.floating-tools-panel').filter({ visible: true });
+	const panelBar = panel.locator('.panel-bar');
+	const workspaceHeader = page.locator('.workspace-header');
+	await expect(panelBar).toHaveAttribute('aria-expanded', 'false');
+
+	const headerBounds = await workspaceHeader.boundingBox();
+	const restoredBounds = await panel.boundingBox();
+	if (!headerBounds || !restoredBounds) throw new Error('workspace bounds missing');
+	expect(restoredBounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height + 16);
+
+	await dragBy(page, panelBar, 0, -2000);
+	const topBounds = await panelBar.boundingBox();
+	if (!topBounds) throw new Error('top-clamped panel bar bounds missing');
+	expect(topBounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height + 16);
+
+	await dragBy(page, panelBar, 0, 2000);
+	const bottomBounds = await panelBar.boundingBox();
+	if (!bottomBounds) throw new Error('bottom-clamped panel bar bounds missing');
+	expect(bottomBounds.y + bottomBounds.height).toBeLessThanOrEqual(800 - 16);
+
+	await panelBar.click();
+	await expect(panelBar).toHaveAttribute('aria-expanded', 'true');
+	const expandedBarBounds = await panelBar.boundingBox();
+	const expandedBounds = await panel.boundingBox();
+	if (!expandedBarBounds || !expandedBounds) throw new Error('expanded panel bounds missing');
+	expect(expandedBarBounds.y).toBe(bottomBounds.y);
+	expect(expandedBounds.y + expandedBounds.height).toBeGreaterThan(800);
+
+	await page.setViewportSize({ width: 1280, height: 700 });
+	await expect
+		.poll(async () => {
+			const bounds = await panelBar.boundingBox();
+			if (!bounds) throw new Error('resized panel bar bounds missing');
+			return bounds.y + bounds.height;
+		})
+		.toBeLessThanOrEqual(700 - 16);
+	const resizedBounds = await panel.boundingBox();
+	if (!resizedBounds) throw new Error('resized panel bounds missing');
+	expect(resizedBounds.y + resizedBounds.height).toBeGreaterThan(700);
+
+	await dragBy(page, panelBar, -2000, 0);
+	const leftBounds = await panelBar.boundingBox();
+	if (!leftBounds) throw new Error('left-clamped panel bar bounds missing');
+	expect(leftBounds.x).toBeGreaterThanOrEqual(16);
+
+	await dragBy(page, panelBar, 2000, 0);
+	const rightBounds = await panelBar.boundingBox();
+	if (!rightBounds) throw new Error('right-clamped panel bar bounds missing');
+	expect(rightBounds.x + rightBounds.width).toBeLessThanOrEqual(1280 - 16);
+
+	const resizeHandle = panel.getByRole('slider', { name: 'Изменить ширину панели инструментов' });
+	await resizeHandle.press('End');
+	const widenedBounds = await panelBar.boundingBox();
+	if (!widenedBounds) throw new Error('widened panel bar bounds missing');
+	expect(widenedBounds.x + widenedBounds.width).toBeLessThanOrEqual(1280 - 16);
 });
 
 test('shows authenticated scenes newest first', async ({ page }) => {

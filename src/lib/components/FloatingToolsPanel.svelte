@@ -27,9 +27,10 @@ before the Change Date. See LICENSE for complete terms.
 
 	interface Props {
 		children: Snippet;
+		workingAreaTop: number | null;
 	}
 
-	let { children }: Props = $props();
+	let { children, workingAreaTop }: Props = $props();
 
 	const uid = $props.id();
 	const bodyId = `${uid}-body`;
@@ -84,14 +85,15 @@ before the Change Date. See LICENSE for complete terms.
 		const dy = event.clientY - drag.startY;
 		if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
 		drag.moved = true;
-		const bounds = panel.getBoundingClientRect();
+		const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
 		const next = clampToolsPanelPosition(
 			drag.originX + dx,
 			drag.originY + dy,
 			bounds.width,
 			bounds.height,
 			window.innerWidth,
-			window.innerHeight
+			window.innerHeight,
+			workingAreaTop ?? 0
 		);
 		// Not persisted here — pointermove fires far too often to justify a
 		// localStorage write on every event. The final position is persisted
@@ -124,6 +126,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	const RESIZE_STEP = 24;
+	const DESKTOP_BREAKPOINT = 900;
 
 	function clampWidth(value: number): number {
 		return clampToolsPanelWidth(value, window.innerWidth);
@@ -153,6 +156,7 @@ before the Change Date. See LICENSE for complete terms.
 		const next = clampWidth(resizeStartWidth + delta);
 		toolsPanel.updateWidth(next);
 		measuredWidth = next;
+		clampPositionToBar(next);
 	}
 
 	function onResizeHandlePointerUp(event: PointerEvent): void {
@@ -171,15 +175,35 @@ before the Change Date. See LICENSE for complete terms.
 		else return;
 		event.preventDefault();
 		const clamped = clampWidth(next);
-		toolsPanel.setWidth(clamped);
+		toolsPanel.updateWidth(clamped);
 		measuredWidth = clamped;
+		clampPositionToBar(clamped);
+		toolsPanel.persist();
 	}
 
-	// Re-clamps a previously dragged position/width after the viewport shrinks
-	// (e.g. rotating a tablet) so the panel can't end up stranded off-screen or
-	// wider than the viewport. A position/width that's still null (never
-	// dragged/resized) is left alone — it's CSS-anchored and already tracks
-	// the viewport on its own.
+	function clampPositionToBar(barWidth: number): void {
+		if (!panel || !toolsPanel.position) return;
+		const bar = panel.querySelector<HTMLElement>('.panel-bar');
+		if (!bar) return;
+		const bounds = bar.getBoundingClientRect();
+		const next = clampToolsPanelPosition(
+			toolsPanel.position.x,
+			toolsPanel.position.y,
+			barWidth,
+			bounds.height,
+			window.innerWidth,
+			window.innerHeight,
+			workingAreaTop ?? 0
+		);
+		if (next.x === toolsPanel.position.x && next.y === toolsPanel.position.y) return;
+		toolsPanel.updatePosition(next.x, next.y);
+	}
+
+	// Re-clamps a previously dragged position/width after the viewport or
+	// workspace header changes so the panel can't end up stranded outside its
+	// working area or wider than the viewport. A position/width that's still
+	// null (never dragged/resized) is left alone — it's CSS-anchored and already
+	// tracks the viewport on its own.
 	//
 	// Workspace.svelte mounts one FloatingToolsPanel per mode (render/edit/
 	// styleTransfer) sharing this same `toolsPanel` singleton, with only the
@@ -188,20 +212,22 @@ before the Change Date. See LICENSE for complete terms.
 	// all zeros, so without this guard every window resize would have the
 	// *inactive* panels clamp the shared position/width against a 0×0 box and
 	// stomp on whatever the visible panel just computed.
-	function onWindowResize(): void {
-		viewportWidth = window.innerWidth;
+	function clampToWorkingArea(currentWorkingAreaTop: number): void {
+		if (window.innerWidth <= DESKTOP_BREAKPOINT) return;
 		if (!panel) return;
-		const bounds = panel.getBoundingClientRect();
-		if (bounds.width === 0 && bounds.height === 0) return;
-		measuredWidth = bounds.width;
+		const panelBounds = panel.getBoundingClientRect();
+		const barBounds = panel.querySelector<HTMLElement>('.panel-bar')?.getBoundingClientRect();
+		if (!barBounds || (barBounds.width === 0 && barBounds.height === 0)) return;
+		measuredWidth = panelBounds.width;
 		if (toolsPanel.position) {
 			const next = clampToolsPanelPosition(
-				bounds.left,
-				bounds.top,
-				bounds.width,
-				bounds.height,
+				barBounds.left,
+				barBounds.top,
+				barBounds.width,
+				barBounds.height,
 				window.innerWidth,
-				window.innerHeight
+				window.innerHeight,
+				currentWorkingAreaTop
 			);
 			if (next.x !== toolsPanel.position.x || next.y !== toolsPanel.position.y) {
 				toolsPanel.setPosition(next.x, next.y);
@@ -213,10 +239,21 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
+	function onWindowResize(): void {
+		viewportWidth = window.innerWidth;
+		clampToWorkingArea(workingAreaTop ?? 0);
+	}
+
 	$effect(() => {
 		toolsPanel.hydrate();
 		window.addEventListener('resize', onWindowResize);
 		return () => window.removeEventListener('resize', onWindowResize);
+	});
+
+	$effect(() => {
+		const currentWorkingAreaTop = workingAreaTop ?? 0;
+		const frame = requestAnimationFrame(() => clampToWorkingArea(currentWorkingAreaTop));
+		return () => cancelAnimationFrame(frame);
 	});
 </script>
 
@@ -297,19 +334,11 @@ before the Change Date. See LICENSE for complete terms.
 		max-height: calc(100dvh - var(--workspace-header-bottom, 13.5rem) - 2rem);
 	}
 
-	/* Desktop-only: a dragged position is stored/applied as pixel coordinates,
-	   which only make sense once the panel is `position: fixed` (see the
-	   media query below, which drops it to a static, normal-flow block on
-	   narrow screens). Scoping this to the same breakpoint — rather than
-	   relying on the mobile rule to override it — means a stale dragged
-	   position from a previous desktop session can't constrain the panel's
-	   height on mobile, since the custom properties driving it simply don't
-	   apply outside this query. */
 	@media (min-width: 901px) {
 		.floating-tools-panel:not(.at-default-corner) {
 			left: var(--tools-panel-x);
 			top: var(--tools-panel-y);
-			max-height: calc(100dvh - var(--tools-panel-y) - 1rem);
+			max-height: none;
 		}
 	}
 

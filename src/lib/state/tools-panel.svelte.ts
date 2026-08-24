@@ -37,25 +37,22 @@ interface StoredToolsPanel {
 	width: number | null;
 }
 
-// Keeps the panel's top-left corner fully inside the viewport (minus a fixed
-// margin) no matter what drag delta or window resize produced the candidate
-// position. Pure so drag handling and the resize listener can both reuse it
-// without re-deriving the same bounds math, and so it's unit-testable without
-// a DOM.
 export function clampToolsPanelPosition(
 	x: number,
 	y: number,
-	panelWidth: number,
-	panelHeight: number,
+	barWidth: number,
+	barHeight: number,
 	viewportWidth: number,
 	viewportHeight: number,
+	workingAreaTop: number,
 	margin: number = VIEWPORT_MARGIN
 ): ToolsPanelPosition {
-	const maxX = Math.max(margin, viewportWidth - panelWidth - margin);
-	const maxY = Math.max(margin, viewportHeight - panelHeight - margin);
+	const maxX = Math.max(margin, viewportWidth - barWidth - margin);
+	const minY = Math.max(margin, workingAreaTop + margin);
+	const maxY = Math.max(minY, viewportHeight - barHeight - margin);
 	return {
 		x: Math.min(Math.max(x, margin), maxX),
-		y: Math.min(Math.max(y, margin), maxY)
+		y: Math.min(Math.max(y, minY), maxY)
 	};
 }
 
