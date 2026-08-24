@@ -21,8 +21,6 @@ before the Change Date. See LICENSE for complete terms.
 	import favicon from '$lib/assets/favicon.svg';
 	import AuthBar from '$lib/components/AuthBar.svelte';
 	import GenerationOverlay from '$lib/components/GenerationOverlay.svelte';
-	import LanguageSwitcher from '$lib/components/LanguageSwitcher.svelte';
-	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import Workspace from '$lib/components/Workspace.svelte';
 	import { hydrateLocale, t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
@@ -93,10 +91,6 @@ before the Change Date. See LICENSE for complete terms.
 	</a>
 	<div class="header-actions">
 		<AuthBar />
-		<div class="header-toggles">
-			<LanguageSwitcher />
-			<ThemeToggle />
-		</div>
 	</div>
 </header>
 
@@ -176,12 +170,6 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
-	}
-
-	.header-toggles {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
 	}
 
 	.brand-title,

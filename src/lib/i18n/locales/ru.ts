@@ -93,6 +93,7 @@ export const ru = {
 	'generationOverlay.textureReplacement': 'Заменяем текстуру…',
 	'generationOverlay.upscale': 'Увеличиваем разрешение до 4K…',
 	'auth.signIn': 'Войти',
+	'auth.guest': 'Гость',
 	'auth.restoring': 'Восстанавливаем сессию…',
 	'auth.login.nip07': 'Расширение Nostr',
 	'auth.login.nip46': 'Nostr Connect (QR)',

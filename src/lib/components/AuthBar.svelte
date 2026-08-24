@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { ArrowUpRight, Check, ChevronRight, Copy, LogOut } from '@lucide/svelte';
+	import { ArrowUpRight, Check, ChevronRight, Copy, LogOut, User } from '@lucide/svelte';
 	import { dev } from '$app/environment';
 	import { resolve } from '$app/paths';
 	import { npubEncode } from 'nostr-tools/nip19';
@@ -21,6 +21,8 @@ before the Change Date. See LICENSE for complete terms.
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { dismissable, formatCredit, logBoundaryError } from '$lib/utils';
 	import QrCode from './QrCode.svelte';
+	import LanguageSwitcher from './LanguageSwitcher.svelte';
+	import ThemeToggle from './ThemeToggle.svelte';
 
 	const errorKeys: Record<AuthError, TranslationKey> = {
 		extension_missing: 'auth.error.extensionMissing',
@@ -32,7 +34,6 @@ before the Change Date. See LICENSE for complete terms.
 	const shortNpub = $derived(npub ? `${npub.slice(0, 12)}…${npub.slice(-6)}` : '');
 	const primalUrl = $derived(npub ? `https://primal.net/profile/${npub}` : null);
 
-	let menuOpen = $state(false);
 	// 'auto' = open iff missingCadbosName; 'open'/'closed' = user overrode.
 	let profileState = $state<'auto' | 'open' | 'closed'>('auto');
 	let savingProfile = $state(false);
@@ -84,11 +85,6 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
-	function choose(method: () => Promise<void>): void {
-		menuOpen = false;
-		method();
-	}
-
 	async function saveProfile(): Promise<void> {
 		savingProfile = true;
 		saveError = null;
@@ -109,36 +105,44 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <div class="auth">
-	{#if auth.status === 'authenticated'}
-		<div
-			class="profile"
-			{@attach dismissable(
-				() => profileOpen,
-				() => (profileState = 'closed'),
-				'.chip-toggle'
-			)}
-		>
-			<div class="profile-chip">
-				<button
-					type="button"
-					class="chip-toggle"
-					aria-expanded={profileOpen}
-					aria-controls="auth-profile"
-					onclick={() => (profileState = profileOpen ? 'closed' : 'open')}
-				>
-					{#if auth.nostrProfile?.picture}
-						<img src={auth.nostrProfile.picture} alt="" />
-					{:else}
-						<span class="avatar" aria-hidden="true">{displayName.slice(0, 1).toUpperCase()}</span>
-					{/if}
-					<span class="identity">
+	<div
+		class="profile"
+		{@attach dismissable(
+			() => profileOpen,
+			() => (profileState = 'closed'),
+			'.auth-trigger'
+		)}
+	>
+		<div class="profile-chip">
+			<button
+				type="button"
+				class="auth-trigger"
+				aria-expanded={profileOpen}
+				aria-controls="auth-panel"
+				onclick={() => (profileState = profileOpen ? 'closed' : 'open')}
+			>
+				{#if auth.nostrProfile?.picture}
+					<img src={auth.nostrProfile.picture} alt="" />
+				{:else if auth.status === 'authenticated'}
+					<span class="avatar" aria-hidden="true">{displayName.slice(0, 1).toUpperCase()}</span>
+				{:else}
+					<span class="avatar avatar-guest" aria-hidden="true">
+						<User size={16} strokeWidth={1.8} />
+					</span>
+				{/if}
+				<span class="identity">
+					{#if auth.status === 'authenticated'}
 						{#if dev && auth.user?.pubkey?.startsWith('000000')}
 							<span class="demo-badge">{t('auth.demo.badge')}</span>
 						{/if}
 						<span class="display">{displayName}</span>
 						<span class="who" title={auth.pubkey ?? ''}>{shortNpub}</span>
-					</span>
-				</button>
+					{:else}
+						<span class="display">{t('auth.guest')}</span>
+					{/if}
+				</span>
+			</button>
+			{#if auth.status === 'authenticated'}
 				<div class="chip-actions">
 					{#if primalUrl}
 						<a
@@ -171,8 +175,10 @@ before the Change Date. See LICENSE for complete terms.
 						</span>
 					</button>
 				</div>
-			</div>
-			<div id="auth-profile" class="profile-panel" hidden={!profileOpen}>
+			{/if}
+		</div>
+		<div id="auth-panel" class="auth-panel" hidden={!profileOpen}>
+			{#if auth.status === 'authenticated'}
 				{#if auth.nostrProfile?.about}
 					<p class="bio">{auth.nostrProfile.about}</p>
 				{/if}
@@ -237,68 +243,57 @@ before the Change Date. See LICENSE for complete terms.
 				</div>
 
 				<p class="relay-count">{ti('auth.profile.relayCount', { count: relayCount })}</p>
-			</div>
-		</div>
-	{:else if auth.connectUri}
-		<div class="connect">
-			<p class="hint">{t('auth.connect.scan')}</p>
-			<QrCode data={auth.connectUri} label={t('auth.connect.qrAlt')} />
-			{#if auth.authUrl}
-				<a class="approve" href={auth.authUrl} target="_blank" rel="external noopener noreferrer">
-					{t('auth.connect.approve')}
-				</a>
-			{/if}
-			<div class="connect-actions">
-				<button type="button" onclick={copyUri}>
-					{copied ? t('auth.connect.copied') : t('auth.connect.copy')}
-				</button>
-				<button type="button" onclick={() => auth.cancelNip46()}>
-					{t('auth.connect.cancel')}
-				</button>
-			</div>
-		</div>
-	{:else if auth.status === 'restoring'}
-		<p class="restoring" role="status">{t('auth.restoring')}</p>
-	{:else}
-		<div
-			class="signin"
-			{@attach dismissable(
-				() => menuOpen,
-				() => (menuOpen = false),
-				'.trigger'
-			)}
-		>
-			<button
-				type="button"
-				class="trigger"
-				aria-expanded={menuOpen}
-				aria-controls="signin-menu"
-				disabled={auth.status === 'connecting'}
-				onclick={() => (menuOpen = !menuOpen)}
-			>
-				<span>{auth.status === 'connecting' ? t('auth.connecting') : t('auth.signIn')}</span>
-				<svg class="chevron" viewBox="0 0 16 16" aria-hidden="true">
-					<path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" />
-				</svg>
-			</button>
-			<div id="signin-menu" class="menu" hidden={!menuOpen}>
-				<button type="button" onclick={() => choose(() => auth.loginNip07())}>
+			{:else if auth.connectUri}
+				<div class="connect">
+					<p class="hint">{t('auth.connect.scan')}</p>
+					<QrCode data={auth.connectUri} label={t('auth.connect.qrAlt')} />
+					{#if auth.authUrl}
+						<a
+							class="approve"
+							href={auth.authUrl}
+							target="_blank"
+							rel="external noopener noreferrer"
+						>
+							{t('auth.connect.approve')}
+						</a>
+					{/if}
+					<div class="connect-actions">
+						<button type="button" onclick={copyUri}>
+							{copied ? t('auth.connect.copied') : t('auth.connect.copy')}
+						</button>
+						<button type="button" onclick={() => auth.cancelNip46()}>
+							{t('auth.connect.cancel')}
+						</button>
+					</div>
+				</div>
+			{:else if auth.status === 'connecting'}
+				<p class="restoring" role="status">{t('auth.connecting')}</p>
+			{:else if auth.status === 'restoring'}
+				<p class="restoring" role="status">{t('auth.restoring')}</p>
+			{:else}
+				<p class="notice">{t('auth.signIn')}</p>
+				<button type="button" onclick={() => auth.loginNip07()}>
 					{t('auth.login.nip07')}
 				</button>
-				<button type="button" onclick={() => choose(() => auth.loginNip46())}>
+				<button type="button" onclick={() => auth.loginNip46()}>
 					{t('auth.login.nip46')}
 				</button>
+				{#if auth.error}
+					<p class="error" role="alert">{t(errorKeys[auth.error])}</p>
+				{/if}
+				{#if dev}
+					<button type="button" class="demo-btn" onclick={() => void auth.loginDemo()}>
+						{t('auth.demo.login')}
+					</button>
+				{/if}
+			{/if}
+
+			<div class="settings-row">
+				<LanguageSwitcher />
+				<ThemeToggle />
 			</div>
 		</div>
-		{#if auth.error}
-			<p class="error" role="alert">{t(errorKeys[auth.error])}</p>
-		{/if}
-		{#if dev}
-			<button type="button" class="demo-btn" onclick={() => void auth.loginDemo()}>
-				{t('auth.demo.login')}
-			</button>
-		{/if}
-	{/if}
+	</div>
 </div>
 
 <style>
@@ -330,7 +325,7 @@ before the Change Date. See LICENSE for complete terms.
 		border-radius: var(--radius);
 	}
 
-	.chip-toggle {
+	.auth-trigger {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-1);
@@ -341,7 +336,7 @@ before the Change Date. See LICENSE for complete terms.
 		border: none;
 	}
 
-	.chip-toggle img,
+	.auth-trigger img,
 	.avatar {
 		width: 2rem;
 		height: 2rem;
@@ -349,7 +344,7 @@ before the Change Date. See LICENSE for complete terms.
 		flex: 0 0 auto;
 	}
 
-	.chip-toggle img {
+	.auth-trigger img {
 		object-fit: cover;
 	}
 
@@ -393,6 +388,11 @@ before the Change Date. See LICENSE for complete terms.
 		font-weight: 700;
 	}
 
+	.avatar-guest {
+		color: var(--color-muted);
+		background: var(--color-border);
+	}
+
 	.identity {
 		display: grid;
 		gap: 0.1rem;
@@ -408,7 +408,7 @@ before the Change Date. See LICENSE for complete terms.
 		font-weight: 700;
 	}
 
-	.profile-panel {
+	.auth-panel {
 		position: absolute;
 		right: 0;
 		top: calc(100% + var(--space-1));
@@ -424,7 +424,7 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: var(--shadow-lg);
 	}
 
-	.profile-panel[hidden] {
+	.auth-panel[hidden] {
 		display: none;
 	}
 
@@ -444,71 +444,10 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 0.85rem;
 	}
 
-	.signin {
-		position: relative;
-	}
-
-	.trigger {
-		display: inline-flex;
+	.settings-row {
+		display: flex;
 		align-items: center;
 		gap: var(--space-1);
-	}
-
-	.chevron {
-		width: 0.85em;
-		height: 0.85em;
-		transition: transform 0.15s ease;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.chevron {
-			transition: none;
-		}
-	}
-
-	.trigger[aria-expanded='true'] .chevron {
-		transform: rotate(180deg);
-	}
-
-	.menu {
-		position: absolute;
-		right: 0;
-		top: calc(100% + var(--space-1));
-		z-index: 20;
-		display: flex;
-		flex-direction: column;
-		min-width: 12rem;
-		max-width: calc(100vw - var(--space-4));
-		padding: var(--space-1);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius);
-		box-shadow: var(--shadow-lg);
-	}
-
-	.menu[hidden] {
-		display: none;
-	}
-
-	.menu button {
-		justify-content: flex-start;
-		text-align: left;
-		color: var(--color-text);
-		background: transparent;
-		border-color: transparent;
-	}
-
-	.menu button:hover,
-	.menu button:focus-visible {
-		background: var(--color-bg);
-	}
-
-	@media (max-width: 480px) {
-		.menu {
-			left: 0;
-			right: auto;
-			width: min(18rem, calc(100vw - var(--space-4)));
-		}
 	}
 
 	.connect {

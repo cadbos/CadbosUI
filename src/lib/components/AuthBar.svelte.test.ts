@@ -134,7 +134,7 @@ it('signs in via NIP-07 (sends a Nostr authorization) and signs out', async () =
 	});
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
+	await screen.getByRole('button', { name: 'Гость' }).click();
 	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
 
 	await expect.element(screen.getByRole('button', { name: 'Выйти' })).toBeVisible();
@@ -142,7 +142,7 @@ it('signs in via NIP-07 (sends a Nostr authorization) and signs out', async () =
 	expect(auth.pubkey).toBe(pk);
 
 	await screen.getByRole('button', { name: 'Выйти' }).click();
-	await expect.element(screen.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
+	await expect.element(screen.getByRole('button', { name: 'Гость' })).toBeVisible();
 });
 
 it('autosaves a profile field on blur, with no save button to click', async () => {
@@ -156,7 +156,7 @@ it('autosaves a profile field on blur, with no save button to click', async () =
 	);
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
+	await screen.getByRole('button', { name: 'Гость' }).click();
 	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
 
 	await expect.element(screen.getByText('Заполните имя и фамилию для профиля.')).toBeVisible();
@@ -199,7 +199,7 @@ it('hides the completion hint once both name fields have been autosaved', async 
 	);
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
+	await screen.getByRole('button', { name: 'Гость' }).click();
 	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
 
 	await expect.element(screen.getByText('Заполните имя и фамилию для профиля.')).toBeVisible();
@@ -217,7 +217,7 @@ it('hides the completion hint once both name fields have been autosaved', async 
 	expect(lastSavedBody).toEqual({ firstName: 'Ada', lastName: 'Lovelace' });
 	// The hint is removed outright (not just hidden) once the profile is complete —
 	// a role/text query can't observe an absent element the way `.not.toBeVisible()`
-	// expects, so poll the DOM directly instead (see the sign-in menu test above).
+	// expects, so poll the DOM directly instead (see the dismiss test below).
 	await expect.poll(() => screen.container.querySelector('.notice')).toBe(null);
 });
 
@@ -226,7 +226,7 @@ it('shows an error when no Nostr extension is present', async () => {
 	delete window.nostr;
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
+	await screen.getByRole('button', { name: 'Гость' }).click();
 	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
 
 	await expect
@@ -242,7 +242,7 @@ it('signs in via NIP-46: shows the QR, then completes when the signer connects',
 	});
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
+	await screen.getByRole('button', { name: 'Гость' }).click();
 	await screen.getByRole('button', { name: 'Nostr Connect (QR)' }).click();
 
 	// The connect panel (QR + actions) is shown while we await the remote signer.
@@ -262,13 +262,13 @@ it('returns to anonymous when the NIP-46 connection is cancelled', async () => {
 	mockFetch(() => Response.json({ user: { pubkey: pk } }));
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
+	await screen.getByRole('button', { name: 'Гость' }).click();
 	await screen.getByRole('button', { name: 'Nostr Connect (QR)' }).click();
 	await expect.element(screen.getByRole('button', { name: 'Отмена' })).toBeVisible();
 
 	await screen.getByRole('button', { name: 'Отмена' }).click();
 
-	await expect.element(screen.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
+	await expect.element(screen.getByRole('button', { name: 'Гость' })).toBeVisible();
 	expect(auth.status).toBe('anonymous');
 	expect(auth.error).toBeNull();
 });
@@ -366,79 +366,50 @@ it('ignores a stale session response after a newer restoration succeeds', async 
 	expect(auth.pubkey).toBe(pk);
 });
 
-it('closes the sign-in menu on an outside click, and on Escape returns focus to the trigger', async () => {
-	mockFetch(() => Response.json({ user: { pubkey: pk } }));
-
-	const screen = render(AuthBar);
-	const trigger = screen.getByRole('button', { name: 'Войти', exact: true });
-	const menuItem = screen.getByRole('button', { name: 'Расширение Nostr' });
-	const outside = appendOutsideTarget();
-	// role queries drop out of the accessibility tree once an ancestor gets the
-	// `hidden` attribute, so the "closed" checks below read `hidden` directly instead
-	// of `.not.toBeVisible()`.
-	const menuPanel = screen.container.querySelector<HTMLElement>('#signin-menu');
-	if (!menuPanel) throw new Error('signin menu not rendered');
-
-	try {
-		await trigger.click();
-		await expect.element(menuItem).toBeVisible();
-
-		await userEvent.click(outside);
-		await expect.poll(() => menuPanel.hidden).toBe(true);
-		expect(trigger.element().getAttribute('aria-expanded')).toBe('false');
-
-		await trigger.click();
-		await expect.element(menuItem).toBeVisible();
-		// Move focus into the menu first so the post-Escape check is meaningful — the
-		// trigger already had focus from the click above.
-		menuItem.element().focus();
-		expect(document.activeElement).toBe(menuItem.element());
-
-		await userEvent.keyboard('{Escape}');
-		await expect.poll(() => menuPanel.hidden).toBe(true);
-		expect(document.activeElement).toBe(trigger.element());
-	} finally {
-		outside.remove();
-	}
-});
-
-it('closes the profile panel on an outside click, and on Escape returns focus to the toggle', async () => {
+it('closes the auth panel on an outside click, and on Escape returns focus to the trigger', async () => {
 	// firstName/lastName present so the panel starts closed (no missingCadbosName
 	// auto-open) — the dismiss/reopen cycle below needs a real closed→open transition.
 	mockFetch(() => Response.json({ user: { pubkey: pk, firstName: 'Ada', lastName: 'Lovelace' } }));
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
+	// Clicking the trigger to reach the sign-in buttons also opens the panel (it's
+	// the same toggle) — it stays open across the login transition, so close it
+	// once afterwards to get a real closed→open transition for the checks below.
+	await screen.getByRole('button', { name: 'Гость' }).click();
 	await screen.getByRole('button', { name: 'Расширение Nostr' }).click();
 
 	const logoutButton = screen.getByRole('button', { name: 'Выйти' });
-	// The panel starts closed, so wait on the always-visible toggle rather than on
-	// panel content to know the authenticated view has actually rendered.
-	await expect.poll(() => screen.container.querySelector('.chip-toggle')).not.toBeNull();
-	const profileToggle = screen.container.querySelector<HTMLButtonElement>('.chip-toggle');
-	if (!profileToggle) throw new Error('profile toggle not rendered');
-	const profilePanel = screen.container.querySelector<HTMLElement>('#auth-profile');
-	if (!profilePanel) throw new Error('profile panel not rendered');
-	expect(profilePanel.hidden).toBe(true);
+	await expect.element(logoutButton).toBeVisible();
+
+	const trigger = screen.container.querySelector<HTMLButtonElement>('.auth-trigger');
+	if (!trigger) throw new Error('auth trigger not rendered');
+	// role queries drop out of the accessibility tree once an ancestor gets the
+	// `hidden` attribute, so the "closed" checks below read `hidden` directly instead
+	// of `.not.toBeVisible()`.
+	const panel = screen.container.querySelector<HTMLElement>('#auth-panel');
+	if (!panel) throw new Error('auth panel not rendered');
+
+	await userEvent.click(trigger);
+	await expect.poll(() => panel.hidden).toBe(true);
 
 	const outside = appendOutsideTarget();
 
 	try {
-		await userEvent.click(profileToggle);
+		await userEvent.click(trigger);
 		await expect.element(logoutButton).toBeVisible();
 
 		await userEvent.click(outside);
-		await expect.poll(() => profilePanel.hidden).toBe(true);
-		expect(profileToggle.getAttribute('aria-expanded')).toBe('false');
+		await expect.poll(() => panel.hidden).toBe(true);
+		expect(trigger.getAttribute('aria-expanded')).toBe('false');
 
-		await userEvent.click(profileToggle);
+		await userEvent.click(trigger);
 		await expect.element(logoutButton).toBeVisible();
 		logoutButton.element().focus();
 		expect(document.activeElement).toBe(logoutButton.element());
 
 		await userEvent.keyboard('{Escape}');
-		await expect.poll(() => profilePanel.hidden).toBe(true);
-		expect(document.activeElement).toBe(profileToggle);
+		await expect.poll(() => panel.hidden).toBe(true);
+		expect(document.activeElement).toBe(trigger);
 	} finally {
 		outside.remove();
 	}
@@ -469,7 +440,7 @@ it('cancelling after the signer connects but before verification stays anonymous
 	};
 
 	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Войти', exact: true }).click();
+	await screen.getByRole('button', { name: 'Гость' }).click();
 	await screen.getByRole('button', { name: 'Nostr Connect (QR)' }).click();
 	await expect.element(screen.getByRole('button', { name: 'Отмена' })).toBeVisible();
 
@@ -481,7 +452,7 @@ it('cancelling after the signer connects but before verification stays anonymous
 	auth.cancelNip46();
 	releaseSignature();
 
-	await expect.element(screen.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
+	await expect.element(screen.getByRole('button', { name: 'Гость' })).toBeVisible();
 	expect(auth.status).toBe('anonymous');
 	expect(auth.pubkey).toBeNull();
 	expect(verifyCalled).toBe(false);

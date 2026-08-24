@@ -92,6 +92,7 @@ export const en = {
 	'generationOverlay.textureReplacement': 'Replacing the texture…',
 	'generationOverlay.upscale': 'Upscaling to 4K…',
 	'auth.signIn': 'Sign in',
+	'auth.guest': 'Guest',
 	'auth.restoring': 'Restoring session…',
 	'auth.login.nip07': 'Nostr extension',
 	'auth.login.nip46': 'Nostr Connect (QR)',
