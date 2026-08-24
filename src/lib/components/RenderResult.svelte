@@ -376,7 +376,7 @@ before the Change Date. See LICENSE for complete terms.
 	.icon-btn:hover:not(:disabled) {
 		background: var(--color-surface-hover);
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.icon-btn.active {
@@ -490,7 +490,7 @@ before the Change Date. See LICENSE for complete terms.
 	.secondary-button:hover {
 		background: var(--color-surface-hover);
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.primary-danger-button {

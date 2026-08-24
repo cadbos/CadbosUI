@@ -676,7 +676,7 @@ before the Change Date. See LICENSE for complete terms.
 	.close-button:hover {
 		background: var(--color-surface-hover);
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.drawer-content {
@@ -845,7 +845,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.flow-kind:hover {
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.flow-kind::after {
@@ -934,7 +934,7 @@ before the Change Date. See LICENSE for complete terms.
 	.icon-button:hover {
 		background: var(--color-surface);
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.icon-button:disabled {
@@ -1017,7 +1017,7 @@ before the Change Date. See LICENSE for complete terms.
 	.secondary-button:hover {
 		background: var(--color-surface-hover);
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.primary-danger-button {

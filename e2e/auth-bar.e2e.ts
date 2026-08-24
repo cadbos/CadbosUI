@@ -59,8 +59,8 @@ test('shows rounded object-replacement credit history on the expenses page', asy
 	});
 	await page.goto('/');
 
-	await page.locator('.chip-toggle').click();
-	const profile = page.locator('#auth-profile');
+	await page.locator('.auth-trigger').click();
+	const profile = page.locator('#auth-panel');
 	const balanceLink = profile.getByRole('link', { name: /Баланс: 4\.94/ });
 	await expect(balanceLink).toBeVisible();
 	await balanceLink.click();
@@ -98,8 +98,8 @@ test('shows a zero balance and links to the expenses page for an unapproved acco
 	await restoreApprovedSession(page);
 	await page.goto('/');
 
-	await page.locator('.chip-toggle').click();
-	const profile = page.locator('#auth-profile');
+	await page.locator('.auth-trigger').click();
+	const profile = page.locator('#auth-panel');
 	await expect(profile.getByRole('link', { name: /Баланс: 0\.00/ })).toBeVisible();
 });
 
@@ -144,10 +144,14 @@ test('restores the existing session after authentication storage recovers', asyn
 
 	await page.goto('/');
 
+	// The trigger is always rendered, so open the panel first — while restoring it
+	// still shows the guest label, not a real user's name.
+	await page.locator('.auth-trigger').click();
 	await expect(page.locator('.auth').getByRole('status')).toHaveText('Восстанавливаем сессию…');
-	await expect(page.getByRole('button', { name: 'Войти', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Гость' })).toBeVisible();
+
 	await expect.poll(() => attempts).toBe(2);
-	await expect(page.locator('.chip-toggle')).toBeVisible();
+	await expect(page.getByRole('button', { name: /Ada/ })).toBeVisible();
 });
 
 test('shows sign-in only after session restoration receives an unauthorized response', async ({
@@ -182,8 +186,12 @@ test('shows sign-in only after session restoration receives an unauthorized resp
 
 	await page.goto('/');
 
+	// The trigger is always rendered, so open the panel first — while restoring it
+	// still shows the guest label, not a real user's name.
+	await page.locator('.auth-trigger').click();
 	await expect(page.locator('.auth').getByRole('status')).toHaveText('Восстанавливаем сессию…');
-	await expect(page.getByRole('button', { name: 'Войти', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Гость' })).toBeVisible();
+
 	await expect.poll(() => attempts).toBe(2);
-	await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Расширение Nostr' })).toBeVisible();
 });

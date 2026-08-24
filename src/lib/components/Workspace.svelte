@@ -825,8 +825,8 @@ before the Change Date. See LICENSE for complete terms.
 		flex: 0 0 440px;
 		max-width: 100%;
 		padding: 0.25rem;
-		background: #e9ece9;
-		border: 1px solid #d8ded8;
+		background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface));
+		border: 1px solid color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
 		border-radius: 14px;
 	}
 
@@ -866,7 +866,7 @@ before the Change Date. See LICENSE for complete terms.
 	.scenes-button:hover {
 		background: var(--color-surface-hover);
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 		box-shadow: var(--shadow);
 	}
 
@@ -923,7 +923,7 @@ before the Change Date. See LICENSE for complete terms.
 		overflow: hidden;
 		text-overflow: ellipsis;
 		text-align: center;
-		color: #3f4d43;
+		color: color-mix(in srgb, var(--color-accent) 55%, var(--color-text));
 		background: transparent;
 		border: none;
 		border-radius: 10px;
@@ -935,12 +935,16 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.mode-tabs button:hover:not(.active) {
-		color: var(--color-accent);
-		background: rgb(255 255 255 / 0.7);
+		color: var(--color-accent-text);
+		background: color-mix(in srgb, var(--color-surface) 70%, transparent);
 	}
 
 	.mode-tabs button.active {
-		color: var(--color-accent-contrast);
+		/* Pairs with --color-background rather than --color-accent-contrast: this
+		   pill is an inverted background/text swap (dark-on-light in light mode,
+		   light-on-dark in dark mode), not an accent fill, so its text needs to
+		   track --color-text's polarity flip rather than stay fixed white. */
+		color: var(--color-background);
 		background: var(--color-text);
 		box-shadow: var(--shadow-sm);
 	}

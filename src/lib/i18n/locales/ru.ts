@@ -17,6 +17,13 @@ import type { Dictionary } from '$lib/i18n/locales';
 export const ru = {
 	'app.title': 'ИИ – дизайн',
 	'app.subtitle': 'Создавайте и редактируйте интерьеры и экстерьеры по фото и описанию.',
+	'language.switcher.label': 'Язык интерфейса',
+	'language.ru': 'Русский',
+	'language.en': 'English',
+	'theme.label': 'Тема оформления',
+	'theme.light': 'Светлая',
+	'theme.dark': 'Тёмная',
+	'theme.system': 'Системная',
 	'clientLoad.loading': 'Загружаем приложение…',
 	'clientLoad.failed':
 		'Не удалось полностью загрузить приложение. Обновите страницу и попробуйте снова.',
@@ -86,6 +93,7 @@ export const ru = {
 	'generationOverlay.textureReplacement': 'Заменяем текстуру…',
 	'generationOverlay.upscale': 'Увеличиваем разрешение до 4K…',
 	'auth.signIn': 'Войти',
+	'auth.guest': 'Гость',
 	'auth.restoring': 'Восстанавливаем сессию…',
 	'auth.login.nip07': 'Расширение Nostr',
 	'auth.login.nip46': 'Nostr Connect (QR)',

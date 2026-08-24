@@ -214,7 +214,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.icon-button:hover:not(:disabled) {
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 		background: var(--color-surface-hover);
 		border-color: var(--color-muted);
 	}

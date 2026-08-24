@@ -743,7 +743,7 @@ before the Change Date. See LICENSE for complete terms.
 		border: 1px solid var(--color-accent);
 		border-radius: var(--radius);
 		background: var(--color-accent);
-		color: #fff;
+		color: var(--color-accent-contrast);
 		cursor: pointer;
 	}
 

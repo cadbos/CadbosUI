@@ -22,9 +22,10 @@ before the Change Date. See LICENSE for complete terms.
 	import AuthBar from '$lib/components/AuthBar.svelte';
 	import GenerationOverlay from '$lib/components/GenerationOverlay.svelte';
 	import Workspace from '$lib/components/Workspace.svelte';
-	import { t } from '$lib/i18n/index.svelte';
+	import { hydrateLocale, t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { status } from '$lib/state/status.svelte';
+	import { theme } from '$lib/state/theme.svelte';
 	import { isWorkspaceRoute } from '$lib/state/url-state';
 	import { restorePersistedTabs } from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError } from '$lib/utils';
@@ -47,6 +48,8 @@ before the Change Date. See LICENSE for complete terms.
 	onMount(() => {
 		auth.loadSession();
 		void status.checkOnce();
+		hydrateLocale();
+		theme.hydrate();
 		// Started here, not in Workspace.svelte, so a reload on any route (not
 		// just /create|/edit|/style-transfer) re-opens every previously open
 		// project/session tab before the user can act on a stale, empty one —
@@ -86,7 +89,9 @@ before the Change Date. See LICENSE for complete terms.
 			<p class="brand-subtitle">{t('app.subtitle')}</p>
 		</div>
 	</a>
-	<AuthBar />
+	<div class="header-actions">
+		<AuthBar />
+	</div>
 </header>
 
 {#if showWorkspace}
@@ -101,8 +106,8 @@ before the Change Date. See LICENSE for complete terms.
 	.health-warning {
 		width: 100%;
 		padding: 0.625rem clamp(1rem, 3vw, 2rem);
-		background: #ffcb56;
-		color: #251f12;
+		background: var(--color-warning-bg);
+		color: var(--color-warning-text);
 		font-size: 0.875rem;
 		line-height: 1.4;
 		text-align: center;
@@ -159,6 +164,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	.brand-copy {
 		min-width: 0;
+	}
+
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
 	}
 
 	.brand-title,

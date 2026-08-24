@@ -15,6 +15,13 @@
 export interface Dictionary {
 	'app.title': string;
 	'app.subtitle': string;
+	'language.switcher.label': string;
+	'language.ru': string;
+	'language.en': string;
+	'theme.label': string;
+	'theme.light': string;
+	'theme.dark': string;
+	'theme.system': string;
 	'clientLoad.loading': string;
 	'clientLoad.failed': string;
 	'clientLoad.refresh': string;
@@ -81,6 +88,7 @@ export interface Dictionary {
 	'generationOverlay.textureReplacement': string;
 	'generationOverlay.upscale': string;
 	'auth.signIn': string;
+	'auth.guest': string;
 	'auth.restoring': string;
 	'auth.login.nip07': string;
 	'auth.login.nip46': string;

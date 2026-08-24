@@ -544,7 +544,7 @@ before the Change Date. See LICENSE for complete terms.
 	.job-success {
 		font-size: 0.9375rem;
 		font-weight: 600;
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.secondary-btn {
@@ -561,6 +561,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	.secondary-btn:hover {
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 </style>

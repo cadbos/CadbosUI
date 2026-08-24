@@ -157,7 +157,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.current-version-stage {
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 		font-size: 0.8125rem;
 		font-weight: 650;
 		line-height: 1.2;
@@ -211,7 +211,7 @@ before the Change Date. See LICENSE for complete terms.
 		max-width: 100%;
 		align-items: center;
 		gap: 0.25rem;
-		color: var(--color-accent);
+		color: var(--color-accent-text);
 		text-decoration: underline;
 		text-decoration-thickness: 0.08em;
 		text-underline-offset: 0.16em;
