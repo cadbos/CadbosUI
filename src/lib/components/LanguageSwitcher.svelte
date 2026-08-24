@@ -46,10 +46,9 @@ before the Change Date. See LICENSE for complete terms.
 		class="language-trigger"
 		aria-expanded={open}
 		aria-controls="language-menu"
-		aria-label={t('language.switcher.label')}
 		onclick={() => (open = !open)}
 	>
-		<span class="flag" aria-hidden="true">{flags[getLocale()]}</span>
+		<span class="code">{getLocale()}</span>
 		<ChevronDown class="chevron" size={18} strokeWidth={1.8} aria-hidden="true" />
 	</button>
 	<div id="language-menu" class="menu" hidden={!open}>
@@ -88,8 +87,9 @@ before the Change Date. See LICENSE for complete terms.
 		border-radius: var(--radius);
 	}
 
-	.language-trigger .flag {
-		font-size: 1.3rem;
+	.language-trigger .code {
+		font-weight: 700;
+		text-transform: uppercase;
 		line-height: 1;
 	}
 
