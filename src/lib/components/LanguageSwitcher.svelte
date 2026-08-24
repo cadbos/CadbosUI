@@ -18,7 +18,6 @@ before the Change Date. See LICENSE for complete terms.
 	import { dismissable } from '$lib/utils';
 
 	const labelKeys = { ru: 'language.ru', en: 'language.en' } as const;
-	const flags = { ru: '🇷🇺', en: '🇬🇧' } as const;
 
 	let open = $state(false);
 	let triggerEl: HTMLButtonElement | undefined;
@@ -59,8 +58,7 @@ before the Change Date. See LICENSE for complete terms.
 				aria-current={getLocale() === code}
 				onclick={() => choose(code)}
 			>
-				<span aria-hidden="true">{flags[code]}</span>
-				<span>{t(labelKeys[code])}</span>
+				{t(labelKeys[code])}
 			</button>
 		{/each}
 	</div>
@@ -127,10 +125,6 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.menu button {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		justify-content: flex-start;
 		padding: 0.25rem 0.5rem;
 		font-size: 0.78rem;
 		text-align: left;

@@ -330,7 +330,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	.auth-trigger {
 		display: inline-flex;
+		flex: 1;
 		align-items: center;
+		justify-content: flex-start;
 		gap: var(--space-1);
 		min-width: 0;
 		padding: 0;
