@@ -19,7 +19,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { npubEncode } from 'nostr-tools/nip19';
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
-	import { formatCredit, logBoundaryError } from '$lib/utils';
+	import { dismissable, formatCredit, logBoundaryError } from '$lib/utils';
 	import QrCode from './QrCode.svelte';
 
 	const errorKeys: Record<AuthError, TranslationKey> = {
@@ -105,28 +105,6 @@ before the Change Date. See LICENSE for complete terms.
 	// fires the native 'change' event, which is what triggers the autosave below.
 	function commitOnEnter(event: KeyboardEvent): void {
 		if (event.key === 'Enter') (event.currentTarget as HTMLInputElement).blur();
-	}
-
-	// Dismiss an open panel on an outside pointer press or Escape. An attachment
-	// factory keeps the listeners tied to the element's lifetime without an effect.
-	function dismissable(isOpen: () => boolean, close: () => void, triggerSelector: string) {
-		return (node: HTMLElement) => {
-			const onPointer = (event: PointerEvent) => {
-				if (isOpen() && !node.contains(event.target as Node)) close();
-			};
-			const onKey = (event: KeyboardEvent) => {
-				if (!isOpen() || event.key !== 'Escape') return;
-				close();
-				// Return focus to the trigger so keyboard users aren't dropped to <body>.
-				node.querySelector<HTMLButtonElement>(triggerSelector)?.focus();
-			};
-			window.addEventListener('pointerdown', onPointer);
-			window.addEventListener('keydown', onKey);
-			return () => {
-				window.removeEventListener('pointerdown', onPointer);
-				window.removeEventListener('keydown', onKey);
-			};
-		};
 	}
 </script>
 

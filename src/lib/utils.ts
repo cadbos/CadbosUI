@@ -70,6 +70,32 @@ export function openModal(dialog: HTMLDialogElement): () => void {
 	};
 }
 
+// Dismiss an open panel on an outside pointer press or Escape. An attachment
+// factory keeps the listeners tied to the element's lifetime without an effect.
+export function dismissable(
+	isOpen: () => boolean,
+	close: () => void,
+	triggerSelector: string
+): (node: HTMLElement) => () => void {
+	return (node: HTMLElement) => {
+		const onPointer = (event: PointerEvent) => {
+			if (isOpen() && !node.contains(event.target as Node)) close();
+		};
+		const onKey = (event: KeyboardEvent) => {
+			if (!isOpen() || event.key !== 'Escape') return;
+			close();
+			// Return focus to the trigger so keyboard users aren't dropped to <body>.
+			node.querySelector<HTMLButtonElement>(triggerSelector)?.focus();
+		};
+		window.addEventListener('pointerdown', onPointer);
+		window.addEventListener('keydown', onKey);
+		return () => {
+			window.removeEventListener('pointerdown', onPointer);
+			window.removeEventListener('keydown', onKey);
+		};
+	};
+}
+
 export interface TabController {
 	activate: (index: number) => void;
 	onKeydown: (event: KeyboardEvent) => void;
