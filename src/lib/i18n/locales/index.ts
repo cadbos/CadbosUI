@@ -22,6 +22,9 @@ export interface Dictionary {
 	'theme.light': string;
 	'theme.dark': string;
 	'theme.system': string;
+	'currency.switcher.label': string;
+	'currency.usd': string;
+	'currency.rub': string;
 	'clientLoad.loading': string;
 	'clientLoad.failed': string;
 	'clientLoad.refresh': string;

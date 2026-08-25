@@ -17,6 +17,7 @@ before the Change Date. See LICENSE for complete terms.
 	import type { CreditTransaction } from '$lib/api/contract';
 	import { getLocale, t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
+	import { currency } from '$lib/state/currency.svelte';
 	import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
 	import { request } from '$lib/state/request.svelte';
 	import {
@@ -25,7 +26,7 @@ before the Change Date. See LICENSE for complete terms.
 		withProjectSession
 	} from '$lib/state/url-state';
 	import { initializeGenerationPreview, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
-	import { formatCredit, logBoundaryError } from '$lib/utils';
+	import { logBoundaryError } from '$lib/utils';
 
 	const generationKindKeys: Record<CreditTransaction['kind'], TranslationKey> = {
 		render: 'generatedImages.kind.render',
@@ -141,14 +142,14 @@ before the Change Date. See LICENSE for complete terms.
 								<button type="button" class="history-entry" onclick={() => openGeneration(entry)}>
 									<span class="cell">{formatDate(entry.createdAt)}</span>
 									<span class="cell">{formatTime(entry.createdAt)}</span>
-									<span class="cell value-cell">{formatCredit(entry.amount)}</span>
+									<span class="cell value-cell">{currency.format(entry.amount)}</span>
 									<span class="cell">{t(generationKindKeys[entry.kind])}</span>
 								</button>
 							{:else}
 								<span class="history-entry">
 									<span class="cell">{formatDate(entry.createdAt)}</span>
 									<span class="cell">{formatTime(entry.createdAt)}</span>
-									<span class="cell value-cell">{formatCredit(entry.amount)}</span>
+									<span class="cell value-cell">{currency.format(entry.amount)}</span>
 									<span class="cell">{t(generationKindKeys[entry.kind])}</span>
 								</span>
 							{/if}

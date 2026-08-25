@@ -18,9 +18,11 @@ before the Change Date. See LICENSE for complete terms.
 	import { resolve } from '$app/paths';
 	import { npubEncode } from 'nostr-tools/nip19';
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
+	import { currency } from '$lib/state/currency.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
-	import { dismissable, formatCredit, logBoundaryError } from '$lib/utils';
+	import { dismissable, logBoundaryError } from '$lib/utils';
 	import QrCode from './QrCode.svelte';
+	import CurrencySwitcher from './CurrencySwitcher.svelte';
 	import LanguageSwitcher from './LanguageSwitcher.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
@@ -270,7 +272,7 @@ before the Change Date. See LICENSE for complete terms.
 				>
 					<span
 						>{ti('auth.credit.balance', {
-							balance: formatCredit(auth.credit?.balance ?? 0)
+							balance: currency.format(auth.credit?.balance ?? 0)
 						})}</span
 					>
 					<ChevronRight size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -292,6 +294,7 @@ before the Change Date. See LICENSE for complete terms.
 
 			<div class="settings-row">
 				<LanguageSwitcher />
+				<CurrencySwitcher />
 				<ThemeToggle />
 			</div>
 		</div>

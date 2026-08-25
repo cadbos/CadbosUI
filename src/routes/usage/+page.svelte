@@ -16,8 +16,8 @@ before the Change Date. See LICENSE for complete terms.
 	import { npubEncode } from 'nostr-tools/nip19';
 	import type { PageProps } from './$types';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
+	import { currency } from '$lib/state/currency.svelte';
 	import { usage } from '$lib/state/usage.svelte';
-	import { formatCredit } from '$lib/utils';
 
 	let { data }: PageProps = $props();
 
@@ -92,7 +92,7 @@ before the Change Date. See LICENSE for complete terms.
 			{:else if usage.walletBalanceStatus === 'ready' && usage.walletBalance !== null}
 				<p class="wallet-balance">
 					<strong
-						>{ti('usage.walletBalance', { balance: formatCredit(usage.walletBalance) })}</strong
+						>{ti('usage.walletBalance', { balance: currency.format(usage.walletBalance) })}</strong
 					>
 				</p>
 			{/if}
@@ -110,11 +110,11 @@ before the Change Date. See LICENSE for complete terms.
 					<thead>
 						<tr>
 							<th scope="col">{t('usage.column.user')}</th>
-							<th scope="col">{t('usage.column.balance')}, $</th>
+							<th scope="col">{t('usage.column.balance')}</th>
 							<th scope="col">{t('usage.column.totalDeposit')}</th>
 							<th scope="col">{t('usage.column.lastDepositAt')}</th>
 							<th scope="col">{t('usage.column.generationCount')}</th>
-							<th scope="col">{t('usage.column.totalSpend')}, $</th>
+							<th scope="col">{t('usage.column.totalSpend')}</th>
 							<th scope="col" title={timeZoneFullName}
 								>{t('usage.column.latestSpendAt')}, {timeZoneAbbreviation}</th
 							>
@@ -145,11 +145,11 @@ before the Change Date. See LICENSE for complete terms.
 										>
 									</span>
 								</th>
-								<td>{formatCredit(user.balance)}</td>
-								<td>{formatCredit(user.totalDeposit)}</td>
+								<td>{currency.format(user.balance)}</td>
+								<td>{currency.format(user.totalDeposit)}</td>
 								<td>{formatTimestamp(user.lastDepositAt)}</td>
 								<td>{user.generationCount}</td>
-								<td>{formatCredit(user.totalSpend)}</td>
+								<td>{currency.format(user.totalSpend)}</td>
 								<td>{formatTimestamp(user.latestSpendAt)}</td>
 							</tr>
 						{/each}
