@@ -78,6 +78,16 @@ export const uploadResultSchema = z
 
 export type UploadResult = z.infer<typeof uploadResultSchema>;
 
+// GET /api/exchange-rate → USD→RUB rate for the currency switcher.
+export const exchangeRateSchema = z
+	.object({
+		rubPerUsd: z.number().positive(),
+		asOf: z.iso.datetime()
+	})
+	.strict();
+
+export type ExchangeRate = z.infer<typeof exchangeRateSchema>;
+
 export interface RemoteImageUploadRequest {
 	url: string;
 }
