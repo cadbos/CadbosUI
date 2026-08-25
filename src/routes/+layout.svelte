@@ -24,6 +24,7 @@ before the Change Date. See LICENSE for complete terms.
 	import Workspace from '$lib/components/Workspace.svelte';
 	import { hydrateLocale, t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
+	import { currency } from '$lib/state/currency.svelte';
 	import { status } from '$lib/state/status.svelte';
 	import { theme } from '$lib/state/theme.svelte';
 	import { isWorkspaceRoute } from '$lib/state/url-state';
@@ -50,6 +51,7 @@ before the Change Date. See LICENSE for complete terms.
 		void status.checkOnce();
 		hydrateLocale();
 		theme.hydrate();
+		currency.hydrate();
 		// Started here, not in Workspace.svelte, so a reload on any route (not
 		// just /create|/edit|/style-transfer) re-opens every previously open
 		// project/session tab before the user can act on a stale, empty one —

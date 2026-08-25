@@ -19,8 +19,8 @@ before the Change Date. See LICENSE for complete terms.
 	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
+	import { currency } from '$lib/state/currency.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
-	import { formatCredit } from '$lib/utils';
 
 	let comparing = $state(false);
 	let upscaling = $state(false);
@@ -262,9 +262,9 @@ before the Change Date. See LICENSE for complete terms.
 
 		<div class="footer">
 			<div class="meta">
-				<span>{ti('render.cost', { cost: formatCredit(render.cost) })}</span>
+				<span>{ti('render.cost', { cost: currency.format(render.cost) })}</span>
 				<span class="sep">·</span>
-				<span>{ti('render.balance', { balance: formatCredit(render.balance) })}</span>
+				<span>{ti('render.balance', { balance: currency.format(render.balance) })}</span>
 			</div>
 		</div>
 	</section>

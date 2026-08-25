@@ -26,10 +26,11 @@ before the Change Date. See LICENSE for complete terms.
 		type EditOperationType
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
+	import { currency } from '$lib/state/currency.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import { buildWorkspaceUrl, slugToTool, type ToolId } from '$lib/state/url-state';
-	import { createTabController, formatCredit, logBoundaryError } from '$lib/utils';
+	import { createTabController, logBoundaryError } from '$lib/utils';
 	import EditAddObjectTool from '$lib/components/EditAddObjectTool.svelte';
 	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
 	import EditAtmosphereTool from '$lib/components/EditAtmosphereTool.svelte';
@@ -322,9 +323,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	{#if currentRender?.editOp}
 		<div class="meta">
-			<span>{ti('edit.cost', { cost: formatCredit(currentRender.cost) })}</span>
+			<span>{ti('edit.cost', { cost: currency.format(currentRender.cost) })}</span>
 			<span class="sep">·</span>
-			<span>{ti('edit.balance', { balance: formatCredit(currentRender.balance) })}</span>
+			<span>{ti('edit.balance', { balance: currency.format(currentRender.balance) })}</span>
 		</div>
 	{/if}
 
