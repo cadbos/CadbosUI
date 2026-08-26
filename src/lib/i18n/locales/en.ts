@@ -108,6 +108,8 @@ export const en = {
 	'auth.connecting': 'Connecting…',
 	'auth.logout': 'Sign out',
 	'auth.profile.relayCount': 'Relays: {count}',
+	'auth.profile.relayCountHint':
+		'The number of relays in your personal Nostr relay list (NIP-65), published to your profile. Before you sign in this list has not loaded yet, so it shows 0. Unrelated to the relay availability check on the "Service status" page.',
 	'auth.profile.completeHint': 'Add your first and last name for your profile.',
 	'auth.profile.firstName': 'First name',
 	'auth.profile.lastName': 'Last name',
@@ -270,6 +272,17 @@ export const en = {
 	'status.service.d1': 'D1 database',
 	'status.service.nostr': 'Nostr relays',
 	'status.service.r2': 'R2 storage',
+	'status.hint.archai':
+		'Checks that the archAI API key and URL are configured and that a wallet balance request succeeds.',
+	'status.hint.assets':
+		"Checks that the app's own static files (JS, CSS, interface images) are reachable. Unrelated to the R2 storage used for user-uploaded images.",
+	'status.hint.comfyui':
+		'Checks that the ComfyUI image-generation backend is configured and responds to a stats request.',
+	'status.hint.d1':
+		'Checks that the D1 database (accounts, history, balance) is configured and responds to a query.',
+	'status.hint.nostr':
+		'Checks the reachability of a fixed set of 4 bootstrap relays that Cadbos uses by default. This is an internal infrastructure check — it is unrelated to the relay list in your profile (see "Relays" in the header), which can have a different count.',
+	'status.hint.r2': 'Checks that the R2 storage used for user-uploaded images is reachable.',
 	'version.title': 'Application version',
 	'version.subtitle': 'Release and build information for this Cadbos deployment.',
 	'version.current': 'Current version',
