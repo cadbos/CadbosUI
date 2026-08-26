@@ -27,6 +27,7 @@ import {
 } from '$lib/server/billing';
 import { styleTransferInterior } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
+import { getBucketByName } from '$lib/server/media';
 import { assertSessionOwnedByUser } from '$lib/server/projects';
 
 const STYLE_TRANSFER_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
@@ -76,8 +77,12 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	}
 
 	let result: RenderResponse;
+	let resultHash: string;
 	try {
-		result = await styleTransferInterior(platform, parsed.data);
+		const uploadsUrl = (await getBucketByName(db, 'cadbos-uploads')).url;
+		const stored = await styleTransferInterior(platform, uploadsUrl, parsed.data);
+		result = stored;
+		resultHash = stored.outputHash;
 	} catch (err) {
 		console.error(err);
 		return apiError(500, 'style_transfer_failed', 'Style transfer failed');
@@ -92,6 +97,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		try {
 			const credit = await recordGeneration(db, userId, {
 				url: result.outputUrl,
+				resultHash,
 				sourceUrl: parsed.data.image,
 				sourceHash: parsed.data.imageHash ?? '',
 				sessionId: parsed.data.sessionId,
@@ -113,5 +119,5 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		}
 	}
 
-	return json(result);
+	return json({ outputUrl: result.outputUrl, cost: result.cost, balance: result.balance });
 };

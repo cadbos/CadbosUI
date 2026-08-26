@@ -25,6 +25,7 @@ import {
 	type GenerationKind,
 	type UserUsageRecord
 } from '$lib/api/contract';
+import { getOrCreateMedia, mediaUrl } from '$lib/server/media';
 
 function isGenerationKind(kind: string): kind is GenerationKind {
 	return generationKinds.some((candidate) => candidate === kind);
@@ -38,6 +39,9 @@ export function generationKindForRow(id: string, kind: string): GenerationKind {
 export interface GeneratedImage {
 	id: string;
 	userId: string;
+	mediaId: number;
+	filename: string;
+	bucketName: string;
 	url: string;
 	sourceUrl: string;
 	kind: GenerationKind;
@@ -67,8 +71,12 @@ export interface UserUsagePage {
 interface GenerationRow {
 	id: string;
 	user_id: string;
-	url: string;
-	source_url: string;
+	result_media_id: number;
+	result_filename: string;
+	result_bucket_name: string;
+	result_bucket_url: string;
+	source_filename: string;
+	source_bucket_url: string;
 	kind: string;
 	created_at: number;
 }
@@ -77,8 +85,11 @@ function toGeneratedImage(row: GenerationRow): GeneratedImage {
 	return {
 		id: row.id,
 		userId: row.user_id,
-		url: row.url,
-		sourceUrl: row.source_url,
+		mediaId: row.result_media_id,
+		filename: row.result_filename,
+		bucketName: row.result_bucket_name,
+		url: mediaUrl(row.result_bucket_url, row.result_filename),
+		sourceUrl: mediaUrl(row.source_bucket_url, row.source_filename),
 		kind: generationKindForRow(row.id, row.kind),
 		createdAt: row.created_at
 	};
@@ -95,6 +106,7 @@ function toBalance(row: BalanceRow): Balance {
 
 export interface RecordGenerationInput {
 	url: string;
+	resultHash: string;
 	sourceUrl: string;
 	// Ownership must already be verified by the caller (projects.ts'
 	// assertSessionOwnedByUser) before this is called — this function trusts it.
@@ -134,6 +146,10 @@ export async function recordGeneration(
 	input: RecordGenerationInput
 ): Promise<Balance> {
 	const now = Date.now();
+	const [resultMedia, sourceMedia] = await Promise.all([
+		getOrCreateMedia(db, input.url, input.resultHash),
+		getOrCreateMedia(db, input.sourceUrl, input.sourceHash)
+	]);
 	const [updateResult] = await db.batch<BalanceRow>([
 		db
 			.prepare(
@@ -144,15 +160,14 @@ export async function recordGeneration(
 		db
 			.prepare(
 				'INSERT INTO generations ' +
-					'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at, session_id) ' +
-					'SELECT ?, ?, ?, ?, ?, ?, ?, ?, balance, ?, ? FROM credits WHERE user_id = ?'
+					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id) ' +
+					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ?, ? FROM credits WHERE user_id = ?'
 			)
 			.bind(
 				crypto.randomUUID(),
 				userId,
-				input.url,
-				input.sourceUrl,
-				input.sourceHash,
+				resultMedia.id,
+				sourceMedia.id,
 				input.prompt,
 				input.kind,
 				input.amount,
@@ -174,7 +189,15 @@ export async function getGeneratedImageForUser(
 ): Promise<GeneratedImage | null> {
 	const row = await db
 		.prepare(
-			'SELECT id, user_id, url, source_url, kind, created_at FROM generations WHERE id = ? AND user_id = ?'
+			'SELECT g.id, g.user_id, g.result_media_id, result_media.filename AS result_filename, ' +
+				'result_bucket.name AS result_bucket_name, result_bucket.url AS result_bucket_url, ' +
+				'source_media.filename AS source_filename, source_bucket.url AS source_bucket_url, ' +
+				'g.kind, g.created_at FROM generations g ' +
+				'JOIN media result_media ON result_media.id = g.result_media_id ' +
+				'JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ' +
+				'JOIN media source_media ON source_media.id = g.source_media_id ' +
+				'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
+				'WHERE g.id = ? AND g.user_id = ?'
 		)
 		.bind(id, userId)
 		.first<GenerationRow>();
@@ -184,13 +207,42 @@ export async function getGeneratedImageForUser(
 export async function deleteGeneratedImage(
 	db: D1Database,
 	userId: string,
-	id: string
-): Promise<boolean> {
-	const result = await db
-		.prepare('DELETE FROM generations WHERE id = ? AND user_id = ?')
-		.bind(id, userId)
-		.run();
-	return result.meta.changes === 1;
+	id: string,
+	mediaId: number
+): Promise<{ generationDeleted: boolean; mediaDeleted: boolean }> {
+	const [generationResult, mediaResult] = await db.batch<{ deleted: number }>([
+		db
+			.prepare(
+				'DELETE FROM generations WHERE id = ? AND user_id = ? AND result_media_id = ? RETURNING 1 AS deleted'
+			)
+			.bind(id, userId, mediaId),
+		db
+			.prepare(
+				'DELETE FROM media WHERE id = ? AND changes() = 1 AND NOT EXISTS (' +
+					'SELECT 1 FROM generations WHERE result_media_id = ? OR source_media_id = ? ' +
+					'UNION ALL SELECT 1 FROM object_replacement_jobs WHERE scene_media_id = ? OR reference_media_id = ? OR output_media_id = ? ' +
+					'UNION ALL SELECT 1 FROM texture_replacement_jobs WHERE scene_media_id = ? OR reference_media_id = ? OR output_media_id = ? ' +
+					'UNION ALL SELECT 1 FROM light_settings_jobs WHERE scene_media_id = ? OR output_media_id = ?' +
+					') RETURNING 1 AS deleted'
+			)
+			.bind(
+				mediaId,
+				mediaId,
+				mediaId,
+				mediaId,
+				mediaId,
+				mediaId,
+				mediaId,
+				mediaId,
+				mediaId,
+				mediaId,
+				mediaId
+			)
+	]);
+	return {
+		generationDeleted: generationResult.results.length === 1,
+		mediaDeleted: mediaResult.results.length === 1
+	};
 }
 
 export async function listGeneratedImages(
@@ -201,8 +253,15 @@ export async function listGeneratedImages(
 ): Promise<GeneratedImagesPage> {
 	const result = await db
 		.prepare(
-			'SELECT id, user_id, url, source_url, kind, created_at FROM generations ' +
-				'WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?'
+			'SELECT g.id, g.user_id, g.result_media_id, result_media.filename AS result_filename, ' +
+				'result_bucket.name AS result_bucket_name, result_bucket.url AS result_bucket_url, ' +
+				'source_media.filename AS source_filename, source_bucket.url AS source_bucket_url, ' +
+				'g.kind, g.created_at FROM generations g ' +
+				'JOIN media result_media ON result_media.id = g.result_media_id ' +
+				'JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ' +
+				'JOIN media source_media ON source_media.id = g.source_media_id ' +
+				'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
+				'WHERE g.user_id = ? ORDER BY g.created_at DESC, g.id DESC LIMIT ? OFFSET ?'
 		)
 		.bind(userId, size + 1, offset)
 		.all<GenerationRow>();
@@ -213,11 +272,8 @@ export async function listGeneratedImages(
 	};
 }
 
-// Dedup lookup for /api/uploads: reuse an already-stored object instead of
-// writing a duplicate to R2 when this user has uploaded identical bytes
-// before. Empty-string hashes (pre-migration rows, or calls whose source
-// wasn't a fresh upload) never match, since a real SHA-256 hex digest is
-// never ''.
+// Dedup lookup for /api/uploads: reuse an already-stored object when this user
+// has uploaded identical bytes before. Empty checksums never match.
 export async function findGenerationSourceByHash(
 	db: D1Database,
 	userId: string,
@@ -226,36 +282,25 @@ export async function findGenerationSourceByHash(
 	if (hash.length === 0) return null;
 	const row = await db
 		.prepare(
-			'SELECT source_url FROM generations WHERE user_id = ? AND source_hash = ? ' +
-				'ORDER BY created_at DESC LIMIT 1'
+			'SELECT media.filename, buckets.url AS bucket_url FROM generations ' +
+				'JOIN media ON media.id = generations.source_media_id ' +
+				'JOIN buckets ON buckets.id = media.bucket ' +
+				"WHERE generations.user_id = ? AND media.checksum = ? AND buckets.name = 'cadbos-uploads' " +
+				'ORDER BY generations.created_at DESC LIMIT 1'
 		)
 		.bind(userId, hash)
-		.first<{ source_url: string }>();
-	return row?.source_url ?? null;
+		.first<{ filename: string; bucket_url: string }>();
+	return row ? mediaUrl(row.bucket_url, row.filename) : null;
 }
 
 interface ResourceImageRow {
-	source_url: string;
+	filename: string;
+	bucket_url: string;
 	created_at: number;
 }
 
-// Gallery of distinct source *photos the user actually uploaded* for
-// /resources — not every source_url a generation ever recorded. A row's
-// source_url is only a real upload when source_hash is non-empty:
-// #resolveSourceFor never attaches a hash for the 'current-result' source
-// mode (edit and upscale always use it; style-transfer/object-replacement/
-// texture-replacement do whenever the user picks "use the current result"
-// instead of a fresh photo), so those rows' source_url is a previous
-// generation's *output*, not something the user uploaded — excluding
-// source_hash = '' keeps those, and pre-migration rows backfilled the same
-// way (indistinguishable from each other by design), out of the gallery.
-//
-// Grouped by source_url, not source_hash: the hash only dedups at *upload*
-// time (findGenerationSourceByHash reuses an existing url for a matching
-// hash instead of storing a new object), so two rows ever sharing a hash
-// already share the identical url too — grouping by url gets the same
-// result without a '' collision, and is a true 1:1 identity for a given
-// uploaded image since each upload gets a freshly generated storage key.
+// Gallery of source photos the user uploaded: non-empty checksums identify
+// uploads, while excluding generated outputs removes current-result sources.
 export async function listDistinctSourceImages(
 	db: D1Database,
 	userId: string,
@@ -264,18 +309,24 @@ export async function listDistinctSourceImages(
 ): Promise<ResourceImagesPage> {
 	const result = await db
 		.prepare(
-			'SELECT source_url, MAX(created_at) AS created_at FROM generations ' +
-				"WHERE user_id = ? AND source_hash != '' " +
-				'GROUP BY source_url ' +
-				'ORDER BY created_at DESC, source_url DESC LIMIT ? OFFSET ?'
+			'SELECT source_media.filename, source_bucket.url AS bucket_url, ' +
+				'MAX(g.created_at) AS created_at FROM generations g ' +
+				'JOIN media source_media ON source_media.id = g.source_media_id ' +
+				'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
+				"WHERE g.user_id = ? AND source_media.checksum != '' " +
+				'AND NOT EXISTS (SELECT 1 FROM generations produced ' +
+				'WHERE produced.result_media_id = g.source_media_id) ' +
+				'GROUP BY g.source_media_id, source_media.filename, source_bucket.url ' +
+				'ORDER BY created_at DESC, source_media.filename DESC LIMIT ? OFFSET ?'
 		)
 		.bind(userId, size + 1, offset)
 		.all<ResourceImageRow>();
 	const rows = result.results ?? [];
 	return {
-		images: rows
-			.slice(0, size)
-			.map((row) => ({ sourceUrl: row.source_url, createdAt: row.created_at })),
+		images: rows.slice(0, size).map((row) => ({
+			sourceUrl: mediaUrl(row.bucket_url, row.filename),
+			createdAt: row.created_at
+		})),
 		hasMore: rows.length > size
 	};
 }

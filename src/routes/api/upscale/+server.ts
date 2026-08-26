@@ -29,6 +29,7 @@ import {
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { upscale4k } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
+import { getBucketByName } from '$lib/server/media';
 import { assertSessionOwnedByUser } from '$lib/server/projects';
 
 // Anti-cost-abuse: each upscale is its own paid call, mirroring /api/edit — its
@@ -93,8 +94,12 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	}
 
 	let result: RenderResponse;
+	let resultHash: string;
 	try {
-		result = await upscale4k(platform, parsed.data);
+		const uploadsUrl = db ? (await getBucketByName(db, 'cadbos-uploads')).url : '';
+		const stored = await upscale4k(platform, uploadsUrl, parsed.data);
+		result = stored;
+		resultHash = stored.outputHash;
 	} catch (err) {
 		// generation.ts already sanitizes/logs the detail; this route is the last
 		// line of defense — never forward err.message to the client.
@@ -117,6 +122,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		try {
 			const credit = await recordGeneration(db, userId, {
 				url: result.outputUrl,
+				resultHash,
 				sourceUrl: parsed.data.image,
 				// upscale always operates on a previous render/edit result, never a
 				// fresh upload — nothing to dedup against.
@@ -141,5 +147,5 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		}
 	}
 
-	return json(result);
+	return json({ outputUrl: result.outputUrl, cost: result.cost, balance: result.balance });
 };

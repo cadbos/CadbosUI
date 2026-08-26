@@ -30,6 +30,7 @@ import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { replaceTexturesWithMask } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
+import { getBucketByName } from '$lib/server/media';
 import { assertSessionOwnedByUser } from '$lib/server/projects';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 import {
@@ -139,8 +140,12 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 
 		if (maskedRequest) {
 			let result: RenderResponse;
+			let resultHash: string;
 			try {
-				result = await replaceTexturesWithMask(platform, maskedRequest);
+				const uploadsUrl = (await getBucketByName(db, 'cadbos-uploads')).url;
+				const stored = await replaceTexturesWithMask(platform, uploadsUrl, maskedRequest);
+				result = stored;
+				resultHash = stored.outputHash;
 			} catch {
 				console.error('ArchAI masked texture replacement failed');
 				return apiError(502, 'texture_replacement_failed', 'Texture replacement failed');
@@ -154,6 +159,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			try {
 				const credit = await recordGeneration(db, userId, {
 					url: result.outputUrl,
+					resultHash,
 					sourceUrl: maskedRequest.image,
 					sourceHash: maskedRequest.imageHash ?? '',
 					sessionId: maskedRequest.sessionId,

@@ -16,6 +16,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { GeneratedImagesResponse, SessionUser } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import {
+	seedGeneration as seedGenerationFixture,
+	setBucketUrl
+} from '$lib/server/testing/generation-fixtures';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { DELETE, GET } from './+server';
 
@@ -26,13 +30,14 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 }
 
 function seedGeneratedImage(db: D1Database, id: string, userId: string, createdAt: number): void {
-	db.prepare(
-		'INSERT INTO generations ' +
-			'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-			"VALUES (?, ?, ?, 'https://cdn.example.test/source.jpg', 'cozy', 'render', 1, 10, ?)"
-	)
-		.bind(id, userId, `https://cdn.example.test/${id}.webp`, createdAt)
-		.run();
+	setBucketUrl(db, 'cadbos-uploads', 'https://cdn.example.test');
+	seedGenerationFixture(db, {
+		id,
+		userId,
+		url: `https://cdn.example.test/${id}.webp`,
+		sourceUrl: 'https://cdn.example.test/source.jpg',
+		createdAt
+	});
 }
 
 type GeneratedImagesEvent = Parameters<typeof GET>[0];
@@ -244,10 +249,9 @@ describe('DELETE /api/generated-images', () => {
 			{
 				env: {
 					DB: db,
-					UPLOADS_BUCKET: uploadsBucket,
-					UPLOADS_PUBLIC_URL: 'https://cdn.example.test/'
+					UPLOADS_BUCKET: uploadsBucket
 				}
-			} as App.Platform,
+			} as unknown as App.Platform,
 			{ id: 'image-1' }
 		);
 
@@ -259,6 +263,96 @@ describe('DELETE /api/generated-images', () => {
 		expect(response.status).toBe(204);
 		expect(uploadsBucket.delete).toHaveBeenCalledWith('image-1.webp');
 		expect(row).toBeNull();
+	});
+
+	it('retains media referenced by a light settings job', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		const image = await db
+			.prepare('SELECT result_media_id FROM generations WHERE id = ?')
+			.bind('image-1')
+			.first<{ result_media_id: number }>();
+		if (!image) throw new Error('generated image seed failed');
+		db.prepare(
+			'INSERT INTO light_settings_jobs ' +
+				'(id, user_id, comfy_prompt_id, scene_media_id, instruction, cost, status, created_at, updated_at) ' +
+				"VALUES (?, ?, ?, ?, ?, ?, 'processing', ?, ?)"
+		)
+			.bind('light-1', 'user-1', 'prompt-1', image.result_media_id, 'warmer', 1, 1000, 1000)
+			.run();
+		const uploadsBucket = bucket();
+
+		const response = await callDelete(
+			{ pubkey: 'pubkey-1' },
+			{
+				env: {
+					DB: db,
+					UPLOADS_BUCKET: uploadsBucket
+				}
+			} as unknown as App.Platform,
+			{ id: 'image-1' }
+		);
+		const media = await db
+			.prepare('SELECT id FROM media WHERE id = ?')
+			.bind(image.result_media_id)
+			.first<{ id: number }>();
+
+		expect(response.status).toBe(204);
+		expect(uploadsBucket.delete).not.toHaveBeenCalled();
+		expect(media).toEqual({ id: image.result_media_id });
+	});
+
+	it('retains media when a reference is added immediately before the deletion batch', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		const image = await db
+			.prepare('SELECT result_media_id FROM generations WHERE id = ?')
+			.bind('image-1')
+			.first<{ result_media_id: number }>();
+		if (!image) throw new Error('generated image seed failed');
+		const concurrentDb = new Proxy(db, {
+			get(target, property, receiver) {
+				if (property !== 'batch') return Reflect.get(target, property, receiver);
+				return async (statements: Parameters<D1Database['batch']>[0]) => {
+					await db
+						.prepare(
+							'INSERT INTO light_settings_jobs ' +
+								'(id, user_id, comfy_prompt_id, scene_media_id, instruction, cost, status, created_at, updated_at) ' +
+								"VALUES (?, ?, ?, ?, ?, ?, 'processing', ?, ?)"
+						)
+						.bind('light-1', 'user-1', 'prompt-1', image.result_media_id, 'warmer', 1, 1000, 1000)
+						.run();
+					return target.batch(statements);
+				};
+			}
+		});
+		const uploadsBucket = bucket();
+
+		const response = await callDelete(
+			{ pubkey: 'pubkey-1' },
+			{
+				env: {
+					DB: concurrentDb,
+					UPLOADS_BUCKET: uploadsBucket
+				}
+			} as unknown as App.Platform,
+			{ id: 'image-1' }
+		);
+		const generation = await db
+			.prepare('SELECT id FROM generations WHERE id = ?')
+			.bind('image-1')
+			.first<{ id: string }>();
+		const media = await db
+			.prepare('SELECT id FROM media WHERE id = ?')
+			.bind(image.result_media_id)
+			.first<{ id: number }>();
+
+		expect(response.status).toBe(204);
+		expect(uploadsBucket.delete).not.toHaveBeenCalled();
+		expect(generation).toBeNull();
+		expect(media).toEqual({ id: image.result_media_id });
 	});
 
 	it('does not delete another user image', async () => {
@@ -273,10 +367,9 @@ describe('DELETE /api/generated-images', () => {
 			{
 				env: {
 					DB: db,
-					UPLOADS_BUCKET: uploadsBucket,
-					UPLOADS_PUBLIC_URL: 'https://cdn.example.test/'
+					UPLOADS_BUCKET: uploadsBucket
 				}
-			} as App.Platform,
+			} as unknown as App.Platform,
 			{ id: 'image-2' }
 		);
 		const row = await db
@@ -289,10 +382,15 @@ describe('DELETE /api/generated-images', () => {
 		expect(row).toEqual({ id: 'image-2' });
 	});
 
-	it('keeps the D1 row when R2 deletion fails', async () => {
+	it('keeps the committed D1 deletion when R2 deletion fails', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		const image = await db
+			.prepare('SELECT result_media_id FROM generations WHERE id = ?')
+			.bind('image-1')
+			.first<{ result_media_id: number }>();
+		if (!image) throw new Error('generated image seed failed');
 		const uploadsBucket = bucket(true);
 
 		const response = await callDelete(
@@ -300,19 +398,23 @@ describe('DELETE /api/generated-images', () => {
 			{
 				env: {
 					DB: db,
-					UPLOADS_BUCKET: uploadsBucket,
-					UPLOADS_PUBLIC_URL: 'https://cdn.example.test/'
+					UPLOADS_BUCKET: uploadsBucket
 				}
-			} as App.Platform,
+			} as unknown as App.Platform,
 			{ id: 'image-1' }
 		);
-		const row = await db
+		const generation = await db
 			.prepare('SELECT id FROM generations WHERE id = ?')
 			.bind('image-1')
 			.first<{ id: string }>();
+		const media = await db
+			.prepare('SELECT id FROM media WHERE id = ?')
+			.bind(image.result_media_id)
+			.first<{ id: number }>();
 
 		expect(response.status).toBe(500);
-		expect(row).toEqual({ id: 'image-1' });
+		expect(generation).toBeNull();
+		expect(media).toBeNull();
 	});
 
 	it('fails closed for the dev-only demo session without touching D1 or R2', async () => {

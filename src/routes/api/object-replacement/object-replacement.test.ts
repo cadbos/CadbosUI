@@ -23,6 +23,7 @@ import {
 } from '$lib/server/object-replacement-jobs';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { setBucketUrl } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 
 const integration = vi.hoisted(() => ({
@@ -160,8 +161,7 @@ function platform(
 		env: {
 			DB: db,
 			COMFYUI_BASE_URL: 'http://comfy.internal:8188',
-			UPLOADS_BUCKET: uploadsBucket,
-			UPLOADS_PUBLIC_URL: 'https://cdn.example.test/'
+			UPLOADS_BUCKET: uploadsBucket
 		}
 	} as unknown as App.Platform;
 }
@@ -205,6 +205,7 @@ function callGet(
 }
 
 async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
+	setBucketUrl(db, 'cadbos-uploads', 'https://cdn.example.test');
 	await createObjectReplacementJob(db, {
 		id: 'job-1',
 		userId: 'user-1',

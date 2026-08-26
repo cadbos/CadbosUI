@@ -190,10 +190,11 @@ async function readImageBody(response: Response): Promise<ArrayBuffer> {
 
 export async function importRemoteImage(
 	platform: App.Platform | undefined,
+	publicUrl: string,
 	value: string,
 	applicationOrigin: string,
 	fetcher: typeof fetch = globalThis.fetch,
-	// Optional dedup lookup (generations.source_hash for the current user) —
+	// Optional dedup lookup (source media checksum for the current user) —
 	// callers without a D1 user to dedup against (e.g. tests) simply omit it.
 	findExisting?: (hash: string) => Promise<string | null>
 ): Promise<{
@@ -207,7 +208,7 @@ export async function importRemoteImage(
 	const hash = await hashBytes(bytes);
 	const existingUrl = await findExisting?.(hash);
 	if (existingUrl) return { url: existingUrl, mime, size: bytes.byteLength, hash };
-	return uploadImageBytes(platform, bytes, mime, undefined, hash);
+	return uploadImageBytes(platform, publicUrl, bytes, mime, undefined, hash);
 }
 
 export async function downloadRemoteImage(

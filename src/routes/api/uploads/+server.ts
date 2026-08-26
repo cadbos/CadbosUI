@@ -21,13 +21,14 @@ import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { findGenerationSourceByHash } from '$lib/server/generations';
+import { getBucketByName, getOrCreateMedia } from '$lib/server/media';
 import { normalizeImageContentType } from '$lib/image-mime';
 import {
 	MAX_IMAGE_UPLOAD_SIZE,
 	RemoteImageImportError,
 	importRemoteImage
 } from '$lib/server/remote-image';
-import { hashBytes, isStoredUploadUrl, uploadImageBytes } from '$lib/server/uploads';
+import { hashBytes, uploadImageBytes } from '$lib/server/uploads';
 
 function remoteImportErrorResponse(error: RemoteImageImportError): Response {
 	switch (error.code) {
@@ -47,26 +48,30 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 	}
 
-	// The demo session bypasses D1 entirely (hooks.server.ts) — no account row
-	// to dedup against, so uploads for it always go straight to R2.
+	// Demo sessions skip account lookup and deduplication, but still use D1 to
+	// resolve the uploads bucket via getBucketByName.
 	const demoUser = dev && locals.user.pubkey === DEMO_PUBKEY;
-	const db = demoUser ? null : getDb(platform);
-	const userId = db ? await getUserIdByPubkey(db, locals.user.pubkey) : null;
-	if (db && !userId) return apiError(500, 'account_error', 'Account record not found');
+	const db = getDb(platform);
+	const userId = demoUser ? null : await getUserIdByPubkey(db, locals.user.pubkey);
+	if (!demoUser && !userId) return apiError(500, 'account_error', 'Account record not found');
+	let uploadsUrl: string;
+	try {
+		uploadsUrl = (await getBucketByName(db, 'cadbos-uploads')).url;
+	} catch (error) {
+		console.error('Upload bucket lookup failed:', error);
+		return apiError(500, 'upload_failed', 'Upload failed');
+	}
 
-	// generations.source_url isn't always a stored upload — render/edit calls
-	// record their output URL there too (recordGeneration) — so a hash match
+	// Generation source media isn't always a stored upload — render/edit calls
+	// can use their prior output (recordGeneration) — so a hash match
 	// is only reused when it actually resolves to our own bucket; otherwise
 	// this falls through to a normal upload rather than handing back an
 	// arbitrary URL as if it were deduped.
-	const publicUrl = platform?.env?.UPLOADS_PUBLIC_URL;
-	const findExisting =
-		db && userId && publicUrl
-			? async (hash: string) => {
-					const existingUrl = await findGenerationSourceByHash(db, userId, hash);
-					return existingUrl && isStoredUploadUrl(existingUrl, publicUrl) ? existingUrl : null;
-				}
-			: undefined;
+	const findExisting = userId
+		? async (hash: string) => {
+				return findGenerationSourceByHash(db, userId, hash);
+			}
+		: undefined;
 
 	if (request.headers.get('content-type')?.startsWith('application/json')) {
 		const body: unknown = await request.json().catch(() => null);
@@ -74,15 +79,16 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 		if (!parsed.success) return apiError(400, 'invalid_url', 'Invalid image URL');
 
 		try {
-			return json(
-				await importRemoteImage(
-					platform,
-					parsed.data.url,
-					url.origin,
-					globalThis.fetch,
-					findExisting
-				)
+			const result = await importRemoteImage(
+				platform,
+				uploadsUrl,
+				parsed.data.url,
+				url.origin,
+				globalThis.fetch,
+				findExisting
 			);
+			await getOrCreateMedia(db, result.url, result.hash);
+			return json(result);
 		} catch (error) {
 			if (error instanceof RemoteImageImportError) return remoteImportErrorResponse(error);
 			console.error('Remote image import failed:', error);
@@ -117,7 +123,8 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 		const existingUrl = await findExisting?.(hash);
 		const result = existingUrl
 			? { url: existingUrl, mime: normalizedMime, size: bytes.byteLength, hash }
-			: await uploadImageBytes(platform, bytes, file.type, undefined, hash);
+			: await uploadImageBytes(platform, uploadsUrl, bytes, file.type, undefined, hash);
+		await getOrCreateMedia(db, result.url, result.hash);
 		return json(result);
 	} catch (err) {
 		console.error('Upload failed:', err);

@@ -29,6 +29,7 @@ import {
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { editInterior } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
+import { getBucketByName } from '$lib/server/media';
 import { assertSessionOwnedByUser } from '$lib/server/projects';
 
 // Anti-cost-abuse (FR-К5): each edit is its own paid call, so it gets its own
@@ -93,8 +94,12 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	}
 
 	let result: RenderResponse;
+	let resultHash: string;
 	try {
-		result = await editInterior(platform, parsed.data);
+		const uploadsUrl = db ? (await getBucketByName(db, 'cadbos-uploads')).url : '';
+		const stored = await editInterior(platform, uploadsUrl, parsed.data);
+		result = stored;
+		resultHash = stored.outputHash;
 	} catch (err) {
 		// generation.ts already sanitizes/logs the detail; this route is the last
 		// line of defense (NFR-6/8) — never forward err.message to the client.
@@ -117,6 +122,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		try {
 			const credit = await recordGeneration(db, userId, {
 				url: result.outputUrl,
+				resultHash,
 				sourceUrl: parsed.data.image,
 				// Usually a previous render/edit result (no hash — nothing to dedup
 				// against), but Edit also works with no prior render yet, falling
@@ -143,5 +149,5 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		}
 	}
 
-	return json(result);
+	return json({ outputUrl: result.outputUrl, cost: result.cost, balance: result.balance });
 };

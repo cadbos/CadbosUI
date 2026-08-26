@@ -41,16 +41,6 @@ const generatedImageDeleteSchema = z.strictObject({
 	id: z.string().trim().min(1)
 });
 
-function getGeneratedImageStorageKey(url: string, publicUrl: string): string | null {
-	const imageUrl = new URL(url);
-	const baseUrl = new URL('.', publicUrl);
-	if (imageUrl.origin !== baseUrl.origin) return null;
-	if (!imageUrl.pathname.startsWith(baseUrl.pathname)) return null;
-
-	const key = decodeURIComponent(imageUrl.pathname.slice(baseUrl.pathname.length));
-	return key.length > 0 ? key : null;
-}
-
 export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	if (!locals.user) {
 		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
@@ -104,23 +94,19 @@ export const DELETE: RequestHandler = async ({ request, platform, locals }) => {
 	const image = await getGeneratedImageForUser(db, userId, parsed.data.id);
 	if (!image) return apiError(404, 'image_not_found', 'Image not found');
 
-	const bucket = platform?.env?.UPLOADS_BUCKET;
-	const publicUrl = platform?.env?.UPLOADS_PUBLIC_URL;
-	if (!bucket || !publicUrl) return apiError(500, 'storage_error', 'Image storage not configured');
-
-	let key: string | null;
 	try {
-		key = getGeneratedImageStorageKey(image.url, publicUrl);
-	} catch (err) {
-		console.error('Generated image storage URL parsing failed:', err);
-		return apiError(500, 'storage_error', 'Image storage record invalid');
-	}
-	if (!key) return apiError(500, 'storage_error', 'Image storage record invalid');
-
-	try {
-		await bucket.delete(key);
-		const deleted = await deleteGeneratedImage(db, userId, image.id);
-		if (!deleted) return apiError(404, 'image_not_found', 'Image not found');
+		const { generationDeleted, mediaDeleted } = await deleteGeneratedImage(
+			db,
+			userId,
+			image.id,
+			image.mediaId
+		);
+		if (!generationDeleted) return apiError(404, 'image_not_found', 'Image not found');
+		if (mediaDeleted && image.bucketName === 'cadbos-uploads') {
+			const bucket = platform?.env?.UPLOADS_BUCKET;
+			if (!bucket) throw new Error('UPLOADS_BUCKET not configured');
+			await bucket.delete(image.filename);
+		}
 		return new Response(null, { status: 204 });
 	} catch (err) {
 		console.error('Generated image delete failed:', err);

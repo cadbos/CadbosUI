@@ -25,6 +25,7 @@
 
 import type { D1Database } from '@cloudflare/workers-types';
 import type { GenerationKind } from '$lib/api/contract';
+import { mediaUrl } from '$lib/server/media';
 import { randomToken } from './auth/session';
 import { generationKindForRow } from './generations';
 
@@ -116,8 +117,10 @@ function toProjectSession(row: ProjectSessionRow): ProjectSession {
 
 interface SessionGenerationRow {
 	id: string;
-	url: string;
-	source_url: string;
+	result_filename: string;
+	result_bucket_url: string;
+	source_filename: string;
+	source_bucket_url: string;
 	kind: string;
 	created_at: number;
 	amount: number;
@@ -127,8 +130,8 @@ interface SessionGenerationRow {
 function toSessionGeneration(row: SessionGenerationRow): SessionGeneration {
 	return {
 		id: row.id,
-		url: row.url,
-		sourceUrl: row.source_url,
+		url: mediaUrl(row.result_bucket_url, row.result_filename),
+		sourceUrl: mediaUrl(row.source_bucket_url, row.source_filename),
 		kind: generationKindForRow(row.id, row.kind),
 		createdAt: row.created_at,
 		amount: row.amount,
@@ -245,9 +248,14 @@ async function loadProjectDetail(db: D1Database, projectRow: ProjectRow): Promis
 			(
 				await db
 					.prepare(
-						`SELECT id, session_id, url, source_url, kind, created_at, amount, balance_after ` +
-							`FROM generations WHERE session_id IN (${placeholders}) ` +
-							`ORDER BY created_at DESC, id DESC`
+						`SELECT g.id, g.session_id, result_media.filename AS result_filename, ` +
+							`result_bucket.url AS result_bucket_url, source_media.filename AS source_filename, ` +
+							`source_bucket.url AS source_bucket_url, g.kind, g.created_at, g.amount, g.balance_after ` +
+							`FROM generations g JOIN media result_media ON result_media.id = g.result_media_id ` +
+							`JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ` +
+							`JOIN media source_media ON source_media.id = g.source_media_id ` +
+							`JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ` +
+							`WHERE g.session_id IN (${placeholders}) ORDER BY g.created_at DESC, g.id DESC`
 					)
 					.bind(...chunk.map((session) => session.id))
 					.all<SessionGenerationRow & { session_id: string }>()

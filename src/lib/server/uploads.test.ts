@@ -19,11 +19,10 @@ function mockBucket(): { put: ReturnType<typeof vi.fn> } {
 	return { put: vi.fn(async () => undefined) };
 }
 
-function platform(bucket: ReturnType<typeof mockBucket>, publicUrl?: string): App.Platform {
+function platform(bucket: ReturnType<typeof mockBucket>): App.Platform {
 	return {
 		env: {
-			UPLOADS_BUCKET: bucket,
-			UPLOADS_PUBLIC_URL: publicUrl
+			UPLOADS_BUCKET: bucket
 		}
 	} as unknown as App.Platform;
 }
@@ -39,7 +38,7 @@ describe('uploadImage', () => {
 		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
 
 		const file = new File(['image-bytes'], 'room.jpg', { type: 'image/jpeg' });
-		const result = await uploadImage(platform(bucket, 'https://uploads.cadbos.example'), file);
+		const result = await uploadImage(platform(bucket), 'https://uploads.cadbos.example', file);
 
 		expect(bucket.put).toHaveBeenCalledWith(`${id}.jpg`, expect.any(ArrayBuffer), {
 			httpMetadata: { contentType: 'image/jpeg' }
@@ -58,17 +57,9 @@ describe('uploadImage', () => {
 		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
 
 		const file = new File(['image-bytes'], 'room.jpg', { type: 'image/jpeg' });
-		const result = await uploadImage(platform(bucket, 'https://cdn.example.com/uploads'), file);
+		const result = await uploadImage(platform(bucket), 'https://cdn.example.com/uploads', file);
 
 		expect(result.url).toBe(`https://cdn.example.com/uploads/${id}.jpg`);
-	});
-
-	it('requires a public upload base URL when storage is configured', async () => {
-		const file = new File(['image-bytes'], 'room.jpg', { type: 'image/jpeg' });
-
-		await expect(uploadImage(platform(mockBucket()), file)).rejects.toThrow(
-			'UPLOADS_PUBLIC_URL not configured'
-		);
 	});
 
 	it('stores generated image bytes and returns the public object URL', async () => {
@@ -78,7 +69,8 @@ describe('uploadImage', () => {
 
 		const bytes = await new Blob(['generated-image']).arrayBuffer();
 		const result = await uploadImageBytes(
-			platform(bucket, 'https://uploads.cadbos.example'),
+			platform(bucket),
+			'https://uploads.cadbos.example',
 			bytes,
 			'image/webp'
 		);
@@ -101,7 +93,8 @@ describe('uploadImage', () => {
 
 		const bytes = await new Blob(['generated-image']).arrayBuffer();
 		const result = await uploadImageBytes(
-			platform(bucket, 'https://uploads.cadbos.example'),
+			platform(bucket),
+			'https://uploads.cadbos.example',
 			bytes,
 			'image/jpeg; charset=binary'
 		);
@@ -122,7 +115,8 @@ describe('uploadImage', () => {
 		const bytes = await new Blob(['generated-image']).arrayBuffer();
 
 		const result = await uploadImageBytes(
-			platform(bucket, 'https://uploads.cadbos.example'),
+			platform(bucket),
+			'https://uploads.cadbos.example',
 			bytes,
 			'image/png',
 			'object-replacements/job-1.png'

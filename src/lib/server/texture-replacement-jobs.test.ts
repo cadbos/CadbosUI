@@ -62,6 +62,7 @@ describe('texture replacement jobs', () => {
 			'user-1',
 			'job-1',
 			'https://cdn.example.test/result.png',
+			'',
 			20
 		);
 

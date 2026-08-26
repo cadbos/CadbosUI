@@ -17,6 +17,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser, UserUsageResponse } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedGeneration as seedGenerationFixture } from '$lib/server/testing/generation-fixtures';
 import { GET } from './+server';
 
 const ADMIN_PUBKEY = 'admin-pubkey';
@@ -40,13 +41,14 @@ function seedGeneration(
 	amount: number,
 	createdAt: number
 ): void {
-	db.prepare(
-		'INSERT INTO generations ' +
-			'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-			"VALUES (?, ?, ?, 'https://cdn.example.test/source.jpg', 'cozy', 'render', ?, 10, ?)"
-	)
-		.bind(id, userId, `https://cdn.example.test/${id}.webp`, amount, createdAt)
-		.run();
+	seedGenerationFixture(db, {
+		id,
+		userId,
+		url: `https://cdn.example.test/${id}.webp`,
+		sourceUrl: 'https://cdn.example.test/source.jpg',
+		amount,
+		createdAt
+	});
 }
 
 type UsageEvent = Parameters<typeof GET>[0];

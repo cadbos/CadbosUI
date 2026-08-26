@@ -83,6 +83,7 @@ describe('object replacement jobs', () => {
 			'user-1',
 			'job-1',
 			'https://cdn.example.test/result.png',
+			'',
 			20
 		);
 
@@ -110,9 +111,17 @@ describe('object replacement jobs', () => {
 				'user-1',
 				'job-1',
 				'https://cdn.example.test/result.png',
+				'',
 				20
 			),
-			completeObjectReplacementJob(db, 'user-1', 'job-1', 'https://cdn.example.test/result.png', 21)
+			completeObjectReplacementJob(
+				db,
+				'user-1',
+				'job-1',
+				'https://cdn.example.test/result.png',
+				'',
+				21
+			)
 		]);
 
 		expect(first.balanceAfter).toBe(10);
@@ -142,6 +151,7 @@ describe('object replacement jobs', () => {
 				'user-1',
 				'job-1',
 				'https://cdn.example.test/result-1.png',
+				'',
 				20
 			),
 			completeObjectReplacementJob(
@@ -149,6 +159,7 @@ describe('object replacement jobs', () => {
 				'user-1',
 				'job-2',
 				'https://cdn.example.test/result-2.png',
+				'',
 				21
 			)
 		]);
@@ -157,6 +168,7 @@ describe('object replacement jobs', () => {
 			'user-1',
 			'job-2',
 			'https://cdn.example.test/result-2.png',
+			'',
 			22
 		);
 

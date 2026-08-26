@@ -43,6 +43,9 @@ export function makeD1(): D1Database {
 	const db = new DatabaseSync(':memory:');
 	db.exec('PRAGMA foreign_keys = ON');
 	db.exec(SCHEMA);
+	db.exec(
+		"INSERT INTO buckets (name, url) VALUES ('cadbos-uploads', 'https://uploads.cadbos.example')"
+	);
 	const stmt = (sql: string, args: SQLInputValue[] = []): ShimStatement => ({
 		bind: (...next: SQLInputValue[]) => stmt(sql, next),
 		run: () => ({ success: true, meta: { changes: Number(db.prepare(sql).run(...args).changes) } }),
