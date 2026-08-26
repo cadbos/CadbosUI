@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { setBucketUrl } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 
 const integration = vi.hoisted(() => ({
@@ -180,6 +181,7 @@ describe('POST /api/texture-replacement', () => {
 
 	it('uses ArchAI for a masked request and completes without creating a ComfyUI job', async () => {
 		const db = makeD1();
+		setBucketUrl(db, 'cadbos-uploads', 'https://uploads.example.test');
 		seedUser(db);
 		const maskedRequest = {
 			image: requestBody.image,
@@ -199,12 +201,19 @@ describe('POST /api/texture-replacement', () => {
 		});
 		expect(archai.replaceTexturesWithMask).toHaveBeenCalledWith(
 			expect.objectContaining({ env: expect.objectContaining({ DB: db }) }),
+			'https://uploads.example.test',
 			{ ...maskedRequest, sessionId: sessionIdForPubkey('pubkey-1') }
 		);
 		expect(integration.submit).not.toHaveBeenCalled();
 		expect(jobs.create).not.toHaveBeenCalled();
 		const generation = await db
-			.prepare('SELECT kind, source_url, amount FROM generations WHERE user_id = ?')
+			.prepare(
+				"SELECT g.kind, source_bucket.url || '/' || source_media.filename AS source_url, g.amount " +
+					'FROM generations g ' +
+					'JOIN media source_media ON source_media.id = g.source_media_id ' +
+					'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
+					'WHERE g.user_id = ?'
+			)
 			.bind('user-1')
 			.first<{ kind: string; source_url: string; amount: number }>();
 		expect(generation).toEqual({

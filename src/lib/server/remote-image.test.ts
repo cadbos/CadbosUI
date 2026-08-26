@@ -24,8 +24,7 @@ import {
 function platform(bucket: { put: ReturnType<typeof vi.fn> }): App.Platform {
 	return {
 		env: {
-			UPLOADS_BUCKET: bucket,
-			UPLOADS_PUBLIC_URL: 'https://uploads.cadbos.example'
+			UPLOADS_BUCKET: bucket
 		}
 	} as unknown as App.Platform;
 }
@@ -47,6 +46,7 @@ describe('remote image import', () => {
 
 		const result = await importRemoteImage(
 			platform(bucket),
+			'https://uploads.cadbos.example',
 			'https://images.example.com/room.png',
 			'https://cadbos.example',
 			fetcher as typeof fetch
@@ -95,6 +95,7 @@ describe('remote image import', () => {
 
 		await importRemoteImage(
 			platform(bucket),
+			'https://uploads.cadbos.example',
 			'https://images.example.com/room.webp',
 			'https://cadbos.example',
 			fetcher as typeof fetch
@@ -117,6 +118,7 @@ describe('remote image import', () => {
 		await expect(
 			importRemoteImage(
 				platform({ put: vi.fn(async () => undefined) }),
+				'https://uploads.cadbos.example',
 				url,
 				'https://cadbos.example',
 				fetcher as typeof fetch
@@ -129,6 +131,7 @@ describe('remote image import', () => {
 		await expect(
 			importRemoteImage(
 				platform({ put: vi.fn(async () => undefined) }),
+				'https://uploads.cadbos.example',
 				'https://images.example.com/room.jpg',
 				'https://cadbos.example',
 				vi.fn(async () => imageResponse('text/html', 'not-an-image')) as typeof fetch
@@ -148,6 +151,7 @@ describe('remote image import', () => {
 		await expect(
 			importRemoteImage(
 				platform({ put: vi.fn(async () => undefined) }),
+				'https://uploads.cadbos.example',
 				'https://images.example.com/room.jpg',
 				'https://cadbos.example',
 				vi.fn(async () => imageResponse('image/jpeg', stream)) as typeof fetch

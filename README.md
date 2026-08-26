@@ -78,7 +78,7 @@ environment variables. Their authoritative definitions are in
 [`wrangler.jsonc`](wrangler.jsonc) and [`src/app.d.ts`](src/app.d.ts):
 
 - `DB` — D1 database for users, sessions, credits, and generation records
-- `UPLOADS_BUCKET` and `UPLOADS_PUBLIC_URL` — R2 image storage and its public base URL
+- `UPLOADS_BUCKET` — R2 image storage; its public URL comes from the `buckets` database table
 - `ARCHAI_API_URL` and the `ARCHAI_API_KEY` secret — archAI server integration
 - `COMFYUI_BASE_URL` — private VPC service binding for ComfyUI
 - `ADMIN_PUBKEYS`, `METERED_DESIGNER_PUBKEYS`, and `PUBKEY_VIEWER` — access and usage
@@ -97,6 +97,10 @@ pnpm exec wrangler d1 migrations apply DB --local
 
 Use `--remote` instead of `--local` only when intentionally applying migrations to the
 configured remote database.
+
+Before serving application traffic, provision the uploads CDN base URL in `buckets` under
+the name `cadbos-uploads`. Rename the matching `external:*` row created from migrated media,
+or insert the named row when the database contains no existing uploads.
 
 ## Deployment
 

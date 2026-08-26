@@ -17,21 +17,19 @@ import type { SessionUser } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { MAX_IMAGE_UPLOAD_SIZE } from '$lib/server/remote-image';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedGeneration, setBucketUrl } from '$lib/server/testing/generation-fixtures';
 import { POST } from './+server';
 
 type UploadEvent = Parameters<typeof POST>[0];
 
-const UPLOADS_PUBLIC_URL = 'https://uploads.cadbos.example';
+const UPLOADS_URL = 'https://uploads.cadbos.example';
 
-function platform(
-	bucket = { put: vi.fn(async () => undefined) },
-	db?: ReturnType<typeof makeD1>
-): App.Platform {
+function platform(bucket = { put: vi.fn(async () => undefined) }, db = makeD1()): App.Platform {
+	setBucketUrl(db, 'cadbos-uploads', UPLOADS_URL);
 	return {
 		env: {
 			UPLOADS_BUCKET: bucket,
-			UPLOADS_PUBLIC_URL,
-			...(db ? { DB: db } : {})
+			DB: db
 		}
 	} as unknown as App.Platform;
 }
@@ -62,8 +60,6 @@ function seedUser(db: ReturnType<typeof makeD1>, id: string, pubkey: string): vo
 		.run();
 }
 
-// Mirrors generations.test.ts's own seedGenerationWithSource — lets the test
-// set source_url/source_hash directly to exercise the /api/uploads dedup path.
 function seedGenerationWithSource(
 	db: ReturnType<typeof makeD1>,
 	id: string,
@@ -71,13 +67,17 @@ function seedGenerationWithSource(
 	sourceUrl: string,
 	sourceHash: string
 ): void {
-	db.prepare(
-		'INSERT INTO generations ' +
-			'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at) ' +
-			"VALUES (?, ?, ?, ?, ?, 'cozy', 'render', 1, 10, ?)"
-	)
-		.bind(id, userId, `https://cdn.example.test/${id}.webp`, sourceUrl, sourceHash, Date.now())
-		.run();
+	if (sourceUrl.startsWith(UPLOADS_URL)) {
+		setBucketUrl(db, 'cadbos-uploads', UPLOADS_URL);
+	}
+	seedGeneration(db, {
+		id,
+		userId,
+		url: `https://cdn.example.test/${id}.webp`,
+		sourceUrl,
+		sourceChecksum: sourceHash,
+		createdAt: Date.now()
+	});
 }
 
 async function sha256Hex(bytes: string): Promise<string> {
@@ -198,7 +198,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		const hash = await sha256Hex('image-bytes');
-		seedGenerationWithSource(db, 'a', 'user-1', `${UPLOADS_PUBLIC_URL}/existing.webp`, hash);
+		seedGenerationWithSource(db, 'a', 'user-1', `${UPLOADS_URL}/existing.webp`, hash);
 		const bucket = { put: vi.fn(async () => undefined) };
 		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
 			new Response('image-bytes', { headers: { 'content-type': 'image/webp' } })
@@ -211,7 +211,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 		);
 
 		expect(response.status).toBe(200);
-		expect(await response.json()).toMatchObject({ url: `${UPLOADS_PUBLIC_URL}/existing.webp` });
+		expect(await response.json()).toMatchObject({ url: `${UPLOADS_URL}/existing.webp` });
 		expect(bucket.put).not.toHaveBeenCalled();
 	});
 
@@ -219,7 +219,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		const hash = await sha256Hex('image-bytes');
-		// A render/edit call also writes generations.source_url (recordGeneration),
+		// A render/edit call can use generation output media as its source,
 		// so a hash match here isn't necessarily a stored upload — reusing it as
 		// one would hand back an arbitrary, attacker-influenced URL.
 		seedGenerationWithSource(
@@ -242,7 +242,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 
 		expect(response.status).toBe(200);
 		expect(await response.json()).toMatchObject({
-			url: expect.stringMatching(new RegExp(`^${UPLOADS_PUBLIC_URL}/`))
+			url: expect.stringMatching(new RegExp(`^${UPLOADS_URL}/`))
 		});
 		expect(bucket.put).toHaveBeenCalledTimes(1);
 	});

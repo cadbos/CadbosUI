@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { MeResponse, SessionUser } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedGeneration } from '$lib/server/testing/generation-fixtures';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { GET } from './+server';
 
@@ -109,14 +110,16 @@ describe('GET /auth/me — generation access control', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 5);
-		db.prepare(
-			'INSERT INTO generations ' +
-				'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-				"VALUES (?, ?, 'https://cdn.example.test/out.webp', 'https://cdn.example.test/room.jpg', " +
-				"'cozy', ?, ?, ?, ?)"
-		)
-			.bind('tx-1', 'user-1', 'render', 2, 3, Date.now())
-			.run();
+		seedGeneration(db, {
+			id: 'tx-1',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/out.webp',
+			sourceUrl: 'https://cdn.example.test/room.jpg',
+			kind: 'render',
+			amount: 2,
+			balanceAfter: 3,
+			createdAt: Date.now()
+		});
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
 		const result = (await response.json()) as MeResponse;

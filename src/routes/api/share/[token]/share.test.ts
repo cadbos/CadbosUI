@@ -23,6 +23,7 @@ import {
 	revokeActiveShareToken
 } from '$lib/server/projects';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedGeneration as seedGenerationFixture } from '$lib/server/testing/generation-fixtures';
 
 const { GET: getSharedProject } = await import('./+server');
 
@@ -33,13 +34,14 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 }
 
 function seedGeneration(db: D1Database, id: string, sessionId: string, userId: string): void {
-	db.prepare(
-		'INSERT INTO generations ' +
-			'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at, session_id) ' +
-			"VALUES (?, ?, 'https://cdn.example.test/out.webp', 'https://cdn.example.test/room.jpg', 'cozy', 'render', 1, 10, ?, ?)"
-	)
-		.bind(id, userId, Date.now(), sessionId)
-		.run();
+	seedGenerationFixture(db, {
+		id,
+		userId,
+		url: 'https://cdn.example.test/out.webp',
+		sourceUrl: 'https://cdn.example.test/room.jpg',
+		createdAt: Date.now(),
+		sessionId
+	});
 }
 
 function platform(db: D1Database): App.Platform {

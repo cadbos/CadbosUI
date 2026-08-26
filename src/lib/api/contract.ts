@@ -97,7 +97,7 @@ export interface RenderRequest {
 	image: string;
 	// SHA-256 hex digest of `image`'s bytes, from the /api/uploads response —
 	// omitted when `image` is a previous render/edit result rather than a
-	// fresh upload. Lets the server record generations.source_hash for future
+	// fresh upload. Lets the server record the source media checksum for future
 	// upload dedup; never forwarded to the render provider.
 	imageHash?: string;
 	prompt: string;
@@ -284,7 +284,7 @@ export interface GeneratedImagesResponse {
 }
 
 // GET /api/resources — distinct source photos the user has actually
-// uploaded (one card per photo, grouped by source_url). Rows whose source
+// uploaded (one card per source media row). Rows whose source
 // was a previous generation's own result rather than a fresh upload (edit,
 // upscale, or any other call made with source mode 'current-result' —
 // these intentionally carry imageHash: '') are excluded, not shown as if

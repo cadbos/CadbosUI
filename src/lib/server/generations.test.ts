@@ -26,6 +26,10 @@ import {
 	recordGeneration
 } from './generations';
 
+const HASH_1 = '1'.repeat(64);
+const HASH_2 = '2'.repeat(64);
+const RESULT_HASH = 'a'.repeat(64);
+
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
@@ -65,17 +69,31 @@ function seedGeneration(
 	createdAt: number,
 	kind = 'render'
 ): void {
+	const resultMediaId = seedMedia(db, `https://cdn.example.test/${id}.webp`, '');
+	const sourceMediaId = seedMedia(db, 'https://cdn.example.test/source.jpg', '');
 	db.prepare(
 		'INSERT INTO generations ' +
-			'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at) ' +
-			"VALUES (?, ?, ?, 'https://cdn.example.test/source.jpg', 'cozy', ?, 1, 10, ?)"
+			'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at) ' +
+			"VALUES (?, ?, ?, ?, 'cozy', ?, 1, 10, ?)"
 	)
-		.bind(id, userId, `https://cdn.example.test/${id}.webp`, kind, createdAt)
+		.bind(id, userId, resultMediaId, sourceMediaId, kind, createdAt)
 		.run();
 }
 
-// Unlike seedGeneration, lets the caller set source_url/source_hash directly —
-// needed to exercise dedup lookups and the pre-migration ('') grouping case.
+function seedMedia(db: D1Database, url: string, checksum: string): number {
+	const filename = new URL(url).pathname.slice(1);
+	db.prepare('INSERT OR IGNORE INTO media (filename, bucket, checksum) VALUES (?, 1, ?)')
+		.bind(filename, checksum)
+		.run();
+	const row = db
+		.prepare('SELECT id FROM media WHERE bucket = 1 AND filename = ?')
+		.bind(filename)
+		.first<{ id: number }>() as unknown as { id: number } | null;
+	if (!row) throw new Error('media seed failed');
+	return row.id;
+}
+
+// Unlike seedGeneration, lets the caller set source media and checksum directly.
 function seedGenerationWithSource(
 	db: D1Database,
 	id: string,
@@ -84,12 +102,14 @@ function seedGenerationWithSource(
 	sourceHash: string,
 	createdAt: number
 ): void {
+	const resultMediaId = seedMedia(db, `https://cdn.example.test/${id}.webp`, '');
+	const sourceMediaId = seedMedia(db, sourceUrl, sourceHash);
 	db.prepare(
 		'INSERT INTO generations ' +
-			'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at) ' +
-			"VALUES (?, ?, ?, ?, ?, 'cozy', 'render', 1, 10, ?)"
+			'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at) ' +
+			"VALUES (?, ?, ?, ?, 'cozy', 'render', 1, 10, ?)"
 	)
-		.bind(id, userId, `https://cdn.example.test/${id}.webp`, sourceUrl, sourceHash, createdAt)
+		.bind(id, userId, resultMediaId, sourceMediaId, createdAt)
 		.run();
 }
 
@@ -97,6 +117,9 @@ let db: D1Database;
 
 beforeEach(() => {
 	db = makeD1();
+	db.prepare(
+		"UPDATE buckets SET url = 'https://cdn.example.test' WHERE name = 'cadbos-uploads'"
+	).run();
 });
 
 describe('recordGeneration', () => {
@@ -107,8 +130,9 @@ describe('recordGeneration', () => {
 
 		const result = await recordGeneration(db, 'user-1', {
 			url: 'https://cdn.example.test/out.webp',
+			resultHash: RESULT_HASH,
 			sourceUrl: 'https://cdn.example.test/room.jpg',
-			sourceHash: 'hash-room',
+			sourceHash: HASH_1,
 			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
@@ -136,8 +160,9 @@ describe('recordGeneration', () => {
 
 		await recordGeneration(db, 'user-1', {
 			url: 'https://cdn.example.test/out.webp',
+			resultHash: RESULT_HASH,
 			sourceUrl: 'https://cdn.example.test/room.jpg',
-			sourceHash: 'hash-room',
+			sourceHash: HASH_1,
 			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
@@ -162,8 +187,9 @@ describe('listCreditHistory', () => {
 		const sessionId = seedSession(db, 'user-1');
 		await recordGeneration(db, 'user-1', {
 			url: 'https://cdn.example.test/a.webp',
+			resultHash: RESULT_HASH,
 			sourceUrl: 'https://cdn.example.test/room.jpg',
-			sourceHash: 'hash-room',
+			sourceHash: HASH_1,
 			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
@@ -171,6 +197,7 @@ describe('listCreditHistory', () => {
 		});
 		await recordGeneration(db, 'user-1', {
 			url: 'https://cdn.example.test/b.webp',
+			resultHash: RESULT_HASH,
 			sourceUrl: 'https://cdn.example.test/a.webp',
 			sourceHash: '',
 			sessionId,
@@ -206,8 +233,9 @@ describe('listCreditHistory', () => {
 		)?.project_id;
 		await recordGeneration(db, 'user-1', {
 			url: 'https://cdn.example.test/out.webp',
+			resultHash: RESULT_HASH,
 			sourceUrl: 'https://cdn.example.test/room.jpg',
-			sourceHash: 'hash-room',
+			sourceHash: HASH_1,
 			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
@@ -251,6 +279,9 @@ describe('getGeneratedImageForUser', () => {
 		await expect(getGeneratedImageForUser(db, 'user-1', 'image-1')).resolves.toEqual({
 			id: 'image-1',
 			userId: 'user-1',
+			mediaId: expect.any(Number),
+			filename: 'image-1.webp',
+			bucketName: 'cadbos-uploads',
 			url: 'https://cdn.example.test/image-1.webp',
 			sourceUrl: 'https://cdn.example.test/source.jpg',
 			kind: 'render',
@@ -264,10 +295,21 @@ describe('deleteGeneratedImage', () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
 		seedGeneration(db, 'image-1', 'user-1', 1000);
+		const image = await getGeneratedImageForUser(db, 'user-1', 'image-1');
+		if (!image) throw new Error('generated image seed failed');
 
-		await expect(deleteGeneratedImage(db, 'user-2', 'image-1')).resolves.toBe(false);
-		await expect(deleteGeneratedImage(db, 'user-1', 'image-1')).resolves.toBe(true);
+		await expect(deleteGeneratedImage(db, 'user-2', 'image-1', image.mediaId)).resolves.toEqual({
+			generationDeleted: false,
+			mediaDeleted: false
+		});
+		await expect(deleteGeneratedImage(db, 'user-1', 'image-1', image.mediaId)).resolves.toEqual({
+			generationDeleted: true,
+			mediaDeleted: true
+		});
 		await expect(getGeneratedImageForUser(db, 'user-1', 'image-1')).resolves.toBeNull();
+		expect(
+			await db.prepare('SELECT id FROM media WHERE id = ?').bind(image.mediaId).first()
+		).toBeNull();
 	});
 });
 
@@ -287,6 +329,9 @@ describe('listGeneratedImages', () => {
 				{
 					id: 'newest',
 					userId: 'user-1',
+					mediaId: expect.any(Number),
+					filename: 'newest.webp',
+					bucketName: 'cadbos-uploads',
 					url: 'https://cdn.example.test/newest.webp',
 					sourceUrl: 'https://cdn.example.test/source.jpg',
 					kind: 'render',
@@ -295,6 +340,9 @@ describe('listGeneratedImages', () => {
 				{
 					id: 'middle',
 					userId: 'user-1',
+					mediaId: expect.any(Number),
+					filename: 'middle.webp',
+					bucketName: 'cadbos-uploads',
 					url: 'https://cdn.example.test/middle.webp',
 					sourceUrl: 'https://cdn.example.test/source.jpg',
 					kind: 'render',
@@ -328,14 +376,14 @@ describe('listGeneratedImages', () => {
 });
 
 describe('findGenerationSourceByHash', () => {
-	it('returns the most recent source_url for a matching hash', async () => {
+	it('returns the most recent source media URL for a matching hash', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedGenerationWithSource(
 			db,
 			'a',
 			'user-1',
 			'https://cdn.example.test/room-v1.jpg',
-			'hash-1',
+			HASH_1,
 			1000
 		);
 		seedGenerationWithSource(
@@ -343,11 +391,11 @@ describe('findGenerationSourceByHash', () => {
 			'b',
 			'user-1',
 			'https://cdn.example.test/room-v2.jpg',
-			'hash-1',
+			HASH_1,
 			2000
 		);
 
-		await expect(findGenerationSourceByHash(db, 'user-1', 'hash-1')).resolves.toBe(
+		await expect(findGenerationSourceByHash(db, 'user-1', HASH_1)).resolves.toBe(
 			'https://cdn.example.test/room-v2.jpg'
 		);
 	});
@@ -355,21 +403,14 @@ describe('findGenerationSourceByHash', () => {
 	it('never matches across users', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
-		seedGenerationWithSource(
-			db,
-			'a',
-			'user-2',
-			'https://cdn.example.test/room.jpg',
-			'hash-1',
-			1000
-		);
+		seedGenerationWithSource(db, 'a', 'user-2', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
 
-		await expect(findGenerationSourceByHash(db, 'user-1', 'hash-1')).resolves.toBeNull();
+		await expect(findGenerationSourceByHash(db, 'user-1', HASH_1)).resolves.toBeNull();
 	});
 
-	it('never matches an empty hash, even against pre-migration rows', async () => {
+	it('never matches an empty hash', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneration(db, 'legacy', 'user-1', 1000); // seedGeneration leaves source_hash at its '' default
+		seedGeneration(db, 'empty-checksum', 'user-1', 1000);
 
 		await expect(findGenerationSourceByHash(db, 'user-1', '')).resolves.toBeNull();
 	});
@@ -378,22 +419,8 @@ describe('findGenerationSourceByHash', () => {
 describe('listDistinctSourceImages', () => {
 	it('collapses repeat uploads of the same hash into one card', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGenerationWithSource(
-			db,
-			'a',
-			'user-1',
-			'https://cdn.example.test/room.jpg',
-			'hash-1',
-			1000
-		);
-		seedGenerationWithSource(
-			db,
-			'b',
-			'user-1',
-			'https://cdn.example.test/room.jpg',
-			'hash-1',
-			2000
-		);
+		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
 
 		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
 
@@ -403,13 +430,11 @@ describe('listDistinctSourceImages', () => {
 		});
 	});
 
-	// source_hash = '' means this row's source_url isn't something the user
-	// uploaded: #resolveSourceFor never attaches a hash for the
+	// An empty checksum means this source isn't something the user uploaded:
+	// #resolveSourceFor never attaches a hash for the
 	// 'current-result' source mode (edit/upscale always use it; the other
 	// tools do whenever "use the current result" is picked over a fresh
-	// photo), so source_url there is a previous generation's own *output*.
-	// Pre-migration rows share the same '' backfill and are indistinguishable
-	// from those — both are excluded, not just deduped away.
+	// photo), so the source media there is a previous generation's own output.
 	it('excludes rows whose source was a previous result, not an upload', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		// A real upload, mixed in so the exclusion isn't just "everything is empty".
@@ -418,10 +443,10 @@ describe('listDistinctSourceImages', () => {
 			'upload',
 			'user-1',
 			'https://cdn.example.test/room.jpg',
-			'hash-1',
+			HASH_1,
 			500
 		);
-		// An edit continuing from a previous render result — source_hash is
+		// An edit continuing from a previous render result — its checksum is
 		// always '' for this mode, even though the row itself is recent.
 		seedGenerationWithSource(
 			db,
@@ -453,20 +478,13 @@ describe('listDistinctSourceImages', () => {
 	it('never mixes another user’s photos into the page', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
-		seedGenerationWithSource(
-			db,
-			'a',
-			'user-1',
-			'https://cdn.example.test/mine.jpg',
-			'hash-1',
-			1000
-		);
+		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/mine.jpg', HASH_1, 1000);
 		seedGenerationWithSource(
 			db,
 			'b',
 			'user-2',
 			'https://cdn.example.test/theirs.jpg',
-			'hash-2',
+			HASH_2,
 			2000
 		);
 

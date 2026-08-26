@@ -242,7 +242,16 @@ describe('POST /api/edit — billing', () => {
 		const result = (await response.json()) as { outputUrl: string };
 
 		const row = await db
-			.prepare('SELECT user_id, url, source_url, prompt, kind FROM generations WHERE user_id = ?')
+			.prepare(
+				"SELECT g.user_id, result_bucket.url || '/' || result_media.filename AS url, " +
+					"source_bucket.url || '/' || source_media.filename AS source_url, g.prompt, g.kind " +
+					'FROM generations g ' +
+					'JOIN media result_media ON result_media.id = g.result_media_id ' +
+					'JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ' +
+					'JOIN media source_media ON source_media.id = g.source_media_id ' +
+					'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
+					'WHERE g.user_id = ?'
+			)
 			.bind('user-1')
 			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
 		expect(row).toEqual({
@@ -266,7 +275,10 @@ describe('POST /api/edit — billing', () => {
 		expect(response.status).toBe(200);
 
 		const row = await db
-			.prepare('SELECT source_hash FROM generations WHERE user_id = ?')
+			.prepare(
+				'SELECT media.checksum AS source_hash FROM generations ' +
+					'JOIN media ON media.id = generations.source_media_id WHERE generations.user_id = ?'
+			)
 			.bind('user-1')
 			.first<{ source_hash: string }>();
 		expect(row?.source_hash).toBe('a'.repeat(64));
@@ -281,7 +293,10 @@ describe('POST /api/edit — billing', () => {
 		expect(response.status).toBe(200);
 
 		const row = await db
-			.prepare('SELECT source_hash FROM generations WHERE user_id = ?')
+			.prepare(
+				'SELECT media.checksum AS source_hash FROM generations ' +
+					'JOIN media ON media.id = generations.source_media_id WHERE generations.user_id = ?'
+			)
 			.bind('user-1')
 			.first<{ source_hash: string }>();
 		expect(row?.source_hash).toBe('');

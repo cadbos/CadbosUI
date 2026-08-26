@@ -25,7 +25,7 @@ type StoredImage = {
 };
 
 // Content hash used to dedup repeat uploads of the same photo against
-// generations.source_hash (see findGenerationSourceByHash). Not a security
+// media.checksum (see findGenerationSourceByHash). Not a security
 // boundary — just a lookup key — so a fast, non-cryptographic-strength
 // concern doesn't apply; SHA-256 is used because it's already available via
 // Web Crypto in the Workers runtime.
@@ -36,26 +36,15 @@ export async function hashBytes(bytes: ArrayBuffer): Promise<string> {
 		.join('');
 }
 
-// Guards the dedup path in POST /api/uploads: generations.source_url can also
-// hold a render/edit *output* URL (any generation kind, not just uploads —
-// see recordGeneration), so a hash lookup match must be confirmed to actually
-// point at our own R2 bucket before it's reused as if it were a stored
-// upload. Same trailing-slash-safe base as storeImage's own key resolution.
-export function isStoredUploadUrl(url: string, publicUrl: string): boolean {
-	const base = publicUrl.endsWith('/') ? publicUrl : `${publicUrl}/`;
-	return url.startsWith(base);
-}
-
 async function storeImage(
 	platform: App.Platform | undefined,
+	publicUrl: string,
 	bytes: ArrayBuffer,
 	mime: string,
 	storageKey?: string,
 	precomputedHash?: string
 ): Promise<StoredImage> {
 	const bucket = platform?.env?.UPLOADS_BUCKET;
-	const publicUrl = platform?.env?.UPLOADS_PUBLIC_URL;
-
 	if (!bucket) {
 		if (dev) {
 			const upload = mockUpload();
@@ -66,8 +55,6 @@ async function storeImage(
 		}
 		throw new Error('UPLOADS_BUCKET not configured');
 	}
-
-	if (!publicUrl) throw new Error('UPLOADS_PUBLIC_URL not configured');
 
 	const normalizedMime = normalizeImageContentType(mime);
 	if (normalizedMime === null) throw new Error(`Unsupported image type: ${mime}`);
@@ -92,18 +79,27 @@ async function storeImage(
 
 export async function uploadImage(
 	platform: App.Platform | undefined,
+	publicUrl: string,
 	file: File,
 	precomputedHash?: string
 ): Promise<StoredImage> {
-	return storeImage(platform, await file.arrayBuffer(), file.type, undefined, precomputedHash);
+	return storeImage(
+		platform,
+		publicUrl,
+		await file.arrayBuffer(),
+		file.type,
+		undefined,
+		precomputedHash
+	);
 }
 
 export async function uploadImageBytes(
 	platform: App.Platform | undefined,
+	publicUrl: string,
 	bytes: ArrayBuffer,
 	mime: string,
 	storageKey?: string,
 	precomputedHash?: string
 ): Promise<StoredImage> {
-	return storeImage(platform, bytes, mime, storageKey, precomputedHash);
+	return storeImage(platform, publicUrl, bytes, mime, storageKey, precomputedHash);
 }

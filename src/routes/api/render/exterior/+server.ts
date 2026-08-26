@@ -28,6 +28,7 @@ import {
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { renderExterior } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
+import { getBucketByName } from '$lib/server/media';
 import { assertSessionOwnedByUser } from '$lib/server/projects';
 
 // Generation is restricted further, by design: only accounts an admin has
@@ -77,8 +78,12 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	}
 
 	let result: RenderResponse;
+	let resultHash: string;
 	try {
-		result = await renderExterior(platform, parsed.data);
+		const uploadsUrl = db ? (await getBucketByName(db, 'cadbos-uploads')).url : '';
+		const stored = await renderExterior(platform, uploadsUrl, parsed.data);
+		result = stored;
+		resultHash = stored.outputHash;
 	} catch (err) {
 		// generation.ts already sanitizes/logs the detail; this route is the last
 		// line of defense (NFR-6/8) — never forward err.message to the client.
@@ -101,6 +106,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		try {
 			const credit = await recordGeneration(db, userId, {
 				url: result.outputUrl,
+				resultHash,
 				sourceUrl: parsed.data.image,
 				sourceHash: parsed.data.imageHash ?? '',
 				sessionId: parsed.data.sessionId,
@@ -123,5 +129,5 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		}
 	}
 
-	return json(result);
+	return json({ outputUrl: result.outputUrl, cost: result.cost, balance: result.balance });
 };

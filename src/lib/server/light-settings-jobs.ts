@@ -13,6 +13,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
+import { getOrCreateMedia, mediaUrl } from '$lib/server/media';
 
 export type LightSettingsJobStatus = 'processing' | 'completed' | 'failed';
 
@@ -21,7 +22,6 @@ export interface LightSettingsJob {
 	userId: string;
 	comfyPromptId: string;
 	sceneUrl: string;
-	sceneHash: string;
 	sessionId: string;
 	instruction: string;
 	cost: number;
@@ -38,13 +38,14 @@ interface LightSettingsJobRow {
 	id: string;
 	user_id: string;
 	comfy_prompt_id: string;
-	scene_url: string;
-	scene_hash: string;
+	scene_filename: string;
+	scene_bucket_url: string;
 	session_id: string;
 	instruction: string;
 	cost: number;
 	status: LightSettingsJobStatus;
-	output_url: string | null;
+	output_filename: string | null;
+	output_bucket_url: string | null;
 	error_code: string | null;
 	balance_after: number | null;
 	created_at: number;
@@ -62,13 +63,15 @@ function toLightSettingsJob(row: LightSettingsJobRow): LightSettingsJob {
 		id: row.id,
 		userId: row.user_id,
 		comfyPromptId: row.comfy_prompt_id,
-		sceneUrl: row.scene_url,
-		sceneHash: row.scene_hash,
+		sceneUrl: mediaUrl(row.scene_bucket_url, row.scene_filename),
 		sessionId: row.session_id,
 		instruction: row.instruction,
 		cost: row.cost,
 		status: row.status,
-		outputUrl: row.output_url,
+		outputUrl:
+			row.output_filename === null || row.output_bucket_url === null
+				? null
+				: mediaUrl(row.output_bucket_url, row.output_filename),
 		errorCode: row.error_code,
 		balanceAfter: row.balance_after,
 		createdAt: row.created_at,
@@ -91,27 +94,28 @@ export async function createLightSettingsJob(
 		createdAt: number;
 	}
 ): Promise<LightSettingsJob> {
-	const row = await db
+	const scene = await getOrCreateMedia(db, input.sceneUrl, input.sceneHash);
+	await db
 		.prepare(
 			'INSERT INTO light_settings_jobs ' +
-				'(id, user_id, comfy_prompt_id, scene_url, scene_hash, session_id, instruction, cost, status, created_at, updated_at) ' +
-				"VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?) RETURNING *"
+				'(id, user_id, comfy_prompt_id, scene_media_id, session_id, instruction, cost, status, created_at, updated_at) ' +
+				"VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?)"
 		)
 		.bind(
 			input.id,
 			input.userId,
 			input.comfyPromptId,
-			input.sceneUrl,
-			input.sceneHash,
+			scene.id,
 			input.sessionId,
 			input.instruction,
 			input.cost,
 			input.createdAt,
 			input.createdAt
 		)
-		.first<LightSettingsJobRow>();
-	if (!row) throw new Error('light settings job insert failed');
-	return toLightSettingsJob(row);
+		.run();
+	const job = await getLightSettingsJob(db, input.userId, input.id);
+	if (!job) throw new Error('light settings job insert failed');
+	return job;
 }
 
 export async function getLightSettingsJob(
@@ -120,7 +124,17 @@ export async function getLightSettingsJob(
 	id: string
 ): Promise<LightSettingsJob | null> {
 	const row = await db
-		.prepare('SELECT * FROM light_settings_jobs WHERE id = ? AND user_id = ?')
+		.prepare(
+			'SELECT j.id, j.user_id, j.comfy_prompt_id, scene.filename AS scene_filename, ' +
+				'scene_bucket.url AS scene_bucket_url, j.session_id, j.instruction, j.cost, j.status, ' +
+				'output.filename AS output_filename, output_bucket.url AS output_bucket_url, ' +
+				'j.error_code, j.balance_after, j.created_at, j.updated_at, j.completed_at ' +
+				'FROM light_settings_jobs j JOIN media scene ON scene.id = j.scene_media_id ' +
+				'JOIN buckets scene_bucket ON scene_bucket.id = scene.bucket ' +
+				'LEFT JOIN media output ON output.id = j.output_media_id ' +
+				'LEFT JOIN buckets output_bucket ON output_bucket.id = output.bucket ' +
+				'WHERE j.id = ? AND j.user_id = ?'
+		)
 		.bind(id, userId)
 		.first<LightSettingsJobRow>();
 	return row ? toLightSettingsJob(row) : null;
@@ -133,17 +147,16 @@ export async function failLightSettingsJob(
 	errorCode: string,
 	completedAt: number
 ): Promise<LightSettingsJob> {
-	const row = await db
+	await db
 		.prepare(
 			"UPDATE light_settings_jobs SET status = 'failed', error_code = ?, updated_at = ?, completed_at = ? " +
-				"WHERE id = ? AND user_id = ? AND status = 'processing' RETURNING *"
+				"WHERE id = ? AND user_id = ? AND status = 'processing'"
 		)
 		.bind(errorCode, completedAt, completedAt, id, userId)
-		.first<LightSettingsJobRow>();
-	if (row) return toLightSettingsJob(row);
-	const existing = await getLightSettingsJob(db, userId, id);
-	if (!existing) throw new Error('light settings job not found');
-	return existing;
+		.run();
+	const job = await getLightSettingsJob(db, userId, id);
+	if (!job) throw new Error('light settings job not found');
+	return job;
 }
 
 export async function completeLightSettingsJob(
@@ -151,9 +164,11 @@ export async function completeLightSettingsJob(
 	userId: string,
 	id: string,
 	outputUrl: string,
+	outputHash: string,
 	completedAt: number
 ): Promise<LightSettingsJob> {
-	const results = await db.batch<LightSettingsDeductionSnapshotRow | LightSettingsJobRow>([
+	const output = await getOrCreateMedia(db, outputUrl, outputHash);
+	const results = await db.batch<LightSettingsDeductionSnapshotRow>([
 		db
 			.prepare(
 				'SELECT c.balance AS available_balance, j.cost FROM credits c ' +
@@ -173,31 +188,29 @@ export async function completeLightSettingsJob(
 		db
 			.prepare(
 				'INSERT INTO generations ' +
-					'(id, user_id, url, source_url, source_hash, prompt, kind, amount, balance_after, created_at, session_id) ' +
-					"SELECT j.id, j.user_id, ?, j.scene_url, j.scene_hash, j.instruction, 'light-settings', j.cost, c.balance, ?, j.session_id " +
+					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id) ' +
+					"SELECT j.id, j.user_id, ?, j.scene_media_id, j.instruction, 'light-settings', j.cost, c.balance, ?, j.session_id " +
 					'FROM light_settings_jobs j JOIN credits c ON c.user_id = j.user_id ' +
 					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
 			)
-			.bind(outputUrl, completedAt, id, userId),
+			.bind(output.id, completedAt, id, userId),
 		db
 			.prepare(
-				"UPDATE light_settings_jobs SET status = 'completed', output_url = ?, " +
+				"UPDATE light_settings_jobs SET status = 'completed', output_media_id = ?, " +
 					'balance_after = (SELECT balance FROM credits WHERE user_id = ?), updated_at = ?, completed_at = ? ' +
 					"WHERE id = ? AND user_id = ? AND status = 'processing' " +
-					'AND EXISTS (SELECT 1 FROM credits WHERE user_id = ?) RETURNING *'
+					'AND EXISTS (SELECT 1 FROM credits WHERE user_id = ?)'
 			)
-			.bind(outputUrl, userId, completedAt, completedAt, id, userId, userId)
+			.bind(output.id, userId, completedAt, completedAt, id, userId, userId)
 	]);
 	const snapshot = results[0]?.results[0];
-	if (snapshot && 'available_balance' in snapshot && snapshot.available_balance < snapshot.cost) {
+	if (snapshot && snapshot.available_balance < snapshot.cost) {
 		console.warn('Light settings credit deduction exceeded available balance:', {
 			jobId: id
 		});
 	}
-	const row = results[3]?.results[0];
-	if (row && 'id' in row) return toLightSettingsJob(row);
-	const existing = await getLightSettingsJob(db, userId, id);
-	if (!existing) throw new Error('light settings job not found');
-	if (existing.status === 'processing') throw new Error('light settings job completion failed');
-	return existing;
+	const job = await getLightSettingsJob(db, userId, id);
+	if (!job) throw new Error('light settings job not found');
+	if (job.status === 'processing') throw new Error('light settings job completion failed');
+	return job;
 }

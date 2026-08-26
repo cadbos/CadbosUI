@@ -23,6 +23,7 @@ import { getUserIdByPubkey } from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { imageExtensionFromMime } from '$lib/image-mime';
+import { getBucketByName } from '$lib/server/media';
 import {
 	OBJECT_REPLACEMENT_TIMEOUT_MS,
 	pollObjectReplacement
@@ -136,13 +137,22 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	}
 
 	try {
+		const uploadsUrl = (await getBucketByName(db, 'cadbos-uploads')).url;
 		const stored = await uploadImageBytes(
 			platform,
+			uploadsUrl,
 			result.bytes,
 			result.contentType,
 			`object-replacements/${job.id}.${extension}`
 		);
-		job = await completeObjectReplacementJob(db, userId, job.id, stored.url, Date.now());
+		job = await completeObjectReplacementJob(
+			db,
+			userId,
+			job.id,
+			stored.url,
+			stored.hash,
+			Date.now()
+		);
 		return responseForJob(job);
 	} catch (error) {
 		console.error('Object replacement finalization failed:', error);

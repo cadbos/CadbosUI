@@ -50,7 +50,6 @@ declare global {
 				TEXTURE_REPLACEMENT_COST?: string;
 				LIGHT_SETTINGS_COST?: string;
 				UPLOADS_BUCKET: R2Bucket;
-				UPLOADS_PUBLIC_URL?: string;
 				// Comma-separated Nostr pubkeys (hex) subject to the local metered
 				// credit limit (billing.ts) — everyone else keeps the unlimited,
 				// archAI-is-the-only-gate behavior. Not a secret; swap accounts by

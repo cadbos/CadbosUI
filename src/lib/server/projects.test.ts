@@ -15,6 +15,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { makeD1 } from './testing/d1-shim';
+import { seedGeneration as seedGenerationFixture } from '$lib/server/testing/generation-fixtures';
 import {
 	archiveProject,
 	archiveSession,
@@ -44,13 +45,14 @@ function seedGeneration(
 	sessionId: string,
 	createdAt: number
 ): void {
-	db.prepare(
-		'INSERT INTO generations ' +
-			'(id, user_id, url, source_url, prompt, kind, amount, balance_after, created_at, session_id) ' +
-			"VALUES (?, ?, ?, 'https://cdn.example.test/source.jpg', 'cozy', 'render', 1, 10, ?, ?)"
-	)
-		.bind(id, userId, `https://cdn.example.test/${id}.webp`, createdAt, sessionId)
-		.run();
+	seedGenerationFixture(db, {
+		id,
+		userId,
+		url: `https://cdn.example.test/${id}.webp`,
+		sourceUrl: 'https://cdn.example.test/source.jpg',
+		createdAt,
+		sessionId
+	});
 }
 
 describe('projects repository', () => {

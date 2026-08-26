@@ -35,6 +35,7 @@ const { editInterior, renderInterior, replaceTexturesWithMask, styleTransferInte
 const withoutKey = { env: {} } as App.Platform;
 const publicUploadsUrl = 'https://uploads.cadbos.example';
 const archaiApiUrl = 'https://archai.example.test/v1';
+const generatedImageHash = 'ea6ee3ad978493f9f7d995feff3384f7a08d46ec01510e0c07d21dc7c05ac37a';
 
 function mockBucket(): { put: ReturnType<typeof vi.fn> } {
 	return { put: vi.fn(async () => undefined) };
@@ -45,8 +46,7 @@ function withKey(bucket: ReturnType<typeof mockBucket> = mockBucket()): App.Plat
 		env: {
 			ARCHAI_API_KEY: 'test-key',
 			ARCHAI_API_URL: archaiApiUrl,
-			UPLOADS_BUCKET: bucket,
-			UPLOADS_PUBLIC_URL: publicUploadsUrl
+			UPLOADS_BUCKET: bucket
 		}
 	} as unknown as App.Platform;
 }
@@ -72,7 +72,7 @@ afterEach(() => {
 
 describe('renderInterior', () => {
 	it('falls back to the dev mock when no API key is configured', async () => {
-		const result = await renderInterior(withoutKey, {
+		const result = await renderInterior(withoutKey, publicUploadsUrl, {
 			image: 'https://example.test/room.jpg',
 			prompt: 'cozy',
 			outputFormat: 'webp'
@@ -92,7 +92,7 @@ describe('renderInterior', () => {
 			}
 		});
 
-		const result = await renderInterior(withKey(bucket), {
+		const result = await renderInterior(withKey(bucket), publicUploadsUrl, {
 			image: 'https://example.test/room.jpg',
 			prompt: 'cozy',
 			outputFormat: 'webp'
@@ -112,6 +112,7 @@ describe('renderInterior', () => {
 		);
 		expect(result).toEqual({
 			outputUrl: `${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174000.webp`,
+			outputHash: generatedImageHash,
 			cost: 1,
 			balance: 24
 		});
@@ -125,7 +126,7 @@ describe('renderInterior', () => {
 			data: { output: 'https://example.test/a.jpg', cost: 1, balance: 24 }
 		});
 
-		const result = await renderInterior(withKey(bucket), {
+		const result = await renderInterior(withKey(bucket), publicUploadsUrl, {
 			image: 'https://example.test/room.jpg',
 			prompt: '',
 			outputFormat: 'webp'
@@ -145,7 +146,7 @@ describe('renderInterior', () => {
 		});
 
 		await expect(
-			renderInterior(withKey(), {
+			renderInterior(withKey(), publicUploadsUrl, {
 				image: 'https://example.test/room.jpg',
 				prompt: '',
 				outputFormat: 'webp'
@@ -159,7 +160,7 @@ describe('renderInterior', () => {
 		const platform = { env: { ARCHAI_API_KEY: 'test-key' } } as App.Platform;
 
 		try {
-			const render = renderInterior(platform, {
+			const render = renderInterior(platform, publicUploadsUrl, {
 				image: 'https://example.test/room.jpg',
 				prompt: 'cozy',
 				outputFormat: 'webp'
@@ -190,13 +191,13 @@ describe('renderInterior', () => {
 		});
 
 		try {
-			const result = await renderInterior(withKey(), {
+			const result = await renderInterior(withKey(), publicUploadsUrl, {
 				image: 'https://example.test/room.jpg',
 				prompt: '',
 				outputFormat: 'webp'
 			});
 
-			expect(result).toEqual({ outputUrl: providerUrl, cost: 1, balance: 24 });
+			expect(result).toEqual({ outputUrl: providerUrl, outputHash: '', cost: 1, balance: 24 });
 			expect(consoleError).toHaveBeenCalledWith(
 				'archAI render/interior image mirror failed after successful generation:',
 				'download fetch failed (Error)'
@@ -209,7 +210,7 @@ describe('renderInterior', () => {
 
 describe('editInterior', () => {
 	it('falls back to the dev mock when no API key is configured', async () => {
-		const result = await editInterior(withoutKey, {
+		const result = await editInterior(withoutKey, publicUploadsUrl, {
 			image: 'https://example.test/prev-render.jpg',
 			prompt: 'make the wall sage green'
 		});
@@ -224,7 +225,7 @@ describe('editInterior', () => {
 			data: { output: 'https://example.test/edited.jpg', cost: 1, balance: 23 }
 		});
 
-		const result = await editInterior(withKey(bucket), {
+		const result = await editInterior(withKey(bucket), publicUploadsUrl, {
 			image: 'https://example.test/prev-render.jpg',
 			prompt: 'make the wall sage green'
 		});
@@ -236,6 +237,7 @@ describe('editInterior', () => {
 		);
 		expect(result).toEqual({
 			outputUrl: `${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174002.webp`,
+			outputHash: generatedImageHash,
 			cost: 1,
 			balance: 23
 		});
@@ -248,7 +250,7 @@ describe('editInterior', () => {
 			data: { output: 'https://example.test/edited.jpg', cost: 1, balance: 23 }
 		});
 
-		await editInterior(withKey(), {
+		await editInterior(withKey(), publicUploadsUrl, {
 			image: 'https://example.test/prev-render.jpg',
 			prompt: 'replace the sofa with a leather armchair'
 		});
@@ -266,7 +268,7 @@ describe('editInterior', () => {
 		});
 
 		await expect(
-			editInterior(withKey(), {
+			editInterior(withKey(), publicUploadsUrl, {
 				image: 'https://example.test/prev-render.jpg',
 				prompt: 'replace the sofa'
 			})
@@ -279,7 +281,7 @@ describe('editInterior', () => {
 		});
 
 		await expect(
-			editInterior(withKey(), {
+			editInterior(withKey(), publicUploadsUrl, {
 				image: 'https://example.test/prev-render.jpg',
 				prompt: 'replace the sofa'
 			})
@@ -300,13 +302,13 @@ describe('editInterior', () => {
 		});
 
 		try {
-			const result = await editInterior(withKey(bucket), {
+			const result = await editInterior(withKey(bucket), publicUploadsUrl, {
 				image: 'https://example.test/prev-render.jpg',
 				prompt: 'replace the sofa'
 			});
 
 			expect(bucket.put).toHaveBeenCalled();
-			expect(result).toEqual({ outputUrl: providerUrl, cost: 1, balance: 23 });
+			expect(result).toEqual({ outputUrl: providerUrl, outputHash: '', cost: 1, balance: 23 });
 			expect(consoleError).toHaveBeenCalledWith(
 				'archAI edit-by-prompt image mirror failed after successful generation:',
 				'storage upload failed (Error)'
@@ -325,12 +327,12 @@ describe('editInterior', () => {
 		});
 
 		try {
-			const result = await editInterior(withKey(), {
+			const result = await editInterior(withKey(), publicUploadsUrl, {
 				image: 'https://example.test/prev-render.jpg',
 				prompt: 'replace the sofa'
 			});
 
-			expect(result).toEqual({ outputUrl: providerUrl, cost: 1, balance: 23 });
+			expect(result).toEqual({ outputUrl: providerUrl, outputHash: '', cost: 1, balance: 23 });
 			expect(consoleError).toHaveBeenCalledWith(
 				'archAI edit-by-prompt image mirror failed after successful generation:',
 				'unexpected content type text/html'
@@ -343,7 +345,7 @@ describe('editInterior', () => {
 
 describe('styleTransferInterior', () => {
 	it('falls back to the dev mock when no API key is configured', async () => {
-		const result = await styleTransferInterior(withoutKey, {
+		const result = await styleTransferInterior(withoutKey, publicUploadsUrl, {
 			image: 'https://example.test/room.jpg',
 			referenceImage: 'https://example.test/style.jpg',
 			outputFormat: 'webp'
@@ -356,7 +358,7 @@ describe('styleTransferInterior', () => {
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 		try {
-			const transfer = styleTransferInterior(withoutKey, {
+			const transfer = styleTransferInterior(withoutKey, publicUploadsUrl, {
 				image: 'https://example.test/room.jpg',
 				referenceImage: 'https://example.test/style.jpg',
 				outputFormat: 'webp'
@@ -381,7 +383,7 @@ describe('styleTransferInterior', () => {
 			}
 		});
 
-		const result = await styleTransferInterior(withKey(bucket), {
+		const result = await styleTransferInterior(withKey(bucket), publicUploadsUrl, {
 			image: 'https://example.test/room.jpg',
 			referenceImage: 'https://example.test/style.jpg',
 			outputFormat: 'webp',
@@ -405,6 +407,7 @@ describe('styleTransferInterior', () => {
 		);
 		expect(result).toEqual({
 			outputUrl: `${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174004.png`,
+			outputHash: generatedImageHash,
 			cost: 2,
 			balance: 22
 		});
@@ -416,7 +419,7 @@ describe('styleTransferInterior', () => {
 		});
 
 		await expect(
-			styleTransferInterior(withKey(), {
+			styleTransferInterior(withKey(), publicUploadsUrl, {
 				image: 'https://example.test/room.jpg',
 				referenceImage: 'https://example.test/style.jpg',
 				outputFormat: 'webp'
@@ -430,7 +433,7 @@ describe('styleTransferInterior', () => {
 		});
 
 		await expect(
-			styleTransferInterior(withKey(), {
+			styleTransferInterior(withKey(), publicUploadsUrl, {
 				image: 'https://example.test/room.jpg',
 				referenceImage: 'https://example.test/style.jpg',
 				outputFormat: 'webp'
@@ -441,7 +444,7 @@ describe('styleTransferInterior', () => {
 
 describe('replaceTexturesWithMask', () => {
 	it('falls back to the dev mock when ArchAI is not configured', async () => {
-		const result = await replaceTexturesWithMask(withoutKey, {
+		const result = await replaceTexturesWithMask(withoutKey, publicUploadsUrl, {
 			image: 'https://example.test/room.jpg',
 			referenceImage: 'https://example.test/texture.jpg',
 			mask: 'https://example.test/mask.png',
@@ -463,7 +466,7 @@ describe('replaceTexturesWithMask', () => {
 			}
 		});
 
-		const result = await replaceTexturesWithMask(withKey(bucket), {
+		const result = await replaceTexturesWithMask(withKey(bucket), publicUploadsUrl, {
 			image: 'https://example.test/room.jpg',
 			referenceImage: 'https://example.test/texture.jpg',
 			mask: 'https://example.test/mask.png',
@@ -477,6 +480,7 @@ describe('replaceTexturesWithMask', () => {
 		});
 		expect(result).toEqual({
 			outputUrl: `${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174005.png`,
+			outputHash: generatedImageHash,
 			cost: 1.5,
 			balance: 20
 		});
@@ -488,7 +492,7 @@ describe('replaceTexturesWithMask', () => {
 		});
 
 		await expect(
-			replaceTexturesWithMask(withKey(), {
+			replaceTexturesWithMask(withKey(), publicUploadsUrl, {
 				image: 'https://example.test/room.jpg',
 				referenceImage: 'https://example.test/texture.jpg',
 				mask: 'https://example.test/mask.png',
