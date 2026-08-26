@@ -16,6 +16,7 @@ before the Change Date. See LICENSE for complete terms.
 	import type { HealthServiceStatus, HealthSnapshot } from '$lib/api/contract';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { status } from '$lib/state/status.svelte';
+	import HintIcon from '$lib/components/HintIcon.svelte';
 
 	type ServiceKey = keyof HealthSnapshot['services'];
 
@@ -28,6 +29,10 @@ before the Change Date. See LICENSE for complete terms.
 
 	function serviceName(key: ServiceKey): string {
 		return t(`status.service.${key}` as TranslationKey);
+	}
+
+	function serviceHint(key: ServiceKey): string {
+		return t(`status.hint.${key}` as TranslationKey);
 	}
 
 	function healthLabel(health: HealthServiceStatus): string {
@@ -94,7 +99,12 @@ before the Change Date. See LICENSE for complete terms.
 						{#each serviceKeys as key (key)}
 							{@const service = snapshot.services[key]}
 							<tr>
-								<th scope="row">{serviceName(key)}</th>
+								<th scope="row">
+									<span class="service-name">
+										{serviceName(key)}
+										<HintIcon label={serviceHint(key)} />
+									</span>
+								</th>
 								<td>
 									<span class:healthy={service.status === 'healthy'} class="health-badge">
 										{healthLabel(service.status)}
@@ -262,6 +272,12 @@ before the Change Date. See LICENSE for complete terms.
 	tbody tr:last-child th,
 	tbody tr:last-child td {
 		border-bottom: 0;
+	}
+
+	.service-name {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
 	}
 
 	tbody tr:hover {

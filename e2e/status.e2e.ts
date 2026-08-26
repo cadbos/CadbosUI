@@ -172,13 +172,13 @@ test('deduplicates the direct status load and preserves cache-driven polling', a
 	await expect(
 		page.getByRole('table', { name: 'Состояние сервисов, используемых Cadbos' })
 	).toBeVisible();
-	await expect(page.getByRole('row', { name: /archAI Работает 12 мс/ })).toBeVisible();
+	await expect(page.getByRole('row', { name: /archAI.*Работает 12 мс/s })).toBeVisible();
 	await expect(
 		page.getByRole('row', {
-			name: /Ретрансляторы Nostr Работает 16 мс Доступно ретрансляторов: 3 из 4/
+			name: /Ретрансляторы Nostr.*Работает 16 мс Доступно ретрансляторов: 3 из 4/s
 		})
 	).toBeVisible();
-	await expect(page.getByRole('row', { name: /Хранилище R2 Работает 17 мс/ })).toBeVisible();
+	await expect(page.getByRole('row', { name: /Хранилище R2.*Работает 17 мс/s })).toBeVisible();
 	await expect.poll(() => requests).toBe(1);
 
 	await page.clock.fastForward(59_999);
@@ -186,7 +186,7 @@ test('deduplicates the direct status load and preserves cache-driven polling', a
 	await page.clock.fastForward(1);
 
 	await expect.poll(() => requests).toBe(2);
-	await expect(page.getByRole('row', { name: /Хранилище R2 Не работает 17 мс/ })).toBeVisible();
+	await expect(page.getByRole('row', { name: /Хранилище R2.*Не работает 17 мс/s })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'странице состояния' })).toHaveCount(0);
 	await expect(page.getByText('Проверено', { exact: false })).toBeVisible();
 	await expect(page.getByRole('tab')).toHaveCount(0);
@@ -214,18 +214,18 @@ test('keeps the last snapshot through a refresh failure and recovers', async ({ 
 	});
 
 	await page.goto('/status');
-	await expect(page.getByRole('row', { name: /archAI Работает 12 мс/ })).toBeVisible();
+	await expect(page.getByRole('row', { name: /archAI.*Работает 12 мс/s })).toBeVisible();
 	await page.clock.fastForward(1_000);
 
 	await expect(page.getByRole('alert')).toHaveText(
 		'Не удалось обновить состояние. Показаны последние доступные данные.'
 	);
-	await expect(page.getByRole('row', { name: /archAI Работает 12 мс/ })).toBeVisible();
+	await expect(page.getByRole('row', { name: /archAI.*Работает 12 мс/s })).toBeVisible();
 
 	await page.clock.fastForward(30_000);
 
 	await expect.poll(() => requests).toBe(3);
-	await expect(page.getByRole('row', { name: /archAI Работает 42 мс/ })).toBeVisible();
+	await expect(page.getByRole('row', { name: /archAI.*Работает 42 мс/s })).toBeVisible();
 	await expect(page.getByRole('alert')).toHaveCount(0);
 });
 

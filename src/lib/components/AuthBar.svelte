@@ -23,6 +23,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { dismissable, logBoundaryError } from '$lib/utils';
 	import QrCode from './QrCode.svelte';
 	import CurrencySwitcher from './CurrencySwitcher.svelte';
+	import HintIcon from './HintIcon.svelte';
 	import LanguageSwitcher from './LanguageSwitcher.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
@@ -290,7 +291,10 @@ before the Change Date. See LICENSE for complete terms.
 				{/if}
 			</div>
 
-			<p class="relay-count">{ti('auth.profile.relayCount', { count: relayCount })}</p>
+			<p class="relay-count">
+				{ti('auth.profile.relayCount', { count: relayCount })}
+				<HintIcon label={t('auth.profile.relayCountHint')} />
+			</p>
 
 			<div class="settings-row">
 				<LanguageSwitcher />
@@ -612,6 +616,9 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.relay-count {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
 		margin: 0;
 		color: var(--color-muted);
 		font-size: 0.78rem;
