@@ -1101,16 +1101,29 @@ test('the Remove Object tool builds a removal prompt from the described object',
 	);
 });
 
-test('the Atmosphere tool applies the exterior variant of a lighting preset', async ({ page }) => {
+test('the Light settings tool composes an instruction from selected presets and queues a job', async ({
+	page
+}) => {
+	const jobId = '123e4567-e89b-42d3-a456-426614174000';
 	await authenticate(page);
 	await mockUpload(page);
-	let capturedPrompt: string | undefined;
-	await page.route('**/api/edit', async (route) => {
-		capturedPrompt = (route.request().postDataJSON() as { prompt: string }).prompt;
+	let submittedBody: unknown;
+	await page.route('**/api/light-settings', async (route) => {
+		submittedBody = route.request().postDataJSON();
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: `/api/light-settings/${jobId}` },
+			body: JSON.stringify({ id: jobId, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/light-settings/${jobId}`, async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
+				id: jobId,
+				status: 'completed',
 				outputUrl: 'https://cdn.example.test/golden-hour.webp',
 				cost: 2,
 				balance: 90
@@ -1124,16 +1137,25 @@ test('the Atmosphere tool applies the exterior variant of a lighting preset', as
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	await page.getByRole('tab', { name: 'Атмосфера' }).click();
-	await page.getByRole('tab', { name: 'Экстерьер' }).click();
-	await page.getByRole('radio', { name: 'Золотой час' }).click();
-	await page.getByRole('button', { name: 'Применить' }).click();
+	await page.getByRole('tab', { name: 'Свет' }).click();
+	const panel = page.locator('#edit-tool-panel-light-settings');
+	await panel.getByRole('button', { name: 'Золотой час' }).click();
+	await panel
+		.locator('.fixture-row', { hasText: 'Торшер' })
+		.getByRole('button', { name: 'Вкл' })
+		.click();
+	await expect(panel.getByText('сделай тёплый золотой свет заката, зажги торшер')).toBeVisible();
+	await panel.getByRole('button', { name: 'Применить' }).click();
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/golden-hour.webp'
+		'https://cdn.example.test/golden-hour.webp',
+		{ timeout: 10_000 }
 	);
-	expect(capturedPrompt).toBe(
-		'Измени освещение на золотой час: тёплый закатный свет с длинными тенями.'
-	);
+	expect(submittedBody).toEqual({
+		image: 'https://cdn.example.test/uploaded.webp',
+		imageHash: 'a'.repeat(64),
+		instruction: 'сделай тёплый золотой свет заката, зажги торшер',
+		sessionId: E2E_SESSION_ID
+	});
 });

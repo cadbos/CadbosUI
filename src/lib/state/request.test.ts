@@ -214,6 +214,8 @@ describe('serialization', () => {
 			textureReplacementSurface: '',
 			textureReplacementSourceMode: 'current-result',
 			textureReplacementMasked: false,
+			lightSettingsPresetIds: [],
+			lightSettingsInstruction: '',
 			currentRender: undefined
 		});
 	});
@@ -1239,6 +1241,137 @@ describe('toTextureReplacementRequest', () => {
 
 		expect(request.commitTextureMaskUpload(textureMask, operation)).toBe(false);
 		expect(request.textureMaskImage).toBeUndefined();
+	});
+});
+
+describe('toLightSettingsRequest', () => {
+	it('reports missing image and instruction when the form is empty', async () => {
+		expect(request.validateLightSettings()).toEqual({
+			valid: false,
+			missing: ['image', 'instruction']
+		});
+		expect(await request.toLightSettingsRequest()).toBeNull();
+	});
+
+	it('is valid with only a preset selected, or only free text', () => {
+		request.setImage(AC9_IMAGE);
+		request.toggleLightSettingsPreset('dim');
+		expect(request.validateLightSettings()).toEqual({ valid: true, missing: [] });
+
+		request.toggleLightSettingsPreset('dim');
+		expect(request.validateLightSettings()).toEqual({
+			valid: false,
+			missing: ['instruction']
+		});
+
+		request.setLightSettingsInstruction('turn off the lamp in the corner');
+		expect(request.validateLightSettings()).toEqual({ valid: true, missing: [] });
+	});
+
+	it('ignores an unknown preset id', () => {
+		request.toggleLightSettingsPreset('not-a-real-preset');
+		expect(request.lightSettingsPresetIds).toEqual([]);
+	});
+
+	it('joins selected presets in click order, then the free-text supplement', async () => {
+		request.setImage(AC9_IMAGE);
+		request.toggleLightSettingsPreset('golden-hour');
+		request.toggleLightSettingsPreset('floor-lamp-on');
+		request.setLightSettingsInstruction('  and dim the hallway  ');
+
+		// t() resolves against the default locale ('ru') absent an explicit
+		// setLocale() call, so the preset phrases come back in Russian — only
+		// the free-text supplement is passed through verbatim.
+		expect(request.lightSettingsPrompt).toBe(
+			'сделай тёплый золотой свет заката, зажги торшер, and dim the hallway'
+		);
+		expect(await request.toLightSettingsRequest()).toEqual({
+			image: AC9_IMAGE.url,
+			instruction: request.lightSettingsPrompt,
+			sessionId: AC9_SESSION_ID
+		});
+	});
+
+	it('removes a preset from the selection when toggled again', () => {
+		request.toggleLightSettingsPreset('midday');
+		request.toggleLightSettingsPreset('dim');
+		request.toggleLightSettingsPreset('midday');
+		expect(request.lightSettingsPresetIds).toEqual(['dim']);
+	});
+
+	it('setLightSettingsFixtureState keeps a fixture’s on/off state mutually exclusive', () => {
+		request.setLightSettingsFixtureState('floor-lamp', 'on');
+		expect(request.lightSettingsPresetIds).toEqual(['floor-lamp-on']);
+
+		request.setLightSettingsFixtureState('floor-lamp', 'off');
+		expect(request.lightSettingsPresetIds).toEqual(['floor-lamp-off']);
+
+		request.setLightSettingsFixtureState('floor-lamp', null);
+		expect(request.lightSettingsPresetIds).toEqual([]);
+	});
+
+	it('setLightSettingsFixtureState leaves other fixtures and mood presets untouched', () => {
+		request.toggleLightSettingsPreset('dim');
+		request.setLightSettingsFixtureState('chandelier', 'on');
+		request.setLightSettingsFixtureState('floor-lamp', 'off');
+
+		expect(request.lightSettingsPresetIds).toEqual(['dim', 'chandelier-on', 'floor-lamp-off']);
+	});
+
+	it('uses the current result when available and falls back to the room photo', async () => {
+		request.setImage(AC9_IMAGE);
+		request.setLightSettingsInstruction('turn on the chandelier');
+		expect((await request.toLightSettingsRequest())?.image).toBe(AC9_IMAGE.url);
+
+		request.setCurrentRender({
+			id: 'render-1',
+			outputUrls: ['https://example.test/current-result.webp'],
+			cost: 2,
+			balance: 18,
+			ts: 0
+		});
+
+		expect((await request.toLightSettingsRequest())?.image).toBe(
+			'https://example.test/current-result.webp'
+		);
+	});
+
+	it('enforces the endpoint text limit and job-id shape', () => {
+		expect(() => request.setLightSettingsInstruction('x'.repeat(501))).toThrow();
+		expect(() => request.setActiveLightSettingsJobId('not-a-job-id')).toThrow();
+		request.setLightSettingsInstruction('x'.repeat(500));
+		request.setActiveLightSettingsJobId('123e4567-e89b-42d3-a456-426614174000');
+		expect(request.lightSettingsInstruction).toHaveLength(500);
+		expect(request.activeLightSettingsJobId).toBe('123e4567-e89b-42d3-a456-426614174000');
+	});
+
+	it('retains an immutable source snapshot and instruction for the accepted job', () => {
+		const source: RenderResult = {
+			id: 'source-render',
+			outputUrls: ['https://example.test/source.webp'],
+			cost: 1,
+			balance: 19,
+			ts: 1
+		};
+		request.setActiveLightSettingsJob(
+			'123e4567-e89b-42d3-a456-426614174000',
+			source,
+			'turn on the chandelier'
+		);
+		source.outputUrls[0] = 'https://example.test/mutated.webp';
+		request.setLightSettingsInstruction('changed after submission');
+
+		expect(request.activeLightSettingsJob).toEqual({
+			id: '123e4567-e89b-42d3-a456-426614174000',
+			instruction: 'turn on the chandelier',
+			sourceRender: {
+				id: 'source-render',
+				outputUrls: ['https://example.test/source.webp'],
+				cost: 1,
+				balance: 19,
+				ts: 1
+			}
+		});
 	});
 });
 
