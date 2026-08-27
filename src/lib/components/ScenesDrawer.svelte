@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import {
 		Download,
+		Lightbulb,
 		Palette,
 		PaintRoller,
 		Pencil,
@@ -41,7 +42,8 @@ before the Change Date. See LICENSE for complete terms.
 		'style-transfer': 'generatedImages.kind.styleTransfer',
 		upscale: 'generatedImages.kind.upscale',
 		'object-replacement': 'generatedImages.kind.objectReplacement',
-		'texture-replacement': 'generatedImages.kind.textureReplacement'
+		'texture-replacement': 'generatedImages.kind.textureReplacement',
+		'light-settings': 'generatedImages.kind.lightSettings'
 	};
 
 	const generationKindIcons: Record<GenerationKind, Component<ComponentProps<typeof Sparkles>>> = {
@@ -50,7 +52,8 @@ before the Change Date. See LICENSE for complete terms.
 		'style-transfer': Palette,
 		upscale: Sparkles,
 		'object-replacement': Replace,
-		'texture-replacement': PaintRoller
+		'texture-replacement': PaintRoller,
+		'light-settings': Lightbulb
 	};
 
 	interface Props {

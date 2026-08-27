@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import {
 	OUTPUT_FORMATS,
+	type LightSettingsRequest,
 	type ObjectReplacementRequest,
 	type OutputFormat,
 	type RenderRequest,
@@ -24,6 +25,7 @@ import {
 	uploadResultSchema
 } from '$lib/api/contract';
 import { t, type TranslationKey } from '$lib/i18n/index.svelte';
+import { LIGHT_SETTINGS_FIXTURES, LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 
 export type { OutputFormat };
 
@@ -52,7 +54,7 @@ export const EDIT_OPERATION_TYPES = [
 	'freeform',
 	'add-object',
 	'remove-object',
-	'atmosphere',
+	'light-settings',
 	'upscale'
 ] as const;
 
@@ -85,6 +87,12 @@ export interface ActiveTextureReplacementJob {
 	sourceRender?: RenderResult;
 }
 
+export interface ActiveLightSettingsJob {
+	id: string;
+	instruction: string;
+	sourceRender?: RenderResult;
+}
+
 export interface TextureMaskUploadOperation {
 	epoch: number;
 	sourceUrl: string;
@@ -101,7 +109,8 @@ export type ValidationField =
 	| 'referenceImage'
 	| 'mask'
 	| 'replacementObject'
-	| 'replacementSurface';
+	| 'replacementSurface'
+	| 'instruction';
 
 export interface ValidationResult {
 	valid: boolean;
@@ -129,6 +138,8 @@ export interface RequestJSON {
 	textureReplacementSurface?: string;
 	textureReplacementSourceMode?: ImageSourceMode;
 	textureReplacementMasked?: boolean;
+	lightSettingsPresetIds?: string[];
+	lightSettingsInstruction?: string;
 	promptOverride: string | null;
 	currentRender?: RenderResult;
 	status: RequestStatus;
@@ -159,6 +170,9 @@ export interface NormalizedRequest {
 	textureReplacementSourceMode: ImageSourceMode;
 	textureReplacementSourceUrl: string | undefined;
 	textureReplacementMasked: boolean;
+	lightSettingsPresetIds: string[];
+	lightSettingsInstruction: string;
+	lightSettingsPrompt: string;
 	editPrompt: string;
 	styleTransferPrompt: string;
 	prompt: string;
@@ -172,6 +186,13 @@ const replacementObjectSchema = z.string().max(200);
 export const objectReplacementJobIdSchema = z.uuid();
 const replacementSurfaceSchema = z.string().max(200);
 const textureReplacementJobIdSchema = z.uuid();
+const lightSettingsInstructionSchema = z.string().max(500);
+export const lightSettingsJobIdSchema = z.uuid();
+const lightSettingsPresetIdsSchema = z
+	.array(z.string())
+	.transform((ids) =>
+		ids.filter((id) => LIGHT_SETTINGS_PRESETS.some((preset) => preset.id === id))
+	);
 
 const imageInputSchema = z.object({
 	url: z.string().trim().url(),
@@ -227,6 +248,8 @@ const requestJsonSchema = z
 		textureReplacementSurface: replacementSurfaceSchema.default(''),
 		textureReplacementSourceMode: imageSourceModeSchema.default('current-result'),
 		textureReplacementMasked: z.boolean().default(false),
+		lightSettingsPresetIds: lightSettingsPresetIdsSchema.default([]),
+		lightSettingsInstruction: lightSettingsInstructionSchema.default(''),
 		promptOverride: z.string().nullable(),
 		currentRender: renderResultSchema.optional(),
 		status: z.enum(['idle', 'rendering', 'error'])
@@ -374,6 +397,17 @@ function cloneActiveObjectReplacementJob(
 function cloneActiveTextureReplacementJob(
 	job: ActiveTextureReplacementJob | undefined
 ): ActiveTextureReplacementJob | undefined {
+	if (!job) return undefined;
+	return {
+		id: job.id,
+		instruction: job.instruction,
+		sourceRender: cloneRenderResult(job.sourceRender)
+	};
+}
+
+function cloneActiveLightSettingsJob(
+	job: ActiveLightSettingsJob | undefined
+): ActiveLightSettingsJob | undefined {
 	if (!job) return undefined;
 	return {
 		id: job.id,
@@ -539,6 +573,13 @@ export class RequestState {
 	textureReplacementMasked = $state(false);
 	textureMaskUploading = $state(false);
 	activeTextureReplacementJob = $state<ActiveTextureReplacementJob | undefined>(undefined);
+	// Ordered (click-order) selection of light-settings preset ids (see
+	// $lib/light-settings-presets) — the store of *selections*, not resolved
+	// text; lightSettingsPrompt below derives the actual instruction from this
+	// plus the free-text supplement, so there is exactly one source of truth.
+	lightSettingsPresetIds = $state<string[]>([]);
+	lightSettingsInstruction = $state('');
+	activeLightSettingsJob = $state<ActiveLightSettingsJob | undefined>(undefined);
 	// Whether the currently displayed render is already the resolved result of a
 	// masked texture-replacement submission — Workspace.svelte reads this to know
 	// when to swap the canvas from the mask-drawing surface back to the render
@@ -554,6 +595,19 @@ export class RequestState {
 	status = $state<RequestStatus>('idle');
 
 	prompt = $derived.by(() => derivePrompt(this.promptOverride, this.promptFragments));
+
+	// The single source of truth for what gets sent to /api/light-settings:
+	// each selected preset's phrase (in click order), then the free-text
+	// supplement, comma-joined. Never written back into lightSettingsInstruction
+	// — components read this to preview/submit, never the other way around.
+	lightSettingsPrompt = $derived.by(() => {
+		const phrases = this.lightSettingsPresetIds
+			.map((id) => LIGHT_SETTINGS_PRESETS.find((preset) => preset.id === id))
+			.filter((preset) => preset !== undefined)
+			.map((preset) => t(preset.phrase));
+		const custom = this.lightSettingsInstruction.trim();
+		return [...phrases, ...(custom ? [custom] : [])].join(', ');
+	});
 
 	get currentRender(): RenderResult | undefined {
 		return this.#historyIndex >= 0 ? this.#renderHistory[this.#historyIndex] : undefined;
@@ -583,6 +637,10 @@ export class RequestState {
 
 	get activeTextureReplacementJobId(): string | undefined {
 		return this.activeTextureReplacementJob?.id;
+	}
+
+	get activeLightSettingsJobId(): string | undefined {
+		return this.activeLightSettingsJob?.id;
 	}
 
 	addFragment(input: AddFragmentInput): string {
@@ -805,6 +863,56 @@ export class RequestState {
 		};
 	}
 
+	toggleLightSettingsPreset(id: string): void {
+		if (!LIGHT_SETTINGS_PRESETS.some((preset) => preset.id === id)) return;
+		this.lightSettingsPresetIds = this.lightSettingsPresetIds.includes(id)
+			? this.lightSettingsPresetIds.filter((presetId) => presetId !== id)
+			: [...this.lightSettingsPresetIds, id];
+	}
+
+	setLightSettingsPresetIds(ids: string[]): void {
+		this.lightSettingsPresetIds = lightSettingsPresetIdsSchema.parse(ids);
+	}
+
+	// Fixture rows are a single on/off toggle, not two independent buttons —
+	// selecting one state clears the other for the same fixture. `state: null`
+	// clears both (back to "not mentioned" for that fixture).
+	setLightSettingsFixtureState(fixtureId: string, state: 'on' | 'off' | null): void {
+		const fixture = LIGHT_SETTINGS_FIXTURES.find((candidate) => candidate.id === fixtureId);
+		if (!fixture) return;
+		const withoutFixture = this.lightSettingsPresetIds.filter(
+			(id) => id !== fixture.onId && id !== fixture.offId
+		);
+		this.lightSettingsPresetIds =
+			state === null
+				? withoutFixture
+				: [...withoutFixture, state === 'on' ? fixture.onId : fixture.offId];
+	}
+
+	setLightSettingsInstruction(instruction: string): void {
+		this.lightSettingsInstruction = lightSettingsInstructionSchema.parse(instruction);
+	}
+
+	setActiveLightSettingsJobId(id: string | undefined): void {
+		const parsed = lightSettingsJobIdSchema.optional().parse(id);
+		if (parsed === this.activeLightSettingsJob?.id) return;
+		this.activeLightSettingsJob = parsed
+			? { id: parsed, instruction: this.lightSettingsPrompt.trim() }
+			: undefined;
+	}
+
+	setActiveLightSettingsJob(
+		id: string,
+		sourceRender: RenderResult | undefined,
+		instruction: string
+	): void {
+		this.activeLightSettingsJob = {
+			id: lightSettingsJobIdSchema.parse(id),
+			instruction: lightSettingsInstructionSchema.parse(instruction).trim(),
+			sourceRender: cloneRenderResult(sourceRender)
+		};
+	}
+
 	setTextureReplacementSurface(surface: string): void {
 		this.textureReplacementSurface = replacementSurfaceSchema.parse(surface);
 	}
@@ -977,6 +1085,13 @@ export class RequestState {
 		} else if (!this.textureReplacementSurface.trim()) {
 			missing.push('replacementSurface');
 		}
+		return { valid: missing.length === 0, missing };
+	}
+
+	validateLightSettings(): ValidationResult {
+		const missing: ValidationField[] = [];
+		if (!this.hasEditSource()) missing.push('image');
+		if (!this.lightSettingsPrompt.trim()) missing.push('instruction');
 		return { valid: missing.length === 0, missing };
 	}
 
@@ -1181,7 +1296,7 @@ export class RequestState {
 	}
 
 	// Edit tools (EditPanel.svelte: freeform/add-object/remove-object/
-	// atmosphere) target the latest render/edit result once one exists;
+	// light-settings) target the latest render/edit result once one exists;
 	// before that, they fall back to the room photo — same 'current-result'
 	// semantics as the other tools' source mode, just without a toggle since
 	// Edit has no separate room-photo/current-result choice to make.
@@ -1268,6 +1383,20 @@ export class RequestState {
 		};
 	}
 
+	async toLightSettingsRequest(): Promise<LightSettingsRequest | null> {
+		const validation = this.validateLightSettings();
+		if (!validation.valid) return null;
+		const source = await this.resolveEditSource();
+		if (!source) return null;
+		const { sessionId } = await this.ensureProjectSession();
+		return {
+			image: source.url,
+			...(source.hash ? { imageHash: source.hash } : {}),
+			instruction: this.lightSettingsPrompt.trim(),
+			sessionId
+		};
+	}
+
 	toJSON(): RequestJSON {
 		return {
 			id: this.id,
@@ -1290,6 +1419,8 @@ export class RequestState {
 			textureReplacementSurface: this.textureReplacementSurface,
 			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			textureReplacementMasked: this.textureReplacementMasked,
+			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
+			lightSettingsInstruction: this.lightSettingsInstruction,
 			promptOverride: this.promptOverride,
 			currentRender: cloneRenderResult(this.currentRender),
 			status: this.status
@@ -1325,6 +1456,9 @@ export class RequestState {
 		this.textureReplacementSourceMode = parsed.textureReplacementSourceMode;
 		this.textureReplacementMasked = parsed.textureReplacementMasked;
 		this.activeTextureReplacementJob = undefined;
+		this.lightSettingsPresetIds = [...parsed.lightSettingsPresetIds];
+		this.lightSettingsInstruction = parsed.lightSettingsInstruction;
+		this.activeLightSettingsJob = undefined;
 		this.promptOverride = parsed.promptOverride;
 		const restoredRender = cloneRenderResult(parsed.currentRender);
 		if (restoredRender) {
@@ -1362,6 +1496,9 @@ export class RequestState {
 			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			textureReplacementSourceUrl: this.textureReplacementSourceUrl(),
 			textureReplacementMasked: this.textureReplacementMasked,
+			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
+			lightSettingsInstruction: this.lightSettingsInstruction,
+			lightSettingsPrompt: this.lightSettingsPrompt,
 			editPrompt: this.editPrompt,
 			styleTransferPrompt: this.styleTransferPrompt,
 			prompt: this.prompt
@@ -1404,6 +1541,9 @@ export class RequestState {
 		this.textureReplacementSourceMode = 'current-result';
 		this.textureReplacementMasked = false;
 		this.activeTextureReplacementJob = undefined;
+		this.lightSettingsPresetIds = [];
+		this.lightSettingsInstruction = '';
+		this.activeLightSettingsJob = undefined;
 		this.promptOverride = null;
 		this.#renderHistory = [];
 		this.#historyIndex = -1;
@@ -1471,6 +1611,9 @@ export class RequestState {
 			source.activeTextureReplacementJob
 		);
 		this.textureReplacementResultReady = source.textureReplacementResultReady;
+		this.lightSettingsPresetIds = [...source.lightSettingsPresetIds];
+		this.lightSettingsInstruction = source.lightSettingsInstruction;
+		this.activeLightSettingsJob = cloneActiveLightSettingsJob(source.activeLightSettingsJob);
 		this.promptOverride = source.promptOverride;
 		// currentRender/previousRender are derived from the history stack, not
 		// settable fields — copy the stack itself (deep-cloned, so neither

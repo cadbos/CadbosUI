@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Eraser, PaintRoller, Pencil, Plus, Replace, Sun } from '@lucide/svelte';
+	import { Eraser, Lightbulb, PaintRoller, Pencil, Plus, Replace } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -33,7 +33,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { createTabController, logBoundaryError } from '$lib/utils';
 	import EditAddObjectTool from '$lib/components/EditAddObjectTool.svelte';
 	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
-	import EditAtmosphereTool from '$lib/components/EditAtmosphereTool.svelte';
+	import LightSettingsPanel from '$lib/components/LightSettingsPanel.svelte';
 	import ObjectReplacementPanel from '$lib/components/ObjectReplacementPanel.svelte';
 	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
 
@@ -48,7 +48,7 @@ before the Change Date. See LICENSE for complete terms.
 		{ id: 'freeform', label: 'edit.tool.freeform', Icon: Pencil },
 		{ id: 'add-object', label: 'edit.tool.addObject', Icon: Plus },
 		{ id: 'remove-object', label: 'edit.tool.removeObject', Icon: Eraser },
-		{ id: 'atmosphere', label: 'edit.tool.atmosphere', Icon: Sun },
+		{ id: 'light-settings', label: 'edit.tool.lightSettings', Icon: Lightbulb },
 		{
 			id: 'object-replacement',
 			label: 'mode.objectReplacement',
@@ -71,10 +71,12 @@ before the Change Date. See LICENSE for complete terms.
 	let error = $state<string | null>(null);
 	let objectReplacementOpened = $state(false);
 	let textureReplacementOpened = $state(false);
+	let lightSettingsOpened = $state(false);
 
 	$effect(() => {
 		if (activeTool === 'object-replacement') objectReplacementOpened = true;
 		if (activeTool === 'texture-replacement') textureReplacementOpened = true;
+		if (activeTool === 'light-settings') lightSettingsOpened = true;
 	});
 
 	const toolTabs = createTabController({
@@ -198,7 +200,7 @@ before the Change Date. See LICENSE for complete terms.
 		</div>
 
 		<div class="tool-content">
-			{#if activeTool !== 'object-replacement' && activeTool !== 'texture-replacement'}
+			{#if activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'light-settings'}
 				<div
 					class="tool-panel"
 					role="tabpanel"
@@ -259,13 +261,30 @@ before the Change Date. See LICENSE for complete terms.
 							{applying}
 							onApply={(prompt) => void submit(prompt, 'remove-object')}
 						/>
-					{:else if activeTool === 'atmosphere'}
-						<EditAtmosphereTool
-							disabled={toolDisabled || !hasEditTarget}
-							{applying}
-							onApply={(prompt) => void submit(prompt, 'atmosphere')}
-						/>
 					{/if}
+				</div>
+			{/if}
+
+			{#if lightSettingsOpened}
+				<div
+					class="tool-panel"
+					role="tabpanel"
+					id="edit-tool-panel-light-settings"
+					aria-labelledby="edit-tool-tab-light-settings"
+					tabindex="0"
+					hidden={activeTool !== 'light-settings'}
+				>
+					<svelte:boundary
+						onerror={(err: unknown) => logBoundaryError('editPanel.lightSettings', err)}
+					>
+						<LightSettingsPanel />
+						{#snippet failed(_error: unknown, reset: () => void)}
+							<p class="error">{t('boundary.failed')}</p>
+							<button type="button" class="btn-apply" onclick={reset}>
+								{t('boundary.retry')}
+							</button>
+						{/snippet}
+					</svelte:boundary>
 				</div>
 			{/if}
 
@@ -317,7 +336,7 @@ before the Change Date. See LICENSE for complete terms.
 		</div>
 	</div>
 
-	{#if !isAuthenticated && activeTool !== 'object-replacement' && activeTool !== 'texture-replacement'}
+	{#if !isAuthenticated && activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'light-settings'}
 		<p class="auth-hint">{t('edit.signInToApply')}</p>
 	{/if}
 
