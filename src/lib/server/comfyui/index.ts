@@ -43,6 +43,14 @@ export {
 	type QueueObjectReplacementRequest
 } from '$lib/server/comfyui/object-replacement';
 export {
+	getLightSettingsResult,
+	queueLightSettings,
+	runLightSettings,
+	type LightSettingsImage,
+	type LightSettingsRequest,
+	type QueueLightSettingsRequest
+} from '$lib/server/comfyui/light-settings';
+export {
 	getTextureReplacementResult,
 	queueTextureReplacement,
 	runTextureReplacement,

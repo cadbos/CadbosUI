@@ -1,0 +1,311 @@
+{
+	"1": {
+		"inputs": {
+			"image": "гост3.jpg"
+		},
+		"class_type": "LoadImage",
+		"_meta": {
+			"title": "1 · СЦЕНА — комната со светильниками"
+		}
+	},
+	"3": {
+		"inputs": {
+			"upscale_method": "lanczos",
+			"megapixels": 1,
+			"resolution_steps": 1,
+			"image": ["1", 0]
+		},
+		"class_type": "ImageScaleToTotalPixels",
+		"_meta": {
+			"title": "Сцена · ~1 MP"
+		}
+	},
+	"6": {
+		"inputs": {
+			"lora_name": "Qwen-Image-Edit-Lightning-8steps-V1.0-bf16.safetensors",
+			"strength_model": 1,
+			"model": ["39", 0]
+		},
+		"class_type": "LoraLoaderModelOnly",
+		"_meta": {
+			"title": "Lightning 8-step LoRA · strength 1.0"
+		}
+	},
+	"7": {
+		"inputs": {
+			"shift": 2.8,
+			"model": ["6", 0]
+		},
+		"class_type": "ModelSamplingAuraFlow",
+		"_meta": {
+			"title": "AuraFlow shift · 2.8"
+		}
+	},
+	"8": {
+		"inputs": {
+			"strength": 0.9,
+			"pre_cfg": true,
+			"model": ["7", 0]
+		},
+		"class_type": "CFGNorm",
+		"_meta": {
+			"title": "CFGNorm · 0.9"
+		}
+	},
+	"9": {
+		"inputs": {
+			"clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+			"type": "qwen_image",
+			"device": "default"
+		},
+		"class_type": "CLIPLoader",
+		"_meta": {
+			"title": "Qwen 2.5 VL text encoder"
+		}
+	},
+	"10": {
+		"inputs": {
+			"vae_name": "qwen_image_vae.safetensors"
+		},
+		"class_type": "VAELoader",
+		"_meta": {
+			"title": "Qwen Image VAE"
+		}
+	},
+	"11": {
+		"inputs": {
+			"prompt": ["47", 0],
+			"clip": ["9", 0],
+			"vae": ["10", 0],
+			"image1": ["3", 0]
+		},
+		"class_type": "TextEncodeQwenImageEditPlus",
+		"_meta": {
+			"title": "Positive prompt (single image — только сцена)"
+		}
+	},
+	"13": {
+		"inputs": {
+			"pixels": ["3", 0],
+			"vae": ["10", 0]
+		},
+		"class_type": "VAEEncode",
+		"_meta": {
+			"title": "Сцена становится выходным холстом"
+		}
+	},
+	"17": {
+		"inputs": {
+			"filename_prefix": "light-toggle-v1",
+			"images": ["38", 0]
+		},
+		"class_type": "SaveImage",
+		"_meta": {
+			"title": "SAVE RESULT"
+		}
+	},
+	"18": {
+		"inputs": {
+			"add_noise": "enable",
+			"noise_seed": 42,
+			"steps": 8,
+			"cfg": 1,
+			"sampler_name": "euler",
+			"scheduler": "simple",
+			"start_at_step": 0,
+			"end_at_step": 10000,
+			"return_with_leftover_noise": "disable",
+			"preview_method": "none",
+			"vae_decode": "true",
+			"model": ["8", 0],
+			"positive": ["11", 0],
+			"negative": ["32", 0],
+			"latent_image": ["13", 0],
+			"optional_vae": ["10", 0]
+		},
+		"class_type": "KSampler Adv. (Efficient)",
+		"_meta": {
+			"title": "KSampler Adv. (Efficient)"
+		}
+	},
+	"19": {
+		"inputs": {
+			"value": "сделай свет приглушенным"
+		},
+		"class_type": "PrimitiveString",
+		"_meta": {
+			"title": "Инструкция (что сделать со светом) — пишите как угодно: 'зажги люстру', 'выключи бра над кроватью', 'выключи все светильники'"
+		}
+	},
+	"20": {
+		"inputs": {
+			"model": "Hy-MT2-1.8B-Q6_K.gguf",
+			"device": "cuda",
+			"n_gpu_layers": -1
+		},
+		"class_type": "GGUFLoader",
+		"_meta": {
+			"title": "GGUFLoader"
+		}
+	},
+	"21": {
+		"inputs": {
+			"prompt": ["19", 0],
+			"target_language": "English",
+			"auto_release": false,
+			"llama_model": ["20", 0]
+		},
+		"class_type": "PromptTranslatorNode",
+		"_meta": {
+			"title": "Prompt Translator (GGUF)"
+		}
+	},
+	"23": {
+		"inputs": {
+			"value": "Picture 1 shows a room that contains one or more lighting fixtures (chandeliers, lamps, sconces, spotlights, string lights, etc.).\n\nApply the following instruction exactly, and only to the fixture(s) it refers to: {}.\n\nCRITICAL — the physical fixture itself must stay 100% identical to Picture 1: the exact same silhouette, number of arms, number of bulbs/lights, shape, size, material, color and position. Do not add, remove, extend, duplicate or invent any arm, bulb, cable, bracket or ornament that is not already visible in Picture 1. Copy the fixture's geometry pixel-for-pixel from Picture 1; only its illumination state may change.\n\nWhen a fixture is turned ON: each bulb or light-emitting part that already exists in Picture 1 becomes bright and glowing (do not add new bulbs), and it casts warm, realistic light, highlights and soft shadows onto the nearby walls, ceiling, floor and furniture, consistent with the rest of the room's existing lighting.\n\nWhen a fixture is turned OFF: each bulb or light-emitting part that already exists in Picture 1 becomes dark and unlit, and any glow, light spill or cast shadows it was producing disappear completely, while the rest of the room's lighting stays exactly as it was.\n\nDo not change the state of any other lighting fixture unless the instruction explicitly mentions it.\n\nEverything else in Picture 1 stays pixel-identical: walls, floor, ceiling, windows, furniture, camera position, framing and perspective. The only allowed changes are the illumination effects (glow, cast light, shadows) that naturally follow from the instructed fixture(s) turning on or off — never a change to the fixture's physical geometry.\n\nPhotorealistic and seamless, as if the change was physically made in that room and photographed with the same camera under the same base conditions."
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "Prompt template (свет вкл/выкл)"
+		}
+	},
+	"25": {
+		"inputs": {
+			"string": ["21", 0],
+			"mode": "lowercase"
+		},
+		"class_type": "CaseConverter",
+		"_meta": {
+			"title": "Convert Text Case"
+		}
+	},
+	"26": {
+		"inputs": {
+			"string": ["23", 0],
+			"find": "{}",
+			"replace": ["25", 0]
+		},
+		"class_type": "StringReplace",
+		"_meta": {
+			"title": "Replace Text"
+		}
+	},
+	"28": {
+		"inputs": {
+			"stitch_mode": "right",
+			"match_image_size": true,
+			"megapixels": 0,
+			"max_width": 0,
+			"max_height": 0,
+			"upscale_method": "lanczos",
+			"spacing_width": 5,
+			"background_color": "#FFFFFF",
+			"image1": ["1", 0],
+			"image2": ["38", 0]
+		},
+		"class_type": "AILab_ImageStitch",
+		"_meta": {
+			"title": "Stitch before/after for history"
+		}
+	},
+	"29": {
+		"inputs": {
+			"images": ["28", 0]
+		},
+		"class_type": "PreviewImage",
+		"_meta": {
+			"title": "Preview Image"
+		}
+	},
+	"32": {
+		"inputs": {
+			"prompt": "deformed geometry, distorted proportions, duplicated objects, missing furniture, moved furniture, changed room layout, changed camera angle, blurry, low quality, watermark, text, extra light fixtures, fixture shape changed, fixture moved, extra bulbs, extra arms, extra lamps, added ornaments, invented fixture parts, extended chandelier, larger fixture, additional lights not in original, changed fixture silhouette, changed fixture size",
+			"clip": ["9", 0],
+			"vae": ["10", 0]
+		},
+		"class_type": "TextEncodeQwenImageEdit",
+		"_meta": {
+			"title": "Negative prompt"
+		}
+	},
+	"33": {
+		"inputs": {
+			"model_name": "4x-UltraSharp.pth"
+		},
+		"class_type": "UpscaleModelLoader",
+		"_meta": {
+			"title": "Load Upscale Model"
+		}
+	},
+	"34": {
+		"inputs": {
+			"upscale_model": ["33", 0],
+			"image": ["18", 5]
+		},
+		"class_type": "ImageUpscaleWithModel",
+		"_meta": {
+			"title": "Upscale Image (using Model)"
+		}
+	},
+	"36": {
+		"inputs": {
+			"resize_type": "scale total pixels",
+			"resize_type.megapixels": 2,
+			"scale_method": "area",
+			"input": ["34", 0]
+		},
+		"class_type": "ResizeImageMaskNode",
+		"_meta": {
+			"title": "Resize Image/Mask"
+		}
+	},
+	"38": {
+		"inputs": {
+			"seed": 15643179617000,
+			"strength": 0.02,
+			"image": ["36", 0]
+		},
+		"class_type": "ImageAddNoise",
+		"_meta": {
+			"title": "Add Noise to Image"
+		}
+	},
+	"39": {
+		"inputs": {
+			"unet_name": "qwen-image-edit-2511-Q8_0.gguf"
+		},
+		"class_type": "UnetLoaderGGUF",
+		"_meta": {
+			"title": "Unet Loader (GGUF)"
+		}
+	},
+	"40": {
+		"inputs": {
+			"source": ["47", 0]
+		},
+		"class_type": "PreviewAny",
+		"_meta": {
+			"title": "Positive prompt preview"
+		}
+	},
+	"47": {
+		"inputs": {
+			"string_a": ["26", 0],
+			"string_b": "",
+			"delimiter": "\n"
+		},
+		"class_type": "StringConcatenate",
+		"_meta": {
+			"title": "Concatenate Text"
+		}
+	},
+	"49": {
+		"inputs": {
+			"source": ["25", 0]
+		},
+		"class_type": "PreviewAny",
+		"_meta": {
+			"title": "Translated instruction preview"
+		}
+	}
+}
