@@ -33,16 +33,6 @@ import {
 	type RenderResult
 } from '$lib/state/request.svelte';
 
-// The real implementation needs OffscreenCanvas/createImageBitmap, unavailable
-// in this suite's node environment — only toObjectReplacementRequest()'s own
-// orchestration (fetch the reference, hand it to this, upload the result) is
-// under test here.
-vi.mock('$lib/image-scale', () => ({
-	scaleReferenceImageBlob: vi.fn(async (_blob: Blob, _scale: number, mime?: string) =>
-		Promise.resolve(new Blob(['scaled'], { type: mime ?? 'image/png' }))
-	)
-}));
-
 beforeEach(() => {
 	request.reset();
 	// Most tests don't care about project/session assignment at all — pre-set
@@ -1096,63 +1086,45 @@ describe('toObjectReplacementRequest', () => {
 		expect(request.objectReplacementScale).toBe(2);
 	});
 
-	it('sends the reference image unchanged when scale is left at 1', async () => {
-		const fetchMock = vi.fn();
-		vi.stubGlobal('fetch', fetchMock);
+	it('sends the reference image unchanged and appends no size clause at the default scale', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setObjectReferenceImage(objectReference);
 		request.setObjectReplacementSourceMode('room-photo');
 		request.setObjectReplacementObject('sofa');
 
-		expect((await request.toObjectReplacementRequest())?.referenceImage).toBe(objectReference.url);
-		expect(fetchMock).not.toHaveBeenCalled();
+		const body = await request.toObjectReplacementRequest();
+		expect(body?.referenceImage).toBe(objectReference.url);
+		expect(body?.replacementObject).toBe('sofa');
 	});
 
-	it('re-uploads a rescaled reference image when scale differs from 1', async () => {
-		const scaledUrl = 'https://uploads.example.test/reference-scaled.png';
-		const fetchMock = vi.fn(async (url: string) => {
-			if (url.startsWith('/api/download')) {
-				return {
-					ok: true,
-					blob: () => Promise.resolve(new Blob(['original'], { type: 'image/webp' }))
-				};
-			}
-			if (url === '/api/uploads') {
-				return {
-					ok: true,
-					json: () =>
-						Promise.resolve({ url: scaledUrl, mime: 'image/png', size: 6, hash: 'scaled-hash' })
-				};
-			}
-			throw new Error(`unexpected fetch: ${url}`);
-		});
-		vi.stubGlobal('fetch', fetchMock);
-
+	it('appends a translated size clause once the scale moves off 1', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setObjectReferenceImage(objectReference);
 		request.setObjectReplacementSourceMode('room-photo');
 		request.setObjectReplacementObject('sofa');
-		request.setObjectReplacementScale(1.5);
 
-		expect((await request.toObjectReplacementRequest())?.referenceImage).toBe(scaledUrl);
-		expect(fetchMock).toHaveBeenCalledWith(
-			`/api/download?url=${encodeURIComponent(objectReference.url)}`
-		);
-		expect(fetchMock).toHaveBeenCalledWith(
-			'/api/uploads',
-			expect.objectContaining({ method: 'POST' })
-		);
-	});
-
-	it('throws RequestImageUploadError when the rescaled reference fetch fails', async () => {
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
-		request.setImage(AC9_IMAGE);
-		request.setObjectReferenceImage(objectReference);
-		request.setObjectReplacementSourceMode('room-photo');
-		request.setObjectReplacementObject('sofa');
 		request.setObjectReplacementScale(0.5);
+		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe(
+			'sofa, сделай его очень маленьким, непропорционально маленьким'
+		);
 
-		await expect(request.toObjectReplacementRequest()).rejects.toThrow(RequestImageUploadError);
+		request.setObjectReplacementScale(0.8);
+		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe(
+			'sofa, сделай его заметно меньше, чем обычно'
+		);
+
+		request.setObjectReplacementScale(1);
+		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe('sofa');
+
+		request.setObjectReplacementScale(1.2);
+		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe(
+			'sofa, сделай его заметно крупнее, чем обычно'
+		);
+
+		request.setObjectReplacementScale(2);
+		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe(
+			'sofa, сделай его очень крупным, непропорционально крупным'
+		);
 	});
 
 	it('enforces the endpoint text limit and job-id shape', () => {

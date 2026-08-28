@@ -25,8 +25,6 @@ import {
 	uploadResultSchema
 } from '$lib/api/contract';
 import { t, type TranslationKey } from '$lib/i18n/index.svelte';
-import { imageExtensionFromMime } from '$lib/image-mime';
-import { scaleReferenceImageBlob } from '$lib/image-scale';
 import { LIGHT_SETTINGS_FIXTURES, LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 
 export type { OutputFormat };
@@ -187,6 +185,17 @@ const sceneTypeSchema = z.enum(SCENE_TYPES);
 const imageSourceModeSchema = z.enum(IMAGE_SOURCE_MODES);
 const styleTransferStrengthSchema = z.number().min(0).max(1);
 const objectReplacementScaleSchema = z.number().min(0.5).max(2);
+// Bucketed, not continuous — text is the only lever that actually moves the
+// model's sense of size (a same-scale image reframing trick tested against
+// production had zero effect), and only a handful of tested phrasings exist,
+// not one per slider step.
+function objectReplacementSizeClauseKey(scale: number): TranslationKey | null {
+	if (scale <= 0.65) return 'objectReplacement.sizeExtremeSmall';
+	if (scale < 0.9) return 'objectReplacement.sizeModerateSmall';
+	if (scale <= 1.1) return null;
+	if (scale < 1.5) return 'objectReplacement.sizeModerateLarge';
+	return 'objectReplacement.sizeExtremeLarge';
+}
 const replacementObjectSchema = z.string().max(200);
 export const objectReplacementJobIdSchema = z.uuid();
 const replacementSurfaceSchema = z.string().max(200);
@@ -630,6 +639,16 @@ export class RequestState {
 			.map((preset) => t(preset.phrase));
 		const custom = this.lightSettingsInstruction.trim();
 		return [...phrases, ...(custom ? [custom] : [])].join(', ');
+	});
+
+	// What actually gets sent as replacementObject: the located-object
+	// description plus a translated size clause when the scale slider has
+	// moved off its 1 (as-shown) default — same comma-joined shape as
+	// lightSettingsPrompt above.
+	objectReplacementInstruction = $derived.by(() => {
+		const object = this.objectReplacementObject.trim();
+		const sizeClauseKey = objectReplacementSizeClauseKey(this.objectReplacementScale);
+		return sizeClauseKey ? `${object}, ${t(sizeClauseKey)}` : object;
 	});
 
 	get currentRender(): RenderResult | undefined {
@@ -1214,53 +1233,6 @@ export class RequestState {
 		return this.image;
 	}
 
-	// Scale !== 1 re-frames the reference photo (crop tighter to zoom in, or pad
-	// outward to shrink) so the object-replace model's vision conditioning reads
-	// the subject as larger/smaller — the ComfyUI workflow has no size control of
-	// its own, so this happens entirely client-side, once at submit time. Routes
-	// the read through /api/download (same-origin re-serve, see that route) since
-	// the reference image's own URL lives on a different origin (UPLOADS_PUBLIC_URL)
-	// that isn't CORS-enabled for a client-side fetch.
-	async #resolveObjectReferenceImage(): Promise<ImageInput | undefined> {
-		const reference = this.objectReferenceImage;
-		if (!reference) return undefined;
-		if (this.objectReplacementScale === 1) return reference;
-
-		let blob: Blob;
-		try {
-			const response = await fetch(`/api/download?url=${encodeURIComponent(reference.url)}`);
-			if (!response.ok) throw new RequestImageUploadError('reference image fetch failed');
-			blob = await response.blob();
-		} catch (error) {
-			if (error instanceof RequestImageUploadError) throw error;
-			throw new RequestImageUploadError('reference image fetch failed', { cause: error });
-		}
-		const scaled = await scaleReferenceImageBlob(blob, this.objectReplacementScale, reference.mime);
-		return this.#uploadScaledReferenceImage(scaled, reference.mime);
-	}
-
-	async #uploadScaledReferenceImage(blob: Blob, mime: string | undefined): Promise<ImageInput> {
-		const extension = (mime && imageExtensionFromMime(mime)) || 'png';
-		try {
-			const formData = new FormData();
-			formData.append('file', blob, `reference-scaled.${extension}`);
-			const response = await fetch('/api/uploads', { method: 'POST', body: formData });
-			if (!response.ok) throw new RequestImageUploadError('upload request failed');
-			const parsed = uploadResultSchema.safeParse(await response.json().catch(() => null));
-			if (!parsed.success) throw new RequestImageUploadError('upload response invalid');
-			return {
-				url: parsed.data.url,
-				mime: parsed.data.mime,
-				size: parsed.data.size,
-				hash: parsed.data.hash,
-				...(parsed.data.dimensions ? { dimensions: parsed.data.dimensions } : {})
-			};
-		} catch (error) {
-			if (error instanceof RequestImageUploadError) throw error;
-			throw new RequestImageUploadError('upload failed', { cause: error });
-		}
-	}
-
 	// Lazily provisions a project+session the first time a generation call needs
 	// one — same "resolve on demand, cache the result" shape as
 	// #ensureImageUploaded(). A user who never visited a projects UI still gets a
@@ -1422,14 +1394,12 @@ export class RequestState {
 		if (!validation.valid) return null;
 		const source = await this.#resolveSourceFor(this.objectReplacementSourceMode);
 		if (!source || !this.objectReferenceImage) return null;
-		const reference = await this.#resolveObjectReferenceImage();
-		if (!reference) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
 			image: source.url,
 			...(source.hash ? { imageHash: source.hash } : {}),
-			referenceImage: reference.url,
-			replacementObject: this.objectReplacementObject.trim(),
+			referenceImage: this.objectReferenceImage.url,
+			replacementObject: this.objectReplacementInstruction,
 			sessionId
 		};
 	}
