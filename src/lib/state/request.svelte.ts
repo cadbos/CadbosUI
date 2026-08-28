@@ -201,12 +201,12 @@ const lightSettingsPresetGroupKey = (id: string): string => {
 };
 const lightSettingsPresetIdsSchema = z.array(z.string()).transform((ids) => {
 	const validIds = ids.filter((id) => LIGHT_SETTINGS_PRESETS.some((preset) => preset.id === id));
-	const lastIndexByGroup = new Map<string, number>();
+	const lastIndexByGroup: Record<string, number> = {};
 	validIds.forEach((id, index) => {
-		lastIndexByGroup.set(lightSettingsPresetGroupKey(id), index);
+		lastIndexByGroup[lightSettingsPresetGroupKey(id)] = index;
 	});
 	return validIds.filter(
-		(id, index) => lastIndexByGroup.get(lightSettingsPresetGroupKey(id)) === index
+		(id, index) => lastIndexByGroup[lightSettingsPresetGroupKey(id)] === index
 	);
 });
 
