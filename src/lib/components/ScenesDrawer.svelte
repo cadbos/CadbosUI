@@ -289,6 +289,7 @@ before the Change Date. See LICENSE for complete terms.
 		request.setTextureMaskImage(undefined);
 		request.setActiveObjectReplacementJobId(undefined);
 		request.setActiveTextureReplacementJobId(undefined);
+		request.setActiveLightSettingsJobId(undefined);
 		request.setStatus('idle');
 		const destination = destinationForGenerationKind(kind);
 		onClose();
