@@ -33,6 +33,16 @@ import {
 	type RenderResult
 } from '$lib/state/request.svelte';
 
+// The real implementation needs OffscreenCanvas/createImageBitmap, unavailable
+// in this suite's node environment — only toObjectReplacementRequest()'s own
+// orchestration (fetch the reference, hand it to this, upload the result) is
+// under test here.
+vi.mock('$lib/image-scale', () => ({
+	scaleReferenceImageBlob: vi.fn(async (_blob: Blob, _scale: number, mime?: string) =>
+		Promise.resolve(new Blob(['scaled'], { type: mime ?? 'image/png' }))
+	)
+}));
+
 beforeEach(() => {
 	request.reset();
 	// Most tests don't care about project/session assignment at all — pre-set
@@ -188,6 +198,7 @@ describe('serialization', () => {
 		delete snapshot.objectReferenceImage;
 		delete snapshot.objectReplacementObject;
 		delete snapshot.objectReplacementSourceMode;
+		delete snapshot.objectReplacementScale;
 		delete snapshot.textureReferenceImage;
 		delete snapshot.textureMaskImage;
 		delete snapshot.textureMaskSourceUrl;
@@ -211,6 +222,7 @@ describe('serialization', () => {
 			styleSourceMode: 'current-result',
 			objectReplacementObject: '',
 			objectReplacementSourceMode: 'current-result',
+			objectReplacementScale: 1,
 			textureReplacementSurface: '',
 			textureReplacementSourceMode: 'current-result',
 			textureReplacementMasked: false,
@@ -1073,6 +1085,74 @@ describe('toObjectReplacementRequest', () => {
 		expect((await request.toObjectReplacementRequest())?.image).toBe(
 			'https://example.test/current-result.webp'
 		);
+	});
+
+	it('enforces the scale range', () => {
+		expect(() => request.setObjectReplacementScale(0.4)).toThrow();
+		expect(() => request.setObjectReplacementScale(2.1)).toThrow();
+		request.setObjectReplacementScale(0.5);
+		expect(request.objectReplacementScale).toBe(0.5);
+		request.setObjectReplacementScale(2);
+		expect(request.objectReplacementScale).toBe(2);
+	});
+
+	it('sends the reference image unchanged when scale is left at 1', async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal('fetch', fetchMock);
+		request.setImage(AC9_IMAGE);
+		request.setObjectReferenceImage(objectReference);
+		request.setObjectReplacementSourceMode('room-photo');
+		request.setObjectReplacementObject('sofa');
+
+		expect((await request.toObjectReplacementRequest())?.referenceImage).toBe(objectReference.url);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('re-uploads a rescaled reference image when scale differs from 1', async () => {
+		const scaledUrl = 'https://uploads.example.test/reference-scaled.png';
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url.startsWith('/api/download')) {
+				return {
+					ok: true,
+					blob: () => Promise.resolve(new Blob(['original'], { type: 'image/webp' }))
+				};
+			}
+			if (url === '/api/uploads') {
+				return {
+					ok: true,
+					json: () =>
+						Promise.resolve({ url: scaledUrl, mime: 'image/png', size: 6, hash: 'scaled-hash' })
+				};
+			}
+			throw new Error(`unexpected fetch: ${url}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		request.setImage(AC9_IMAGE);
+		request.setObjectReferenceImage(objectReference);
+		request.setObjectReplacementSourceMode('room-photo');
+		request.setObjectReplacementObject('sofa');
+		request.setObjectReplacementScale(1.5);
+
+		expect((await request.toObjectReplacementRequest())?.referenceImage).toBe(scaledUrl);
+		expect(fetchMock).toHaveBeenCalledWith(
+			`/api/download?url=${encodeURIComponent(objectReference.url)}`
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			'/api/uploads',
+			expect.objectContaining({ method: 'POST' })
+		);
+	});
+
+	it('throws RequestImageUploadError when the rescaled reference fetch fails', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+		request.setImage(AC9_IMAGE);
+		request.setObjectReferenceImage(objectReference);
+		request.setObjectReplacementSourceMode('room-photo');
+		request.setObjectReplacementObject('sofa');
+		request.setObjectReplacementScale(0.5);
+
+		await expect(request.toObjectReplacementRequest()).rejects.toThrow(RequestImageUploadError);
 	});
 
 	it('enforces the endpoint text limit and job-id shape', () => {

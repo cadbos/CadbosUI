@@ -436,6 +436,10 @@ export const ru = {
 	'objectReplacement.objectHint':
 		'Точно опишите существующий объект, чтобы модель смогла его найти.',
 	'objectReplacement.objectPlaceholder': 'например: серый диван у окна',
+	'objectReplacement.scale': 'Размер объекта',
+	'objectReplacement.scaleSmaller': 'Меньше',
+	'objectReplacement.scaleAsShown': 'Как на фото',
+	'objectReplacement.scaleLarger': 'Крупнее',
 	'objectReplacement.controls': 'Запуск замены',
 	'objectReplacement.validationSource': 'Загрузите изображение сцены.',
 	'objectReplacement.validationReference': 'Загрузите референс нового объекта.',

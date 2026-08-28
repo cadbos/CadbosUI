@@ -435,6 +435,10 @@ export const en = {
 	'objectReplacement.objectHint':
 		'Describe the existing object precisely so the model can find it.',
 	'objectReplacement.objectPlaceholder': 'for example: gray sofa by the window',
+	'objectReplacement.scale': 'Object size',
+	'objectReplacement.scaleSmaller': 'Smaller',
+	'objectReplacement.scaleAsShown': 'As shown',
+	'objectReplacement.scaleLarger': 'Larger',
 	'objectReplacement.controls': 'Start replacement',
 	'objectReplacement.validationSource': 'Upload a scene image.',
 	'objectReplacement.validationReference': 'Upload a reference image of the new object.',
