@@ -88,6 +88,13 @@ export const objectReplacementRequestSchema = z.strictObject({
 	sessionId
 });
 
+export const lightSettingsRequestSchema = z.strictObject({
+	image: httpsImageUrl,
+	imageHash: optionalImageHash,
+	instruction: z.string().trim().min(1).max(500),
+	sessionId
+});
+
 export const textureReplacementRequestSchema = z.union([
 	z.strictObject({
 		image: httpsImageUrl,

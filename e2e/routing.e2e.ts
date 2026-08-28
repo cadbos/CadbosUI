@@ -247,8 +247,8 @@ test('switching edit tool tabs updates only the tool query param', async ({ page
 	await page.getByRole('tab', { name: /Удалить объект/ }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=remove-object$/);
 
-	await page.getByRole('tab', { name: /Атмосфера/ }).click();
-	await expect(page).toHaveURL(/\/edit\?tool=atmosphere$/);
+	await page.getByRole('tab', { name: /Свет/ }).click();
+	await expect(page).toHaveURL(/\/edit\?tool=light-settings$/);
 
 	await page.getByRole('tab', { name: /Замена объекта.*Альфа/ }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=object-replacement&source=current-result$/);

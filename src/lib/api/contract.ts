@@ -169,6 +169,37 @@ export type ObjectReplacementJobResponse =
 	| ObjectReplacementCompletedResponse
 	| ObjectReplacementFailedResponse;
 
+export interface LightSettingsRequest {
+	image: string;
+	imageHash?: string;
+	instruction: string;
+	sessionId: string;
+}
+
+export interface LightSettingsProcessingResponse {
+	id: string;
+	status: 'processing';
+}
+
+export interface LightSettingsCompletedResponse {
+	id: string;
+	status: 'completed';
+	outputUrl: string;
+	cost: number;
+	balance: number;
+}
+
+export interface LightSettingsFailedResponse {
+	id: string;
+	status: 'failed';
+	error: { code: string; message: string };
+}
+
+export type LightSettingsJobResponse =
+	| LightSettingsProcessingResponse
+	| LightSettingsCompletedResponse
+	| LightSettingsFailedResponse;
+
 export interface AutomaticTextureReplacementRequest {
 	image: string;
 	imageHash?: string;
@@ -229,7 +260,8 @@ export const generationKinds = [
 	'style-transfer',
 	'upscale',
 	'object-replacement',
-	'texture-replacement'
+	'texture-replacement',
+	'light-settings'
 ] as const;
 
 export type GenerationKind = (typeof generationKinds)[number];

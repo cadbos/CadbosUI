@@ -14,6 +14,7 @@
 
 import { z } from 'zod';
 import { OUTPUT_FORMATS, type GenerationKind, type OutputFormat } from '$lib/api/contract';
+import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 import {
 	SCENE_TYPES,
 	IMAGE_SOURCE_MODES,
@@ -31,7 +32,7 @@ export type ToolId =
 	| 'freeform'
 	| 'add-object'
 	| 'remove-object'
-	| 'atmosphere'
+	| 'light-settings'
 	| 'object-replacement'
 	| 'texture-replacement';
 export type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
@@ -75,7 +76,7 @@ const TOOL_IDS: readonly ToolId[] = [
 	'freeform',
 	'add-object',
 	'remove-object',
-	'atmosphere',
+	'light-settings',
 	'object-replacement',
 	'texture-replacement'
 ];
@@ -135,6 +136,8 @@ export function destinationForGenerationKind(kind: GenerationKind): WorkspaceDes
 			return { mode: 'edit', subTab: { tool: 'object-replacement' } };
 		case 'texture-replacement':
 			return { mode: 'edit', subTab: { tool: 'texture-replacement' } };
+		case 'light-settings':
+			return { mode: 'edit', subTab: { tool: 'light-settings' } };
 		case 'edit':
 		case 'upscale':
 			return { mode: 'edit', subTab: { tool: 'freeform' } };
@@ -164,7 +167,10 @@ export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): Sub
 	if (mode === 'edit') {
 		const tool = slugToTool(searchParams.get('tool') ?? undefined);
 		const job = searchParams.get('job');
-		return (tool === 'object-replacement' || tool === 'texture-replacement') && isJobId(job)
+		return (tool === 'object-replacement' ||
+			tool === 'texture-replacement' ||
+			tool === 'light-settings') &&
+			isJobId(job)
 			? { tool, job }
 			: { tool };
 	}
@@ -280,6 +286,15 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 				params.set('surface', request.textureReplacementSurface);
 			}
 			const job = subTab.job ?? request.activeTextureReplacementJobId;
+			if (isJobId(job)) params.set('job', job);
+		} else if (tool === 'light-settings') {
+			if (request.lightSettingsPresetIds.length > 0) {
+				params.set('presets', request.lightSettingsPresetIds.join(','));
+			}
+			if (request.lightSettingsInstruction.trim() !== '') {
+				params.set('instruction', request.lightSettingsInstruction);
+			}
+			const job = subTab.job ?? request.activeLightSettingsJobId;
 			if (isJobId(job)) params.set('job', job);
 		} else if (tool === 'freeform' && request.editPrompt.trim() !== '') {
 			params.set('prompt', request.editPrompt);
@@ -461,6 +476,15 @@ export function applyShareParams(
 			);
 			const job = searchParams.get('job');
 			request.setActiveTextureReplacementJobId(isJobId(job) ? job : undefined);
+		} else if (tool === 'light-settings') {
+			const presetsRaw = searchParams.get('presets');
+			const knownIds = new Set(LIGHT_SETTINGS_PRESETS.map((preset) => preset.id));
+			request.setLightSettingsPresetIds(
+				presetsRaw ? presetsRaw.split(',').filter((id) => knownIds.has(id)) : []
+			);
+			request.setLightSettingsInstruction((searchParams.get('instruction') ?? '').slice(0, 500));
+			const job = searchParams.get('job');
+			request.setActiveLightSettingsJobId(isJobId(job) ? job : undefined);
 		} else if (tool === 'freeform') {
 			request.setEditPrompt(searchParams.get('prompt') ?? '');
 		}
