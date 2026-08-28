@@ -188,11 +188,27 @@ const replacementSurfaceSchema = z.string().max(200);
 const textureReplacementJobIdSchema = z.uuid();
 const lightSettingsInstructionSchema = z.string().max(500);
 export const lightSettingsJobIdSchema = z.uuid();
-const lightSettingsPresetIdsSchema = z
-	.array(z.string())
-	.transform((ids) =>
-		ids.filter((id) => LIGHT_SETTINGS_PRESETS.some((preset) => preset.id === id))
+// A fixture's on/off ids are mutually exclusive (setLightSettingsFixtureState
+// enforces that in the UI), but ids arriving here — from a shared URL or a
+// persisted session — aren't guaranteed to respect that. Collapse each
+// fixture pair to its last-mentioned id, and drop exact duplicates, while
+// keeping every surviving id at its original position in the list.
+const lightSettingsPresetGroupKey = (id: string): string => {
+	const fixture = LIGHT_SETTINGS_FIXTURES.find(
+		(candidate) => candidate.onId === id || candidate.offId === id
 	);
+	return fixture?.id ?? id;
+};
+const lightSettingsPresetIdsSchema = z.array(z.string()).transform((ids) => {
+	const validIds = ids.filter((id) => LIGHT_SETTINGS_PRESETS.some((preset) => preset.id === id));
+	const lastIndexByGroup = new Map<string, number>();
+	validIds.forEach((id, index) => {
+		lastIndexByGroup.set(lightSettingsPresetGroupKey(id), index);
+	});
+	return validIds.filter(
+		(id, index) => lastIndexByGroup.get(lightSettingsPresetGroupKey(id)) === index
+	);
+});
 
 const imageInputSchema = z.object({
 	url: z.string().trim().url(),
