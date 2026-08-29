@@ -71,11 +71,11 @@ describe('texture replacement jobs', () => {
 			.bind('user-1')
 			.first<{ balance: number }>();
 		const generation = await db
-			.prepare('SELECT amount, balance_after FROM generations WHERE id = ?')
+			.prepare('SELECT source_hash, amount, balance_after FROM generations WHERE id = ?')
 			.bind('job-1')
-			.first<{ amount: number; balance_after: number }>();
+			.first<{ source_hash: string; amount: number; balance_after: number }>();
 		expect(credit?.balance).toBe(0);
-		expect(generation).toEqual({ amount: 2, balance_after: 0 });
+		expect(generation).toEqual({ source_hash: 'hash-scene', amount: 2, balance_after: 0 });
 		expect(warning).toHaveBeenCalledOnce();
 		expect(warning).toHaveBeenCalledWith(
 			'Texture replacement credit deduction exceeded available balance:',

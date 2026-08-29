@@ -156,9 +156,9 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		}
 
 		const id = crypto.randomUUID();
-		let comfyPromptId: string;
+		let submission: Awaited<ReturnType<typeof submitObjectReplacement>>;
 		try {
-			comfyPromptId = await submitObjectReplacement(platform, parsed.data, url.origin, id);
+			submission = await submitObjectReplacement(platform, parsed.data, url.origin, id);
 		} catch (error) {
 			if (error instanceof RemoteImageImportError) return remoteImageError(error);
 			if (error instanceof ComfyUiError) {
@@ -183,9 +183,9 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			await createObjectReplacementJob(db, {
 				id,
 				userId,
-				comfyPromptId,
+				comfyPromptId: submission.comfyPromptId,
 				sceneUrl: parsed.data.image,
-				sceneHash: parsed.data.imageHash ?? '',
+				sceneHash: submission.sceneHash,
 				sessionId: parsed.data.sessionId,
 				referenceUrl: parsed.data.referenceImage,
 				replacementObject: parsed.data.replacementObject,
@@ -195,7 +195,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		} catch {
 			logFailure(500, 'object_replacement_failed', { operation: 'job_persistence' });
 			try {
-				await cancelObjectReplacement(platform, comfyPromptId);
+				await cancelObjectReplacement(platform, submission.comfyPromptId);
 			} catch (cleanupError) {
 				logFailure(
 					500,

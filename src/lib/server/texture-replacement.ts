@@ -22,6 +22,7 @@ import {
 } from '$lib/server/comfyui';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import { downloadRemoteImage } from '$lib/server/remote-image';
+import { hashBytes } from '$lib/server/uploads';
 
 const DEFAULT_TEXTURE_REPLACEMENT_COST = 0.03;
 const COMFYUI_REQUEST_TIMEOUT_MS = 120_000;
@@ -30,6 +31,11 @@ export const TEXTURE_REPLACEMENT_TIMEOUT_MS = 10 * 60_000;
 // Target of the COMFYUI_BASE_URL VPC Service binding (wrangler.jsonc), which
 // routes to ComfyUI's actual localhost:8188 on the VPS over the private tunnel.
 const COMFYUI_VPC_TARGET_URL = 'http://localhost:8188/';
+
+export interface TextureReplacementSubmission {
+	comfyPromptId: string;
+	sceneHash: string;
+}
 
 function createClient(platform: App.Platform | undefined) {
 	const vpcService = platform?.env?.COMFYUI_BASE_URL;
@@ -77,12 +83,13 @@ export async function submitTextureReplacement(
 	request: AutomaticTextureReplacementRequest,
 	applicationOrigin: string,
 	jobId: string
-): Promise<string> {
+): Promise<TextureReplacementSubmission> {
 	const client = createClient(platform);
 	const [scene, reference] = await Promise.all([
 		downloadRemoteImage(request.image, applicationOrigin),
 		downloadRemoteImage(request.referenceImage, applicationOrigin)
 	]);
+	const sceneHash = await hashBytes(scene.bytes);
 	const signal = AbortSignal.timeout(COMFYUI_REQUEST_TIMEOUT_MS);
 	const queued = await queueTextureReplacement(client, {
 		clientId: jobId,
@@ -97,7 +104,7 @@ export async function submitTextureReplacement(
 		},
 		signal
 	});
-	return queued.promptId;
+	return { comfyPromptId: queued.promptId, sceneHash };
 }
 
 export async function pollTextureReplacement(

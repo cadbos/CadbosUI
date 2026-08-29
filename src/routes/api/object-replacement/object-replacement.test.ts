@@ -73,6 +73,10 @@ const requestBody = {
 	referenceImage: 'https://cdn.example.test/reference.jpg',
 	replacementObject: 'sofa'
 };
+
+function submission(comfyPromptId = 'prompt-1', sceneHash = 'server-scene-hash') {
+	return { comfyPromptId, sceneHash };
+}
 const completedImage: ComfyDownloadedImage = {
 	filename: 'result.png',
 	subfolder: 'output',
@@ -224,7 +228,7 @@ beforeEach(() => {
 	integration.cost = 2;
 	integration.costError = null;
 	integration.poll.mockReset().mockResolvedValue(null);
-	integration.submit.mockReset().mockResolvedValue('prompt-1');
+	integration.submit.mockReset().mockResolvedValue(submission());
 	jobStore.failNextCreate = false;
 });
 
@@ -375,9 +379,28 @@ describe('POST /api/object-replacement', () => {
 		);
 		await expect(getObjectReplacementJob(db, 'user-1', id)).resolves.toMatchObject({
 			comfyPromptId: 'prompt-1',
+			sceneHash: 'server-scene-hash',
 			cost: 3.5,
 			status: 'processing'
 		});
+	});
+
+	it('persists the server-computed scene hash instead of client hash metadata', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		integration.submit.mockResolvedValue(submission('prompt-1', 'computed-from-scene-bytes'));
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), {
+			...requestBody,
+			imageHash: 'a'.repeat(64)
+		});
+
+		expect(response.status).toBe(202);
+		const job = await db
+			.prepare('SELECT scene_hash FROM object_replacement_jobs WHERE user_id = ?')
+			.bind('user-1')
+			.first<{ scene_hash: string }>();
+		expect(job?.scene_hash).toBe('computed-from-scene-bytes');
 	});
 
 	it.each([
@@ -524,10 +547,10 @@ describe('POST /api/object-replacement', () => {
 		const db = makeD1();
 		seedUser(db, 12);
 		seedUser(db, 12, 'user-2', 'pubkey-2');
-		let resolveSubmission!: (promptId: string) => void;
+		let resolveSubmission!: (result: ReturnType<typeof submission>) => void;
 		integration.submit.mockImplementationOnce(
 			() =>
-				new Promise<string>((resolve) => {
+				new Promise<ReturnType<typeof submission>>((resolve) => {
 					resolveSubmission = resolve;
 				})
 		);
@@ -546,13 +569,13 @@ describe('POST /api/object-replacement', () => {
 		});
 		expect(integration.submit).toHaveBeenCalledTimes(1);
 
-		integration.submit.mockResolvedValueOnce('prompt-2');
+		integration.submit.mockResolvedValueOnce(submission('prompt-2'));
 		const otherAccount = await callPost({ pubkey: 'pubkey-2' }, requestPlatform);
 		expect(otherAccount.status).toBe(202);
 
-		resolveSubmission('prompt-1');
+		resolveSubmission(submission('prompt-1'));
 		expect((await first).status).toBe(202);
-		integration.submit.mockResolvedValueOnce('prompt-3');
+		integration.submit.mockResolvedValueOnce(submission('prompt-3'));
 		expect((await callPost({ pubkey: 'pubkey-1' }, requestPlatform)).status).toBe(202);
 	});
 
@@ -562,7 +585,7 @@ describe('POST /api/object-replacement', () => {
 		let rejectSubmission!: (error: Error) => void;
 		integration.submit.mockImplementationOnce(
 			() =>
-				new Promise<string>((_resolve, reject) => {
+				new Promise<ReturnType<typeof submission>>((_resolve, reject) => {
 					rejectSubmission = reject;
 				})
 		);
@@ -582,8 +605,8 @@ describe('POST /api/object-replacement', () => {
 		const db = makeD1();
 		seedUser(db, 100);
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-		integration.submit.mockImplementation(
-			async () => `prompt-${integration.submit.mock.calls.length}`
+		integration.submit.mockImplementation(async () =>
+			submission(`prompt-${integration.submit.mock.calls.length}`)
 		);
 
 		for (let attempt = 0; attempt < 10; attempt += 1) {
