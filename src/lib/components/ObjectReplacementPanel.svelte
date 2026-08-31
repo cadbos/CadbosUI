@@ -119,8 +119,22 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	});
 
+	const scalePercent = $derived(Math.round(request.objectReplacementScale * 100));
+	const scaleTier = $derived.by((): TranslationKey => {
+		if (request.objectReplacementScale < 0.9) return 'objectReplacement.scaleSmaller';
+		if (request.objectReplacementScale > 1.1) return 'objectReplacement.scaleLarger';
+		return 'objectReplacement.scaleAsShown';
+	});
+	const scaleValueText = $derived(`${scalePercent}% ${t(scaleTier)}`);
+
 	function objectValue(event: Event): string {
 		return event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : '';
+	}
+
+	function scaleValue(event: Event): number {
+		return event.currentTarget instanceof HTMLInputElement
+			? Number(event.currentTarget.value)
+			: request.objectReplacementScale;
 	}
 
 	function parseRetryAfter(response: Response): number {
@@ -344,6 +358,7 @@ before the Change Date. See LICENSE for complete terms.
 		request.setObjectReferenceImage(undefined);
 		request.setObjectReplacementObject('');
 		request.setObjectReplacementSourceMode('current-result');
+		request.setObjectReplacementScale(1);
 		request.setImage(undefined);
 		request.setCurrentRender(undefined);
 		terminalJob = null;
@@ -376,6 +391,28 @@ before the Change Date. See LICENSE for complete terms.
 			compact
 		/>
 	</div>
+
+	<label class="field scale-field">
+		<span class="scale-top">
+			<span>{t('objectReplacement.scale')}</span>
+			<span class="scale-value">{scalePercent}%</span>
+		</span>
+		<input
+			type="range"
+			min="0.5"
+			max="2"
+			step="0.05"
+			value={request.objectReplacementScale}
+			disabled={formLocked}
+			aria-valuetext={scaleValueText}
+			oninput={(event) => request.setObjectReplacementScale(scaleValue(event))}
+		/>
+		<span class="scale-scale" aria-hidden="true">
+			<span>{t('objectReplacement.scaleSmaller')}</span>
+			<span>{t('objectReplacement.scaleAsShown')}</span>
+			<span>{t('objectReplacement.scaleLarger')}</span>
+		</span>
+	</label>
 
 	<label class="field">
 		<span>
@@ -522,6 +559,34 @@ before the Change Date. See LICENSE for complete terms.
 	.field input:disabled {
 		opacity: 0.75;
 		cursor: not-allowed;
+	}
+
+	.scale-top,
+	.scale-scale {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+	}
+
+	.scale-top {
+		justify-content: space-between;
+		color: var(--color-muted-strong);
+	}
+
+	.scale-value {
+		color: var(--color-text);
+		font-weight: 600;
+	}
+
+	.scale-scale {
+		justify-content: space-between;
+		font-size: 0.75rem;
+		color: var(--color-muted-strong);
+	}
+
+	input[type='range'] {
+		width: 100%;
+		accent-color: var(--color-accent);
 	}
 
 	.validation-hint,

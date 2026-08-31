@@ -135,6 +135,7 @@ export interface RequestJSON {
 	styleSourceMode: ImageSourceMode;
 	objectReplacementObject?: string;
 	objectReplacementSourceMode?: ImageSourceMode;
+	objectReplacementScale?: number;
 	textureReplacementSurface?: string;
 	textureReplacementSourceMode?: ImageSourceMode;
 	textureReplacementMasked?: boolean;
@@ -166,6 +167,7 @@ export interface NormalizedRequest {
 	objectReplacementObject: string;
 	objectReplacementSourceMode: ImageSourceMode;
 	objectReplacementSourceUrl: string | undefined;
+	objectReplacementScale: number;
 	textureReplacementSurface: string;
 	textureReplacementSourceMode: ImageSourceMode;
 	textureReplacementSourceUrl: string | undefined;
@@ -182,6 +184,18 @@ const outputFormatSchema = z.enum(OUTPUT_FORMATS);
 const sceneTypeSchema = z.enum(SCENE_TYPES);
 const imageSourceModeSchema = z.enum(IMAGE_SOURCE_MODES);
 const styleTransferStrengthSchema = z.number().min(0).max(1);
+const objectReplacementScaleSchema = z.number().min(0.5).max(2);
+// Bucketed, not continuous — text is the only lever that actually moves the
+// model's sense of size (a same-scale image reframing trick tested against
+// production had zero effect), and only a handful of tested phrasings exist,
+// not one per slider step.
+function objectReplacementSizeClauseKey(scale: number): TranslationKey | null {
+	if (scale <= 0.65) return 'objectReplacement.sizeExtremeSmall';
+	if (scale < 0.9) return 'objectReplacement.sizeModerateSmall';
+	if (scale <= 1.1) return null;
+	if (scale < 1.5) return 'objectReplacement.sizeModerateLarge';
+	return 'objectReplacement.sizeExtremeLarge';
+}
 const replacementObjectSchema = z.string().max(200);
 export const objectReplacementJobIdSchema = z.uuid();
 const replacementSurfaceSchema = z.string().max(200);
@@ -261,6 +275,7 @@ const requestJsonSchema = z
 		styleSourceMode: imageSourceModeSchema.default('current-result'),
 		objectReplacementObject: replacementObjectSchema.default(''),
 		objectReplacementSourceMode: imageSourceModeSchema.default('current-result'),
+		objectReplacementScale: objectReplacementScaleSchema.default(1),
 		textureReplacementSurface: replacementSurfaceSchema.default(''),
 		textureReplacementSourceMode: imageSourceModeSchema.default('current-result'),
 		textureReplacementMasked: z.boolean().default(false),
@@ -583,6 +598,7 @@ export class RequestState {
 	styleSourceMode = $state<ImageSourceMode>('current-result');
 	objectReplacementObject = $state('');
 	objectReplacementSourceMode = $state<ImageSourceMode>('current-result');
+	objectReplacementScale = $state(1);
 	activeObjectReplacementJob = $state<ActiveObjectReplacementJob | undefined>(undefined);
 	textureReplacementSurface = $state('');
 	textureReplacementSourceMode = $state<ImageSourceMode>('current-result');
@@ -623,6 +639,16 @@ export class RequestState {
 			.map((preset) => t(preset.phrase));
 		const custom = this.lightSettingsInstruction.trim();
 		return [...phrases, ...(custom ? [custom] : [])].join(', ');
+	});
+
+	// What actually gets sent as replacementObject: the located-object
+	// description plus a translated size clause when the scale slider has
+	// moved off its 1 (as-shown) default — same comma-joined shape as
+	// lightSettingsPrompt above.
+	objectReplacementInstruction = $derived.by(() => {
+		const object = this.objectReplacementObject.trim();
+		const sizeClauseKey = objectReplacementSizeClauseKey(this.objectReplacementScale);
+		return sizeClauseKey ? `${object}, ${t(sizeClauseKey)}` : object;
 	});
 
 	get currentRender(): RenderResult | undefined {
@@ -857,6 +883,10 @@ export class RequestState {
 
 	setObjectReplacementSourceMode(mode: ImageSourceMode): void {
 		this.objectReplacementSourceMode = imageSourceModeSchema.parse(mode);
+	}
+
+	setObjectReplacementScale(scale: number): void {
+		this.objectReplacementScale = objectReplacementScaleSchema.parse(scale);
 	}
 
 	setActiveObjectReplacementJobId(id: string | undefined): void {
@@ -1369,7 +1399,7 @@ export class RequestState {
 			image: source.url,
 			...(source.hash ? { imageHash: source.hash } : {}),
 			referenceImage: this.objectReferenceImage.url,
-			replacementObject: this.objectReplacementObject.trim(),
+			replacementObject: this.objectReplacementInstruction,
 			sessionId
 		};
 	}
@@ -1432,6 +1462,7 @@ export class RequestState {
 			styleSourceMode: this.styleSourceMode,
 			objectReplacementObject: this.objectReplacementObject,
 			objectReplacementSourceMode: this.objectReplacementSourceMode,
+			objectReplacementScale: this.objectReplacementScale,
 			textureReplacementSurface: this.textureReplacementSurface,
 			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			textureReplacementMasked: this.textureReplacementMasked,
@@ -1467,6 +1498,7 @@ export class RequestState {
 		this.styleSourceMode = parsed.styleSourceMode;
 		this.objectReplacementObject = parsed.objectReplacementObject;
 		this.objectReplacementSourceMode = parsed.objectReplacementSourceMode;
+		this.objectReplacementScale = parsed.objectReplacementScale;
 		this.activeObjectReplacementJob = undefined;
 		this.textureReplacementSurface = parsed.textureReplacementSurface;
 		this.textureReplacementSourceMode = parsed.textureReplacementSourceMode;
@@ -1506,6 +1538,7 @@ export class RequestState {
 			objectReplacementObject: this.objectReplacementObject,
 			objectReplacementSourceMode: this.objectReplacementSourceMode,
 			objectReplacementSourceUrl: this.objectReplacementSourceUrl(),
+			objectReplacementScale: this.objectReplacementScale,
 			textureReplacementSurface: this.textureReplacementMasked
 				? ''
 				: this.textureReplacementSurface,
@@ -1552,6 +1585,7 @@ export class RequestState {
 		this.styleSourceMode = 'current-result';
 		this.objectReplacementObject = '';
 		this.objectReplacementSourceMode = 'current-result';
+		this.objectReplacementScale = 1;
 		this.activeObjectReplacementJob = undefined;
 		this.textureReplacementSurface = '';
 		this.textureReplacementSourceMode = 'current-result';
@@ -1616,6 +1650,7 @@ export class RequestState {
 		this.styleSourceMode = source.styleSourceMode;
 		this.objectReplacementObject = source.objectReplacementObject;
 		this.objectReplacementSourceMode = source.objectReplacementSourceMode;
+		this.objectReplacementScale = source.objectReplacementScale;
 		this.activeObjectReplacementJob = cloneActiveObjectReplacementJob(
 			source.activeObjectReplacementJob
 		);

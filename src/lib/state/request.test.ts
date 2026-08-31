@@ -188,6 +188,7 @@ describe('serialization', () => {
 		delete snapshot.objectReferenceImage;
 		delete snapshot.objectReplacementObject;
 		delete snapshot.objectReplacementSourceMode;
+		delete snapshot.objectReplacementScale;
 		delete snapshot.textureReferenceImage;
 		delete snapshot.textureMaskImage;
 		delete snapshot.textureMaskSourceUrl;
@@ -211,6 +212,7 @@ describe('serialization', () => {
 			styleSourceMode: 'current-result',
 			objectReplacementObject: '',
 			objectReplacementSourceMode: 'current-result',
+			objectReplacementScale: 1,
 			textureReplacementSurface: '',
 			textureReplacementSourceMode: 'current-result',
 			textureReplacementMasked: false,
@@ -1072,6 +1074,56 @@ describe('toObjectReplacementRequest', () => {
 
 		expect((await request.toObjectReplacementRequest())?.image).toBe(
 			'https://example.test/current-result.webp'
+		);
+	});
+
+	it('enforces the scale range', () => {
+		expect(() => request.setObjectReplacementScale(0.4)).toThrow();
+		expect(() => request.setObjectReplacementScale(2.1)).toThrow();
+		request.setObjectReplacementScale(0.5);
+		expect(request.objectReplacementScale).toBe(0.5);
+		request.setObjectReplacementScale(2);
+		expect(request.objectReplacementScale).toBe(2);
+	});
+
+	it('sends the reference image unchanged and appends no size clause at the default scale', async () => {
+		request.setImage(AC9_IMAGE);
+		request.setObjectReferenceImage(objectReference);
+		request.setObjectReplacementSourceMode('room-photo');
+		request.setObjectReplacementObject('sofa');
+
+		const body = await request.toObjectReplacementRequest();
+		expect(body?.referenceImage).toBe(objectReference.url);
+		expect(body?.replacementObject).toBe('sofa');
+	});
+
+	it('appends a translated size clause once the scale moves off 1', async () => {
+		request.setImage(AC9_IMAGE);
+		request.setObjectReferenceImage(objectReference);
+		request.setObjectReplacementSourceMode('room-photo');
+		request.setObjectReplacementObject('sofa');
+
+		request.setObjectReplacementScale(0.5);
+		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe(
+			'sofa, сделай его очень маленьким, непропорционально маленьким'
+		);
+
+		request.setObjectReplacementScale(0.8);
+		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe(
+			'sofa, сделай его заметно меньше, чем обычно'
+		);
+
+		request.setObjectReplacementScale(1);
+		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe('sofa');
+
+		request.setObjectReplacementScale(1.2);
+		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe(
+			'sofa, сделай его заметно крупнее, чем обычно'
+		);
+
+		request.setObjectReplacementScale(2);
+		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe(
+			'sofa, сделай его очень крупным, непропорционально крупным'
 		);
 	});
 
