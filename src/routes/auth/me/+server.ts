@@ -53,13 +53,16 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 		// A transient D1 failure here is not proof the session is invalid — the
 		// caller (auth.svelte.ts's loadSession) must retry rather than treat this
 		// as a logout, or the sign-in indicator desyncs from the still-valid
-		// session cookie every other endpoint keeps honoring.
+		// session cookie every other endpoint keeps honoring. The D1 driver's own
+		// error message isn't logged as-is: its contents aren't under our control
+		// and could echo back query/bind details, so only a coarse error kind is
+		// recorded (mirrors remote-image.ts's errorKind for the same reason).
 		console.error(
 			JSON.stringify({
 				level: 'error',
 				area: 'auth',
 				event: 'me_billing_lookup_error',
-				message: error instanceof Error ? error.message : 'Unknown billing lookup error'
+				errorKind: errorKind(error)
 			})
 		);
 		return accountLookupUnavailableResponse();
@@ -72,4 +75,8 @@ function accountLookupUnavailableResponse(): Response {
 	const response = apiError(503, 'account_unavailable', 'Account data temporarily unavailable');
 	response.headers.set('Retry-After', '5');
 	return response;
+}
+
+function errorKind(error: unknown): string {
+	return error instanceof Error ? error.name : typeof error;
 }
