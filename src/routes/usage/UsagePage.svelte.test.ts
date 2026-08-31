@@ -17,6 +17,7 @@ import { render } from 'vitest-browser-svelte';
 import { npubEncode } from 'nostr-tools/nip19';
 import type { UsageProfilesResponse, UserUsageRecord, UserUsageResponse } from '$lib/api/contract';
 import { setLocale, type Locale } from '$lib/i18n/index.svelte';
+import { auth } from '$lib/state/auth.svelte';
 import { usage } from '$lib/state/usage.svelte';
 import UsagePage from './+page.svelte';
 import type { PageProps } from './$types';
@@ -103,11 +104,13 @@ function localTimeZoneName(
 beforeEach(() => {
 	usage.clear();
 	setLocale('en');
+	auth.status = 'authenticated';
 });
 
 afterEach(() => {
 	usage.clear();
 	setLocale('ru');
+	auth.status = 'anonymous';
 	vi.unstubAllGlobals();
 });
 
@@ -187,6 +190,19 @@ it('loads the next usage page when the infinite-scroll sentinel intersects', asy
 	expect(fetchMock).toHaveBeenCalledWith('/api/usage?offset=1&size=20', {
 		signal: expect.any(AbortSignal)
 	});
+});
+
+it('never fetches or renders usage data while the auth store is not authenticated', async () => {
+	auth.status = 'anonymous';
+	const fetchMock = mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)]);
+	vi.stubGlobal('fetch', fetchMock);
+
+	const screen = render(UsagePage, pageProps());
+
+	await expect
+		.element(screen.getByText('Sign in with an account that has access to see this data.'))
+		.toBeVisible();
+	expect(fetchMock).not.toHaveBeenCalled();
 });
 
 it('renders an error state when usage cannot be loaded', async () => {

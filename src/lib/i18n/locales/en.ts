@@ -214,6 +214,7 @@ export const en = {
 	'generatedImages.resizeHandle': 'Resize the scenes panel',
 	'usage.title': 'Usage',
 	'usage.subtitle': 'Account balances and generation spend across Cadbos users.',
+	'usage.signInRequired': 'Sign in with an account that has access to see this data.',
 	'usage.walletBalance': 'Wallet balance: {balance}',
 	'usage.walletBalanceLoading': 'Loading wallet balance…',
 	'usage.walletBalanceFailed': 'Could not load wallet balance.',

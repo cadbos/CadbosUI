@@ -16,6 +16,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { npubEncode } from 'nostr-tools/nip19';
 	import type { PageProps } from './$types';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
+	import { auth } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { usage } from '$lib/state/usage.svelte';
 
@@ -31,6 +32,10 @@ before the Change Date. See LICENSE for complete terms.
 	let timeZoneFullName = $derived(formatTimeZoneName('long'));
 
 	$effect(() => {
+		// Wait for the shared auth store, not just the session cookie, so the
+		// header's sign-in indicator and this page's data never disagree (the
+		// header alone showing "Гость" must not coexist with a loaded table).
+		if (auth.status !== 'authenticated') return;
 		void usage.load();
 		return () => usage.clear();
 	});
@@ -98,7 +103,9 @@ before the Change Date. See LICENSE for complete terms.
 			{/if}
 		</header>
 
-		{#if usage.status === 'loading'}
+		{#if auth.status !== 'authenticated'}
+			<p class="status">{t('usage.signInRequired')}</p>
+		{:else if usage.status === 'loading'}
 			<p class="status">{t('usage.loading')}</p>
 		{:else if usage.status === 'error' && usage.users.length === 0}
 			<p class="status error" role="alert">{t('usage.failed')}</p>
