@@ -12,11 +12,35 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import type { Page } from '@playwright/test';
 import { npubEncode } from 'nostr-tools/nip19';
 
 import { expect, test } from './fixtures';
 
+// /usage now gates its fetch on the client auth store (fix/usage-auth-status-desync),
+// not just the session cookie — so every scenario needs a signed-in session mocked,
+// the same way workspace.e2e.ts does for its own authenticated-only assertions.
+async function mockAuthenticatedSession(page: Page): Promise<void> {
+	await page.route('**/auth/me', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+			})
+		});
+	});
+	await page.route('**/auth/nostr-profile', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ profile: { relays: [] } })
+		});
+	});
+}
+
 test('links usage pubkeys to Primal in a new tab by default', async ({ page }) => {
+	await mockAuthenticatedSession(page);
 	const pubkey = 'a'.repeat(64);
 	const pubkeyWithoutPicture = 'b'.repeat(64);
 	const npub = npubEncode(pubkey);
@@ -98,6 +122,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 });
 
 test('shows an error message when the wallet balance cannot be loaded', async ({ page }) => {
+	await mockAuthenticatedSession(page);
 	await page.route('**/api/usage**', async (route) => {
 		const pathname = new URL(route.request().url()).pathname;
 
