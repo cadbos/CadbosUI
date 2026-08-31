@@ -123,21 +123,35 @@ async function uploadInputs(page: Page): Promise<UploadCapture> {
 		});
 	});
 
-	const inputs = page.locator('#mode-panel-edit input[type="file"]');
+	// Mask mode being the only mode now means the "or upload a ready mask"
+	// input (target="textureMask") is already in the DOM before any photo is
+	// picked, alongside the scene and reference-texture inputs — so these are
+	// targeted by their accessible name instead of a fragile nth() position.
+	const sceneInput = page.locator('#mode-panel-edit input[type="file"][aria-label="Фото комнаты"]');
+	const referenceInput = page.locator(
+		'#mode-panel-edit input[type="file"][aria-label="Референс новой текстуры — обязательно"]'
+	);
 	// The room/main photo upload is deferred to submit time — just pick the
 	// file locally; the actual /api/uploads call fires once the test later
-	// submits the texture-replacement request (or enters masked mode). Wait
-	// for the local preview to render before continuing, so validation has
-	// settled on the picked file rather than racing a pending reactive update.
-	await inputs.nth(0).setInputFiles({
+	// submits the texture-replacement request (or enters masked mode). Picking
+	// it also flips the request straight into masked mode (mask-based
+	// replacement is the only mode), which immediately swaps the photo
+	// dropzone for the mask editor's canvas — wait for that canvas instead of
+	// the dropzone's "change photo" button, so validation has settled on the
+	// picked file rather than racing a pending reactive update.
+	await sceneInput.setInputFiles({
 		name: 'scene.webp',
 		mimeType: 'image/webp',
 		buffer: Buffer.from('scene')
 	});
-	await expect(page.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await expect(
+		page.locator(
+			'#mode-panel-edit canvas[aria-label="Область рисования маски поверх исходной сцены"]'
+		)
+	).toBeVisible();
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
-		inputs.nth(1).setInputFiles({
+		referenceInput.setInputFiles({
 			name: 'fabric.webp',
 			mimeType: 'image/webp',
 			buffer: Buffer.from('fabric')
@@ -146,66 +160,49 @@ async function uploadInputs(page: Page): Promise<UploadCapture> {
 	return { maskPng: () => maskPng };
 }
 
-test('submits texture inputs and completes inside the nested edit tool', async ({ page }) => {
-	await authenticate(page);
-	await page.goto('/edit?tool=texture-replacement');
-	await uploadInputs(page);
-
-	let submittedBody: unknown;
-	await page.route('**/api/texture-replacement', async (route) => {
-		submittedBody = route.request().postDataJSON();
-		await route.fulfill({
-			status: 202,
-			contentType: 'application/json',
-			body: JSON.stringify({ id: JOB_ID, status: 'processing' })
-		});
-	});
-	await page.route(`**/api/texture-replacement/${JOB_ID}`, async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				id: JOB_ID,
-				status: 'completed',
-				outputUrl: 'https://cdn.example.test/retextured.webp',
-				cost: 2,
-				balance: 18
-			})
-		});
-	});
-
-	const panel = page.locator('#edit-tool-panel-texture-replacement');
-	await panel.getByLabel(/Укажите поверхность или материал/).fill('  обивка дивана  ');
-	await panel.getByRole('button', { name: 'Заменить текстуру' }).click();
-
-	await expect(page).toHaveURL(new RegExp(`tool=texture-replacement.*job=${JOB_ID}`));
-	await expect(page.locator('.result img.output')).toHaveAttribute(
-		'src',
-		'https://cdn.example.test/retextured.webp'
+// Draws a small brush stroke on the mask canvas and saves it — the minimum
+// needed to satisfy validation and unlock submission, for tests that don't
+// otherwise care about the mask editor's UX (see the dedicated coverage of
+// brush/eraser/cursor behavior below).
+async function drawAndSaveMask(page: Page): Promise<void> {
+	const maskEditor = page.locator('#mode-panel-edit .canvas-col');
+	const canvas = maskEditor.locator(
+		'canvas[aria-label="Область рисования маски поверх исходной сцены"]'
 	);
-	await expect(panel.locator('.job-success')).toHaveText('Замена текстуры завершена.');
-	expect(submittedBody).toEqual({
-		image: 'https://cdn.example.test/scene.webp',
-		imageHash: 'scene-hash',
-		referenceImage: 'https://cdn.example.test/reference-fabric.webp',
-		replacementSurface: 'обивка дивана',
-		sessionId: E2E_SESSION_ID
+	await expect(canvas).toBeVisible();
+	await expect
+		.poll(() =>
+			canvas.evaluate((element) => (element instanceof HTMLCanvasElement ? element.width : 0))
+		)
+		.toBe(800);
+	await canvas.scrollIntoViewIfNeeded();
+	const bounds = await canvas.boundingBox();
+	if (!bounds) throw new Error('Mask canvas has no visible bounds');
+	await page.mouse.move(bounds.x + bounds.width * 0.25, bounds.y + bounds.height * 0.55);
+	await page.mouse.down();
+	await page.mouse.move(bounds.x + bounds.width * 0.7, bounds.y + bounds.height * 0.55, {
+		steps: 8
 	});
-});
+	await page.mouse.up();
+	await expect(maskEditor.getByText('Сохраните маску после рисования.')).toBeVisible();
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		maskEditor.getByRole('button', { name: 'Сохранить маску' }).click()
+	]);
+	await expect(maskEditor.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
+}
 
-test('uses the masked texture mode and applies the synchronous result without polling', async ({
-	page
-}) => {
+test('draws a mask and applies the synchronous result without polling', async ({ page }) => {
 	await authenticate(page);
 	await page.goto('/edit?tool=texture-replacement');
 	const uploads = await uploadInputs(page);
 
 	const panel = page.locator('#edit-tool-panel-texture-replacement');
 	// The mask editor draws directly on the canvas image (Workspace.svelte's
-	// canvas-col), not inside this tool panel — only the checkbox/surface
-	// field/job status live in the panel itself.
+	// canvas-col), not inside this tool panel — only the reference/job status
+	// live in the panel itself. Mask mode is the only mode, so the mask editor
+	// is already showing — no toggle to flip.
 	const maskEditor = page.locator('#mode-panel-edit .canvas-col');
-	await panel.getByRole('checkbox', { name: 'С маской' }).check();
 	await expect(page).toHaveURL(/masked=1/);
 	await expect(panel.getByLabel(/Укажите поверхность или материал/)).toHaveCount(0);
 	const canvas = maskEditor.locator(
@@ -258,28 +255,7 @@ test('uses the masked texture mode and applies the synchronous result without po
 		element.value = '48';
 		element.dispatchEvent(new Event('input', { bubbles: true }));
 	});
-	await canvas.scrollIntoViewIfNeeded();
-	const drawingBounds = await canvas.boundingBox();
-	if (!drawingBounds) throw new Error('Mask canvas has no visible bounds');
-	await page.mouse.move(
-		drawingBounds.x + drawingBounds.width * 0.25,
-		drawingBounds.y + drawingBounds.height * 0.55
-	);
-	await page.mouse.down();
-	await page.mouse.move(
-		drawingBounds.x + drawingBounds.width * 0.7,
-		drawingBounds.y + drawingBounds.height * 0.55,
-		{
-			steps: 8
-		}
-	);
-	await page.mouse.up();
-	await expect(maskEditor.getByText('Сохраните маску после рисования.')).toBeVisible();
-	await Promise.all([
-		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
-		maskEditor.getByRole('button', { name: 'Сохранить маску' }).click()
-	]);
-	await expect(maskEditor.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
+	await drawAndSaveMask(page);
 	const maskPng = uploads.maskPng();
 	if (!maskPng) throw new Error('The generated mask PNG was not captured');
 	const decodedMask = await page.evaluate(async (base64) => {
@@ -369,7 +345,9 @@ test('uses the masked texture mode and applies the synchronous result without po
 	);
 
 	await page.getByRole('tab', { name: /Замена текстуры/ }).click();
-	await expect(panel.getByRole('checkbox', { name: 'С маской' })).toBeEnabled();
+	await expect(
+		panel.getByText('Выделите область для замены прямо на изображении выше.')
+	).toBeVisible();
 	await expect(panel.locator('.job-success')).toHaveCount(0);
 	await expect(panel.getByRole('button', { name: 'Новая замена' })).toHaveCount(0);
 });
@@ -378,6 +356,7 @@ test('does not navigate back after switching tools during submission', async ({ 
 	await authenticate(page);
 	await page.goto('/edit?tool=texture-replacement');
 	await uploadInputs(page);
+	await drawAndSaveMask(page);
 
 	let releaseResponse: (() => void) | undefined;
 	const responseGate = new Promise<void>((resolve) => {
@@ -403,7 +382,6 @@ test('does not navigate back after switching tools during submission', async ({ 
 	});
 
 	const panel = page.locator('#edit-tool-panel-texture-replacement');
-	await panel.getByLabel(/Укажите поверхность или материал/).fill('sofa upholstery');
 	await panel.getByRole('button', { name: 'Заменить текстуру' }).click();
 	await expect.poll(() => postCount).toBe(1);
 	await page.getByRole('tab', { name: 'Свой промпт' }).focus();
