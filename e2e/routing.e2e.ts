@@ -143,7 +143,12 @@ test('direct navigation opens texture replacement inside edit with explicit defa
 		panel.getByText('Замена текстур находится на раннем этапе', { exact: false })
 	).toBeVisible();
 	await expect(panel.getByRole('region', { name: /Референс новой текстуры/ })).toBeVisible();
-	await expect(panel.getByLabel(/Укажите поверхность или материал/)).toBeVisible();
+	// Mask-based replacement is the only mode (the free-text surface field is
+	// retired) — the panel shows the canvas hint instead, even before a source
+	// photo exists.
+	await expect(
+		panel.getByText('Выделите область для замены прямо на изображении выше.')
+	).toBeVisible();
 });
 
 test('the removed standalone texture replacement route returns 404', async ({ page }) => {
@@ -264,7 +269,10 @@ test('texture replacement source and surface text round-trip without image URLs'
 		'/edit?tool=texture-replacement&source=room-photo&surface=sofa%20upholstery&image=https://evil.example.com/scene.jpg&referenceImage=https://evil.example.com/fabric.jpg'
 	);
 
-	await expect(page.getByLabel(/Укажите поверхность или материал/)).toHaveValue('sofa upholstery');
+	// The free-text surface field is retired from the UI (mask-based
+	// replacement is the only mode), so a legacy `surface=` link no longer
+	// populates a visible field — it just has to round-trip harmlessly
+	// through the URL below without ever restoring the image URLs.
 	await expect(page).toHaveURL(/source=room-photo/);
 	await expect(page).toHaveURL(/surface=sofa(?:%20|\+)upholstery/);
 	await expect(page).not.toHaveURL(/image=/);
@@ -278,7 +286,7 @@ test('texture replacement source and surface text round-trip without image URLs'
 
 	const sharedUrl = page.url();
 	await page.goto(sharedUrl);
-	await expect(page.getByLabel(/Укажите поверхность или материал/)).toHaveValue('sofa upholstery');
+	await expect(page).toHaveURL(/surface=sofa(?:%20|\+)upholstery/);
 });
 
 test('switching style transfer reference tabs updates only the reference query param', async ({
