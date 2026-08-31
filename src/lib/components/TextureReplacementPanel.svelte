@@ -42,6 +42,13 @@ before the Change Date. See LICENSE for complete terms.
 	// upload/finalize time, but finite so a stalled connection is retried
 	// instead of leaving pollJob awaiting a response that never arrives.
 	const POLL_REQUEST_TIMEOUT_MS = 150_000;
+	// Prompt-only texture replacement (describing the surface in free text,
+	// without a mask) doesn't produce reliable results, so the mode toggle is
+	// hidden and mask-based replacement is the only mode exposed here. The
+	// toggle markup, the automatic-mode branch below, and the underlying
+	// store/server support for it are kept, not deleted, so this can be
+	// restored later by flipping this flag back on.
+	const SHOW_MASKED_TOGGLE = false;
 
 	const jobResponseSchema = z.discriminatedUnion('status', [
 		z.object({ id: z.string().uuid(), status: z.literal('processing') }).strict(),
@@ -113,6 +120,24 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	$effect(pollingEffect);
+
+	// With the prompt-only mode hidden (see SHOW_MASKED_TOGGLE), mask-based
+	// replacement is the only supported mode: switch to it as soon as a source
+	// image is available, same as a user manually checking the (now hidden)
+	// toggle would have — gating on the source keeps the initial photo upload
+	// working (Workspace.svelte swaps to the mask editor, replacing the photo
+	// dropzone, once masked mode is on).
+	function forceMaskedModeEffect(): void {
+		if (
+			!SHOW_MASKED_TOGGLE &&
+			!request.textureReplacementMasked &&
+			request.hasTextureReplacementSource()
+		) {
+			request.setTextureReplacementMasked(true);
+		}
+	}
+
+	$effect(forceMaskedModeEffect);
 
 	// The full-screen overlay tracks this flow's own in-flight state (not just
 	// the button's `submitting`) since the wait spans the async job queue +
@@ -384,7 +409,7 @@ before the Change Date. See LICENSE for complete terms.
 		request.setActiveTextureReplacementJobId(undefined);
 		request.setTextureReferenceImage(undefined);
 		request.setTextureMaskImage(undefined);
-		request.setTextureReplacementMasked(false);
+		request.setTextureReplacementMasked(true);
 		request.setTextureReplacementResultReady(false);
 		request.setTextureReplacementSurface('');
 		request.setTextureReplacementSourceMode('current-result');
@@ -423,21 +448,21 @@ before the Change Date. See LICENSE for complete terms.
 		/>
 	</div>
 
-	<label class="masked-toggle">
-		<input
-			{@attach attachMaskedToggle}
-			id="texture-replacement-masked-toggle"
-			type="checkbox"
-			checked={request.textureReplacementMasked}
-			disabled={formLocked}
-			onchange={(event) => request.setTextureReplacementMasked(maskedValue(event))}
-		/>
-		<span>{t('textureReplacement.maskedLabel')}</span>
-	</label>
+	{#if SHOW_MASKED_TOGGLE}
+		<label class="masked-toggle">
+			<input
+				{@attach attachMaskedToggle}
+				id="texture-replacement-masked-toggle"
+				type="checkbox"
+				checked={request.textureReplacementMasked}
+				disabled={formLocked}
+				onchange={(event) => request.setTextureReplacementMasked(maskedValue(event))}
+			/>
+			<span>{t('textureReplacement.maskedLabel')}</span>
+		</label>
+	{/if}
 
-	{#if request.textureReplacementMasked}
-		<p class="canvas-hint">{t('textureReplacement.maskEditor.canvasHint')}</p>
-	{:else}
+	{#if SHOW_MASKED_TOGGLE && !request.textureReplacementMasked}
 		<label class="field">
 			<span>
 				{t('textureReplacement.surfaceHint')}
@@ -453,6 +478,8 @@ before the Change Date. See LICENSE for complete terms.
 				oninput={(event) => request.setTextureReplacementSurface(surfaceValue(event))}
 			/>
 		</label>
+	{:else}
+		<p class="canvas-hint">{t('textureReplacement.maskEditor.canvasHint')}</p>
 	{/if}
 
 	{#if !isAuthenticated}
