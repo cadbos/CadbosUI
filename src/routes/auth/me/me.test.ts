@@ -63,6 +63,18 @@ describe('GET /auth/me — generation access control', () => {
 		});
 	});
 
+	it('fails closed with a retryable response when the billing lookup errors, instead of looking logged out', async () => {
+		const response = await call({ pubkey }, { env: {} } as App.Platform);
+		expect(response.status).toBe(503);
+		expect(response.headers.get('retry-after')).toBe('5');
+		expect(await response.json()).toEqual({
+			error: {
+				code: 'account_unavailable',
+				message: 'Account data temporarily unavailable'
+			}
+		});
+	});
+
 	it('omits credit for an account no admin has approved', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);

@@ -215,6 +215,8 @@ export const ru = {
 	'generatedImages.resizeHandle': 'Изменить ширину панели сцен',
 	'usage.title': 'Использование',
 	'usage.subtitle': 'Балансы аккаунтов и траты на генерации по пользователям Cadbos.',
+	'usage.signInRequired':
+		'Для доступа к данным вы должны быть авторизованы с аккаунтом, имеющим доступ.',
 	'usage.walletBalance': 'Баланс кошелька: {balance}',
 	'usage.walletBalanceLoading': 'Загрузка баланса кошелька…',
 	'usage.walletBalanceFailed': 'Не удалось загрузить баланс кошелька.',

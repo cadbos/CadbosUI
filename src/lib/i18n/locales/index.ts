@@ -210,6 +210,7 @@ export interface Dictionary {
 	'generatedImages.resizeHandle': string;
 	'usage.title': string;
 	'usage.subtitle': string;
+	'usage.signInRequired': string;
 	'usage.walletBalance': string;
 	'usage.walletBalanceLoading': string;
 	'usage.walletBalanceFailed': string;
