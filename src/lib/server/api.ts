@@ -95,6 +95,23 @@ export const lightSettingsRequestSchema = z.strictObject({
 	sessionId
 });
 
+const objectAdderRectSchema = z.strictObject({
+	x: z.number().min(0).max(1),
+	y: z.number().min(0).max(1),
+	width: z.number().min(0).max(1),
+	height: z.number().min(0).max(1)
+});
+
+export const objectAdderRequestSchema = z.strictObject({
+	image: httpsImageUrl,
+	imageHash: optionalImageHash,
+	objectImage: httpsImageUrl,
+	objectImageHash: optionalImageHash,
+	rect: objectAdderRectSchema,
+	prompt: z.string().trim().max(2000).optional(),
+	sessionId
+});
+
 export const textureReplacementRequestSchema = z.union([
 	z.strictObject({
 		image: httpsImageUrl,

@@ -58,3 +58,11 @@ export {
 	type TextureReplacementRequest,
 	type QueueTextureReplacementRequest
 } from '$lib/server/comfyui/texture-replacement';
+export {
+	getObjectAdderResult,
+	queueObjectAdder,
+	runObjectAdder,
+	type ObjectAdderImage,
+	type ObjectAdderRequest,
+	type QueueObjectAdderRequest
+} from '$lib/server/comfyui/object-adder';

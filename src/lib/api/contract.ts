@@ -200,6 +200,52 @@ export type LightSettingsJobResponse =
 	| LightSettingsCompletedResponse
 	| LightSettingsFailedResponse;
 
+// The object's placement on the scene, as fractions of the scene image's own
+// width/height (not pixels) — resolution-independent between whatever the
+// browser measured and whatever the server downloads, since composing happens
+// server-side (see object-adder-compositor.ts) once both images are back on
+// the server, not in the browser.
+export interface ObjectAdderRect {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+export interface ObjectAdderRequest {
+	image: string;
+	imageHash?: string;
+	objectImage: string;
+	objectImageHash?: string;
+	rect: ObjectAdderRect;
+	prompt?: string;
+	sessionId: string;
+}
+
+export interface ObjectAdderProcessingResponse {
+	id: string;
+	status: 'processing';
+}
+
+export interface ObjectAdderCompletedResponse {
+	id: string;
+	status: 'completed';
+	outputUrl: string;
+	cost: number;
+	balance: number;
+}
+
+export interface ObjectAdderFailedResponse {
+	id: string;
+	status: 'failed';
+	error: { code: string; message: string };
+}
+
+export type ObjectAdderJobResponse =
+	| ObjectAdderProcessingResponse
+	| ObjectAdderCompletedResponse
+	| ObjectAdderFailedResponse;
+
 export interface AutomaticTextureReplacementRequest {
 	image: string;
 	imageHash?: string;

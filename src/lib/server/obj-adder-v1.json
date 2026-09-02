@@ -1,0 +1,261 @@
+{
+	"74": {
+		"inputs": {
+			"vae_name": "qwen_image_vae.safetensors"
+		},
+		"class_type": "VAELoader",
+		"_meta": {
+			"title": "Qwen Image VAE"
+		}
+	},
+	"75": {
+		"inputs": {
+			"upscale_method": "lanczos",
+			"megapixels": 1,
+			"resolution_steps": 1,
+			"image": ["103", 0]
+		},
+		"class_type": "ImageScaleToTotalPixels",
+		"_meta": {
+			"title": "Target canvas · ~1 MP"
+		}
+	},
+	"76": {
+		"inputs": {
+			"upscale_method": "lanczos",
+			"megapixels": 1,
+			"resolution_steps": 1,
+			"image": ["100", 0]
+		},
+		"class_type": "ImageScaleToTotalPixels",
+		"_meta": {
+			"title": "Identity reference · ~1 MP"
+		}
+	},
+	"77": {
+		"inputs": {
+			"strength": 1,
+			"pre_cfg": true,
+			"model": ["78", 0]
+		},
+		"class_type": "CFGNorm",
+		"_meta": {
+			"title": "CFGNorm · 1.0"
+		}
+	},
+	"78": {
+		"inputs": {
+			"shift": 2.8,
+			"model": ["80", 0]
+		},
+		"class_type": "ModelSamplingAuraFlow",
+		"_meta": {
+			"title": "AuraFlow shift · 2.8"
+		}
+	},
+	"80": {
+		"inputs": {
+			"lora_name": "Qwen-Image-Edit-Lightning-8steps-V1.0-bf16.safetensors",
+			"strength_model": 1,
+			"model": ["81", 0]
+		},
+		"class_type": "LoraLoaderModelOnly",
+		"_meta": {
+			"title": "Lightning 4-step LoRA · strength 1.0"
+		}
+	},
+	"81": {
+		"inputs": {
+			"unet_name": "qwen-image-edit-2511-Q8_0.gguf"
+		},
+		"class_type": "UnetLoaderGGUF",
+		"_meta": {
+			"title": "Unet Loader (GGUF)"
+		}
+	},
+	"90": {
+		"inputs": {
+			"pixels": ["75", 0],
+			"vae": ["74", 0]
+		},
+		"class_type": "VAEEncode",
+		"_meta": {
+			"title": "Image 1 becomes output canvas"
+		}
+	},
+	"91": {
+		"inputs": {
+			"clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+			"type": "qwen_image",
+			"device": "default"
+		},
+		"class_type": "CLIPLoader",
+		"_meta": {
+			"title": "Qwen 2.5 VL text encoder"
+		}
+	},
+	"93": {
+		"inputs": {
+			"add_noise": "enable",
+			"noise_seed": 711405871014554,
+			"steps": 8,
+			"cfg": 1,
+			"sampler_name": "euler",
+			"scheduler": "simple",
+			"start_at_step": 0,
+			"end_at_step": 10000,
+			"return_with_leftover_noise": "disable",
+			"preview_method": "none",
+			"vae_decode": "true",
+			"model": ["77", 0],
+			"positive": ["94", 0],
+			"negative": ["116", 0],
+			"latent_image": ["90", 0],
+			"optional_vae": ["74", 0]
+		},
+		"class_type": "KSampler Adv. (Efficient)",
+		"_meta": {
+			"title": "KSampler Adv. (Efficient)"
+		}
+	},
+	"94": {
+		"inputs": {
+			"prompt": ["110", 0],
+			"clip": ["91", 0],
+			"vae": ["74", 0],
+			"image1": ["75", 0],
+			"image2": ["76", 0]
+		},
+		"class_type": "TextEncodeQwenImageEditPlus",
+		"_meta": {
+			"title": "Positive prompt"
+		}
+	},
+	"100": {
+		"inputs": {
+			"image": "room.jpg"
+		},
+		"class_type": "LoadImage",
+		"_meta": {
+			"title": "Scene reference (OPTIONAL)"
+		}
+	},
+	"103": {
+		"inputs": {
+			"image": "Frame 4(8).jpg"
+		},
+		"class_type": "LoadImage",
+		"_meta": {
+			"title": "Inpaint reference"
+		}
+	},
+	"105": {
+		"inputs": {
+			"filename_prefix": "obj-add",
+			"images": ["93", 5]
+		},
+		"class_type": "SaveImage",
+		"_meta": {
+			"title": "Save Image"
+		}
+	},
+	"106": {
+		"inputs": {
+			"stitch_mode": "right",
+			"match_image_size": true,
+			"megapixels": 0,
+			"max_width": 0,
+			"max_height": 0,
+			"upscale_method": "lanczos",
+			"spacing_width": 5,
+			"background_color": "#FFFFFF",
+			"image1": ["103", 0],
+			"image2": ["93", 5]
+		},
+		"class_type": "AILab_ImageStitch",
+		"_meta": {
+			"title": "Stitch all images for history"
+		}
+	},
+	"107": {
+		"inputs": {
+			"images": ["106", 0]
+		},
+		"class_type": "PreviewImage",
+		"_meta": {
+			"title": "Preview Image"
+		}
+	},
+	"108": {
+		"inputs": {
+			"value": "Finish this partially inpainted image by seamlessly integrating the added object into the scene.\n\nThe inserted object must remain 100% identical to how it appears in the input — same shape, proportions, color, texture, material, pattern, and every visual detail. Treat the object's pixels as fixed content that must be preserved, not as a reference to reimagine.\n\nWHAT YOU SHOULD DO — ONLY SCENE INTEGRATION:\n- Blend the object's edges naturally into the background so the boundary is invisible.\n- Add physically accurate contact shadows and cast shadows consistent with the scene's existing light direction, intensity, and color temperature.\n- Add reflections or ambient occlusion only if the surface/environment would realistically produce them (e.g. glossy floor, glass, water).\n- Adjust only the object's overall brightness/color grading slightly if needed so it sits under the same lighting conditions as the rest of the scene — but never alter its actual hue, material, or design identity.\n- Match perspective, scale, and grounding (the object must sit correctly on/against the surface it touches, with a realistic contact point).\n\nREFERENCE IMAGE (if provided):\nIf a second image is given, use it strictly as a reference for the object's correct dimensions, proportions, and spatial placement within the scene. It is for measurement/positioning guidance only.\n\nOUTPUT:\nA single photorealistic image where the object looks like it was physically present in the scene when the photo was taken — untouched in identity, but fully harmonized in light, shadow, and perspective.\n\nAdditional instructions (if any):"
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "System prompt"
+		}
+	},
+	"109": {
+		"inputs": {
+			"value": "Compute chair standing in front of a pink chair"
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "User prompt (OPTIONAL)"
+		}
+	},
+	"110": {
+		"inputs": {
+			"string_a": ["108", 0],
+			"string_b": ["115:112", 0],
+			"delimiter": " "
+		},
+		"class_type": "StringConcatenate",
+		"_meta": {
+			"title": "Concatenate Text"
+		}
+	},
+	"114": {
+		"inputs": {
+			"source": ["110", 0]
+		},
+		"class_type": "PreviewAny",
+		"_meta": {
+			"title": "Resulting prompt preview"
+		}
+	},
+	"116": {
+		"inputs": {
+			"prompt": "Modifying, redrawing, reinterpreting, stylizing, or regenerating the object itself. Changing its pose or design.\n\nIncluding, blending in, or copying any background/content from the second (reference) image into the final result.",
+			"clip": ["91", 0],
+			"vae": ["74", 0]
+		},
+		"class_type": "TextEncodeQwenImageEdit",
+		"_meta": {
+			"title": "Negative prompt"
+		}
+	},
+	"115:111": {
+		"inputs": {
+			"model": "Hy-MT2-1.8B-Q6_K.gguf",
+			"device": "cuda",
+			"n_gpu_layers": -1
+		},
+		"class_type": "GGUFLoader",
+		"_meta": {
+			"title": "GGUFLoader"
+		}
+	},
+	"115:112": {
+		"inputs": {
+			"prompt": ["109", 0],
+			"target_language": "English",
+			"auto_release": false,
+			"llama_model": ["115:111", 0]
+		},
+		"class_type": "PromptTranslatorNode",
+		"_meta": {
+			"title": "Prompt Translator (GGUF)"
+		}
+	}
+}
