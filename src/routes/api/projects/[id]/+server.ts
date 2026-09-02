@@ -19,6 +19,7 @@ import { apiError, parseBody, renameProjectRequestSchema } from '$lib/server/api
 import { getDb } from '$lib/server/auth/repository';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { archiveProject, getProjectDetail, renameProject } from '$lib/server/projects';
+import { mediaAccessBatch } from '$lib/server/media-access';
 
 export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (!locals.user) return apiError(401, 'unauthorized', 'Authentication required');
@@ -29,31 +30,42 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 
 	const project = await getProjectDetail(db, userId, params.id);
 	if (!project) return apiError(404, 'project_not_found', 'Project not found');
+	const access = await mediaAccessBatch(
+		db,
+		platform,
+		project.sessions.flatMap((session) =>
+			session.generations.flatMap((generation) => [generation.mediaId, generation.sourceMediaId])
+		)
+	);
+	if (!access) return apiError(404, 'project_not_found', 'Project not found');
 
-	return json({
-		id: project.id,
-		title: project.title,
-		createdAt: project.createdAt,
-		updatedAt: project.updatedAt,
-		shareActive: project.shareActive,
-		sessions: project.sessions.map((session) => ({
-			id: session.id,
-			title: session.title,
-			parentSessionId: session.parentSessionId,
-			forkedFromGenerationId: session.forkedFromGenerationId,
-			createdAt: session.createdAt,
-			updatedAt: session.updatedAt,
-			generations: session.generations.map((generation) => ({
-				id: generation.id,
-				url: generation.url,
-				sourceUrl: generation.sourceUrl,
-				kind: generation.kind,
-				createdAt: generation.createdAt,
-				amount: generation.amount,
-				balanceAfter: generation.balanceAfter
+	return json(
+		{
+			id: project.id,
+			title: project.title,
+			createdAt: project.createdAt,
+			updatedAt: project.updatedAt,
+			shareActive: project.shareActive,
+			sessions: project.sessions.map((session) => ({
+				id: session.id,
+				title: session.title,
+				parentSessionId: session.parentSessionId,
+				forkedFromGenerationId: session.forkedFromGenerationId,
+				createdAt: session.createdAt,
+				updatedAt: session.updatedAt,
+				generations: session.generations.map((generation) => ({
+					id: generation.id,
+					image: access.get(generation.mediaId)!,
+					source: access.get(generation.sourceMediaId)!,
+					kind: generation.kind,
+					createdAt: generation.createdAt,
+					amount: generation.amount,
+					balanceAfter: generation.balanceAfter
+				}))
 			}))
-		}))
-	} satisfies ProjectDetailResponse);
+		} satisfies ProjectDetailResponse,
+		{ headers: { 'cache-control': 'private, no-store' } }
+	);
 };
 
 export const PATCH: RequestHandler = async ({ request, params, platform, locals }) => {

@@ -25,7 +25,6 @@ import {
 	type GenerationKind,
 	type UserUsageRecord
 } from '$lib/api/contract';
-import { getOrCreateMedia, mediaUrl } from '$lib/server/media';
 
 function isGenerationKind(kind: string): kind is GenerationKind {
 	return generationKinds.some((candidate) => candidate === kind);
@@ -40,16 +39,15 @@ export interface GeneratedImage {
 	id: string;
 	userId: string;
 	mediaId: number;
+	sourceMediaId: number;
 	filename: string;
 	bucketName: string;
-	url: string;
-	sourceUrl: string;
 	kind: GenerationKind;
 	createdAt: number;
 }
 
 export interface ResourceImage {
-	sourceUrl: string;
+	mediaId: number;
 	createdAt: number;
 }
 
@@ -72,11 +70,9 @@ interface GenerationRow {
 	id: string;
 	user_id: string;
 	result_media_id: number;
+	source_media_id: number;
 	result_filename: string;
 	result_bucket_name: string;
-	result_bucket_url: string;
-	source_filename: string;
-	source_bucket_url: string;
 	kind: string;
 	created_at: number;
 }
@@ -86,10 +82,9 @@ function toGeneratedImage(row: GenerationRow): GeneratedImage {
 		id: row.id,
 		userId: row.user_id,
 		mediaId: row.result_media_id,
+		sourceMediaId: row.source_media_id,
 		filename: row.result_filename,
 		bucketName: row.result_bucket_name,
-		url: mediaUrl(row.result_bucket_url, row.result_filename),
-		sourceUrl: mediaUrl(row.source_bucket_url, row.source_filename),
 		kind: generationKindForRow(row.id, row.kind),
 		createdAt: row.created_at
 	};
@@ -105,18 +100,11 @@ function toBalance(row: BalanceRow): Balance {
 }
 
 export interface RecordGenerationInput {
-	url: string;
-	resultHash: string;
-	sourceUrl: string;
+	resultMediaId: number;
+	sourceMediaId: number;
 	// Ownership must already be verified by the caller (projects.ts'
 	// assertSessionOwnedByUser) before this is called — this function trusts it.
 	sessionId: string;
-	// SHA-256 hex digest of the source image's bytes, or '' when the source is
-	// a previous render/edit result rather than a fresh upload (e.g. edit,
-	// upscale, or a style-transfer/object-replacement/texture-replacement call
-	// whose source mode is 'current-result') — nothing was uploaded in this
-	// call to dedup against. See findGenerationSourceByHash.
-	sourceHash: string;
 	prompt: string;
 	kind: CreditTransaction['kind'];
 	amount: number;
@@ -146,10 +134,6 @@ export async function recordGeneration(
 	input: RecordGenerationInput
 ): Promise<Balance> {
 	const now = Date.now();
-	const [resultMedia, sourceMedia] = await Promise.all([
-		getOrCreateMedia(db, input.url, input.resultHash),
-		getOrCreateMedia(db, input.sourceUrl, input.sourceHash)
-	]);
 	const [updateResult] = await db.batch<BalanceRow>([
 		db
 			.prepare(
@@ -166,8 +150,8 @@ export async function recordGeneration(
 			.bind(
 				crypto.randomUUID(),
 				userId,
-				resultMedia.id,
-				sourceMedia.id,
+				input.resultMediaId,
+				input.sourceMediaId,
 				input.prompt,
 				input.kind,
 				input.amount,
@@ -189,9 +173,8 @@ export async function getGeneratedImageForUser(
 ): Promise<GeneratedImage | null> {
 	const row = await db
 		.prepare(
-			'SELECT g.id, g.user_id, g.result_media_id, result_media.filename AS result_filename, ' +
-				'result_bucket.name AS result_bucket_name, result_bucket.url AS result_bucket_url, ' +
-				'source_media.filename AS source_filename, source_bucket.url AS source_bucket_url, ' +
+			'SELECT g.id, g.user_id, g.result_media_id, g.source_media_id, result_media.filename AS result_filename, ' +
+				'result_bucket.name AS result_bucket_name, ' +
 				'g.kind, g.created_at FROM generations g ' +
 				'JOIN media result_media ON result_media.id = g.result_media_id ' +
 				'JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ' +
@@ -253,9 +236,8 @@ export async function listGeneratedImages(
 ): Promise<GeneratedImagesPage> {
 	const result = await db
 		.prepare(
-			'SELECT g.id, g.user_id, g.result_media_id, result_media.filename AS result_filename, ' +
-				'result_bucket.name AS result_bucket_name, result_bucket.url AS result_bucket_url, ' +
-				'source_media.filename AS source_filename, source_bucket.url AS source_bucket_url, ' +
+			'SELECT g.id, g.user_id, g.result_media_id, g.source_media_id, result_media.filename AS result_filename, ' +
+				'result_bucket.name AS result_bucket_name, ' +
 				'g.kind, g.created_at FROM generations g ' +
 				'JOIN media result_media ON result_media.id = g.result_media_id ' +
 				'JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ' +
@@ -278,24 +260,23 @@ export async function findGenerationSourceByHash(
 	db: D1Database,
 	userId: string,
 	hash: string
-): Promise<string | null> {
+): Promise<number | null> {
 	if (hash.length === 0) return null;
 	const row = await db
 		.prepare(
-			'SELECT media.filename, buckets.url AS bucket_url FROM generations ' +
+			'SELECT media.id FROM generations ' +
 				'JOIN media ON media.id = generations.source_media_id ' +
 				'JOIN buckets ON buckets.id = media.bucket ' +
 				"WHERE generations.user_id = ? AND media.checksum = ? AND buckets.name = 'cadbos-uploads' " +
 				'ORDER BY generations.created_at DESC LIMIT 1'
 		)
 		.bind(userId, hash)
-		.first<{ filename: string; bucket_url: string }>();
-	return row ? mediaUrl(row.bucket_url, row.filename) : null;
+		.first<{ id: number }>();
+	return row?.id ?? null;
 }
 
 interface ResourceImageRow {
-	filename: string;
-	bucket_url: string;
+	media_id: number;
 	created_at: number;
 }
 
@@ -309,22 +290,22 @@ export async function listDistinctSourceImages(
 ): Promise<ResourceImagesPage> {
 	const result = await db
 		.prepare(
-			'SELECT source_media.filename, source_bucket.url AS bucket_url, ' +
+			'SELECT g.source_media_id AS media_id, ' +
 				'MAX(g.created_at) AS created_at FROM generations g ' +
 				'JOIN media source_media ON source_media.id = g.source_media_id ' +
 				'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
 				"WHERE g.user_id = ? AND source_media.checksum != '' " +
 				'AND NOT EXISTS (SELECT 1 FROM generations produced ' +
 				'WHERE produced.result_media_id = g.source_media_id) ' +
-				'GROUP BY g.source_media_id, source_media.filename, source_bucket.url ' +
-				'ORDER BY created_at DESC, source_media.filename DESC LIMIT ? OFFSET ?'
+				'GROUP BY g.source_media_id ' +
+				'ORDER BY created_at DESC, g.source_media_id DESC LIMIT ? OFFSET ?'
 		)
 		.bind(userId, size + 1, offset)
 		.all<ResourceImageRow>();
 	const rows = result.results ?? [];
 	return {
 		images: rows.slice(0, size).map((row) => ({
-			sourceUrl: mediaUrl(row.bucket_url, row.filename),
+			mediaId: row.media_id,
 			createdAt: row.created_at
 		})),
 		hasMore: rows.length > size

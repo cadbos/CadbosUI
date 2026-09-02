@@ -24,6 +24,7 @@ import {
 	applyAc9Fixture,
 	buildAc9RequestJSON
 } from '$lib/state/request-fixtures';
+import { mediaAccess } from '$lib/state/media-access.svelte';
 import {
 	RequestImageUploadError,
 	RequestProjectSessionError,
@@ -35,6 +36,7 @@ import {
 
 beforeEach(() => {
 	request.reset();
+	mediaAccess.clear();
 	// Most tests don't care about project/session assignment at all — pre-set
 	// one so every toXRequest() call's ensureProjectSession() resolves from
 	// state instead of hitting the network. Tests that actually exercise
@@ -43,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	mediaAccess.clear();
 	vi.unstubAllGlobals();
 });
 
@@ -131,20 +134,15 @@ describe('validate', () => {
 		expect(request.validate()).toEqual({ valid: true, missing: [] });
 	});
 
-	it('accepts an image URL without derived metadata', () => {
-		request.setImage({ url: AC9_IMAGE.url });
-		expect(request.toJSON().image).toEqual({ url: AC9_IMAGE.url });
+	it('accepts a media key without derived metadata', () => {
+		request.setImage({ mediaKey: AC9_IMAGE.mediaKey });
+		expect(request.toJSON().image).toEqual({ mediaKey: AC9_IMAGE.mediaKey });
 	});
 
-	it('trims image URLs at the store boundary', () => {
-		request.setImage({ url: ` ${AC9_IMAGE.url} ` });
-		expect(request.toJSON().image).toEqual({ url: AC9_IMAGE.url });
-	});
-
-	it('rejects invalid image URLs at the store boundary', () => {
+	it('rejects invalid media keys at the store boundary', () => {
 		request.setImage(AC9_IMAGE);
-		expect(() => request.setImage({ url: 'not a url' })).toThrow();
-		expect(request.image?.url).toBe(AC9_IMAGE.url);
+		expect(() => request.setImage({ mediaKey: '' })).toThrow();
+		expect(request.image).toEqual(AC9_IMAGE);
 	});
 
 	it('is valid when prompt and image are present', () => {
@@ -191,7 +189,7 @@ describe('serialization', () => {
 		delete snapshot.objectReplacementScale;
 		delete snapshot.textureReferenceImage;
 		delete snapshot.textureMaskImage;
-		delete snapshot.textureMaskSourceUrl;
+		delete snapshot.textureMaskSourceKey;
 		delete snapshot.textureReplacementSurface;
 		delete snapshot.textureReplacementSourceMode;
 		delete snapshot.textureReplacementMasked;
@@ -205,7 +203,7 @@ describe('serialization', () => {
 			objectReferenceImage: undefined,
 			textureReferenceImage: undefined,
 			textureMaskImage: undefined,
-			textureMaskSourceUrl: undefined,
+			textureMaskSourceKey: undefined,
 			styleTransferPrompt: '',
 			styleTransferStrength: 0.7,
 			styleNegativePrompt: '',
@@ -237,14 +235,14 @@ describe('serialization', () => {
 		applyAc9Fixture();
 		request.setCurrentRender({
 			id: 'render-a',
-			outputUrls: ['https://example.test/a.webp'],
+			outputKey: '201',
 			cost: 1,
 			balance: 24,
 			ts: 0
 		});
 		request.applyEditResult({
 			id: 'render-b',
-			outputUrls: ['https://example.test/b.webp'],
+			outputKey: '202',
 			cost: 1,
 			balance: 23,
 			ts: 1
@@ -261,9 +259,9 @@ describe('serialization', () => {
 		expect(() => request.fromJSON({ id: '' })).toThrow();
 	});
 
-	it('rejects invalid image URLs from JSON', () => {
+	it('rejects invalid media keys from JSON', () => {
 		const snapshot = buildAc9RequestJSON();
-		snapshot.image = { url: 'not a url' };
+		snapshot.image = { mediaKey: '' };
 		expect(() => request.fromJSON(snapshot)).toThrow();
 	});
 
@@ -289,24 +287,30 @@ describe('serialization', () => {
 		applyAc9Fixture();
 		const snapshot = request.toJSON();
 		expect(snapshot.image).toBeDefined();
-		if (!snapshot.image) return;
-		snapshot.image.url = 'https://example.invalid/mutated';
+		if (!snapshot.image || !('mediaKey' in snapshot.image))
+			throw new Error('Expected managed image');
+		snapshot.image.mediaKey = '999';
 		snapshot.promptFragments[0].text = 'mutated';
-		expect(request.image?.url).toBe(AC9_IMAGE.url);
+		expect(request.image).toEqual(AC9_IMAGE);
 		expect(request.prompt).toBe(AC9_PROMPT);
 	});
 
 	it('builds isolated fixture snapshots', () => {
 		const snapshot = buildAc9RequestJSON();
 		expect(snapshot.image).toBeDefined();
-		expect(snapshot.image?.dimensions).toBeDefined();
-		if (!snapshot.image || !snapshot.image.dimensions) return;
-		snapshot.image.url = 'https://example.invalid/mutated';
+		if (!snapshot.image || !('mediaKey' in snapshot.image))
+			throw new Error('Expected managed image');
+		expect(snapshot.image.dimensions).toBeDefined();
+		if (!snapshot.image.dimensions) throw new Error('Expected image dimensions');
+		snapshot.image.mediaKey = '999';
 		snapshot.image.dimensions[0] = 1;
 		snapshot.promptFragments[0].text = 'mutated';
 
 		const nextSnapshot = buildAc9RequestJSON();
 		expect(nextSnapshot.image).toEqual(AC9_IMAGE);
+		if (!nextSnapshot.image || !('mediaKey' in nextSnapshot.image)) {
+			throw new Error('Expected managed image');
+		}
 		expect(nextSnapshot.promptFragments[0].text).toBe('Scandinavian ');
 		expect(nextSnapshot.image).not.toBe(AC9_IMAGE);
 		expect(nextSnapshot.image?.dimensions).not.toBe(AC9_IMAGE.dimensions);
@@ -321,14 +325,14 @@ describe('copyFrom', () => {
 		request.setStatus('rendering');
 		request.setCurrentRender({
 			id: 'render-a',
-			outputUrls: ['https://example.test/a.webp'],
+			outputKey: '201',
 			cost: 1,
 			balance: 24,
 			ts: 0
 		});
 		request.applyEditResult({
 			id: 'render-b',
-			outputUrls: ['https://example.test/b.webp'],
+			outputKey: '202',
 			cost: 1,
 			balance: 23,
 			ts: 1
@@ -391,7 +395,7 @@ describe('viewingGenerationId', () => {
 		request.setViewingGenerationId('gen-1');
 		request.setCurrentRender({
 			id: 'render-a',
-			outputUrls: ['https://example.test/a.webp'],
+			outputKey: '201',
 			cost: 1,
 			balance: 24,
 			ts: 0
@@ -419,7 +423,7 @@ describe('viewingGenerationId', () => {
 	it('is cleared by applyEditResult', () => {
 		request.setCurrentRender({
 			id: 'render-a',
-			outputUrls: ['https://example.test/a.webp'],
+			outputKey: '201',
 			cost: 1,
 			balance: 24,
 			ts: 0
@@ -427,7 +431,7 @@ describe('viewingGenerationId', () => {
 		request.setViewingGenerationId('gen-1');
 		request.applyEditResult({
 			id: 'render-b',
-			outputUrls: ['https://example.test/b.webp'],
+			outputKey: '202',
 			cost: 1,
 			balance: 23,
 			ts: 1
@@ -439,14 +443,14 @@ describe('viewingGenerationId', () => {
 	it('is cleared by undoLastEdit', () => {
 		request.setCurrentRender({
 			id: 'render-a',
-			outputUrls: ['https://example.test/a.webp'],
+			outputKey: '201',
 			cost: 1,
 			balance: 24,
 			ts: 0
 		});
 		request.applyEditResult({
 			id: 'render-b',
-			outputUrls: ['https://example.test/b.webp'],
+			outputKey: '202',
 			cost: 1,
 			balance: 23,
 			ts: 1
@@ -477,12 +481,12 @@ describe('normalizeForComparison', () => {
 
 	it('distinguishes current-result source mode by the actual render selected', () => {
 		// objectReplacementSourceMode defaults to 'current-result', so the
-		// effective source is currentRender.outputUrls[0], not `image` — two
+		// effective source is currentRender.outputKey, not `image` — two
 		// states with the same `image` but different current renders submit
 		// different request bodies and must not normalize as equal.
 		request.setCurrentRender({
 			id: 'gen-1',
-			outputUrls: ['https://example.test/gen-1.jpg'],
+			outputKey: '201',
 			cost: 1,
 			balance: 24,
 			ts: 0
@@ -491,21 +495,21 @@ describe('normalizeForComparison', () => {
 
 		request.setCurrentRender({
 			id: 'gen-2',
-			outputUrls: ['https://example.test/gen-2.jpg'],
+			outputKey: '202',
 			cost: 1,
 			balance: 24,
 			ts: 1
 		});
 		const second = request.normalizeForComparison();
 
-		expect(first.objectReplacementSourceUrl).toBe('https://example.test/gen-1.jpg');
-		expect(second.objectReplacementSourceUrl).toBe('https://example.test/gen-2.jpg');
+		expect(first.objectReplacementSourceKey).toBe('201');
+		expect(second.objectReplacementSourceKey).toBe('202');
 		expect(second).not.toEqual(first);
 	});
 
 	it('normalizes texture replacement by active mode independently of prior mode history', async () => {
-		const textureReference = { url: 'https://example.test/reference-fabric.webp' };
-		const textureMask = { url: 'https://example.test/sofa-mask.webp' };
+		const textureReference = { mediaKey: '103' };
+		const textureMask = { mediaKey: '104' };
 
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
@@ -609,10 +613,12 @@ describe('toRenderRequest', () => {
 		const file = new File(['bytes'], 'room.jpg', { type: 'image/jpeg' });
 		request.setPendingImage(file);
 		const uploadResult = {
-			url: 'https://example.test/uploaded-room.webp',
+			image: {
+				key: 'cadbos-uploads/uploaded-room.webp',
+				url: 'https://example.test/uploaded-room.webp'
+			},
 			mime: 'image/webp',
-			size: 1234,
-			hash: 'deadbeef'
+			size: 1234
 		};
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: true,
@@ -623,9 +629,13 @@ describe('toRenderRequest', () => {
 		const body = await request.toRenderRequest();
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(body?.image).toBe(uploadResult.url);
-		expect(body?.imageHash).toBe(uploadResult.hash);
-		expect(request.image?.url).toBe(uploadResult.url);
+		expect(body?.imageKey).toBe(uploadResult.image.key);
+		expect(request.image).toEqual({
+			mediaKey: uploadResult.image.key,
+			mime: uploadResult.mime,
+			size: uploadResult.size
+		});
+		expect(mediaAccess.get(uploadResult.image.key)?.url).toBe(uploadResult.image.url);
 		expect(request.pendingImageFile).toBeUndefined();
 	});
 
@@ -687,10 +697,12 @@ describe('toRenderRequest', () => {
 			ok: true,
 			json: () =>
 				Promise.resolve({
-					url: 'https://example.test/uploaded-room.webp',
+					image: {
+						key: 'cadbos-uploads/uploaded-room.webp',
+						url: 'https://example.test/uploaded-room.webp'
+					},
 					mime: 'image/webp',
-					size: 1234,
-					hash: 'deadbeef'
+					size: 1234
 				})
 		});
 		await expect(promise).rejects.toThrow(RequestImageUploadError);
@@ -950,7 +962,7 @@ describe('toStyleTransferRequest', () => {
 		applyAc9Fixture();
 		request.setCurrentRender({
 			id: 'render-1',
-			outputUrls: ['https://example.test/current-result.webp'],
+			outputKey: '201',
 			cost: 2,
 			balance: 18,
 			ts: 0
@@ -958,13 +970,13 @@ describe('toStyleTransferRequest', () => {
 
 		expect(await request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
-			image: 'https://example.test/current-result.webp'
+			imageKey: '201'
 		});
 	});
 
 	it('falls back to the room photo when current-result is selected before a result exists', async () => {
 		applyAc9Fixture();
-		expect((await request.toStyleTransferRequest())?.image).toBe(AC9_IMAGE.url);
+		expect((await request.toStyleTransferRequest())?.imageKey).toBe(AC9_IMAGE.mediaKey);
 	});
 
 	it('omits optional prompt fields when they are empty', async () => {
@@ -974,8 +986,8 @@ describe('toStyleTransferRequest', () => {
 		request.setStyleNegativePrompt('   ');
 
 		expect(await request.toStyleTransferRequest()).toEqual({
-			image: AC9_IMAGE.url,
-			referenceImage: AC9_REFERENCE_IMAGE.url,
+			imageKey: AC9_IMAGE.mediaKey,
+			referenceImageKey: AC9_REFERENCE_IMAGE.mediaKey,
 			outputFormat: 'webp',
 			styleTransferStrength: 0.7,
 			sessionId: AC9_SESSION_ID
@@ -1032,7 +1044,7 @@ describe('toStyleTransferRequest', () => {
 
 describe('toObjectReplacementRequest', () => {
 	const objectReference = {
-		url: 'https://example.test/reference-chair.webp',
+		mediaKey: '103',
 		mime: 'image/webp'
 	};
 
@@ -1051,8 +1063,8 @@ describe('toObjectReplacementRequest', () => {
 		request.setObjectReplacementObject('  gray sofa by the window  ');
 
 		expect(await request.toObjectReplacementRequest()).toEqual({
-			image: AC9_IMAGE.url,
-			referenceImage: objectReference.url,
+			imageKey: AC9_IMAGE.mediaKey,
+			referenceImageKey: objectReference.mediaKey,
 			replacementObject: 'gray sofa by the window',
 			sessionId: AC9_SESSION_ID
 		});
@@ -1062,19 +1074,17 @@ describe('toObjectReplacementRequest', () => {
 		request.setImage(AC9_IMAGE);
 		request.setObjectReferenceImage(objectReference);
 		request.setObjectReplacementObject('sofa');
-		expect((await request.toObjectReplacementRequest())?.image).toBe(AC9_IMAGE.url);
+		expect((await request.toObjectReplacementRequest())?.imageKey).toBe(AC9_IMAGE.mediaKey);
 
 		request.setCurrentRender({
 			id: 'render-1',
-			outputUrls: ['https://example.test/current-result.webp'],
+			outputKey: '201',
 			cost: 2,
 			balance: 18,
 			ts: 0
 		});
 
-		expect((await request.toObjectReplacementRequest())?.image).toBe(
-			'https://example.test/current-result.webp'
-		);
+		expect((await request.toObjectReplacementRequest())?.imageKey).toBe('201');
 	});
 
 	it('enforces the scale range', () => {
@@ -1093,7 +1103,7 @@ describe('toObjectReplacementRequest', () => {
 		request.setObjectReplacementObject('sofa');
 
 		const body = await request.toObjectReplacementRequest();
-		expect(body?.referenceImage).toBe(objectReference.url);
+		expect(body?.referenceImageKey).toBe(objectReference.mediaKey);
 		expect(body?.replacementObject).toBe('sofa');
 	});
 
@@ -1139,7 +1149,7 @@ describe('toObjectReplacementRequest', () => {
 	it('retains an immutable source snapshot and instruction for the accepted job', () => {
 		const source: RenderResult = {
 			id: 'source-render',
-			outputUrls: ['https://example.test/source.webp'],
+			outputKey: '201',
 			cost: 1,
 			balance: 19,
 			ts: 1
@@ -1149,7 +1159,7 @@ describe('toObjectReplacementRequest', () => {
 			source,
 			'gray sofa'
 		);
-		source.outputUrls[0] = 'https://example.test/mutated.webp';
+		source.outputKey = '999';
 		request.setObjectReplacementObject('changed after submission');
 
 		expect(request.activeObjectReplacementJob).toEqual({
@@ -1157,7 +1167,7 @@ describe('toObjectReplacementRequest', () => {
 			instruction: 'gray sofa',
 			sourceRender: {
 				id: 'source-render',
-				outputUrls: ['https://example.test/source.webp'],
+				outputKey: '201',
 				cost: 1,
 				balance: 19,
 				ts: 1
@@ -1167,8 +1177,8 @@ describe('toObjectReplacementRequest', () => {
 });
 
 describe('toTextureReplacementRequest', () => {
-	const textureReference = { url: 'https://example.test/reference-fabric.webp' };
-	const textureMask = { url: 'https://example.test/sofa-mask.webp' };
+	const textureReference = { mediaKey: '103' };
+	const textureMask = { mediaKey: '104' };
 
 	it('requires a surface for automatic replacement', () => {
 		expect(request.validateTextureReplacement()).toEqual({
@@ -1184,8 +1194,8 @@ describe('toTextureReplacementRequest', () => {
 		request.setTextureReplacementSurface('  sofa upholstery  ');
 
 		expect(await request.toTextureReplacementRequest()).toEqual({
-			image: AC9_IMAGE.url,
-			referenceImage: textureReference.url,
+			imageKey: AC9_IMAGE.mediaKey,
+			referenceImageKey: textureReference.mediaKey,
 			replacementSurface: 'sofa upholstery',
 			sessionId: AC9_SESSION_ID
 		});
@@ -1209,9 +1219,9 @@ describe('toTextureReplacementRequest', () => {
 		request.setTextureReplacementMasked(true);
 
 		expect(await request.toTextureReplacementRequest()).toEqual({
-			image: AC9_IMAGE.url,
-			referenceImage: textureReference.url,
-			mask: textureMask.url,
+			imageKey: AC9_IMAGE.mediaKey,
+			referenceImageKey: textureReference.mediaKey,
+			maskImageKey: textureMask.mediaKey,
 			sessionId: AC9_SESSION_ID
 		});
 	});
@@ -1226,12 +1236,12 @@ describe('toTextureReplacementRequest', () => {
 		request.reset();
 		request.fromJSON(snapshot);
 		expect(request.textureMaskImage).toEqual(textureMask);
-		expect(request.textureMaskSourceUrl).toBe(AC9_IMAGE.url);
+		expect(request.textureMaskSourceKey).toBe(AC9_IMAGE.mediaKey);
 		expect(request.textureReplacementMasked).toBe(true);
 
 		request.reset();
 		expect(request.textureMaskImage).toBeUndefined();
-		expect(request.textureMaskSourceUrl).toBeUndefined();
+		expect(request.textureMaskSourceKey).toBeUndefined();
 		expect(request.textureReplacementMasked).toBe(false);
 	});
 
@@ -1242,7 +1252,7 @@ describe('toTextureReplacementRequest', () => {
 		request.setTextureReplacementMasked(true);
 		request.setTextureMaskImage(textureMask);
 
-		request.setImage({ url: 'https://example.test/another-room.webp' });
+		request.setImage({ mediaKey: '105' });
 
 		expect(request.textureMaskMatchesSource()).toBe(false);
 		expect(request.validateTextureReplacement()).toEqual({ valid: false, missing: ['mask'] });
@@ -1255,12 +1265,12 @@ describe('toTextureReplacementRequest', () => {
 		request.setTextureReplacementMasked(true);
 		const operation = request.beginTextureMaskUpload();
 		if (!operation) throw new Error('Expected a texture mask upload operation');
-		request.setImage({ url: 'https://example.test/another-room.webp' });
+		request.setImage({ mediaKey: '105' });
 
 		expect(request.commitTextureMaskUpload(textureMask, operation)).toBe(false);
 
 		expect(request.textureMaskImage).toBeUndefined();
-		expect(request.textureMaskSourceUrl).toBeUndefined();
+		expect(request.textureMaskSourceKey).toBeUndefined();
 	});
 
 	it('allows only the latest mask upload to commit for the same source', () => {
@@ -1274,9 +1284,7 @@ describe('toTextureReplacementRequest', () => {
 
 		expect(request.commitTextureMaskUpload(textureMask, second)).toBe(true);
 		expect(request.textureMaskUploading).toBe(false);
-		expect(
-			request.commitTextureMaskUpload({ url: 'https://example.test/stale-mask.webp' }, first)
-		).toBe(false);
+		expect(request.commitTextureMaskUpload({ mediaKey: '106' }, first)).toBe(false);
 		expect(request.textureMaskImage).toEqual(textureMask);
 	});
 
@@ -1338,7 +1346,7 @@ describe('toLightSettingsRequest', () => {
 			'сделай тёплый золотой свет заката, зажги торшер, and dim the hallway'
 		);
 		expect(await request.toLightSettingsRequest()).toEqual({
-			image: AC9_IMAGE.url,
+			imageKey: AC9_IMAGE.mediaKey,
 			instruction: request.lightSettingsPrompt,
 			sessionId: AC9_SESSION_ID
 		});
@@ -1373,19 +1381,17 @@ describe('toLightSettingsRequest', () => {
 	it('uses the current result when available and falls back to the room photo', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setLightSettingsInstruction('turn on the chandelier');
-		expect((await request.toLightSettingsRequest())?.image).toBe(AC9_IMAGE.url);
+		expect((await request.toLightSettingsRequest())?.imageKey).toBe(AC9_IMAGE.mediaKey);
 
 		request.setCurrentRender({
 			id: 'render-1',
-			outputUrls: ['https://example.test/current-result.webp'],
+			outputKey: '201',
 			cost: 2,
 			balance: 18,
 			ts: 0
 		});
 
-		expect((await request.toLightSettingsRequest())?.image).toBe(
-			'https://example.test/current-result.webp'
-		);
+		expect((await request.toLightSettingsRequest())?.imageKey).toBe('201');
 	});
 
 	it('enforces the endpoint text limit and job-id shape', () => {
@@ -1400,7 +1406,7 @@ describe('toLightSettingsRequest', () => {
 	it('retains an immutable source snapshot and instruction for the accepted job', () => {
 		const source: RenderResult = {
 			id: 'source-render',
-			outputUrls: ['https://example.test/source.webp'],
+			outputKey: '201',
 			cost: 1,
 			balance: 19,
 			ts: 1
@@ -1410,7 +1416,7 @@ describe('toLightSettingsRequest', () => {
 			source,
 			'turn on the chandelier'
 		);
-		source.outputUrls[0] = 'https://example.test/mutated.webp';
+		source.outputKey = '999';
 		request.setLightSettingsInstruction('changed after submission');
 
 		expect(request.activeLightSettingsJob).toEqual({
@@ -1418,7 +1424,7 @@ describe('toLightSettingsRequest', () => {
 			instruction: 'turn on the chandelier',
 			sourceRender: {
 				id: 'source-render',
-				outputUrls: ['https://example.test/source.webp'],
+				outputKey: '201',
 				cost: 1,
 				balance: 19,
 				ts: 1
@@ -1429,7 +1435,13 @@ describe('toLightSettingsRequest', () => {
 
 describe('edit lifecycle (FR-К4/К6)', () => {
 	function render(id: string): RenderResult {
-		return { id, outputUrls: [`https://example.test/${id}.jpg`], cost: 1, balance: 24, ts: 0 };
+		return {
+			id,
+			outputKey: String(id.length * 100 + id.charCodeAt(0)),
+			cost: 1,
+			balance: 24,
+			ts: 0
+		};
 	}
 
 	it('a fresh generation has nothing to undo', () => {
@@ -1513,7 +1525,13 @@ describe('edit lifecycle (FR-К4/К6)', () => {
 
 describe('redo (multi-step history navigation, FR-К6)', () => {
 	function render(id: string): RenderResult {
-		return { id, outputUrls: [`https://example.test/${id}.jpg`], cost: 1, balance: 24, ts: 0 };
+		return {
+			id,
+			outputKey: String(id.length * 100 + id.charCodeAt(0)),
+			cost: 1,
+			balance: 24,
+			ts: 0
+		};
 	}
 
 	it('there is nothing to redo before an undo happens', () => {
@@ -1616,17 +1634,17 @@ describe('redo (multi-step history navigation, FR-К6)', () => {
 
 describe('the originally uploaded photo as the root history step (FR-К6)', () => {
 	function render(id: string, cost = 5, balance = 95): RenderResult {
-		return { id, outputUrls: [`https://example.test/${id}.jpg`], cost, balance, ts: 0 };
+		return { id, outputKey: String(id.length * 100 + id.charCodeAt(0)), cost, balance, ts: 0 };
 	}
 
 	it('undoing the first generation restores the originally uploaded photo', () => {
-		request.setImage({ url: 'https://example.test/uploaded.jpg' });
+		request.setImage({ mediaKey: '101' });
 		request.setCurrentRender(render('gen-1', 5, 95));
 
 		expect(request.canUndoEdit).toBe(true);
 		request.undoLastEdit();
 
-		expect(request.currentRender?.outputUrls[0]).toBe('https://example.test/uploaded.jpg');
+		expect(request.currentRender?.outputKey).toBe('101');
 		expect(request.currentRender?.cost).toBe(0);
 		expect(request.currentRender?.balance).toBe(100);
 		expect(request.canUndoEdit).toBe(false);
@@ -1642,17 +1660,17 @@ describe('the originally uploaded photo as the root history step (FR-К6)', () =
 	});
 
 	it('an edit applied directly to an uploaded photo (no prior render) still gets a root step', () => {
-		request.setImage({ url: 'https://example.test/uploaded.jpg' });
+		request.setImage({ mediaKey: '101' });
 		request.applyEditResult(render('edit-1', 3, 97));
 
 		expect(request.canUndoEdit).toBe(true);
 		request.undoLastEdit();
-		expect(request.currentRender?.outputUrls[0]).toBe('https://example.test/uploaded.jpg');
+		expect(request.currentRender?.outputKey).toBe('101');
 		expect(request.currentRender?.balance).toBe(100);
 	});
 
 	it('a late-arriving edit whose anchor fell out of history lands on the current tip instead of discarding it', () => {
-		request.setImage({ url: 'https://example.test/uploaded.jpg' });
+		request.setImage({ mediaKey: '101' });
 		request.setCurrentRender(render('gen-1', 5, 90));
 		request.applyEditResult(render('edit-1', 3, 87));
 		// Snapshot of the render an async job was requested against, taken
@@ -1670,7 +1688,7 @@ describe('the originally uploaded photo as the root history step (FR-К6)', () =
 		request.undoLastEdit();
 		expect(request.currentRender?.id).toBe('gen-1');
 		request.undoLastEdit();
-		expect(request.currentRender?.outputUrls[0]).toBe('https://example.test/uploaded.jpg');
+		expect(request.currentRender?.outputKey).toBe('101');
 		expect(request.canUndoEdit).toBe(false);
 	});
 });

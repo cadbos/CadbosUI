@@ -13,14 +13,27 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
+import type { D1Database } from '@cloudflare/workers-types';
 import type { GeneratedImagesResponse, SessionUser } from '$lib/api/contract';
+import type { Bucket } from '$lib/server/media';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedGeneration as seedGenerationFixture,
-	setBucketUrl
+	setBucketUrl,
+	TEST_S3_ENV
 } from '$lib/server/testing/generation-fixtures';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+
+const storage = vi.hoisted(() => ({
+	deleteS3Object:
+		vi.fn<(platform: App.Platform | undefined, bucket: Bucket, key: string) => Promise<void>>()
+}));
+
+vi.mock('$lib/server/s3', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/server/s3')>()),
+	deleteS3Object: storage.deleteS3Object
+}));
+
 import { DELETE, GET } from './+server';
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
@@ -56,13 +69,21 @@ function call(
 	} as GeneratedImagesEvent);
 }
 
-function bucket(failDelete = false): Pick<R2Bucket, 'delete'> {
-	return {
-		delete: vi.fn(() => {
-			if (failDelete) return Promise.reject(new Error('simulated R2 failure'));
+function bucket(failDelete = false): { delete: ReturnType<typeof vi.fn> } {
+	const uploadsBucket = {
+		delete: vi.fn((_key: string) => {
+			if (failDelete) return Promise.reject(new Error('simulated S3 failure'));
 			return Promise.resolve();
 		})
 	};
+	storage.deleteS3Object.mockImplementation(async (_platform, _bucket, key) =>
+		uploadsBucket.delete(key)
+	);
+	return uploadsBucket;
+}
+
+function platform(db: D1Database): App.Platform {
+	return { env: { DB: db, ...TEST_S3_ENV } } as unknown as App.Platform;
 }
 
 function callDelete(
@@ -116,15 +137,21 @@ describe('GET /api/generated-images', () => {
 			seedGeneratedImage(db, `user-1-image-${index}`, 'user-1', 10_000 + index);
 		}
 
-		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform);
+		const response = await call({ pubkey: 'pubkey-1' }, platform(db));
 		const result = (await response.json()) as GeneratedImagesResponse;
 
 		expect(response.status).toBe(200);
 		expect(result.images).toHaveLength(20);
 		expect(result.images[0]).toEqual({
 			id: 'user-1-image-20',
-			url: 'https://cdn.example.test/user-1-image-20.webp',
-			sourceUrl: 'https://cdn.example.test/source.jpg',
+			image: {
+				key: 'cadbos-uploads/user-1-image-20.webp',
+				url: expect.stringContaining('/user-1-image-20.webp?')
+			},
+			source: {
+				key: 'cadbos-uploads/source.jpg',
+				url: expect.stringContaining('/source.jpg?')
+			},
 			kind: 'render',
 			createdAt: 10020
 		});
@@ -135,11 +162,7 @@ describe('GET /api/generated-images', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 
-		const response = await call(
-			{ pubkey: 'pubkey-1' },
-			{ env: { DB: db } } as App.Platform,
-			'?userId=user-2'
-		);
+		const response = await call({ pubkey: 'pubkey-1' }, platform(db), '?userId=user-2');
 
 		expect(response.status).toBe(400);
 	});
@@ -151,11 +174,7 @@ describe('GET /api/generated-images', () => {
 		seedGeneratedImage(db, 'second', 'user-1', 2000);
 		seedGeneratedImage(db, 'third', 'user-1', 1000);
 
-		const response = await call(
-			{ pubkey: 'pubkey-1' },
-			{ env: { DB: db } } as App.Platform,
-			'?offset=1&size=2'
-		);
+		const response = await call({ pubkey: 'pubkey-1' }, platform(db), '?offset=1&size=2');
 		const result = (await response.json()) as GeneratedImagesResponse;
 
 		expect(response.status).toBe(200);
@@ -211,7 +230,7 @@ describe('DELETE /api/generated-images', () => {
 		const uploadsBucket = bucket();
 		const response = await callDelete(
 			null,
-			{ env: { UPLOADS_BUCKET: uploadsBucket } } as App.Platform,
+			{ env: {} } as unknown as App.Platform,
 			{ id: 'image-1' },
 			true
 		);
@@ -238,22 +257,13 @@ describe('DELETE /api/generated-images', () => {
 		expect(response.status).toBe(400);
 	});
 
-	it('deletes the authenticated user image from R2 and D1', async () => {
+	it('deletes the authenticated user image from S3 and D1', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
 		const uploadsBucket = bucket();
 
-		const response = await callDelete(
-			{ pubkey: 'pubkey-1' },
-			{
-				env: {
-					DB: db,
-					UPLOADS_BUCKET: uploadsBucket
-				}
-			} as unknown as App.Platform,
-			{ id: 'image-1' }
-		);
+		const response = await callDelete({ pubkey: 'pubkey-1' }, platform(db), { id: 'image-1' });
 
 		const row = await db
 			.prepare('SELECT id FROM generations WHERE id = ?')
@@ -283,16 +293,7 @@ describe('DELETE /api/generated-images', () => {
 			.run();
 		const uploadsBucket = bucket();
 
-		const response = await callDelete(
-			{ pubkey: 'pubkey-1' },
-			{
-				env: {
-					DB: db,
-					UPLOADS_BUCKET: uploadsBucket
-				}
-			} as unknown as App.Platform,
-			{ id: 'image-1' }
-		);
+		const response = await callDelete({ pubkey: 'pubkey-1' }, platform(db), { id: 'image-1' });
 		const media = await db
 			.prepare('SELECT id FROM media WHERE id = ?')
 			.bind(image.result_media_id)
@@ -330,16 +331,9 @@ describe('DELETE /api/generated-images', () => {
 		});
 		const uploadsBucket = bucket();
 
-		const response = await callDelete(
-			{ pubkey: 'pubkey-1' },
-			{
-				env: {
-					DB: concurrentDb,
-					UPLOADS_BUCKET: uploadsBucket
-				}
-			} as unknown as App.Platform,
-			{ id: 'image-1' }
-		);
+		const response = await callDelete({ pubkey: 'pubkey-1' }, platform(concurrentDb), {
+			id: 'image-1'
+		});
 		const generation = await db
 			.prepare('SELECT id FROM generations WHERE id = ?')
 			.bind('image-1')
@@ -355,6 +349,31 @@ describe('DELETE /api/generated-images', () => {
 		expect(media).toEqual({ id: image.result_media_id });
 	});
 
+	it('keeps S3 media referenced by another generation', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		seedGenerationFixture(db, {
+			id: 'image-2',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/image-2.webp',
+			sourceUrl: 'https://cdn.example.test/image-1.webp',
+			createdAt: 2000
+		});
+		const uploadsBucket = bucket();
+
+		const response = await callDelete({ pubkey: 'pubkey-1' }, platform(db), { id: 'image-1' });
+
+		expect(response.status).toBe(204);
+		expect(uploadsBucket.delete).not.toHaveBeenCalled();
+		expect(
+			await db
+				.prepare('SELECT id FROM media WHERE filename = ?')
+				.bind('image-1.webp')
+				.first<{ id: number }>()
+		).not.toBeNull();
+	});
+
 	it('does not delete another user image', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
@@ -362,16 +381,7 @@ describe('DELETE /api/generated-images', () => {
 		seedGeneratedImage(db, 'image-2', 'user-2', 1000);
 		const uploadsBucket = bucket();
 
-		const response = await callDelete(
-			{ pubkey: 'pubkey-1' },
-			{
-				env: {
-					DB: db,
-					UPLOADS_BUCKET: uploadsBucket
-				}
-			} as unknown as App.Platform,
-			{ id: 'image-2' }
-		);
+		const response = await callDelete({ pubkey: 'pubkey-1' }, platform(db), { id: 'image-2' });
 		const row = await db
 			.prepare('SELECT id FROM generations WHERE id = ?')
 			.bind('image-2')
@@ -382,7 +392,7 @@ describe('DELETE /api/generated-images', () => {
 		expect(row).toEqual({ id: 'image-2' });
 	});
 
-	it('keeps the committed D1 deletion when R2 deletion fails', async () => {
+	it('keeps the committed D1 deletion when S3 deletion fails', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
@@ -391,18 +401,9 @@ describe('DELETE /api/generated-images', () => {
 			.bind('image-1')
 			.first<{ result_media_id: number }>();
 		if (!image) throw new Error('generated image seed failed');
-		const uploadsBucket = bucket(true);
+		bucket(true);
 
-		const response = await callDelete(
-			{ pubkey: 'pubkey-1' },
-			{
-				env: {
-					DB: db,
-					UPLOADS_BUCKET: uploadsBucket
-				}
-			} as unknown as App.Platform,
-			{ id: 'image-1' }
-		);
+		const response = await callDelete({ pubkey: 'pubkey-1' }, platform(db), { id: 'image-1' });
 		const generation = await db
 			.prepare('SELECT id FROM generations WHERE id = ?')
 			.bind('image-1')
@@ -417,12 +418,12 @@ describe('DELETE /api/generated-images', () => {
 		expect(media).toBeNull();
 	});
 
-	it('fails closed for the dev-only demo session without touching D1 or R2', async () => {
+	it('fails closed for the dev-only demo session without touching D1 or S3', async () => {
 		const uploadsBucket = bucket();
 
 		const response = await callDelete(
 			{ pubkey: DEMO_PUBKEY },
-			{ env: { UPLOADS_BUCKET: uploadsBucket } } as App.Platform,
+			{ env: {} } as unknown as App.Platform,
 			{ id: 'image-1' }
 		);
 

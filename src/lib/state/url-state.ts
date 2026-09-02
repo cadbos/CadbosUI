@@ -310,10 +310,11 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 		// Only a known, safe preset id is shareable — it's just a lookup into our
 		// own static preset list. A custom-uploaded reference image is never
 		// included (its raw URL isn't in the query string at all).
-		const styleImageUrl = request.styleReferenceImage?.url;
-		const preset = styleImageUrl
-			? STYLE_PRESETS.find((candidate) => candidate.src === styleImageUrl)
-			: undefined;
+		const presetId =
+			request.styleReferenceImage && 'stylePresetId' in request.styleReferenceImage
+				? request.styleReferenceImage.stylePresetId
+				: undefined;
+		const preset = STYLE_PRESETS.find((candidate) => candidate.id === presetId);
 		if (preset) params.set('preset', preset.id);
 
 		if (request.styleNegativePrompt.trim() !== '') {
@@ -492,7 +493,9 @@ export function applyShareParams(
 		const presetId = searchParams.get('preset');
 		if (presetId !== null) {
 			const preset = STYLE_PRESETS.find((candidate) => candidate.id === presetId);
-			request.setStyleReferenceImage(preset ? { url: preset.src, mime: preset.mime } : undefined);
+			request.setStyleReferenceImage(
+				preset ? { stylePresetId: preset.id, url: preset.src, mime: preset.mime } : undefined
+			);
 		}
 
 		const strengthParam = searchParams.get('strength');

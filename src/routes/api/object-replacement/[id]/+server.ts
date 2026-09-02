@@ -23,7 +23,8 @@ import { getUserIdByPubkey } from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { imageExtensionFromMime } from '$lib/image-mime';
-import { getBucketByName } from '$lib/server/media';
+import { getBucketByName, getOrCreateMediaByKey } from '$lib/server/media';
+import { mediaAccessById } from '$lib/server/media-access';
 import {
 	OBJECT_REPLACEMENT_TIMEOUT_MS,
 	pollObjectReplacement
@@ -34,21 +35,28 @@ import {
 	getObjectReplacementJob,
 	type ObjectReplacementJob
 } from '$lib/server/object-replacement-jobs';
-import { uploadImageBytes } from '$lib/server/uploads';
+import { uploadGeneratedImageBytes } from '$lib/server/uploads';
 
-function responseForJob(job: ObjectReplacementJob): Response {
+async function responseForJob(
+	job: ObjectReplacementJob,
+	db: ReturnType<typeof getDb>,
+	platform: App.Platform | undefined
+): Promise<Response> {
 	const headers = { 'cache-control': 'no-store' };
 	if (job.status === 'processing') {
 		return json({ id: job.id, status: job.status } satisfies ObjectReplacementJobResponse, {
 			headers: { ...headers, 'retry-after': '2' }
 		});
 	}
-	if (job.status === 'completed' && job.outputUrl !== null && job.balanceAfter !== null) {
+	if (job.status === 'completed' && job.outputMediaId !== null && job.balanceAfter !== null) {
+		const output = await mediaAccessById(db, platform, job.outputMediaId);
+		if (!output)
+			return apiError(404, 'object_replacement_not_found', 'Object replacement not found');
 		return json(
 			{
 				id: job.id,
 				status: job.status,
-				outputUrl: job.outputUrl,
+				output,
 				cost: job.cost,
 				balance: job.balanceAfter
 			} satisfies ObjectReplacementJobResponse,
@@ -82,7 +90,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (!userId) return apiError(500, 'account_error', 'Account record not found');
 	let job = await getObjectReplacementJob(db, userId, params.id);
 	if (!job) return apiError(404, 'object_replacement_not_found', 'Object replacement not found');
-	if (job.status !== 'processing') return responseForJob(job);
+	if (job.status !== 'processing') return responseForJob(job, db, platform);
 
 	let result;
 	try {
@@ -99,7 +107,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 				'object_replacement_failed',
 				Date.now()
 			);
-			return responseForJob(job);
+			return responseForJob(job, db, platform);
 		}
 		if (error instanceof ComfyUiError) {
 			console.error('ComfyUI object replacement poll failed:', {
@@ -121,7 +129,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 		if (now - job.createdAt >= OBJECT_REPLACEMENT_TIMEOUT_MS) {
 			job = await failObjectReplacementJob(db, userId, job.id, 'object_replacement_timeout', now);
 		}
-		return responseForJob(job);
+		return responseForJob(job, db, platform);
 	}
 
 	const extension = imageExtensionFromMime(result.contentType);
@@ -133,27 +141,21 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			'object_replacement_failed',
 			Date.now()
 		);
-		return responseForJob(job);
+		return responseForJob(job, db, platform);
 	}
 
 	try {
-		const uploadsUrl = (await getBucketByName(db, 'cadbos-uploads')).url;
-		const stored = await uploadImageBytes(
+		const uploadsBucket = await getBucketByName(db, 'cadbos-uploads');
+		const stored = await uploadGeneratedImageBytes(
 			platform,
-			uploadsUrl,
+			uploadsBucket,
 			result.bytes,
 			result.contentType,
 			`object-replacements/${job.id}.${extension}`
 		);
-		job = await completeObjectReplacementJob(
-			db,
-			userId,
-			job.id,
-			stored.url,
-			stored.hash,
-			Date.now()
-		);
-		return responseForJob(job);
+		const output = await getOrCreateMediaByKey(db, uploadsBucket, stored.key, stored.hash);
+		job = await completeObjectReplacementJob(db, userId, job.id, output.id, Date.now());
+		return responseForJob(job, db, platform);
 	} catch (error) {
 		console.error('Object replacement finalization failed:', error);
 		return apiError(500, 'object_replacement_finalize_failed', 'Object replacement failed');

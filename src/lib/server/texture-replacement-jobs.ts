@@ -13,7 +13,6 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
-import { getOrCreateMedia, mediaUrl } from '$lib/server/media';
 
 export type TextureReplacementJobStatus = 'processing' | 'completed' | 'failed';
 
@@ -21,13 +20,13 @@ export interface TextureReplacementJob {
 	id: string;
 	userId: string;
 	comfyPromptId: string;
-	sceneUrl: string;
+	sceneMediaId: number;
 	sessionId: string;
-	referenceUrl: string;
+	referenceMediaId: number;
 	replacementSurface: string;
 	cost: number;
 	status: TextureReplacementJobStatus;
-	outputUrl: string | null;
+	outputMediaId: number | null;
 	errorCode: string | null;
 	balanceAfter: number | null;
 	createdAt: number;
@@ -39,16 +38,13 @@ interface TextureReplacementJobRow {
 	id: string;
 	user_id: string;
 	comfy_prompt_id: string;
-	scene_filename: string;
-	scene_bucket_url: string;
+	scene_media_id: number;
 	session_id: string;
-	reference_filename: string;
-	reference_bucket_url: string;
+	reference_media_id: number;
 	replacement_surface: string;
 	cost: number;
 	status: TextureReplacementJobStatus;
-	output_filename: string | null;
-	output_bucket_url: string | null;
+	output_media_id: number | null;
 	error_code: string | null;
 	balance_after: number | null;
 	created_at: number;
@@ -66,16 +62,13 @@ function toTextureReplacementJob(row: TextureReplacementJobRow): TextureReplacem
 		id: row.id,
 		userId: row.user_id,
 		comfyPromptId: row.comfy_prompt_id,
-		sceneUrl: mediaUrl(row.scene_bucket_url, row.scene_filename),
+		sceneMediaId: row.scene_media_id,
 		sessionId: row.session_id,
-		referenceUrl: mediaUrl(row.reference_bucket_url, row.reference_filename),
+		referenceMediaId: row.reference_media_id,
 		replacementSurface: row.replacement_surface,
 		cost: row.cost,
 		status: row.status,
-		outputUrl:
-			row.output_filename === null || row.output_bucket_url === null
-				? null
-				: mediaUrl(row.output_bucket_url, row.output_filename),
+		outputMediaId: row.output_media_id,
 		errorCode: row.error_code,
 		balanceAfter: row.balance_after,
 		createdAt: row.created_at,
@@ -90,19 +83,14 @@ export async function createTextureReplacementJob(
 		id: string;
 		userId: string;
 		comfyPromptId: string;
-		sceneUrl: string;
-		sceneHash: string;
+		sceneMediaId: number;
 		sessionId: string;
-		referenceUrl: string;
+		referenceMediaId: number;
 		replacementSurface: string;
 		cost: number;
 		createdAt: number;
 	}
 ): Promise<TextureReplacementJob> {
-	const [scene, reference] = await Promise.all([
-		getOrCreateMedia(db, input.sceneUrl, input.sceneHash),
-		getOrCreateMedia(db, input.referenceUrl, '')
-	]);
 	await db
 		.prepare(
 			'INSERT INTO texture_replacement_jobs ' +
@@ -113,9 +101,9 @@ export async function createTextureReplacementJob(
 			input.id,
 			input.userId,
 			input.comfyPromptId,
-			scene.id,
+			input.sceneMediaId,
 			input.sessionId,
-			reference.id,
+			input.referenceMediaId,
 			input.replacementSurface,
 			input.cost,
 			input.createdAt,
@@ -134,18 +122,10 @@ export async function getTextureReplacementJob(
 ): Promise<TextureReplacementJob | null> {
 	const row = await db
 		.prepare(
-			'SELECT j.id, j.user_id, j.comfy_prompt_id, scene.filename AS scene_filename, ' +
-				'scene_bucket.url AS scene_bucket_url, j.session_id, ' +
-				'reference.filename AS reference_filename, reference_bucket.url AS reference_bucket_url, ' +
-				'j.replacement_surface, j.cost, j.status, output.filename AS output_filename, ' +
-				'output_bucket.url AS output_bucket_url, j.error_code, j.balance_after, ' +
-				'j.created_at, j.updated_at, j.completed_at FROM texture_replacement_jobs j ' +
-				'JOIN media scene ON scene.id = j.scene_media_id ' +
-				'JOIN buckets scene_bucket ON scene_bucket.id = scene.bucket ' +
-				'JOIN media reference ON reference.id = j.reference_media_id ' +
-				'JOIN buckets reference_bucket ON reference_bucket.id = reference.bucket ' +
-				'LEFT JOIN media output ON output.id = j.output_media_id ' +
-				'LEFT JOIN buckets output_bucket ON output_bucket.id = output.bucket ' +
+			'SELECT j.id, j.user_id, j.comfy_prompt_id, j.scene_media_id, j.session_id, ' +
+				'j.reference_media_id, j.replacement_surface, j.cost, j.status, j.output_media_id, ' +
+				'j.error_code, j.balance_after, j.created_at, j.updated_at, j.completed_at ' +
+				'FROM texture_replacement_jobs j ' +
 				'WHERE j.id = ? AND j.user_id = ?'
 		)
 		.bind(id, userId)
@@ -176,11 +156,9 @@ export async function completeTextureReplacementJob(
 	db: D1Database,
 	userId: string,
 	id: string,
-	outputUrl: string,
-	outputHash: string,
+	outputMediaId: number,
 	completedAt: number
 ): Promise<TextureReplacementJob> {
-	const output = await getOrCreateMedia(db, outputUrl, outputHash);
 	const results = await db.batch<TextureReplacementDeductionSnapshotRow>([
 		db
 			.prepare(
@@ -205,7 +183,7 @@ export async function completeTextureReplacementJob(
 					'FROM texture_replacement_jobs j JOIN credits c ON c.user_id = j.user_id ' +
 					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
 			)
-			.bind(output.id, completedAt, id, userId),
+			.bind(outputMediaId, completedAt, id, userId),
 		db
 			.prepare(
 				"UPDATE texture_replacement_jobs SET status = 'completed', output_media_id = ?, " +
@@ -213,7 +191,7 @@ export async function completeTextureReplacementJob(
 					"WHERE id = ? AND user_id = ? AND status = 'processing' " +
 					'AND EXISTS (SELECT 1 FROM credits WHERE user_id = ?)'
 			)
-			.bind(output.id, userId, completedAt, completedAt, id, userId, userId)
+			.bind(outputMediaId, userId, completedAt, completedAt, id, userId, userId)
 	]);
 	const snapshot = results[0]?.results[0];
 	if (snapshot && snapshot.available_balance < snapshot.cost) {

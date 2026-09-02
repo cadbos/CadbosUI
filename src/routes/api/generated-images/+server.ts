@@ -27,6 +27,9 @@ import {
 	getGeneratedImageForUser,
 	listGeneratedImages
 } from '$lib/server/generations';
+import { mediaAccessBatch } from '$lib/server/media-access';
+import { getBucketByName } from '$lib/server/media';
+import { deleteS3Object } from '$lib/server/s3';
 
 const DEFAULT_IMAGE_PAGE_OFFSET = 0;
 const DEFAULT_IMAGE_PAGE_SIZE = 20;
@@ -58,20 +61,29 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	if (!userId) return apiError(500, 'account_error', 'Account record not found');
 
 	const page = await listGeneratedImages(db, userId, parsed.data.offset, parsed.data.size);
-	return json({
-		images: page.images.map((image) => ({
-			id: image.id,
-			url: image.url,
-			sourceUrl: image.sourceUrl,
-			kind: image.kind,
-			createdAt: image.createdAt
-		})),
-		pagination: {
-			offset: parsed.data.offset,
-			size: parsed.data.size,
-			hasMore: page.hasMore
-		}
-	} satisfies GeneratedImagesResponse);
+	const access = await mediaAccessBatch(
+		db,
+		platform,
+		page.images.flatMap((image) => [image.mediaId, image.sourceMediaId])
+	);
+	if (!access) return apiError(404, 'image_not_found', 'Image not found');
+	return json(
+		{
+			images: page.images.map((image) => ({
+				id: image.id,
+				image: access.get(image.mediaId)!,
+				source: access.get(image.sourceMediaId)!,
+				kind: image.kind,
+				createdAt: image.createdAt
+			})),
+			pagination: {
+				offset: parsed.data.offset,
+				size: parsed.data.size,
+				hasMore: page.hasMore
+			}
+		} satisfies GeneratedImagesResponse,
+		{ headers: { 'cache-control': 'private, no-store' } }
+	);
 };
 
 export const DELETE: RequestHandler = async ({ request, platform, locals }) => {
@@ -103,13 +115,14 @@ export const DELETE: RequestHandler = async ({ request, platform, locals }) => {
 		);
 		if (!generationDeleted) return apiError(404, 'image_not_found', 'Image not found');
 		if (mediaDeleted && image.bucketName === 'cadbos-uploads') {
-			const bucket = platform?.env?.UPLOADS_BUCKET;
-			if (!bucket) throw new Error('UPLOADS_BUCKET not configured');
-			await bucket.delete(image.filename);
+			await deleteS3Object(platform, await getBucketByName(db, image.bucketName), image.filename);
 		}
 		return new Response(null, { status: 204 });
 	} catch (err) {
-		console.error('Generated image delete failed:', err);
+		console.error(
+			'Generated image delete failed:',
+			err instanceof Error ? err.message : typeof err
+		);
 		return apiError(500, 'image_delete_failed', 'Image delete failed');
 	}
 };

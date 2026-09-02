@@ -14,6 +14,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { beforeNavigate, goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { z } from 'zod';
 	import type { LightSettingsCompletedResponse, LightSettingsJobResponse } from '$lib/api/contract';
@@ -25,6 +26,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { extractApiErrorCode, request, RequestImageUploadError } from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, isEditToolRoute } from '$lib/state/url-state';
 	import { logBoundaryError } from '$lib/utils';
+	import { mediaAccess } from '$lib/state/media-access.svelte';
 
 	const MAX_TRANSIENT_FAILURES = 5;
 	const DEFAULT_POLL_DELAY_MS = 2_000;
@@ -40,7 +42,10 @@ before the Change Date. See LICENSE for complete terms.
 			.object({
 				id: z.uuid(),
 				status: z.literal('completed'),
-				outputUrl: z.url(),
+				output: z.object({
+					key: z.string().min(1),
+					url: z.url()
+				}),
 				cost: z.number().nonnegative(),
 				balance: z.number()
 			})
@@ -58,6 +63,7 @@ before the Change Date. See LICENSE for complete terms.
 		jobId: string;
 		key: TranslationKey;
 	}
+	type EditUrl = '/edit' | `/edit?${string}`;
 
 	const moodPresets = lightSettingsPresetsFor('mood');
 
@@ -91,7 +97,7 @@ before the Change Date. See LICENSE for complete terms.
 		return null;
 	});
 
-	$effect(() => {
+	function pollingEffect(): void | (() => void) {
 		const id = jobId;
 		const authenticated = isAuthenticated;
 		const failedPoll = pollFailure;
@@ -100,20 +106,23 @@ before the Change Date. See LICENSE for complete terms.
 		const controller = new AbortController();
 		void pollJob(id, controller.signal, run);
 		return () => controller.abort();
-	});
+	}
+
+	$effect(pollingEffect);
 
 	// The full-screen overlay tracks this flow's own in-flight state (not just
 	// the button's `submitting`) since the wait spans the async job queue +
 	// poll cycle, not a single fetch.
-	$effect(() => {
+	function overlayEffect(): void | (() => void) {
 		if (!(submitting || isPolling)) return;
 		const overlayId = generationOverlay.start(
 			'generationOverlay.lightSettings',
 			'generationOverlay.lightSettingsDetail'
 		);
 		return () => generationOverlay.stop(overlayId);
-	});
+	}
 
+	$effect(overlayEffect);
 	beforeNavigate(({ to }) => {
 		if (
 			submitting &&
@@ -173,7 +182,7 @@ before the Change Date. See LICENSE for complete terms.
 			request.applyEditResult(
 				{
 					id: result.id,
-					outputUrls: [result.outputUrl],
+					outputKey: mediaAccess.normalize(result.output).key,
 					cost: result.cost,
 					balance: result.balance,
 					parentId: context.sourceRender.id,
@@ -188,7 +197,7 @@ before the Change Date. See LICENSE for complete terms.
 		} else {
 			request.applyEditResult({
 				id: result.id,
-				outputUrls: [result.outputUrl],
+				outputKey: mediaAccess.normalize(result.output).key,
 				cost: result.cost,
 				balance: result.balance,
 				editOp: { type: 'light-settings', instruction: context?.instruction ?? '' },
@@ -316,11 +325,14 @@ before the Change Date. See LICENSE for complete terms.
 				return;
 			}
 			try {
-				await goto(buildWorkspaceUrl('edit', request, { tool: 'light-settings' }), {
-					replaceState: true,
-					keepFocus: true,
-					noScroll: true
-				});
+				await goto(
+					resolve(buildWorkspaceUrl('edit', request, { tool: 'light-settings' }) as EditUrl, {}),
+					{
+						replaceState: true,
+						keepFocus: true,
+						noScroll: true
+					}
+				);
 			} catch (error) {
 				logBoundaryError('lightSettings.jobNavigation', error);
 			}
@@ -346,11 +358,14 @@ before the Change Date. See LICENSE for complete terms.
 		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
-		await goto(buildWorkspaceUrl('edit', request, { tool: 'light-settings' }), {
-			replaceState: true,
-			keepFocus: true,
-			noScroll: true
-		}).catch((error: unknown) => logBoundaryError('lightSettings.clearJobNavigation', error));
+		await goto(
+			resolve(buildWorkspaceUrl('edit', request, { tool: 'light-settings' }) as EditUrl, {}),
+			{
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true
+			}
+		).catch((error: unknown) => logBoundaryError('lightSettings.clearJobNavigation', error));
 	}
 </script>
 

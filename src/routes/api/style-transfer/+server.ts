@@ -25,10 +25,12 @@ import {
 	getUserIdByPubkey,
 	recordBalance
 } from '$lib/server/billing';
-import { styleTransferInterior } from '$lib/server/generation';
+import { styleTransferInterior, type StoredRenderResponse } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
-import { getBucketByName } from '$lib/server/media';
+import { getOrCreateMediaByKey } from '$lib/server/media';
+import { mediaAccess, providerMediaBatch } from '$lib/server/media-access';
 import { assertSessionOwnedByUser } from '$lib/server/projects';
+import { STYLE_PRESETS } from '$lib/style-presets';
 
 const STYLE_TRANSFER_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
 
@@ -43,7 +45,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	const db = getDb(platform);
 	const userId = db ? await getUserIdByPubkey(db, locals.user.pubkey) : null;
 
-	if (db && !userId) return apiError(500, 'account_error', 'Account record not found');
+	if (!userId) return apiError(500, 'account_error', 'Account record not found');
 
 	if (db) {
 		const limited = await touchRateLimit(
@@ -76,19 +78,42 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		if (!sessionOwned) return apiError(404, 'session_not_found', 'Session not found');
 	}
 
-	let result: RenderResponse;
-	let resultHash: string;
+	const managedKeys = [
+		parsed.data.imageKey,
+		...('referenceImageKey' in parsed.data ? [parsed.data.referenceImageKey] : [])
+	];
+	const media = await providerMediaBatch(db, platform, managedKeys);
+	if (!media) return apiError(404, 'image_not_found', 'Image not found');
+	const sourceMedia = media.get(parsed.data.imageKey)!.media;
+	const uploadsBucket = sourceMedia.bucket;
+	const stylePresetId = 'stylePresetId' in parsed.data ? parsed.data.stylePresetId : undefined;
+	const referenceImageKey =
+		'referenceImageKey' in parsed.data ? parsed.data.referenceImageKey : undefined;
+	const referenceImage =
+		stylePresetId !== undefined
+			? STYLE_PRESETS.find((preset) => preset.id === stylePresetId)?.src
+			: media.get(referenceImageKey!)?.url;
+	if (!referenceImage) return apiError(400, 'invalid_request', 'Invalid style preset');
+
+	let result: StoredRenderResponse;
 	try {
-		const uploadsUrl = (await getBucketByName(db, 'cadbos-uploads')).url;
-		const stored = await styleTransferInterior(platform, uploadsUrl, parsed.data);
-		result = stored;
-		resultHash = stored.outputHash;
+		result = await styleTransferInterior(platform, uploadsBucket, {
+			...parsed.data,
+			image: media.get(parsed.data.imageKey)!.url,
+			referenceImage
+		});
 	} catch (err) {
 		console.error(err);
 		return apiError(500, 'style_transfer_failed', 'Style transfer failed');
 	}
 
 	if (db && userId) {
+		const outputMedia = await getOrCreateMediaByKey(
+			db,
+			uploadsBucket,
+			result.outputKey,
+			result.outputHash
+		);
 		try {
 			await recordBalance(db, userId, result.balance);
 		} catch (err) {
@@ -96,10 +121,8 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		}
 		try {
 			const credit = await recordGeneration(db, userId, {
-				url: result.outputUrl,
-				resultHash,
-				sourceUrl: parsed.data.image,
-				sourceHash: parsed.data.imageHash ?? '',
+				resultMediaId: outputMedia.id,
+				sourceMediaId: sourceMedia.id,
 				sessionId: parsed.data.sessionId,
 				prompt: parsed.data.prompt ?? '',
 				kind: 'style-transfer',
@@ -119,5 +142,15 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		}
 	}
 
-	return json({ outputUrl: result.outputUrl, cost: result.cost, balance: result.balance });
+	const outputMedia = await getOrCreateMediaByKey(
+		db,
+		uploadsBucket,
+		result.outputKey,
+		result.outputHash
+	);
+	return json({
+		output: await mediaAccess(platform, outputMedia),
+		cost: result.cost,
+		balance: result.balance
+	} satisfies RenderResponse);
 };

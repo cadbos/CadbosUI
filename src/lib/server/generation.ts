@@ -23,12 +23,9 @@ import {
 	postUpscale4K
 } from '$lib/server/archai';
 import type { ArrayGenerationResponse, SingleGenerationResponse } from '$lib/server/archai';
-import type {
-	MaskedTextureReplacementRequest,
-	OutputFormat,
-	RenderResponse
-} from '$lib/api/contract';
+import type { OutputFormat } from '$lib/api/contract';
 import { imageExtensionFromMime } from '$lib/image-mime';
+import type { Bucket } from '$lib/server/media';
 import {
 	mockEdit,
 	mockMaskedTextureReplacement,
@@ -37,14 +34,19 @@ import {
 	mockStyleTransfer,
 	mockUpscale
 } from '$lib/server/mocks/fixtures';
-import { uploadImageBytes } from '$lib/server/uploads';
+import { uploadGeneratedImageBytes } from '$lib/server/uploads';
+import { downloadRemoteImage, RemoteImageImportError } from '$lib/server/remote-image';
 
 // И-MA-6 / И-MA-ED3: default sync-call timeout, shared by render and edit.
 const RENDER_TIMEOUT_MS = 120_000;
-const GENERATED_IMAGE_FETCH_TIMEOUT_MS = 60_000;
+const MAX_GENERATED_IMAGE_SIZE = 32 * 1024 * 1024;
+const RETRY_DELAYS_MS = [0, 250, 1_000] as const;
 
-export interface StoredRenderResponse extends RenderResponse {
+export interface StoredRenderResponse {
+	outputKey: string;
 	outputHash: string;
+	cost: number;
+	balance: number;
 }
 
 // Provider error details (raw response text, internal ids) must stay server-side
@@ -68,70 +70,55 @@ function caughtErrorKind(err: unknown): string {
 	return err instanceof Error ? err.name : typeof err;
 }
 
+async function retry<T>(operation: string, call: () => Promise<T>): Promise<T> {
+	let lastError: unknown;
+	for (const delay of RETRY_DELAYS_MS) {
+		if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+		try {
+			return await call();
+		} catch (error) {
+			if (error instanceof RemoteImageImportError && error.code !== 'remote_fetch_failed') {
+				throw error;
+			}
+			lastError = error;
+		}
+	}
+	throw new Error(`${operation} failed (${caughtErrorKind(lastError)})`);
+}
+
 async function storeGeneratedImage(
 	platform: App.Platform | undefined,
-	publicUrl: string,
+	bucket: Bucket,
 	imageUrl: string,
 	operation: string
-): Promise<{ url: string; hash: string }> {
-	let response: Response;
+): Promise<{ key: string; hash: string }> {
 	try {
-		response = await fetch(imageUrl, {
-			signal: AbortSignal.timeout(GENERATED_IMAGE_FETCH_TIMEOUT_MS)
+		const downloaded = await retry('download', async () => {
+			const image = await downloadRemoteImage(
+				imageUrl,
+				undefined,
+				globalThis.fetch,
+				MAX_GENERATED_IMAGE_SIZE
+			);
+			const extension = imageExtensionFromMime(image.mime);
+			if (extension === null) throw new Error('unexpected content type');
+			return { ...image, contentType: image.mime, extension };
 		});
+		const key = `${crypto.randomUUID()}.${downloaded.extension}`;
+		const stored = await uploadGeneratedImageBytes(
+			platform,
+			bucket,
+			downloaded.bytes,
+			downloaded.contentType,
+			key
+		);
+		return { key: stored.key, hash: stored.hash };
 	} catch (err) {
 		console.error(
 			`archAI ${operation} image mirror failed after successful generation:`,
-			`download fetch failed (${caughtErrorKind(err)})`
+			caughtErrorKind(err)
 		);
-		return { url: imageUrl, hash: '' };
-	}
-
-	if (!response.ok) {
-		console.error(
-			`archAI ${operation} image mirror failed after successful generation:`,
-			`unexpected download status ${response.status}`
-		);
-		return { url: imageUrl, hash: '' };
-	}
-
-	const contentType = response.headers.get('content-type') ?? '';
-	if (imageExtensionFromMime(contentType) === null) {
-		console.error(
-			`archAI ${operation} image mirror failed after successful generation:`,
-			`unexpected content type ${contentType || '(missing)'}`
-		);
-		return { url: imageUrl, hash: '' };
-	}
-
-	let bytes: ArrayBuffer;
-	try {
-		bytes = await response.arrayBuffer();
-	} catch (err) {
-		console.error(
-			`archAI ${operation} image mirror failed after successful generation:`,
-			`download body read failed (${caughtErrorKind(err)})`
-		);
-		return { url: imageUrl, hash: '' };
-	}
-
-	if (bytes.byteLength === 0) {
-		console.error(
-			`archAI ${operation} image mirror failed after successful generation:`,
-			'empty image response'
-		);
-		return { url: imageUrl, hash: '' };
-	}
-
-	try {
-		const stored = await uploadImageBytes(platform, publicUrl, bytes, contentType);
-		return { url: stored.url, hash: stored.hash };
-	} catch (err) {
-		console.error(
-			`archAI ${operation} image mirror failed after successful generation:`,
-			`storage upload failed (${caughtErrorKind(err)})`
-		);
-		return { url: imageUrl, hash: '' };
+		throw new Error(`${operation} output storage failed`, { cause: err });
 	}
 }
 
@@ -142,7 +129,7 @@ async function processRenderResult(
 	operation: string,
 	clientMessage: string,
 	platform: App.Platform | undefined,
-	publicUrl: string,
+	bucket: Bucket,
 	call: () => Promise<{
 		data?: ArrayGenerationResponse | SingleGenerationResponse;
 		error?: unknown;
@@ -171,9 +158,9 @@ async function processRenderResult(
 		);
 	}
 
-	const output = await storeGeneratedImage(platform, publicUrl, outputUrl, operation);
+	const output = await storeGeneratedImage(platform, bucket, outputUrl, operation);
 	return {
-		outputUrl: output.url,
+		outputKey: output.key,
 		outputHash: output.hash,
 		cost: data.cost,
 		balance: data.balance
@@ -182,22 +169,30 @@ async function processRenderResult(
 
 export async function renderInterior(
 	platform: App.Platform | undefined,
-	publicUrl: string,
+	bucket: Bucket | undefined,
 	params: { image: string; prompt: string; outputFormat: OutputFormat }
 ): Promise<StoredRenderResponse> {
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
 	if (!apiKey || !apiUrl) {
-		if (dev) return { ...mockRender(), outputHash: '' };
+		if (dev) {
+			const mock = mockRender();
+			return {
+				...mock,
+				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
+				outputHash: ''
+			};
+		}
 		generationFailed(
 			'render/interior',
 			'Render failed',
 			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
 		);
 	}
+	if (!bucket) generationFailed('render/interior', 'Render failed', 'bucket not configured');
 
-	return processRenderResult('render/interior', 'Render failed', platform, publicUrl, () =>
+	return processRenderResult('render/interior', 'Render failed', platform, bucket, () =>
 		postRenderInterior({
 			client: requestClientFor(apiKey, apiUrl),
 			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
@@ -213,22 +208,30 @@ export async function renderInterior(
 
 export async function renderExterior(
 	platform: App.Platform | undefined,
-	publicUrl: string,
+	bucket: Bucket | undefined,
 	params: { image: string; prompt: string; outputFormat: OutputFormat }
 ): Promise<StoredRenderResponse> {
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
 	if (!apiKey || !apiUrl) {
-		if (dev) return { ...mockRenderExterior(), outputHash: '' };
+		if (dev) {
+			const mock = mockRenderExterior();
+			return {
+				...mock,
+				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
+				outputHash: ''
+			};
+		}
 		generationFailed(
 			'render/exterior',
 			'Render failed',
 			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
 		);
 	}
+	if (!bucket) generationFailed('render/exterior', 'Render failed', 'bucket not configured');
 
-	return processRenderResult('render/exterior', 'Render failed', platform, publicUrl, () =>
+	return processRenderResult('render/exterior', 'Render failed', platform, bucket, () =>
 		postRenderExterior({
 			client: requestClientFor(apiKey, apiUrl),
 			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
@@ -241,25 +244,33 @@ export async function renderExterior(
 	);
 }
 
-// Д-17: `image` is the URL of the render being edited (the caller passes
-// currentRender.outputUrls[0] for iterative edits). No outputFormat — aspect
+// Д-17: `image` is a freshly signed URL for the managed render being edited.
+// No outputFormat — aspect
 // ratio is preserved automatically (И-MA-ED1).
 export async function editInterior(
 	platform: App.Platform | undefined,
-	publicUrl: string,
+	bucket: Bucket | undefined,
 	params: { image: string; prompt: string }
 ): Promise<StoredRenderResponse> {
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
 	if (!apiKey || !apiUrl) {
-		if (dev) return { ...mockEdit(), outputHash: '' };
+		if (dev) {
+			const mock = mockEdit();
+			return {
+				...mock,
+				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
+				outputHash: ''
+			};
+		}
 		generationFailed(
 			'edit-by-prompt',
 			'Edit failed',
 			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
 		);
 	}
+	if (!bucket) generationFailed('edit-by-prompt', 'Edit failed', 'bucket not configured');
 
 	let result: Awaited<ReturnType<typeof postEditByPrompt>>;
 	try {
@@ -289,9 +300,9 @@ export async function editInterior(
 		);
 	}
 
-	const output = await storeGeneratedImage(platform, publicUrl, data.output, 'edit-by-prompt');
+	const output = await storeGeneratedImage(platform, bucket, data.output, 'edit-by-prompt');
 	return {
-		outputUrl: output.url,
+		outputKey: output.key,
 		outputHash: output.hash,
 		cost: data.cost,
 		balance: data.balance
@@ -300,7 +311,7 @@ export async function editInterior(
 
 export async function styleTransferInterior(
 	platform: App.Platform | undefined,
-	publicUrl: string,
+	bucket: Bucket | undefined,
 	params: {
 		image: string;
 		referenceImage: string;
@@ -314,13 +325,21 @@ export async function styleTransferInterior(
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
 	if (!apiKey || !apiUrl) {
-		if (dev) return { ...mockStyleTransfer(), outputHash: '' };
+		if (dev) {
+			const mock = mockStyleTransfer();
+			return {
+				...mock,
+				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
+				outputHash: ''
+			};
+		}
 		generationFailed(
 			'style-transfer',
 			'Style transfer failed',
 			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
 		);
 	}
+	if (!bucket) generationFailed('style-transfer', 'Style transfer failed', 'bucket not configured');
 
 	let result: Awaited<ReturnType<typeof postStyleTransfer>>;
 	try {
@@ -362,9 +381,9 @@ export async function styleTransferInterior(
 		);
 	}
 
-	const output = await storeGeneratedImage(platform, publicUrl, outputUrl, 'style-transfer');
+	const output = await storeGeneratedImage(platform, bucket, outputUrl, 'style-transfer');
 	return {
-		outputUrl: output.url,
+		outputKey: output.key,
 		outputHash: output.hash,
 		cost: data.cost,
 		balance: data.balance
@@ -373,33 +392,40 @@ export async function styleTransferInterior(
 
 export async function replaceTexturesWithMask(
 	platform: App.Platform | undefined,
-	publicUrl: string,
-	params: MaskedTextureReplacementRequest
+	bucket: Bucket | undefined,
+	params: { image: string; referenceImage: string; mask: string }
 ): Promise<StoredRenderResponse> {
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
 	if (!apiKey || !apiUrl) {
-		if (dev) return { ...mockMaskedTextureReplacement(), outputHash: '' };
+		if (dev) {
+			const mock = mockMaskedTextureReplacement();
+			return {
+				...mock,
+				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
+				outputHash: ''
+			};
+		}
 		generationFailed(
 			'change-textures',
 			'Texture replacement failed',
 			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
 		);
 	}
+	if (!bucket) {
+		generationFailed('change-textures', 'Texture replacement failed', 'bucket not configured');
+	}
 
 	return processRenderResult(
 		'change-textures',
 		'Texture replacement failed',
 		platform,
-		publicUrl,
+		bucket,
 		() =>
 			postChangeTextures({
 				client: requestClientFor(apiKey, apiUrl),
 				signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
-				// Explicit field list, not `params` as-is: MaskedTextureReplacementRequest
-				// also carries our own imageHash (dedup bookkeeping), which must never
-				// reach the external provider.
 				body: { image: params.image, referenceImage: params.referenceImage, mask: params.mask }
 			})
 	);
@@ -409,22 +435,30 @@ export async function replaceTexturesWithMask(
 // archAI defaults to jpg if omitted, mirroring the archAI API itself.
 export async function upscale4k(
 	platform: App.Platform | undefined,
-	publicUrl: string,
+	bucket: Bucket | undefined,
 	params: { image: string; outputFormat?: OutputFormat }
 ): Promise<StoredRenderResponse> {
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
 	if (!apiKey || !apiUrl) {
-		if (dev) return { ...mockUpscale(), outputHash: '' };
+		if (dev) {
+			const mock = mockUpscale();
+			return {
+				...mock,
+				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
+				outputHash: ''
+			};
+		}
 		generationFailed(
 			'upscale-4k',
 			'Upscale failed',
 			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
 		);
 	}
+	if (!bucket) generationFailed('upscale-4k', 'Upscale failed', 'bucket not configured');
 
-	return processRenderResult('upscale-4k', 'Upscale failed', platform, publicUrl, () =>
+	return processRenderResult('upscale-4k', 'Upscale failed', platform, bucket, () =>
 		postUpscale4K({
 			client: requestClientFor(apiKey, apiUrl),
 			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),

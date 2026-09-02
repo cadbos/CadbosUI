@@ -16,6 +16,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedManagedMedia, TEST_S3_ENV } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
@@ -84,6 +85,7 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 	)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
+	seedManagedMedia(db);
 }
 
 // The admin's manual approval step (migrations/0005) — no auto-provisioning
@@ -102,17 +104,18 @@ function call(
 	platform: App.Platform,
 	body: Record<string, unknown>
 ): ReturnType<typeof POST> {
+	const testPlatform = { ...platform, env: { ...TEST_S3_ENV, ...platform.env } } as App.Platform;
 	return POST({
 		request: new Request('https://cadbos.example/api/upscale', {
 			method: 'POST',
 			body: JSON.stringify({ ...body, sessionId: sessionIdForPubkey(user?.pubkey) })
 		}),
-		platform,
+		platform: testPlatform,
 		locals: { sessionLookupUnavailable: false, user }
 	} as UpscaleEvent);
 }
 
-const body = { image: 'https://example.test/render.jpg' };
+const body = { imageKey: 'cadbos-uploads/test/source.webp' };
 const pubkey = 'a'.repeat(64);
 
 describe('POST /api/upscale — billing', () => {
@@ -121,13 +124,13 @@ describe('POST /api/upscale — billing', () => {
 		expect(response.status).toBe(401);
 	});
 
-	it('rejects an image value that is not a URL', async () => {
+	it('rejects an image value that is not a media key', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
-			image: 'not-a-url'
+			imageKey: 1
 		});
 		expect(response.status).toBe(400);
 	});
@@ -145,7 +148,7 @@ describe('POST /api/upscale — billing', () => {
 				method: 'POST',
 				body: JSON.stringify({ ...body, sessionId: foreignSessionId })
 			}),
-			platform: { env: { DB: db } } as App.Platform,
+			platform: { env: { ...TEST_S3_ENV, DB: db } } as App.Platform,
 			locals: { user: { pubkey } }
 		} as UpscaleEvent);
 		expect(response.status).toBe(404);
@@ -160,8 +163,8 @@ describe('POST /api/upscale — billing', () => {
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
-		expect(result.outputUrl).toMatch(/^https:\/\//);
+		const result = (await response.json()) as { output: { url: string } };
+		expect(result.output.url).toMatch(/^https:\/\//);
 	});
 
 	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
@@ -190,7 +193,7 @@ describe('POST /api/upscale — billing', () => {
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
+		const result = (await response.json()) as { output: { key: string; url: string } };
 
 		const row = await db
 			.prepare(
@@ -207,10 +210,12 @@ describe('POST /api/upscale — billing', () => {
 			.first<{ user_id: string; url: string; source_url: string; kind: string }>();
 		expect(row).toEqual({
 			user_id: 'user-1',
-			url: result.outputUrl,
-			source_url: body.image,
+			url: expect.stringMatching(/^https:\/\/uploads\.cadbos\.example\//),
+			source_url: 'https://uploads.cadbos.example/test/source.webp',
 			kind: 'upscale'
 		});
+		expect(result.output.key).toBeTruthy();
+		expect(result.output.url).toContain('X-Amz-Expires=43200');
 	});
 
 	it('still returns the completed, already-charged upscale if recordGeneration fails', async () => {
@@ -228,8 +233,8 @@ describe('POST /api/upscale — billing', () => {
 			);
 
 			expect(response.status).toBe(200);
-			const result = (await response.json()) as { outputUrl: string };
-			expect(result.outputUrl).toMatch(/^https:\/\//);
+			const result = (await response.json()) as { output: { url: string } };
+			expect(result.output.url).toMatch(/^https:\/\//);
 			expect(consoleError).toHaveBeenCalledWith(
 				'recordGeneration failed after a successful upscale:',
 				expect.any(Error)
@@ -248,8 +253,8 @@ describe('POST /api/upscale — billing', () => {
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
-		expect(result.outputUrl).toMatch(/^https:\/\//);
+		const result = (await response.json()) as { output: { url: string } };
+		expect(result.output.url).toMatch(/^https:\/\//);
 	});
 
 	it('rate-limits repeated upscales from the same account (anti-cost-abuse)', async () => {

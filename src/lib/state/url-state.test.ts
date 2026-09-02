@@ -153,9 +153,9 @@ describe('texture replacement edit URL state', () => {
 		state.setTextureReplacementSourceMode('room-photo');
 		state.setTextureReplacementSurface('sofa upholstery');
 		state.setTextureReplacementMasked(true);
-		state.setImage({ url: 'https://example.test/scene.jpg' });
-		state.setTextureReferenceImage({ url: 'https://example.test/fabric.jpg' });
-		state.setTextureMaskImage({ url: 'https://example.test/mask.png' });
+		state.setImage({ mediaKey: '1' });
+		state.setTextureReferenceImage({ mediaKey: '2' });
+		state.setTextureMaskImage({ mediaKey: '3' });
 
 		const url = buildShareUrl('edit', state, { tool: 'texture-replacement' });
 		expect(url).toBe('/edit?tool=texture-replacement&source=room-photo&masked=1');

@@ -21,7 +21,15 @@ before the Change Date. See LICENSE for complete terms.
 
 	const token = $derived(page.params.token);
 
-	let lightbox = $state<{ url: string; alt: string } | null>(null);
+	let lightbox = $state<{ generationId: string; alt: string } | null>(null);
+	const lightboxImage = $derived.by(() => {
+		const selected = lightbox;
+		if (!selected || !shareViewer.project) return null;
+		const generation = shareViewer.project.sessions
+			.flatMap((session) => session.generations)
+			.find((candidate) => candidate.id === selected.generationId);
+		return generation ? { url: generation.image.url, alt: selected.alt } : null;
+	});
 
 	$effect(() => {
 		void shareViewer.load(token);
@@ -56,8 +64,8 @@ before the Change Date. See LICENSE for complete terms.
 		};
 	}
 
-	function openLightbox(url: string, alt: string): void {
-		lightbox = { url, alt };
+	function openLightbox(generationId: string, alt: string): void {
+		lightbox = { generationId, alt };
 	}
 
 	function closeLightbox(): void {
@@ -117,9 +125,9 @@ before the Change Date. See LICENSE for complete terms.
 													order: index + 1,
 													title: sessionTitle(session)
 												})}
-												onclick={() => openLightbox(generation.url, alt)}
+												onclick={() => openLightbox(generation.id, alt)}
 											>
-												<img src={generation.url} {alt} loading="lazy" />
+												<img src={generation.image.url} {alt} loading="lazy" />
 											</button>
 										</li>
 									{/each}
@@ -132,8 +140,8 @@ before the Change Date. See LICENSE for complete terms.
 		</section>
 	{/if}
 
-	{#if lightbox}
-		{@const image = lightbox}
+	{#if lightboxImage}
+		{@const image = lightboxImage}
 		<dialog
 			class="lightbox-dialog"
 			{@attach openModal}

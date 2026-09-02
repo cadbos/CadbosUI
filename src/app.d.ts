@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database, Fetcher, R2Bucket } from '@cloudflare/workers-types';
+import type { D1Database, Fetcher } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 
 // See https://svelte.dev/docs/kit/types#app.d.ts
@@ -49,7 +49,10 @@ declare global {
 				OBJECT_REPLACEMENT_COST?: string;
 				TEXTURE_REPLACEMENT_COST?: string;
 				LIGHT_SETTINGS_COST?: string;
-				UPLOADS_BUCKET: R2Bucket;
+				S3_ACCESS_KEY_ID: string;
+				S3_PRESIGNED_PROVIDER_TTL_SECONDS?: string;
+				S3_PRESIGNED_UI_TTL_SECONDS?: string;
+				S3_SECRET_ACCESS_KEY: string;
 				// Comma-separated Nostr pubkeys (hex) subject to the local metered
 				// credit limit (billing.ts) — everyone else keeps the unlimited,
 				// archAI-is-the-only-gate behavior. Not a secret; swap accounts by

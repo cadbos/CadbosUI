@@ -15,6 +15,7 @@
 import type { Locator, Page, Route } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { media } from './helpers/media';
 import {
 	E2E_GENERATION_ID,
 	E2E_PROJECT_ID,
@@ -59,10 +60,9 @@ async function mockUpload(page: Page): Promise<void> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				url: 'https://cdn.example.test/uploaded.webp',
+				image: media(1, 'https://cdn.example.test/uploaded.webp'),
 				mime: 'image/webp',
 				size: 1024,
-				hash: 'a'.repeat(64),
 				dimensions: [800, 600]
 			})
 		});
@@ -140,8 +140,8 @@ async function mockProjectWithGeneration(page: Page): Promise<void> {
 						generations: [
 							{
 								id: E2E_GENERATION_ID,
-								url: 'https://cdn.example.test/after.webp',
-								sourceUrl: 'https://cdn.example.test/before.webp',
+								image: media(2, 'https://cdn.example.test/after.webp'),
+								source: media(1, 'https://cdn.example.test/before.webp'),
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 1),
 								amount: 1.5,
@@ -153,14 +153,6 @@ async function mockProjectWithGeneration(page: Page): Promise<void> {
 			})
 		});
 	});
-}
-
-function styleTransferUploadHash(route: Route): string {
-	const body = route.request().postDataBuffer();
-	if (body === null) throw new Error('Upload request body is missing');
-	if (body.includes(Buffer.from('room'))) return 'source-hash';
-	if (body.includes(Buffer.from('reference'))) return 'reference-hash';
-	throw new Error('Upload request body does not match the style transfer fixtures');
 }
 
 test('the Edit tab lets you upload an image directly, without generating a render first', async ({
@@ -207,10 +199,9 @@ test('the shared image picker imports an HTTPS image URL through the upload endp
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				url: 'https://cdn.example.test/imported.webp',
+				image: media(1, 'https://cdn.example.test/imported.webp'),
 				mime: 'image/webp',
 				size: 1024,
-				hash: 'imported-hash',
 				dimensions: [800, 600]
 			})
 		});
@@ -248,10 +239,12 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				url: styleTransferUploadUrl(route),
+				image: media(
+					styleTransferUploadUrl(route).includes('/source.') ? 1 : 2,
+					styleTransferUploadUrl(route)
+				),
 				mime: 'image/webp',
 				size: 1024,
-				hash: styleTransferUploadHash(route),
 				dimensions: [800, 600]
 			})
 		});
@@ -262,7 +255,8 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/styled.webp',
+				id: '00000000-0000-4000-8000-000000000101',
+				output: media(3, 'https://cdn.example.test/styled.webp'),
 				cost: 4,
 				balance: 96
 			})
@@ -311,9 +305,8 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 	]);
 
 	expect(capturedBody).toEqual({
-		image: 'https://cdn.example.test/source.webp',
-		imageHash: 'source-hash',
-		referenceImage: 'https://cdn.example.test/reference.webp',
+		imageKey: 'cadbos-uploads/1',
+		referenceImageKey: 'cadbos-uploads/2',
 		outputFormat: 'webp',
 		prompt: 'keep layout, use warmer materials',
 		negativePrompt: 'people',
@@ -337,10 +330,12 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				url: styleTransferUploadUrl(route),
+				image: media(
+					styleTransferUploadUrl(route).includes('/source.') ? 1 : 2,
+					styleTransferUploadUrl(route)
+				),
 				mime: 'image/webp',
 				size: 1024,
-				hash: styleTransferUploadHash(route),
 				dimensions: [800, 600]
 			})
 		});
@@ -351,7 +346,8 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/render.webp',
+				id: '00000000-0000-4000-8000-000000000102',
+				output: media(3, 'https://cdn.example.test/render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -363,7 +359,8 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/styled.webp',
+				id: '00000000-0000-4000-8000-000000000103',
+				output: media(4, 'https://cdn.example.test/styled.webp'),
 				cost: 4,
 				balance: 91
 			})
@@ -407,9 +404,8 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 	]);
 
 	expect(styleTransferBody).toEqual({
-		image: 'https://cdn.example.test/source.webp',
-		imageHash: 'source-hash',
-		referenceImage: 'https://cdn.example.test/reference.webp',
+		imageKey: 'cadbos-uploads/1',
+		referenceImageKey: 'cadbos-uploads/2',
 		outputFormat: 'webp',
 		prompt: 'style transfer guidance only',
 		styleTransferStrength: 0.7,
@@ -423,8 +419,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 	]);
 
 	expect(renderBody).toEqual({
-		image: 'https://cdn.example.test/source.webp',
-		imageHash: 'source-hash',
+		imageKey: 'cadbos-uploads/1',
 		prompt: 'render prompt for paid generation',
 		outputFormat: 'webp',
 		sessionId: E2E_SESSION_ID
@@ -443,7 +438,8 @@ test('the Style transfer tab lets you pick a ready-made photorealistic preset as
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/styled.webp',
+				id: '00000000-0000-4000-8000-000000000104',
+				output: media(3, 'https://cdn.example.test/styled.webp'),
 				cost: 4,
 				balance: 96
 			})
@@ -475,9 +471,8 @@ test('the Style transfer tab lets you pick a ready-made photorealistic preset as
 	]);
 
 	expect(capturedBody).toMatchObject({
-		image: 'https://cdn.example.test/uploaded.webp',
-		referenceImage:
-			'https://style-presets.cadbos.com/interior/photorealistic/concrete-spa-bathroom.webp',
+		imageKey: 'cadbos-uploads/1',
+		stylePresetId: 'interior-concrete-spa-bathroom',
 		outputFormat: 'webp'
 	});
 });
@@ -526,10 +521,12 @@ test('switching from a custom reference upload back to a preset tab clears the u
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				url: styleTransferUploadUrl(route),
+				image: media(
+					styleTransferUploadUrl(route).includes('/source.') ? 1 : 2,
+					styleTransferUploadUrl(route)
+				),
 				mime: 'image/webp',
 				size: 1024,
-				hash: styleTransferUploadHash(route),
 				dimensions: [800, 600]
 			})
 		});
@@ -540,7 +537,8 @@ test('switching from a custom reference upload back to a preset tab clears the u
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/styled.webp',
+				id: '00000000-0000-4000-8000-000000000105',
+				output: media(3, 'https://cdn.example.test/styled.webp'),
 				cost: 4,
 				balance: 96
 			})
@@ -585,8 +583,7 @@ test('switching from a custom reference upload back to a preset tab clears the u
 	// The submitted reference must be the freshly selected preset, not the
 	// custom upload left over from the earlier "Custom" tab.
 	expect(capturedBody).toMatchObject({
-		referenceImage:
-			'https://style-presets.cadbos.com/interior/photorealistic/concrete-spa-bathroom.webp'
+		stylePresetId: 'interior-concrete-spa-bathroom'
 	});
 });
 
@@ -602,7 +599,8 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/edited.webp',
+				id: '00000000-0000-4000-8000-000000000106',
+				output: media(2, 'https://cdn.example.test/edited.webp'),
 				cost: 3,
 				balance: 97
 			})
@@ -623,10 +621,7 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 		'src',
 		'https://cdn.example.test/edited.webp'
 	);
-	// The source was a fresh upload (no prior render) — its hash must travel
-	// through to /api/edit so the resources gallery can tell this apart from
-	// an edit continuing off a previous result (which never has a hash).
-	expect(editBody).toMatchObject({ imageHash: expect.stringMatching(/^[0-9a-f]{64}$/) });
+	expect(editBody).toMatchObject({ imageKey: 'cadbos-uploads/1' });
 	// Once a result exists, the Edit tab no longer offers a raw upload — it edits
 	// the result itself, same as the post-render flow.
 	await expect(page.locator('#mode-panel-edit input[type="file"]')).toHaveCount(0);
@@ -671,7 +666,8 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/render.webp',
+				id: '00000000-0000-4000-8000-000000000107',
+				output: media(2, 'https://cdn.example.test/render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -729,7 +725,8 @@ test('generating from the scratch tab adds the lazily-created project/session to
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/render.webp',
+				id: '00000000-0000-4000-8000-000000000108',
+				output: media(2, 'https://cdn.example.test/render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -833,7 +830,8 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/render.webp',
+				id: '00000000-0000-4000-8000-000000000109',
+				output: media(2, 'https://cdn.example.test/render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -844,7 +842,8 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/edited.webp',
+				id: '00000000-0000-4000-8000-000000000110',
+				output: media(3, 'https://cdn.example.test/edited.webp'),
 				cost: 3,
 				balance: 92
 			})
@@ -855,7 +854,8 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/edited-4k.webp',
+				id: '00000000-0000-4000-8000-000000000111',
+				output: media(4, 'https://cdn.example.test/edited-4k.webp'),
 				cost: 4,
 				balance: 88
 			})
@@ -966,7 +966,8 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: `https://cdn.example.test/render-${renders}.webp`,
+				id: `00000000-0000-4000-8000-00000000011${renders}`,
+				output: media(1 + renders, `https://cdn.example.test/render-${renders}.webp`),
 				cost: renderCost,
 				balance: startingBalance - renderCost * renders
 			})
@@ -1034,7 +1035,8 @@ test('the Add Object tool applies a selected preset to the current image', async
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/added-mirror.webp',
+				id: '00000000-0000-4000-8000-000000000114',
+				output: media(2, 'https://cdn.example.test/added-mirror.webp'),
 				cost: 2,
 				balance: 90
 			})
@@ -1075,7 +1077,8 @@ test('the Remove Object tool builds a removal prompt from the described object',
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/removed-sofa.webp',
+				id: '00000000-0000-4000-8000-000000000115',
+				output: media(2, 'https://cdn.example.test/removed-sofa.webp'),
 				cost: 2,
 				balance: 90
 			})
@@ -1124,7 +1127,7 @@ test('the Light settings tool composes an instruction from selected presets and 
 			body: JSON.stringify({
 				id: jobId,
 				status: 'completed',
-				outputUrl: 'https://cdn.example.test/golden-hour.webp',
+				output: media(2, 'https://cdn.example.test/golden-hour.webp'),
 				cost: 2,
 				balance: 90
 			})
@@ -1153,8 +1156,7 @@ test('the Light settings tool composes an instruction from selected presets and 
 		{ timeout: 10_000 }
 	);
 	expect(submittedBody).toEqual({
-		image: 'https://cdn.example.test/uploaded.webp',
-		imageHash: 'a'.repeat(64),
+		imageKey: 'cadbos-uploads/1',
 		instruction: 'сделай тёплый золотой свет заката, зажги торшер',
 		sessionId: E2E_SESSION_ID
 	});

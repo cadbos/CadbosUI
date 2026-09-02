@@ -13,6 +13,7 @@
  */
 
 import { expect, test, type Page } from '@playwright/test';
+import { media } from './helpers/media';
 
 const TOKEN = 'b'.repeat(64);
 
@@ -42,15 +43,15 @@ test('shows a shared project read-only, without auth, with no editing controls',
 				generations: [
 					{
 						id: '00000000-0000-4000-8000-000000000100',
-						url: 'https://cdn.example.test/render-2.webp',
-						sourceUrl: 'https://cdn.example.test/room.jpg',
+						image: media(3, 'https://cdn.example.test/render-2.webp'),
+						source: media(1, 'https://cdn.example.test/room.jpg'),
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 2)
 					},
 					{
 						id: '00000000-0000-4000-8000-000000000101',
-						url: 'https://cdn.example.test/render-1.webp',
-						sourceUrl: 'https://cdn.example.test/room.jpg',
+						image: media(2, 'https://cdn.example.test/render-1.webp'),
+						source: media(1, 'https://cdn.example.test/room.jpg'),
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 1)
 					}

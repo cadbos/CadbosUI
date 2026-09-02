@@ -101,7 +101,7 @@ function seedGenerationWithSource(
 	sourceUrl: string,
 	sourceHash: string,
 	createdAt: number
-): void {
+): number {
 	const resultMediaId = seedMedia(db, `https://cdn.example.test/${id}.webp`, '');
 	const sourceMediaId = seedMedia(db, sourceUrl, sourceHash);
 	db.prepare(
@@ -111,6 +111,7 @@ function seedGenerationWithSource(
 	)
 		.bind(id, userId, resultMediaId, sourceMediaId, createdAt)
 		.run();
+	return sourceMediaId;
 }
 
 let db: D1Database;
@@ -127,12 +128,12 @@ describe('recordGeneration', () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 5);
 		const sessionId = seedSession(db, 'user-1');
+		const resultMediaId = seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
+		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 
 		const result = await recordGeneration(db, 'user-1', {
-			url: 'https://cdn.example.test/out.webp',
-			resultHash: RESULT_HASH,
-			sourceUrl: 'https://cdn.example.test/room.jpg',
-			sourceHash: HASH_1,
+			resultMediaId,
+			sourceMediaId,
 			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
@@ -147,7 +148,7 @@ describe('recordGeneration', () => {
 
 		const images = await listGeneratedImages(db, 'user-1', 0, 10);
 		expect(images.images).toEqual([
-			expect.objectContaining({ url: 'https://cdn.example.test/out.webp' })
+			expect.objectContaining({ mediaId: resultMediaId, sourceMediaId })
 		]);
 	});
 
@@ -157,12 +158,12 @@ describe('recordGeneration', () => {
 		grantAccess(db, 'user-1', 5);
 		grantAccess(db, 'user-2', 5);
 		const sessionId = seedSession(db, 'user-1');
+		const resultMediaId = seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
+		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 
 		await recordGeneration(db, 'user-1', {
-			url: 'https://cdn.example.test/out.webp',
-			resultHash: RESULT_HASH,
-			sourceUrl: 'https://cdn.example.test/room.jpg',
-			sourceHash: HASH_1,
+			resultMediaId,
+			sourceMediaId,
 			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
@@ -185,21 +186,20 @@ describe('listCreditHistory', () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 5);
 		const sessionId = seedSession(db, 'user-1');
+		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		const firstResultMediaId = seedMedia(db, 'https://cdn.example.test/a.webp', RESULT_HASH);
 		await recordGeneration(db, 'user-1', {
-			url: 'https://cdn.example.test/a.webp',
-			resultHash: RESULT_HASH,
-			sourceUrl: 'https://cdn.example.test/room.jpg',
-			sourceHash: HASH_1,
+			resultMediaId: firstResultMediaId,
+			sourceMediaId,
 			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
 			amount: 1
 		});
+		const secondResultMediaId = seedMedia(db, 'https://cdn.example.test/b.webp', RESULT_HASH);
 		await recordGeneration(db, 'user-1', {
-			url: 'https://cdn.example.test/b.webp',
-			resultHash: RESULT_HASH,
-			sourceUrl: 'https://cdn.example.test/a.webp',
-			sourceHash: '',
+			resultMediaId: secondResultMediaId,
+			sourceMediaId: firstResultMediaId,
 			sessionId,
 			prompt: 'change the sofa',
 			kind: 'edit',
@@ -231,11 +231,11 @@ describe('listCreditHistory', () => {
 				.bind(sessionId)
 				.first<{ project_id: string }>()
 		)?.project_id;
+		const resultMediaId = seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
+		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 		await recordGeneration(db, 'user-1', {
-			url: 'https://cdn.example.test/out.webp',
-			resultHash: RESULT_HASH,
-			sourceUrl: 'https://cdn.example.test/room.jpg',
-			sourceHash: HASH_1,
+			resultMediaId,
+			sourceMediaId,
 			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
@@ -280,10 +280,9 @@ describe('getGeneratedImageForUser', () => {
 			id: 'image-1',
 			userId: 'user-1',
 			mediaId: expect.any(Number),
+			sourceMediaId: expect.any(Number),
 			filename: 'image-1.webp',
 			bucketName: 'cadbos-uploads',
-			url: 'https://cdn.example.test/image-1.webp',
-			sourceUrl: 'https://cdn.example.test/source.jpg',
 			kind: 'render',
 			createdAt: 1000
 		});
@@ -330,10 +329,9 @@ describe('listGeneratedImages', () => {
 					id: 'newest',
 					userId: 'user-1',
 					mediaId: expect.any(Number),
+					sourceMediaId: expect.any(Number),
 					filename: 'newest.webp',
 					bucketName: 'cadbos-uploads',
-					url: 'https://cdn.example.test/newest.webp',
-					sourceUrl: 'https://cdn.example.test/source.jpg',
 					kind: 'render',
 					createdAt: 3000
 				},
@@ -341,10 +339,9 @@ describe('listGeneratedImages', () => {
 					id: 'middle',
 					userId: 'user-1',
 					mediaId: expect.any(Number),
+					sourceMediaId: expect.any(Number),
 					filename: 'middle.webp',
 					bucketName: 'cadbos-uploads',
-					url: 'https://cdn.example.test/middle.webp',
-					sourceUrl: 'https://cdn.example.test/source.jpg',
 					kind: 'render',
 					createdAt: 2000
 				}
@@ -386,7 +383,7 @@ describe('findGenerationSourceByHash', () => {
 			HASH_1,
 			1000
 		);
-		seedGenerationWithSource(
+		const expectedMediaId = seedGenerationWithSource(
 			db,
 			'b',
 			'user-1',
@@ -395,9 +392,7 @@ describe('findGenerationSourceByHash', () => {
 			2000
 		);
 
-		await expect(findGenerationSourceByHash(db, 'user-1', HASH_1)).resolves.toBe(
-			'https://cdn.example.test/room-v2.jpg'
-		);
+		await expect(findGenerationSourceByHash(db, 'user-1', HASH_1)).resolves.toBe(expectedMediaId);
 	});
 
 	it('never matches across users', async () => {
@@ -419,13 +414,20 @@ describe('findGenerationSourceByHash', () => {
 describe('listDistinctSourceImages', () => {
 	it('collapses repeat uploads of the same hash into one card', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		const mediaId = seedGenerationWithSource(
+			db,
+			'a',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			1000
+		);
 		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
 
 		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
 
 		expect(page).toEqual({
-			images: [{ sourceUrl: 'https://cdn.example.test/room.jpg', createdAt: 2000 }],
+			images: [{ mediaId, createdAt: 2000 }],
 			hasMore: false
 		});
 	});
@@ -438,7 +440,7 @@ describe('listDistinctSourceImages', () => {
 	it('excludes rows whose source was a previous result, not an upload', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		// A real upload, mixed in so the exclusion isn't just "everything is empty".
-		seedGenerationWithSource(
+		const uploadMediaId = seedGenerationWithSource(
 			db,
 			'upload',
 			'user-1',
@@ -470,7 +472,7 @@ describe('listDistinctSourceImages', () => {
 		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
 
 		expect(page).toEqual({
-			images: [{ sourceUrl: 'https://cdn.example.test/room.jpg', createdAt: 500 }],
+			images: [{ mediaId: uploadMediaId, createdAt: 500 }],
 			hasMore: false
 		});
 	});
@@ -478,7 +480,14 @@ describe('listDistinctSourceImages', () => {
 	it('never mixes another user’s photos into the page', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
-		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/mine.jpg', HASH_1, 1000);
+		const mediaId = seedGenerationWithSource(
+			db,
+			'a',
+			'user-1',
+			'https://cdn.example.test/mine.jpg',
+			HASH_1,
+			1000
+		);
 		seedGenerationWithSource(
 			db,
 			'b',
@@ -490,8 +499,6 @@ describe('listDistinctSourceImages', () => {
 
 		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
 
-		expect(page.images).toEqual([
-			{ sourceUrl: 'https://cdn.example.test/mine.jpg', createdAt: 1000 }
-		]);
+		expect(page.images).toEqual([{ mediaId, createdAt: 1000 }]);
 	});
 });

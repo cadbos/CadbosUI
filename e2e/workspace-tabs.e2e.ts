@@ -13,6 +13,7 @@
  */
 
 import { expect, test, type Page } from '@playwright/test';
+import { media } from './helpers/media';
 
 const PROJECT_A = '00000000-0000-4000-8000-000000000001';
 const PROJECT_B = '00000000-0000-4000-8000-000000000002';
@@ -96,8 +97,8 @@ async function mockProjectDetail(
 						generations: [
 							{
 								id: generationId,
-								url: renderUrl,
-								sourceUrl: 'https://cdn.example.test/room.jpg',
+								image: media(projectId === PROJECT_A ? 2 : 4, renderUrl),
+								source: media(projectId === PROJECT_A ? 1 : 3, 'https://cdn.example.test/room.jpg'),
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 1),
 								amount: 5,
@@ -179,7 +180,8 @@ test('opens a tab per project continued into the workspace and preserves each on
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/render.webp',
+				id: '00000000-0000-4000-8000-000000000102',
+				output: media(5, 'https://cdn.example.test/render.webp'),
 				cost: 5,
 				balance: 95
 			})

@@ -20,6 +20,7 @@ export interface Bucket {
 	id: number;
 	name: string;
 	url: string;
+	region: string;
 }
 
 export interface Media {
@@ -36,8 +37,10 @@ interface MediaRow {
 	checksum: string;
 }
 
-function baseUrl(url: string): string {
-	return url.replace(/\/+$/, '');
+interface JoinedMediaRow extends MediaRow {
+	bucket_name: string;
+	bucket_url: string;
+	bucket_region: string;
 }
 
 function normalizeChecksum(checksum: string | undefined): string {
@@ -45,63 +48,57 @@ function normalizeChecksum(checksum: string | undefined): string {
 	return CHECKSUM.test(normalized) ? normalized : '';
 }
 
-export function mediaUrl(bucketUrl: string, filename: string): string {
-	const base = baseUrl(bucketUrl);
-	return filename ? `${base}/${filename}` : base;
+export function mediaKey(bucketName: string, filename: string): string {
+	if (!bucketName) throw new Error('media bucket name is empty');
+	if (!filename) throw new Error('media object key is empty');
+	return `${encodeURIComponent(bucketName)}/${filename}`;
+}
+
+export function parseMediaKey(key: string): { bucketName: string; filename: string } | null {
+	const delimiter = key.indexOf('/');
+	if (delimiter <= 0 || delimiter === key.length - 1) return null;
+	const encodedBucketName = key.slice(0, delimiter);
+	let bucketName: string;
+	try {
+		bucketName = decodeURIComponent(encodedBucketName);
+	} catch {
+		return null;
+	}
+	if (!bucketName || encodeURIComponent(bucketName) !== encodedBucketName) return null;
+	return { bucketName, filename: key.slice(delimiter + 1) };
 }
 
 export async function getBucketByName(db: D1Database, name: string): Promise<Bucket> {
 	const bucket = await db
-		.prepare('SELECT id, name, url FROM buckets WHERE name = ?')
+		.prepare('SELECT id, name, url, region FROM buckets WHERE name = ?')
 		.bind(name)
 		.first<Bucket>();
 	if (!bucket) throw new Error(`bucket ${name} not found`);
 	return bucket;
 }
 
-async function bucketForUrl(
-	db: D1Database,
-	value: string
-): Promise<{ bucket: Bucket; filename: string }> {
-	const parsed = new URL(value);
-	if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-		throw new Error('media URL must use HTTP or HTTPS');
-	}
-	const normalizedUrl = `${parsed.origin}${parsed.pathname}${parsed.search}`;
-
-	const { results } = await db
-		.prepare('SELECT id, name, url FROM buckets ORDER BY length(url) DESC, id')
-		.all<Bucket>();
-	let bucket: Bucket | null | undefined = (results ?? []).find((candidate) => {
-		const base = baseUrl(candidate.url);
-		return normalizedUrl === base || normalizedUrl.startsWith(`${base}/`);
-	});
-	if (!bucket) {
-		const origin = parsed.origin;
-		await db
-			.prepare('INSERT OR IGNORE INTO buckets (name, url) VALUES (?, ?)')
-			.bind(`external:${origin}`, origin)
-			.run();
-		bucket = await db
-			.prepare('SELECT id, name, url FROM buckets WHERE url = ?')
-			.bind(origin)
-			.first<Bucket>();
-		if (!bucket) throw new Error(`bucket for ${parsed.hostname} not found`);
-	}
-
+function toMedia(row: JoinedMediaRow): Media {
 	return {
-		bucket,
-		filename: normalizedUrl.slice(baseUrl(bucket.url).length).replace(/^\//, '')
+		id: row.id,
+		filename: row.filename,
+		bucket: {
+			id: row.bucket,
+			name: row.bucket_name,
+			url: row.bucket_url,
+			region: row.bucket_region
+		},
+		checksum: row.checksum
 	};
 }
 
-export async function getOrCreateMedia(
+async function getOrCreateMediaInBucket(
 	db: D1Database,
-	url: string,
+	bucket: Bucket,
+	filename: string,
 	checksum: string
 ): Promise<Media> {
+	if (!filename) throw new Error('media key is empty');
 	const normalizedChecksum = normalizeChecksum(checksum);
-	const { bucket, filename } = await bucketForUrl(db, url);
 	const existing = await db
 		.prepare('SELECT id, filename, bucket, checksum FROM media WHERE bucket = ? AND filename = ?')
 		.bind(bucket.id, filename)
@@ -128,5 +125,68 @@ export async function getOrCreateMedia(
 		.bind(filename, bucket.id, normalizedChecksum)
 		.first<MediaRow>();
 	if (row) return { ...row, bucket };
-	return getOrCreateMedia(db, url, normalizedChecksum);
+	return getOrCreateMediaInBucket(db, bucket, filename, normalizedChecksum);
+}
+
+export async function getOrCreateMediaByKey(
+	db: D1Database,
+	bucket: Bucket,
+	key: string,
+	checksum: string
+): Promise<Media> {
+	return getOrCreateMediaInBucket(db, bucket, key, checksum);
+}
+
+export async function getMedia(db: D1Database, mediaId: number): Promise<Media | null> {
+	const row = await db
+		.prepare(
+			'SELECT media.id, media.filename, media.bucket, media.checksum, ' +
+				'buckets.name AS bucket_name, buckets.url AS bucket_url, ' +
+				'buckets.region AS bucket_region FROM media ' +
+				'JOIN buckets ON buckets.id = media.bucket ' +
+				'WHERE media.id = ?'
+		)
+		.bind(mediaId)
+		.first<JoinedMediaRow>();
+	return row ? toMedia(row) : null;
+}
+
+export async function getMediaBatch(db: D1Database, mediaIds: number[]): Promise<Media[]> {
+	const ids = [...new Set(mediaIds)];
+	if (ids.length === 0) return [];
+	const rows: JoinedMediaRow[] = [];
+	for (let offset = 0; offset < ids.length; offset += 100) {
+		const chunk = ids.slice(offset, offset + 100);
+		const placeholders = chunk.map(() => '?').join(', ');
+		const { results } = await db
+			.prepare(
+				'SELECT media.id, media.filename, media.bucket, media.checksum, ' +
+					'buckets.name AS bucket_name, buckets.url AS bucket_url, ' +
+					'buckets.region AS bucket_region FROM media ' +
+					'JOIN buckets ON buckets.id = media.bucket ' +
+					`WHERE media.id IN (${placeholders})`
+			)
+			.bind(...chunk)
+			.all<JoinedMediaRow>();
+		rows.push(...(results ?? []));
+	}
+	return rows.sort((left, right) => left.id - right.id).map(toMedia);
+}
+
+export async function getMediaByBucketKey(
+	db: D1Database,
+	bucketName: string,
+	filename: string
+): Promise<Media | null> {
+	const row = await db
+		.prepare(
+			'SELECT media.id, media.filename, media.bucket, media.checksum, ' +
+				'buckets.name AS bucket_name, buckets.url AS bucket_url, ' +
+				'buckets.region AS bucket_region FROM media ' +
+				'JOIN buckets ON buckets.id = media.bucket ' +
+				'WHERE buckets.name = ? AND media.filename = ?'
+		)
+		.bind(bucketName, filename)
+		.first<JoinedMediaRow>();
+	return row ? toMedia(row) : null;
 }

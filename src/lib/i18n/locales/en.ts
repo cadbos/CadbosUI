@@ -273,18 +273,18 @@ export const en = {
 	'status.service.comfyui': 'ComfyUI',
 	'status.service.d1': 'D1 database',
 	'status.service.nostr': 'Nostr relays',
-	'status.service.r2': 'R2 storage',
+	'status.service.s3': 'S3 storage',
 	'status.hint.archai':
 		'Checks that the archAI API key and URL are configured and that a wallet balance request succeeds.',
 	'status.hint.assets':
-		"Checks that the app's own static files (JS, CSS, interface images) are reachable. Unrelated to the R2 storage used for user-uploaded images.",
+		"Checks that the app's own static files (JS, CSS, interface images) are reachable. Unrelated to the S3 storage used for user-uploaded images.",
 	'status.hint.comfyui':
 		'Checks that the ComfyUI image-generation backend is configured and responds to a stats request.',
 	'status.hint.d1':
 		'Checks that the D1 database (accounts, history, balance) is configured and responds to a query.',
 	'status.hint.nostr':
 		'Checks the reachability of a fixed set of 4 bootstrap relays that Cadbos uses by default. This is an internal infrastructure check — it is unrelated to the relay list in your profile (see "Relays" in the header), which can have a different count.',
-	'status.hint.r2': 'Checks that the R2 storage used for user-uploaded images is reachable.',
+	'status.hint.s3': 'Checks that the S3 storage used for user-uploaded images is reachable.',
 	'version.title': 'Application version',
 	'version.subtitle': 'Release and build information for this Cadbos deployment.',
 	'version.current': 'Current version',

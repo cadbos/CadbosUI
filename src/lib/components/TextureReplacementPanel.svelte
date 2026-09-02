@@ -14,6 +14,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { beforeNavigate, goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { tick } from 'svelte';
 	import { z } from 'zod';
@@ -34,6 +35,7 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, isEditToolRoute } from '$lib/state/url-state';
 	import { logBoundaryError } from '$lib/utils';
+	import { mediaAccess } from '$lib/state/media-access.svelte';
 
 	const MAX_TRANSIENT_FAILURES = 5;
 	const DEFAULT_POLL_DELAY_MS = 2_000;
@@ -56,7 +58,10 @@ before the Change Date. See LICENSE for complete terms.
 			.object({
 				id: z.string().uuid(),
 				status: z.literal('completed'),
-				outputUrl: z.string().url(),
+				output: z.object({
+					key: z.string().min(1),
+					url: z.url()
+				}),
 				cost: z.number().nonnegative(),
 				balance: z.number()
 			})
@@ -74,6 +79,7 @@ before the Change Date. See LICENSE for complete terms.
 		jobId: string;
 		key: TranslationKey;
 	}
+	type EditUrl = '/edit' | `/edit?${string}`;
 
 	let submitting = $state(false);
 	let terminalJob = $state<TextureReplacementCompletedResponse | null>(null);
@@ -226,7 +232,7 @@ before the Change Date. See LICENSE for complete terms.
 			request.applyEditResult(
 				{
 					id: result.id,
-					outputUrls: [result.outputUrl],
+					outputKey: mediaAccess.normalize(result.output).key,
 					cost: result.cost,
 					balance: result.balance,
 					parentId: context.sourceRender.id,
@@ -241,7 +247,7 @@ before the Change Date. See LICENSE for complete terms.
 		} else {
 			request.setCurrentRender({
 				id: result.id,
-				outputUrls: [result.outputUrl],
+				outputKey: mediaAccess.normalize(result.output).key,
 				cost: result.cost,
 				balance: result.balance,
 				ts: Date.now()
@@ -380,11 +386,17 @@ before the Change Date. See LICENSE for complete terms.
 				return;
 			}
 			try {
-				await goto(buildWorkspaceUrl('edit', request, { tool: 'texture-replacement' }), {
-					replaceState: true,
-					keepFocus: true,
-					noScroll: true
-				});
+				await goto(
+					resolve(
+						buildWorkspaceUrl('edit', request, { tool: 'texture-replacement' }) as EditUrl,
+						{}
+					),
+					{
+						replaceState: true,
+						keepFocus: true,
+						noScroll: true
+					}
+				);
 			} catch (error) {
 				logBoundaryError('textureReplacement.jobNavigation', error);
 			}
@@ -420,10 +432,13 @@ before the Change Date. See LICENSE for complete terms.
 		pollFailure = null;
 		const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 		window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
-		await goto(buildWorkspaceUrl('edit', request, { tool: 'texture-replacement' }), {
-			replaceState: true,
-			noScroll: true
-		}).catch((error: unknown) => logBoundaryError('textureReplacement.clearJobNavigation', error));
+		await goto(
+			resolve(buildWorkspaceUrl('edit', request, { tool: 'texture-replacement' }) as EditUrl, {}),
+			{
+				replaceState: true,
+				noScroll: true
+			}
+		).catch((error: unknown) => logBoundaryError('textureReplacement.clearJobNavigation', error));
 		await tick();
 		maskedToggle?.focus({ preventScroll: true });
 	}

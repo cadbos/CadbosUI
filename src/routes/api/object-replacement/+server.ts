@@ -29,6 +29,7 @@ import {
 	submitObjectReplacement
 } from '$lib/server/object-replacement';
 import { createObjectReplacementJob } from '$lib/server/object-replacement-jobs';
+import { providerMediaBatch } from '$lib/server/media-access';
 import { assertSessionOwnedByUser } from '$lib/server/projects';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 
@@ -129,6 +130,13 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			logRejection(404, 'session_not_found');
 			return apiError(404, 'session_not_found', 'Session not found');
 		}
+		const media = await providerMediaBatch(db, platform, [
+			parsed.data.imageKey,
+			parsed.data.referenceImageKey
+		]);
+		if (!media) return apiError(404, 'image_not_found', 'Image not found');
+		const sceneMedia = media.get(parsed.data.imageKey)!.media;
+		const referenceMedia = media.get(parsed.data.referenceImageKey)!.media;
 
 		let cost: number;
 		try {
@@ -158,7 +166,16 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		const id = crypto.randomUUID();
 		let comfyPromptId: string;
 		try {
-			comfyPromptId = await submitObjectReplacement(platform, parsed.data, url.origin, id);
+			comfyPromptId = await submitObjectReplacement(
+				platform,
+				{
+					image: media.get(parsed.data.imageKey)!.url,
+					referenceImage: media.get(parsed.data.referenceImageKey)!.url,
+					replacementObject: parsed.data.replacementObject
+				},
+				url.origin,
+				id
+			);
 		} catch (error) {
 			if (error instanceof RemoteImageImportError) return remoteImageError(error);
 			if (error instanceof ComfyUiError) {
@@ -184,10 +201,9 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				id,
 				userId,
 				comfyPromptId,
-				sceneUrl: parsed.data.image,
-				sceneHash: parsed.data.imageHash ?? '',
+				sceneMediaId: sceneMedia.id,
 				sessionId: parsed.data.sessionId,
-				referenceUrl: parsed.data.referenceImage,
+				referenceMediaId: referenceMedia.id,
 				replacementObject: parsed.data.replacementObject,
 				cost,
 				createdAt: Date.now()

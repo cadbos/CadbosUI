@@ -18,7 +18,10 @@ import { mockRender, mockUpload } from '$lib/server/mocks/fixtures';
 describe('mock fixtures match the API contract', () => {
 	it('upload', () => {
 		expect(mockUpload()).toMatchObject({
-			url: expect.any(String),
+			image: {
+				key: expect.any(String),
+				url: expect.any(String)
+			},
 			mime: expect.any(String),
 			size: expect.any(Number)
 		});

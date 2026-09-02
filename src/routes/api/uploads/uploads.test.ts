@@ -15,28 +15,54 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SessionUser } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+import type { Bucket } from '$lib/server/media';
 import { MAX_IMAGE_UPLOAD_SIZE } from '$lib/server/remote-image';
 import { makeD1 } from '$lib/server/testing/d1-shim';
-import { seedGeneration, setBucketUrl } from '$lib/server/testing/generation-fixtures';
+import { seedGeneration, setBucketUrl, TEST_S3_ENV } from '$lib/server/testing/generation-fixtures';
+
+const storage = vi.hoisted(() => ({
+	putS3Object:
+		vi.fn<
+			(
+				platform: App.Platform | undefined,
+				bucket: Bucket,
+				key: string,
+				bytes: ArrayBuffer,
+				mime: string
+			) => Promise<void>
+		>()
+}));
+
+vi.mock('$lib/server/s3', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/server/s3')>()),
+	putS3Object: storage.putS3Object
+}));
+
 import { POST } from './+server';
 
 type UploadEvent = Parameters<typeof POST>[0];
 
 const UPLOADS_URL = 'https://uploads.cadbos.example';
-
-function platform(bucket = { put: vi.fn(async () => undefined) }, db = makeD1()): App.Platform {
+function platform(
+	bucket = {
+		put: vi.fn(async (_key: string, _bytes: ArrayBuffer, _metadata: unknown) => undefined)
+	},
+	db = makeD1()
+): App.Platform {
 	setBucketUrl(db, 'cadbos-uploads', UPLOADS_URL);
+	storage.putS3Object.mockImplementation(async (_platform, _bucket, key, bytes, mime) => {
+		await bucket.put(key, bytes, { httpMetadata: { contentType: mime } });
+	});
 	return {
 		env: {
-			UPLOADS_BUCKET: bucket,
-			DB: db
+			DB: db,
+			...TEST_S3_ENV
 		}
 	} as unknown as App.Platform;
 }
 
-// DEMO_PUBKEY bypasses D1 entirely (see hooks.server.ts / the route's demoUser
-// check), so these tests exercise the pure R2 storage path without needing to
-// seed a database for the dedup lookup.
+// Demo requests still use D1 for the canonical uploads URL, but skip account
+// lookup and deduplication.
 function call(
 	body: unknown,
 	uploadPlatform = platform(),
@@ -90,18 +116,28 @@ async function sha256Hex(bytes: string): Promise<string> {
 describe('POST /api/uploads remote import', () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
+		vi.clearAllMocks();
 	});
 
-	it('imports a valid HTTPS URL through the R2 upload path', async () => {
+	it('imports a valid HTTPS URL through the S3 upload path', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
 		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
 			new Response('image-bytes', { headers: { 'content-type': 'image/webp' } })
 		);
 
-		const response = await call({ url: 'https://images.example.com/room.webp' });
+		const response = await call(
+			{ url: 'https://images.example.com/room.webp' },
+			platform(undefined, db),
+			{ pubkey: 'pubkey-1' }
+		);
 
 		expect(response.status).toBe(200);
 		expect(await response.json()).toMatchObject({
-			url: expect.stringMatching(/^https:\/\/uploads\.cadbos\.example\//),
+			image: {
+				key: expect.any(String),
+				url: expect.stringContaining('?')
+			},
 			mime: 'image/webp',
 			size: 11
 		});
@@ -163,7 +199,7 @@ describe('POST /api/uploads remote import', () => {
 	});
 
 	it('returns 500 for an unrecognized remote import error', async () => {
-		const bucket = { put: vi.fn().mockRejectedValue(new Error('R2 write failed')) };
+		const bucket = { put: vi.fn().mockRejectedValue(new Error('S3 write failed')) };
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
 			new Response('image-bytes', { headers: { 'content-type': 'image/jpeg' } })
@@ -194,7 +230,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 		vi.restoreAllMocks();
 	});
 
-	it('reuses an existing stored-upload source_url instead of writing to R2', async () => {
+	it('reuses an existing stored-upload source_url instead of writing to S3', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		const hash = await sha256Hex('image-bytes');
@@ -211,7 +247,12 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 		);
 
 		expect(response.status).toBe(200);
-		expect(await response.json()).toMatchObject({ url: `${UPLOADS_URL}/existing.webp` });
+		expect(await response.json()).toMatchObject({
+			image: {
+				key: 'cadbos-uploads/existing.webp',
+				url: expect.stringContaining('/existing.webp?')
+			}
+		});
 		expect(bucket.put).not.toHaveBeenCalled();
 	});
 
@@ -242,7 +283,10 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 
 		expect(response.status).toBe(200);
 		expect(await response.json()).toMatchObject({
-			url: expect.stringMatching(new RegExp(`^${UPLOADS_URL}/`))
+			image: {
+				key: expect.any(String),
+				url: expect.stringContaining('?')
+			}
 		});
 		expect(bucket.put).toHaveBeenCalledTimes(1);
 	});

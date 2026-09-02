@@ -260,28 +260,13 @@ before the Change Date. See LICENSE for complete terms.
 		return extension ? `generated-image-${id}.${extension}` : `generated-image-${id}`;
 	}
 
-	function downloadHref(url: string, id: string): string {
-		const filename = downloadFilename(url, id);
-		return `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
-	}
-
-	function downloadImage(url: string, id: string): void {
-		const filename = downloadFilename(url, id);
-		const anchor = document.createElement('a');
-		anchor.href = downloadHref(url, id);
-		anchor.download = filename;
-		document.body.append(anchor);
-		anchor.click();
-		anchor.remove();
-	}
-
 	function requestDelete(id: string, order: number): void {
 		if (generatedImages.deletingIds.has(id)) return;
 		deleteCandidate = { id, order };
 	}
 
-	function useImage(url: string, kind: GenerationKind): void {
-		request.setImage({ url });
+	function useImage(mediaKey: string, kind: GenerationKind): void {
+		request.setImage({ mediaKey });
 		request.setCurrentRender(undefined);
 		request.setStyleSourceMode('room-photo');
 		request.setObjectReplacementSourceMode('room-photo');
@@ -426,7 +411,7 @@ before the Change Date. See LICENSE for complete terms.
 								<div class="image-column">
 									<div class="image-frame">
 										<img
-											src={image.sourceUrl}
+											src={image.source.url}
 											alt={ti('generatedImages.sourceImageAlt', { order: index + 1 })}
 											loading="lazy"
 										/>
@@ -436,19 +421,21 @@ before the Change Date. See LICENSE for complete terms.
 												class="icon-button"
 												aria-label={ti('generatedImages.useSource', { order: index + 1 })}
 												title={ti('generatedImages.useSource', { order: index + 1 })}
-												onclick={() => useImage(image.sourceUrl, image.kind)}
+												onclick={() => useImage(image.source.key, image.kind)}
 											>
 												<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
 											</button>
-											<button
-												type="button"
+											<a
+												href={image.source.url}
+												download={downloadFilename(image.source.url, `${image.id}-source`)}
+												target="_blank"
+												rel="noopener noreferrer"
 												class="icon-button"
 												aria-label={ti('generatedImages.downloadSource', { order: index + 1 })}
 												title={ti('generatedImages.downloadSource', { order: index + 1 })}
-												onclick={() => downloadImage(image.sourceUrl, `${image.id}-source`)}
 											>
 												<Download size={17} strokeWidth={1.8} aria-hidden="true" />
-											</button>
+											</a>
 										</div>
 									</div>
 								</div>
@@ -465,7 +452,7 @@ before the Change Date. See LICENSE for complete terms.
 								<div class="image-column">
 									<div class="image-frame result-frame">
 										<img
-											src={image.url}
+											src={image.image.url}
 											alt={ti('generatedImages.resultImageAlt', { order: index + 1 })}
 											loading="lazy"
 										/>
@@ -475,19 +462,21 @@ before the Change Date. See LICENSE for complete terms.
 												class="icon-button"
 												aria-label={ti('generatedImages.useResult', { order: index + 1 })}
 												title={ti('generatedImages.useResult', { order: index + 1 })}
-												onclick={() => useImage(image.url, image.kind)}
+												onclick={() => useImage(image.image.key, image.kind)}
 											>
 												<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
 											</button>
-											<button
-												type="button"
+											<a
+												href={image.image.url}
+												download={downloadFilename(image.image.url, image.id)}
+												target="_blank"
+												rel="noopener noreferrer"
 												class="icon-button"
 												aria-label={ti('generatedImages.download', { order: index + 1 })}
 												title={ti('generatedImages.download', { order: index + 1 })}
-												onclick={() => downloadImage(image.url, image.id)}
 											>
 												<Download size={17} strokeWidth={1.8} aria-hidden="true" />
-											</button>
+											</a>
 										</div>
 									</div>
 								</div>

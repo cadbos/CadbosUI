@@ -16,6 +16,8 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { HealthSnapshot, NostrHealth, ServiceHealth } from '$lib/api/contract';
 import { NOSTR_PROFILE_BOOTSTRAP_RELAYS } from '$lib/nostr/connect';
+import { getBucketByName } from '$lib/server/media';
+import { isS3BucketAvailable } from '$lib/server/s3';
 import { getWalletBalance } from '$lib/server/wallet';
 
 const DEFAULT_HEALTH_CACHE_TTL_SECONDS = 30;
@@ -94,7 +96,7 @@ async function collectHealthSnapshot(
 	fetcher: typeof fetch
 ): Promise<HealthSnapshot> {
 	const env = platform?.env;
-	const [archai, assets, comfyui, d1, nostr, r2] = await Promise.all([
+	const [archai, assets, comfyui, d1, nostr, s3] = await Promise.all([
 		probe(async () => {
 			if (!env?.ARCHAI_API_KEY || !env.ARCHAI_API_URL) return false;
 			await getWalletBalance(platform);
@@ -128,12 +130,11 @@ async function collectHealthSnapshot(
 		}),
 		probeNostr(fetcher),
 		probe(async () => {
-			if (!env?.UPLOADS_BUCKET) return false;
-			await env.UPLOADS_BUCKET.list({ limit: 1 });
-			return true;
+			if (!env?.DB) return false;
+			return isS3BucketAvailable(platform, await getBucketByName(env.DB, 'cadbos-uploads'));
 		})
 	]);
-	const services = { archai, assets, comfyui, d1, nostr, r2 };
+	const services = { archai, assets, comfyui, d1, nostr, s3 };
 	return {
 		status: Object.values(services).every((service) => service.status === 'healthy')
 			? 'healthy'

@@ -13,6 +13,8 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Bucket } from '$lib/server/media';
+import { TEST_S3_BUCKET, TEST_S3_ENV } from '$lib/server/testing/generation-fixtures';
 
 const archai = vi.hoisted(() => ({
 	postChangeTextures: vi.fn(),
@@ -21,6 +23,18 @@ const archai = vi.hoisted(() => ({
 	postStyleTransfer: vi.fn()
 }));
 const appEnvironment = vi.hoisted(() => ({ dev: true }));
+const storage = vi.hoisted(() => ({
+	putS3Object:
+		vi.fn<
+			(
+				platform: App.Platform | undefined,
+				bucket: Bucket,
+				key: string,
+				bytes: ArrayBuffer,
+				mime: string
+			) => Promise<void>
+		>()
+}));
 
 vi.mock('$lib/server/archai', () => archai);
 vi.mock('$app/environment', () => ({
@@ -28,25 +42,36 @@ vi.mock('$app/environment', () => ({
 		return appEnvironment.dev;
 	}
 }));
+vi.mock('$lib/server/s3', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/server/s3')>()),
+	putS3Object: storage.putS3Object
+}));
 
 const { editInterior, renderInterior, replaceTexturesWithMask, styleTransferInterior } =
 	await import('./generation');
 
 const withoutKey = { env: {} } as App.Platform;
-const publicUploadsUrl = 'https://uploads.cadbos.example';
 const archaiApiUrl = 'https://archai.example.test/v1';
 const generatedImageHash = 'ea6ee3ad978493f9f7d995feff3384f7a08d46ec01510e0c07d21dc7c05ac37a';
 
 function mockBucket(): { put: ReturnType<typeof vi.fn> } {
-	return { put: vi.fn(async () => undefined) };
+	return { put: vi.fn(async (_key: string, _bytes: ArrayBuffer, _metadata: unknown) => undefined) };
 }
 
 function withKey(bucket: ReturnType<typeof mockBucket> = mockBucket()): App.Platform {
+	storage.putS3Object.mockImplementation(async (_platform, _bucket, key, bytes, mime) => {
+		const put = bucket.put as unknown as (
+			key: string,
+			bytes: ArrayBuffer,
+			metadata: { httpMetadata: { contentType: string } }
+		) => Promise<void>;
+		await put(key, bytes, { httpMetadata: { contentType: mime } });
+	});
 	return {
 		env: {
 			ARCHAI_API_KEY: 'test-key',
 			ARCHAI_API_URL: archaiApiUrl,
-			UPLOADS_BUCKET: bucket
+			...TEST_S3_ENV
 		}
 	} as unknown as App.Platform;
 }
@@ -72,12 +97,12 @@ afterEach(() => {
 
 describe('renderInterior', () => {
 	it('falls back to the dev mock when no API key is configured', async () => {
-		const result = await renderInterior(withoutKey, publicUploadsUrl, {
+		const result = await renderInterior(withoutKey, TEST_S3_BUCKET, {
 			image: 'https://example.test/room.jpg',
 			prompt: 'cozy',
 			outputFormat: 'webp'
 		});
-		expect(result.outputUrl).toMatch(/^https:\/\//);
+		expect(result.outputKey).toBeTruthy();
 	});
 
 	it('normalizes an array output to its first element (И-MA-4)', async () => {
@@ -92,7 +117,7 @@ describe('renderInterior', () => {
 			}
 		});
 
-		const result = await renderInterior(withKey(bucket), publicUploadsUrl, {
+		const result = await renderInterior(withKey(bucket), TEST_S3_BUCKET, {
 			image: 'https://example.test/room.jpg',
 			prompt: 'cozy',
 			outputFormat: 'webp'
@@ -101,17 +126,16 @@ describe('renderInterior', () => {
 		expect(archai.postRenderInterior.mock.calls[0][0].client.getConfig().baseUrl).toBe(
 			archaiApiUrl
 		);
-		expect(fetch).toHaveBeenCalledWith(
-			'https://example.test/a.jpg',
-			expect.objectContaining({ signal: expect.any(AbortSignal) })
-		);
+		expect(String(fetch.mock.calls[0]?.[0])).toBe('https://example.test/a.jpg');
+		expect(fetch.mock.calls[0]?.[1]).toMatchObject({ redirect: 'manual' });
+		expect(fetch.mock.calls[0]?.[1]?.signal).toBeDefined();
 		expect(bucket.put).toHaveBeenCalledWith(
 			'123e4567-e89b-12d3-a456-426614174000.webp',
 			expect.any(ArrayBuffer),
 			{ httpMetadata: { contentType: 'image/webp' } }
 		);
 		expect(result).toEqual({
-			outputUrl: `${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174000.webp`,
+			outputKey: '123e4567-e89b-12d3-a456-426614174000.webp',
 			outputHash: generatedImageHash,
 			cost: 1,
 			balance: 24
@@ -126,7 +150,7 @@ describe('renderInterior', () => {
 			data: { output: 'https://example.test/a.jpg', cost: 1, balance: 24 }
 		});
 
-		const result = await renderInterior(withKey(bucket), publicUploadsUrl, {
+		const result = await renderInterior(withKey(bucket), TEST_S3_BUCKET, {
 			image: 'https://example.test/room.jpg',
 			prompt: '',
 			outputFormat: 'webp'
@@ -137,7 +161,7 @@ describe('renderInterior', () => {
 			expect.any(ArrayBuffer),
 			{ httpMetadata: { contentType: 'image/png' } }
 		);
-		expect(result.outputUrl).toBe(`${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174001.png`);
+		expect(result.outputKey).toBe('123e4567-e89b-12d3-a456-426614174001.png');
 	});
 
 	it('throws a generic error without leaking provider details', async () => {
@@ -146,7 +170,7 @@ describe('renderInterior', () => {
 		});
 
 		await expect(
-			renderInterior(withKey(), publicUploadsUrl, {
+			renderInterior(withKey(), TEST_S3_BUCKET, {
 				image: 'https://example.test/room.jpg',
 				prompt: '',
 				outputFormat: 'webp'
@@ -160,7 +184,7 @@ describe('renderInterior', () => {
 		const platform = { env: { ARCHAI_API_KEY: 'test-key' } } as App.Platform;
 
 		try {
-			const render = renderInterior(platform, publicUploadsUrl, {
+			const render = renderInterior(platform, TEST_S3_BUCKET, {
 				image: 'https://example.test/room.jpg',
 				prompt: 'cozy',
 				outputFormat: 'webp'
@@ -177,7 +201,7 @@ describe('renderInterior', () => {
 		}
 	});
 
-	it('returns the charged provider result when downloading the mirror image fails', async () => {
+	it('fails when downloading the generated image cannot be completed', async () => {
 		const providerUrl = 'https://example.test/a.jpg';
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		vi.stubGlobal(
@@ -191,17 +215,14 @@ describe('renderInterior', () => {
 		});
 
 		try {
-			const result = await renderInterior(withKey(), publicUploadsUrl, {
+			const render = renderInterior(withKey(), TEST_S3_BUCKET, {
 				image: 'https://example.test/room.jpg',
 				prompt: '',
 				outputFormat: 'webp'
 			});
 
-			expect(result).toEqual({ outputUrl: providerUrl, outputHash: '', cost: 1, balance: 24 });
-			expect(consoleError).toHaveBeenCalledWith(
-				'archAI render/interior image mirror failed after successful generation:',
-				'download fetch failed (Error)'
-			);
+			await expect(render).rejects.toThrow('render/interior output storage failed');
+			expect(consoleError).toHaveBeenCalled();
 		} finally {
 			consoleError.mockRestore();
 		}
@@ -210,11 +231,11 @@ describe('renderInterior', () => {
 
 describe('editInterior', () => {
 	it('falls back to the dev mock when no API key is configured', async () => {
-		const result = await editInterior(withoutKey, publicUploadsUrl, {
+		const result = await editInterior(withoutKey, TEST_S3_BUCKET, {
 			image: 'https://example.test/prev-render.jpg',
 			prompt: 'make the wall sage green'
 		});
-		expect(result.outputUrl).toMatch(/^https:\/\//);
+		expect(result.outputKey).toBeTruthy();
 	});
 
 	it('normalizes the single-string output (И-MA-ED2)', async () => {
@@ -225,7 +246,7 @@ describe('editInterior', () => {
 			data: { output: 'https://example.test/edited.jpg', cost: 1, balance: 23 }
 		});
 
-		const result = await editInterior(withKey(bucket), publicUploadsUrl, {
+		const result = await editInterior(withKey(bucket), TEST_S3_BUCKET, {
 			image: 'https://example.test/prev-render.jpg',
 			prompt: 'make the wall sage green'
 		});
@@ -236,7 +257,7 @@ describe('editInterior', () => {
 			{ httpMetadata: { contentType: 'image/webp' } }
 		);
 		expect(result).toEqual({
-			outputUrl: `${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174002.webp`,
+			outputKey: '123e4567-e89b-12d3-a456-426614174002.webp',
 			outputHash: generatedImageHash,
 			cost: 1,
 			balance: 23
@@ -250,7 +271,7 @@ describe('editInterior', () => {
 			data: { output: 'https://example.test/edited.jpg', cost: 1, balance: 23 }
 		});
 
-		await editInterior(withKey(), publicUploadsUrl, {
+		await editInterior(withKey(), TEST_S3_BUCKET, {
 			image: 'https://example.test/prev-render.jpg',
 			prompt: 'replace the sofa with a leather armchair'
 		});
@@ -268,7 +289,7 @@ describe('editInterior', () => {
 		});
 
 		await expect(
-			editInterior(withKey(), publicUploadsUrl, {
+			editInterior(withKey(), TEST_S3_BUCKET, {
 				image: 'https://example.test/prev-render.jpg',
 				prompt: 'replace the sofa'
 			})
@@ -281,18 +302,18 @@ describe('editInterior', () => {
 		});
 
 		await expect(
-			editInterior(withKey(), publicUploadsUrl, {
+			editInterior(withKey(), TEST_S3_BUCKET, {
 				image: 'https://example.test/prev-render.jpg',
 				prompt: 'replace the sofa'
 			})
 		).rejects.toThrow('Edit failed');
 	});
 
-	it('returns the charged provider result when R2 upload fails', async () => {
+	it('fails when S3 storage cannot be completed', async () => {
 		const providerUrl = 'https://example.test/edited.jpg';
 		const bucket = {
 			put: vi.fn(async () => {
-				throw new Error('R2 unavailable');
+				throw new Error('S3 unavailable');
 			})
 		};
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -302,23 +323,20 @@ describe('editInterior', () => {
 		});
 
 		try {
-			const result = await editInterior(withKey(bucket), publicUploadsUrl, {
+			const edit = editInterior(withKey(bucket), TEST_S3_BUCKET, {
 				image: 'https://example.test/prev-render.jpg',
 				prompt: 'replace the sofa'
 			});
 
+			await expect(edit).rejects.toThrow('edit-by-prompt output storage failed');
 			expect(bucket.put).toHaveBeenCalled();
-			expect(result).toEqual({ outputUrl: providerUrl, outputHash: '', cost: 1, balance: 23 });
-			expect(consoleError).toHaveBeenCalledWith(
-				'archAI edit-by-prompt image mirror failed after successful generation:',
-				'storage upload failed (Error)'
-			);
+			expect(consoleError).toHaveBeenCalled();
 		} finally {
 			consoleError.mockRestore();
 		}
 	});
 
-	it('returns the charged provider result when the mirror response is not an image', async () => {
+	it('fails when the generated response is not an image', async () => {
 		const providerUrl = 'https://example.test/edited.jpg';
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		mockDownloadedImage('text/html');
@@ -327,16 +345,13 @@ describe('editInterior', () => {
 		});
 
 		try {
-			const result = await editInterior(withKey(), publicUploadsUrl, {
+			const edit = editInterior(withKey(), TEST_S3_BUCKET, {
 				image: 'https://example.test/prev-render.jpg',
 				prompt: 'replace the sofa'
 			});
 
-			expect(result).toEqual({ outputUrl: providerUrl, outputHash: '', cost: 1, balance: 23 });
-			expect(consoleError).toHaveBeenCalledWith(
-				'archAI edit-by-prompt image mirror failed after successful generation:',
-				'unexpected content type text/html'
-			);
+			await expect(edit).rejects.toThrow('edit-by-prompt output storage failed');
+			expect(consoleError).toHaveBeenCalled();
 		} finally {
 			consoleError.mockRestore();
 		}
@@ -345,12 +360,12 @@ describe('editInterior', () => {
 
 describe('styleTransferInterior', () => {
 	it('falls back to the dev mock when no API key is configured', async () => {
-		const result = await styleTransferInterior(withoutKey, publicUploadsUrl, {
+		const result = await styleTransferInterior(withoutKey, TEST_S3_BUCKET, {
 			image: 'https://example.test/room.jpg',
 			referenceImage: 'https://example.test/style.jpg',
 			outputFormat: 'webp'
 		});
-		expect(result.outputUrl).toMatch(/^https:\/\//);
+		expect(result.outputKey).toBeTruthy();
 	});
 
 	it('throws a generic production misconfiguration error without leaking API key details', async () => {
@@ -358,7 +373,7 @@ describe('styleTransferInterior', () => {
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 		try {
-			const transfer = styleTransferInterior(withoutKey, publicUploadsUrl, {
+			const transfer = styleTransferInterior(withoutKey, TEST_S3_BUCKET, {
 				image: 'https://example.test/room.jpg',
 				referenceImage: 'https://example.test/style.jpg',
 				outputFormat: 'webp'
@@ -383,7 +398,7 @@ describe('styleTransferInterior', () => {
 			}
 		});
 
-		const result = await styleTransferInterior(withKey(bucket), publicUploadsUrl, {
+		const result = await styleTransferInterior(withKey(bucket), TEST_S3_BUCKET, {
 			image: 'https://example.test/room.jpg',
 			referenceImage: 'https://example.test/style.jpg',
 			outputFormat: 'webp',
@@ -406,7 +421,7 @@ describe('styleTransferInterior', () => {
 			{ httpMetadata: { contentType: 'image/png' } }
 		);
 		expect(result).toEqual({
-			outputUrl: `${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174004.png`,
+			outputKey: '123e4567-e89b-12d3-a456-426614174004.png',
 			outputHash: generatedImageHash,
 			cost: 2,
 			balance: 22
@@ -419,7 +434,7 @@ describe('styleTransferInterior', () => {
 		});
 
 		await expect(
-			styleTransferInterior(withKey(), publicUploadsUrl, {
+			styleTransferInterior(withKey(), TEST_S3_BUCKET, {
 				image: 'https://example.test/room.jpg',
 				referenceImage: 'https://example.test/style.jpg',
 				outputFormat: 'webp'
@@ -433,7 +448,7 @@ describe('styleTransferInterior', () => {
 		});
 
 		await expect(
-			styleTransferInterior(withKey(), publicUploadsUrl, {
+			styleTransferInterior(withKey(), TEST_S3_BUCKET, {
 				image: 'https://example.test/room.jpg',
 				referenceImage: 'https://example.test/style.jpg',
 				outputFormat: 'webp'
@@ -444,14 +459,13 @@ describe('styleTransferInterior', () => {
 
 describe('replaceTexturesWithMask', () => {
 	it('falls back to the dev mock when ArchAI is not configured', async () => {
-		const result = await replaceTexturesWithMask(withoutKey, publicUploadsUrl, {
+		const result = await replaceTexturesWithMask(withoutKey, TEST_S3_BUCKET, {
 			image: 'https://example.test/room.jpg',
 			referenceImage: 'https://example.test/texture.jpg',
-			mask: 'https://example.test/mask.png',
-			sessionId: 'test-session-id'
+			mask: 'https://example.test/mask.png'
 		});
 
-		expect(result.outputUrl).toMatch(/^https:\/\//);
+		expect(result.outputKey).toBeTruthy();
 	});
 
 	it('sends the masked reference request and stores the first output image', async () => {
@@ -466,11 +480,10 @@ describe('replaceTexturesWithMask', () => {
 			}
 		});
 
-		const result = await replaceTexturesWithMask(withKey(bucket), publicUploadsUrl, {
+		const result = await replaceTexturesWithMask(withKey(bucket), TEST_S3_BUCKET, {
 			image: 'https://example.test/room.jpg',
 			referenceImage: 'https://example.test/texture.jpg',
-			mask: 'https://example.test/mask.png',
-			sessionId: 'test-session-id'
+			mask: 'https://example.test/mask.png'
 		});
 
 		expect(archai.postChangeTextures.mock.calls[0][0].body).toEqual({
@@ -479,7 +492,7 @@ describe('replaceTexturesWithMask', () => {
 			mask: 'https://example.test/mask.png'
 		});
 		expect(result).toEqual({
-			outputUrl: `${publicUploadsUrl}/123e4567-e89b-12d3-a456-426614174005.png`,
+			outputKey: '123e4567-e89b-12d3-a456-426614174005.png',
 			outputHash: generatedImageHash,
 			cost: 1.5,
 			balance: 20
@@ -492,11 +505,10 @@ describe('replaceTexturesWithMask', () => {
 		});
 
 		await expect(
-			replaceTexturesWithMask(withKey(), publicUploadsUrl, {
+			replaceTexturesWithMask(withKey(), TEST_S3_BUCKET, {
 				image: 'https://example.test/room.jpg',
 				referenceImage: 'https://example.test/texture.jpg',
-				mask: 'https://example.test/mask.png',
-				sessionId: 'test-session-id'
+				mask: 'https://example.test/mask.png'
 			})
 		).rejects.toThrow(/^Texture replacement failed$/);
 	});

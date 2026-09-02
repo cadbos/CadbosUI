@@ -15,27 +15,20 @@
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { ApiError } from '$lib/api/contract';
+import { parseMediaKey } from '$lib/server/media';
 
 export function apiError(status: number, code: string, message: string): Response {
 	return json({ error: { code, message } } satisfies ApiError, { status });
 }
 
 const outputFormat = z.enum(['webp', 'jpg', 'png', 'avif']);
-const httpImageUrl = z.url({ protocol: /^https?$/ }).trim();
 const httpsImageUrl = z.url({ protocol: /^https$/ }).trim();
 const optionalText = z
 	.string()
 	.trim()
 	.transform((value) => (value.length === 0 ? undefined : value))
 	.optional();
-// SHA-256 hex digest of the uploaded `image`'s bytes — omitted when `image`
-// is a previous render/edit result rather than a fresh upload. See
-// RenderRequest.imageHash in $lib/api/contract.
-const optionalImageHash = z
-	.string()
-	.trim()
-	.regex(/^[0-9a-f]{64}$/)
-	.optional();
+const mediaKey = z.string().refine((value) => parseMediaKey(value) !== null);
 
 // The project-session a generation attaches to (Module 11) — ownership is
 // verified server-side (projects.ts' assertSessionOwnedByUser) before any paid
@@ -43,8 +36,7 @@ const optionalImageHash = z
 const sessionId = z.uuid();
 
 export const renderRequestSchema = z.object({
-	image: z.string().trim().min(1),
-	imageHash: optionalImageHash,
+	imageKey: mediaKey,
 	prompt: z.string().trim().default(''),
 	outputFormat,
 	sessionId
@@ -57,57 +49,55 @@ export const remoteImageUploadRequestSchema = z.object({
 // Unlike render, edit-by-prompt has no "enhance" fallback for an empty prompt —
 // the instruction is the whole point of the call (FR-К2/К3).
 export const editRequestSchema = z.object({
-	image: z.url().trim(),
-	imageHash: optionalImageHash,
+	imageKey: mediaKey,
 	prompt: z.string().trim().min(1),
 	sessionId
 });
 
-export const styleTransferRequestSchema = z.object({
-	image: httpImageUrl,
-	imageHash: optionalImageHash,
-	referenceImage: httpImageUrl,
+const styleTransferBase = {
+	imageKey: mediaKey,
 	outputFormat,
 	prompt: optionalText,
 	negativePrompt: optionalText,
 	styleTransferStrength: z.number().min(0).max(1).optional(),
 	sessionId
-});
+};
+
+export const styleTransferRequestSchema = z.union([
+	z.strictObject({ ...styleTransferBase, referenceImageKey: mediaKey }),
+	z.strictObject({ ...styleTransferBase, stylePresetId: z.string().trim().min(1) })
+]);
 
 export const upscaleRequestSchema = z.object({
-	image: httpImageUrl,
+	imageKey: mediaKey,
 	outputFormat: outputFormat.optional(),
 	sessionId
 });
 
 export const objectReplacementRequestSchema = z.strictObject({
-	image: httpsImageUrl,
-	imageHash: optionalImageHash,
-	referenceImage: httpsImageUrl,
+	imageKey: mediaKey,
+	referenceImageKey: mediaKey,
 	replacementObject: z.string().trim().min(1).max(200),
 	sessionId
 });
 
 export const lightSettingsRequestSchema = z.strictObject({
-	image: httpsImageUrl,
-	imageHash: optionalImageHash,
+	imageKey: mediaKey,
 	instruction: z.string().trim().min(1).max(500),
 	sessionId
 });
 
 export const textureReplacementRequestSchema = z.union([
 	z.strictObject({
-		image: httpsImageUrl,
-		imageHash: optionalImageHash,
-		referenceImage: httpsImageUrl,
+		imageKey: mediaKey,
+		referenceImageKey: mediaKey,
 		replacementSurface: z.string().trim().min(1).max(200),
 		sessionId
 	}),
 	z.strictObject({
-		image: httpsImageUrl,
-		imageHash: optionalImageHash,
-		referenceImage: httpsImageUrl,
-		mask: httpsImageUrl,
+		imageKey: mediaKey,
+		referenceImageKey: mediaKey,
+		maskImageKey: mediaKey,
 		sessionId
 	})
 ]);
