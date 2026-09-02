@@ -10,7 +10,10 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mediaKey } from '$lib/server/media';
+import { TEST_S3_BUCKET } from '$lib/server/testing/generation-fixtures';
 import { request } from '$lib/state/request.svelte';
+import { mediaAccess } from '$lib/state/media-access.svelte';
 import {
 	initializeGenerationPreview,
 	SCRATCH_TAB_ID,
@@ -46,6 +49,7 @@ function memoryLocalStorage(): Storage {
 
 beforeEach(() => {
 	vi.stubGlobal('localStorage', memoryLocalStorage());
+	mediaAccess.clear();
 });
 
 afterEach(() => {
@@ -55,6 +59,7 @@ afterEach(() => {
 		workspaceTabs.close(workspaceTabs.tabs[workspaceTabs.tabs.length - 1].id);
 	}
 	request.reset();
+	mediaAccess.clear();
 	vi.unstubAllGlobals();
 });
 
@@ -160,7 +165,7 @@ describe('workspaceTabs.openProject', () => {
 });
 
 describe('initializeGenerationPreview', () => {
-	it('seeds the generation as the after step and its sourceUrl as the synthetic before', () => {
+	it('seeds the generation as the after step and its source as the synthetic before', () => {
 		const session = {
 			id: SESSION_A1,
 			title: 'Main thread',
@@ -172,8 +177,14 @@ describe('initializeGenerationPreview', () => {
 		};
 		const generation = {
 			id: 'gen-1',
-			url: 'https://example.test/after.webp',
-			sourceUrl: 'https://example.test/before.webp',
+			image: {
+				key: mediaKey(TEST_S3_BUCKET.name, 'after.webp'),
+				url: 'https://example.test/after.webp'
+			},
+			source: {
+				key: mediaKey(TEST_S3_BUCKET.name, 'before.webp'),
+				url: 'https://example.test/before.webp'
+			},
 			kind: 'render' as const,
 			createdAt: 1000,
 			amount: 1.5,
@@ -184,11 +195,12 @@ describe('initializeGenerationPreview', () => {
 
 		expect(request.projectId).toBe(PROJECT_A);
 		expect(request.sessionId).toBe(SESSION_A1);
-		expect(request.image?.url).toBe(generation.sourceUrl);
-		expect(request.currentRender?.outputUrls).toEqual([generation.url]);
+		expect(request.image).toEqual({ mediaKey: generation.source.key });
+		expect(mediaAccess.get(generation.source.key)?.url).toBe(generation.source.url);
+		expect(request.currentRender?.outputKey).toBe(generation.image.key);
 		expect(request.currentRender?.cost).toBe(1.5);
 		expect(request.currentRender?.balance).toBe(8.5);
-		expect(request.previousRender?.outputUrls).toEqual([generation.sourceUrl]);
+		expect(request.previousRender?.outputKey).toBe(generation.source.key);
 		expect(request.viewingGenerationId).toBe('gen-1');
 	});
 });

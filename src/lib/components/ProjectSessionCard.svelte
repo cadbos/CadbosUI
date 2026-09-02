@@ -93,7 +93,7 @@ before the Change Date. See LICENSE for complete terms.
 	{#if latest}
 		<span class="session-thumb">
 			<img
-				src={latest.url}
+				src={latest.image.url}
 				alt={ti('projects.detail.sessionThumbnailAlt', { title: displayTitle })}
 				loading="lazy"
 			/>

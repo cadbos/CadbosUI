@@ -13,7 +13,8 @@
  */
 
 import { normalizeImageContentType, type ImageMime } from '$lib/image-mime';
-import { hashBytes, uploadImageBytes } from '$lib/server/uploads';
+import type { Bucket } from '$lib/server/media';
+import { hashBytes, uploadImageBytes, type StoredImage } from '$lib/server/uploads';
 
 export const MAX_IMAGE_UPLOAD_SIZE = 8 * 1024 * 1024;
 
@@ -55,7 +56,7 @@ function isBlockedHostname(hostname: string): boolean {
 	);
 }
 
-export function validateRemoteImageUrl(value: string, applicationOrigin: string): URL {
+export function validateRemoteImageUrl(value: string, applicationOrigin?: string): URL {
 	let url: URL;
 	try {
 		url = new URL(value);
@@ -71,7 +72,7 @@ export function validateRemoteImageUrl(value: string, applicationOrigin: string)
 		url.username ||
 		url.password ||
 		(url.port !== '' && url.port !== '443') ||
-		url.origin === applicationOrigin ||
+		(applicationOrigin !== undefined && url.origin === applicationOrigin) ||
 		isBlockedHostname(hostname)
 	) {
 		throw new RemoteImageImportError('invalid_url');
@@ -95,7 +96,7 @@ async function cancelBody(response: Response): Promise<void> {
 
 async function fetchRemoteImage(
 	initialUrl: URL,
-	applicationOrigin: string,
+	applicationOrigin: string | undefined,
 	fetcher: typeof fetch
 ): Promise<Response> {
 	let url = initialUrl;
@@ -140,9 +141,9 @@ async function fetchRemoteImage(
 	throw new RemoteImageImportError('remote_fetch_failed');
 }
 
-async function readImageBody(response: Response): Promise<ArrayBuffer> {
+async function readImageBody(response: Response, maxSize: number): Promise<ArrayBuffer> {
 	const contentLength = response.headers.get('content-length');
-	if (contentLength !== null && Number(contentLength) > MAX_IMAGE_UPLOAD_SIZE) {
+	if (contentLength !== null && Number(contentLength) > maxSize) {
 		await cancelBody(response);
 		throw new RemoteImageImportError('image_too_large');
 	}
@@ -159,7 +160,7 @@ async function readImageBody(response: Response): Promise<ArrayBuffer> {
 			if (!value) continue;
 
 			totalSize += value.byteLength;
-			if (totalSize > MAX_IMAGE_UPLOAD_SIZE) {
+			if (totalSize > maxSize) {
 				try {
 					await reader.cancel();
 				} catch (error) {
@@ -190,31 +191,26 @@ async function readImageBody(response: Response): Promise<ArrayBuffer> {
 
 export async function importRemoteImage(
 	platform: App.Platform | undefined,
-	publicUrl: string,
+	bucket: Bucket,
 	value: string,
 	applicationOrigin: string,
 	fetcher: typeof fetch = globalThis.fetch,
 	// Optional dedup lookup (source media checksum for the current user) —
 	// callers without a D1 user to dedup against (e.g. tests) simply omit it.
 	findExisting?: (hash: string) => Promise<string | null>
-): Promise<{
-	url: string;
-	mime: ImageMime;
-	size: number;
-	hash: string;
-	dimensions?: [number, number];
-}> {
+): Promise<StoredImage> {
 	const { bytes, mime } = await downloadRemoteImage(value, applicationOrigin, fetcher);
 	const hash = await hashBytes(bytes);
-	const existingUrl = await findExisting?.(hash);
-	if (existingUrl) return { url: existingUrl, mime, size: bytes.byteLength, hash };
-	return uploadImageBytes(platform, publicUrl, bytes, mime, undefined, hash);
+	const existingKey = await findExisting?.(hash);
+	if (existingKey) return { key: existingKey, mime, size: bytes.byteLength, hash };
+	return uploadImageBytes(platform, bucket, bytes, mime, undefined, hash);
 }
 
 export async function downloadRemoteImage(
 	value: string,
-	applicationOrigin: string,
-	fetcher: typeof fetch = globalThis.fetch
+	applicationOrigin: string | undefined,
+	fetcher: typeof fetch = globalThis.fetch,
+	maxSize = MAX_IMAGE_UPLOAD_SIZE
 ): Promise<DownloadedRemoteImage> {
 	const url = validateRemoteImageUrl(value, applicationOrigin);
 	const response = await fetchRemoteImage(url, applicationOrigin, fetcher);
@@ -224,6 +220,6 @@ export async function downloadRemoteImage(
 		throw new RemoteImageImportError('unsupported_image_type');
 	}
 
-	const bytes = await readImageBody(response);
+	const bytes = await readImageBody(response, maxSize);
 	return { bytes, mime };
 }

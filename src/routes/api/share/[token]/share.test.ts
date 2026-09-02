@@ -23,7 +23,10 @@ import {
 	revokeActiveShareToken
 } from '$lib/server/projects';
 import { makeD1 } from '$lib/server/testing/d1-shim';
-import { seedGeneration as seedGenerationFixture } from '$lib/server/testing/generation-fixtures';
+import {
+	seedGeneration as seedGenerationFixture,
+	TEST_S3_ENV
+} from '$lib/server/testing/generation-fixtures';
 
 const { GET: getSharedProject } = await import('./+server');
 
@@ -37,15 +40,15 @@ function seedGeneration(db: D1Database, id: string, sessionId: string, userId: s
 	seedGenerationFixture(db, {
 		id,
 		userId,
-		url: 'https://cdn.example.test/out.webp',
-		sourceUrl: 'https://cdn.example.test/room.jpg',
+		url: 'https://uploads.cadbos.example/out.webp',
+		sourceUrl: 'https://uploads.cadbos.example/room.jpg',
 		createdAt: Date.now(),
 		sessionId
 	});
 }
 
 function platform(db: D1Database): App.Platform {
-	return { env: { DB: db } } as unknown as App.Platform;
+	return { env: { DB: db, ...TEST_S3_ENV } } as unknown as App.Platform;
 }
 
 describe('GET /api/share/[token]', () => {

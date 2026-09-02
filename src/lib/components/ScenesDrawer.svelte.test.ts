@@ -17,13 +17,20 @@ import { render } from 'vitest-browser-svelte';
 import type { GeneratedImageRecord, GeneratedImagesResponse } from '$lib/api/contract';
 import { setLocale, type Locale } from '$lib/i18n/index.svelte';
 import { generatedImages } from '$lib/state/generated-images.svelte';
+import { mediaAccess } from '$lib/state/media-access.svelte';
 import ScenesDrawer from './ScenesDrawer.svelte';
 
 function image(id: string, createdAt: number): GeneratedImageRecord {
 	return {
 		id,
-		url: `https://cdn.example.test/${id}.webp`,
-		sourceUrl: `https://cdn.example.test/${id}-source.jpg`,
+		image: {
+			key: `${id}.webp`,
+			url: `https://cdn.example.test/${id}.webp`
+		},
+		source: {
+			key: `${id}-source.jpg`,
+			url: `https://cdn.example.test/${id}-source.jpg`
+		},
 		kind: 'render',
 		createdAt
 	};
@@ -75,11 +82,13 @@ function localTimeLabel(locale: Locale, createdAt: number): string {
 
 beforeEach(() => {
 	generatedImages.clear();
+	mediaAccess.clear();
 	setLocale('ru');
 });
 
 afterEach(() => {
 	generatedImages.clear();
+	mediaAccess.clear();
 	setLocale('ru');
 	vi.unstubAllGlobals();
 });

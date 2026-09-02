@@ -17,6 +17,7 @@ before the Change Date. See LICENSE for complete terms.
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { request } from '$lib/state/request.svelte';
+	import { mediaAccess } from '$lib/state/media-access.svelte';
 
 	const MAX_UPLOAD_SIZE = 8 * 1024 * 1024;
 	const MAX_CANVAS_DIMENSION = 2048;
@@ -24,6 +25,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	interface Props {
 		sourceUrl?: string;
+		sourceKey?: string;
 		disabled?: boolean;
 	}
 
@@ -42,7 +44,7 @@ before the Change Date. See LICENSE for complete terms.
 		empty: boolean;
 	}
 
-	let { sourceUrl = undefined, disabled = false }: Props = $props();
+	let { sourceUrl = undefined, sourceKey = undefined, disabled = false }: Props = $props();
 	let canvas = $state<HTMLCanvasElement | null>(null);
 	let tool = $state<DrawingTool>('brush');
 	let brushSize = $state(48);
@@ -55,6 +57,8 @@ before the Change Date. See LICENSE for complete terms.
 	let brushCursor = $state<BrushCursor | null>(null);
 	let previousPoint: Point | null = null;
 	let activePointerId: number | null = null;
+	let initializedSource: number | string | undefined;
+	const sourceIdentity = $derived(sourceKey ?? sourceUrl);
 	const maskReady = $derived(request.textureMaskMatchesSource());
 	const editorBusy = $derived(uploading || fallbackUploading);
 	const canSave = $derived(canvasReady && hasMarks && !editorBusy && !disabled);
@@ -95,15 +99,27 @@ before the Change Date. See LICENSE for complete terms.
 			1,
 			MAX_CANVAS_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight)
 		);
-		canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-		canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+		const width = Math.max(1, Math.round(image.naturalWidth * scale));
+		const height = Math.max(1, Math.round(image.naturalHeight * scale));
+		if (
+			sourceIdentity !== initializedSource ||
+			canvas.width !== width ||
+			canvas.height !== height
+		) {
+			canvas.width = width;
+			canvas.height = height;
+			initializedSource = sourceIdentity;
+			resetDrawing();
+		}
 		canvasReady = image.naturalWidth > 0 && image.naturalHeight > 0;
-		resetDrawing();
+		errorKey = null;
 	}
 
 	function sourceLoadFailed(): void {
-		canvasReady = false;
-		resetDrawing();
+		if (sourceIdentity !== initializedSource) {
+			canvasReady = false;
+			resetDrawing();
+		}
 		errorKey = 'textureReplacement.maskEditor.sourceFailed';
 	}
 
@@ -312,7 +328,17 @@ before the Change Date. See LICENSE for complete terms.
 				errorKey = 'textureReplacement.maskEditor.saveFailed';
 				return;
 			}
-			if (!request.commitTextureMaskUpload(parsed.data, operation)) {
+			if (
+				!request.commitTextureMaskUpload(
+					{
+						mediaKey: mediaAccess.normalize(parsed.data.image).key,
+						mime: parsed.data.mime,
+						size: parsed.data.size,
+						dimensions: parsed.data.dimensions
+					},
+					operation
+				)
+			) {
 				errorKey = 'textureReplacement.maskEditor.saveFailed';
 			}
 		} catch {
@@ -381,7 +407,7 @@ before the Change Date. See LICENSE for complete terms.
 			</div>
 		</div>
 
-		{#key sourceUrl}
+		{#key sourceIdentity}
 			<div class:disabled={disabled || editorBusy} class="drawing-stage">
 				<img
 					src={sourceUrl}

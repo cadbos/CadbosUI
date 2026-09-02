@@ -20,7 +20,7 @@ browser.
 ## Technology
 
 Cadbos is a TypeScript application built with Svelte 5 runes and SvelteKit. It deploys to
-Cloudflare Workers and uses D1 for authentication and generation records, R2 for image
+Cloudflare Workers and uses D1 for authentication and generation records, S3-compatible image
 storage, archAI for generation workflows, and a private ComfyUI service for object and
 reference-guided texture replacement. All provider calls and secrets remain in server-only
 modules and SvelteKit endpoints.
@@ -78,7 +78,10 @@ environment variables. Their authoritative definitions are in
 [`wrangler.jsonc`](wrangler.jsonc) and [`src/app.d.ts`](src/app.d.ts):
 
 - `DB` — D1 database for users, sessions, credits, and generation records
-- `UPLOADS_BUCKET` — R2 image storage; its public URL comes from the `buckets` database table
+- `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` — private S3-compatible image storage
+- `S3_PRESIGNED_UI_TTL_SECONDS` and `S3_PRESIGNED_PROVIDER_TTL_SECONDS` — optional
+  presigned URL lifetimes in seconds; defaults are 43200 and 10800, and valid values
+  range from 1 through 604800
 - `ARCHAI_API_URL` and the `ARCHAI_API_KEY` secret — archAI server integration
 - `COMFYUI_BASE_URL` — private VPC service binding for ComfyUI
 - `ADMIN_PUBKEYS`, `METERED_DESIGNER_PUBKEYS`, and `PUBKEY_VIEWER` — access and usage
@@ -87,9 +90,9 @@ environment variables. Their authoritative definitions are in
   `HEALTH_CACHE_TTL_SECONDS` — optional operational settings
 
 Never place provider credentials in `.env` variables exposed to the client. Production
-secrets must be configured through Cloudflare; `wrangler.jsonc` documents the expected
-secret names and resource bindings. Apply the checked-in D1 migrations before using a new
-database:
+secrets, including the S3 credentials, must be configured through Cloudflare;
+`wrangler.jsonc` documents the expected variable and secret names. Apply the checked-in D1
+migrations before using a new database:
 
 ```sh
 pnpm exec wrangler d1 migrations apply DB --local
@@ -98,14 +101,15 @@ pnpm exec wrangler d1 migrations apply DB --local
 Use `--remote` instead of `--local` only when intentionally applying migrations to the
 configured remote database.
 
-Before serving application traffic, provision the uploads CDN base URL in `buckets` under
-the name `cadbos-uploads`. Rename the matching `external:*` row created from migrated media,
-or insert the named row when the database contains no existing uploads.
+Before serving application traffic, provision the uploads bucket in `buckets` under the name
+`cadbos-uploads`. Set `url` to the full bucket-scoped S3 API endpoint and `region` to its
+signing region. Existing object keys remain in `media`; application reads use presigned S3
+URLs.
 
 ## Deployment
 
 The configured target is Cloudflare Workers with Static Assets. The adapter, D1 database,
-R2 bucket, and private VPC service are already represented in `wrangler.jsonc`; deployment
+S3 storage configuration and the private VPC service are represented in `wrangler.jsonc`; deployment
 therefore requires access to the Cadbos Cloudflare resources and provider credentials. A
 successful `pnpm build` writes the Worker bundle to `.svelte-kit/cloudflare`.
 

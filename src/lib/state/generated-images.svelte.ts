@@ -15,6 +15,7 @@
 import { SvelteSet } from 'svelte/reactivity';
 import { z } from 'zod';
 import { generationKinds, type GeneratedImageRecord } from '$lib/api/contract';
+import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export type GeneratedImagesStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -22,8 +23,14 @@ const PAGE_SIZE = 100;
 
 const generatedImageRecordSchema = z.object({
 	id: z.string().min(1),
-	url: z.url(),
-	sourceUrl: z.url(),
+	image: z.object({
+		key: z.string().min(1),
+		url: z.url()
+	}),
+	source: z.object({
+		key: z.string().min(1),
+		url: z.url()
+	}),
 	kind: z.enum(generationKinds),
 	createdAt: z.number().int().min(0)
 });
@@ -178,7 +185,14 @@ class GeneratedImagesState {
 
 		const parsed = generatedImagesResponseSchema.safeParse(await response.json().catch(() => null));
 		if (!parsed.success) throw new GeneratedImagesLoadError('generated images response invalid');
-		return parsed.data;
+		return {
+			...parsed.data,
+			images: parsed.data.images.map((image) => ({
+				...image,
+				image: mediaAccess.normalize(image.image),
+				source: mediaAccess.normalize(image.source)
+			}))
+		};
 	}
 
 	#setNextPage(page: z.infer<typeof generatedImagesResponseSchema>): void {

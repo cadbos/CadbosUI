@@ -19,9 +19,11 @@ before the Change Date. See LICENSE for complete terms.
 	import { normalizeImageContentType } from '$lib/image-mime';
 	import {
 		request,
+		imageUrl as resolveImageUrl,
 		type ImageInput,
 		type TextureMaskUploadOperation
 	} from '$lib/state/request.svelte';
+	import { mediaAccess } from '$lib/state/media-access.svelte';
 
 	const MAX_SIZE = 8 * 1024 * 1024;
 
@@ -131,7 +133,7 @@ before the Change Date. See LICENSE for complete terms.
 						? 'textureReplacement.maskDropSubtitle'
 						: 'upload.dropSubtitle'
 	);
-	const imageUrl = $derived(image?.url ?? null);
+	const imageUrl = $derived(resolveImageUrl(image) ?? null);
 	// For target 'room' the local preview lives on the shared store instead
 	// of `previewUrl` (a plain component $state) — Render and Edit each
 	// mount their own <ImageUpload target="room"> instance, and a
@@ -296,10 +298,9 @@ before the Change Date. See LICENSE for complete terms.
 			previewUrl = null;
 			setUploadedImage(
 				{
-					url: result.url,
+					mediaKey: mediaAccess.normalize(result.image).key,
 					mime: result.mime,
 					size: result.size,
-					hash: result.hash,
 					dimensions: result.dimensions
 				},
 				textureMaskUpload
@@ -349,10 +350,9 @@ before the Change Date. See LICENSE for complete terms.
 			remoteUrl = '';
 			setUploadedImage(
 				{
-					url: result.url,
+					mediaKey: mediaAccess.normalize(result.image).key,
 					mime: result.mime,
 					size: result.size,
-					hash: result.hash,
 					dimensions: result.dimensions
 				},
 				textureMaskUpload

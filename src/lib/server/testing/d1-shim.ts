@@ -20,6 +20,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import type { D1Database } from '@cloudflare/workers-types';
+import { TEST_S3_BUCKET } from './generation-fixtures';
 
 const MIGRATIONS_DIR = new URL('../../../../migrations/', import.meta.url);
 // Mirrors `wrangler d1 migrations apply`: every *.sql file in the migrations
@@ -43,8 +44,9 @@ export function makeD1(): D1Database {
 	const db = new DatabaseSync(':memory:');
 	db.exec('PRAGMA foreign_keys = ON');
 	db.exec(SCHEMA);
-	db.exec(
-		"INSERT INTO buckets (name, url) VALUES ('cadbos-uploads', 'https://uploads.cadbos.example')"
+	db.prepare('INSERT INTO buckets (name, url) VALUES (?, ?)').run(
+		TEST_S3_BUCKET.name,
+		'https://uploads.cadbos.example'
 	);
 	const stmt = (sql: string, args: SQLInputValue[] = []): ShimStatement => ({
 		bind: (...next: SQLInputValue[]) => stmt(sql, next),

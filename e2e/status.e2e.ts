@@ -23,7 +23,7 @@ const SECOND_TIMESTAMP = '2026-08-12T10:00:02.000Z';
 function snapshot(
 	status: HealthSnapshot['status'],
 	timestamp: string,
-	r2Status: HealthSnapshot['status'] = status
+	s3Status: HealthSnapshot['status'] = status
 ): HealthSnapshot {
 	return {
 		status,
@@ -34,7 +34,7 @@ function snapshot(
 			comfyui: { status: 'healthy', latencyMs: 14 },
 			d1: { status: 'healthy', latencyMs: 15 },
 			nostr: { status: 'healthy', latencyMs: 16, reachable: 3, total: 4 },
-			r2: { status: r2Status, latencyMs: 17 }
+			s3: { status: s3Status, latencyMs: 17 }
 		}
 	};
 }
@@ -178,7 +178,7 @@ test('deduplicates the direct status load and preserves cache-driven polling', a
 			name: /Ретрансляторы Nostr.*Работает 16 мс Доступно ретрансляторов: 3 из 4/s
 		})
 	).toBeVisible();
-	await expect(page.getByRole('row', { name: /Хранилище R2.*Работает 17 мс/s })).toBeVisible();
+	await expect(page.getByRole('row', { name: /Хранилище S3.*Работает 17 мс/s })).toBeVisible();
 	await expect.poll(() => requests).toBe(1);
 
 	await page.clock.fastForward(59_999);
@@ -186,7 +186,7 @@ test('deduplicates the direct status load and preserves cache-driven polling', a
 	await page.clock.fastForward(1);
 
 	await expect.poll(() => requests).toBe(2);
-	await expect(page.getByRole('row', { name: /Хранилище R2.*Не работает 17 мс/s })).toBeVisible();
+	await expect(page.getByRole('row', { name: /Хранилище S3.*Не работает 17 мс/s })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'странице состояния' })).toHaveCount(0);
 	await expect(page.getByText('Проверено', { exact: false })).toBeVisible();
 	await expect(page.getByRole('tab')).toHaveCount(0);

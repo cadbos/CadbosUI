@@ -15,9 +15,10 @@
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { media } from './helpers/media';
 
 interface ResourceImage {
-	sourceUrl: string;
+	image: ReturnType<typeof media>;
 	createdAt: number;
 }
 
@@ -101,8 +102,8 @@ test('lists uploaded photos newest first with their dates', async ({ page }) => 
 	await mockResourcesPages(page, {
 		0: {
 			images: [
-				{ sourceUrl: 'https://cdn.example.test/newest.jpg', createdAt: newest },
-				{ sourceUrl: 'https://cdn.example.test/oldest.jpg', createdAt: oldest }
+				{ image: media(2, 'https://cdn.example.test/newest.jpg'), createdAt: newest },
+				{ image: media(1, 'https://cdn.example.test/oldest.jpg'), createdAt: oldest }
 			],
 			hasMore: false
 		}
@@ -130,8 +131,14 @@ test('lists uploaded photos newest first with their dates', async ({ page }) => 
 test('loads more photos when scrolling near the end of the list', async ({ page }) => {
 	await authenticate(page);
 	await mockResourcesPages(page, {
-		0: { images: [{ sourceUrl: 'https://cdn.example.test/one.jpg', createdAt: 1 }], hasMore: true },
-		1: { images: [{ sourceUrl: 'https://cdn.example.test/two.jpg', createdAt: 2 }], hasMore: false }
+		0: {
+			images: [{ image: media(1, 'https://cdn.example.test/one.jpg'), createdAt: 1 }],
+			hasMore: true
+		},
+		1: {
+			images: [{ image: media(2, 'https://cdn.example.test/two.jpg'), createdAt: 2 }],
+			hasMore: false
+		}
 	});
 
 	await page.goto('/resources');
@@ -182,7 +189,7 @@ test('uses a resource photo to start a new generation', async ({ page }) => {
 	});
 	await mockResourcesPages(page, {
 		0: {
-			images: [{ sourceUrl: 'https://cdn.example.test/resource-photo.jpg', createdAt: 1 }],
+			images: [{ image: media(1, 'https://cdn.example.test/resource-photo.jpg'), createdAt: 1 }],
 			hasMore: false
 		}
 	});
@@ -249,8 +256,8 @@ test('using a resource photo while a project tab is open opens the scratch tab i
 						generations: [
 							{
 								id: '00000000-0000-4000-8000-000000000100',
-								url: 'https://cdn.example.test/living-room.webp',
-								sourceUrl: 'https://cdn.example.test/room.jpg',
+								image: media(3, 'https://cdn.example.test/living-room.webp'),
+								source: media(2, 'https://cdn.example.test/room.jpg'),
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 1),
 								amount: 5,
@@ -264,7 +271,7 @@ test('using a resource photo while a project tab is open opens the scratch tab i
 	});
 	await mockResourcesPages(page, {
 		0: {
-			images: [{ sourceUrl: 'https://cdn.example.test/resource-photo.jpg', createdAt: 1 }],
+			images: [{ image: media(1, 'https://cdn.example.test/resource-photo.jpg'), createdAt: 1 }],
 			hasMore: false
 		}
 	});
