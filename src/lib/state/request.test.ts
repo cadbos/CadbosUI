@@ -218,6 +218,7 @@ describe('serialization', () => {
 			textureReplacementMasked: false,
 			lightSettingsPresetIds: [],
 			lightSettingsInstruction: '',
+			objectAdderPrompt: '',
 			currentRender: undefined
 		});
 	});
