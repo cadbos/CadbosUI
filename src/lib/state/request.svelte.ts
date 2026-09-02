@@ -16,6 +16,8 @@ import { z } from 'zod';
 import {
 	OUTPUT_FORMATS,
 	type LightSettingsRequest,
+	type ObjectAdderRect,
+	type ObjectAdderRequest,
 	type ObjectReplacementRequest,
 	type OutputFormat,
 	type RenderRequest,
@@ -53,6 +55,7 @@ export const EDIT_OPERATION_TYPES = [
 	'change-surface-color',
 	'freeform',
 	'add-object',
+	'add-object-reference',
 	'remove-object',
 	'light-settings',
 	'upscale'
@@ -90,6 +93,12 @@ export interface ActiveTextureReplacementJob {
 export interface ActiveLightSettingsJob {
 	id: string;
 	instruction: string;
+	sourceRender?: RenderResult;
+}
+
+export interface ActiveObjectAdderJob {
+	id: string;
+	prompt: string;
 	sourceRender?: RenderResult;
 }
 
@@ -141,6 +150,7 @@ export interface RequestJSON {
 	textureReplacementMasked?: boolean;
 	lightSettingsPresetIds?: string[];
 	lightSettingsInstruction?: string;
+	objectAdderPrompt?: string;
 	promptOverride: string | null;
 	currentRender?: RenderResult;
 	status: RequestStatus;
@@ -175,6 +185,7 @@ export interface NormalizedRequest {
 	lightSettingsPresetIds: string[];
 	lightSettingsInstruction: string;
 	lightSettingsPrompt: string;
+	objectAdderPrompt: string;
 	editPrompt: string;
 	styleTransferPrompt: string;
 	prompt: string;
@@ -202,6 +213,8 @@ const replacementSurfaceSchema = z.string().max(200);
 const textureReplacementJobIdSchema = z.uuid();
 const lightSettingsInstructionSchema = z.string().max(500);
 export const lightSettingsJobIdSchema = z.uuid();
+const objectAdderPromptSchema = z.string().max(2000);
+export const objectAdderJobIdSchema = z.uuid();
 // A fixture's on/off ids are mutually exclusive (setLightSettingsFixtureState
 // enforces that in the UI), but ids arriving here — from a shared URL or a
 // persisted session — aren't guaranteed to respect that. Collapse each
@@ -281,6 +294,7 @@ const requestJsonSchema = z
 		textureReplacementMasked: z.boolean().default(false),
 		lightSettingsPresetIds: lightSettingsPresetIdsSchema.default([]),
 		lightSettingsInstruction: lightSettingsInstructionSchema.default(''),
+		objectAdderPrompt: objectAdderPromptSchema.default(''),
 		promptOverride: z.string().nullable(),
 		currentRender: renderResultSchema.optional(),
 		status: z.enum(['idle', 'rendering', 'error'])
@@ -443,6 +457,17 @@ function cloneActiveLightSettingsJob(
 	return {
 		id: job.id,
 		instruction: job.instruction,
+		sourceRender: cloneRenderResult(job.sourceRender)
+	};
+}
+
+function cloneActiveObjectAdderJob(
+	job: ActiveObjectAdderJob | undefined
+): ActiveObjectAdderJob | undefined {
+	if (!job) return undefined;
+	return {
+		id: job.id,
+		prompt: job.prompt,
 		sourceRender: cloneRenderResult(job.sourceRender)
 	};
 }
@@ -612,6 +637,8 @@ export class RequestState {
 	lightSettingsPresetIds = $state<string[]>([]);
 	lightSettingsInstruction = $state('');
 	activeLightSettingsJob = $state<ActiveLightSettingsJob | undefined>(undefined);
+	objectAdderPrompt = $state('');
+	activeObjectAdderJob = $state<ActiveObjectAdderJob | undefined>(undefined);
 	// Whether the currently displayed render is already the resolved result of a
 	// masked texture-replacement submission — Workspace.svelte reads this to know
 	// when to swap the canvas from the mask-drawing surface back to the render
@@ -683,6 +710,10 @@ export class RequestState {
 
 	get activeLightSettingsJobId(): string | undefined {
 		return this.activeLightSettingsJob?.id;
+	}
+
+	get activeObjectAdderJobId(): string | undefined {
+		return this.activeObjectAdderJob?.id;
 	}
 
 	addFragment(input: AddFragmentInput): string {
@@ -959,6 +990,30 @@ export class RequestState {
 		};
 	}
 
+	setObjectAdderPrompt(prompt: string): void {
+		this.objectAdderPrompt = objectAdderPromptSchema.parse(prompt);
+	}
+
+	setActiveObjectAdderJobId(id: string | undefined): void {
+		const parsed = objectAdderJobIdSchema.optional().parse(id);
+		if (parsed === this.activeObjectAdderJob?.id) return;
+		this.activeObjectAdderJob = parsed
+			? { id: parsed, prompt: this.objectAdderPrompt.trim() }
+			: undefined;
+	}
+
+	setActiveObjectAdderJob(
+		id: string,
+		sourceRender: RenderResult | undefined,
+		prompt: string
+	): void {
+		this.activeObjectAdderJob = {
+			id: objectAdderJobIdSchema.parse(id),
+			prompt: objectAdderPromptSchema.parse(prompt).trim(),
+			sourceRender: cloneRenderResult(sourceRender)
+		};
+	}
+
 	setTextureReplacementSurface(surface: string): void {
 		this.textureReplacementSurface = replacementSurfaceSchema.parse(surface);
 	}
@@ -1138,6 +1193,16 @@ export class RequestState {
 		const missing: ValidationField[] = [];
 		if (!this.hasEditSource()) missing.push('image');
 		if (!this.lightSettingsPrompt.trim()) missing.push('instruction');
+		return { valid: missing.length === 0, missing };
+	}
+
+	// The object photo/placement themselves aren't tracked here (see
+	// $lib/state/object-adder.svelte.ts) — only the edit source is store
+	// content, so that's all this checks. ObjectAdderPanel additionally
+	// requires objectAdder.objectImage/rect before enabling submit.
+	validateObjectAdder(): ValidationResult {
+		const missing: ValidationField[] = [];
+		if (!this.hasEditSource()) missing.push('image');
 		return { valid: missing.length === 0, missing };
 	}
 
@@ -1354,6 +1419,13 @@ export class RequestState {
 		return this.#resolveSourceFor('current-result');
 	}
 
+	// Synchronous counterpart to resolveEditSource() for display purposes
+	// (Workspace.svelte mounts ObjectAdderCanvas against this) — never
+	// triggers an upload, same as textureReplacementSourceUrl() etc.
+	editSourcePreviewUrl(): string | undefined {
+		return this.#sourceUrlFor('current-result');
+	}
+
 	async toRenderRequest(): Promise<RenderRequest | null> {
 		const validation = this.validate();
 		if (!validation.valid) return null;
@@ -1443,6 +1515,31 @@ export class RequestState {
 		};
 	}
 
+	// Takes the object photo/placement as parameters rather than reading them
+	// off this store — see $lib/state/object-adder.svelte.ts, which owns them
+	// (a spatial canvas placement isn't request-model "content" any more than
+	// MaskEditor's brush strokes are; only the resulting job/prompt are).
+	async toObjectAdderRequest(
+		objectImage: { url: string; hash?: string },
+		rect: ObjectAdderRect
+	): Promise<ObjectAdderRequest | null> {
+		const validation = this.validateObjectAdder();
+		if (!validation.valid) return null;
+		const source = await this.resolveEditSource();
+		if (!source) return null;
+		const { sessionId } = await this.ensureProjectSession();
+		const prompt = this.objectAdderPrompt.trim();
+		return {
+			image: source.url,
+			...(source.hash ? { imageHash: source.hash } : {}),
+			objectImage: objectImage.url,
+			...(objectImage.hash ? { objectImageHash: objectImage.hash } : {}),
+			rect,
+			...(prompt ? { prompt } : {}),
+			sessionId
+		};
+	}
+
 	toJSON(): RequestJSON {
 		return {
 			id: this.id,
@@ -1468,6 +1565,7 @@ export class RequestState {
 			textureReplacementMasked: this.textureReplacementMasked,
 			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
 			lightSettingsInstruction: this.lightSettingsInstruction,
+			objectAdderPrompt: this.objectAdderPrompt,
 			promptOverride: this.promptOverride,
 			currentRender: cloneRenderResult(this.currentRender),
 			status: this.status
@@ -1507,6 +1605,8 @@ export class RequestState {
 		this.lightSettingsPresetIds = [...parsed.lightSettingsPresetIds];
 		this.lightSettingsInstruction = parsed.lightSettingsInstruction;
 		this.activeLightSettingsJob = undefined;
+		this.objectAdderPrompt = parsed.objectAdderPrompt;
+		this.activeObjectAdderJob = undefined;
 		this.promptOverride = parsed.promptOverride;
 		const restoredRender = cloneRenderResult(parsed.currentRender);
 		if (restoredRender) {
@@ -1548,6 +1648,7 @@ export class RequestState {
 			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
 			lightSettingsInstruction: this.lightSettingsInstruction,
 			lightSettingsPrompt: this.lightSettingsPrompt,
+			objectAdderPrompt: this.objectAdderPrompt,
 			editPrompt: this.editPrompt,
 			styleTransferPrompt: this.styleTransferPrompt,
 			prompt: this.prompt
@@ -1594,6 +1695,8 @@ export class RequestState {
 		this.lightSettingsPresetIds = [];
 		this.lightSettingsInstruction = '';
 		this.activeLightSettingsJob = undefined;
+		this.objectAdderPrompt = '';
+		this.activeObjectAdderJob = undefined;
 		this.promptOverride = null;
 		this.#renderHistory = [];
 		this.#historyIndex = -1;
@@ -1665,6 +1768,8 @@ export class RequestState {
 		this.lightSettingsPresetIds = [...source.lightSettingsPresetIds];
 		this.lightSettingsInstruction = source.lightSettingsInstruction;
 		this.activeLightSettingsJob = cloneActiveLightSettingsJob(source.activeLightSettingsJob);
+		this.objectAdderPrompt = source.objectAdderPrompt;
+		this.activeObjectAdderJob = cloneActiveObjectAdderJob(source.activeObjectAdderJob);
 		this.promptOverride = source.promptOverride;
 		// currentRender/previousRender are derived from the history stack, not
 		// settable fields — copy the stack itself (deep-cloned, so neither

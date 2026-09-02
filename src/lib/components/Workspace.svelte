@@ -24,6 +24,7 @@ before the Change Date. See LICENSE for complete terms.
 	import RenderResult from '$lib/components/RenderResult.svelte';
 	import EditPanel from '$lib/components/EditPanel.svelte';
 	import MaskEditor from '$lib/components/MaskEditor.svelte';
+	import ObjectAdderCanvas from '$lib/components/ObjectAdderCanvas.svelte';
 	import PromptViews from '$lib/components/PromptViews.svelte';
 	import ScenesDrawer from '$lib/components/ScenesDrawer.svelte';
 	import ShareProjectDialog from '$lib/components/ShareProjectDialog.svelte';
@@ -40,6 +41,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
+	import { objectAdder } from '$lib/state/object-adder.svelte';
 	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
 	import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
 	import {
@@ -158,6 +160,19 @@ before the Change Date. See LICENSE for complete terms.
 		request.textureMaskUploading || request.activeTextureReplacementJobId !== undefined
 	);
 
+	// Same idea as showMaskOnCanvas above, for the "add object by reference
+	// photo" sub-mode: the canvas swaps to the drag/resize placement surface
+	// instead of the plain upload/result whenever that sub-mode is active and
+	// there's a scene photo to place the object onto.
+	const showObjectAdderCanvas = $derived(
+		mode === 'edit' &&
+			activeEditTool === 'add-object' &&
+			objectAdder.referenceMode &&
+			request.hasEditSource() &&
+			!objectAdder.resultReady
+	);
+	const objectAdderCanvasLocked = $derived(request.activeObjectAdderJobId !== undefined);
+
 	$effect(() => {
 		if (auth.canLoadGeneratedImages) void generatedImages.load();
 		else generatedImages.clear();
@@ -172,6 +187,22 @@ before the Change Date. See LICENSE for complete terms.
 			request
 				.ensureTextureReplacementSourceUploaded()
 				.catch((error: unknown) => logBoundaryError('workspace.maskEditorSourceUpload', error));
+		}
+	});
+
+	// Same reasoning as above, for ObjectAdderCanvas: without this, its scene
+	// image starts out as request.editSourcePreviewUrl()'s local blob:
+	// fallback and later swaps to the real URL once something finally
+	// triggers the deferred upload — and ObjectAdderCanvas resets the placed
+	// object's rect whenever its sceneImageUrl prop changes (a genuinely
+	// different photo shouldn't keep a stale placement), so that swap would
+	// wipe out whatever the user had just placed. Resolving eagerly here
+	// means the canvas only ever sees the final URL.
+	$effect(() => {
+		if (showObjectAdderCanvas) {
+			request
+				.resolveEditSource()
+				.catch((error: unknown) => logBoundaryError('workspace.objectAdderSourceUpload', error));
 		}
 	});
 
@@ -666,6 +697,21 @@ before the Change Date. See LICENSE for complete terms.
 							<MaskEditor
 								sourceUrl={request.textureReplacementSourceUrl()}
 								disabled={maskEditorLocked}
+							/>
+							{#snippet failed(_error: unknown, reset: () => void)}
+								<p class="boundary-failed">{t('boundary.failed')}</p>
+								<button type="button" class="boundary-retry" onclick={reset}>
+									{t('boundary.retry')}
+								</button>
+							{/snippet}
+						</svelte:boundary>
+					{:else if showObjectAdderCanvas}
+						<svelte:boundary
+							onerror={(error: unknown) => logBoundaryError('workspace.objectAdderCanvas', error)}
+						>
+							<ObjectAdderCanvas
+								sceneImageUrl={request.editSourcePreviewUrl()}
+								disabled={objectAdderCanvasLocked}
 							/>
 							{#snippet failed(_error: unknown, reset: () => void)}
 								<p class="boundary-failed">{t('boundary.failed')}</p>

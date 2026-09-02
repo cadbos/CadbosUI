@@ -29,11 +29,13 @@ before the Change Date. See LICENSE for complete terms.
 	import { currency } from '$lib/state/currency.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
+	import { objectAdder } from '$lib/state/object-adder.svelte';
 	import { buildWorkspaceUrl, slugToTool, type ToolId } from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 	import EditAddObjectTool from '$lib/components/EditAddObjectTool.svelte';
 	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
 	import LightSettingsPanel from '$lib/components/LightSettingsPanel.svelte';
+	import ObjectAdderPanel from '$lib/components/ObjectAdderPanel.svelte';
 	import ObjectReplacementPanel from '$lib/components/ObjectReplacementPanel.svelte';
 	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
 
@@ -72,11 +74,13 @@ before the Change Date. See LICENSE for complete terms.
 	let objectReplacementOpened = $state(false);
 	let textureReplacementOpened = $state(false);
 	let lightSettingsOpened = $state(false);
+	let objectAdderOpened = $state(false);
 
 	$effect(() => {
 		if (activeTool === 'object-replacement') objectReplacementOpened = true;
 		if (activeTool === 'texture-replacement') textureReplacementOpened = true;
 		if (activeTool === 'light-settings') lightSettingsOpened = true;
+		if (objectAdder.referenceMode) objectAdderOpened = true;
 	});
 
 	const toolTabs = createTabController({
@@ -200,6 +204,29 @@ before the Change Date. See LICENSE for complete terms.
 		</div>
 
 		<div class="tool-content">
+			{#if activeTool === 'add-object'}
+				<div class="mode-toggle" role="tablist" aria-label={t('edit.tool.addObject')}>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={!objectAdder.referenceMode}
+						class:active={!objectAdder.referenceMode}
+						onclick={() => objectAdder.setReferenceMode(false)}
+					>
+						{t('edit.addObject.mode.presets')}
+					</button>
+					<button
+						type="button"
+						role="tab"
+						aria-selected={objectAdder.referenceMode}
+						class:active={objectAdder.referenceMode}
+						onclick={() => objectAdder.setReferenceMode(true)}
+					>
+						{t('edit.addObject.mode.reference')}
+					</button>
+				</div>
+			{/if}
+
 			{#if activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'light-settings'}
 				<div
 					class="tool-panel"
@@ -249,7 +276,7 @@ before the Change Date. See LICENSE for complete terms.
 								{applying ? t('edit.applying') : t('edit.apply')}
 							</button>
 						</div>
-					{:else if activeTool === 'add-object'}
+					{:else if activeTool === 'add-object' && !objectAdder.referenceMode}
 						<EditAddObjectTool
 							disabled={toolDisabled || !hasEditTarget}
 							{applying}
@@ -333,6 +360,29 @@ before the Change Date. See LICENSE for complete terms.
 					</svelte:boundary>
 				</div>
 			{/if}
+
+			{#if objectAdderOpened}
+				<div
+					class="tool-panel"
+					role="tabpanel"
+					id="edit-tool-panel-add-object-reference"
+					aria-labelledby="edit-tool-tab-add-object"
+					tabindex="0"
+					hidden={activeTool !== 'add-object' || !objectAdder.referenceMode}
+				>
+					<svelte:boundary
+						onerror={(err: unknown) => logBoundaryError('editPanel.objectAdder', err)}
+					>
+						<ObjectAdderPanel />
+						{#snippet failed(_error: unknown, reset: () => void)}
+							<p class="error">{t('boundary.failed')}</p>
+							<button type="button" class="btn-apply" onclick={reset}>
+								{t('boundary.retry')}
+							</button>
+						{/snippet}
+					</svelte:boundary>
+				</div>
+			{/if}
 		</div>
 	</div>
 
@@ -404,6 +454,41 @@ before the Change Date. See LICENSE for complete terms.
 
 	.tool-panel[hidden] {
 		display: none;
+	}
+
+	.mode-toggle {
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.25rem;
+		background: var(--color-background);
+		border-radius: 12px;
+	}
+
+	.mode-toggle button {
+		flex: 1;
+		padding: 0.5rem 1.25rem;
+		font: inherit;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--color-muted);
+		background: transparent;
+		border: none;
+		border-radius: 9px;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			color 0.15s;
+	}
+
+	.mode-toggle button:hover:not(.active) {
+		background: var(--color-surface-hover);
+		color: var(--color-text);
+	}
+
+	.mode-toggle button.active {
+		background: var(--color-surface);
+		color: var(--color-text);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
 	}
 
 	.tool-tabs button {
