@@ -33,8 +33,8 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "cadbos-auth",
-			"database_id": "d1f2f49c-bb39-473c-ae35-2d78eebcbc53",
+			"database_name": "cadbos-temp",
+			"database_id": "f111d591-8ba0-48fe-89d4-d8ea3677b5f0",
 			"migrations_dir": "migrations"
 		}
 	],
