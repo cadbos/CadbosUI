@@ -71,7 +71,9 @@ before the Change Date. See LICENSE for complete terms.
 		referenceTab === 'custom' ? [] : stylePresetsFor(request.sceneType, referenceTab)
 	);
 	const selectedPresetId = $derived(
-		currentPresets.find((preset) => preset.src === request.styleReferenceImage?.url)?.id ?? null
+		request.styleReferenceImage && 'stylePresetId' in request.styleReferenceImage
+			? request.styleReferenceImage.stylePresetId
+			: null
 	);
 	const activePresetIndex = $derived(
 		Math.max(
@@ -120,6 +122,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	function selectPreset(preset: StylePreset): void {
 		request.setStyleReferenceImage({
+			stylePresetId: preset.id,
 			url: preset.src,
 			mime: preset.mime
 		});

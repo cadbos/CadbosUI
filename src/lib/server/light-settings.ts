@@ -12,7 +12,6 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { LightSettingsRequest } from '$lib/api/contract';
 import {
 	ComfyUiError,
 	createComfyUiClient,
@@ -70,7 +69,7 @@ export async function cancelLightSettings(
 
 export async function submitLightSettings(
 	platform: App.Platform | undefined,
-	request: LightSettingsRequest,
+	request: { image: string; instruction: string },
 	applicationOrigin: string,
 	jobId: string
 ): Promise<string> {

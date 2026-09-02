@@ -23,6 +23,7 @@ import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { listDistinctSourceImages } from '$lib/server/generations';
+import { mediaAccessBatch } from '$lib/server/media-access';
 
 const DEFAULT_RESOURCES_PAGE_OFFSET = 0;
 const DEFAULT_RESOURCES_PAGE_SIZE = 30;
@@ -58,12 +59,24 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	if (!userId) return apiError(500, 'account_error', 'Account record not found');
 
 	const page = await listDistinctSourceImages(db, userId, parsed.data.offset, parsed.data.size);
-	return json({
-		images: page.images,
-		pagination: {
-			offset: parsed.data.offset,
-			size: parsed.data.size,
-			hasMore: page.hasMore
-		}
-	} satisfies ResourcesResponse);
+	const access = await mediaAccessBatch(
+		db,
+		platform,
+		page.images.map((image) => image.mediaId)
+	);
+	if (!access) return apiError(404, 'image_not_found', 'Image not found');
+	return json(
+		{
+			images: page.images.map((image) => ({
+				image: access.get(image.mediaId)!,
+				createdAt: image.createdAt
+			})),
+			pagination: {
+				offset: parsed.data.offset,
+				size: parsed.data.size,
+				hasMore: page.hasMore
+			}
+		} satisfies ResourcesResponse,
+		{ headers: { 'cache-control': 'private, no-store' } }
+	);
 };

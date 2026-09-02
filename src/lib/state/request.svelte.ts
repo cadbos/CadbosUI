@@ -26,6 +26,7 @@ import {
 } from '$lib/api/contract';
 import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 import { LIGHT_SETTINGS_FIXTURES, LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
+import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export type { OutputFormat };
 
@@ -33,13 +34,20 @@ export const SCENE_TYPES = ['interior', 'exterior'] as const;
 
 export type SceneType = (typeof SCENE_TYPES)[number];
 
-export interface ImageInput {
-	url: string;
+export interface ManagedImageInput {
+	mediaKey: string;
 	mime?: string;
 	size?: number;
-	hash?: string;
 	dimensions?: [number, number];
 }
+
+export interface StylePresetImageInput {
+	stylePresetId: string;
+	url: string;
+	mime?: string;
+}
+
+export type ImageInput = ManagedImageInput | StylePresetImageInput;
 
 export interface PromptFragment {
 	id: string;
@@ -67,7 +75,7 @@ export interface EditOperation {
 
 export interface RenderResult {
 	id: string;
-	outputUrls: string[];
+	outputKey: string;
 	cost: number;
 	balance: number;
 	parentId?: string;
@@ -95,7 +103,7 @@ export interface ActiveLightSettingsJob {
 
 export interface TextureMaskUploadOperation {
 	epoch: number;
-	sourceUrl: string;
+	sourceKey: string;
 }
 
 export type RequestStatus = 'idle' | 'rendering' | 'error';
@@ -124,7 +132,7 @@ export interface RequestJSON {
 	objectReferenceImage?: ImageInput;
 	textureReferenceImage?: ImageInput;
 	textureMaskImage?: ImageInput;
-	textureMaskSourceUrl?: string;
+	textureMaskSourceKey?: string;
 	promptFragments: PromptFragment[];
 	editPrompt: string;
 	outputFormat: OutputFormat;
@@ -158,19 +166,18 @@ export interface NormalizedRequest {
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
 	styleSourceMode: ImageSourceMode;
-	// The URL request builders actually send (image?.url, or — in
-	// current-result mode — currentRender's own output). Comparing raw
+	// The media identity request builders actually send. Comparing raw
 	// `image` alone can't tell two states with different current renders
 	// apart when both use current-result mode, even though they'd submit
 	// different request bodies.
-	styleTransferSourceUrl: string | undefined;
+	styleTransferSourceKey: string | undefined;
 	objectReplacementObject: string;
 	objectReplacementSourceMode: ImageSourceMode;
-	objectReplacementSourceUrl: string | undefined;
+	objectReplacementSourceKey: string | undefined;
 	objectReplacementScale: number;
 	textureReplacementSurface: string;
 	textureReplacementSourceMode: ImageSourceMode;
-	textureReplacementSourceUrl: string | undefined;
+	textureReplacementSourceKey: string | undefined;
 	textureReplacementMasked: boolean;
 	lightSettingsPresetIds: string[];
 	lightSettingsInstruction: string;
@@ -224,13 +231,19 @@ const lightSettingsPresetIdsSchema = z.array(z.string()).transform((ids) => {
 	);
 });
 
-const imageInputSchema = z.object({
-	url: z.string().trim().url(),
-	mime: z.string().min(1).optional(),
-	size: z.number().nonnegative().optional(),
-	hash: z.string().min(1).optional(),
-	dimensions: z.tuple([z.number().positive(), z.number().positive()]).optional()
-});
+const imageInputSchema = z.union([
+	z.object({
+		mediaKey: z.string().min(1),
+		mime: z.string().min(1).optional(),
+		size: z.number().nonnegative().optional(),
+		dimensions: z.tuple([z.number().positive(), z.number().positive()]).optional()
+	}),
+	z.object({
+		stylePresetId: z.string().min(1),
+		url: z.string().trim().url(),
+		mime: z.string().min(1).optional()
+	})
+]);
 const optionalImageInputSchema = imageInputSchema.optional();
 
 const promptFragmentSchema = z.object({
@@ -247,7 +260,7 @@ const editOperationSchema = z.object({
 
 const renderResultSchema = z.object({
 	id: z.string().min(1),
-	outputUrls: z.array(z.string().min(1)).min(1),
+	outputKey: z.string().min(1),
 	cost: z.number(),
 	balance: z.number(),
 	parentId: z.string().optional(),
@@ -263,7 +276,7 @@ const requestJsonSchema = z
 		objectReferenceImage: optionalImageInputSchema,
 		textureReferenceImage: optionalImageInputSchema,
 		textureMaskImage: optionalImageInputSchema,
-		textureMaskSourceUrl: z.string().min(1).optional(),
+		textureMaskSourceKey: z.string().min(1).optional(),
 		promptFragments: z.array(promptFragmentSchema),
 		editPrompt: z.string().default(''),
 		outputFormat: outputFormatSchema,
@@ -372,13 +385,28 @@ function renumberFragments(fragments: PromptFragment[]): PromptFragment[] {
 
 function cloneImage(image: ImageInput | undefined): ImageInput | undefined {
 	if (!image) return undefined;
+	if ('stylePresetId' in image) {
+		return {
+			stylePresetId: image.stylePresetId,
+			url: image.url,
+			...(image.mime !== undefined ? { mime: image.mime } : {})
+		};
+	}
 	return {
-		url: image.url,
+		mediaKey: image.mediaKey,
 		...(image.mime !== undefined ? { mime: image.mime } : {}),
 		...(image.size !== undefined ? { size: image.size } : {}),
-		...(image.hash !== undefined ? { hash: image.hash } : {}),
 		...(image.dimensions ? { dimensions: [...image.dimensions] } : {})
 	};
+}
+
+export function imageUrl(image: ImageInput | undefined): string | undefined {
+	if (!image) return undefined;
+	return 'stylePresetId' in image ? image.url : mediaAccess.get(image.mediaKey)?.url;
+}
+
+function managedImageKey(image: ImageInput | undefined): string | undefined {
+	return image && 'mediaKey' in image ? image.mediaKey : undefined;
 }
 
 function cloneFragment(fragment: PromptFragment): PromptFragment {
@@ -405,7 +433,7 @@ function cloneRenderResult(render: RenderResult | undefined): RenderResult | und
 	if (!render) return undefined;
 	return {
 		id: render.id,
-		outputUrls: [...render.outputUrls],
+		outputKey: render.outputKey,
 		cost: render.cost,
 		balance: render.balance,
 		...(render.parentId !== undefined ? { parentId: render.parentId } : {}),
@@ -478,7 +506,7 @@ export function renderResultFromResponse(
 ): RenderResult {
 	return {
 		id: crypto.randomUUID(),
-		outputUrls: [response.outputUrl],
+		outputKey: mediaAccess.normalize(response.output).key,
 		cost: response.cost,
 		balance: response.balance,
 		parentId: opts?.parentId,
@@ -587,7 +615,7 @@ export class RequestState {
 	objectReferenceImage = $state<ImageInput | undefined>(undefined);
 	textureReferenceImage = $state<ImageInput | undefined>(undefined);
 	textureMaskImage = $state<ImageInput | undefined>(undefined);
-	textureMaskSourceUrl = $state<string | undefined>(undefined);
+	textureMaskSourceKey = $state<string | undefined>(undefined);
 	promptFragments = $state<PromptFragment[]>([]);
 	editPrompt = $state('');
 	outputFormat = $state<OutputFormat>('webp');
@@ -811,33 +839,33 @@ export class RequestState {
 		this.textureMaskUploading = false;
 		if (image === undefined) {
 			this.textureMaskImage = undefined;
-			this.textureMaskSourceUrl = undefined;
+			this.textureMaskSourceKey = undefined;
 			return;
 		}
-		const sourceUrl = this.textureReplacementSourceUrl();
-		if (!sourceUrl) return;
+		const sourceKey = this.textureReplacementSourceKey();
+		if (!sourceKey) return;
 		this.textureMaskImage = cloneImage(optionalImageInputSchema.parse(image));
-		this.textureMaskSourceUrl = sourceUrl;
+		this.textureMaskSourceKey = sourceKey;
 	}
 
 	beginTextureMaskUpload(): TextureMaskUploadOperation | null {
-		const sourceUrl = this.textureReplacementSourceUrl();
-		if (!sourceUrl || !this.textureReplacementMasked) return null;
+		const sourceKey = this.textureReplacementSourceKey();
+		if (!sourceKey || !this.textureReplacementMasked) return null;
 		this.#textureMaskUploadEpoch += 1;
 		this.textureMaskUploading = true;
-		return { epoch: this.#textureMaskUploadEpoch, sourceUrl };
+		return { epoch: this.#textureMaskUploadEpoch, sourceKey };
 	}
 
 	commitTextureMaskUpload(image: ImageInput, operation: TextureMaskUploadOperation): boolean {
 		if (
 			!this.textureReplacementMasked ||
 			operation.epoch !== this.#textureMaskUploadEpoch ||
-			operation.sourceUrl !== this.textureReplacementSourceUrl()
+			operation.sourceKey !== this.textureReplacementSourceKey()
 		) {
 			return false;
 		}
 		this.textureMaskImage = cloneImage(optionalImageInputSchema.parse(image));
-		this.textureMaskSourceUrl = operation.sourceUrl;
+		this.textureMaskSourceKey = operation.sourceKey;
 		this.textureMaskUploading = false;
 		return true;
 	}
@@ -848,8 +876,8 @@ export class RequestState {
 
 	textureMaskMatchesSource(): boolean {
 		return (
-			this.textureMaskImage?.url !== undefined &&
-			this.textureMaskSourceUrl === this.textureReplacementSourceUrl()
+			managedImageKey(this.textureMaskImage) !== undefined &&
+			this.textureMaskSourceKey === this.textureReplacementSourceKey()
 		);
 	}
 
@@ -1015,10 +1043,10 @@ export class RequestState {
 	// cost/balance (balance-after + cost-of-that-render), since no generation
 	// call was ever made for the upload itself.
 	#syntheticOriginalStep(firstRender: RenderResult): RenderResult | undefined {
-		if (!this.image) return undefined;
+		if (!this.image || !('mediaKey' in this.image)) return undefined;
 		return {
 			id: `${this.id}:original`,
-			outputUrls: [this.image.url],
+			outputKey: this.image.mediaKey,
 			cost: 0,
 			balance: firstRender.balance + firstRender.cost,
 			ts: 0
@@ -1103,21 +1131,21 @@ export class RequestState {
 
 	validate(): ValidationResult {
 		const missing: ValidationField[] = [];
-		if (!this.image?.url && !this.pendingImageFile) missing.push('image');
+		if (!managedImageKey(this.image) && !this.pendingImageFile) missing.push('image');
 		return { valid: missing.length === 0, missing };
 	}
 
 	validateStyleTransfer(): ValidationResult {
 		const missing: ValidationField[] = [];
 		if (!this.hasStyleTransferSource()) missing.push('image');
-		if (!this.styleReferenceImage?.url) missing.push('referenceImage');
+		if (!this.styleReferenceImage) missing.push('referenceImage');
 		return { valid: missing.length === 0, missing };
 	}
 
 	validateObjectReplacement(): ValidationResult {
 		const missing: ValidationField[] = [];
 		if (!this.hasObjectReplacementSource()) missing.push('image');
-		if (!this.objectReferenceImage?.url) missing.push('referenceImage');
+		if (!managedImageKey(this.objectReferenceImage)) missing.push('referenceImage');
 		if (!this.objectReplacementObject.trim()) missing.push('replacementObject');
 		return { valid: missing.length === 0, missing };
 	}
@@ -1125,7 +1153,7 @@ export class RequestState {
 	validateTextureReplacement(): ValidationResult {
 		const missing: ValidationField[] = [];
 		if (!this.hasTextureReplacementSource()) missing.push('image');
-		if (!this.textureReferenceImage?.url) missing.push('referenceImage');
+		if (!managedImageKey(this.textureReferenceImage)) missing.push('referenceImage');
 		if (this.textureReplacementMasked) {
 			if (!this.textureMaskMatchesSource()) missing.push('mask');
 		} else if (!this.textureReplacementSurface.trim()) {
@@ -1143,9 +1171,11 @@ export class RequestState {
 
 	#sourceUrlFor(mode: ImageSourceMode): string | undefined {
 		if (mode === 'current-result') {
-			return this.currentRender?.outputUrls[0] ?? this.image?.url ?? this.pendingImagePreviewUrl;
+			return this.currentRender
+				? mediaAccess.get(this.currentRender.outputKey)?.url
+				: (imageUrl(this.image) ?? this.pendingImagePreviewUrl);
 		}
-		return this.image?.url ?? this.pendingImagePreviewUrl;
+		return imageUrl(this.image) ?? this.pendingImagePreviewUrl;
 	}
 
 	// Sync "is there something to submit" check for button-enabled validation —
@@ -1164,21 +1194,18 @@ export class RequestState {
 		return this.image !== undefined || this.pendingImageFile !== undefined;
 	}
 
-	// Resolves the actual URL (and, when it came from a fresh upload, its
-	// content hash) for the outgoing request body. Triggers the deferred main-
+	// Resolves the managed media key for the outgoing request body. Triggers the deferred main-
 	// photo upload the first time it's needed — see #ensureImageUploaded().
-	async #resolveSourceFor(
-		mode: ImageSourceMode
-	): Promise<{ url: string; hash?: string } | undefined> {
+	async #resolveSourceFor(mode: ImageSourceMode): Promise<string | undefined> {
 		if (mode === 'current-result' && this.currentRender) {
-			return { url: this.currentRender.outputUrls[0] };
+			return this.currentRender.outputKey;
 		}
 		const image = await this.#ensureImageUploaded();
-		return image ? { url: image.url, hash: image.hash } : undefined;
+		return managedImageKey(image);
 	}
 
 	// Uploads the pending main photo the first time a generate call actually
-	// needs its resolved URL, then caches the result on `image` (via
+	// needs its media key, then caches the result on `image` (via
 	// setImage) so a second generate call in the same session — e.g.
 	// re-generating with a tweaked prompt — reuses it instead of re-uploading.
 	// Throws RequestImageUploadError on failure so callers can show an
@@ -1211,10 +1238,9 @@ export class RequestState {
 			const parsed = uploadResultSchema.safeParse(await response.json().catch(() => null));
 			if (!parsed.success) throw new RequestImageUploadError('upload response invalid');
 			uploaded = {
-				url: parsed.data.url,
+				mediaKey: mediaAccess.normalize(parsed.data.image).key,
 				mime: parsed.data.mime,
 				size: parsed.data.size,
-				hash: parsed.data.hash,
 				...(parsed.data.dimensions ? { dimensions: parsed.data.dimensions } : {})
 			};
 		} catch (error) {
@@ -1328,17 +1354,34 @@ export class RequestState {
 	// preview when nothing has actually been uploaded yet (same origin, so
 	// it's safe to draw into a canvas). Do not use these for building request
 	// bodies — that's what #resolveSourceFor is for, since a blob: URL isn't
-	// resolvable by the server.
+	// accepted by the key-only server contract.
 	styleTransferSourceUrl(): string | undefined {
 		return this.#sourceUrlFor(this.styleSourceMode);
+	}
+
+	styleTransferSourceKey(): string | undefined {
+		return this.#sourceKeyFor(this.styleSourceMode);
 	}
 
 	objectReplacementSourceUrl(): string | undefined {
 		return this.#sourceUrlFor(this.objectReplacementSourceMode);
 	}
 
+	objectReplacementSourceKey(): string | undefined {
+		return this.#sourceKeyFor(this.objectReplacementSourceMode);
+	}
+
 	textureReplacementSourceUrl(): string | undefined {
 		return this.#sourceUrlFor(this.textureReplacementSourceMode);
+	}
+
+	textureReplacementSourceKey(): string | undefined {
+		return this.#sourceKeyFor(this.textureReplacementSourceMode);
+	}
+
+	#sourceKeyFor(mode: ImageSourceMode): string | undefined {
+		if (mode === 'current-result' && this.currentRender) return this.currentRender.outputKey;
+		return managedImageKey(this.image);
 	}
 
 	// Edit tools (EditPanel.svelte: freeform/add-object/remove-object/
@@ -1350,7 +1393,7 @@ export class RequestState {
 		return this.#hasSourceFor('current-result');
 	}
 
-	async resolveEditSource(): Promise<{ url: string; hash?: string } | undefined> {
+	async resolveEditSource(): Promise<string | undefined> {
 		return this.#resolveSourceFor('current-result');
 	}
 
@@ -1358,11 +1401,11 @@ export class RequestState {
 		const validation = this.validate();
 		if (!validation.valid) return null;
 		const image = await this.#ensureImageUploaded();
-		if (!image) return null;
+		const imageKey = managedImageKey(image);
+		if (!imageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
-			image: image.url,
-			...(image.hash ? { imageHash: image.hash } : {}),
+			imageKey,
 			prompt: this.prompt,
 			outputFormat: this.outputFormat,
 			sessionId
@@ -1372,15 +1415,16 @@ export class RequestState {
 	async toStyleTransferRequest(): Promise<StyleTransferRequest | null> {
 		const validation = this.validateStyleTransfer();
 		if (!validation.valid) return null;
-		const source = await this.#resolveSourceFor(this.styleSourceMode);
-		if (!source || !this.styleReferenceImage) return null;
+		const imageKey = await this.#resolveSourceFor(this.styleSourceMode);
+		if (!imageKey || !this.styleReferenceImage) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		const prompt = this.styleTransferPrompt.trim();
 		const negativePrompt = this.styleNegativePrompt.trim();
 		return {
-			image: source.url,
-			...(source.hash ? { imageHash: source.hash } : {}),
-			referenceImage: this.styleReferenceImage.url,
+			imageKey,
+			...('stylePresetId' in this.styleReferenceImage
+				? { stylePresetId: this.styleReferenceImage.stylePresetId }
+				: { referenceImageKey: this.styleReferenceImage.mediaKey }),
 			outputFormat: this.outputFormat,
 			...(prompt ? { prompt } : {}),
 			...(negativePrompt ? { negativePrompt } : {}),
@@ -1392,13 +1436,13 @@ export class RequestState {
 	async toObjectReplacementRequest(): Promise<ObjectReplacementRequest | null> {
 		const validation = this.validateObjectReplacement();
 		if (!validation.valid) return null;
-		const source = await this.#resolveSourceFor(this.objectReplacementSourceMode);
-		if (!source || !this.objectReferenceImage) return null;
+		const imageKey = await this.#resolveSourceFor(this.objectReplacementSourceMode);
+		const referenceImageKey = managedImageKey(this.objectReferenceImage);
+		if (!imageKey || !referenceImageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
-			image: source.url,
-			...(source.hash ? { imageHash: source.hash } : {}),
-			referenceImage: this.objectReferenceImage.url,
+			imageKey,
+			referenceImageKey,
 			replacementObject: this.objectReplacementInstruction,
 			sessionId
 		};
@@ -1407,23 +1451,23 @@ export class RequestState {
 	async toTextureReplacementRequest(): Promise<TextureReplacementRequest | null> {
 		const validation = this.validateTextureReplacement();
 		if (!validation.valid) return null;
-		const source = await this.#resolveSourceFor(this.textureReplacementSourceMode);
-		if (!source || !this.textureReferenceImage) return null;
+		const imageKey = await this.#resolveSourceFor(this.textureReplacementSourceMode);
+		const referenceImageKey = managedImageKey(this.textureReferenceImage);
+		if (!imageKey || !referenceImageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		if (this.textureReplacementMasked) {
-			if (!this.textureMaskImage || !this.textureMaskMatchesSource()) return null;
+			const maskImageKey = managedImageKey(this.textureMaskImage);
+			if (!maskImageKey || !this.textureMaskMatchesSource()) return null;
 			return {
-				image: source.url,
-				...(source.hash ? { imageHash: source.hash } : {}),
-				referenceImage: this.textureReferenceImage.url,
-				mask: this.textureMaskImage.url,
+				imageKey,
+				referenceImageKey,
+				maskImageKey,
 				sessionId
 			};
 		}
 		return {
-			image: source.url,
-			...(source.hash ? { imageHash: source.hash } : {}),
-			referenceImage: this.textureReferenceImage.url,
+			imageKey,
+			referenceImageKey,
 			replacementSurface: this.textureReplacementSurface.trim(),
 			sessionId
 		};
@@ -1432,12 +1476,11 @@ export class RequestState {
 	async toLightSettingsRequest(): Promise<LightSettingsRequest | null> {
 		const validation = this.validateLightSettings();
 		if (!validation.valid) return null;
-		const source = await this.resolveEditSource();
-		if (!source) return null;
+		const imageKey = await this.resolveEditSource();
+		if (!imageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
-			image: source.url,
-			...(source.hash ? { imageHash: source.hash } : {}),
+			imageKey,
 			instruction: this.lightSettingsPrompt.trim(),
 			sessionId
 		};
@@ -1451,7 +1494,7 @@ export class RequestState {
 			objectReferenceImage: cloneImage(this.objectReferenceImage),
 			textureReferenceImage: cloneImage(this.textureReferenceImage),
 			textureMaskImage: cloneImage(this.textureMaskImage),
-			textureMaskSourceUrl: this.textureMaskSourceUrl,
+			textureMaskSourceKey: this.textureMaskSourceKey,
 			promptFragments: cloneFragments(this.promptFragments),
 			editPrompt: this.editPrompt,
 			outputFormat: this.outputFormat,
@@ -1487,7 +1530,7 @@ export class RequestState {
 		this.objectReferenceImage = cloneImage(parsed.objectReferenceImage);
 		this.textureReferenceImage = cloneImage(parsed.textureReferenceImage);
 		this.textureMaskImage = cloneImage(parsed.textureMaskImage);
-		this.textureMaskSourceUrl = parsed.textureMaskImage ? parsed.textureMaskSourceUrl : undefined;
+		this.textureMaskSourceKey = parsed.textureMaskImage ? parsed.textureMaskSourceKey : undefined;
 		this.promptFragments = cloneFragments(parsed.promptFragments);
 		this.editPrompt = parsed.editPrompt;
 		this.outputFormat = parsed.outputFormat;
@@ -1534,16 +1577,16 @@ export class RequestState {
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
 			styleSourceMode: this.styleSourceMode,
-			styleTransferSourceUrl: this.styleTransferSourceUrl(),
+			styleTransferSourceKey: this.styleTransferSourceKey(),
 			objectReplacementObject: this.objectReplacementObject,
 			objectReplacementSourceMode: this.objectReplacementSourceMode,
-			objectReplacementSourceUrl: this.objectReplacementSourceUrl(),
+			objectReplacementSourceKey: this.objectReplacementSourceKey(),
 			objectReplacementScale: this.objectReplacementScale,
 			textureReplacementSurface: this.textureReplacementMasked
 				? ''
 				: this.textureReplacementSurface,
 			textureReplacementSourceMode: this.textureReplacementSourceMode,
-			textureReplacementSourceUrl: this.textureReplacementSourceUrl(),
+			textureReplacementSourceKey: this.textureReplacementSourceKey(),
 			textureReplacementMasked: this.textureReplacementMasked,
 			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
 			lightSettingsInstruction: this.lightSettingsInstruction,
@@ -1574,7 +1617,7 @@ export class RequestState {
 		this.objectReferenceImage = undefined;
 		this.textureReferenceImage = undefined;
 		this.textureMaskImage = undefined;
-		this.textureMaskSourceUrl = undefined;
+		this.textureMaskSourceKey = undefined;
 		this.promptFragments = [];
 		this.editPrompt = '';
 		this.outputFormat = 'webp';
@@ -1639,7 +1682,7 @@ export class RequestState {
 		this.objectReferenceImage = cloneImage(source.objectReferenceImage);
 		this.textureReferenceImage = cloneImage(source.textureReferenceImage);
 		this.textureMaskImage = cloneImage(source.textureMaskImage);
-		this.textureMaskSourceUrl = source.textureMaskSourceUrl;
+		this.textureMaskSourceKey = source.textureMaskSourceKey;
 		this.promptFragments = cloneFragments(source.promptFragments);
 		this.editPrompt = source.editPrompt;
 		this.outputFormat = source.outputFormat;

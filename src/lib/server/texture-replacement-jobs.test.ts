@@ -19,6 +19,7 @@ import {
 	createTextureReplacementJob
 } from '$lib/server/texture-replacement-jobs';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedManagedMedia } from '$lib/server/testing/generation-fixtures';
 
 function seedAccount(db: D1Database): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -43,28 +44,23 @@ describe('texture replacement jobs', () => {
 	it('clamps completion spending at zero and warns', async () => {
 		const db = makeD1();
 		seedAccount(db);
+		const sceneMediaId = seedManagedMedia(db, 'scene.jpg');
+		const referenceMediaId = seedManagedMedia(db, 'reference.jpg');
 		await createTextureReplacementJob(db, {
 			id: 'job-1',
 			userId: 'user-1',
 			comfyPromptId: 'prompt-job-1',
-			sceneUrl: 'https://cdn.example.test/scene.jpg',
-			sceneHash: 'hash-scene',
+			sceneMediaId,
 			sessionId: 'session-1',
-			referenceUrl: 'https://cdn.example.test/reference.jpg',
+			referenceMediaId,
 			replacementSurface: 'oak flooring',
 			cost: 2,
 			createdAt: 10
 		});
+		const outputMediaId = seedManagedMedia(db, 'result.png');
 		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-		const job = await completeTextureReplacementJob(
-			db,
-			'user-1',
-			'job-1',
-			'https://cdn.example.test/result.png',
-			'',
-			20
-		);
+		const job = await completeTextureReplacementJob(db, 'user-1', 'job-1', outputMediaId, 20);
 
 		expect(job).toMatchObject({ status: 'completed', balanceAfter: 0, cost: 2 });
 		const credit = await db

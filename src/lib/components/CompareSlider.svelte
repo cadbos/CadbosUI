@@ -21,12 +21,9 @@ before the Change Date. See LICENSE for complete terms.
 		beforeAlt: string;
 		afterAlt: string;
 		handleLabel: string;
-		onBeforeLoad?: () => void;
-		onAfterLoad?: () => void;
 	}
 
-	let { beforeSrc, afterSrc, beforeAlt, afterAlt, handleLabel, onBeforeLoad, onAfterLoad }: Props =
-		$props();
+	let { beforeSrc, afterSrc, beforeAlt, afterAlt, handleLabel }: Props = $props();
 
 	let position = $state(50);
 	let frame = $state<HTMLDivElement | null>(null);
@@ -78,7 +75,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions (dragging here is a pointer convenience; the accessible role and keyboard handling live on the .handle below) -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	{@attach attachFrame}
 	class="compare-slider"
@@ -87,14 +84,13 @@ before the Change Date. See LICENSE for complete terms.
 	onpointerup={onPointerUp}
 	onpointercancel={onPointerUp}
 >
-	<img src={afterSrc} alt={afterAlt} class="output" draggable="false" onload={onAfterLoad} />
+	<img src={afterSrc} alt={afterAlt} class="output" draggable="false" />
 	<img
 		src={beforeSrc}
 		alt={beforeAlt}
 		class="overlay"
 		draggable="false"
 		style:clip-path={`inset(0 ${100 - position}% 0 0)`}
-		onload={onBeforeLoad}
 	/>
 	<div class="divider" style:left="{position}%" aria-hidden="true"></div>
 	<div

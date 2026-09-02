@@ -14,15 +14,19 @@
 
 import { dev } from '$app/environment';
 import { imageExtensionFromMime, normalizeImageContentType, type ImageMime } from '$lib/image-mime';
+import type { Bucket } from '$lib/server/media';
 import { mockUpload } from '$lib/server/mocks/fixtures';
+import { putS3Object } from '$lib/server/s3';
 
-type StoredImage = {
-	url: string;
+export type StoredImage = {
+	key: string;
 	mime: ImageMime;
 	size: number;
 	hash: string;
 	dimensions?: [number, number];
 };
+
+const STORAGE_RETRY_DELAYS_MS = [0, 250, 1_000] as const;
 
 // Content hash used to dedup repeat uploads of the same photo against
 // media.checksum (see findGenerationSourceByHash). Not a security
@@ -38,22 +42,24 @@ export async function hashBytes(bytes: ArrayBuffer): Promise<string> {
 
 async function storeImage(
 	platform: App.Platform | undefined,
-	publicUrl: string,
+	bucket: Bucket,
 	bytes: ArrayBuffer,
 	mime: string,
 	storageKey?: string,
 	precomputedHash?: string
 ): Promise<StoredImage> {
-	const bucket = platform?.env?.UPLOADS_BUCKET;
-	if (!bucket) {
-		if (dev) {
-			const upload = mockUpload();
-			const normalizedMime = normalizeImageContentType(upload.mime);
-			if (normalizedMime === null) throw new Error(`Unsupported image type: ${upload.mime}`);
+	if (dev && (!platform?.env?.S3_ACCESS_KEY_ID || !platform.env.S3_SECRET_ACCESS_KEY)) {
+		const upload = mockUpload();
+		const normalizedMime = normalizeImageContentType(upload.mime);
+		if (normalizedMime === null) throw new Error(`Unsupported image type: ${upload.mime}`);
 
-			return { ...upload, mime: normalizedMime, hash: precomputedHash ?? (await hashBytes(bytes)) };
-		}
-		throw new Error('UPLOADS_BUCKET not configured');
+		return {
+			key: new URL(upload.image.url).pathname.replace(/^\//, ''),
+			mime: normalizedMime,
+			size: upload.size,
+			hash: precomputedHash ?? (await hashBytes(bytes)),
+			dimensions: upload.dimensions
+		};
 	}
 
 	const normalizedMime = normalizeImageContentType(mime);
@@ -61,16 +67,10 @@ async function storeImage(
 
 	const extension = imageExtensionFromMime(normalizedMime);
 	const key = storageKey ?? `${crypto.randomUUID()}.${extension}`;
-	await bucket.put(key, bytes, {
-		httpMetadata: { contentType: normalizedMime }
-	});
+	await putS3Object(platform, bucket, key, bytes, normalizedMime);
 
-	// A relative URL resolves against the *directory* of its base, so a base
-	// without a trailing slash (e.g. https://cdn.example.com/uploads) would
-	// otherwise have its last path segment replaced instead of extended.
-	const base = publicUrl.endsWith('/') ? publicUrl : `${publicUrl}/`;
 	return {
-		url: new URL(key, base).toString(),
+		key,
 		mime: normalizedMime,
 		size: bytes.byteLength,
 		hash: precomputedHash ?? (await hashBytes(bytes))
@@ -79,13 +79,13 @@ async function storeImage(
 
 export async function uploadImage(
 	platform: App.Platform | undefined,
-	publicUrl: string,
+	bucket: Bucket,
 	file: File,
 	precomputedHash?: string
 ): Promise<StoredImage> {
 	return storeImage(
 		platform,
-		publicUrl,
+		bucket,
 		await file.arrayBuffer(),
 		file.type,
 		undefined,
@@ -95,11 +95,30 @@ export async function uploadImage(
 
 export async function uploadImageBytes(
 	platform: App.Platform | undefined,
-	publicUrl: string,
+	bucket: Bucket,
 	bytes: ArrayBuffer,
 	mime: string,
 	storageKey?: string,
 	precomputedHash?: string
 ): Promise<StoredImage> {
-	return storeImage(platform, publicUrl, bytes, mime, storageKey, precomputedHash);
+	return storeImage(platform, bucket, bytes, mime, storageKey, precomputedHash);
+}
+
+export async function uploadGeneratedImageBytes(
+	platform: App.Platform | undefined,
+	bucket: Bucket,
+	bytes: ArrayBuffer,
+	mime: string,
+	storageKey: string
+): Promise<StoredImage> {
+	let lastError: unknown;
+	for (const delay of STORAGE_RETRY_DELAYS_MS) {
+		if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+		try {
+			return await uploadImageBytes(platform, bucket, bytes, mime, storageKey);
+		} catch (error) {
+			lastError = error;
+		}
+	}
+	throw lastError;
 }

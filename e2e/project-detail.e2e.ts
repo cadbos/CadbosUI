@@ -13,6 +13,7 @@
  */
 
 import { expect, test, type Page } from '@playwright/test';
+import { media } from './helpers/media';
 
 const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
 const SESSION_ID = '00000000-0000-4000-8000-000000000010';
@@ -26,8 +27,8 @@ interface SessionFixture {
 	updatedAt: number;
 	generations: {
 		id: string;
-		url: string;
-		sourceUrl: string;
+		image: ReturnType<typeof media>;
+		source: ReturnType<typeof media>;
 		kind: string;
 		createdAt: number;
 		amount: number;
@@ -251,8 +252,8 @@ test('continues a session into the render workspace with its latest render as th
 				generations: [
 					{
 						id: '00000000-0000-4000-8000-000000000100',
-						url: 'https://cdn.example.test/latest-render.webp',
-						sourceUrl: 'https://cdn.example.test/room.jpg',
+						image: media(2, 'https://cdn.example.test/latest-render.webp'),
+						source: media(1, 'https://cdn.example.test/room.jpg'),
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 1),
 						amount: 5,
@@ -270,7 +271,8 @@ test('continues a session into the render workspace with its latest render as th
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/render.webp',
+				id: '00000000-0000-4000-8000-000000000101',
+				output: media(3, 'https://cdn.example.test/render.webp'),
 				cost: 5,
 				balance: 95
 			})

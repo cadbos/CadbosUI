@@ -22,6 +22,13 @@ export const OUTPUT_FORMATS = ['webp', 'jpg', 'png', 'avif'] as const;
 
 export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
 
+export interface MediaAccess {
+	key: string;
+	url: string;
+}
+
+export const DEFAULT_UPLOADS_BUCKET_NAME = 'cadbos-uploads';
+
 // Unified error body (HTTP 4xx/5xx) — no stack, paths, or internal ids.
 export interface ApiError {
 	error: { code: string; message: string };
@@ -54,7 +61,7 @@ export const healthSnapshotSchema = z
 				comfyui: serviceHealthSchema,
 				d1: serviceHealthSchema,
 				nostr: nostrHealthSchema,
-				r2: serviceHealthSchema
+				s3: serviceHealthSchema
 			})
 			.strict()
 	})
@@ -65,13 +72,17 @@ export type ServiceHealth = z.infer<typeof serviceHealthSchema>;
 export type NostrHealth = z.infer<typeof nostrHealthSchema>;
 export type HealthSnapshot = z.infer<typeof healthSnapshotSchema>;
 
-// POST /api/uploads (after UploadThing) → data for the image input.
+// POST /api/uploads → managed image identity plus temporary read access.
 export const uploadResultSchema = z
 	.object({
-		url: z.url(),
+		image: z
+			.object({
+				key: z.string().min(1),
+				url: z.url()
+			})
+			.strict(),
 		mime: z.string().min(1),
 		size: z.number().nonnegative(),
-		hash: z.string().min(1),
 		dimensions: z.tuple([z.number().positive(), z.number().positive()]).optional()
 	})
 	.strict();
@@ -94,12 +105,7 @@ export interface RemoteImageUploadRequest {
 
 // POST /api/render or /api/render/exterior — create a render.
 export interface RenderRequest {
-	image: string;
-	// SHA-256 hex digest of `image`'s bytes, from the /api/uploads response —
-	// omitted when `image` is a previous render/edit result rather than a
-	// fresh upload. Lets the server record the source media checksum for future
-	// upload dedup; never forwarded to the render provider.
-	imageHash?: string;
+	imageKey: string;
 	prompt: string;
 	outputFormat: OutputFormat;
 	// The project session this generation attaches to (Module 11) — the server
@@ -109,20 +115,16 @@ export interface RenderRequest {
 
 // POST /api/edit — edit by prompt (no outputFormat; aspect ratio is preserved).
 export interface EditRequest {
-	image: string;
-	// See RenderRequest.imageHash — Edit has no room-photo/current-result
-	// toggle, but still falls back to the room photo when there's no render
-	// yet (resolveEditSource), so `image` isn't always a previous result.
-	imageHash?: string;
+	imageKey: string;
 	prompt: string;
 	sessionId: string;
 }
 
 // POST /api/style-transfer — apply a reference image's style to a source image.
 export interface StyleTransferRequest {
-	image: string;
-	imageHash?: string;
-	referenceImage: string;
+	imageKey: string;
+	referenceImageKey?: string;
+	stylePresetId?: string;
 	outputFormat: OutputFormat;
 	prompt?: string;
 	negativePrompt?: string;
@@ -132,15 +134,14 @@ export interface StyleTransferRequest {
 
 // POST /api/upscale — upscale an existing render/edit result to 4K.
 export interface UpscaleRequest {
-	image: string;
+	imageKey: string;
 	outputFormat?: OutputFormat;
 	sessionId: string;
 }
 
 export interface ObjectReplacementRequest {
-	image: string;
-	imageHash?: string;
-	referenceImage: string;
+	imageKey: string;
+	referenceImageKey: string;
 	replacementObject: string;
 	sessionId: string;
 }
@@ -153,7 +154,7 @@ export interface ObjectReplacementProcessingResponse {
 export interface ObjectReplacementCompletedResponse {
 	id: string;
 	status: 'completed';
-	outputUrl: string;
+	output: MediaAccess;
 	cost: number;
 	balance: number;
 }
@@ -170,8 +171,7 @@ export type ObjectReplacementJobResponse =
 	| ObjectReplacementFailedResponse;
 
 export interface LightSettingsRequest {
-	image: string;
-	imageHash?: string;
+	imageKey: string;
 	instruction: string;
 	sessionId: string;
 }
@@ -184,7 +184,7 @@ export interface LightSettingsProcessingResponse {
 export interface LightSettingsCompletedResponse {
 	id: string;
 	status: 'completed';
-	outputUrl: string;
+	output: MediaAccess;
 	cost: number;
 	balance: number;
 }
@@ -201,18 +201,16 @@ export type LightSettingsJobResponse =
 	| LightSettingsFailedResponse;
 
 export interface AutomaticTextureReplacementRequest {
-	image: string;
-	imageHash?: string;
-	referenceImage: string;
+	imageKey: string;
+	referenceImageKey: string;
 	replacementSurface: string;
 	sessionId: string;
 }
 
 export interface MaskedTextureReplacementRequest {
-	image: string;
-	imageHash?: string;
-	referenceImage: string;
-	mask: string;
+	imageKey: string;
+	referenceImageKey: string;
+	maskImageKey: string;
 	sessionId: string;
 }
 
@@ -228,7 +226,7 @@ export interface TextureReplacementProcessingResponse {
 export interface TextureReplacementCompletedResponse {
 	id: string;
 	status: 'completed';
-	outputUrl: string;
+	output: MediaAccess;
 	cost: number;
 	balance: number;
 }
@@ -244,12 +242,12 @@ export type TextureReplacementJobResponse =
 	| TextureReplacementCompletedResponse
 	| TextureReplacementFailedResponse;
 
-// Normalized response for image-generation endpoints. Provider array/string
-// outputs are normalized to a single URL. `balance` is the caller's own
+// Normalized response for image-generation endpoints. Provider outputs are
+// mirrored to managed storage before temporary access is issued. `balance` is the caller's own
 // remaining approved-account balance after this call — never archAI's raw
 // (shared) account balance, which the client must never see.
 export interface RenderResponse {
-	outputUrl: string;
+	output: MediaAccess;
 	cost: number;
 	balance: number;
 }
@@ -268,8 +266,8 @@ export type GenerationKind = (typeof generationKinds)[number];
 
 export interface GeneratedImageRecord {
 	id: string;
-	url: string;
-	sourceUrl: string;
+	image: MediaAccess;
+	source: MediaAccess;
 	kind: GenerationKind;
 	createdAt: number;
 }
@@ -286,13 +284,12 @@ export interface GeneratedImagesResponse {
 // GET /api/resources — distinct source photos the user has actually
 // uploaded (one card per source media row). Rows whose source
 // was a previous generation's own result rather than a fresh upload (edit,
-// upscale, or any other call made with source mode 'current-result' —
-// these intentionally carry imageHash: '') are excluded, not shown as if
-// they were uploads; see listDistinctSourceImages. Content-hash dedup still
+// upscale, or any other call made with source mode 'current-result') are
+// excluded, not shown as if they were uploads; see listDistinctSourceImages. Content-hash dedup still
 // applies at *upload* time (findGenerationSourceByHash) to avoid storing
 // duplicate objects. Read-only gallery: no delete in this iteration.
 export interface ResourceImageRecord {
-	sourceUrl: string;
+	image: MediaAccess;
 	createdAt: number;
 }
 

@@ -15,7 +15,7 @@
 import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RenderResponse, TextureReplacementJobResponse } from '$lib/api/contract';
+import type { TextureReplacementJobResponse } from '$lib/api/contract';
 import { apiError, parseBody, textureReplacementRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
@@ -28,9 +28,10 @@ import {
 } from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { replaceTexturesWithMask } from '$lib/server/generation';
+import { replaceTexturesWithMask, type StoredRenderResponse } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
-import { getBucketByName } from '$lib/server/media';
+import { getOrCreateMediaByKey } from '$lib/server/media';
+import { mediaAccess, providerMediaBatch } from '$lib/server/media-access';
 import { assertSessionOwnedByUser } from '$lib/server/projects';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 import {
@@ -109,8 +110,18 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			return apiError(404, 'session_not_found', 'Session not found');
 		}
 
-		const maskedRequest = 'mask' in parsed.data ? parsed.data : undefined;
+		const maskedRequest = 'maskImageKey' in parsed.data ? parsed.data : undefined;
 		const automaticRequest = 'replacementSurface' in parsed.data ? parsed.data : undefined;
+		const mediaKeys = [
+			parsed.data.imageKey,
+			parsed.data.referenceImageKey,
+			...(maskedRequest ? [maskedRequest.maskImageKey] : [])
+		];
+		const media = await providerMediaBatch(db, platform, mediaKeys);
+		if (!media) return apiError(404, 'image_not_found', 'Image not found');
+		const sceneMedia = media.get(parsed.data.imageKey)!.media;
+		const referenceMedia = media.get(parsed.data.referenceImageKey)!.media;
+		const uploadsBucket = sceneMedia.bucket;
 		let precheckBalance: number | undefined;
 		let comfyCost: number | undefined;
 		try {
@@ -139,13 +150,13 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		}
 
 		if (maskedRequest) {
-			let result: RenderResponse;
-			let resultHash: string;
+			let result: StoredRenderResponse;
 			try {
-				const uploadsUrl = (await getBucketByName(db, 'cadbos-uploads')).url;
-				const stored = await replaceTexturesWithMask(platform, uploadsUrl, maskedRequest);
-				result = stored;
-				resultHash = stored.outputHash;
+				result = await replaceTexturesWithMask(platform, uploadsBucket, {
+					image: media.get(maskedRequest.imageKey)!.url,
+					referenceImage: media.get(maskedRequest.referenceImageKey)!.url,
+					mask: media.get(maskedRequest.maskImageKey)!.url
+				});
 			} catch {
 				console.error('ArchAI masked texture replacement failed');
 				return apiError(502, 'texture_replacement_failed', 'Texture replacement failed');
@@ -157,11 +168,15 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				console.error('recordBalance failed after masked texture replacement:', error);
 			}
 			try {
+				const outputMedia = await getOrCreateMediaByKey(
+					db,
+					uploadsBucket,
+					result.outputKey,
+					result.outputHash
+				);
 				const credit = await recordGeneration(db, userId, {
-					url: result.outputUrl,
-					resultHash,
-					sourceUrl: maskedRequest.image,
-					sourceHash: maskedRequest.imageHash ?? '',
+					resultMediaId: outputMedia.id,
+					sourceMediaId: sceneMedia.id,
 					sessionId: maskedRequest.sessionId,
 					prompt: '',
 					kind: 'texture-replacement',
@@ -180,7 +195,10 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			return json({
 				id: crypto.randomUUID(),
 				status: 'completed',
-				outputUrl: result.outputUrl,
+				output: await mediaAccess(
+					platform,
+					await getOrCreateMediaByKey(db, uploadsBucket, result.outputKey, result.outputHash)
+				),
 				cost: result.cost,
 				balance: result.balance
 			} satisfies TextureReplacementJobResponse);
@@ -194,7 +212,16 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		const id = crypto.randomUUID();
 		let comfyPromptId: string;
 		try {
-			comfyPromptId = await submitTextureReplacement(platform, automaticRequest, url.origin, id);
+			comfyPromptId = await submitTextureReplacement(
+				platform,
+				{
+					image: media.get(automaticRequest.imageKey)!.url,
+					referenceImage: media.get(automaticRequest.referenceImageKey)!.url,
+					replacementSurface: automaticRequest.replacementSurface
+				},
+				url.origin,
+				id
+			);
 		} catch (error) {
 			if (error instanceof RemoteImageImportError) return remoteImageError(error);
 			if (error instanceof ComfyUiError) {
@@ -217,10 +244,9 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				id,
 				userId,
 				comfyPromptId,
-				sceneUrl: automaticRequest.image,
-				sceneHash: automaticRequest.imageHash ?? '',
+				sceneMediaId: sceneMedia.id,
 				sessionId: automaticRequest.sessionId,
-				referenceUrl: automaticRequest.referenceImage,
+				referenceMediaId: referenceMedia.id,
 				replacementSurface: automaticRequest.replacementSurface,
 				cost: comfyCost,
 				createdAt: Date.now()

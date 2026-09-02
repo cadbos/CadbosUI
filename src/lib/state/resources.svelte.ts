@@ -14,13 +14,17 @@
 
 import { z } from 'zod';
 import type { ResourceImageRecord } from '$lib/api/contract';
+import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export type ResourcesStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 const PAGE_SIZE = 30;
 
 const resourceImageRecordSchema = z.object({
-	sourceUrl: z.url(),
+	image: z.object({
+		key: z.string().min(1),
+		url: z.url()
+	}),
 	createdAt: z.number().int().min(0)
 });
 
@@ -124,7 +128,13 @@ class ResourcesState {
 
 		const parsed = resourcesResponseSchema.safeParse(await response.json().catch(() => null));
 		if (!parsed.success) throw new ResourcesLoadError('resources response invalid');
-		return parsed.data;
+		return {
+			...parsed.data,
+			images: parsed.data.images.map((image) => ({
+				...image,
+				image: mediaAccess.normalize(image.image)
+			}))
+		};
 	}
 
 	#setNextPage(page: z.infer<typeof resourcesResponseSchema>): void {

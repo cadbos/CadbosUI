@@ -15,7 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { Handle, Position, type Node, type NodeProps } from '@xyflow/svelte';
 	import { t } from '$lib/i18n/index.svelte';
-	import { request } from '$lib/state/request.svelte';
+	import { imageUrl, request } from '$lib/state/request.svelte';
 
 	type ImageNode = Node<Record<string, never>, 'image'>;
 
@@ -23,10 +23,10 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <div id={props.id} class="graph-node graph-node--image">
-	{#if request.image?.url}
+	{#if imageUrl(request.image)}
 		<img
 			class="graph-node__thumbnail"
-			src={request.image.url}
+			src={imageUrl(request.image)}
 			alt={t('view.graph.imageNode.alt')}
 		/>
 	{:else}

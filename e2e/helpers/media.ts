@@ -12,26 +12,12 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { describe, it, expect } from 'vitest';
-import { mockRender, mockUpload } from '$lib/server/mocks/fixtures';
+const TEST_MEDIA_BUCKET = 'test-media';
 
-describe('mock fixtures match the API contract', () => {
-	it('upload', () => {
-		expect(mockUpload()).toMatchObject({
-			image: {
-				key: expect.any(String),
-				url: expect.any(String)
-			},
-			mime: expect.any(String),
-			size: expect.any(Number)
-		});
-	});
+export function mediaKey(key: string | number): string {
+	return `${TEST_MEDIA_BUCKET}/${key}`;
+}
 
-	it('render', () => {
-		expect(mockRender()).toMatchObject({
-			outputUrl: expect.any(String),
-			cost: expect.any(Number),
-			balance: expect.any(Number)
-		});
-	});
-});
+export function media(key: string | number, url: string): { key: string; url: string } {
+	return { key: mediaKey(key), url };
+}

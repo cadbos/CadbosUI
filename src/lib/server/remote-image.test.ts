@@ -13,6 +13,27 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Bucket } from '$lib/server/media';
+import { TEST_S3_BUCKET, TEST_S3_ENV } from '$lib/server/testing/generation-fixtures';
+
+const storage = vi.hoisted(() => ({
+	putS3Object:
+		vi.fn<
+			(
+				platform: App.Platform | undefined,
+				bucket: Bucket,
+				key: string,
+				bytes: ArrayBuffer,
+				mime: string
+			) => Promise<void>
+		>()
+}));
+
+vi.mock('$lib/server/s3', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/server/s3')>()),
+	putS3Object: storage.putS3Object
+}));
+
 import {
 	MAX_IMAGE_UPLOAD_SIZE,
 	RemoteImageImportError,
@@ -22,11 +43,15 @@ import {
 } from './remote-image';
 
 function platform(bucket: { put: ReturnType<typeof vi.fn> }): App.Platform {
-	return {
-		env: {
-			UPLOADS_BUCKET: bucket
-		}
-	} as unknown as App.Platform;
+	storage.putS3Object.mockImplementation(async (_platform, _bucket, key, bytes, mime) => {
+		const put = bucket.put as unknown as (
+			key: string,
+			bytes: ArrayBuffer,
+			metadata: { httpMetadata: { contentType: string } }
+		) => Promise<void>;
+		await put(key, bytes, { httpMetadata: { contentType: mime } });
+	});
+	return { env: TEST_S3_ENV } as unknown as App.Platform;
 }
 
 function imageResponse(contentType: string, body: BodyInit): Response {
@@ -38,7 +63,7 @@ describe('remote image import', () => {
 		vi.restoreAllMocks();
 	});
 
-	it('downloads an image and stores it through the existing R2 adapter', async () => {
+	it('downloads an image and stores it through the S3 adapter', async () => {
 		const bucket = { put: vi.fn(async () => undefined) };
 		const id = '123e4567-e89b-12d3-a456-426614174003' as ReturnType<typeof crypto.randomUUID>;
 		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
@@ -46,7 +71,7 @@ describe('remote image import', () => {
 
 		const result = await importRemoteImage(
 			platform(bucket),
-			'https://uploads.cadbos.example',
+			TEST_S3_BUCKET,
 			'https://images.example.com/room.png',
 			'https://cadbos.example',
 			fetcher as typeof fetch
@@ -61,14 +86,14 @@ describe('remote image import', () => {
 			httpMetadata: { contentType: 'image/png' }
 		});
 		expect(result).toEqual({
-			url: `https://uploads.cadbos.example/${id}.png`,
+			key: `${id}.png`,
 			mime: 'image/png',
 			size: 11,
 			hash: expect.any(String)
 		});
 	});
 
-	it('returns validated image bytes without writing another R2 object', async () => {
+	it('returns validated image bytes without writing another S3 object', async () => {
 		const fetcher = vi.fn(async () => imageResponse('image/webp', 'image-bytes'));
 
 		const result = await downloadRemoteImage(
@@ -95,7 +120,7 @@ describe('remote image import', () => {
 
 		await importRemoteImage(
 			platform(bucket),
-			'https://uploads.cadbos.example',
+			TEST_S3_BUCKET,
 			'https://images.example.com/room.webp',
 			'https://cadbos.example',
 			fetcher as typeof fetch
@@ -118,7 +143,7 @@ describe('remote image import', () => {
 		await expect(
 			importRemoteImage(
 				platform({ put: vi.fn(async () => undefined) }),
-				'https://uploads.cadbos.example',
+				TEST_S3_BUCKET,
 				url,
 				'https://cadbos.example',
 				fetcher as typeof fetch
@@ -131,7 +156,7 @@ describe('remote image import', () => {
 		await expect(
 			importRemoteImage(
 				platform({ put: vi.fn(async () => undefined) }),
-				'https://uploads.cadbos.example',
+				TEST_S3_BUCKET,
 				'https://images.example.com/room.jpg',
 				'https://cadbos.example',
 				vi.fn(async () => imageResponse('text/html', 'not-an-image')) as typeof fetch
@@ -151,7 +176,7 @@ describe('remote image import', () => {
 		await expect(
 			importRemoteImage(
 				platform({ put: vi.fn(async () => undefined) }),
-				'https://uploads.cadbos.example',
+				TEST_S3_BUCKET,
 				'https://images.example.com/room.jpg',
 				'https://cadbos.example',
 				vi.fn(async () => imageResponse('image/jpeg', stream)) as typeof fetch

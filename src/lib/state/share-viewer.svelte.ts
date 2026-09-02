@@ -20,8 +20,14 @@ export type ShareViewerStatus = 'idle' | 'loading' | 'ready' | 'not-found' | 'er
 
 const sessionGenerationSchema = z.object({
 	id: z.uuid(),
-	url: z.url(),
-	sourceUrl: z.url(),
+	image: z.object({
+		key: z.string().min(1),
+		url: z.url()
+	}),
+	source: z.object({
+		key: z.string().min(1),
+		url: z.url()
+	}),
 	kind: z.enum(generationKinds),
 	createdAt: z.number().int().min(0)
 });

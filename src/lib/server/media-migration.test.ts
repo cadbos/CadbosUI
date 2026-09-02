@@ -15,6 +15,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
+import { TEST_S3_BUCKET } from './testing/generation-fixtures';
 
 const MIGRATIONS_DIR = new URL('../../../migrations/', import.meta.url);
 const MIGRATION = '0015_media.sql';
@@ -39,9 +40,10 @@ describe('0015 media migration', () => {
 	it('moves every image reference to media and sanitizes historical checksums', () => {
 		const db = makeDatabase();
 		const now = Date.now();
-		db.prepare(
-			"INSERT INTO buckets (name, url) VALUES ('cadbos-uploads', 'https://uploads.example.test')"
-		).run();
+		db.prepare('INSERT INTO buckets (name, url) VALUES (?, ?)').run(
+			TEST_S3_BUCKET.name,
+			'https://uploads.example.test'
+		);
 		db.prepare(
 			"INSERT INTO buckets (name, url) VALUES ('cadbos-style-presets', 'https://presets.example.test')"
 		).run();

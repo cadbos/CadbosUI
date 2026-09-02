@@ -121,8 +121,7 @@ before the Change Date. See LICENSE for complete terms.
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
-					image: source.url,
-					...(source.hash ? { imageHash: source.hash } : {}),
+					imageKey: source,
 					prompt: trimmed,
 					sessionId
 				})

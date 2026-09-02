@@ -13,6 +13,7 @@
  */
 
 import { expect, test, type Page } from '@playwright/test';
+import { media } from './helpers/media';
 
 const PK = '0'.repeat(64);
 const PROJECT_ID = '00000000-0000-4000-8000-000000000700';
@@ -78,8 +79,8 @@ async function mockProjectDetail(page: Page): Promise<void> {
 						generations: [
 							{
 								id: GENERATION_ID,
-								url: AFTER_URL,
-								sourceUrl: BEFORE_URL,
+								image: media(2, AFTER_URL),
+								source: media(1, BEFORE_URL),
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 1),
 								amount: 1.5,
@@ -122,7 +123,8 @@ test('clicking an expense row opens its generation before/after in the workspace
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/new-render.webp',
+				id: '00000000-0000-4000-8000-000000000703',
+				output: media(3, 'https://cdn.example.test/new-render.webp'),
 				cost: 1,
 				balance: 7.5
 			})

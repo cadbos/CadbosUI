@@ -21,6 +21,7 @@ import {
 	getObjectReplacementJob
 } from '$lib/server/object-replacement-jobs';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedManagedMedia } from '$lib/server/testing/generation-fixtures';
 
 function seedAccount(db: D1Database, balance = 12): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -42,14 +43,15 @@ function seedAccount(db: D1Database, balance = 12): void {
 }
 
 async function seedJob(db: D1Database, id = 'job-1') {
+	const sceneMediaId = seedManagedMedia(db, 'scene.jpg');
+	const referenceMediaId = seedManagedMedia(db, 'reference.jpg');
 	return createObjectReplacementJob(db, {
 		id,
 		userId: 'user-1',
 		comfyPromptId: `prompt-${id}`,
-		sceneUrl: 'https://cdn.example.test/scene.jpg',
-		sceneHash: 'hash-scene',
+		sceneMediaId,
 		sessionId: 'session-1',
-		referenceUrl: 'https://cdn.example.test/reference.jpg',
+		referenceMediaId,
 		replacementObject: 'sofa',
 		cost: 2,
 		createdAt: 10
@@ -65,8 +67,8 @@ describe('object replacement jobs', () => {
 
 		await expect(getObjectReplacementJob(db, 'user-1', 'job-1')).resolves.toMatchObject({
 			comfyPromptId: 'prompt-job-1',
-			sceneUrl: 'https://cdn.example.test/scene.jpg',
-			referenceUrl: 'https://cdn.example.test/reference.jpg',
+			sceneMediaId: expect.any(Number),
+			referenceMediaId: expect.any(Number),
 			replacementObject: 'sofa',
 			cost: 2,
 			status: 'processing'
@@ -77,15 +79,9 @@ describe('object replacement jobs', () => {
 		const db = makeD1();
 		seedAccount(db);
 		await seedJob(db);
+		const outputMediaId = seedManagedMedia(db, 'result.png');
 
-		const job = await completeObjectReplacementJob(
-			db,
-			'user-1',
-			'job-1',
-			'https://cdn.example.test/result.png',
-			'',
-			20
-		);
+		const job = await completeObjectReplacementJob(db, 'user-1', 'job-1', outputMediaId, 20);
 
 		expect(job).toMatchObject({ status: 'completed', balanceAfter: 10, cost: 2 });
 		const generation = await db
@@ -104,24 +100,11 @@ describe('object replacement jobs', () => {
 		const db = makeD1();
 		seedAccount(db);
 		await seedJob(db);
+		const outputMediaId = seedManagedMedia(db, 'result.png');
 
 		const [first, second] = await Promise.all([
-			completeObjectReplacementJob(
-				db,
-				'user-1',
-				'job-1',
-				'https://cdn.example.test/result.png',
-				'',
-				20
-			),
-			completeObjectReplacementJob(
-				db,
-				'user-1',
-				'job-1',
-				'https://cdn.example.test/result.png',
-				'',
-				21
-			)
+			completeObjectReplacementJob(db, 'user-1', 'job-1', outputMediaId, 20),
+			completeObjectReplacementJob(db, 'user-1', 'job-1', outputMediaId, 21)
 		]);
 
 		expect(first.balanceAfter).toBe(10);
@@ -143,34 +126,15 @@ describe('object replacement jobs', () => {
 		seedAccount(db, 3);
 		await seedJob(db, 'job-1');
 		await seedJob(db, 'job-2');
+		const firstOutputMediaId = seedManagedMedia(db, 'result-1.png');
+		const secondOutputMediaId = seedManagedMedia(db, 'result-2.png');
 		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
 		const jobs = await Promise.all([
-			completeObjectReplacementJob(
-				db,
-				'user-1',
-				'job-1',
-				'https://cdn.example.test/result-1.png',
-				'',
-				20
-			),
-			completeObjectReplacementJob(
-				db,
-				'user-1',
-				'job-2',
-				'https://cdn.example.test/result-2.png',
-				'',
-				21
-			)
+			completeObjectReplacementJob(db, 'user-1', 'job-1', firstOutputMediaId, 20),
+			completeObjectReplacementJob(db, 'user-1', 'job-2', secondOutputMediaId, 21)
 		]);
-		await completeObjectReplacementJob(
-			db,
-			'user-1',
-			'job-2',
-			'https://cdn.example.test/result-2.png',
-			'',
-			22
-		);
+		await completeObjectReplacementJob(db, 'user-1', 'job-2', secondOutputMediaId, 22);
 
 		expect(jobs.map((job) => job.balanceAfter).sort()).toEqual([0, 1]);
 		const credit = await db

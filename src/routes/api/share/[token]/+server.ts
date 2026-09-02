@@ -18,6 +18,7 @@ import type { ProjectDetailResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { getProjectDetailByShareToken } from '$lib/server/projects';
+import { mediaAccessBatch } from '$lib/server/media-access';
 
 // The public, unauthenticated viewer for a project share link — no
 // locals.user check by design (that's the whole point of the token). Returns
@@ -26,27 +27,38 @@ export const GET: RequestHandler = async ({ params, platform }) => {
 	const db = getDb(platform);
 	const project = await getProjectDetailByShareToken(db, params.token);
 	if (!project) return apiError(404, 'share_not_found', 'Share link not found');
+	const access = await mediaAccessBatch(
+		db,
+		platform,
+		project.sessions.flatMap((session) =>
+			session.generations.flatMap((generation) => [generation.mediaId, generation.sourceMediaId])
+		)
+	);
+	if (!access) return apiError(404, 'share_not_found', 'Share link not found');
 
-	return json({
-		id: project.id,
-		title: project.title,
-		createdAt: project.createdAt,
-		updatedAt: project.updatedAt,
-		shareActive: project.shareActive,
-		sessions: project.sessions.map((session) => ({
-			id: session.id,
-			title: session.title,
-			parentSessionId: session.parentSessionId,
-			forkedFromGenerationId: session.forkedFromGenerationId,
-			createdAt: session.createdAt,
-			updatedAt: session.updatedAt,
-			generations: session.generations.map((generation) => ({
-				id: generation.id,
-				url: generation.url,
-				sourceUrl: generation.sourceUrl,
-				kind: generation.kind,
-				createdAt: generation.createdAt
+	return json(
+		{
+			id: project.id,
+			title: project.title,
+			createdAt: project.createdAt,
+			updatedAt: project.updatedAt,
+			shareActive: project.shareActive,
+			sessions: project.sessions.map((session) => ({
+				id: session.id,
+				title: session.title,
+				parentSessionId: session.parentSessionId,
+				forkedFromGenerationId: session.forkedFromGenerationId,
+				createdAt: session.createdAt,
+				updatedAt: session.updatedAt,
+				generations: session.generations.map((generation) => ({
+					id: generation.id,
+					image: access.get(generation.mediaId)!,
+					source: access.get(generation.sourceMediaId)!,
+					kind: generation.kind,
+					createdAt: generation.createdAt
+				}))
 			}))
-		}))
-	} satisfies ProjectDetailResponse);
+		} satisfies ProjectDetailResponse,
+		{ headers: { 'cache-control': 'private, no-store' } }
+	);
 };
