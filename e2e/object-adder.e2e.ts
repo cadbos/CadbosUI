@@ -12,10 +12,66 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { deflateSync } from 'node:zlib';
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
 import { mockProjectSessionRoutes, E2E_SESSION_ID } from './helpers/project-session-routes';
+
+const CRC_TABLE = (() => {
+	const table = new Uint32Array(256);
+	for (let n = 0; n < 256; n++) {
+		let c = n;
+		for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+		table[n] = c >>> 0;
+	}
+	return table;
+})();
+
+function crc32(bytes: Buffer): number {
+	let crc = 0xffffffff;
+	for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+	return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+	const length = Buffer.alloc(4);
+	length.writeUInt32BE(data.length);
+	const typeAndData = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+	const crc = Buffer.alloc(4);
+	crc.writeUInt32BE(crc32(typeAndData));
+	return Buffer.concat([length, typeAndData, crc]);
+}
+
+// A minimal, real, decodable solid-gray PNG at an exact pixel size — used
+// where the app validates the file's declared MIME type against the
+// supported list (jpeg/png/webp/avif; see normalizeImageContentType), which
+// an SVG-typed fixture (see svg() below) would fail client-side.
+function png(width: number, height: number): Buffer {
+	const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+	const ihdrData = Buffer.alloc(13);
+	ihdrData.writeUInt32BE(width, 0);
+	ihdrData.writeUInt32BE(height, 4);
+	ihdrData.writeUInt8(8, 8); // bit depth
+	ihdrData.writeUInt8(2, 9); // color type: RGB
+	const scanline = Buffer.alloc((1 + width * 3) * height);
+	for (let y = 0; y < height; y++) {
+		const rowStart = y * (1 + width * 3);
+		scanline[rowStart] = 0; // filter: none
+		for (let x = 0; x < width; x++) {
+			const pixelStart = rowStart + 1 + x * 3;
+			scanline[pixelStart] = 136;
+			scanline[pixelStart + 1] = 136;
+			scanline[pixelStart + 2] = 136;
+		}
+	}
+	return Buffer.concat([
+		signature,
+		pngChunk('IHDR', ihdrData),
+		pngChunk('IDAT', deflateSync(scanline)),
+		pngChunk('IEND', Buffer.alloc(0))
+	]);
+}
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
 // A real, decodable image is required — both the object overlay <img> (loaded
@@ -127,7 +183,7 @@ async function enterReferenceMode(page: Page): Promise<void> {
 async function pickObject(page: Page): Promise<void> {
 	const canvas = page.locator('.object-adder-canvas');
 	await expect(canvas).toBeVisible();
-	await canvas.locator('input[type="file"]').setInputFiles({
+	await canvas.getByLabel('Выбрать фото объекта').setInputFiles({
 		name: 'object.svg',
 		mimeType: 'image/svg+xml',
 		buffer: Buffer.from('object-file-bytes')
@@ -298,6 +354,46 @@ test('surfaces a submission error and keeps the form usable for retry', async ({
 	await panel.getByRole('button', { name: 'Добавить объект' }).click();
 	await expect(panel.getByRole('alert')).toContainText('Тестовый баланс исчерпан');
 	await expect(panel.getByRole('button', { name: 'Добавить объект' })).toBeEnabled();
+});
+
+test('lets the scene photo be changed from the canvas, resetting the placement', async ({
+	page
+}) => {
+	await authenticate(page);
+	await enterReferenceMode(page);
+	await pickObject(page);
+
+	const canvas = page.locator('.object-adder-canvas');
+	// Native drag-and-drop on an <img> conflicts with the custom pointer-based
+	// move/resize handlers (a real browser can require an extra press before a
+	// drag "takes" while a stray dragstart is still settling) — both photos
+	// must opt out.
+	await expect(canvas.locator('.scene-image')).toHaveAttribute('draggable', 'false');
+	await expect(canvas.locator('.object-image')).toHaveAttribute('draggable', 'false');
+
+	const sceneSrcBefore = await canvas.locator('.scene-image').getAttribute('src');
+	const topBefore = await canvas.locator('.object-wrapper').evaluate((el) => el.style.top);
+
+	// Picking a new room photo here only ever creates a local preview (see
+	// request.setPendingImage) — the actual upload is deferred to generate
+	// time, same as the very first scene photo, so no /api/uploads mock is
+	// needed to observe the swap. A different aspect ratio (2:1 vs the
+	// original 4:3) makes the recomputed default placement measurably
+	// different from the old one, proving the rect actually reset instead of
+	// just being left alone.
+	await canvas.getByLabel('Изменить фото сцены').setInputFiles({
+		name: 'scene-2.png',
+		mimeType: 'image/png',
+		buffer: png(800, 400)
+	});
+
+	await expect
+		.poll(() => canvas.locator('.scene-image').getAttribute('src'))
+		.not.toBe(sceneSrcBefore);
+	await expect(canvas.locator('.object-image')).toBeVisible();
+	await expect
+		.poll(() => canvas.locator('.object-wrapper').evaluate((el) => el.style.top))
+		.not.toBe(topBefore);
 });
 
 test('requires authentication and a placed object before enabling submit', async ({ page }) => {
