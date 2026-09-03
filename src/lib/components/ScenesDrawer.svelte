@@ -28,6 +28,8 @@ before the Change Date. See LICENSE for complete terms.
 	} from '@lucide/svelte';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import type { PathnameWithSearchOrHash } from '$app/types';
 	import type { Component, ComponentProps } from 'svelte';
 	import type { GenerationKind } from '$lib/api/contract';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -72,7 +74,6 @@ before the Change Date. See LICENSE for complete terms.
 		timeLabel: string;
 		ariaLabel: string;
 	}
-
 	let { open, onClose }: Props = $props();
 	let deleteCandidate = $state<DeleteCandidate | null>(null);
 	const isDeletingCandidate = $derived(
@@ -278,9 +279,19 @@ before the Change Date. See LICENSE for complete terms.
 		request.setStatus('idle');
 		const destination = destinationForGenerationKind(kind);
 		onClose();
-		goto(buildWorkspaceUrl(destination.mode, request, destination.subTab), {
-			replaceState: false
-		}).catch((error: unknown) => logBoundaryError('scenesDrawer.imageNavigation', error));
+		goto(
+			resolve(
+				buildWorkspaceUrl(
+					destination.mode,
+					request,
+					destination.subTab
+				) as PathnameWithSearchOrHash,
+				{}
+			),
+			{
+				replaceState: false
+			}
+		).catch((error: unknown) => logBoundaryError('scenesDrawer.imageNavigation', error));
 	}
 
 	function closeDrawer(): void {
@@ -426,10 +437,11 @@ before the Change Date. See LICENSE for complete terms.
 												<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
 											</button>
 											<a
-												href={image.source.url}
+												href={resolve('/api/download/[bucket]/[...filename]', {
+													bucket: image.source.key.slice(0, image.source.key.indexOf('/')),
+													filename: image.source.key.slice(image.source.key.indexOf('/') + 1)
+												})}
 												download={downloadFilename(image.source.url, `${image.id}-source`)}
-												target="_blank"
-												rel="noopener noreferrer"
 												class="icon-button"
 												aria-label={ti('generatedImages.downloadSource', { order: index + 1 })}
 												title={ti('generatedImages.downloadSource', { order: index + 1 })}
@@ -467,10 +479,11 @@ before the Change Date. See LICENSE for complete terms.
 												<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
 											</button>
 											<a
-												href={image.image.url}
+												href={resolve('/api/download/[bucket]/[...filename]', {
+													bucket: image.image.key.slice(0, image.image.key.indexOf('/')),
+													filename: image.image.key.slice(image.image.key.indexOf('/') + 1)
+												})}
 												download={downloadFilename(image.image.url, image.id)}
-												target="_blank"
-												rel="noopener noreferrer"
 												class="icon-button"
 												aria-label={ti('generatedImages.download', { order: index + 1 })}
 												title={ti('generatedImages.download', { order: index + 1 })}

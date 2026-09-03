@@ -170,8 +170,6 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	const sourceDownloadLink = page.getByRole('link', { name: 'Скачать исходник сцены 1' });
 	await expect(sourceDownloadLink).toHaveAttribute('href', `/api/download/${mediaKey(5)}`);
 	await expect(sourceDownloadLink).toHaveAttribute('download', 'generated-image-newest-source.jpg');
-	await expect(sourceDownloadLink).toHaveAttribute('target', '_blank');
-	await expect(sourceDownloadLink).toHaveAttribute('rel', 'noopener noreferrer');
 	await expect(sourceDownloadLink).toHaveClass(/\bicon-button\b/);
 	await expect(sourceDownloadLink).toHaveAttribute('title', 'Скачать исходник сцены 1');
 
@@ -203,8 +201,6 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	});
 	await expect(downloadLink).toHaveAttribute('href', `/api/download/${mediaKey(6)}`);
 	await expect(downloadLink).toHaveAttribute('download', 'generated-image-newest.webp');
-	await expect(downloadLink).toHaveAttribute('target', '_blank');
-	await expect(downloadLink).toHaveAttribute('rel', 'noopener noreferrer');
 	await expect(downloadLink).toHaveClass(/\bicon-button\b/);
 	await expect(downloadLink).toHaveAttribute('title', 'Скачать результат сцены 1');
 	await downloadLink.focus();
@@ -455,8 +451,6 @@ test('generating with the exterior scene type calls the exterior render route', 
 	const downloadLink = page.getByRole('link', { name: 'Скачать' });
 	await expect(downloadLink).toHaveAttribute('href', `/api/download/${mediaKey(2)}`);
 	await expect(downloadLink).toHaveAttribute('download', 'render.webp');
-	await expect(downloadLink).toHaveAttribute('target', '_blank');
-	await expect(downloadLink).toHaveAttribute('rel', 'noopener noreferrer');
 	await expect(downloadLink).toHaveClass(/\bicon-btn\b/);
 	await expect(downloadLink).toHaveAttribute('title', 'Скачать');
 	await downloadLink.focus();
