@@ -335,6 +335,141 @@ test('places an object on the scene, drags/resizes it, and submits the composed 
 	expect(body.rect.height).toBeCloseTo(expectedHeight, 2);
 });
 
+test('recovers a usable panel and canvas after toggling away from a completed job', async ({
+	page
+}) => {
+	await authenticate(page);
+	await enterReferenceMode(page);
+	await pickObject(page);
+
+	// Reopening the canvas after completion targets the generated result as
+	// its new scene (the edit target is always "the latest render" — see
+	// request.hasEditSource()), so the result itself needs to be a real,
+	// decodable image too, not just a JSON field asserted on elsewhere.
+	await page.route('https://cdn.example.test/added.webp', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'image/svg+xml',
+			body: svg(SCENE_WIDTH, SCENE_HEIGHT, 'e2e-added')
+		});
+	});
+	await page.route('**/api/object-adder', async (route) => {
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			body: JSON.stringify({ id: JOB_ID, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/object-adder/${JOB_ID}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: JOB_ID,
+				status: 'completed',
+				outputUrl: 'https://cdn.example.test/added.webp',
+				cost: 1.5,
+				balance: 18.5
+			})
+		});
+	});
+
+	const panel = page.locator('#edit-tool-panel-add-object-reference');
+	await panel.getByRole('button', { name: 'Добавить объект' }).click();
+	await expect(page.locator('.result img.output')).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/added.webp',
+		{ timeout: 10_000 }
+	);
+
+	// The completed job leaves objectAdder.resultReady true, so Workspace.svelte
+	// shows the result instead of the canvas — toggling away and back resets
+	// it (see objectAdder.setReferenceMode), and the panel's own effect must
+	// notice the stale finished job and clear it, rather than leaving the
+	// Generate button permanently disabled on "Объект добавлен.".
+	await page.getByRole('tab', { name: 'Пресеты' }).click();
+	await page.getByRole('tab', { name: 'По референс-фото' }).click();
+
+	await expect(page.locator('.object-adder-canvas')).toBeVisible();
+	await expect(page.locator('.object-image')).toBeVisible();
+	await expect(panel.locator('.job-success')).toHaveCount(0);
+	await expect(panel.getByRole('button', { name: 'Добавить объект' })).toBeEnabled();
+});
+
+test('regenerates with the same object and placement without resetting them', async ({ page }) => {
+	await authenticate(page);
+	await enterReferenceMode(page);
+	await pickObject(page);
+
+	const JOB_ID_2 = '223e4567-e89b-42d3-a456-426614174001';
+	const submittedBodies: unknown[] = [];
+	let submissions = 0;
+	await page.route('**/api/object-adder', async (route) => {
+		submittedBodies.push(route.request().postDataJSON());
+		submissions += 1;
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			body: JSON.stringify({ id: submissions === 1 ? JOB_ID : JOB_ID_2, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/object-adder/${JOB_ID}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: JOB_ID,
+				status: 'completed',
+				outputUrl: 'https://cdn.example.test/added.webp',
+				cost: 1.5,
+				balance: 18.5
+			})
+		});
+	});
+	await page.route(`**/api/object-adder/${JOB_ID_2}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: JOB_ID_2,
+				status: 'completed',
+				outputUrl: 'https://cdn.example.test/added-2.webp',
+				cost: 1.5,
+				balance: 17
+			})
+		});
+	});
+
+	const panel = page.locator('#edit-tool-panel-add-object-reference');
+	await panel.getByRole('button', { name: 'Добавить объект' }).click();
+	await expect(page.locator('.result img.output')).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/added.webp',
+		{ timeout: 10_000 }
+	);
+
+	await panel.getByRole('button', { name: 'Сгенерировать ещё раз' }).click();
+	await expect(page.locator('.result img.output')).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/added-2.webp',
+		{ timeout: 10_000 }
+	);
+
+	expect(submittedBodies).toHaveLength(2);
+	const [first, second] = submittedBodies as {
+		image: string;
+		objectImage: string;
+		rect: unknown;
+	}[];
+	// Regenerating must reuse the *original* scene, not the just-generated
+	// result (request.currentRender at the time of the retry) — otherwise
+	// it would composite the same object onto an image that already has it.
+	expect(second.image).toBe(first.image);
+	expect(second.image).toBe('https://cdn.example.test/scene.svg');
+	expect(second.objectImage).toBe(first.objectImage);
+	expect(second.rect).toEqual(first.rect);
+});
+
 test('surfaces a submission error and keeps the form usable for retry', async ({ page }) => {
 	await authenticate(page);
 	await enterReferenceMode(page);
@@ -354,6 +489,38 @@ test('surfaces a submission error and keeps the form usable for retry', async ({
 	await panel.getByRole('button', { name: 'Добавить объект' }).click();
 	await expect(panel.getByRole('alert')).toContainText('Тестовый баланс исчерпан');
 	await expect(panel.getByRole('button', { name: 'Добавить объект' })).toBeEnabled();
+});
+
+test('does not queue a second job on a fast double-click', async ({ page }) => {
+	await authenticate(page);
+	await enterReferenceMode(page);
+	await pickObject(page);
+
+	let postCount = 0;
+	await page.route('**/api/object-adder', async (route) => {
+		postCount += 1;
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			body: JSON.stringify({ id: JOB_ID, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/object-adder/${JOB_ID}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			headers: { 'retry-after': '30' },
+			body: JSON.stringify({ id: JOB_ID, status: 'processing' })
+		});
+	});
+
+	const panel = page.locator('#edit-tool-panel-add-object-reference');
+	// submit() must set its "in flight" lock synchronously, before its first
+	// await (resolving the scene) — otherwise canSubmit still reads true for
+	// a second click that lands before that await settles, queuing twice.
+	await panel.getByRole('button', { name: 'Добавить объект' }).dblclick();
+	await expect(panel.getByRole('button', { name: 'Добавляем объект' })).toBeVisible();
+	expect(postCount).toBe(1);
 });
 
 test('lets the scene photo be changed from the canvas, resetting the placement', async ({
