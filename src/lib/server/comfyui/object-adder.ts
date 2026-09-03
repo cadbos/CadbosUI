@@ -52,13 +52,24 @@ function setWorkflowInput(
 	nodeId: string,
 	classType: string,
 	input: string,
-	value: string
+	value: string | number
 ): void {
 	const node = workflow[nodeId];
 	if (!node || node.class_type !== classType || !(input in node.inputs)) {
 		throw new ComfyUiError('invalid_configuration', 'workflow', 'Invalid object adder workflow');
 	}
 	node.inputs[input] = value;
+}
+
+// The workflow's own noise_seed is a fixed value baked in at export time —
+// ComfyUI's "-1 / randomize" seed control is a queue-button convenience in
+// its own UI, not something the exported API-format JSON can express, so a
+// fixed seed here would otherwise make every generation (and in particular
+// ObjectAdderPanel's "regenerate" retry, which reuses the exact same scene/
+// object/prompt) produce the same, or near-identical, output every time.
+// Kept within Number.MAX_SAFE_INTEGER so it round-trips through JSON exactly.
+function randomNoiseSeed(): number {
+	return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
 }
 
 function objectAdderWorkflow(
@@ -70,6 +81,7 @@ function objectAdderWorkflow(
 	setWorkflowInput(workflow, '100', 'LoadImage', 'image', uploadedImagePath(scene));
 	setWorkflowInput(workflow, '103', 'LoadImage', 'image', uploadedImagePath(composite));
 	setWorkflowInput(workflow, '109', 'PrimitiveStringMultiline', 'value', prompt);
+	setWorkflowInput(workflow, '93', 'KSampler Adv. (Efficient)', 'noise_seed', randomNoiseSeed());
 	const outputNode = workflow[FINAL_OUTPUT_NODE_ID];
 	if (!outputNode || outputNode.class_type !== 'SaveImage') {
 		throw new ComfyUiError('invalid_configuration', 'workflow', 'Invalid object adder workflow');

@@ -123,10 +123,20 @@ describe('runObjectAdder', () => {
 			{ signal: undefined }
 		);
 		const queuedWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
+		// Randomized on every call (see randomNoiseSeed's own comment) — assert
+		// it moved off the template's fixed default, then pin the expected
+		// workflow to whatever value actually got drawn for the rest of the
+		// equality check below.
+		const queuedSeed = queuedWorkflow?.['93'].inputs.noise_seed;
+		expect(typeof queuedSeed).toBe('number');
+		expect(queuedSeed).not.toBe(workflowTemplate['93'].inputs.noise_seed);
+		expect(queuedSeed as number).toBeGreaterThanOrEqual(0);
+		expect(queuedSeed as number).toBeLessThanOrEqual(Number.MAX_SAFE_INTEGER);
 		const expectedWorkflow = structuredClone(workflowTemplate) as ComfyWorkflow;
 		expectedWorkflow['100'].inputs.image = 'cadbos/jobs/scene (1).png';
 		expectedWorkflow['103'].inputs.image = 'composite.png';
 		expectedWorkflow['109'].inputs.value = '  компьютерный стул  ';
+		expectedWorkflow['93'].inputs.noise_seed = queuedSeed;
 		expect(queuedWorkflow).toEqual(expectedWorkflow);
 		expect(workflowTemplate['100'].inputs.image).toBe('room.jpg');
 		expect(workflowTemplate['103'].inputs.image).toBe('Frame 4(8).jpg');
@@ -176,6 +186,12 @@ describe('runObjectAdder', () => {
 		expect(secondWorkflow?.['100'].inputs.image).toBe('cadbos/jobs/second-scene.png');
 		expect(secondWorkflow?.['103'].inputs.image).toBe('second-composite.png');
 		expect(secondWorkflow?.['109'].inputs.value).toBe('armchair');
+		// A "regenerate with the same inputs" retry (ObjectAdderPanel) sends the
+		// exact same scene/composite/prompt on the second call — only a fresh
+		// seed keeps that from being a deterministic no-op re-run.
+		expect(firstWorkflow?.['93'].inputs.noise_seed).not.toBe(
+			secondWorkflow?.['93'].inputs.noise_seed
+		);
 	});
 
 	it('fails when the completed workflow has no final node 105 image', async () => {
