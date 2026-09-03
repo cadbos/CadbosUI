@@ -468,6 +468,7 @@ export const en = {
 	'objectAdder.hint':
 		'Choose a photo of the object, then drag it onto the scene and resize it with the corner handle.',
 	'objectAdder.pickObject': 'Choose object photo',
+	'objectAdder.changeScene': 'Change scene photo',
 	'objectAdder.changeObject': 'Change object photo',
 	'objectAdder.promptLabel': 'Additional instructions (optional)',
 	'objectAdder.promptPlaceholder': 'for example: match the lighting on the left side',

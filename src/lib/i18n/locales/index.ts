@@ -445,6 +445,7 @@ export interface Dictionary {
 	'objectReplacement.generationRestricted': string;
 	'objectAdder.hint': string;
 	'objectAdder.pickObject': string;
+	'objectAdder.changeScene': string;
 	'objectAdder.changeObject': string;
 	'objectAdder.promptLabel': string;
 	'objectAdder.promptPlaceholder': string;

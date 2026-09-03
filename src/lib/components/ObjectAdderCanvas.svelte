@@ -14,8 +14,10 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { type ObjectAdderRect, uploadResultSchema } from '$lib/api/contract';
+	import { normalizeImageContentType } from '$lib/image-mime';
 	import { t } from '$lib/i18n/index.svelte';
 	import { objectAdder } from '$lib/state/object-adder.svelte';
+	import { request } from '$lib/state/request.svelte';
 
 	const MAX_SIZE = 8 * 1024 * 1024;
 	const DEFAULT_WIDTH = 0.3;
@@ -44,6 +46,8 @@ before the Change Date. See LICENSE for complete terms.
 
 	let containerEl = $state<HTMLDivElement | null>(null);
 	let inputEl = $state<HTMLInputElement | null>(null);
+	let sceneInputEl = $state<HTMLInputElement | null>(null);
+	let sceneError = $state<string | null>(null);
 	let sceneNaturalWidth = $state<number | undefined>(undefined);
 	let sceneNaturalHeight = $state<number | undefined>(undefined);
 	// The object photo's url this natural size was actually measured for —
@@ -67,6 +71,14 @@ before the Change Date. See LICENSE for complete terms.
 	let sceneUrlTracked = false;
 	let previousSceneUrl: string | undefined;
 
+	// Picking a new room photo only takes effect through setPendingImage()
+	// while there's no render/edit result yet — once one exists,
+	// editSourcePreviewUrl() keeps preferring it over a freshly picked
+	// pending file (same "current-result wins" precedence every edit tool
+	// shares), so re-picking here would silently do nothing. The plain
+	// ImageUpload widget's own "change photo" control has the same scope —
+	// it isn't shown at all once a result exists either (see Workspace.svelte).
+	const canChangeScene = $derived(!request.currentRender);
 	const placementRect = $derived(objectAdder.rect);
 	const objectNaturalReady = $derived(
 		objectAdder.objectImage !== undefined && objectAdder.objectImage.url === measuredObjectUrl
@@ -78,6 +90,10 @@ before the Change Date. See LICENSE for complete terms.
 
 	function attachInput(node: HTMLInputElement): void {
 		inputEl = node;
+	}
+
+	function attachSceneInput(node: HTMLInputElement): void {
+		sceneInputEl = node;
 	}
 
 	function handleSceneLoad(event: Event): void {
@@ -164,8 +180,41 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
+	function onSceneFileInputChange(event: Event): void {
+		const file = (event.currentTarget as HTMLInputElement).files?.[0];
+		if (file) handleSceneFile(file);
+	}
+
+	// Deferred, same as ImageUpload.svelte's 'room' target — the actual
+	// /api/uploads call happens at generate-time (request.svelte.ts's
+	// #ensureImageUploaded()), not here.
+	function handleSceneFile(file: File): void {
+		if (disabled) return;
+		sceneError = null;
+		if (!file.type.startsWith('image/')) {
+			sceneError = t('upload.errorType');
+			return;
+		}
+		if (file.size > MAX_SIZE) {
+			sceneError = t('upload.errorSize');
+			return;
+		}
+		if (normalizeImageContentType(file.type) === null) {
+			sceneError = t('upload.errorType');
+			return;
+		}
+		request.setPendingImage(file);
+		if (sceneInputEl) sceneInputEl.value = '';
+	}
+
 	function beginMove(event: PointerEvent): void {
 		if (disabled || !objectAdder.rect || !containerEl) return;
+		// Belt-and-suspenders alongside draggable="false" on the <img> itself —
+		// without this, a real mouse/trackpad can still start the browser's own
+		// default action on the first press (native image drag, text
+		// selection), which eats that press instead of handing it to this
+		// handler; only a second, distinct press then reaches continueMove.
+		event.preventDefault();
 		const containerRect = containerEl.getBoundingClientRect();
 		if (containerRect.width === 0 || containerRect.height === 0) return;
 		drag = {
@@ -196,6 +245,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	function beginResize(event: PointerEvent): void {
 		event.stopPropagation();
+		event.preventDefault();
 		if (disabled || !objectAdder.rect || !containerEl) return;
 		const containerRect = containerEl.getBoundingClientRect();
 		if (containerRect.width === 0 || containerRect.height === 0) return;
@@ -231,7 +281,14 @@ before the Change Date. See LICENSE for complete terms.
 
 <div class="object-adder-canvas" {@attach attachContainer}>
 	{#if sceneImageUrl}
-		<img src={sceneImageUrl} alt="" class="scene-image" onload={handleSceneLoad} />
+		<img
+			src={sceneImageUrl}
+			alt=""
+			class="scene-image"
+			draggable="false"
+			onload={handleSceneLoad}
+			ondragstart={(event) => event.preventDefault()}
+		/>
 	{/if}
 
 	{#if objectAdder.objectImage}
@@ -249,11 +306,13 @@ before the Change Date. See LICENSE for complete terms.
 				alt=""
 				class="object-image"
 				class:disabled
+				draggable="false"
 				onload={handleObjectLoad}
 				onpointerdown={beginMove}
 				onpointermove={continueMove}
 				onpointerup={endDrag}
 				onpointercancel={endDrag}
+				ondragstart={(event) => event.preventDefault()}
 			/>
 			<div
 				class="resize-handle"
@@ -271,6 +330,23 @@ before the Change Date. See LICENSE for complete terms.
 		{#if !objectAdder.objectImage}
 			<p class="hint">{t('objectAdder.hint')}</p>
 		{/if}
+		{#if canChangeScene}
+			<button type="button" class="pick-btn" {disabled} onclick={() => sceneInputEl?.click()}>
+				{t('objectAdder.changeScene')}
+			</button>
+			<input
+				{@attach attachSceneInput}
+				type="file"
+				accept="image/*"
+				class="file-input"
+				aria-label={t('objectAdder.changeScene')}
+				{disabled}
+				onchange={onSceneFileInputChange}
+			/>
+			{#if sceneError}
+				<p class="upload-error" role="alert">{sceneError}</p>
+			{/if}
+		{/if}
 		<button type="button" class="pick-btn" {disabled} onclick={() => inputEl?.click()}>
 			{uploading
 				? t('upload.uploading')
@@ -283,6 +359,9 @@ before the Change Date. See LICENSE for complete terms.
 			type="file"
 			accept="image/*"
 			class="file-input"
+			aria-label={objectAdder.objectImage
+				? t('objectAdder.changeObject')
+				: t('objectAdder.pickObject')}
 			disabled={disabled || uploading}
 			onchange={onFileInputChange}
 		/>
@@ -306,6 +385,8 @@ before the Change Date. See LICENSE for complete terms.
 		display: block;
 		width: 100%;
 		height: auto;
+		-webkit-user-drag: none;
+		user-select: none;
 	}
 
 	.object-wrapper {
@@ -320,6 +401,8 @@ before the Change Date. See LICENSE for complete terms.
 		object-fit: contain;
 		cursor: move;
 		touch-action: none;
+		-webkit-user-drag: none;
+		user-select: none;
 		filter: drop-shadow(0 0 4px rgb(0 0 0 / 0.5));
 	}
 

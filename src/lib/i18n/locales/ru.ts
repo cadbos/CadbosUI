@@ -470,6 +470,7 @@ export const ru = {
 	'objectAdder.hint':
 		'Выберите фото объекта, затем перетащите его на сцену и измените размер за уголок.',
 	'objectAdder.pickObject': 'Выбрать фото объекта',
+	'objectAdder.changeScene': 'Изменить фото сцены',
 	'objectAdder.changeObject': 'Изменить фото объекта',
 	'objectAdder.promptLabel': 'Дополнительные инструкции (необязательно)',
 	'objectAdder.promptPlaceholder': 'например: подстроить освещение как слева',
