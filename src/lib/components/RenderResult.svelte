@@ -14,6 +14,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { Download, ImagePlus, Redo, Sparkles, SquareSplitHorizontal, Undo } from '@lucide/svelte';
+	import { resolve } from '$app/paths';
 	import CompareSlider from '$lib/components/CompareSlider.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
@@ -140,10 +141,11 @@ before the Change Date. See LICENSE for complete terms.
 				<span class="toolbar-sep" aria-hidden="true"></span>
 
 				<a
-					href={imageUrl}
+					href={resolve('/api/download/[bucket]/[...filename]', {
+						bucket: render.outputKey.slice(0, render.outputKey.indexOf('/')),
+						filename: render.outputKey.slice(render.outputKey.indexOf('/') + 1)
+					})}
 					download={downloadName}
-					target="_blank"
-					rel="noopener noreferrer"
 					class="icon-btn"
 					aria-label={t('render.download')}
 					title={t('render.download')}

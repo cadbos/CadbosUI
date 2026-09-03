@@ -168,13 +168,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	const sourceImages = page.getByRole('img', { name: /Исходное изображение сцены/ });
 	await sourceImages.nth(0).hover();
 	const sourceDownloadLink = page.getByRole('link', { name: 'Скачать исходник сцены 1' });
-	await expect(sourceDownloadLink).toHaveAttribute(
-		'href',
-		'https://cdn.example.test/newest-source.jpg'
-	);
+	await expect(sourceDownloadLink).toHaveAttribute('href', '/api/download/cadbos-uploads/5');
 	await expect(sourceDownloadLink).toHaveAttribute('download', 'generated-image-newest-source.jpg');
-	await expect(sourceDownloadLink).toHaveAttribute('target', '_blank');
-	await expect(sourceDownloadLink).toHaveAttribute('rel', 'noopener noreferrer');
 	await expect(sourceDownloadLink).toHaveClass(/\bicon-button\b/);
 	await expect(sourceDownloadLink).toHaveAttribute('title', 'Скачать исходник сцены 1');
 
@@ -204,10 +199,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	const downloadLink = page.getByRole('link', {
 		name: 'Скачать результат сцены 1'
 	});
-	await expect(downloadLink).toHaveAttribute('href', 'https://cdn.example.test/newest.webp');
+	await expect(downloadLink).toHaveAttribute('href', '/api/download/cadbos-uploads/6');
 	await expect(downloadLink).toHaveAttribute('download', 'generated-image-newest.webp');
-	await expect(downloadLink).toHaveAttribute('target', '_blank');
-	await expect(downloadLink).toHaveAttribute('rel', 'noopener noreferrer');
 	await expect(downloadLink).toHaveClass(/\bicon-button\b/);
 	await expect(downloadLink).toHaveAttribute('title', 'Скачать результат сцены 1');
 	await downloadLink.focus();
@@ -456,13 +449,8 @@ test('generating with the exterior scene type calls the exterior render route', 
 		'https://cdn.example.test/exterior-render.webp'
 	);
 	const downloadLink = page.getByRole('link', { name: 'Скачать' });
-	await expect(downloadLink).toHaveAttribute(
-		'href',
-		'https://cdn.example.test/exterior-render.webp'
-	);
+	await expect(downloadLink).toHaveAttribute('href', '/api/download/cadbos-uploads/2');
 	await expect(downloadLink).toHaveAttribute('download', 'render.webp');
-	await expect(downloadLink).toHaveAttribute('target', '_blank');
-	await expect(downloadLink).toHaveAttribute('rel', 'noopener noreferrer');
 	await expect(downloadLink).toHaveClass(/\bicon-btn\b/);
 	await expect(downloadLink).toHaveAttribute('title', 'Скачать');
 	await downloadLink.focus();
