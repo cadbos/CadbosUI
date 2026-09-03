@@ -480,6 +480,9 @@ export const en = {
 	'objectAdder.processing': 'Adding the object. This can take several minutes…',
 	'objectAdder.completed': 'Object added.',
 	'objectAdder.newRequest': 'Add another',
+	'objectAdder.regenerate': 'Generate again',
+	'objectAdder.regenerateHint':
+		"If the result isn't quite what you had in mind, generate again with the same object and placement.",
 	'objectAdder.tryAgain': 'Try again',
 	'objectAdder.retryStatus': 'Retry status check',
 	'objectAdder.failed': 'Could not add the object. Please try again.',

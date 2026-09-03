@@ -457,6 +457,8 @@ export interface Dictionary {
 	'objectAdder.processing': string;
 	'objectAdder.completed': string;
 	'objectAdder.newRequest': string;
+	'objectAdder.regenerate': string;
+	'objectAdder.regenerateHint': string;
 	'objectAdder.tryAgain': string;
 	'objectAdder.retryStatus': string;
 	'objectAdder.failed': string;

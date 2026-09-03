@@ -482,6 +482,9 @@ export const ru = {
 	'objectAdder.processing': 'Добавляем объект. Это может занять несколько минут…',
 	'objectAdder.completed': 'Объект добавлен.',
 	'objectAdder.newRequest': 'Добавить ещё',
+	'objectAdder.regenerate': 'Сгенерировать ещё раз',
+	'objectAdder.regenerateHint':
+		'Если результат отличается от задуманного, сгенерируйте ещё раз с тем же объектом и размещением.',
 	'objectAdder.tryAgain': 'Попробовать снова',
 	'objectAdder.retryStatus': 'Повторить проверку статуса',
 	'objectAdder.failed': 'Не удалось добавить объект. Попробуйте ещё раз.',

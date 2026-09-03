@@ -1519,19 +1519,25 @@ export class RequestState {
 	// off this store — see $lib/state/object-adder.svelte.ts, which owns them
 	// (a spatial canvas placement isn't request-model "content" any more than
 	// MaskEditor's brush strokes are; only the resulting job/prompt are).
+	// Takes the resolved scene explicitly (see resolveEditSource()) rather
+	// than re-resolving it internally — ObjectAdderPanel's "regenerate with
+	// the same placement" needs to reuse the exact scene from the original
+	// attempt, not whatever resolveEditSource() currently points at (which,
+	// once that attempt completes, is the just-generated result itself —
+	// compositing the same object onto its own already-blended output would
+	// double it up, not retry the original request).
 	async toObjectAdderRequest(
 		objectImage: { url: string; hash?: string },
-		rect: ObjectAdderRect
+		rect: ObjectAdderRect,
+		scene: { url: string; hash?: string }
 	): Promise<ObjectAdderRequest | null> {
 		const validation = this.validateObjectAdder();
 		if (!validation.valid) return null;
-		const source = await this.resolveEditSource();
-		if (!source) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		const prompt = this.objectAdderPrompt.trim();
 		return {
-			image: source.url,
-			...(source.hash ? { imageHash: source.hash } : {}),
+			image: scene.url,
+			...(scene.hash ? { imageHash: scene.hash } : {}),
 			objectImage: objectImage.url,
 			...(objectImage.hash ? { objectImageHash: objectImage.hash } : {}),
 			rect,

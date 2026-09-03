@@ -20,7 +20,12 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import { objectAdder } from '$lib/state/object-adder.svelte';
-	import { extractApiErrorCode, request, RequestImageUploadError } from '$lib/state/request.svelte';
+	import {
+		extractApiErrorCode,
+		request,
+		RequestImageUploadError,
+		type RenderResult
+	} from '$lib/state/request.svelte';
 	import { logBoundaryError } from '$lib/utils';
 
 	const MAX_TRANSIENT_FAILURES = 5;
@@ -61,6 +66,12 @@ before the Change Date. See LICENSE for complete terms.
 	let terminalError = $state<PollFailure | null>(null);
 	let pollFailure = $state<PollFailure | null>(null);
 	let pollRun = 0;
+	// The exact scene resolved for the last submission — kept so "regenerate"
+	// can reuse the original scene instead of whatever resolveEditSource()
+	// resolves to *now* (see toObjectAdderRequest's own comment). Not reset by
+	// clearJob() — a fresh "add another" attempt re-resolves its own scene at
+	// submit time regardless.
+	let lastScene = $state<{ url: string; hash?: string } | null>(null);
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const jobId = $derived(request.activeObjectAdderJobId ?? null);
 	const validation = $derived(request.validateObjectAdder());
@@ -106,6 +117,29 @@ before the Change Date. See LICENSE for complete terms.
 			'generationOverlay.objectAdderDetail'
 		);
 		return () => generationOverlay.stop(overlayId);
+	});
+
+	// ObjectAdderCanvas.svelte isn't sticky-mounted like this panel — leaving
+	// reference mode (Presets) and coming back destroys and recreates it, and
+	// objectAdder.setReferenceMode(true) resets objectAdder.resultReady so
+	// Workspace.svelte shows that fresh canvas again instead of the finished
+	// result. But without this, the *job* itself (jobId, terminalJob) is
+	// untouched — the canvas reopens (with its existing placement, since that
+	// lives in the objectAdder store, not this component) while this panel
+	// keeps showing the previous attempt's disabled "completed"/"failed"
+	// button and success message, out of sync with what the user is actually
+	// looking at. resetJobState() only clears the stale job/terminal display,
+	// not the placement or prompt — same reasoning as "regenerate": the
+	// canvas reopening isn't the user asking to start over.
+	$effect(() => {
+		if (
+			objectAdder.referenceMode &&
+			!objectAdder.resultReady &&
+			jobId !== null &&
+			(terminalJob?.id === jobId || terminalError?.jobId === jobId)
+		) {
+			resetJobState();
+		}
 	});
 
 	function textareaValue(event: Event): string {
@@ -268,15 +302,28 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
-	async function submit(): Promise<void> {
-		if (!canSubmit || !objectAdder.objectImage || !objectAdder.rect) return;
-		submitting = true;
+	// Shared by submit() and regenerate() — everything past "resolve the
+	// scene and object" is identical between a fresh attempt and a retry.
+	// Deliberately does not touch `submitting` — the caller owns that lock
+	// for its *entire* operation (including, for submit(), the scene
+	// resolution before this is even called), since setting it only here
+	// would leave a window between a click and this function's first await
+	// where canSubmit still reads true, letting a fast double-click queue
+	// two submissions.
+	async function queueJob(
+		scene: { url: string; hash?: string },
+		sourceRender: RenderResult | undefined
+	): Promise<void> {
+		if (!objectAdder.objectImage || !objectAdder.rect) return;
 		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
 		try {
-			const sourceRender = request.currentRender;
-			const body = await request.toObjectAdderRequest(objectAdder.objectImage, objectAdder.rect);
+			const body = await request.toObjectAdderRequest(
+				objectAdder.objectImage,
+				objectAdder.rect,
+				scene
+			);
 			if (!body) return;
 			const response = await fetch('/api/object-adder', {
 				method: 'POST',
@@ -296,6 +343,49 @@ before the Change Date. See LICENSE for complete terms.
 				jobId: '',
 				key: error instanceof RequestImageUploadError ? 'upload.errorUpload' : 'objectAdder.failed'
 			};
+		}
+	}
+
+	async function submit(): Promise<void> {
+		if (!canSubmit || !objectAdder.objectImage || !objectAdder.rect) return;
+		// Set synchronously, before the first await — canSubmit's formLocked
+		// check must already see this on a fast second click, not just once
+		// queueJob (called below, after resolving the scene) gets around to it.
+		submitting = true;
+		try {
+			const scene = await request.resolveEditSource();
+			if (!scene) return;
+			lastScene = scene;
+			await queueJob(scene, request.currentRender);
+		} catch (error) {
+			terminalError = {
+				jobId: '',
+				key: error instanceof RequestImageUploadError ? 'upload.errorUpload' : 'objectAdder.failed'
+			};
+		} finally {
+			submitting = false;
+		}
+	}
+
+	// Reuses the exact object/placement/prompt/scene from the last attempt —
+	// for when the result itself was fine as an attempt but just didn't come
+	// out as intended, without forcing the user to re-pick the object photo
+	// and re-place it via "Добавить ещё" first. sourceRender comes from the
+	// original job's own recorded context (still available — clearJob()
+	// hasn't run), not request.currentRender, so the new attempt stays a
+	// sibling of the last one in the edit history rather than a child of it.
+	async function regenerate(): Promise<void> {
+		if (submitting || !lastScene) return;
+		// Set synchronously, before any await, same reasoning as submit() —
+		// otherwise a fast double-click could both pass this check.
+		submitting = true;
+		const sourceRender = request.activeObjectAdderJob?.sourceRender;
+		// Clears just the finished job id (not the whole clearJob() — the
+		// object/rect/prompt/scene all carry over unchanged) so canSubmit's
+		// jobId===null gate doesn't block the queued request below.
+		request.setActiveObjectAdderJobId(undefined);
+		try {
+			await queueJob(lastScene, sourceRender);
 		} finally {
 			submitting = false;
 		}
@@ -305,13 +395,21 @@ before the Change Date. See LICENSE for complete terms.
 		pollFailure = null;
 	}
 
-	function clearJob(): void {
+	// Just the job/terminal-display bits — leaves the placed object, rect and
+	// prompt alone. Used where the intent is "this job is done with, let the
+	// form be usable again" without also discarding a placement the user
+	// might still want (see the reference-mode re-entry effect above).
+	function resetJobState(): void {
 		request.setActiveObjectAdderJobId(undefined);
-		request.setObjectAdderPrompt('');
-		objectAdder.clear();
 		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
+	}
+
+	function clearJob(): void {
+		resetJobState();
+		request.setObjectAdderPrompt('');
+		objectAdder.clear();
 	}
 </script>
 
@@ -358,9 +456,23 @@ before the Change Date. See LICENSE for complete terms.
 	</div>
 
 	{#if terminalJob?.id === jobId}
-		<button type="button" class="secondary-btn" onclick={clearJob}>
-			{t('objectAdder.newRequest')}
-		</button>
+		<p class="regenerate-hint">{t('objectAdder.regenerateHint')}</p>
+		<div class="actions">
+			<button
+				type="button"
+				class="generate-btn"
+				disabled={submitting}
+				onclick={() => void regenerate()}
+			>
+				{#if submitting}
+					<span class="spinner" aria-hidden="true"></span>
+				{/if}
+				{t('objectAdder.regenerate')}
+			</button>
+			<button type="button" class="secondary-btn" onclick={clearJob}>
+				{t('objectAdder.newRequest')}
+			</button>
+		</div>
 	{:else if terminalError?.jobId === jobId || (terminalError?.jobId === '' && jobId === null)}
 		<p class="submit-error" role="alert">{t(terminalError.key)}</p>
 		{#if jobId !== null}
@@ -423,10 +535,17 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.auth-hint,
-	.validation-hint {
+	.validation-hint,
+	.regenerate-hint {
 		margin: 0;
 		font-size: 0.875rem;
 		color: var(--color-muted);
+	}
+
+	.actions {
+		display: flex;
+		gap: 0.625rem;
+		flex-wrap: wrap;
 	}
 
 	.generate-btn {
