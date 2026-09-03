@@ -16,6 +16,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedManagedMedia, TEST_S3_ENV } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
@@ -84,6 +85,7 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 	)
 		.bind(TEST_SESSION_ID, projectId, 'Test session', now, now)
 		.run();
+	seedManagedMedia(db);
 }
 
 // The admin's manual approval step (migrations/0005) — no auto-provisioning
@@ -102,18 +104,19 @@ function call(
 	platform: App.Platform,
 	body: unknown
 ): ReturnType<typeof POST> {
+	const testPlatform = { ...platform, env: { ...TEST_S3_ENV, ...platform.env } } as App.Platform;
 	return POST({
 		request: new Request('https://cadbos.example/api/render', {
 			method: 'POST',
 			body: JSON.stringify(body)
 		}),
-		platform,
+		platform: testPlatform,
 		locals: { sessionLookupUnavailable: false, user }
 	} as RenderEvent);
 }
 
 const body = {
-	image: 'https://example.test/room.jpg',
+	imageKey: 'cadbos-uploads/test/source.webp',
 	prompt: 'cozy',
 	outputFormat: 'webp',
 	sessionId: TEST_SESSION_ID
@@ -124,6 +127,15 @@ describe('POST /api/render — billing', () => {
 	it('rejects unauthenticated requests', async () => {
 		const response = await call(null, { env: { DB: makeD1() } } as App.Platform, body);
 		expect(response.status).toBe(401);
+	});
+
+	it('rejects an unqualified media key', async () => {
+		const response = await call({ pubkey }, { env: { DB: makeD1() } } as App.Platform, {
+			...body,
+			imageKey: 'source.webp'
+		});
+
+		expect(response.status).toBe(400);
 	});
 
 	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
@@ -167,7 +179,7 @@ describe('POST /api/render — billing', () => {
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
+		const result = (await response.json()) as { output: { key: string; url: string } };
 
 		const row = await db
 			.prepare(
@@ -184,11 +196,13 @@ describe('POST /api/render — billing', () => {
 			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
 		expect(row).toEqual({
 			user_id: 'user-1',
-			url: result.outputUrl,
-			source_url: body.image,
+			url: expect.stringMatching(/^https:\/\/uploads\.cadbos\.example\//),
+			source_url: 'https://uploads.cadbos.example/test/source.webp',
 			prompt: body.prompt,
 			kind: 'render'
 		});
+		expect(result.output.key).toBeTruthy();
+		expect(result.output.url).toContain('X-Amz-Expires=43200');
 	});
 
 	it('overwrites the mirrored archAI balance rather than accumulating it across calls', async () => {
@@ -221,8 +235,8 @@ describe('POST /api/render — billing', () => {
 			);
 
 			expect(response.status).toBe(200);
-			const result = (await response.json()) as { outputUrl: string };
-			expect(result.outputUrl).toMatch(/^https:\/\//);
+			const result = (await response.json()) as { output: { url: string } };
+			expect(result.output.url).toMatch(/^https:\/\//);
 			expect(consoleError).toHaveBeenCalledWith(
 				'recordGeneration failed after a successful render:',
 				expect.any(Error)
@@ -247,8 +261,8 @@ describe('POST /api/render — billing', () => {
 			);
 
 			expect(response.status).toBe(200);
-			const result = (await response.json()) as { outputUrl: string };
-			expect(result.outputUrl).toMatch(/^https:\/\//);
+			const result = (await response.json()) as { output: { url: string } };
+			expect(result.output.url).toMatch(/^https:\/\//);
 			expect(consoleError).toHaveBeenCalledWith(
 				'recordBalance failed after a successful render:',
 				expect.any(Error)

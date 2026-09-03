@@ -60,14 +60,14 @@ before the Change Date. See LICENSE for complete terms.
 		}).format(new Date(createdAt));
 	}
 
-	function useImage(sourceUrl: string): void {
+	function useImage(mediaKey: string): void {
 		// A resource picked here is fresh, project-less work — it belongs on
 		// the scratch tab, not whatever project tab happened to be active.
 		// Without this, the mutations below would land on the shared `request`
 		// singleton while it's still standing in for that other tab, silently
 		// detaching *its* session and replacing its content with this image.
 		workspaceTabs.activate(SCRATCH_TAB_ID);
-		request.setImage({ url: sourceUrl });
+		request.setImage({ mediaKey });
 		request.setCurrentRender(undefined);
 		request.clearProjectSession();
 		request.setStyleSourceMode('room-photo');
@@ -102,17 +102,17 @@ before the Change Date. See LICENSE for complete terms.
 			<p class="status">{t('resources.empty')}</p>
 		{:else}
 			<ul class="grid" aria-label={t('resources.listLabel')}>
-				{#each resources.images as image, index (image.sourceUrl)}
+				{#each resources.images as image, index (image.image.key)}
 					<li class="card">
 						<button
 							type="button"
 							class="card-button"
 							aria-label={ti('resources.useImageAria', { order: index + 1 })}
-							onclick={() => useImage(image.sourceUrl)}
+							onclick={() => useImage(image.image.key)}
 						>
 							<span class="image-frame">
 								<img
-									src={image.sourceUrl}
+									src={image.image.url}
 									alt={ti('resources.imageAlt', { order: index + 1 })}
 									loading="lazy"
 								/>

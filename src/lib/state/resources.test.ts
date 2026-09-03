@@ -14,10 +14,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResourceImageRecord, ResourcesResponse } from '$lib/api/contract';
+import { mediaAccess } from './media-access.svelte';
 import { resources } from './resources.svelte';
 
-function image(sourceUrl: string, createdAt: number): ResourceImageRecord {
-	return { sourceUrl, createdAt };
+function image(url: string, createdAt: number): ResourceImageRecord {
+	return { image: { key: new URL(url).pathname, url }, createdAt };
 }
 
 function page(images: ResourceImageRecord[], offset: number, hasMore: boolean): ResourcesResponse {
@@ -54,10 +55,12 @@ function mockResourcesFetch(pages: ResourcesResponse[]) {
 
 beforeEach(() => {
 	resources.clear();
+	mediaAccess.clear();
 });
 
 afterEach(() => {
 	resources.clear();
+	mediaAccess.clear();
 	vi.unstubAllGlobals();
 });
 
@@ -75,7 +78,7 @@ describe('resources pagination', () => {
 			signal: expect.any(AbortSignal)
 		});
 		expect(resources.status).toBe('ready');
-		expect(resources.images.map((record) => record.sourceUrl)).toEqual([
+		expect(resources.images.map((record) => record.image.url)).toEqual([
 			'https://cdn.example/one.jpg'
 		]);
 		expect(resources.hasMore).toBe(true);
@@ -96,7 +99,7 @@ describe('resources pagination', () => {
 			signal: expect.any(AbortSignal)
 		});
 		expect(resources.status).toBe('ready');
-		expect(resources.images.map((record) => record.sourceUrl)).toEqual([
+		expect(resources.images.map((record) => record.image.url)).toEqual([
 			'https://cdn.example/one.jpg',
 			'https://cdn.example/two.jpg'
 		]);
@@ -107,7 +110,7 @@ describe('resources pagination', () => {
 	it('surfaces invalid resources responses as load errors', async () => {
 		const fetchMock = vi.fn<typeof fetch>(() =>
 			Promise.resolve(
-				new Response(JSON.stringify({ images: [{ sourceUrl: '' }] }), {
+				new Response(JSON.stringify({ images: [{ image: { key: 'one.jpg', url: '' } }] }), {
 					status: 200,
 					headers: { 'content-type': 'application/json' }
 				})

@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { completeLightSettingsJob, createLightSettingsJob } from '$lib/server/light-settings-jobs';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedManagedMedia } from '$lib/server/testing/generation-fixtures';
 
 function seedAccount(db: D1Database): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -40,31 +41,23 @@ describe('light settings jobs', () => {
 	it('stores media references and atomically records a completed generation', async () => {
 		const db = makeD1();
 		seedAccount(db);
-		const sceneUrl = 'https://uploads.cadbos.example/scene.jpg';
-		const outputUrl = 'https://uploads.cadbos.example/light-settings/job-1.png';
+		const sceneMediaId = seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
+		const outputMediaId = seedManagedMedia(db, 'light-settings/job-1.png', 'b'.repeat(64));
 
 		const created = await createLightSettingsJob(db, {
 			id: 'job-1',
 			userId: 'user-1',
 			comfyPromptId: 'prompt-1',
-			sceneUrl,
-			sceneHash: 'A'.repeat(64),
+			sceneMediaId,
 			sessionId: 'session-1',
 			instruction: 'warmer light',
 			cost: 2,
 			createdAt: 10
 		});
-		expect(created).toMatchObject({ sceneUrl, status: 'processing', outputUrl: null });
+		expect(created).toMatchObject({ sceneMediaId, status: 'processing', outputMediaId: null });
 
-		const completed = await completeLightSettingsJob(
-			db,
-			'user-1',
-			'job-1',
-			outputUrl,
-			'B'.repeat(64),
-			20
-		);
-		expect(completed).toMatchObject({ outputUrl, status: 'completed', balanceAfter: 10 });
+		const completed = await completeLightSettingsJob(db, 'user-1', 'job-1', outputMediaId, 20);
+		expect(completed).toMatchObject({ outputMediaId, status: 'completed', balanceAfter: 10 });
 
 		const references = await db
 			.prepare(

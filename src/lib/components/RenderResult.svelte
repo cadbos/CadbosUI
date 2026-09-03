@@ -14,6 +14,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { Download, ImagePlus, Redo, Sparkles, SquareSplitHorizontal, Undo } from '@lucide/svelte';
+	import { resolve } from '$app/paths';
 	import CompareSlider from '$lib/components/CompareSlider.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
@@ -21,6 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
+	import { mediaAccess } from '$lib/state/media-access.svelte';
 
 	let comparing = $state(false);
 	let upscaling = $state(false);
@@ -48,83 +50,18 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	const render = $derived(request.currentRender);
-	const imageUrl = $derived(render?.outputUrls[0]);
+	const imageUrl = $derived(render ? mediaAccess.get(render.outputKey)?.url : undefined);
 	// The originally uploaded photo is itself the root history step (FR-К6), so
 	// "before" is always the actual previous step — there's nothing to compare
 	// against only at that root step, where comparing is correctly disabled.
-	const beforeImageUrl = $derived(request.previousRender?.outputUrls[0]);
+	const beforeImageUrl = $derived(
+		request.previousRender ? mediaAccess.get(request.previousRender.outputKey)?.url : undefined
+	);
 	const canCompare = $derived(beforeImageUrl !== undefined);
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	// The render result doesn't carry its own format, so the current form setting
 	// is the best available signal for the download filename's extension.
 	const downloadName = $derived(`render.${request.outputFormat}`);
-	// archAI hosts the output on its own CDN, so a plain <a download> to imageUrl
-	// only works same-origin — cross-origin, browsers just navigate away instead,
-	// losing all in-page form state. Routing through our own proxy with
-	// Content-Disposition: attachment forces a real download with no navigation.
-	const downloadHref = $derived(
-		imageUrl
-			? `/api/download?url=${encodeURIComponent(imageUrl)}&filename=${encodeURIComponent(downloadName)}`
-			: undefined
-	);
-
-	// The archAI CDN occasionally stalls mid-transfer: the connection never
-	// errors and never completes, so the <img> just hangs with no onload and
-	// no onerror. This watchdog force-reloads via a cache-busted URL if load
-	// hasn't fired within STALL_TIMEOUT_MS, capped at MAX_STALL_RETRIES.
-	const STALL_TIMEOUT_MS = 20_000;
-	const MAX_STALL_RETRIES = 2;
-
-	function withRetryParam(url: string, attempt: number): string {
-		const separator = url.includes('?') ? '&' : '?';
-		return `${url}${separator}retry=${attempt}`;
-	}
-
-	// `active` gates whether the watchdog should be armed at all — the before
-	// image only actually renders (and can stall) while the compare slider is
-	// open, so arming its timer regardless would reload/retry an <img> that
-	// isn't even in the DOM.
-	function createStallWatchdog(
-		getUrl: () => string | undefined,
-		active: () => boolean = () => true
-	) {
-		let src = $state<string | undefined>(undefined);
-		let clearTimer = () => {};
-
-		$effect(() => {
-			const url = getUrl();
-			src = url;
-			clearTimer = () => {};
-			if (!url || !active()) return;
-
-			let attempt = 0;
-			let timer: ReturnType<typeof setTimeout>;
-			const arm = () => {
-				timer = setTimeout(() => {
-					attempt += 1;
-					src = withRetryParam(url, attempt);
-					if (attempt < MAX_STALL_RETRIES) arm();
-				}, STALL_TIMEOUT_MS);
-			};
-			arm();
-			clearTimer = () => clearTimeout(timer);
-
-			return () => clearTimeout(timer);
-		});
-
-		return {
-			get src() {
-				return src;
-			},
-			onload: () => clearTimer()
-		};
-	}
-
-	const imageWatchdog = createStallWatchdog(() => imageUrl);
-	const beforeImageWatchdog = createStallWatchdog(
-		() => beforeImageUrl,
-		() => comparing
-	);
 
 	async function upscale(): Promise<void> {
 		if (!render || upscaling || !isAuthenticated) return;
@@ -141,7 +78,7 @@ before the Change Date. See LICENSE for complete terms.
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
-					image: sourceRender.outputUrls[0],
+					imageKey: sourceRender.outputKey,
 					outputFormat: request.outputFormat,
 					sessionId
 				})
@@ -169,21 +106,14 @@ before the Change Date. See LICENSE for complete terms.
 		<div class="image-card">
 			{#if comparing && beforeImageUrl}
 				<CompareSlider
-					beforeSrc={beforeImageWatchdog.src}
-					afterSrc={imageWatchdog.src}
+					beforeSrc={beforeImageUrl}
+					afterSrc={imageUrl}
 					beforeAlt={t('toolbar.before')}
 					afterAlt={t('toolbar.after')}
 					handleLabel={t('toolbar.compare')}
-					onBeforeLoad={beforeImageWatchdog.onload}
-					onAfterLoad={imageWatchdog.onload}
 				/>
 			{:else}
-				<img
-					src={imageWatchdog.src}
-					alt={t('render.generate')}
-					class="output"
-					onload={imageWatchdog.onload}
-				/>
+				<img src={imageUrl} alt={t('render.generate')} class="output" />
 			{/if}
 
 			<div class="toolbar">
@@ -211,7 +141,10 @@ before the Change Date. See LICENSE for complete terms.
 				<span class="toolbar-sep" aria-hidden="true"></span>
 
 				<a
-					href={downloadHref}
+					href={resolve('/api/download/[bucket]/[...filename]', {
+						bucket: render.outputKey.slice(0, render.outputKey.indexOf('/')),
+						filename: render.outputKey.slice(render.outputKey.indexOf('/') + 1)
+					})}
 					download={downloadName}
 					class="icon-btn"
 					aria-label={t('render.download')}

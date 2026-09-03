@@ -17,6 +17,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedManagedMedia, TEST_S3_ENV } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 
 const { POST } = await import('./+server');
@@ -41,6 +42,8 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 	)
 		.bind(TEST_SESSION_ID, projectId, 'Test session', now, now)
 		.run();
+	seedManagedMedia(db);
+	seedManagedMedia(db, 'test/reference.webp');
 }
 
 function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
@@ -56,19 +59,20 @@ function call(
 	platform: App.Platform,
 	body: unknown
 ): ReturnType<typeof POST> {
+	const testPlatform = { ...platform, env: { ...TEST_S3_ENV, ...platform.env } } as App.Platform;
 	return POST({
 		request: new Request('https://cadbos.example/api/style-transfer', {
 			method: 'POST',
 			body: JSON.stringify(body)
 		}),
-		platform,
+		platform: testPlatform,
 		locals: { sessionLookupUnavailable: false, user }
 	} as StyleTransferEvent);
 }
 
 const body = {
-	image: 'https://example.test/room.jpg',
-	referenceImage: 'https://example.test/style.jpg',
+	imageKey: 'cadbos-uploads/test/source.webp',
+	referenceImageKey: 'cadbos-uploads/test/reference.webp',
 	outputFormat: 'webp',
 	prompt: 'preserve the room layout',
 	negativePrompt: 'no people',
@@ -98,32 +102,30 @@ describe('POST /api/style-transfer — billing', () => {
 		expect(result.error.code).toBe('session_not_found');
 	});
 
-	it('rejects an image value that is not a URL', async () => {
+	it('rejects a reference image value that is not a media key', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
 			...body,
-			referenceImage: 'not-a-url'
+			referenceImageKey: 2
 		});
 		expect(response.status).toBe(400);
 	});
 
-	it('rejects non-http image URLs', async () => {
+	it('rejects URL fields from the previous contract', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 		const platform = { env: { DB: db } } as App.Platform;
-		const dataUrl = 'data:image/png;base64,aW1hZ2U=';
-
 		const sourceResponse = await call({ pubkey }, platform, {
 			...body,
-			image: dataUrl
+			image: 'https://example.test/room.jpg'
 		});
 		const referenceResponse = await call({ pubkey }, platform, {
 			...body,
-			referenceImage: dataUrl
+			referenceImage: 'https://example.test/style.jpg'
 		});
 
 		expect(sourceResponse.status).toBe(400);
@@ -166,7 +168,7 @@ describe('POST /api/style-transfer — billing', () => {
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
+		const result = (await response.json()) as { output: { key: string; url: string } };
 
 		const row = await db
 			.prepare(
@@ -183,11 +185,13 @@ describe('POST /api/style-transfer — billing', () => {
 			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
 		expect(row).toEqual({
 			user_id: 'user-1',
-			url: result.outputUrl,
-			source_url: body.image,
+			url: expect.stringMatching(/^https:\/\/uploads\.cadbos\.example\//),
+			source_url: 'https://uploads.cadbos.example/test/source.webp',
 			prompt: body.prompt,
 			kind: 'style-transfer'
 		});
+		expect(result.output.key).toBeTruthy();
+		expect(result.output.url).toContain('X-Amz-Expires=43200');
 	});
 
 	it('rate-limits repeated style transfers from the same account', async () => {

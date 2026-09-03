@@ -15,6 +15,7 @@
 import type { Page, Route } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { media } from './helpers/media';
 import {
 	E2E_PROJECT_ID,
 	E2E_SESSION_ID,
@@ -71,24 +72,24 @@ async function authenticate(page: Page): Promise<void> {
 	await mockProjectSessionRoutes(page);
 }
 
-function textureUploadFixture(route: Route): { url: string; mime: string; hash: string } {
+function textureUploadFixture(route: Route): { key: string; url: string; mime: string } {
 	const body = route.request().postDataBuffer();
 	if (body === null) throw new Error('Upload request body is missing');
 	if (pngFromMultipart(body) !== undefined) {
 		return {
+			key: '3',
 			url: 'https://cdn.example.test/texture-mask.png',
-			mime: 'image/png',
-			hash: 'mask-hash'
+			mime: 'image/png'
 		};
 	}
 	if (body.includes(Buffer.from('scene'))) {
-		return { url: 'https://cdn.example.test/scene.webp', mime: 'image/webp', hash: 'scene-hash' };
+		return { key: '1', url: 'https://cdn.example.test/scene.webp', mime: 'image/webp' };
 	}
 	if (body.includes(Buffer.from('fabric'))) {
 		return {
+			key: '2',
 			url: 'https://cdn.example.test/reference-fabric.webp',
-			mime: 'image/webp',
-			hash: 'fabric-hash'
+			mime: 'image/webp'
 		};
 	}
 	throw new Error('Upload request body does not match the texture replacement fixtures');
@@ -114,10 +115,9 @@ async function uploadInputs(page: Page): Promise<UploadCapture> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				url: fixture.url,
+				image: media(fixture.key, fixture.url),
 				mime: fixture.mime,
 				size: 1024,
-				hash: fixture.hash,
 				dimensions: [800, 600]
 			})
 		});
@@ -302,7 +302,7 @@ test('draws a mask and applies the synchronous result without polling', async ({
 			body: JSON.stringify({
 				id: JOB_ID,
 				status: 'completed',
-				outputUrl: 'https://cdn.example.test/masked-result.webp',
+				output: media(4, 'https://cdn.example.test/masked-result.webp'),
 				cost: 1.5,
 				balance: 18.5
 			})
@@ -317,10 +317,9 @@ test('draws a mask and applies the synchronous result without polling', async ({
 	);
 	await expect(panel.locator('.job-success')).toHaveText('Замена текстуры завершена.');
 	expect(submittedBody).toEqual({
-		image: 'https://cdn.example.test/scene.webp',
-		imageHash: 'scene-hash',
-		referenceImage: 'https://cdn.example.test/reference-fabric.webp',
-		mask: 'https://cdn.example.test/texture-mask.png',
+		imageKey: 'cadbos-uploads/1',
+		referenceImageKey: 'cadbos-uploads/2',
+		maskImageKey: 'cadbos-uploads/3',
 		sessionId: E2E_SESSION_ID
 	});
 	expect(pollCount).toBe(0);
@@ -330,7 +329,8 @@ test('draws a mask and applies the synchronous result without polling', async ({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/follow-up-edit.webp',
+				id: '00000000-0000-4000-8000-000000000301',
+				output: media(5, 'https://cdn.example.test/follow-up-edit.webp'),
 				cost: 1,
 				balance: 17.5
 			})

@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { makeD1 } from '$lib/server/testing/d1-shim';
-import { setBucketUrl } from '$lib/server/testing/generation-fixtures';
+import { seedManagedMedia, TEST_S3_ENV } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 
 const integration = vi.hoisted(() => ({
@@ -49,8 +49,8 @@ vi.mock('$lib/server/texture-replacement-jobs', async (importOriginal) => {
 const { POST } = await import('./+server');
 
 const requestBody = {
-	image: 'https://cdn.example.test/scene.jpg',
-	referenceImage: 'https://cdn.example.test/reference.jpg',
+	imageKey: 'cadbos-uploads/scene.jpg',
+	referenceImageKey: 'cadbos-uploads/reference.jpg',
 	replacementSurface: 'floor'
 };
 
@@ -107,10 +107,13 @@ function seedUser(
 	)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
+	seedManagedMedia(db, 'scene.jpg');
+	seedManagedMedia(db, 'reference.jpg');
+	seedManagedMedia(db, 'mask.png');
 }
 
 function platform(db: D1Database): App.Platform {
-	return { env: { DB: db } } as unknown as App.Platform;
+	return { env: { DB: db, ...TEST_S3_ENV } } as unknown as App.Platform;
 }
 
 type PostEvent = Parameters<typeof POST>[0];
@@ -140,7 +143,8 @@ function callPost(
 
 beforeEach(() => {
 	archai.replaceTexturesWithMask.mockReset().mockResolvedValue({
-		outputUrl: 'https://cdn.example.test/masked-result.webp',
+		outputKey: 'masked-result.webp',
+		outputHash: 'a'.repeat(64),
 		cost: 1.5,
 		balance: 100
 	});
@@ -181,12 +185,11 @@ describe('POST /api/texture-replacement', () => {
 
 	it('uses ArchAI for a masked request and completes without creating a ComfyUI job', async () => {
 		const db = makeD1();
-		setBucketUrl(db, 'cadbos-uploads', 'https://uploads.example.test');
 		seedUser(db);
 		const maskedRequest = {
-			image: requestBody.image,
-			referenceImage: requestBody.referenceImage,
-			mask: 'https://cdn.example.test/mask.png'
+			imageKey: requestBody.imageKey,
+			referenceImageKey: requestBody.referenceImageKey,
+			maskImageKey: 'cadbos-uploads/mask.png'
 		};
 
 		const response = await callPost(platform(db), 'pubkey-1', maskedRequest);
@@ -195,30 +198,31 @@ describe('POST /api/texture-replacement', () => {
 		expect(await response.json()).toEqual({
 			id: expect.any(String),
 			status: 'completed',
-			outputUrl: 'https://cdn.example.test/masked-result.webp',
+			output: {
+				key: 'cadbos-uploads/masked-result.webp',
+				url: expect.stringContaining('/masked-result.webp?')
+			},
 			cost: 1.5,
 			balance: 10.5
 		});
 		expect(archai.replaceTexturesWithMask).toHaveBeenCalledWith(
 			expect.objectContaining({ env: expect.objectContaining({ DB: db }) }),
-			'https://uploads.example.test',
-			{ ...maskedRequest, sessionId: sessionIdForPubkey('pubkey-1') }
+			expect.objectContaining({ name: 'cadbos-uploads' }),
+			{
+				image: expect.stringContaining('/scene.jpg?'),
+				referenceImage: expect.stringContaining('/reference.jpg?'),
+				mask: expect.stringContaining('/mask.png?')
+			}
 		);
 		expect(integration.submit).not.toHaveBeenCalled();
 		expect(jobs.create).not.toHaveBeenCalled();
 		const generation = await db
-			.prepare(
-				"SELECT g.kind, source_bucket.url || '/' || source_media.filename AS source_url, g.amount " +
-					'FROM generations g ' +
-					'JOIN media source_media ON source_media.id = g.source_media_id ' +
-					'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
-					'WHERE g.user_id = ?'
-			)
+			.prepare('SELECT g.kind, g.source_media_id, g.amount FROM generations g WHERE g.user_id = ?')
 			.bind('user-1')
-			.first<{ kind: string; source_url: string; amount: number }>();
+			.first<{ kind: string; source_media_id: number; amount: number }>();
 		expect(generation).toEqual({
 			kind: 'texture-replacement',
-			source_url: requestBody.image,
+			source_media_id: 1,
 			amount: 1.5
 		});
 	});
@@ -230,9 +234,9 @@ describe('POST /api/texture-replacement', () => {
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 		const response = await callPost(platform(db), 'pubkey-1', {
-			image: requestBody.image,
-			referenceImage: requestBody.referenceImage,
-			mask: 'https://cdn.example.test/mask.png'
+			imageKey: requestBody.imageKey,
+			referenceImageKey: requestBody.referenceImageKey,
+			maskImageKey: 'cadbos-uploads/mask.png'
 		});
 
 		expect(response.status).toBe(502);
@@ -251,7 +255,7 @@ describe('POST /api/texture-replacement', () => {
 
 		const response = await callPost(platform(db), 'pubkey-1', {
 			...requestBody,
-			mask: 'https://cdn.example.test/mask.png'
+			maskImageKey: 'cadbos-uploads/mask.png'
 		});
 
 		expect(response.status).toBe(400);

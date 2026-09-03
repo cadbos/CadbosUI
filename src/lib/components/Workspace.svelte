@@ -33,6 +33,7 @@ before the Change Date. See LICENSE for complete terms.
 	import {
 		creditErrorKey,
 		extractApiErrorCode,
+		renderResultFromResponse,
 		request,
 		RequestImageUploadError,
 		type SceneType
@@ -40,7 +41,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
-	import type { OutputFormat, RenderResult as RenderResultType } from '$lib/state/request.svelte';
+	import type { OutputFormat } from '$lib/state/request.svelte';
 	import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
 	import {
 		initializeGenerationPreview,
@@ -383,14 +384,7 @@ before the Change Date. See LICENSE for complete terms.
 				throw new Error(await extractApiErrorCode(response, 'render_failed'));
 			}
 			const result = await response.json();
-			const render: RenderResultType = {
-				id: crypto.randomUUID(),
-				outputUrls: [result.outputUrl],
-				cost: result.cost,
-				balance: result.balance,
-				ts: Date.now()
-			};
-			request.setCurrentRender(render);
+			request.setCurrentRender(renderResultFromResponse(result));
 			request.setStatus('idle');
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
@@ -665,6 +659,7 @@ before the Change Date. See LICENSE for complete terms.
 						>
 							<MaskEditor
 								sourceUrl={request.textureReplacementSourceUrl()}
+								sourceKey={request.textureReplacementSourceKey()}
 								disabled={maskEditorLocked}
 							/>
 							{#snippet failed(_error: unknown, reset: () => void)}

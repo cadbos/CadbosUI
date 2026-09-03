@@ -13,12 +13,25 @@
  */
 
 import type { D1Database, D1Result } from '@cloudflare/workers-types';
+import type { Bucket } from '$lib/server/media';
 
 interface BucketRow {
 	id: number;
 	name: string;
 	url: string;
 }
+
+export const TEST_S3_ENV = {
+	S3_ACCESS_KEY_ID: 'test-access-key',
+	S3_SECRET_ACCESS_KEY: 'test-secret-key'
+} as const;
+
+export const TEST_S3_BUCKET: Bucket = {
+	id: 1,
+	name: 'cadbos-uploads',
+	url: 'https://s3.example.test/cadbos',
+	region: 'auto'
+};
 
 function syncFirst<T>(value: Promise<T | null>): T | null {
 	return value as unknown as T | null;
@@ -60,6 +73,14 @@ export function seedMedia(db: D1Database, url: string, checksum = ''): number {
 	);
 	if (!media) throw new Error('media seed failed');
 	return media.id;
+}
+
+export function seedManagedMedia(
+	db: D1Database,
+	filename = 'test/source.webp',
+	checksum = ''
+): number {
+	return seedMedia(db, `https://uploads.cadbos.example/${filename}`, checksum);
 }
 
 export function seedGeneration(

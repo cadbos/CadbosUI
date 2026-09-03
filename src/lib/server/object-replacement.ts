@@ -12,7 +12,6 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { ObjectReplacementRequest } from '$lib/api/contract';
 import {
 	ComfyUiError,
 	createComfyUiClient,
@@ -74,7 +73,7 @@ export async function cancelObjectReplacement(
 
 export async function submitObjectReplacement(
 	platform: App.Platform | undefined,
-	request: ObjectReplacementRequest,
+	request: { image: string; referenceImage: string; replacementObject: string },
 	applicationOrigin: string,
 	jobId: string
 ): Promise<string> {

@@ -17,13 +17,14 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { ObjectReplacementJobResponse, SessionUser } from '$lib/api/contract';
 import { ComfyUiError, type ComfyDownloadedImage } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+import type { Bucket } from '$lib/server/media';
 import {
 	createObjectReplacementJob,
 	getObjectReplacementJob
 } from '$lib/server/object-replacement-jobs';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 import { makeD1 } from '$lib/server/testing/d1-shim';
-import { setBucketUrl } from '$lib/server/testing/generation-fixtures';
+import { seedManagedMedia, setBucketUrl } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 
 const integration = vi.hoisted(() => ({
@@ -34,6 +35,18 @@ const integration = vi.hoisted(() => ({
 	submit: vi.fn()
 }));
 const jobStore = vi.hoisted(() => ({ failNextCreate: false }));
+const storage = vi.hoisted(() => ({
+	putS3Object:
+		vi.fn<
+			(
+				platform: App.Platform | undefined,
+				bucket: Bucket,
+				key: string,
+				bytes: ArrayBuffer,
+				mime: string
+			) => Promise<void>
+		>()
+}));
 
 vi.mock('$lib/server/object-replacement', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/server/object-replacement')>();
@@ -66,12 +79,17 @@ vi.mock('$lib/server/object-replacement-jobs', async (importOriginal) => {
 	};
 });
 
+vi.mock('$lib/server/s3', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/server/s3')>()),
+	putS3Object: storage.putS3Object
+}));
+
 const { POST } = await import('./+server');
 const { GET } = await import('./[id]/+server');
 
 const requestBody = {
-	image: 'https://cdn.example.test/scene.jpg',
-	referenceImage: 'https://cdn.example.test/reference.jpg',
+	imageKey: 'cadbos-uploads/scene.jpg',
+	referenceImageKey: 'cadbos-uploads/reference.jpg',
 	replacementObject: 'sofa'
 };
 const completedImage: ComfyDownloadedImage = {
@@ -147,21 +165,32 @@ function seedUser(db: D1Database, balance?: number, userId = 'user-1', pubkey = 
 	)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
+	seedManagedMedia(db, 'scene.jpg');
+	seedManagedMedia(db, 'reference.jpg');
 }
 
 function bucket(): { put: ReturnType<typeof vi.fn> } {
-	return { put: vi.fn(async () => undefined) };
+	return { put: vi.fn(async (_key: string, _bytes: ArrayBuffer, _metadata: unknown) => undefined) };
 }
 
 function platform(
 	db: D1Database,
 	uploadsBucket: ReturnType<typeof bucket> = bucket()
 ): App.Platform {
+	storage.putS3Object.mockImplementation(async (_platform, _bucket, key, bytes, mime) => {
+		const put = uploadsBucket.put as unknown as (
+			key: string,
+			bytes: ArrayBuffer,
+			metadata: { httpMetadata: { contentType: string } }
+		) => Promise<void>;
+		await put(key, bytes, { httpMetadata: { contentType: mime } });
+	});
 	return {
 		env: {
 			DB: db,
 			COMFYUI_BASE_URL: 'http://comfy.internal:8188',
-			UPLOADS_BUCKET: uploadsBucket
+			S3_ACCESS_KEY_ID: 'test-access-key',
+			S3_SECRET_ACCESS_KEY: 'test-secret-key'
 		}
 	} as unknown as App.Platform;
 }
@@ -210,10 +239,9 @@ async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
 		id: 'job-1',
 		userId: 'user-1',
 		comfyPromptId: 'prompt-1',
-		sceneUrl: requestBody.image,
-		sceneHash: 'hash-scene',
+		sceneMediaId: 1,
 		sessionId: sessionIdForPubkey('pubkey-1'),
-		referenceUrl: requestBody.referenceImage,
+		referenceMediaId: 2,
 		replacementObject: requestBody.replacementObject,
 		cost: 2,
 		createdAt
@@ -370,7 +398,11 @@ describe('POST /api/object-replacement', () => {
 		expect(result).toEqual({ id, status: 'processing' });
 		expect(integration.submit).toHaveBeenCalledWith(
 			expect.anything(),
-			{ ...requestBody, sessionId: sessionIdForPubkey('pubkey-1') },
+			{
+				image: expect.stringContaining('/scene.jpg?'),
+				referenceImage: expect.stringContaining('/reference.jpg?'),
+				replacementObject: requestBody.replacementObject
+			},
 			'https://cadbos.example',
 			id
 		);
@@ -476,8 +508,6 @@ describe('POST /api/object-replacement', () => {
 			failureLog(500, 'object_replacement_failed', 'job_persistence')
 		);
 		const logged = consoleError.mock.calls.flat().join(' ');
-		expect(logged).not.toContain(requestBody.image);
-		expect(logged).not.toContain(requestBody.referenceImage);
 		expect(logged).not.toContain(requestBody.replacementObject);
 		expect(logged).not.toContain('private persistence detail');
 	});
@@ -666,14 +696,20 @@ describe('GET /api/object-replacement/[id]', () => {
 			{
 				id: 'job-1',
 				status: 'completed',
-				outputUrl: 'https://cdn.example.test/object-replacements/job-1.png',
+				output: {
+					key: 'cadbos-uploads/object-replacements/job-1.png',
+					url: expect.stringContaining('object-replacements/job-1.png')
+				},
 				cost: 2,
 				balance: 10
 			},
 			{
 				id: 'job-1',
 				status: 'completed',
-				outputUrl: 'https://cdn.example.test/object-replacements/job-1.png',
+				output: {
+					key: 'cadbos-uploads/object-replacements/job-1.png',
+					url: expect.stringContaining('object-replacements/job-1.png')
+				},
 				cost: 2,
 				balance: 10
 			}
@@ -738,7 +774,9 @@ describe('GET /api/object-replacement/[id]', () => {
 		);
 		const uploadsBucket = bucket();
 		vi.mocked(uploadsBucket.put)
-			.mockRejectedValueOnce(new Error('simulated R2 failure'))
+			.mockRejectedValueOnce(new Error('simulated S3 failure'))
+			.mockRejectedValueOnce(new Error('simulated S3 failure'))
+			.mockRejectedValueOnce(new Error('simulated S3 failure'))
 			.mockResolvedValue(undefined);
 		const requestPlatform = platform(db, uploadsBucket);
 

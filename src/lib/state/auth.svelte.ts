@@ -38,6 +38,7 @@ import type {
 import { t } from '$lib/i18n/index.svelte';
 import { NOSTR_CONNECT_RELAYS } from '$lib/nostr/connect';
 import { workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+import { mediaAccess } from '$lib/state/media-access.svelte';
 
 // NIP-98 HTTP-Auth event kind — a protocol constant, mirrored on the server.
 const NIP98_KIND = 27235;
@@ -417,6 +418,7 @@ class AuthState {
 	}
 
 	#setAnonymous(): void {
+		mediaAccess.clear();
 		this.user = null;
 		this.credit = null;
 		this.nostrProfile = null;

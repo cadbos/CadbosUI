@@ -12,27 +12,31 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { ImageInput, PromptFragment, RequestJSON } from '$lib/state/request.svelte';
+import type { ManagedImageInput, PromptFragment, RequestJSON } from '$lib/state/request.svelte';
 import { request } from '$lib/state/request.svelte';
 import type { StyleTransferRequest } from '$lib/api/contract';
+import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export const AC9_REQUEST_ID = 'ac9-request-0001';
 
 export const AC9_FRAGMENT_IDS = ['ac9-frag-01', 'ac9-frag-02', 'ac9-frag-03'] as const;
 
-export const AC9_IMAGE: ImageInput = {
-	url: 'https://example.ufs.sh/f/ac9-fixture-room',
+export const AC9_IMAGE: ManagedImageInput = {
+	mediaKey: 'cadbos-uploads/ac9-fixture-room.webp',
 	mime: 'image/webp',
 	size: 2048,
 	dimensions: [1024, 768]
 };
 
-export const AC9_REFERENCE_IMAGE: ImageInput = {
-	url: 'https://example.ufs.sh/f/ac9-fixture-style-reference',
+export const AC9_REFERENCE_IMAGE: ManagedImageInput = {
+	mediaKey: 'cadbos-uploads/ac9-fixture-style-reference.jpg',
 	mime: 'image/jpeg',
 	size: 4096,
 	dimensions: [900, 1200]
 };
+
+export const AC9_IMAGE_URL = 'https://example.ufs.sh/f/ac9-fixture-room';
+export const AC9_REFERENCE_IMAGE_URL = 'https://example.ufs.sh/f/ac9-fixture-style-reference';
 
 export const AC9_FRAGMENTS: PromptFragment[] = [
 	{ id: AC9_FRAGMENT_IDS[0], label: 'Style', text: 'Scandinavian ', order: 0 },
@@ -49,15 +53,15 @@ export const AC9_PROJECT_ID = 'ac9-fixture-project-0001';
 export const AC9_SESSION_ID = 'ac9-fixture-session-0001';
 
 export const AC9_RENDER_REQUEST = {
-	image: AC9_IMAGE.url,
+	imageKey: AC9_IMAGE.mediaKey,
 	prompt: AC9_PROMPT,
 	outputFormat: 'webp' as const,
 	sessionId: AC9_SESSION_ID
 };
 
 export const AC9_STYLE_TRANSFER_REQUEST: StyleTransferRequest = {
-	image: AC9_IMAGE.url,
-	referenceImage: AC9_REFERENCE_IMAGE.url,
+	imageKey: AC9_IMAGE.mediaKey,
+	referenceImageKey: AC9_REFERENCE_IMAGE.mediaKey,
 	outputFormat: 'webp' as const,
 	prompt: AC9_PROMPT,
 	styleTransferStrength: 0.7,
@@ -68,13 +72,13 @@ export function buildAc9RequestJSON(): RequestJSON {
 	return {
 		id: AC9_REQUEST_ID,
 		image: {
-			url: AC9_IMAGE.url,
+			mediaKey: AC9_IMAGE.mediaKey,
 			mime: AC9_IMAGE.mime,
 			size: AC9_IMAGE.size,
 			...(AC9_IMAGE.dimensions ? { dimensions: [...AC9_IMAGE.dimensions] } : {})
 		},
 		styleReferenceImage: {
-			url: AC9_REFERENCE_IMAGE.url,
+			mediaKey: AC9_REFERENCE_IMAGE.mediaKey,
 			mime: AC9_REFERENCE_IMAGE.mime,
 			size: AC9_REFERENCE_IMAGE.size,
 			...(AC9_REFERENCE_IMAGE.dimensions ? { dimensions: [...AC9_REFERENCE_IMAGE.dimensions] } : {})
@@ -101,5 +105,13 @@ export function buildAc9RequestJSON(): RequestJSON {
 }
 
 export function applyAc9Fixture(): void {
+	mediaAccess.normalize({
+		key: AC9_IMAGE.mediaKey,
+		url: AC9_IMAGE_URL
+	});
+	mediaAccess.normalize({
+		key: AC9_REFERENCE_IMAGE.mediaKey,
+		url: AC9_REFERENCE_IMAGE_URL
+	});
 	request.fromJSON(buildAc9RequestJSON());
 }

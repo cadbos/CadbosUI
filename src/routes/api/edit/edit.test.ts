@@ -17,6 +17,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedManagedMedia, TEST_S3_ENV } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { editInterior } from '$lib/server/generation';
@@ -92,6 +93,7 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 	)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
+	seedManagedMedia(db);
 }
 
 // The admin's manual approval step (migrations/0005) — no auto-provisioning
@@ -111,18 +113,19 @@ function call(
 	body: Record<string, unknown>,
 	sessionLookupUnavailable = false
 ): ReturnType<typeof POST> {
+	const testPlatform = { ...platform, env: { ...TEST_S3_ENV, ...platform.env } } as App.Platform;
 	return POST({
 		request: new Request('https://cadbos.example/api/edit', {
 			method: 'POST',
 			body: JSON.stringify({ ...body, sessionId: sessionIdForPubkey(user?.pubkey) })
 		}),
-		platform,
+		platform: testPlatform,
 		locals: { sessionLookupUnavailable, user }
 	} as EditEvent);
 }
 
 const body = {
-	image: 'https://example.test/prev-render.jpg',
+	imageKey: 'cadbos-uploads/test/source.webp',
 	prompt: 'replace the sofa with a leather armchair'
 };
 const pubkey = 'a'.repeat(64);
@@ -190,14 +193,14 @@ describe('POST /api/edit — billing', () => {
 		expect(response.status).toBe(400);
 	});
 
-	it('rejects an image value that is not a URL', async () => {
+	it('rejects an image value that is not a media key', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
 			...body,
-			image: 'not-a-url'
+			imageKey: 1
 		});
 		expect(response.status).toBe(400);
 	});
@@ -209,8 +212,8 @@ describe('POST /api/edit — billing', () => {
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
-		expect(result.outputUrl).toMatch(/^https:\/\//);
+		const result = (await response.json()) as { output: { url: string } };
+		expect(result.output.url).toMatch(/^https:\/\//);
 	});
 
 	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
@@ -239,7 +242,7 @@ describe('POST /api/edit — billing', () => {
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
+		const result = (await response.json()) as { output: { key: string; url: string } };
 
 		const row = await db
 			.prepare(
@@ -256,22 +259,22 @@ describe('POST /api/edit — billing', () => {
 			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
 		expect(row).toEqual({
 			user_id: 'user-1',
-			url: result.outputUrl,
-			source_url: body.image,
+			url: expect.stringMatching(/^https:\/\/uploads\.cadbos\.example\//),
+			source_url: 'https://uploads.cadbos.example/test/source.webp',
 			prompt: body.prompt,
 			kind: 'edit'
 		});
+		expect(result.output.key).toBeTruthy();
+		expect(result.output.url).toContain('X-Amz-Expires=43200');
 	});
 
-	it('records source_hash from imageHash when editing a fresh upload with no prior render', async () => {
+	it('records the checksum from the owned source media', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 12);
 
-		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, {
-			...body,
-			imageHash: 'a'.repeat(64)
-		});
+		db.prepare('UPDATE media SET checksum = ? WHERE id = ?').bind('a'.repeat(64), 1).run();
+		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
 
 		const row = await db
@@ -284,7 +287,7 @@ describe('POST /api/edit — billing', () => {
 		expect(row?.source_hash).toBe('a'.repeat(64));
 	});
 
-	it('records an empty source_hash when editing without imageHash (continuing from a result)', async () => {
+	it('records an empty checksum when the source has none', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 12);
@@ -317,8 +320,8 @@ describe('POST /api/edit — billing', () => {
 			);
 
 			expect(response.status).toBe(200);
-			const result = (await response.json()) as { outputUrl: string };
-			expect(result.outputUrl).toMatch(/^https:\/\//);
+			const result = (await response.json()) as { output: { url: string } };
+			expect(result.output.url).toMatch(/^https:\/\//);
 			expect(consoleError).toHaveBeenCalledWith(
 				'recordGeneration failed after a successful edit:',
 				expect.any(Error)
@@ -337,8 +340,8 @@ describe('POST /api/edit — billing', () => {
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string; cost: number };
-		expect(result.outputUrl).toMatch(/^https:\/\//);
+		const result = (await response.json()) as { output: { url: string }; cost: number };
+		expect(result.output.url).toMatch(/^https:\/\//);
 
 		// recordBalance mirrors archAI's own (shared) balance for ops visibility only —
 		// its failure must not skip the actual credit ledger deduction.

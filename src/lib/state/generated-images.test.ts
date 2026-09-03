@@ -15,12 +15,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GeneratedImageRecord, GeneratedImagesResponse } from '$lib/api/contract';
 import { generatedImages } from './generated-images.svelte';
+import { mediaAccess } from './media-access.svelte';
 
 function image(id: string, createdAt: number): GeneratedImageRecord {
 	return {
 		id,
-		url: `https://cdn.example.test/${id}.webp`,
-		sourceUrl: `https://cdn.example.test/${id}-source.jpg`,
+		image: {
+			key: `${id}.webp`,
+			url: `https://cdn.example.test/${id}.webp`
+		},
+		source: {
+			key: `${id}-source.jpg`,
+			url: `https://cdn.example.test/${id}-source.jpg`
+		},
 		kind: 'render',
 		createdAt
 	};
@@ -50,10 +57,12 @@ function jsonResponse(body: GeneratedImagesResponse): Response {
 
 beforeEach(() => {
 	generatedImages.clear();
+	mediaAccess.clear();
 });
 
 afterEach(() => {
 	generatedImages.clear();
+	mediaAccess.clear();
 	vi.unstubAllGlobals();
 });
 

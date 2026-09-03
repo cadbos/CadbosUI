@@ -13,73 +13,84 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { uploadImage, uploadImageBytes } from './uploads';
+import type { Bucket } from '$lib/server/media';
+import { TEST_S3_BUCKET, TEST_S3_ENV } from '$lib/server/testing/generation-fixtures';
+
+const storage = vi.hoisted(() => ({
+	putS3Object:
+		vi.fn<
+			(
+				platform: App.Platform | undefined,
+				bucket: Bucket,
+				key: string,
+				bytes: ArrayBuffer,
+				mime: string
+			) => Promise<void>
+		>()
+}));
+
+vi.mock('./s3', async (importOriginal) => ({
+	...(await importOriginal<typeof import('./s3')>()),
+	putS3Object: storage.putS3Object
+}));
+
+import { uploadGeneratedImageBytes, uploadImage, uploadImageBytes } from './uploads';
 
 function mockBucket(): { put: ReturnType<typeof vi.fn> } {
-	return { put: vi.fn(async () => undefined) };
+	return { put: vi.fn(async (_key: string, _bytes: ArrayBuffer, _metadata: unknown) => undefined) };
 }
 
 function platform(bucket: ReturnType<typeof mockBucket>): App.Platform {
-	return {
-		env: {
-			UPLOADS_BUCKET: bucket
-		}
-	} as unknown as App.Platform;
+	storage.putS3Object.mockImplementation(async (_platform, _bucket, key, bytes, mime) => {
+		const put = bucket.put as unknown as (
+			key: string,
+			bytes: ArrayBuffer,
+			metadata: { httpMetadata: { contentType: string } }
+		) => Promise<void>;
+		await put(key, bytes, { httpMetadata: { contentType: mime } });
+	});
+	return { env: TEST_S3_ENV } as unknown as App.Platform;
 }
 
 describe('uploadImage', () => {
 	afterEach(() => {
+		vi.useRealTimers();
 		vi.restoreAllMocks();
+		vi.clearAllMocks();
 	});
 
-	it('stores the file and returns the public object URL', async () => {
+	it('stores the file and returns its object key', async () => {
 		const bucket = mockBucket();
 		const id = '123e4567-e89b-12d3-a456-426614174000' as ReturnType<typeof crypto.randomUUID>;
 		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
 
 		const file = new File(['image-bytes'], 'room.jpg', { type: 'image/jpeg' });
-		const result = await uploadImage(platform(bucket), 'https://uploads.cadbos.example', file);
+		const result = await uploadImage(platform(bucket), TEST_S3_BUCKET, file);
 
 		expect(bucket.put).toHaveBeenCalledWith(`${id}.jpg`, expect.any(ArrayBuffer), {
 			httpMetadata: { contentType: 'image/jpeg' }
 		});
 		expect(result).toEqual({
-			url: `https://uploads.cadbos.example/${id}.jpg`,
+			key: `${id}.jpg`,
 			mime: 'image/jpeg',
 			size: file.size,
 			hash: expect.any(String)
 		});
 	});
 
-	it('joins a path-bearing base URL without dropping the path segment', async () => {
-		const bucket = mockBucket();
-		const id = '123e4567-e89b-12d3-a456-426614174000' as ReturnType<typeof crypto.randomUUID>;
-		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
-
-		const file = new File(['image-bytes'], 'room.jpg', { type: 'image/jpeg' });
-		const result = await uploadImage(platform(bucket), 'https://cdn.example.com/uploads', file);
-
-		expect(result.url).toBe(`https://cdn.example.com/uploads/${id}.jpg`);
-	});
-
-	it('stores generated image bytes and returns the public object URL', async () => {
+	it('stores generated image bytes and returns the object key', async () => {
 		const bucket = mockBucket();
 		const id = '123e4567-e89b-12d3-a456-426614174001' as ReturnType<typeof crypto.randomUUID>;
 		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
 
 		const bytes = await new Blob(['generated-image']).arrayBuffer();
-		const result = await uploadImageBytes(
-			platform(bucket),
-			'https://uploads.cadbos.example',
-			bytes,
-			'image/webp'
-		);
+		const result = await uploadImageBytes(platform(bucket), TEST_S3_BUCKET, bytes, 'image/webp');
 
 		expect(bucket.put).toHaveBeenCalledWith(`${id}.webp`, bytes, {
 			httpMetadata: { contentType: 'image/webp' }
 		});
 		expect(result).toEqual({
-			url: `https://uploads.cadbos.example/${id}.webp`,
+			key: `${id}.webp`,
 			mime: 'image/webp',
 			size: bytes.byteLength,
 			hash: expect.any(String)
@@ -94,7 +105,7 @@ describe('uploadImage', () => {
 		const bytes = await new Blob(['generated-image']).arrayBuffer();
 		const result = await uploadImageBytes(
 			platform(bucket),
-			'https://uploads.cadbos.example',
+			TEST_S3_BUCKET,
 			bytes,
 			'image/jpeg; charset=binary'
 		);
@@ -103,7 +114,7 @@ describe('uploadImage', () => {
 			httpMetadata: { contentType: 'image/jpeg' }
 		});
 		expect(result).toEqual({
-			url: `https://uploads.cadbos.example/${id}.jpg`,
+			key: `${id}.jpg`,
 			mime: 'image/jpeg',
 			size: bytes.byteLength,
 			hash: expect.any(String)
@@ -116,7 +127,7 @@ describe('uploadImage', () => {
 
 		const result = await uploadImageBytes(
 			platform(bucket),
-			'https://uploads.cadbos.example',
+			TEST_S3_BUCKET,
 			bytes,
 			'image/png',
 			'object-replacements/job-1.png'
@@ -125,6 +136,30 @@ describe('uploadImage', () => {
 		expect(bucket.put).toHaveBeenCalledWith('object-replacements/job-1.png', bytes, {
 			httpMetadata: { contentType: 'image/png' }
 		});
-		expect(result.url).toBe('https://uploads.cadbos.example/object-replacements/job-1.png');
+		expect(result.key).toBe('object-replacements/job-1.png');
+	});
+
+	it('retries generated image storage with the same object key', async () => {
+		vi.useFakeTimers();
+		const bucket = mockBucket();
+		bucket.put
+			.mockRejectedValueOnce(new Error('first failure'))
+			.mockRejectedValueOnce(new Error('second failure'));
+		const bytes = await new Blob(['generated-image']).arrayBuffer();
+
+		const stored = uploadGeneratedImageBytes(
+			platform(bucket),
+			TEST_S3_BUCKET,
+			bytes,
+			'image/png',
+			'generated/job-1.png'
+		);
+		await vi.advanceTimersByTimeAsync(1_250);
+
+		await expect(stored).resolves.toMatchObject({ key: 'generated/job-1.png' });
+		expect(bucket.put).toHaveBeenCalledTimes(3);
+		expect(bucket.put).toHaveBeenNthCalledWith(3, 'generated/job-1.png', bytes, {
+			httpMetadata: { contentType: 'image/png' }
+		});
 	});
 });

@@ -21,7 +21,8 @@ import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { findGenerationSourceByHash } from '$lib/server/generations';
-import { getBucketByName, getOrCreateMedia } from '$lib/server/media';
+import { getBucketByName, getOrCreateMediaByKey, getMedia } from '$lib/server/media';
+import { mediaAccess } from '$lib/server/media-access';
 import { normalizeImageContentType } from '$lib/image-mime';
 import {
 	MAX_IMAGE_UPLOAD_SIZE,
@@ -52,15 +53,9 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 	// resolve the uploads bucket via getBucketByName.
 	const demoUser = dev && locals.user.pubkey === DEMO_PUBKEY;
 	const db = getDb(platform);
+	const uploadsBucket = await getBucketByName(db, 'cadbos-uploads');
 	const userId = demoUser ? null : await getUserIdByPubkey(db, locals.user.pubkey);
 	if (!demoUser && !userId) return apiError(500, 'account_error', 'Account record not found');
-	let uploadsUrl: string;
-	try {
-		uploadsUrl = (await getBucketByName(db, 'cadbos-uploads')).url;
-	} catch (error) {
-		console.error('Upload bucket lookup failed:', error);
-		return apiError(500, 'upload_failed', 'Upload failed');
-	}
 
 	// Generation source media isn't always a stored upload — render/edit calls
 	// can use their prior output (recordGeneration) — so a hash match
@@ -69,7 +64,9 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 	// arbitrary URL as if it were deduped.
 	const findExisting = userId
 		? async (hash: string) => {
-				return findGenerationSourceByHash(db, userId, hash);
+				const mediaId = await findGenerationSourceByHash(db, userId, hash);
+				if (!mediaId) return null;
+				return (await getMedia(db, mediaId))?.filename ?? null;
 			}
 		: undefined;
 
@@ -81,14 +78,20 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 		try {
 			const result = await importRemoteImage(
 				platform,
-				uploadsUrl,
+				uploadsBucket,
 				parsed.data.url,
 				url.origin,
 				globalThis.fetch,
 				findExisting
 			);
-			await getOrCreateMedia(db, result.url, result.hash);
-			return json(result);
+			if (!userId) return apiError(500, 'account_error', 'Account record not found');
+			const media = await getOrCreateMediaByKey(db, uploadsBucket, result.key, result.hash);
+			return json({
+				image: await mediaAccess(platform, media),
+				mime: result.mime,
+				size: result.size,
+				...(result.dimensions ? { dimensions: result.dimensions } : {})
+			});
 		} catch (error) {
 			if (error instanceof RemoteImageImportError) return remoteImportErrorResponse(error);
 			console.error('Remote image import failed:', error);
@@ -120,12 +123,17 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 	try {
 		const bytes = await file.arrayBuffer();
 		const hash = await hashBytes(bytes);
-		const existingUrl = await findExisting?.(hash);
-		const result = existingUrl
-			? { url: existingUrl, mime: normalizedMime, size: bytes.byteLength, hash }
-			: await uploadImageBytes(platform, uploadsUrl, bytes, file.type, undefined, hash);
-		await getOrCreateMedia(db, result.url, result.hash);
-		return json(result);
+		const existingKey = await findExisting?.(hash);
+		const result = existingKey
+			? { key: existingKey, mime: normalizedMime, size: bytes.byteLength, hash }
+			: await uploadImageBytes(platform, uploadsBucket, bytes, file.type, undefined, hash);
+		if (!userId) return apiError(500, 'account_error', 'Account record not found');
+		const media = await getOrCreateMediaByKey(db, uploadsBucket, result.key, result.hash);
+		return json({
+			image: await mediaAccess(platform, media),
+			mime: result.mime,
+			size: result.size
+		});
 	} catch (err) {
 		console.error('Upload failed:', err);
 		return apiError(500, 'upload_failed', 'Upload failed');

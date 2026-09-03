@@ -17,6 +17,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedManagedMedia, TEST_S3_ENV } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { renderExterior } from '$lib/server/generation';
@@ -92,6 +93,7 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 	)
 		.bind(TEST_SESSION_ID, projectId, 'Test session', now, now)
 		.run();
+	seedManagedMedia(db);
 }
 
 // The admin's manual approval step (migrations/0005) — no auto-provisioning
@@ -111,18 +113,19 @@ function call(
 	body: unknown,
 	sessionLookupUnavailable = false
 ): ReturnType<typeof POST> {
+	const testPlatform = { ...platform, env: { ...TEST_S3_ENV, ...platform.env } } as App.Platform;
 	return POST({
 		request: new Request('https://cadbos.example/api/render/exterior', {
 			method: 'POST',
 			body: JSON.stringify(body)
 		}),
-		platform,
+		platform: testPlatform,
 		locals: { sessionLookupUnavailable, user }
 	} as ExteriorRenderEvent);
 }
 
 const body = {
-	image: 'https://example.test/facade.jpg',
+	imageKey: 'cadbos-uploads/test/source.webp',
 	prompt: 'modern facade with warm evening lights',
 	outputFormat: 'webp',
 	sessionId: TEST_SESSION_ID
@@ -181,8 +184,8 @@ describe('POST /api/render/exterior — billing', () => {
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
-		expect(result.outputUrl).toMatch(/^https:\/\//);
+		const result = (await response.json()) as { output: { url: string } };
+		expect(result.output.url).toMatch(/^https:\/\//);
 	});
 
 	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
@@ -211,7 +214,7 @@ describe('POST /api/render/exterior — billing', () => {
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { outputUrl: string };
+		const result = (await response.json()) as { output: { key: string; url: string } };
 
 		const row = await db
 			.prepare(
@@ -228,11 +231,13 @@ describe('POST /api/render/exterior — billing', () => {
 			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
 		expect(row).toEqual({
 			user_id: 'user-1',
-			url: result.outputUrl,
-			source_url: body.image,
+			url: expect.stringMatching(/^https:\/\/uploads\.cadbos\.example\//),
+			source_url: 'https://uploads.cadbos.example/test/source.webp',
 			prompt: body.prompt,
 			kind: 'render'
 		});
+		expect(result.output.key).toBeTruthy();
+		expect(result.output.url).toContain('X-Amz-Expires=43200');
 	});
 
 	it('still returns the completed, already-charged render if recordGeneration fails', async () => {
@@ -250,8 +255,8 @@ describe('POST /api/render/exterior — billing', () => {
 			);
 
 			expect(response.status).toBe(200);
-			const result = (await response.json()) as { outputUrl: string };
-			expect(result.outputUrl).toMatch(/^https:\/\//);
+			const result = (await response.json()) as { output: { url: string } };
+			expect(result.output.url).toMatch(/^https:\/\//);
 			expect(consoleError).toHaveBeenCalledWith(
 				'recordGeneration failed after a successful exterior render:',
 				expect.any(Error)
@@ -276,8 +281,8 @@ describe('POST /api/render/exterior — billing', () => {
 			);
 
 			expect(response.status).toBe(200);
-			const result = (await response.json()) as { outputUrl: string };
-			expect(result.outputUrl).toMatch(/^https:\/\//);
+			const result = (await response.json()) as { output: { url: string } };
+			expect(result.output.url).toMatch(/^https:\/\//);
 			expect(consoleError).toHaveBeenCalledWith(
 				'recordBalance failed after a successful exterior render:',
 				expect.any(Error)

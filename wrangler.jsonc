@@ -33,25 +33,18 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "cadbos-auth",
-			"database_id": "d1f2f49c-bb39-473c-ae35-2d78eebcbc53",
+			"database_name": "cadbos-temp",
+			"database_id": "f111d591-8ba0-48fe-89d4-d8ea3677b5f0",
 			"migrations_dir": "migrations"
 		}
 	],
-	// Provisioned with `wrangler r2 bucket create cadbos-uploads`.
-	// `remote: true` makes local dev (`platformProxy`, remote bindings on by
-	// default) read/write the real bucket instead of the local emulation.
-	"r2_buckets": [
-		{
-			"binding": "UPLOADS_BUCKET",
-			"bucket_name": "cadbos-uploads",
-			"remote": true
-		}
-	],
+	// Worker variables configured per environment in Cloudflare:
+	// S3_PRESIGNED_UI_TTL_SECONDS (optional, default 43200)
+	// S3_PRESIGNED_PROVIDER_TTL_SECONDS (optional, default 10800)
 	// ComfyUI runs on a private VPS, reachable only through this VPC Service
 	// (Cloudflare Tunnel `comfyui-equuleus` -> localhost:8188), never over the
 	// public internet — it has no built-in auth. `remote: true` routes local
-	// dev through the real tunnel too, same as UPLOADS_BUCKET above.
+	// dev through the real tunnel too.
 	"vpc_services": [
 		{
 			"binding": "COMFYUI_BASE_URL",
@@ -61,6 +54,8 @@
 	]
 	// Secrets set via `wrangler secret put <NAME>` — never committed to source:
 	// ARCHAI_API_KEY
+	// S3_ACCESS_KEY_ID
+	// S3_SECRET_ACCESS_KEY
 	//
 	// Generation access itself is controlled in D1, not an env var: an account
 	// can render/edit only once an admin inserts a row for it into the `credits`

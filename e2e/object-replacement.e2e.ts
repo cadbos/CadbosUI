@@ -15,6 +15,7 @@
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { media } from './helpers/media';
 import {
 	E2E_PROJECT_ID,
 	E2E_SESSION_ID,
@@ -60,12 +61,11 @@ async function uploadInputs(page: Page): Promise<void> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				url: isScene
-					? 'https://cdn.example.test/scene.webp'
-					: 'https://cdn.example.test/reference-chair.webp',
+				image: isScene
+					? media(1, 'https://cdn.example.test/scene.webp')
+					: media(2, 'https://cdn.example.test/reference-chair.webp'),
 				mime: 'image/webp',
 				size: 1024,
-				hash: isScene ? 'scene-hash' : 'reference-chair-hash',
 				dimensions: [800, 600]
 			})
 		});
@@ -128,7 +128,7 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 			body: JSON.stringify({
 				id: JOB_ID,
 				status: 'completed',
-				outputUrl: 'https://cdn.example.test/replaced.webp',
+				output: media(3, 'https://cdn.example.test/replaced.webp'),
 				cost: 2,
 				balance: 18
 			})
@@ -151,9 +151,8 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 	await expect(page.getByText('Баланс: 18.00')).toBeVisible();
 	await expect.poll(() => polls).toBe(2);
 	expect(submittedBody).toEqual({
-		image: 'https://cdn.example.test/scene.webp',
-		imageHash: 'scene-hash',
-		referenceImage: 'https://cdn.example.test/reference-chair.webp',
+		imageKey: 'cadbos-uploads/1',
+		referenceImageKey: 'cadbos-uploads/2',
 		replacementObject: 'серый диван у окна',
 		sessionId: E2E_SESSION_ID
 	});
@@ -196,7 +195,7 @@ test('resumes a stored completed job after reload without submitting again', asy
 			body: JSON.stringify({
 				id: JOB_ID,
 				status: 'completed',
-				outputUrl: 'https://cdn.example.test/recovered.webp',
+				output: media(3, 'https://cdn.example.test/recovered.webp'),
 				cost: 2,
 				balance: 18
 			})
@@ -228,13 +227,12 @@ test('keeps the accepted current-result lineage when another render finishes fir
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				url:
+				image:
 					uploads === 1
-						? 'https://cdn.example.test/room.webp'
-						: 'https://cdn.example.test/reference.webp',
+						? media(1, 'https://cdn.example.test/room.webp')
+						: media(2, 'https://cdn.example.test/reference.webp'),
 				mime: 'image/webp',
 				size: 1024,
-				hash: uploads === 1 ? 'room-hash' : 'reference-hash',
 				dimensions: [800, 600]
 			})
 		});
@@ -247,10 +245,11 @@ test('keeps the accepted current-result lineage when another render finishes fir
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl:
+				id: `00000000-0000-4000-8000-00000000010${renders}`,
+				output:
 					renders === 1
-						? 'https://cdn.example.test/original-result.webp'
-						: 'https://cdn.example.test/newer-result.webp',
+						? media(3, 'https://cdn.example.test/original-result.webp')
+						: media(4, 'https://cdn.example.test/newer-result.webp'),
 				cost: 1,
 				balance: 19 - renders
 			})
@@ -260,7 +259,7 @@ test('keeps the accepted current-result lineage when another render finishes fir
 	let submittedImage = '';
 	let polls = 0;
 	await page.route('**/api/object-replacement', async (route) => {
-		submittedImage = (route.request().postDataJSON() as { image: string }).image;
+		submittedImage = (route.request().postDataJSON() as { imageKey: string }).imageKey;
 		await route.fulfill({
 			status: 202,
 			contentType: 'application/json',
@@ -279,7 +278,7 @@ test('keeps the accepted current-result lineage when another render finishes fir
 					: {
 							id: JOB_ID,
 							status: 'completed',
-							outputUrl: 'https://cdn.example.test/replaced.webp',
+							output: media(5, 'https://cdn.example.test/replaced.webp'),
 							cost: 2,
 							balance: 16
 						}
@@ -344,7 +343,7 @@ test('keeps the accepted current-result lineage when another render finishes fir
 		'src',
 		'https://cdn.example.test/original-result.webp'
 	);
-	await expect.poll(() => submittedImage).toBe('https://cdn.example.test/original-result.webp');
+	await expect.poll(() => submittedImage).toBe('cadbos-uploads/3');
 });
 
 test('surfaces submission credit errors and prevents duplicate starts', async ({ page }) => {

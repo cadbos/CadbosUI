@@ -16,6 +16,7 @@ import { z } from 'zod';
 import type { ProjectSessionRecord, SessionGenerationRecord } from '$lib/api/contract';
 import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
 import { request, RequestState } from '$lib/state/request.svelte';
+import { mediaAccess } from '$lib/state/media-access.svelte';
 
 // Resets a RequestState to continue the given session — shared by the
 // "Continue" button (projects/[id]/+page.svelte) and Workspace.svelte's own
@@ -37,7 +38,10 @@ export function initializeSessionState(
 	state.setActiveTextureReplacementJobId(undefined);
 	state.setStatus('idle');
 	const latest = session.generations[0];
-	if (latest) state.setImage({ url: latest.url });
+	if (latest) {
+		mediaAccess.normalize(latest.image);
+		state.setImage({ mediaKey: latest.image.key });
+	}
 }
 
 // Seeds the workspace with one specific past generation's before/after —
@@ -64,10 +68,12 @@ export function initializeGenerationPreview(
 	state.setActiveObjectReplacementJobId(undefined);
 	state.setActiveTextureReplacementJobId(undefined);
 	state.setStatus('idle');
-	state.setImage({ url: generation.sourceUrl });
+	mediaAccess.normalize(generation.source);
+	mediaAccess.normalize(generation.image);
+	state.setImage({ mediaKey: generation.source.key });
 	state.setCurrentRender({
 		id: generation.id,
-		outputUrls: [generation.url],
+		outputKey: generation.image.key,
 		// Only ever undefined for a generation resolved through the public
 		// /share/[token] viewer's response shape, which deliberately strips
 		// these — this function is never called on that path today, but stays

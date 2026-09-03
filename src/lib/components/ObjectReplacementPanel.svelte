@@ -14,6 +14,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { beforeNavigate, goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { z } from 'zod';
 	import type {
@@ -28,6 +29,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { extractApiErrorCode, request, RequestImageUploadError } from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, isEditToolRoute } from '$lib/state/url-state';
 	import { logBoundaryError } from '$lib/utils';
+	import { mediaAccess } from '$lib/state/media-access.svelte';
 
 	const MAX_TRANSIENT_FAILURES = 5;
 	const DEFAULT_POLL_DELAY_MS = 2_000;
@@ -43,7 +45,10 @@ before the Change Date. See LICENSE for complete terms.
 			.object({
 				id: z.uuid(),
 				status: z.literal('completed'),
-				outputUrl: z.url(),
+				output: z.object({
+					key: z.string().min(1),
+					url: z.url()
+				}),
 				cost: z.number().nonnegative(),
 				balance: z.number()
 			})
@@ -61,6 +66,7 @@ before the Change Date. See LICENSE for complete terms.
 		jobId: string;
 		key: TranslationKey;
 	}
+	type EditUrl = '/edit' | `/edit?${string}`;
 
 	let submitting = $state(false);
 	let terminalJob = $state<ObjectReplacementCompletedResponse | null>(null);
@@ -87,7 +93,7 @@ before the Change Date. See LICENSE for complete terms.
 		return null;
 	});
 
-	$effect(() => {
+	function pollingEffect(): void | (() => void) {
 		const id = jobId;
 		const authenticated = isAuthenticated;
 		const failedPoll = pollFailure;
@@ -96,19 +102,23 @@ before the Change Date. See LICENSE for complete terms.
 		const controller = new AbortController();
 		void pollJob(id, controller.signal, run);
 		return () => controller.abort();
-	});
+	}
+
+	$effect(pollingEffect);
 
 	// The full-screen overlay tracks this flow's own in-flight state (not just
 	// the button's `submitting`) since the wait spans the async job queue +
 	// poll cycle, not a single fetch.
-	$effect(() => {
+	function overlayEffect(): void | (() => void) {
 		if (!(submitting || isPolling)) return;
 		const overlayId = generationOverlay.start(
 			'generationOverlay.objectReplacement',
 			'generationOverlay.objectReplacementDetail'
 		);
 		return () => generationOverlay.stop(overlayId);
-	});
+	}
+
+	$effect(overlayEffect);
 
 	beforeNavigate(({ to }) => {
 		if (
@@ -183,7 +193,7 @@ before the Change Date. See LICENSE for complete terms.
 			request.applyEditResult(
 				{
 					id: result.id,
-					outputUrls: [result.outputUrl],
+					outputKey: mediaAccess.normalize(result.output).key,
 					cost: result.cost,
 					balance: result.balance,
 					parentId: context.sourceRender.id,
@@ -198,7 +208,7 @@ before the Change Date. See LICENSE for complete terms.
 		} else {
 			request.setCurrentRender({
 				id: result.id,
-				outputUrls: [result.outputUrl],
+				outputKey: mediaAccess.normalize(result.output).key,
 				cost: result.cost,
 				balance: result.balance,
 				ts: Date.now()
@@ -328,11 +338,17 @@ before the Change Date. See LICENSE for complete terms.
 				return;
 			}
 			try {
-				await goto(buildWorkspaceUrl('edit', request, { tool: 'object-replacement' }), {
-					replaceState: true,
-					keepFocus: true,
-					noScroll: true
-				});
+				await goto(
+					resolve(
+						buildWorkspaceUrl('edit', request, { tool: 'object-replacement' }) as EditUrl,
+						{}
+					),
+					{
+						replaceState: true,
+						keepFocus: true,
+						noScroll: true
+					}
+				);
 			} catch (error) {
 				logBoundaryError('objectReplacement.jobNavigation', error);
 			}
@@ -365,11 +381,14 @@ before the Change Date. See LICENSE for complete terms.
 		terminalError = null;
 		pollFailure = null;
 		window.scrollTo({ top: 0, behavior: 'smooth' });
-		await goto(buildWorkspaceUrl('edit', request, { tool: 'object-replacement' }), {
-			replaceState: true,
-			keepFocus: true,
-			noScroll: true
-		}).catch((error: unknown) => logBoundaryError('objectReplacement.clearJobNavigation', error));
+		await goto(
+			resolve(buildWorkspaceUrl('edit', request, { tool: 'object-replacement' }) as EditUrl, {}),
+			{
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true
+			}
+		).catch((error: unknown) => logBoundaryError('objectReplacement.clearJobNavigation', error));
 	}
 </script>
 

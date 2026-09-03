@@ -14,58 +14,87 @@
 
 import { describe, expect, it } from 'vitest';
 import { makeD1 } from '$lib/server/testing/d1-shim';
-import { setBucketUrl } from '$lib/server/testing/generation-fixtures';
-import { getOrCreateMedia, mediaUrl } from '$lib/server/media';
+import {
+	getBucketByName,
+	getOrCreateMediaByKey,
+	getMedia,
+	getMediaBatch,
+	getMediaByBucketKey,
+	mediaKey,
+	parseMediaKey
+} from '$lib/server/media';
 
 describe('media repository', () => {
-	it('normalizes default HTTPS ports before matching buckets and extracting filenames', async () => {
+	it('stores and resolves managed bearer keys', async () => {
 		const db = makeD1();
-		setBucketUrl(db, 'cadbos-uploads', 'https://uploads.example.test');
+		const bucket = await getBucketByName(db, 'cadbos-uploads');
 
-		const media = await getOrCreateMedia(
+		const created = await getOrCreateMediaByKey(
 			db,
-			'https://uploads.example.test:443/default-port.webp',
-			''
-		);
-
-		expect(media.bucket.name).toBe('cadbos-uploads');
-		expect(media.filename).toBe('default-port.webp');
-		expect(mediaUrl(media.bucket.url, media.filename)).toBe(
-			'https://uploads.example.test/default-port.webp'
-		);
-	});
-
-	it('normalizes checksums, clears invalid/conflicting values, and registers external buckets', async () => {
-		const db = makeD1();
-		setBucketUrl(db, 'cadbos-uploads', 'https://uploads.example.test');
-		const uppercase = await getOrCreateMedia(
-			db,
-			'https://uploads.example.test/uppercase.webp',
+			bucket,
+			'rooms/with space.webp',
 			'A'.repeat(64)
 		);
-		expect(uppercase.checksum).toBe('a'.repeat(64));
+		const reused = await getOrCreateMediaByKey(db, bucket, 'rooms/with space.webp', 'a'.repeat(64));
 
-		const invalid = await getOrCreateMedia(
-			db,
-			'https://uploads.example.test/invalid.webp',
-			'not-hexadecimal'
+		expect(reused.id).toBe(created.id);
+		expect(created).toMatchObject({ filename: 'rooms/with space.webp', checksum: 'a'.repeat(64) });
+		await expect(getMedia(db, created.id)).resolves.toMatchObject({
+			id: created.id,
+			filename: 'rooms/with space.webp',
+			bucket
+		});
+		await expect(getMediaByBucketKey(db, bucket.name, 'rooms/with space.webp')).resolves.toEqual(
+			created
 		);
-		expect(invalid.checksum).toBe('');
+		await expect(getMediaByBucketKey(db, bucket.name, 'missing.webp')).resolves.toBeNull();
+	});
 
-		const first = await getOrCreateMedia(
-			db,
-			'https://images.example.test/result.webp',
-			'1'.repeat(64)
+	it('composes and resolves bucket-qualified keys without splitting object paths', async () => {
+		const db = makeD1();
+		db.prepare('INSERT INTO buckets (name, url) VALUES (?, ?)')
+			.bind('external:https://images.example.test', 'https://images.example.test')
+			.run();
+		const uploads = await getBucketByName(db, 'cadbos-uploads');
+		const external = await getBucketByName(db, 'external:https://images.example.test');
+		const filename = 'rooms/shared/name.webp';
+		const uploadsMedia = await getOrCreateMediaByKey(db, uploads, filename, '');
+		const externalMedia = await getOrCreateMediaByKey(db, external, filename, '');
+		const uploadsKey = mediaKey(uploads.name, filename);
+		const externalKey = mediaKey(external.name, filename);
+
+		expect(uploadsKey).toBe('cadbos-uploads/rooms/shared/name.webp');
+		expect(externalKey).toBe('external%3Ahttps%3A%2F%2Fimages.example.test/rooms/shared/name.webp');
+		expect(parseMediaKey(externalKey)).toEqual({ bucketName: external.name, filename });
+		await expect(getMediaByBucketKey(db, uploads.name, filename)).resolves.toEqual(uploadsMedia);
+		await expect(getMediaByBucketKey(db, external.name, filename)).resolves.toEqual(externalMedia);
+	});
+
+	it('rejects malformed and non-canonical media keys', () => {
+		expect(parseMediaKey('object.webp')).toBeNull();
+		expect(parseMediaKey('bucket/')).toBeNull();
+		expect(parseMediaKey('%invalid/object.webp')).toBeNull();
+		expect(parseMediaKey('external%3ahttps%3a%2f%2fexample.test/object.webp')).toBeNull();
+		expect(parseMediaKey('bucket//nested/object.webp')).toEqual({
+			bucketName: 'bucket',
+			filename: '/nested/object.webp'
+		});
+	});
+
+	it('loads batches of 100 media without exceeding D1 parameter limits', async () => {
+		const db = makeD1();
+		const bucket = await getBucketByName(db, 'cadbos-uploads');
+		const media = await Promise.all(
+			Array.from({ length: 100 }, (_, index) =>
+				getOrCreateMediaByKey(db, bucket, `batch/${index}.webp`, '')
+			)
 		);
-		const conflicting = await getOrCreateMedia(
-			db,
-			'https://images.example.test/result.webp',
-			'2'.repeat(64)
-		);
-		expect(conflicting).toMatchObject({ id: first.id, checksum: '' });
-		expect(conflicting.bucket.name).toBe('external:https://images.example.test');
-		expect(mediaUrl(conflicting.bucket.url, conflicting.filename)).toBe(
-			'https://images.example.test/result.webp'
+
+		const result = await getMediaBatch(db, media.map((item) => item.id).reverse());
+
+		expect(result).toHaveLength(100);
+		expect(result.map((item) => item.id)).toEqual(
+			media.map((item) => item.id).sort((left, right) => left - right)
 		);
 	});
 });

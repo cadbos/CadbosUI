@@ -15,6 +15,7 @@
 import type { Locator, Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { media } from './helpers/media';
 import { mockProjectSessionRoutes } from './helpers/project-session-routes';
 
 function promptPreview(page: Page): Locator {
@@ -97,15 +98,15 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 				? [
 						{
 							id: 'oldest',
-							url: 'https://cdn.example.test/oldest.webp',
-							sourceUrl: 'https://cdn.example.test/oldest-source.jpg',
+							image: media(2, 'https://cdn.example.test/oldest.webp'),
+							source: media(1, 'https://cdn.example.test/oldest-source.jpg'),
 							kind: 'render',
 							createdAt: oldestCreatedAt
 						},
 						{
 							id: 'newest',
-							url: 'https://cdn.example.test/newest.webp',
-							sourceUrl: 'https://cdn.example.test/newest-source.jpg',
+							image: media(6, 'https://cdn.example.test/newest.webp'),
+							source: media(5, 'https://cdn.example.test/newest-source.jpg'),
 							kind: 'style-transfer',
 							createdAt: newestCreatedAt
 						}
@@ -113,8 +114,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 				: [
 						{
 							id: 'middle',
-							url: 'https://cdn.example.test/middle.webp',
-							sourceUrl: 'https://cdn.example.test/middle-source.jpg',
+							image: media(4, 'https://cdn.example.test/middle.webp'),
+							source: media(3, 'https://cdn.example.test/middle-source.jpg'),
 							kind: 'edit',
 							createdAt: middleCreatedAt
 						}
@@ -127,19 +128,6 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 				images,
 				pagination: { offset: Number(offset), size: 100, hasMore: offset === '0' }
 			})
-		});
-	});
-	await page.route('**/api/download**', async (route) => {
-		const url = new URL(route.request().url());
-		const filename = url.searchParams.get('filename');
-		expect(filename).not.toBeNull();
-		await route.fulfill({
-			status: 200,
-			headers: {
-				'content-type': filename?.endsWith('.jpg') ? 'image/jpeg' : 'image/webp',
-				'content-disposition': `attachment; filename="${filename}"`
-			},
-			body: 'image-bytes'
 		});
 	});
 	await openCreate(page);
@@ -179,10 +167,11 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 
 	const sourceImages = page.getByRole('img', { name: /Исходное изображение сцены/ });
 	await sourceImages.nth(0).hover();
-	const sourceDownloadPromise = page.waitForEvent('download');
-	await page.getByRole('button', { name: 'Скачать исходник сцены 1' }).click();
-	const sourceDownload = await sourceDownloadPromise;
-	expect(sourceDownload.suggestedFilename()).toBe('generated-image-newest-source.jpg');
+	const sourceDownloadLink = page.getByRole('link', { name: 'Скачать исходник сцены 1' });
+	await expect(sourceDownloadLink).toHaveAttribute('href', '/api/download/cadbos-uploads/5');
+	await expect(sourceDownloadLink).toHaveAttribute('download', 'generated-image-newest-source.jpg');
+	await expect(sourceDownloadLink).toHaveClass(/\bicon-button\b/);
+	await expect(sourceDownloadLink).toHaveAttribute('title', 'Скачать исходник сцены 1');
 
 	await page.getByRole('button', { name: 'Обработать исходник сцены 1' }).click();
 	await expect(page).toHaveURL(/\/style-transfer\/interior\?.*source=room-photo/);
@@ -207,14 +196,15 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 
 	await scenesButton.click();
 
-	const downloadButton = page.getByRole('button', {
+	const downloadLink = page.getByRole('link', {
 		name: 'Скачать результат сцены 1'
 	});
-	await downloadButton.focus();
-	const downloadPromise = page.waitForEvent('download');
-	await downloadButton.press('Enter');
-	const download = await downloadPromise;
-	expect(download.suggestedFilename()).toBe('generated-image-newest.webp');
+	await expect(downloadLink).toHaveAttribute('href', '/api/download/cadbos-uploads/6');
+	await expect(downloadLink).toHaveAttribute('download', 'generated-image-newest.webp');
+	await expect(downloadLink).toHaveClass(/\bicon-button\b/);
+	await expect(downloadLink).toHaveAttribute('title', 'Скачать результат сцены 1');
+	await downloadLink.focus();
+	await expect(downloadLink).toBeFocused();
 
 	const deleteButton = page.getByRole('button', { name: 'Удалить сцену 2' });
 	await deleteButton.focus();
@@ -389,10 +379,9 @@ test('generating with the exterior scene type calls the exterior render route', 
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				url: 'https://cdn.example.test/facade.webp',
+				image: media(1, 'https://cdn.example.test/facade.webp'),
 				mime: 'image/webp',
 				size: 1024,
-				hash: 'facade-hash',
 				dimensions: [800, 600]
 			})
 		});
@@ -400,12 +389,12 @@ test('generating with the exterior scene type calls the exterior render route', 
 	await mockProjectSessionRoutes(page);
 	let calledExteriorRoute = false;
 	let capturedBody:
-		| { image: string; prompt: string; outputFormat: string; sceneType?: string }
+		| { imageKey: string; prompt: string; outputFormat: string; sceneType?: string }
 		| undefined;
 	await page.route('**/api/render/exterior', async (route) => {
 		calledExteriorRoute = true;
 		capturedBody = route.request().postDataJSON() as {
-			image: string;
+			imageKey: string;
 			prompt: string;
 			outputFormat: string;
 			sceneType?: string;
@@ -414,7 +403,8 @@ test('generating with the exterior scene type calls the exterior render route', 
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				outputUrl: 'https://cdn.example.test/exterior-render.webp',
+				id: '00000000-0000-4000-8000-000000000201',
+				output: media(2, 'https://cdn.example.test/exterior-render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -458,6 +448,13 @@ test('generating with the exterior scene type calls the exterior render route', 
 		'src',
 		'https://cdn.example.test/exterior-render.webp'
 	);
+	const downloadLink = page.getByRole('link', { name: 'Скачать' });
+	await expect(downloadLink).toHaveAttribute('href', '/api/download/cadbos-uploads/2');
+	await expect(downloadLink).toHaveAttribute('download', 'render.webp');
+	await expect(downloadLink).toHaveClass(/\bicon-btn\b/);
+	await expect(downloadLink).toHaveAttribute('title', 'Скачать');
+	await downloadLink.focus();
+	await expect(downloadLink).toBeFocused();
 	expect(calledExteriorRoute).toBe(true);
 	expect(capturedBody?.sceneType).toBeUndefined();
 });

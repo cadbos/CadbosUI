@@ -17,13 +17,20 @@ import { generationKinds } from '$lib/api/contract';
 import type { ProjectDetailResponse, ProjectSessionRecord } from '$lib/api/contract';
 import { projectShare } from './project-share.svelte';
 import { discardBody } from '$lib/utils';
+import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export type ProjectDetailStatus = 'idle' | 'loading' | 'ready' | 'error' | 'not-found';
 
 const sessionGenerationSchema = z.object({
 	id: z.uuid(),
-	url: z.url(),
-	sourceUrl: z.url(),
+	image: z.object({
+		key: z.string().min(1),
+		url: z.url()
+	}),
+	source: z.object({
+		key: z.string().min(1),
+		url: z.url()
+	}),
 	kind: z.enum(generationKinds),
 	createdAt: z.number().int().min(0),
 	amount: z.number(),
@@ -48,6 +55,20 @@ const projectDetailSchema = z.object({
 	shareActive: z.boolean(),
 	sessions: z.array(sessionSchema)
 });
+
+function normalizeProject(project: z.infer<typeof projectDetailSchema>): ProjectDetailResponse {
+	return {
+		...project,
+		sessions: project.sessions.map((session) => ({
+			...session,
+			generations: session.generations.map((generation) => ({
+				...generation,
+				image: mediaAccess.normalize(generation.image),
+				source: mediaAccess.normalize(generation.source)
+			}))
+		}))
+	};
+}
 
 // Narrow response schemas for the action methods below — each only asserts
 // the fields that method actually reads, same principle as projectDetailSchema
@@ -91,7 +112,7 @@ export async function fetchProjectDetail(id: string): Promise<ProjectDetailRespo
 			console.error('fetchProjectDetail: response failed schema validation');
 			return null;
 		}
-		return parsed.data;
+		return normalizeProject(parsed.data);
 	} catch (error) {
 		console.error('fetchProjectDetail failed:', error);
 		return null;
@@ -186,7 +207,7 @@ class ProjectDetailState {
 				throw new ProjectDetailLoadError('project detail response invalid');
 			}
 
-			this.project = parsed.data;
+			this.project = normalizeProject(parsed.data);
 			await projectShare.hydrate(id, parsed.data.shareActive, shareResponse);
 			this.status = 'ready';
 		} catch (error) {

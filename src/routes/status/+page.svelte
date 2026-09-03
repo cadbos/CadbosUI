@@ -13,6 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { HealthServiceStatus, HealthSnapshot } from '$lib/api/contract';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { status } from '$lib/state/status.svelte';
@@ -20,9 +21,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	type ServiceKey = keyof HealthSnapshot['services'];
 
-	const serviceKeys: ServiceKey[] = ['archai', 'assets', 'comfyui', 'd1', 'nostr', 'r2'];
+	const serviceKeys: ServiceKey[] = ['archai', 'assets', 'comfyui', 'd1', 'nostr', 's3'];
 
-	$effect(() => {
+	onMount(() => {
 		status.startPolling();
 		return () => status.stopPolling();
 	});

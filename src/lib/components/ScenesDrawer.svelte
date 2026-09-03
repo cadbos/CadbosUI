@@ -28,6 +28,7 @@ before the Change Date. See LICENSE for complete terms.
 	} from '@lucide/svelte';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import type { Component, ComponentProps } from 'svelte';
 	import type { GenerationKind } from '$lib/api/contract';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -72,6 +73,13 @@ before the Change Date. See LICENSE for complete terms.
 		timeLabel: string;
 		ariaLabel: string;
 	}
+	type WorkspacePath =
+		| '/create'
+		| `/create/${string}`
+		| '/edit'
+		| `/edit?${string}`
+		| '/style-transfer'
+		| `/style-transfer/${string}`;
 
 	let { open, onClose }: Props = $props();
 	let deleteCandidate = $state<DeleteCandidate | null>(null);
@@ -260,28 +268,13 @@ before the Change Date. See LICENSE for complete terms.
 		return extension ? `generated-image-${id}.${extension}` : `generated-image-${id}`;
 	}
 
-	function downloadHref(url: string, id: string): string {
-		const filename = downloadFilename(url, id);
-		return `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
-	}
-
-	function downloadImage(url: string, id: string): void {
-		const filename = downloadFilename(url, id);
-		const anchor = document.createElement('a');
-		anchor.href = downloadHref(url, id);
-		anchor.download = filename;
-		document.body.append(anchor);
-		anchor.click();
-		anchor.remove();
-	}
-
 	function requestDelete(id: string, order: number): void {
 		if (generatedImages.deletingIds.has(id)) return;
 		deleteCandidate = { id, order };
 	}
 
-	function useImage(url: string, kind: GenerationKind): void {
-		request.setImage({ url });
+	function useImage(mediaKey: string, kind: GenerationKind): void {
+		request.setImage({ mediaKey });
 		request.setCurrentRender(undefined);
 		request.setStyleSourceMode('room-photo');
 		request.setObjectReplacementSourceMode('room-photo');
@@ -293,9 +286,15 @@ before the Change Date. See LICENSE for complete terms.
 		request.setStatus('idle');
 		const destination = destinationForGenerationKind(kind);
 		onClose();
-		goto(buildWorkspaceUrl(destination.mode, request, destination.subTab), {
-			replaceState: false
-		}).catch((error: unknown) => logBoundaryError('scenesDrawer.imageNavigation', error));
+		goto(
+			resolve(
+				buildWorkspaceUrl(destination.mode, request, destination.subTab) as WorkspacePath,
+				{}
+			),
+			{
+				replaceState: false
+			}
+		).catch((error: unknown) => logBoundaryError('scenesDrawer.imageNavigation', error));
 	}
 
 	function closeDrawer(): void {
@@ -426,7 +425,7 @@ before the Change Date. See LICENSE for complete terms.
 								<div class="image-column">
 									<div class="image-frame">
 										<img
-											src={image.sourceUrl}
+											src={image.source.url}
 											alt={ti('generatedImages.sourceImageAlt', { order: index + 1 })}
 											loading="lazy"
 										/>
@@ -436,19 +435,22 @@ before the Change Date. See LICENSE for complete terms.
 												class="icon-button"
 												aria-label={ti('generatedImages.useSource', { order: index + 1 })}
 												title={ti('generatedImages.useSource', { order: index + 1 })}
-												onclick={() => useImage(image.sourceUrl, image.kind)}
+												onclick={() => useImage(image.source.key, image.kind)}
 											>
 												<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
 											</button>
-											<button
-												type="button"
+											<a
+												href={resolve('/api/download/[bucket]/[...filename]', {
+													bucket: image.source.key.slice(0, image.source.key.indexOf('/')),
+													filename: image.source.key.slice(image.source.key.indexOf('/') + 1)
+												})}
+												download={downloadFilename(image.source.url, `${image.id}-source`)}
 												class="icon-button"
 												aria-label={ti('generatedImages.downloadSource', { order: index + 1 })}
 												title={ti('generatedImages.downloadSource', { order: index + 1 })}
-												onclick={() => downloadImage(image.sourceUrl, `${image.id}-source`)}
 											>
 												<Download size={17} strokeWidth={1.8} aria-hidden="true" />
-											</button>
+											</a>
 										</div>
 									</div>
 								</div>
@@ -465,7 +467,7 @@ before the Change Date. See LICENSE for complete terms.
 								<div class="image-column">
 									<div class="image-frame result-frame">
 										<img
-											src={image.url}
+											src={image.image.url}
 											alt={ti('generatedImages.resultImageAlt', { order: index + 1 })}
 											loading="lazy"
 										/>
@@ -475,19 +477,22 @@ before the Change Date. See LICENSE for complete terms.
 												class="icon-button"
 												aria-label={ti('generatedImages.useResult', { order: index + 1 })}
 												title={ti('generatedImages.useResult', { order: index + 1 })}
-												onclick={() => useImage(image.url, image.kind)}
+												onclick={() => useImage(image.image.key, image.kind)}
 											>
 												<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
 											</button>
-											<button
-												type="button"
+											<a
+												href={resolve('/api/download/[bucket]/[...filename]', {
+													bucket: image.image.key.slice(0, image.image.key.indexOf('/')),
+													filename: image.image.key.slice(image.image.key.indexOf('/') + 1)
+												})}
+												download={downloadFilename(image.image.url, image.id)}
 												class="icon-button"
 												aria-label={ti('generatedImages.download', { order: index + 1 })}
 												title={ti('generatedImages.download', { order: index + 1 })}
-												onclick={() => downloadImage(image.url, image.id)}
 											>
 												<Download size={17} strokeWidth={1.8} aria-hidden="true" />
-											</button>
+											</a>
 										</div>
 									</div>
 								</div>

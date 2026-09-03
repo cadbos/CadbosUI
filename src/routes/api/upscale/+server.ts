@@ -27,9 +27,10 @@ import {
 	recordBalance
 } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { upscale4k } from '$lib/server/generation';
+import { upscale4k, type StoredRenderResponse } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
-import { getBucketByName } from '$lib/server/media';
+import { getOrCreateMediaByKey, mediaKey } from '$lib/server/media';
+import { mediaAccess, providerMediaBatch } from '$lib/server/media-access';
 import { assertSessionOwnedByUser } from '$lib/server/projects';
 
 // Anti-cost-abuse: each upscale is its own paid call, mirroring /api/edit — its
@@ -93,13 +94,18 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		if (!sessionOwned) return apiError(404, 'session_not_found', 'Session not found');
 	}
 
-	let result: RenderResponse;
-	let resultHash: string;
+	const source =
+		db && userId ? await providerMediaBatch(db, platform, [parsed.data.imageKey]) : null;
+	if (db && userId && !source) return apiError(404, 'image_not_found', 'Image not found');
+	const sourceMedia = source?.get(parsed.data.imageKey)?.media;
+	const uploadsBucket = sourceMedia?.bucket;
+
+	let result: StoredRenderResponse;
 	try {
-		const uploadsUrl = db ? (await getBucketByName(db, 'cadbos-uploads')).url : '';
-		const stored = await upscale4k(platform, uploadsUrl, parsed.data);
-		result = stored;
-		resultHash = stored.outputHash;
+		result = await upscale4k(platform, uploadsBucket, {
+			...parsed.data,
+			image: source?.get(parsed.data.imageKey)?.url ?? 'https://example.test/demo.webp'
+		});
 	} catch (err) {
 		// generation.ts already sanitizes/logs the detail; this route is the last
 		// line of defense — never forward err.message to the client.
@@ -111,6 +117,12 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	// cache the resulting balance/deduction is a bookkeeping gap, not a reason to
 	// make the user think a completed, paid upscale failed.
 	if (db && userId) {
+		const outputMedia = await getOrCreateMediaByKey(
+			db,
+			uploadsBucket!,
+			result.outputKey,
+			result.outputHash
+		);
 		// recordBalance mirrors archAI's own (shared) account balance for ops
 		// visibility only — it must never reach the client, so read it before
 		// overwriting `result.balance` with the caller's own remaining limit.
@@ -121,12 +133,8 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		}
 		try {
 			const credit = await recordGeneration(db, userId, {
-				url: result.outputUrl,
-				resultHash,
-				sourceUrl: parsed.data.image,
-				// upscale always operates on a previous render/edit result, never a
-				// fresh upload — nothing to dedup against.
-				sourceHash: '',
+				resultMediaId: outputMedia.id,
+				sourceMediaId: sourceMedia!.id,
 				sessionId: parsed.data.sessionId,
 				prompt: '4k upscale',
 				kind: 'upscale',
@@ -147,5 +155,12 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		}
 	}
 
-	return json({ outputUrl: result.outputUrl, cost: result.cost, balance: result.balance });
+	const output =
+		db && userId
+			? await mediaAccess(
+					platform,
+					await getOrCreateMediaByKey(db, uploadsBucket!, result.outputKey, result.outputHash)
+				)
+			: { key: mediaKey('cadbos-uploads', result.outputKey), url: `/${result.outputKey}` };
+	return json({ output, cost: result.cost, balance: result.balance } satisfies RenderResponse);
 };
