@@ -49,6 +49,7 @@ declare global {
 				OBJECT_REPLACEMENT_COST?: string;
 				TEXTURE_REPLACEMENT_COST?: string;
 				LIGHT_SETTINGS_COST?: string;
+				OBJECT_ADDER_COST?: string;
 				UPLOADS_BUCKET: R2Bucket;
 				// Comma-separated Nostr pubkeys (hex) subject to the local metered
 				// credit limit (billing.ts) — everyone else keeps the unlimited,

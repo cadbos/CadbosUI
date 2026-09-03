@@ -51,6 +51,7 @@
 		"wrangler": "^4.105.0"
 	},
 	"dependencies": {
+		"@cf-wasm/photon": "^0.4.0",
 		"@lucide/svelte": "^1.23.0",
 		"@xyflow/svelte": "^1.6.1",
 		"bits-ui": "^2.18.1",
