@@ -16,7 +16,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { ProjectDetailResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
-import { getDb } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { getProjectDetailByShareToken } from '$lib/server/projects';
 
 // The public, unauthenticated viewer for a project share link — no

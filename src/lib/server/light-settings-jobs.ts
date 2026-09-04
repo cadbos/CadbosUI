@@ -12,7 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
+import { sql } from 'drizzle-orm';
+import type { Database } from '$lib/server/db';
 import { getOrCreateMedia, mediaUrl } from '$lib/server/media';
 
 export type LightSettingsJobStatus = 'processing' | 'completed' | 'failed';
@@ -81,7 +82,7 @@ function toLightSettingsJob(row: LightSettingsJobRow): LightSettingsJob {
 }
 
 export async function createLightSettingsJob(
-	db: D1Database,
+	db: Database,
 	input: {
 		id: string;
 		userId: string;
@@ -95,72 +96,53 @@ export async function createLightSettingsJob(
 	}
 ): Promise<LightSettingsJob> {
 	const scene = await getOrCreateMedia(db, input.sceneUrl, input.sceneHash);
-	await db
-		.prepare(
-			'INSERT INTO light_settings_jobs ' +
-				'(id, user_id, comfy_prompt_id, scene_media_id, session_id, instruction, cost, status, created_at, updated_at) ' +
-				"VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?)"
-		)
-		.bind(
-			input.id,
-			input.userId,
-			input.comfyPromptId,
-			scene.id,
-			input.sessionId,
-			input.instruction,
-			input.cost,
-			input.createdAt,
-			input.createdAt
-		)
-		.run();
+	await db.run(
+		sql`INSERT INTO light_settings_jobs
+			(id, user_id, comfy_prompt_id, scene_media_id, session_id, instruction, cost, status, created_at, updated_at)
+			VALUES (${input.id}, ${input.userId}, ${input.comfyPromptId}, ${scene.id}, ${input.sessionId}, ${input.instruction}, ${input.cost}, 'processing', ${input.createdAt}, ${input.createdAt})`
+	);
 	const job = await getLightSettingsJob(db, input.userId, input.id);
 	if (!job) throw new Error('light settings job insert failed');
 	return job;
 }
 
 export async function getLightSettingsJob(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	id: string
 ): Promise<LightSettingsJob | null> {
-	const row = await db
-		.prepare(
-			'SELECT j.id, j.user_id, j.comfy_prompt_id, scene.filename AS scene_filename, ' +
-				'scene_bucket.url AS scene_bucket_url, j.session_id, j.instruction, j.cost, j.status, ' +
-				'output.filename AS output_filename, output_bucket.url AS output_bucket_url, ' +
-				'j.error_code, j.balance_after, j.created_at, j.updated_at, j.completed_at ' +
-				'FROM light_settings_jobs j JOIN media scene ON scene.id = j.scene_media_id ' +
-				'JOIN buckets scene_bucket ON scene_bucket.id = scene.bucket ' +
-				'LEFT JOIN media output ON output.id = j.output_media_id ' +
-				'LEFT JOIN buckets output_bucket ON output_bucket.id = output.bucket ' +
-				'WHERE j.id = ? AND j.user_id = ?'
-		)
-		.bind(id, userId)
-		.first<LightSettingsJobRow>();
+	const row = await db.get<LightSettingsJobRow>(
+		sql`SELECT j.id, j.user_id, j.comfy_prompt_id, scene.filename AS scene_filename,
+			scene_bucket.url AS scene_bucket_url, j.session_id, j.instruction, j.cost, j.status,
+			output.filename AS output_filename, output_bucket.url AS output_bucket_url,
+			j.error_code, j.balance_after, j.created_at, j.updated_at, j.completed_at
+			FROM light_settings_jobs j JOIN media scene ON scene.id = j.scene_media_id
+			JOIN buckets scene_bucket ON scene_bucket.id = scene.bucket
+			LEFT JOIN media output ON output.id = j.output_media_id
+			LEFT JOIN buckets output_bucket ON output_bucket.id = output.bucket
+			WHERE j.id = ${id} AND j.user_id = ${userId}`
+	);
 	return row ? toLightSettingsJob(row) : null;
 }
 
 export async function failLightSettingsJob(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	id: string,
 	errorCode: string,
 	completedAt: number
 ): Promise<LightSettingsJob> {
-	await db
-		.prepare(
-			"UPDATE light_settings_jobs SET status = 'failed', error_code = ?, updated_at = ?, completed_at = ? " +
-				"WHERE id = ? AND user_id = ? AND status = 'processing'"
-		)
-		.bind(errorCode, completedAt, completedAt, id, userId)
-		.run();
+	await db.run(
+		sql`UPDATE light_settings_jobs SET status = 'failed', error_code = ${errorCode}, updated_at = ${completedAt}, completed_at = ${completedAt}
+			WHERE id = ${id} AND user_id = ${userId} AND status = 'processing'`
+	);
 	const job = await getLightSettingsJob(db, userId, id);
 	if (!job) throw new Error('light settings job not found');
 	return job;
 }
 
 export async function completeLightSettingsJob(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	id: string,
 	outputUrl: string,
@@ -168,42 +150,33 @@ export async function completeLightSettingsJob(
 	completedAt: number
 ): Promise<LightSettingsJob> {
 	const output = await getOrCreateMedia(db, outputUrl, outputHash);
-	const results = await db.batch<LightSettingsDeductionSnapshotRow>([
-		db
-			.prepare(
-				'SELECT c.balance AS available_balance, j.cost FROM credits c ' +
-					'JOIN light_settings_jobs j ON j.user_id = c.user_id ' +
-					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
-			)
-			.bind(id, userId),
-		db
-			.prepare(
-				'UPDATE credits SET balance = MAX(balance - ' +
-					"(SELECT cost FROM light_settings_jobs WHERE id = ? AND user_id = ? AND status = 'processing'), " +
-					'0), ' +
-					'updated_at = ? WHERE user_id = ? AND EXISTS ' +
-					"(SELECT 1 FROM light_settings_jobs WHERE id = ? AND user_id = ? AND status = 'processing')"
-			)
-			.bind(id, userId, completedAt, userId, id, userId),
-		db
-			.prepare(
-				'INSERT INTO generations ' +
-					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id) ' +
-					"SELECT j.id, j.user_id, ?, j.scene_media_id, j.instruction, 'light-settings', j.cost, c.balance, ?, j.session_id " +
-					'FROM light_settings_jobs j JOIN credits c ON c.user_id = j.user_id ' +
-					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
-			)
-			.bind(output.id, completedAt, id, userId),
-		db
-			.prepare(
-				"UPDATE light_settings_jobs SET status = 'completed', output_media_id = ?, " +
-					'balance_after = (SELECT balance FROM credits WHERE user_id = ?), updated_at = ?, completed_at = ? ' +
-					"WHERE id = ? AND user_id = ? AND status = 'processing' " +
-					'AND EXISTS (SELECT 1 FROM credits WHERE user_id = ?)'
-			)
-			.bind(output.id, userId, completedAt, completedAt, id, userId, userId)
+	const [snapshotRows] = await db.batch([
+		db.all<LightSettingsDeductionSnapshotRow>(
+			sql`SELECT c.balance AS available_balance, j.cost FROM credits c
+				JOIN light_settings_jobs j ON j.user_id = c.user_id
+				WHERE j.id = ${id} AND j.user_id = ${userId} AND j.status = 'processing'`
+		),
+		db.run(
+			sql`UPDATE credits SET balance = MAX(balance -
+				(SELECT cost FROM light_settings_jobs WHERE id = ${id} AND user_id = ${userId} AND status = 'processing'), 0),
+				updated_at = ${completedAt} WHERE user_id = ${userId} AND EXISTS
+				(SELECT 1 FROM light_settings_jobs WHERE id = ${id} AND user_id = ${userId} AND status = 'processing')`
+		),
+		db.run(
+			sql`INSERT INTO generations
+				(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id)
+				SELECT j.id, j.user_id, ${output.id}, j.scene_media_id, j.instruction, 'light-settings', j.cost, c.balance, ${completedAt}, j.session_id
+				FROM light_settings_jobs j JOIN credits c ON c.user_id = j.user_id
+				WHERE j.id = ${id} AND j.user_id = ${userId} AND j.status = 'processing'`
+		),
+		db.run(
+			sql`UPDATE light_settings_jobs SET status = 'completed', output_media_id = ${output.id},
+				balance_after = (SELECT balance FROM credits WHERE user_id = ${userId}), updated_at = ${completedAt}, completed_at = ${completedAt}
+				WHERE id = ${id} AND user_id = ${userId} AND status = 'processing'
+				AND EXISTS (SELECT 1 FROM credits WHERE user_id = ${userId})`
+		)
 	]);
-	const snapshot = results[0]?.results[0];
+	const snapshot = snapshotRows[0];
 	if (snapshot && snapshot.available_balance < snapshot.cost) {
 		console.warn('Light settings credit deduction exceeded available balance:', {
 			jobId: id

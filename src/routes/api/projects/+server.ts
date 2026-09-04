@@ -17,7 +17,7 @@ import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import type { ProjectRecord, ProjectsResponse } from '$lib/api/contract';
 import { apiError, createProjectRequestSchema, parseBody } from '$lib/server/api';
-import { getDb } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { createProject, listProjects } from '$lib/server/projects';
 

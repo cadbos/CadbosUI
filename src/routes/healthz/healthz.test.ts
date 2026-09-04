@@ -83,7 +83,7 @@ function cachedSnapshot(status: 'healthy' | 'unhealthy' = 'healthy'): Response {
 function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 	const assetsFetch = vi.fn(async () => new Response('<svg/>', { status: 200 }));
 	const comfyuiFetch = vi.fn(async () => Response.json({ system: {} }));
-	const dbFirst = vi.fn(async () => 1);
+	const dbFirst = vi.fn(async () => ({ healthy: 1 }));
 	const r2List = vi.fn(async () => ({ objects: [], truncated: false, delimitedPrefixes: [] }));
 	return {
 		platform: {
@@ -94,7 +94,7 @@ function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 				ASSETS: { fetch: assetsFetch } as unknown as Fetcher,
 				COMFYUI_BASE_URL: { fetch: comfyuiFetch } as unknown as Fetcher,
 				DB: {
-					prepare: vi.fn(() => ({ first: dbFirst }))
+					prepare: vi.fn(() => ({ bind: vi.fn(() => ({ first: dbFirst })) }))
 				} as unknown as D1Database,
 				...(ttl === undefined ? {} : { HEALTH_CACHE_TTL_SECONDS: ttl }),
 				UPLOADS_BUCKET: { list: r2List } as unknown as R2Bucket
@@ -217,7 +217,7 @@ describe('GET /healthz', () => {
 		expect(stored?.headers.get('cache-control')).toBe('public, max-age=30');
 		expect(await stored?.json()).toMatchObject({ status: 'healthy' });
 		expect(getWalletBalance).toHaveBeenCalledWith(healthy.platform);
-		expect(healthy.dbFirst).toHaveBeenCalledWith('healthy');
+		expect(healthy.dbFirst).toHaveBeenCalledWith();
 		expect(healthy.r2List).toHaveBeenCalledWith({ limit: 1 });
 		expect(healthy.assetsFetch.mock.calls[0][0].url).toBe('https://assets.internal/favicon.svg');
 		expect(healthy.comfyuiFetch.mock.calls[0][0].url).toBe('http://localhost:8188/system_stats');

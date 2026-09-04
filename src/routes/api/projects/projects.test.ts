@@ -23,6 +23,7 @@ import type {
 	RenameSessionResponse,
 	ShareTokenResponse
 } from '$lib/api/contract';
+import { createDb } from '$lib/server/db';
 import { getProjectDetailByShareToken } from '$lib/server/projects';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { seedGeneration as seedGenerationFixture } from '$lib/server/testing/generation-fixtures';
@@ -49,8 +50,13 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 		.run();
 }
 
-function seedGeneration(db: D1Database, id: string, sessionId: string, userId: string): void {
-	seedGenerationFixture(db, {
+async function seedGeneration(
+	rawDb: D1Database,
+	id: string,
+	sessionId: string,
+	userId: string
+): Promise<void> {
+	await seedGenerationFixture(createDb(rawDb), {
 		id,
 		userId,
 		url: 'https://cdn.example.test/out.webp',
@@ -170,7 +176,7 @@ describe('GET /api/projects/[id]', () => {
 			locals: { user: owner }
 		} as Parameters<typeof createSession>[0]);
 		const session = (await sessionResponse.json()) as CreateSessionResponse;
-		seedGeneration(db, '00000000-0000-4000-8000-000000000101', session.id, 'user-1');
+		await seedGeneration(db, '00000000-0000-4000-8000-000000000101', session.id, 'user-1');
 
 		const detailResponse = await getProject({
 			params: { id: project.id },
@@ -284,7 +290,7 @@ describe('POST /api/projects/[id]/sessions/[sessionId]/fork', () => {
 			locals: { user: owner }
 		} as Parameters<typeof createSession>[0]);
 		const parentSession = (await sessionResponse.json()) as CreateSessionResponse;
-		seedGeneration(db, '00000000-0000-4000-8000-000000000101', parentSession.id, 'user-1');
+		await seedGeneration(db, '00000000-0000-4000-8000-000000000101', parentSession.id, 'user-1');
 
 		const forkResponse = await forkSession({
 			request: new Request('https://cadbos.example/api/projects/x/sessions/y/fork', {
@@ -313,7 +319,7 @@ describe('POST /api/projects/[id]/sessions/[sessionId]/fork', () => {
 			locals: { user: owner }
 		} as Parameters<typeof createSession>[0]);
 		const otherSession = (await otherSessionResponse.json()) as CreateSessionResponse;
-		seedGeneration(db, '00000000-0000-4000-8000-000000000102', otherSession.id, 'user-1');
+		await seedGeneration(db, '00000000-0000-4000-8000-000000000102', otherSession.id, 'user-1');
 
 		const mismatched = await forkSession({
 			request: new Request('https://cadbos.example/api/projects/x/sessions/y/fork', {
@@ -356,7 +362,7 @@ describe('GET, POST /api/projects/[id]/share and DELETE /api/projects/[id]/share
 		} as Parameters<typeof issueShare>[0]);
 		expect(firstShare.status).toBe(201);
 		const firstToken = (await firstShare.json()) as ShareTokenResponse;
-		expect(await getProjectDetailByShareToken(db, firstToken.token)).not.toBeNull();
+		expect(await getProjectDetailByShareToken(createDb(db), firstToken.token)).not.toBeNull();
 
 		// The owner can recover the token they were just handed (e.g. after a
 		// page reload) without reissuing it.
@@ -381,8 +387,8 @@ describe('GET, POST /api/projects/[id]/share and DELETE /api/projects/[id]/share
 			locals: { user: owner }
 		} as Parameters<typeof issueShare>[0]);
 		const secondToken = (await secondShare.json()) as ShareTokenResponse;
-		expect(await getProjectDetailByShareToken(db, firstToken.token)).toBeNull();
-		expect(await getProjectDetailByShareToken(db, secondToken.token)).not.toBeNull();
+		expect(await getProjectDetailByShareToken(createDb(db), firstToken.token)).toBeNull();
+		expect(await getProjectDetailByShareToken(createDb(db), secondToken.token)).not.toBeNull();
 
 		const deniedRevoke = await revokeShare({
 			params: { id: project.id },
@@ -399,7 +405,7 @@ describe('GET, POST /api/projects/[id]/share and DELETE /api/projects/[id]/share
 			locals: { user: owner }
 		} as Parameters<typeof revokeShare>[0]);
 		expect(revoke.status).toBe(204);
-		expect(await getProjectDetailByShareToken(db, secondToken.token)).toBeNull();
+		expect(await getProjectDetailByShareToken(createDb(db), secondToken.token)).toBeNull();
 
 		const getAfterRevoke = await getShare({
 			params: { id: project.id },
@@ -489,7 +495,7 @@ describe('DELETE /api/projects/[id]/sessions/[sessionId]', () => {
 			locals: { user: owner }
 		} as Parameters<typeof createSession>[0]);
 		const session = (await sessionResponse.json()) as CreateSessionResponse;
-		seedGeneration(db, '00000000-0000-4000-8000-000000000101', session.id, 'user-1');
+		await seedGeneration(db, '00000000-0000-4000-8000-000000000101', session.id, 'user-1');
 
 		const archived = await deleteSession({
 			params: { id: project.id, sessionId: session.id },

@@ -12,7 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
+import { sql } from 'drizzle-orm';
+import type { Database } from '$lib/server/db';
 
 const CHECKSUM = /^(?:|[0-9a-f]{64})$/;
 
@@ -50,17 +51,14 @@ export function mediaUrl(bucketUrl: string, filename: string): string {
 	return filename ? `${base}/${filename}` : base;
 }
 
-export async function getBucketByName(db: D1Database, name: string): Promise<Bucket> {
-	const bucket = await db
-		.prepare('SELECT id, name, url FROM buckets WHERE name = ?')
-		.bind(name)
-		.first<Bucket>();
+export async function getBucketByName(db: Database, name: string): Promise<Bucket> {
+	const bucket = await db.get<Bucket>(sql`SELECT id, name, url FROM buckets WHERE name = ${name}`);
 	if (!bucket) throw new Error(`bucket ${name} not found`);
 	return bucket;
 }
 
 async function bucketForUrl(
-	db: D1Database,
+	db: Database,
 	value: string
 ): Promise<{ bucket: Bucket; filename: string }> {
 	const parsed = new URL(value);
@@ -69,23 +67,19 @@ async function bucketForUrl(
 	}
 	const normalizedUrl = `${parsed.origin}${parsed.pathname}${parsed.search}`;
 
-	const { results } = await db
-		.prepare('SELECT id, name, url FROM buckets ORDER BY length(url) DESC, id')
-		.all<Bucket>();
-	let bucket: Bucket | null | undefined = (results ?? []).find((candidate) => {
+	const rows = await db.all<Bucket>(
+		sql`SELECT id, name, url FROM buckets ORDER BY length(url) DESC, id`
+	);
+	let bucket: Bucket | null | undefined = rows.find((candidate) => {
 		const base = baseUrl(candidate.url);
 		return normalizedUrl === base || normalizedUrl.startsWith(`${base}/`);
 	});
 	if (!bucket) {
 		const origin = parsed.origin;
-		await db
-			.prepare('INSERT OR IGNORE INTO buckets (name, url) VALUES (?, ?)')
-			.bind(`external:${origin}`, origin)
-			.run();
-		bucket = await db
-			.prepare('SELECT id, name, url FROM buckets WHERE url = ?')
-			.bind(origin)
-			.first<Bucket>();
+		await db.run(
+			sql`INSERT OR IGNORE INTO buckets (name, url) VALUES (${`external:${origin}`}, ${origin})`
+		);
+		bucket = await db.get<Bucket>(sql`SELECT id, name, url FROM buckets WHERE url = ${origin}`);
 		if (!bucket) throw new Error(`bucket for ${parsed.hostname} not found`);
 	}
 
@@ -96,37 +90,32 @@ async function bucketForUrl(
 }
 
 export async function getOrCreateMedia(
-	db: D1Database,
+	db: Database,
 	url: string,
 	checksum: string
 ): Promise<Media> {
 	const normalizedChecksum = normalizeChecksum(checksum);
 	const { bucket, filename } = await bucketForUrl(db, url);
-	const existing = await db
-		.prepare('SELECT id, filename, bucket, checksum FROM media WHERE bucket = ? AND filename = ?')
-		.bind(bucket.id, filename)
-		.first<MediaRow>();
+	const existing = await db.get<MediaRow>(
+		sql`SELECT id, filename, bucket, checksum FROM media WHERE bucket = ${bucket.id} AND filename = ${filename}`
+	);
 	if (existing) {
 		if (existing.checksum && normalizedChecksum && existing.checksum !== normalizedChecksum) {
-			await db.prepare("UPDATE media SET checksum = '' WHERE id = ?").bind(existing.id).run();
+			await db.run(sql`UPDATE media SET checksum = '' WHERE id = ${existing.id}`);
 			return { ...existing, bucket, checksum: '' };
 		}
 		if (!existing.checksum && normalizedChecksum) {
-			await db
-				.prepare('UPDATE media SET checksum = ? WHERE id = ?')
-				.bind(normalizedChecksum, existing.id)
-				.run();
+			await db.run(
+				sql`UPDATE media SET checksum = ${normalizedChecksum} WHERE id = ${existing.id}`
+			);
 		}
 		return { ...existing, bucket, checksum: existing.checksum || normalizedChecksum };
 	}
 
-	const row = await db
-		.prepare(
-			'INSERT INTO media (filename, bucket, checksum) VALUES (?, ?, ?) ' +
-				'ON CONFLICT (bucket, filename) DO NOTHING RETURNING id, filename, bucket, checksum'
-		)
-		.bind(filename, bucket.id, normalizedChecksum)
-		.first<MediaRow>();
+	const row = await db.get<MediaRow>(
+		sql`INSERT INTO media (filename, bucket, checksum) VALUES (${filename}, ${bucket.id}, ${normalizedChecksum})
+			ON CONFLICT (bucket, filename) DO NOTHING RETURNING id, filename, bucket, checksum`
+	);
 	if (row) return { ...row, bucket };
 	return getOrCreateMedia(db, url, normalizedChecksum);
 }

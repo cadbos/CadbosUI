@@ -22,6 +22,7 @@ import {
 	getObjectReplacementJob
 } from '$lib/server/object-replacement-jobs';
 import { RemoteImageImportError } from '$lib/server/remote-image';
+import { createDb } from '$lib/server/db';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { setBucketUrl } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
@@ -204,8 +205,9 @@ function callGet(
 	} as GetEvent);
 }
 
-async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
-	setBucketUrl(db, 'cadbos-uploads', 'https://cdn.example.test');
+async function seedJob(rawDb: D1Database, createdAt = Date.now()): Promise<void> {
+	const db = createDb(rawDb);
+	await setBucketUrl(db, 'cadbos-uploads', 'https://cdn.example.test');
 	await createObjectReplacementJob(db, {
 		id: 'job-1',
 		userId: 'user-1',
@@ -277,7 +279,7 @@ describe('POST /api/object-replacement', () => {
 		const db = makeD1();
 		seedUser(db, 12);
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-		const foreignSessionId = seedForeignSession(db);
+		const foreignSessionId = await seedForeignSession(createDb(db));
 
 		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), {
 			sessionId: foreignSessionId
@@ -374,7 +376,7 @@ describe('POST /api/object-replacement', () => {
 			'https://cadbos.example',
 			id
 		);
-		await expect(getObjectReplacementJob(db, 'user-1', id)).resolves.toMatchObject({
+		await expect(getObjectReplacementJob(createDb(db), 'user-1', id)).resolves.toMatchObject({
 			comfyPromptId: 'prompt-1',
 			cost: 3.5,
 			status: 'processing'

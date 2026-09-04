@@ -16,6 +16,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { getUserIdByPubkey } from '$lib/server/billing';
+import { createDb } from '$lib/server/db';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 import { DEMO_PUBKEY } from '$lib/server/demo';
@@ -161,7 +162,7 @@ describe('POST /api/edit — billing', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
-		const foreignSessionId = seedForeignSession(db);
+		const foreignSessionId = await seedForeignSession(createDb(db));
 
 		// call() forces sessionId to the caller's own session — bypass it here to
 		// submit someone else's session id instead.

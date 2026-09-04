@@ -13,14 +13,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { makeDb } from '$lib/server/testing/d1-shim';
 import { setBucketUrl } from '$lib/server/testing/generation-fixtures';
 import { getOrCreateMedia, mediaUrl } from '$lib/server/media';
 
 describe('media repository', () => {
 	it('normalizes default HTTPS ports before matching buckets and extracting filenames', async () => {
-		const db = makeD1();
-		setBucketUrl(db, 'cadbos-uploads', 'https://uploads.example.test');
+		const db = makeDb();
+		await setBucketUrl(db, 'cadbos-uploads', 'https://uploads.example.test');
 
 		const media = await getOrCreateMedia(
 			db,
@@ -36,8 +36,8 @@ describe('media repository', () => {
 	});
 
 	it('normalizes checksums, clears invalid/conflicting values, and registers external buckets', async () => {
-		const db = makeD1();
-		setBucketUrl(db, 'cadbos-uploads', 'https://uploads.example.test');
+		const db = makeDb();
+		await setBucketUrl(db, 'cadbos-uploads', 'https://uploads.example.test');
 		const uppercase = await getOrCreateMedia(
 			db,
 			'https://uploads.example.test/uppercase.webp',
