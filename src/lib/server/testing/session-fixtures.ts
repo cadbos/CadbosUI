@@ -12,7 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
+import { sql } from 'drizzle-orm';
+import type { Database } from '$lib/server/db';
 
 // Seeds an entirely separate user's own project+session and returns the
 // session id — the "foreign session" every generation-writing route's
@@ -20,29 +21,25 @@ import type { D1Database } from '@cloudflare/workers-types';
 // session_not_found. Shared by the render/edit/style-transfer/upscale/
 // object-replacement/texture-replacement route test suites so this seed
 // shape (and the IDOR test built on it) isn't reinvented per file.
-export function seedForeignSession(db: D1Database): string {
+export async function seedForeignSession(db: Database): Promise<string> {
 	const suffix = crypto.randomUUID();
 	const foreignUserId = `foreign-user-${suffix}`;
 	const foreignPubkey = suffix.replace(/-/g, '').padEnd(64, '0').slice(0, 64);
 	const now = Date.now();
 
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind(foreignUserId, foreignPubkey, now)
-		.run();
+	await db.run(
+		sql`INSERT INTO users (id, pubkey, created_at) VALUES (${foreignUserId}, ${foreignPubkey}, ${now})`
+	);
 
 	const projectId = `foreign-project-${suffix}`;
-	db.prepare(
-		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
-		.bind(projectId, foreignUserId, 'Foreign project', now, now)
-		.run();
+	await db.run(
+		sql`INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (${projectId}, ${foreignUserId}, 'Foreign project', ${now}, ${now})`
+	);
 
 	const sessionId = crypto.randomUUID();
-	db.prepare(
-		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
-		.bind(sessionId, projectId, 'Foreign session', now, now)
-		.run();
+	await db.run(
+		sql`INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (${sessionId}, ${projectId}, 'Foreign session', ${now}, ${now})`
+	);
 
 	return sessionId;
 }

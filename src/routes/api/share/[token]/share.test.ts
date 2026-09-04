@@ -13,8 +13,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { sql } from 'drizzle-orm';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { ProjectDetailResponse } from '$lib/api/contract';
+import { createDb, type Database } from '$lib/server/db';
 import {
 	archiveProject,
 	createProject,
@@ -27,14 +29,19 @@ import { seedGeneration as seedGenerationFixture } from '$lib/server/testing/gen
 
 const { GET: getSharedProject } = await import('./+server');
 
-function seedUser(db: D1Database, id: string, pubkey: string): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind(id, pubkey, Date.now())
-		.run();
+async function seedUser(db: Database, id: string, pubkey: string): Promise<void> {
+	await db.run(
+		sql`INSERT INTO users (id, pubkey, created_at) VALUES (${id}, ${pubkey}, ${Date.now()})`
+	);
 }
 
-function seedGeneration(db: D1Database, id: string, sessionId: string, userId: string): void {
-	seedGenerationFixture(db, {
+async function seedGeneration(
+	db: Database,
+	id: string,
+	sessionId: string,
+	userId: string
+): Promise<void> {
+	await seedGenerationFixture(db, {
 		id,
 		userId,
 		url: 'https://cdn.example.test/out.webp',
@@ -44,22 +51,23 @@ function seedGeneration(db: D1Database, id: string, sessionId: string, userId: s
 	});
 }
 
-function platform(db: D1Database): App.Platform {
-	return { env: { DB: db } } as unknown as App.Platform;
+function platform(rawDb: D1Database): App.Platform {
+	return { env: { DB: rawDb } } as unknown as App.Platform;
 }
 
 describe('GET /api/share/[token]', () => {
 	it('returns the project detail for a valid, active token — no auth required', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		const rawDb = makeD1();
+		const db = createDb(rawDb);
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const project = await createProject(db, 'user-1', 'Living room');
 		const session = await createSession(db, 'user-1', project.id, 'Main thread');
-		seedGeneration(db, '00000000-0000-4000-8000-000000000101', session!.id, 'user-1');
+		await seedGeneration(db, '00000000-0000-4000-8000-000000000101', session!.id, 'user-1');
 		const token = await issueShareToken(db, 'user-1', project.id);
 
 		const response = await getSharedProject({
 			params: { token: token! },
-			platform: platform(db)
+			platform: platform(rawDb)
 		} as Parameters<typeof getSharedProject>[0]);
 
 		expect(response.status).toBe(200);
@@ -72,35 +80,37 @@ describe('GET /api/share/[token]', () => {
 	});
 
 	it('returns 404 once the project has been archived, even with a still-active token', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		const rawDb = makeD1();
+		const db = createDb(rawDb);
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const project = await createProject(db, 'user-1', 'Living room');
 		const token = await issueShareToken(db, 'user-1', project.id);
 		await archiveProject(db, 'user-1', project.id);
 
 		const response = await getSharedProject({
 			params: { token: token! },
-			platform: platform(db)
+			platform: platform(rawDb)
 		} as Parameters<typeof getSharedProject>[0]);
 		expect(response.status).toBe(404);
 	});
 
 	it('returns 404 for an unknown token, and for a revoked one — indistinguishably', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		const rawDb = makeD1();
+		const db = createDb(rawDb);
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const project = await createProject(db, 'user-1', 'Living room');
 		const token = await issueShareToken(db, 'user-1', project.id);
 		await revokeActiveShareToken(db, 'user-1', project.id);
 
 		const revokedResponse = await getSharedProject({
 			params: { token: token! },
-			platform: platform(db)
+			platform: platform(rawDb)
 		} as Parameters<typeof getSharedProject>[0]);
 		expect(revokedResponse.status).toBe(404);
 
 		const unknownResponse = await getSharedProject({
 			params: { token: 'never-issued' },
-			platform: platform(db)
+			platform: platform(rawDb)
 		} as Parameters<typeof getSharedProject>[0]);
 		expect(unknownResponse.status).toBe(404);
 	});

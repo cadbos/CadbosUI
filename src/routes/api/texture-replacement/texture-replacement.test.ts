@@ -15,6 +15,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { ComfyUiError } from '$lib/server/comfyui';
+import { createDb } from '$lib/server/db';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { setBucketUrl } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
@@ -158,7 +159,7 @@ describe('POST /api/texture-replacement', () => {
 		const db = makeD1();
 		seedUser(db);
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-		const foreignSessionId = seedForeignSession(db);
+		const foreignSessionId = await seedForeignSession(createDb(db));
 
 		// callPost() forces sessionId to the caller's own session — bypass it here
 		// to submit someone else's session id instead.
@@ -181,7 +182,7 @@ describe('POST /api/texture-replacement', () => {
 
 	it('uses ArchAI for a masked request and completes without creating a ComfyUI job', async () => {
 		const db = makeD1();
-		setBucketUrl(db, 'cadbos-uploads', 'https://uploads.example.test');
+		await setBucketUrl(createDb(db), 'cadbos-uploads', 'https://uploads.example.test');
 		seedUser(db);
 		const maskedRequest = {
 			image: requestBody.image,

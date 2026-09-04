@@ -16,7 +16,8 @@ import { beforeEach, describe, it, expect } from 'vitest';
 import { finalizeEvent, generateSecretKey, getPublicKey, type Event } from 'nostr-tools/pure';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Cookies, RequestEvent } from '@sveltejs/kit';
-import { makeD1 } from '../testing/d1-shim';
+import { createDb, type Database } from '$lib/server/db';
+import { makeD1, makeDb } from '../testing/d1-shim';
 import { CHALLENGE_TTL_MS, NIP98_KIND, SESSION_COOKIE } from './config';
 import { consumeChallenge, createChallenge, findValidSession } from './repository';
 import { POST as challengePOST } from '../../../routes/auth/challenge/+server';
@@ -112,19 +113,21 @@ async function verify(db: D1Database, cookies: Cookies, event: Event): Promise<R
 }
 
 describe('auth flow', () => {
-	let db: D1Database;
+	let rawDb: D1Database;
+	let db: Database;
 
 	beforeEach(() => {
-		db = makeD1();
+		rawDb = makeD1();
+		db = createDb(rawDb);
 	});
 
 	it('challenge → verify signs the user in, sets a session cookie, and creates the user', async () => {
 		const sk = generateSecretKey();
 		const pubkey = getPublicKey(sk);
-		const challenge = await requestChallenge(db, pubkey);
+		const challenge = await requestChallenge(rawDb, pubkey);
 		const cookies = makeCookies();
 
-		const response = await verify(db, cookies, signLogin(sk, challenge));
+		const response = await verify(rawDb, cookies, signLogin(sk, challenge));
 		expect(response.status).toBe(200);
 		expect((await response.json()).user).toEqual({ pubkey });
 
@@ -147,27 +150,27 @@ describe('auth flow', () => {
 
 	it('blocks a replayed challenge (second verify with the same nonce fails 401)', async () => {
 		const sk = generateSecretKey();
-		const challenge = await requestChallenge(db, getPublicKey(sk));
+		const challenge = await requestChallenge(rawDb, getPublicKey(sk));
 
-		const first = await verify(db, makeCookies(), signLogin(sk, challenge));
+		const first = await verify(rawDb, makeCookies(), signLogin(sk, challenge));
 		expect(first.status).toBe(200);
 
-		const replay = await verify(db, makeCookies(), signLogin(sk, challenge));
+		const replay = await verify(rawDb, makeCookies(), signLogin(sk, challenge));
 		expect(replay.status).toBe(401);
 	});
 
 	it('rejects a verify whose pubkey does not match the challenge owner', async () => {
-		const challenge = await requestChallenge(db, getPublicKey(generateSecretKey()));
+		const challenge = await requestChallenge(rawDb, getPublicKey(generateSecretKey()));
 		// A different key signs the same nonce.
-		const response = await verify(db, makeCookies(), signLogin(generateSecretKey(), challenge));
+		const response = await verify(rawDb, makeCookies(), signLogin(generateSecretKey(), challenge));
 		expect(response.status).toBe(401);
 	});
 
 	it('logout deletes the session and clears the cookie', async () => {
 		const sk = generateSecretKey();
-		const challenge = await requestChallenge(db, getPublicKey(sk));
+		const challenge = await requestChallenge(rawDb, getPublicKey(sk));
 		const cookies = makeCookies();
-		await verify(db, cookies, signLogin(sk, challenge));
+		await verify(rawDb, cookies, signLogin(sk, challenge));
 		const sessionId = requireSessionId(cookies);
 
 		// hooks.server.ts resolves the session into locals before the handler runs;
@@ -176,7 +179,7 @@ describe('auth flow', () => {
 			sessionLookupUnavailable: false,
 			user: { pubkey: getPublicKey(sk) }
 		};
-		const response = await call(logoutPOST, { platform: platform(db), cookies, locals });
+		const response = await call(logoutPOST, { platform: platform(rawDb), cookies, locals });
 		expect(response.status).toBe(204);
 		expect(cookies.get(SESSION_COOKIE)).toBeUndefined();
 		expect(await findValidSession(db, sessionId, Date.now())).toBeNull();
@@ -192,7 +195,7 @@ describe('auth flow', () => {
 		cookies.set(SESSION_COOKIE, 'unresolved-session', { path: '/' });
 
 		const response = await call(logoutPOST, {
-			platform: platform(db),
+			platform: platform(rawDb),
 			cookies,
 			locals: { sessionLookupUnavailable: true, user: null }
 		});
@@ -228,12 +231,12 @@ describe('auth flow', () => {
 		// is provisioned the way the old quota system used to.
 		const sk = generateSecretKey();
 		const pubkey = getPublicKey(sk);
-		const challenge = await requestChallenge(db, pubkey);
-		await verify(db, makeCookies(), signLogin(sk, challenge));
+		const challenge = await requestChallenge(rawDb, pubkey);
+		await verify(rawDb, makeCookies(), signLogin(sk, challenge));
 
 		const response = await call(meGET, {
 			locals: { sessionLookupUnavailable: false, user: { pubkey } },
-			platform: platform(db)
+			platform: platform(rawDb)
 		});
 		expect(response.status).toBe(200);
 		const body = await response.json();
@@ -244,9 +247,9 @@ describe('auth flow', () => {
 	it('updates Cadbos profile fields only for an authenticated user', async () => {
 		const sk = generateSecretKey();
 		const pubkey = getPublicKey(sk);
-		const challenge = await requestChallenge(db, pubkey);
+		const challenge = await requestChallenge(rawDb, pubkey);
 		const cookies = makeCookies();
-		await verify(db, cookies, signLogin(sk, challenge));
+		await verify(rawDb, cookies, signLogin(sk, challenge));
 
 		const unauthenticated = await call(profilePATCH, {
 			request: new Request(VERIFY_URL, {
@@ -254,7 +257,7 @@ describe('auth flow', () => {
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ firstName: 'Ada', lastName: 'Lovelace' })
 			}),
-			platform: platform(db),
+			platform: platform(rawDb),
 			locals: { sessionLookupUnavailable: false, user: null }
 		});
 		expect(unauthenticated.status).toBe(401);
@@ -265,7 +268,7 @@ describe('auth flow', () => {
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ firstName: 'Ada', lastName: 'Lovelace' })
 			}),
-			platform: platform(db),
+			platform: platform(rawDb),
 			locals: { sessionLookupUnavailable: true, user: null }
 		});
 		expect(unavailable.status).toBe(503);
@@ -283,7 +286,7 @@ describe('auth flow', () => {
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ firstName: ' Ada ', lastName: ' Lovelace ' })
 			}),
-			platform: platform(db),
+			platform: platform(rawDb),
 			locals: { sessionLookupUnavailable: false, user: { pubkey } }
 		});
 		expect(response.status).toBe(200);
@@ -302,7 +305,7 @@ describe('auth flow', () => {
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ firstName: 'Grace' })
 			}),
-			platform: platform(db),
+			platform: platform(rawDb),
 			locals: { sessionLookupUnavailable: false, user: { pubkey } }
 		});
 		expect(await firstNameOnly.json()).toEqual({
@@ -315,7 +318,7 @@ describe('auth flow', () => {
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ lastName: '' })
 			}),
-			platform: platform(db),
+			platform: platform(rawDb),
 			locals: { sessionLookupUnavailable: false, user: { pubkey } }
 		});
 		expect(await clearLastName.json()).toEqual({
@@ -331,7 +334,7 @@ describe('auth flow', () => {
 
 describe('repository challenge atomicity', () => {
 	it('consumeChallenge succeeds once and then reports no change', async () => {
-		const db = makeD1();
+		const db = makeDb();
 		const now = Date.now();
 		await createChallenge(db, 'nonce-1', 'p'.repeat(64), now);
 
@@ -344,7 +347,7 @@ describe('repository challenge atomicity', () => {
 	});
 
 	it('consumeChallenge rejects an expired nonce', async () => {
-		const db = makeD1();
+		const db = makeDb();
 		const now = Date.now();
 		await createChallenge(db, 'old', 'p'.repeat(64), now - CHALLENGE_TTL_MS - 1);
 		expect(await consumeChallenge(db, 'old', 'p'.repeat(64), now - CHALLENGE_TTL_MS, now)).toBe(

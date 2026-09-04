@@ -13,17 +13,16 @@
  */
 
 import { dev } from '$app/environment';
-import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
-import { getDb } from '$lib/server/auth/repository';
 import { getUserIdByPubkey } from '$lib/server/billing';
+import { getDb, type Database } from '$lib/server/db';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
 export async function getUsageViewerDb(
 	platform: App.Platform | undefined,
 	pubkey: string
-): Promise<D1Database | Response> {
+): Promise<Database | Response> {
 	const db = getDb(platform);
 	const userId = await getUserIdByPubkey(db, pubkey);
 	return userId ? db : apiError(500, 'account_error', 'Account record not found');

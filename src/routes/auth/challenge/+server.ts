@@ -17,7 +17,8 @@ import type { RequestHandler } from './$types';
 import type { ChallengeResponse } from '$lib/api/contract';
 import { apiError, challengeRequestSchema, parseBody } from '$lib/server/api';
 import { AUTH_RATE_LIMIT } from '$lib/server/auth/config';
-import { createChallenge, getDb } from '$lib/server/auth/repository';
+import { createChallenge } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import { randomToken } from '$lib/server/auth/session';
 

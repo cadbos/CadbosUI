@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser, UserUsageResponse } from '$lib/api/contract';
+import { createDb } from '$lib/server/db';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { seedGeneration as seedGenerationFixture } from '$lib/server/testing/generation-fixtures';
@@ -34,14 +35,14 @@ function grantAccess(db: D1Database, userId: string, balance: number, updatedAt:
 		.run();
 }
 
-function seedGeneration(
+async function seedGeneration(
 	db: D1Database,
 	id: string,
 	userId: string,
 	amount: number,
 	createdAt: number
-): void {
-	seedGenerationFixture(db, {
+): Promise<void> {
+	await seedGenerationFixture(createDb(db), {
 		id,
 		userId,
 		url: `https://cdn.example.test/${id}.webp`,
@@ -153,8 +154,8 @@ describe('GET /api/usage', () => {
 		seedUser(db, 'user-1', 'pubkey-1', 2000);
 		seedUser(db, 'user-2', 'pubkey-2', 1000);
 		grantAccess(db, 'user-1', 7.5, 4000);
-		seedGeneration(db, 'generation-1', 'user-1', 1.25, 5000);
-		seedGeneration(db, 'generation-2', 'user-1', 2.75, 6000);
+		await seedGeneration(db, 'generation-1', 'user-1', 1.25, 5000);
+		await seedGeneration(db, 'generation-2', 'user-1', 2.75, 6000);
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db), '?size=10');
 		const result = (await response.json()) as UserUsageResponse;

@@ -13,35 +13,30 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import type { D1Database } from '@cloudflare/workers-types';
+import { sql } from 'drizzle-orm';
+import type { Database } from '$lib/server/db';
 import {
 	completeObjectReplacementJob,
 	createObjectReplacementJob,
 	failObjectReplacementJob,
 	getObjectReplacementJob
 } from '$lib/server/object-replacement-jobs';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { makeDb } from '$lib/server/testing/d1-shim';
 
-function seedAccount(db: D1Database, balance = 12): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind('user-1', 'pubkey-1', 1)
-		.run();
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-		.bind('user-1', balance, 1)
-		.run();
-	db.prepare(
-		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
-		.bind('project-1', 'user-1', 'Test project', 1, 1)
-		.run();
-	db.prepare(
-		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
-		.bind('session-1', 'project-1', 'Test session', 1, 1)
-		.run();
+async function seedAccount(db: Database, balance = 12): Promise<void> {
+	await db.run(sql`INSERT INTO users (id, pubkey, created_at) VALUES ('user-1', 'pubkey-1', 1)`);
+	await db.run(
+		sql`INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES ('user-1', ${balance}, 1, 1)`
+	);
+	await db.run(
+		sql`INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES ('project-1', 'user-1', 'Test project', 1, 1)`
+	);
+	await db.run(
+		sql`INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES ('session-1', 'project-1', 'Test session', 1, 1)`
+	);
 }
 
-async function seedJob(db: D1Database, id = 'job-1') {
+async function seedJob(db: Database, id = 'job-1') {
 	return createObjectReplacementJob(db, {
 		id,
 		userId: 'user-1',
@@ -58,8 +53,8 @@ async function seedJob(db: D1Database, id = 'job-1') {
 
 describe('object replacement jobs', () => {
 	it('stores the provider prompt and snapshotted request', async () => {
-		const db = makeD1();
-		seedAccount(db);
+		const db = makeDb();
+		await seedAccount(db);
 
 		await seedJob(db);
 
@@ -74,8 +69,8 @@ describe('object replacement jobs', () => {
 	});
 
 	it('atomically completes, deducts, and records one generation', async () => {
-		const db = makeD1();
-		seedAccount(db);
+		const db = makeDb();
+		await seedAccount(db);
 		await seedJob(db);
 
 		const job = await completeObjectReplacementJob(
@@ -88,10 +83,9 @@ describe('object replacement jobs', () => {
 		);
 
 		expect(job).toMatchObject({ status: 'completed', balanceAfter: 10, cost: 2 });
-		const generation = await db
-			.prepare('SELECT id, kind, amount, balance_after FROM generations WHERE id = ?')
-			.bind('job-1')
-			.first();
+		const generation = await db.get(
+			sql`SELECT id, kind, amount, balance_after FROM generations WHERE id = 'job-1'`
+		);
 		expect(generation).toEqual({
 			id: 'job-1',
 			kind: 'object-replacement',
@@ -101,8 +95,8 @@ describe('object replacement jobs', () => {
 	});
 
 	it('returns the same completion without charging again', async () => {
-		const db = makeD1();
-		seedAccount(db);
+		const db = makeDb();
+		await seedAccount(db);
 		await seedJob(db);
 
 		const [first, second] = await Promise.all([
@@ -126,21 +120,19 @@ describe('object replacement jobs', () => {
 
 		expect(first.balanceAfter).toBe(10);
 		expect(second.balanceAfter).toBe(10);
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
-		const count = await db
-			.prepare('SELECT COUNT(*) AS count FROM generations WHERE id = ?')
-			.bind('job-1')
-			.first<{ count: number }>();
+		const credit = await db.get<{ balance: number }>(
+			sql`SELECT balance FROM credits WHERE user_id = 'user-1'`
+		);
+		const count = await db.get<{ count: number }>(
+			sql`SELECT COUNT(*) AS count FROM generations WHERE id = 'job-1'`
+		);
 		expect(credit?.balance).toBe(10);
 		expect(count?.count).toBe(1);
 	});
 
 	it('clamps concurrent completion spending at zero and warns once', async () => {
-		const db = makeD1();
-		seedAccount(db, 3);
+		const db = makeDb();
+		await seedAccount(db, 3);
 		await seedJob(db, 'job-1');
 		await seedJob(db, 'job-2');
 		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -173,16 +165,14 @@ describe('object replacement jobs', () => {
 		);
 
 		expect(jobs.map((job) => job.balanceAfter).sort()).toEqual([0, 1]);
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
-		const generations = await db
-			.prepare('SELECT id, amount, balance_after FROM generations WHERE user_id = ? ORDER BY id')
-			.bind('user-1')
-			.all<{ id: string; amount: number; balance_after: number }>();
+		const credit = await db.get<{ balance: number }>(
+			sql`SELECT balance FROM credits WHERE user_id = 'user-1'`
+		);
+		const generations = await db.all<{ id: string; amount: number; balance_after: number }>(
+			sql`SELECT id, amount, balance_after FROM generations WHERE user_id = 'user-1' ORDER BY id`
+		);
 		expect(credit?.balance).toBe(0);
-		expect(generations.results).toEqual([
+		expect(generations).toEqual([
 			{ id: 'job-1', amount: 2, balance_after: 1 },
 			{ id: 'job-2', amount: 2, balance_after: 0 }
 		]);
@@ -195,8 +185,8 @@ describe('object replacement jobs', () => {
 	});
 
 	it('marks a provider failure without deducting credit', async () => {
-		const db = makeD1();
-		seedAccount(db);
+		const db = makeDb();
+		await seedAccount(db);
 		await seedJob(db);
 
 		const job = await failObjectReplacementJob(
@@ -211,10 +201,9 @@ describe('object replacement jobs', () => {
 			status: 'failed',
 			errorCode: 'object_replacement_failed'
 		});
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
+		const credit = await db.get<{ balance: number }>(
+			sql`SELECT balance FROM credits WHERE user_id = 'user-1'`
+		);
 		expect(credit?.balance).toBe(12);
 	});
 });

@@ -13,9 +13,11 @@
  */
 
 import { json } from '@sveltejs/kit';
+import { sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import type { HealthSnapshot, NostrHealth, ServiceHealth } from '$lib/api/contract';
 import { NOSTR_PROFILE_BOOTSTRAP_RELAYS } from '$lib/nostr/connect';
+import { getDb } from '$lib/server/db';
 import { getWalletBalance } from '$lib/server/wallet';
 
 const DEFAULT_HEALTH_CACHE_TTL_SECONDS = 30;
@@ -124,7 +126,9 @@ async function collectHealthSnapshot(
 		}),
 		probe(async () => {
 			if (!env?.DB) return false;
-			return (await env.DB.prepare('SELECT 1 AS healthy').first<number>('healthy')) === 1;
+			return (
+				(await getDb(platform).get<{ healthy: number }>(sql`SELECT 1 AS healthy`))?.healthy === 1
+			);
 		}),
 		probeNostr(fetcher),
 		probe(async () => {

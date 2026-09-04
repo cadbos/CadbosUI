@@ -12,7 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database, D1Result } from '@cloudflare/workers-types';
+import { sql } from 'drizzle-orm';
+import type { Database } from '$lib/server/db';
 
 interface BucketRow {
 	id: number;
@@ -20,50 +21,39 @@ interface BucketRow {
 	url: string;
 }
 
-function syncFirst<T>(value: Promise<T | null>): T | null {
-	return value as unknown as T | null;
+export async function setBucketUrl(db: Database, name: string, url: string): Promise<void> {
+	await db.run(sql`UPDATE buckets SET url = ${url.replace(/\/+$/, '')} WHERE name = ${name}`);
 }
 
-function syncResults<T>(value: Promise<D1Result<T>>): T[] {
-	return (value as unknown as D1Result<T>).results;
-}
-
-export function setBucketUrl(db: D1Database, name: string, url: string): void {
-	db.prepare('UPDATE buckets SET url = ? WHERE name = ?').bind(url.replace(/\/+$/, ''), name).run();
-}
-
-export function seedMedia(db: D1Database, url: string, checksum = ''): number {
-	const buckets = syncResults(db.prepare('SELECT id, name, url FROM buckets').all<BucketRow>());
+export async function seedMedia(db: Database, url: string, checksum = ''): Promise<number> {
+	const buckets = await db.all<BucketRow>(sql`SELECT id, name, url FROM buckets`);
 	let bucket: BucketRow | null =
 		buckets
 			.filter((candidate) => url === candidate.url || url.startsWith(`${candidate.url}/`))
 			.sort((left, right) => right.url.length - left.url.length)[0] ?? null;
 	if (!bucket) {
 		const origin = new URL(url).origin;
-		db.prepare('INSERT OR IGNORE INTO buckets (name, url) VALUES (?, ?)')
-			.bind(`external:${origin}`, origin)
-			.run();
-		bucket = syncFirst(
-			db.prepare('SELECT id, name, url FROM buckets WHERE url = ?').bind(origin).first<BucketRow>()
+		await db.run(
+			sql`INSERT OR IGNORE INTO buckets (name, url) VALUES (${`external:${origin}`}, ${origin})`
 		);
+		bucket =
+			(await db.get<BucketRow>(sql`SELECT id, name, url FROM buckets WHERE url = ${origin}`)) ??
+			null;
 	}
 	if (!bucket) throw new Error('media bucket seed failed');
 	const filename = url.slice(bucket.url.length).replace(/^\//, '');
-	db.prepare('INSERT OR IGNORE INTO media (filename, bucket, checksum) VALUES (?, ?, ?)')
-		.bind(filename, bucket.id, checksum)
-		.run();
-	const media = syncFirst(
-		db
-			.prepare('SELECT id FROM media WHERE bucket = ? AND filename = ?')
-			.bind(bucket.id, filename)
-			.first<{ id: number }>()
+	await db.run(
+		sql`INSERT OR IGNORE INTO media (filename, bucket, checksum) VALUES (${filename}, ${bucket.id}, ${checksum})`
+	);
+	const media = await db.get<{ id: number }>(
+		sql`SELECT id FROM media WHERE bucket = ${bucket.id} AND filename = ${filename}`
 	);
 	if (!media) throw new Error('media seed failed');
 	return media.id;
 }
 
-export function seedGeneration(
-	db: D1Database,
+export async function seedGeneration(
+	db: Database,
 	input: {
 		id: string;
 		userId: string;
@@ -78,25 +68,12 @@ export function seedGeneration(
 		amount?: number;
 		balanceAfter?: number;
 	}
-): void {
-	const resultMediaId = seedMedia(db, input.url, input.resultChecksum);
-	const sourceMediaId = seedMedia(db, input.sourceUrl, input.sourceChecksum);
-	db.prepare(
-		'INSERT INTO generations ' +
-			'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id) ' +
-			'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-	)
-		.bind(
-			input.id,
-			input.userId,
-			resultMediaId,
-			sourceMediaId,
-			input.prompt ?? 'cozy',
-			input.kind ?? 'render',
-			input.amount ?? 1,
-			input.balanceAfter ?? 10,
-			input.createdAt,
-			input.sessionId ?? null
-		)
-		.run();
+): Promise<void> {
+	const resultMediaId = await seedMedia(db, input.url, input.resultChecksum);
+	const sourceMediaId = await seedMedia(db, input.sourceUrl, input.sourceChecksum);
+	await db.run(
+		sql`INSERT INTO generations
+			(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id)
+			VALUES (${input.id}, ${input.userId}, ${resultMediaId}, ${sourceMediaId}, ${input.prompt ?? 'cozy'}, ${input.kind ?? 'render'}, ${input.amount ?? 1}, ${input.balanceAfter ?? 10}, ${input.createdAt}, ${input.sessionId ?? null})`
+	);
 }

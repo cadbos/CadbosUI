@@ -16,7 +16,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { ProjectDetailResponse, ProjectRecord } from '$lib/api/contract';
 import { apiError, parseBody, renameProjectRequestSchema } from '$lib/server/api';
-import { getDb } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { archiveProject, getProjectDetail, renameProject } from '$lib/server/projects';
 

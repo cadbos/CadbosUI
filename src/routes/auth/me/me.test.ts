@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { MeResponse, SessionUser } from '$lib/api/contract';
+import { createDb } from '$lib/server/db';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { seedGeneration } from '$lib/server/testing/generation-fixtures';
 import { DEMO_PUBKEY } from '$lib/server/demo';
@@ -110,7 +111,7 @@ describe('GET /auth/me — generation access control', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 5);
-		seedGeneration(db, {
+		await seedGeneration(createDb(db), {
 			id: 'tx-1',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/out.webp',
