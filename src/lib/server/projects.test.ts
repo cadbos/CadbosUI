@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { makeD1 } from './testing/d1-shim';
 import { seedGeneration as seedGenerationFixture } from '$lib/server/testing/generation-fixtures';
@@ -62,6 +62,10 @@ describe('projects repository', () => {
 		db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
 	});
 
 	it("lists only the caller's own projects", async () => {
@@ -114,6 +118,37 @@ describe('projects repository', () => {
 
 		const denied = await getProjectDetail(db, 'user-2', project.id);
 		expect(denied).toBeNull();
+	});
+
+	it('skips a session generation row with an unrecognized kind, logging a warning', async () => {
+		const project = await createProject(db, 'user-1', 'Living room');
+		const session = await createSession(db, 'user-1', project.id, 'Main thread');
+		if (!session) {
+			throw new Error('createSession returned null for a valid owner/project');
+		}
+		seedGenerationFixture(db, {
+			id: 'invalid-kind',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/invalid-kind.webp',
+			sourceUrl: 'https://cdn.example.test/source.jpg',
+			createdAt: Date.now(),
+			sessionId: session.id,
+			kind: 'unknown'
+		});
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+		const detail = await getProjectDetail(db, 'user-1', project.id);
+
+		expect(detail?.sessions[0]?.generations).toEqual([]);
+		expect(consoleWarn.mock.calls.flat()).toEqual([
+			JSON.stringify({
+				level: 'warn',
+				area: 'generations',
+				event: 'unknown_generation_kind',
+				id: 'invalid-kind',
+				kind: 'unknown'
+			})
+		]);
 	});
 
 	it('attaches generations correctly for a project past the D1 100-param IN-clause limit', async () => {

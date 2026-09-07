@@ -124,12 +124,14 @@ interface SessionGenerationRow {
 	balance_after: number;
 }
 
-function toSessionGeneration(row: SessionGenerationRow): SessionGeneration {
+function toSessionGeneration(row: SessionGenerationRow): SessionGeneration | null {
+	const kind = generationKindForRow(row.id, row.kind);
+	if (kind === null) return null;
 	return {
 		id: row.id,
 		mediaId: row.result_media_id,
 		sourceMediaId: row.source_media_id,
-		kind: generationKindForRow(row.id, row.kind),
+		kind,
 		createdAt: row.created_at,
 		amount: row.amount,
 		balanceAfter: row.balance_after
@@ -253,8 +255,10 @@ async function loadProjectDetail(db: D1Database, projectRow: ProjectRow): Promis
 					.all<SessionGenerationRow & { session_id: string }>()
 			).results ?? [];
 		for (const row of generationRows) {
+			const generation = toSessionGeneration(row);
+			if (generation === null) continue;
 			const bucket = generationsBySession.get(row.session_id) ?? [];
-			bucket.push(toSessionGeneration(row));
+			bucket.push(generation);
 			generationsBySession.set(row.session_id, bucket);
 		}
 	}

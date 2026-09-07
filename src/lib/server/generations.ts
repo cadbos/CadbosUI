@@ -30,9 +30,18 @@ function isGenerationKind(kind: string): kind is GenerationKind {
 	return generationKinds.some((candidate) => candidate === kind);
 }
 
-export function generationKindForRow(id: string, kind: string): GenerationKind {
+export function generationKindForRow(id: string, kind: string): GenerationKind | null {
 	if (isGenerationKind(kind)) return kind;
-	throw new Error(`generation ${id} has invalid kind`);
+	console.warn(
+		JSON.stringify({
+			level: 'warn',
+			area: 'generations',
+			event: 'unknown_generation_kind',
+			id,
+			kind
+		})
+	);
+	return null;
 }
 
 export interface GeneratedImage {
@@ -77,7 +86,9 @@ interface GenerationRow {
 	created_at: number;
 }
 
-function toGeneratedImage(row: GenerationRow): GeneratedImage {
+function toGeneratedImage(row: GenerationRow): GeneratedImage | null {
+	const kind = generationKindForRow(row.id, row.kind);
+	if (kind === null) return null;
 	return {
 		id: row.id,
 		userId: row.user_id,
@@ -85,7 +96,7 @@ function toGeneratedImage(row: GenerationRow): GeneratedImage {
 		sourceMediaId: row.source_media_id,
 		filename: row.result_filename,
 		bucketName: row.result_bucket_name,
-		kind: generationKindForRow(row.id, row.kind),
+		kind,
 		createdAt: row.created_at
 	};
 }
@@ -228,29 +239,63 @@ export async function deleteGeneratedImage(
 	};
 }
 
+// Rows with an unrecognized `kind` (generationKindForRow) are dropped after
+// the fact, so a plain LIMIT/OFFSET window can come back short even though
+// valid rows exist further out. This scans forward — growing the window each
+// round trip — until enough valid rows are collected or the table runs out,
+// so pagination is expressed in terms of valid rows, not raw ones.
+async function collectValidRows<Row, T>(
+	fetchRows: (limit: number, offset: number) => Promise<Row[]>,
+	toDomain: (row: Row) => T | null,
+	minValidCount: number
+): Promise<{ items: T[]; exhausted: boolean }> {
+	if (minValidCount <= 0) return { items: [], exhausted: true };
+	const items: T[] = [];
+	let rawOffset = 0;
+	let chunkSize = minValidCount;
+	for (;;) {
+		const rows = await fetchRows(chunkSize, rawOffset);
+		for (const row of rows) {
+			const item = toDomain(row);
+			if (item) items.push(item);
+		}
+		rawOffset += rows.length;
+		if (items.length >= minValidCount || rows.length < chunkSize) {
+			return { items, exhausted: rows.length < chunkSize };
+		}
+		chunkSize *= 2;
+	}
+}
+
 export async function listGeneratedImages(
 	db: D1Database,
 	userId: string,
 	offset: number,
 	size: number
 ): Promise<GeneratedImagesPage> {
-	const result = await db
-		.prepare(
-			'SELECT g.id, g.user_id, g.result_media_id, g.source_media_id, result_media.filename AS result_filename, ' +
-				'result_bucket.name AS result_bucket_name, ' +
-				'g.kind, g.created_at FROM generations g ' +
-				'JOIN media result_media ON result_media.id = g.result_media_id ' +
-				'JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ' +
-				'JOIN media source_media ON source_media.id = g.source_media_id ' +
-				'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
-				'WHERE g.user_id = ? ORDER BY g.created_at DESC, g.id DESC LIMIT ? OFFSET ?'
-		)
-		.bind(userId, size + 1, offset)
-		.all<GenerationRow>();
-	const rows = result.results ?? [];
+	const { items } = await collectValidRows(
+		async (limit, rawOffset) => {
+			const result = await db
+				.prepare(
+					'SELECT g.id, g.user_id, g.result_media_id, g.source_media_id, result_media.filename AS result_filename, ' +
+						'result_bucket.name AS result_bucket_name, ' +
+						'g.kind, g.created_at FROM generations g ' +
+						'JOIN media result_media ON result_media.id = g.result_media_id ' +
+						'JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ' +
+						'JOIN media source_media ON source_media.id = g.source_media_id ' +
+						'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
+						'WHERE g.user_id = ? ORDER BY g.created_at DESC, g.id DESC LIMIT ? OFFSET ?'
+				)
+				.bind(userId, limit, rawOffset)
+				.all<GenerationRow>();
+			return result.results ?? [];
+		},
+		toGeneratedImage,
+		offset + size + 1
+	);
 	return {
-		images: rows.slice(0, size).map(toGeneratedImage),
-		hasMore: rows.length > size
+		images: items.slice(offset, offset + size),
+		hasMore: items.length > offset + size
 	};
 }
 
@@ -367,12 +412,14 @@ interface CreditTransactionRow {
 	project_id: string | null;
 }
 
-function toCreditTransaction(row: CreditTransactionRow): CreditTransaction {
+function toCreditTransaction(row: CreditTransactionRow): CreditTransaction | null {
+	const kind = generationKindForRow(row.id, row.kind);
+	if (kind === null) return null;
 	return {
 		id: row.id,
 		amount: row.amount,
 		balanceAfter: row.balance_after,
-		kind: generationKindForRow(row.id, row.kind),
+		kind,
 		createdAt: row.created_at,
 		sessionId: row.session_id,
 		projectId: row.project_id
@@ -389,14 +436,21 @@ export async function listCreditHistory(
 	// generations.session_id is nullable at the DB level (migrations/0011), so
 	// a row without one must still appear in the history, just without a
 	// session/project to link it to.
-	const { results } = await db
-		.prepare(
-			'SELECT g.id, g.amount, g.balance_after, g.kind, g.created_at, ' +
-				'g.session_id, ps.project_id FROM generations g ' +
-				'LEFT JOIN project_sessions ps ON ps.id = g.session_id ' +
-				'WHERE g.user_id = ? ORDER BY g.created_at DESC, g.rowid DESC LIMIT ?'
-		)
-		.bind(userId, limit)
-		.all<CreditTransactionRow>();
-	return (results ?? []).map(toCreditTransaction);
+	const { items } = await collectValidRows(
+		async (chunkLimit, rawOffset) => {
+			const { results } = await db
+				.prepare(
+					'SELECT g.id, g.amount, g.balance_after, g.kind, g.created_at, ' +
+						'g.session_id, ps.project_id FROM generations g ' +
+						'LEFT JOIN project_sessions ps ON ps.id = g.session_id ' +
+						'WHERE g.user_id = ? ORDER BY g.created_at DESC, g.rowid DESC LIMIT ? OFFSET ?'
+				)
+				.bind(userId, chunkLimit, rawOffset)
+				.all<CreditTransactionRow>();
+			return results ?? [];
+		},
+		toCreditTransaction,
+		limit
+	);
+	return items.slice(0, limit);
 }
