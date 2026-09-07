@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { makeD1 } from './testing/d1-shim';
 import { TEST_S3_BUCKET } from './testing/generation-fixtures';
@@ -124,6 +124,10 @@ beforeEach(() => {
 		.run();
 });
 
+afterEach(() => {
+	vi.restoreAllMocks();
+});
+
 describe('recordGeneration', () => {
 	it('subtracts the real cost and records the image against the same row', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
@@ -211,13 +215,23 @@ describe('listCreditHistory', () => {
 		expect(history.map((entry) => entry.kind)).toEqual(['edit', 'render']);
 	});
 
-	it('rejects an invalid stored generation kind', async () => {
+	it('skips a row with an unrecognized stored generation kind, logging a warning', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedGeneration(db, 'invalid-kind', 'user-1', 1000, 'unknown');
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-		await expect(listCreditHistory(db, 'user-1')).rejects.toThrow(
-			'generation invalid-kind has invalid kind'
-		);
+		const history = await listCreditHistory(db, 'user-1');
+
+		expect(history).toEqual([]);
+		expect(consoleWarn.mock.calls.flat()).toEqual([
+			JSON.stringify({
+				level: 'warn',
+				area: 'generations',
+				event: 'unknown_generation_kind',
+				id: 'invalid-kind',
+				kind: 'unknown'
+			})
+		]);
 	});
 
 	// The expenses page (routes/expenses/+page.svelte) resolves a clicked row
@@ -245,6 +259,17 @@ describe('listCreditHistory', () => {
 
 		const history = await listCreditHistory(db, 'user-1');
 		expect(history).toEqual([expect.objectContaining({ sessionId, projectId })]);
+	});
+
+	it('scans past a newer invalid-kind row to reach a valid older one within the limit', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneration(db, 'invalid-newer', 'user-1', 2000, 'unknown');
+		seedGeneration(db, 'valid-older', 'user-1', 1000);
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+		const history = await listCreditHistory(db, 'user-1', 1);
+
+		expect(history).toEqual([expect.objectContaining({ id: 'valid-older' })]);
 	});
 
 	// A generation predating Module 11 (or otherwise never attached to a
@@ -363,13 +388,40 @@ describe('listGeneratedImages', () => {
 		expect(page.hasMore).toBe(false);
 	});
 
-	it('rejects an invalid stored generation kind', async () => {
+	it('skips a row with an unrecognized stored generation kind, logging a warning', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedGeneration(db, 'invalid-kind', 'user-1', 1000, 'unknown');
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-		await expect(listGeneratedImages(db, 'user-1', 0, 10)).rejects.toThrow(
-			'generation invalid-kind has invalid kind'
-		);
+		const page = await listGeneratedImages(db, 'user-1', 0, 10);
+
+		expect(page.images).toEqual([]);
+		expect(page.hasMore).toBe(false);
+		expect(consoleWarn.mock.calls.flat()).toEqual([
+			JSON.stringify({
+				level: 'warn',
+				area: 'generations',
+				event: 'unknown_generation_kind',
+				id: 'invalid-kind',
+				kind: 'unknown'
+			})
+		]);
+	});
+
+	it('scans past newer invalid-kind rows to fill the page with valid older ones', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneration(db, 'invalid-1', 'user-1', 6000, 'unknown');
+		seedGeneration(db, 'invalid-2', 'user-1', 5000, 'unknown');
+		seedGeneration(db, 'invalid-3', 'user-1', 4000, 'unknown');
+		seedGeneration(db, 'valid-1', 'user-1', 3000);
+		seedGeneration(db, 'valid-2', 'user-1', 2000);
+		seedGeneration(db, 'valid-3', 'user-1', 1000);
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+		const page = await listGeneratedImages(db, 'user-1', 0, 2);
+
+		expect(page.images.map((image) => image.id)).toEqual(['valid-1', 'valid-2']);
+		expect(page.hasMore).toBe(true);
 	});
 });
 
