@@ -143,6 +143,7 @@ export interface ObjectReplacementRequest {
 	imageKey: string;
 	referenceImageKey: string;
 	replacementObject: string;
+	scale: number;
 	sessionId: string;
 }
 

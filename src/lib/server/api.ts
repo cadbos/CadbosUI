@@ -78,6 +78,7 @@ export const objectReplacementRequestSchema = z.strictObject({
 	imageKey: mediaKey,
 	referenceImageKey: mediaKey,
 	replacementObject: z.string().trim().min(1).max(200),
+	scale: z.number().int().min(50).max(200),
 	sessionId
 });
 

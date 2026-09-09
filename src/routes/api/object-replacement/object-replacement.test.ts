@@ -94,7 +94,8 @@ const { GET } = await import('./[id]/+server');
 const requestBody = {
 	imageKey: mediaKey(TEST_S3_BUCKET.name, 'scene.jpg'),
 	referenceImageKey: mediaKey(TEST_S3_BUCKET.name, 'reference.jpg'),
-	replacementObject: 'sofa'
+	replacementObject: 'sofa',
+	scale: 100
 };
 const completedImage: ComfyDownloadedImage = {
 	filename: 'result.png',
@@ -405,7 +406,8 @@ describe('POST /api/object-replacement', () => {
 			{
 				image: expect.stringContaining('/scene.jpg?'),
 				referenceImage: expect.stringContaining('/reference.jpg?'),
-				replacementObject: requestBody.replacementObject
+				replacementObject: requestBody.replacementObject,
+				scale: requestBody.scale
 			},
 			'https://cadbos.example',
 			id

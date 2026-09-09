@@ -67,7 +67,7 @@ function mockClient(): ComfyUiClient {
 	};
 }
 
-function request(replacementObject = '  компьютерный стул  ') {
+function request(replacementObject = '  компьютерный стул  ', scale = 120) {
 	return {
 		pollIntervalMs: 25,
 		reference: {
@@ -75,6 +75,7 @@ function request(replacementObject = '  компьютерный стул  ') {
 			filename: 'reference.png'
 		},
 		replacementObject,
+		scale,
 		scene: {
 			data: new Blob(['scene'], { type: 'image/png' }),
 			filename: 'scene.png',
@@ -126,17 +127,20 @@ describe('runObjectReplacement', () => {
 		const expectedWorkflow = structuredClone(workflowTemplate) as ComfyWorkflow;
 		expectedWorkflow['1'].inputs.image = 'cadbos/jobs/scene (1).png';
 		expectedWorkflow['2'].inputs.image = 'reference.png';
-		expectedWorkflow['19'].inputs.value = 'компьютерный стул';
+		expectedWorkflow['142:21'].inputs.prompt = 'компьютерный стул';
+		expectedWorkflow['138:119'].inputs.value = 120;
 		expect(queuedWorkflow).toEqual(expectedWorkflow);
-		expect(workflowTemplate['1'].inputs.image).toBe('timofeeva14_3.jpg');
-		expect(workflowTemplate['2'].inputs.image).toBe('6961927465.jpg');
-		expect(workflowTemplate['19'].inputs.value).toBe('столик перед диваном');
-		expect(queuedWorkflow?.['11'].inputs.image1).toEqual(['100', 1]);
+		expect(workflowTemplate['1'].inputs.image).toBe('n4jyvqzhc57mqg5g3kid2a5ajtifczc0.webp');
+		expect(workflowTemplate['2'].inputs.image).toBe(
+			'9a2b636b-c27b-46c4-a4a8-4560db39d526-reference.webp'
+		);
+		expect(workflowTemplate['142:21'].inputs.prompt).toBe('Розовый диван с подушками');
+		expect(workflowTemplate['138:119'].inputs.value).toBe(300);
+		expect(queuedWorkflow?.['11'].inputs.image1).toEqual(['3', 0]);
 		expect(queuedWorkflow?.['11'].inputs.image2).toEqual(['4', 0]);
-		expect(queuedWorkflow?.['21'].inputs.prompt).toEqual(['19', 0]);
-		expect(queuedWorkflow?.['26'].inputs.replace).toEqual(['108', 0]);
+		expect(queuedWorkflow?.['26'].inputs.replace).toEqual(['25', 0]);
 		expect(queuedWorkflow?.['17']).toEqual({
-			inputs: { filename_prefix: 'obj-replace-v23', images: ['38', 0] },
+			inputs: { filename_prefix: 'replace-v24', images: ['36', 0] },
 			class_type: 'SaveImage',
 			_meta: { title: 'SAVE RESULT' }
 		});
@@ -167,17 +171,19 @@ describe('runObjectReplacement', () => {
 			});
 		vi.mocked(client.downloadImage).mockResolvedValue(downloadedImage);
 
-		await runObjectReplacement(client, request('sofa'));
-		await runObjectReplacement(client, request('armchair'));
+		await runObjectReplacement(client, request('sofa', 80));
+		await runObjectReplacement(client, request('armchair', 150));
 
 		const firstWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
 		const secondWorkflow = vi.mocked(client.queueWorkflow).mock.calls[1]?.[0];
 		expect(firstWorkflow).not.toBe(secondWorkflow);
 		expect(firstWorkflow?.['1'].inputs.image).toBe('cadbos/jobs/scene (1).png');
-		expect(firstWorkflow?.['19'].inputs.value).toBe('sofa');
+		expect(firstWorkflow?.['142:21'].inputs.prompt).toBe('sofa');
+		expect(firstWorkflow?.['138:119'].inputs.value).toBe(80);
 		expect(secondWorkflow?.['1'].inputs.image).toBe('cadbos/jobs/second-scene.png');
 		expect(secondWorkflow?.['2'].inputs.image).toBe('second-reference.png');
-		expect(secondWorkflow?.['19'].inputs.value).toBe('armchair');
+		expect(secondWorkflow?.['142:21'].inputs.prompt).toBe('armchair');
+		expect(secondWorkflow?.['138:119'].inputs.value).toBe(150);
 	});
 
 	it('fails when the completed workflow has no final node 17 image', async () => {
@@ -203,6 +209,16 @@ describe('runObjectReplacement', () => {
 		const client = mockClient();
 
 		await expect(runObjectReplacement(client, request('   '))).rejects.toMatchObject({
+			code: 'invalid_request',
+			operation: 'workflow'
+		});
+		expect(client.uploadImage).not.toHaveBeenCalled();
+	});
+
+	it('rejects an out-of-range scale before uploading', async () => {
+		const client = mockClient();
+
+		await expect(runObjectReplacement(client, request(undefined, 201))).rejects.toMatchObject({
 			code: 'invalid_request',
 			operation: 'workflow'
 		});

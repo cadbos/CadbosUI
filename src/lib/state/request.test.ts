@@ -1068,6 +1068,7 @@ describe('toObjectReplacementRequest', () => {
 			imageKey: AC9_IMAGE.mediaKey,
 			referenceImageKey: objectReference.mediaKey,
 			replacementObject: 'gray sofa by the window',
+			scale: 100,
 			sessionId: AC9_SESSION_ID
 		});
 	});
@@ -1098,7 +1099,7 @@ describe('toObjectReplacementRequest', () => {
 		expect(request.objectReplacementScale).toBe(2);
 	});
 
-	it('sends the reference image unchanged and appends no size clause at the default scale', async () => {
+	it('sends the reference image and plain object text unchanged at the default scale', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setObjectReferenceImage(objectReference);
 		request.setObjectReplacementSourceMode('room-photo');
@@ -1107,36 +1108,28 @@ describe('toObjectReplacementRequest', () => {
 		const body = await request.toObjectReplacementRequest();
 		expect(body?.referenceImageKey).toBe(objectReference.mediaKey);
 		expect(body?.replacementObject).toBe('sofa');
+		expect(body?.scale).toBe(100);
 	});
 
-	it('appends a translated size clause once the scale moves off 1', async () => {
+	it('sends the scale as a rounded percent and never appends it to the object text', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setObjectReferenceImage(objectReference);
 		request.setObjectReplacementSourceMode('room-photo');
 		request.setObjectReplacementObject('sofa');
 
-		request.setObjectReplacementScale(0.5);
-		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe(
-			'sofa, сделай его очень маленьким, непропорционально маленьким'
-		);
-
-		request.setObjectReplacementScale(0.8);
-		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe(
-			'sofa, сделай его заметно меньше, чем обычно'
-		);
-
-		request.setObjectReplacementScale(1);
-		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe('sofa');
-
-		request.setObjectReplacementScale(1.2);
-		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe(
-			'sofa, сделай его заметно крупнее, чем обычно'
-		);
-
-		request.setObjectReplacementScale(2);
-		expect((await request.toObjectReplacementRequest())?.replacementObject).toBe(
-			'sofa, сделай его очень крупным, непропорционально крупным'
-		);
+		for (const [scale, percent] of [
+			[0.5, 50],
+			[0.8, 80],
+			[1, 100],
+			[1.2, 120],
+			[1.37, 137],
+			[2, 200]
+		] as const) {
+			request.setObjectReplacementScale(scale);
+			const body = await request.toObjectReplacementRequest();
+			expect(body?.replacementObject).toBe('sofa');
+			expect(body?.scale).toBe(percent);
+		}
 	});
 
 	it('enforces the endpoint text limit and job-id shape', () => {

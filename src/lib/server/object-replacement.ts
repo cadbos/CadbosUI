@@ -73,7 +73,7 @@ export async function cancelObjectReplacement(
 
 export async function submitObjectReplacement(
 	platform: App.Platform | undefined,
-	request: { image: string; referenceImage: string; replacementObject: string },
+	request: { image: string; referenceImage: string; replacementObject: string; scale: number },
 	applicationOrigin: string,
 	jobId: string
 ): Promise<string> {
@@ -90,6 +90,7 @@ export async function submitObjectReplacement(
 			filename: `${jobId}-reference.${imageExtensionFromMime(reference.mime)}`
 		},
 		replacementObject: request.replacementObject,
+		scale: request.scale,
 		scene: {
 			data: new Blob([scene.bytes], { type: scene.mime }),
 			filename: `${jobId}-scene.${imageExtensionFromMime(scene.mime)}`

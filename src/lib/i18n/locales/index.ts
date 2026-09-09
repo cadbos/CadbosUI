@@ -418,10 +418,6 @@ export interface Dictionary {
 	'objectReplacement.scaleSmaller': string;
 	'objectReplacement.scaleAsShown': string;
 	'objectReplacement.scaleLarger': string;
-	'objectReplacement.sizeExtremeSmall': string;
-	'objectReplacement.sizeModerateSmall': string;
-	'objectReplacement.sizeModerateLarge': string;
-	'objectReplacement.sizeExtremeLarge': string;
 	'objectReplacement.controls': string;
 	'objectReplacement.validationSource': string;
 	'objectReplacement.validationReference': string;
