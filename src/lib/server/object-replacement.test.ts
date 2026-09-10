@@ -51,7 +51,8 @@ describe('object replacement integration', () => {
 				{
 					image: 'https://images.example.test/scene.png',
 					referenceImage: 'https://images.example.test/reference.png',
-					replacementObject: 'sofa'
+					replacementObject: 'sofa',
+					scale: 100
 				},
 				'https://cadbos.example',
 				'job-1'
@@ -95,7 +96,8 @@ describe('object replacement integration', () => {
 				{
 					image: 'https://images.example.test/scene.png',
 					referenceImage: 'https://images.example.test/reference.png',
-					replacementObject: 'sofa'
+					replacementObject: 'sofa',
+					scale: 100
 				},
 				'https://cadbos.example',
 				'job-1'

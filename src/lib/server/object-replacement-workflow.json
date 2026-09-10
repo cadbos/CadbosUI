@@ -1,7 +1,7 @@
 {
 	"1": {
 		"inputs": {
-			"image": "timofeeva14_3.jpg"
+			"image": "n4jyvqzhc57mqg5g3kid2a5ajtifczc0.webp"
 		},
 		"class_type": "LoadImage",
 		"_meta": {
@@ -10,7 +10,7 @@
 	},
 	"2": {
 		"inputs": {
-			"image": "6961927465.jpg"
+			"image": "9a2b636b-c27b-46c4-a4a8-4560db39d526-reference.webp"
 		},
 		"class_type": "LoadImage",
 		"_meta": {
@@ -49,17 +49,28 @@
 		},
 		"class_type": "LoraLoaderModelOnly",
 		"_meta": {
-			"title": "Lightning 8-step LoRA · strength 1.0"
+			"title": "Lightning X-step LoRA"
 		}
 	},
 	"7": {
 		"inputs": {
-			"shift": 2.8,
+			"shift": 3.2,
 			"model": ["6", 0]
 		},
 		"class_type": "ModelSamplingAuraFlow",
 		"_meta": {
-			"title": "AuraFlow shift · 2.8"
+			"title": "AuraFlow shift"
+		}
+	},
+	"8": {
+		"inputs": {
+			"strength": 0.9,
+			"pre_cfg": true,
+			"model": ["7", 0]
+		},
+		"class_type": "CFGNorm",
+		"_meta": {
+			"title": "CFGNorm"
 		}
 	},
 	"9": {
@@ -84,10 +95,10 @@
 	},
 	"11": {
 		"inputs": {
-			"prompt": ["47", 0],
+			"prompt": ["143", 0],
 			"clip": ["9", 0],
 			"vae": ["10", 0],
-			"image1": ["100", 1],
+			"image1": ["3", 0],
 			"image2": ["4", 0]
 		},
 		"class_type": "TextEncodeQwenImageEditPlus",
@@ -97,7 +108,7 @@
 	},
 	"13": {
 		"inputs": {
-			"pixels": ["100", 1],
+			"pixels": ["3", 0],
 			"vae": ["10", 0]
 		},
 		"class_type": "VAEEncode",
@@ -107,49 +118,41 @@
 	},
 	"17": {
 		"inputs": {
-			"filename_prefix": "obj-replace-v23",
-			"images": ["38", 0]
+			"filename_prefix": "replace-v24",
+			"images": ["36", 0]
 		},
 		"class_type": "SaveImage",
 		"_meta": {
 			"title": "SAVE RESULT"
 		}
 	},
-	"19": {
+	"18": {
 		"inputs": {
-			"value": "столик перед диваном"
+			"add_noise": "enable",
+			"noise_seed": 851430949132994,
+			"steps": 8,
+			"cfg": 0.9,
+			"sampler_name": "euler",
+			"scheduler": "simple",
+			"start_at_step": 0,
+			"end_at_step": 10000,
+			"return_with_leftover_noise": "disable",
+			"preview_method": "none",
+			"vae_decode": "true",
+			"model": ["8", 0],
+			"positive": ["11", 0],
+			"negative": ["144", 0],
+			"latent_image": ["13", 0],
+			"optional_vae": ["10", 0]
 		},
-		"class_type": "PrimitiveString",
+		"class_type": "KSampler Adv. (Efficient)",
 		"_meta": {
-			"title": "Target object"
-		}
-	},
-	"20": {
-		"inputs": {
-			"model": "Hy-MT2-1.8B-Q6_K.gguf",
-			"device": "cpu",
-			"n_gpu_layers": -1
-		},
-		"class_type": "GGUFLoader",
-		"_meta": {
-			"title": "GGUFLoader"
-		}
-	},
-	"21": {
-		"inputs": {
-			"prompt": ["19", 0],
-			"target_language": "English",
-			"auto_release": false,
-			"llama_model": ["20", 0]
-		},
-		"class_type": "PromptTranslatorNode",
-		"_meta": {
-			"title": "Prompt Translator (GGUF)"
+			"title": "KSampler Adv. (Efficient)"
 		}
 	},
 	"23": {
 		"inputs": {
-			"value": "Picture 1 is the scene. Picture 2 is the replacement object.\n\nReplace the {} in Picture 1 with the object from Picture 2.\n\nThe identity of the new object comes entirely from Picture 2: its shape, silhouette, geometry, proportions, structure, materials, colors, textures, patterns and every design detail are copied from Picture 2 exactly as they are. The output shows Picture 2's own form, whatever type, shape or size that object has.\n\nFrom Picture 1 the new object inherits only its placement: the same position in the frame, the same orientation and viewing angle, the same scale relative to the room, the same contact points with the floor and surrounding surfaces, the same perspective, and the scene's lighting with matching cast shadows.\n\nEverything else in Picture 1 stays pixel-identical: background, walls, floor, ceiling, windows, camera position, framing, and every other object and piece of furniture remains exactly where and as it is.\n\nPhotorealistic and seamless, as if Picture 2's object had been physically placed in that spot and photographed with the same camera."
+			"value": "Replace the \"{target}\" in the first image with the object from the second image. Use the second image as the exact visual reference for the replacement object, preserving its shape, structure, color, material, texture, details, and distinguishing features. Position the replacement precisely where the original object appears in the first image, matching the original object’s perspective, orientation, lighting, shadows, reflections, and interaction with the surrounding scene. Scale the object from the second image to exactly {scale}% of its original/natural size fitting it naturally into the first image. Ensure the replacement looks realistic and seamlessly integrated, with clean edges and consistent depth, focus, and image quality. Preserve everything else from the first image exactly as it is, including the background, composition, camera angle, framing, colors, lighting, shadows, textures, people, objects, and all other scene details. Do not add, remove, alter, or regenerate anything except the specified object."
 		},
 		"class_type": "PrimitiveStringMultiline",
 		"_meta": {
@@ -158,7 +161,7 @@
 	},
 	"25": {
 		"inputs": {
-			"string": ["21", 0],
+			"string": ["142:21", 0],
 			"mode": "lowercase"
 		},
 		"class_type": "CaseConverter",
@@ -169,8 +172,8 @@
 	"26": {
 		"inputs": {
 			"string": ["23", 0],
-			"find": "{}",
-			"replace": ["108", 0]
+			"find": "{target}",
+			"replace": ["25", 0]
 		},
 		"class_type": "StringReplace",
 		"_meta": {
@@ -189,7 +192,7 @@
 			"background_color": "#FFFFFF",
 			"image1": ["1", 0],
 			"image2": ["2", 0],
-			"image3": ["38", 0]
+			"image3": ["36", 0]
 		},
 		"class_type": "AILab_ImageStitch",
 		"_meta": {
@@ -205,20 +208,40 @@
 			"title": "Preview Image"
 		}
 	},
-	"38": {
+	"33": {
 		"inputs": {
-			"seed": 42,
-			"strength": 0.02,
-			"image": ["68", 0]
+			"model_name": "4x-UltraSharp.pth"
 		},
-		"class_type": "ImageAddNoise",
+		"class_type": "UpscaleModelLoader",
 		"_meta": {
-			"title": "Add Noise to Image"
+			"title": "Load Upscale Model"
+		}
+	},
+	"34": {
+		"inputs": {
+			"upscale_model": ["33", 0],
+			"image": ["18", 5]
+		},
+		"class_type": "ImageUpscaleWithModel",
+		"_meta": {
+			"title": "Upscale Image (using Model)"
+		}
+	},
+	"36": {
+		"inputs": {
+			"resize_type": "scale total pixels",
+			"resize_type.megapixels": 2,
+			"scale_method": "area",
+			"input": ["34", 0]
+		},
+		"class_type": "ResizeImageMaskNode",
+		"_meta": {
+			"title": "Resize Image/Mask"
 		}
 	},
 	"39": {
 		"inputs": {
-			"unet_name": "qwen-image-edit-2511-Q6_K.gguf"
+			"unet_name": "qwen-image-edit-2511-Q8_0.gguf"
 		},
 		"class_type": "UnetLoaderGGUF",
 		"_meta": {
@@ -227,595 +250,103 @@
 	},
 	"40": {
 		"inputs": {
-			"source": ["47", 0]
+			"source": ["143", 0]
 		},
 		"class_type": "PreviewAny",
 		"_meta": {
 			"title": "Positive prompt preview"
 		}
 	},
-	"47": {
+	"143": {
 		"inputs": {
-			"string_a": ["26", 0],
-			"string_b": "",
-			"delimiter": "\n"
+			"string": ["26", 0],
+			"find": "{scale}",
+			"replace": ["138:141", 0]
 		},
-		"class_type": "StringConcatenate",
+		"class_type": "StringReplace",
 		"_meta": {
-			"title": "Concatenate Text"
+			"title": "Replace Text"
 		}
 	},
-	"49": {
+	"144": {
 		"inputs": {
-			"source": ["25", 0]
+			"text": "deformed geometry, distorted proportions, changed camera angle, blurry, low quality, watermark",
+			"clip": ["9", 0]
 		},
-		"class_type": "PreviewAny",
+		"class_type": "CLIPTextEncode",
 		"_meta": {
-			"title": "Translated object name preview"
+			"title": "Negative prompt"
 		}
 	},
-	"51": {
+	"142:20": {
 		"inputs": {
-			"add_noise": "enable",
-			"noise_seed": 42,
-			"steps": 8,
-			"cfg": 1,
-			"sampler_name": "euler",
-			"scheduler": "simple",
-			"start_at_step": 0,
-			"end_at_step": 10000,
-			"return_with_leftover_noise": "disable",
-			"model": ["95", 0],
-			"positive": ["11", 0],
-			"negative": ["107", 0],
-			"latent_image": ["94", 0]
+			"model": "Hy-MT2-1.8B-Q6_K.gguf",
+			"device": "cuda",
+			"n_gpu_layers": -1
 		},
-		"class_type": "KSamplerAdvanced",
+		"class_type": "GGUFLoader",
 		"_meta": {
-			"title": "KSampler (Advanced)"
+			"title": "GGUFLoader"
 		}
 	},
-	"52": {
+	"142:21": {
 		"inputs": {
-			"samples": ["51", 0],
-			"vae": ["10", 0]
+			"prompt": "Розовый диван с подушками",
+			"target_language": "English",
+			"auto_release": false,
+			"llama_model": ["142:20", 0]
 		},
-		"class_type": "VAEDecode",
+		"class_type": "PromptTranslatorNode",
 		"_meta": {
-			"title": "VAE Decode"
+			"title": "Prompt Translator (GGUF)"
 		}
 	},
-	"53": {
+	"138:140": {
 		"inputs": {
-			"width": ["54", 0],
-			"height": ["54", 1],
-			"upscale_method": "lanczos",
-			"keep_proportion": "stretch",
-			"pad_color": "0, 0, 0",
-			"crop_position": "center",
-			"divisible_by": 32,
-			"device": "cpu",
-			"image": ["3", 0]
+			"value": 200
 		},
-		"class_type": "ImageResizeKJv2",
+		"class_type": "PrimitiveInt",
 		"_meta": {
-			"title": "Resize Image v2"
+			"title": "Max"
 		}
 	},
-	"54": {
+	"138:139": {
 		"inputs": {
-			"image": ["3", 0]
+			"value": 50
 		},
-		"class_type": "GetImageSize",
+		"class_type": "PrimitiveInt",
 		"_meta": {
-			"title": "Get Image Size"
+			"title": "Min"
 		}
 	},
-	"57": {
+	"138:126": {
 		"inputs": {
-			"model_name": "GroundingDINO_SwinT_OGC (694MB)"
+			"expression": "max(b, min(a, c))",
+			"a": ["138:119", 0],
+			"b": ["138:139", 0],
+			"c": ["138:140", 0]
 		},
-		"class_type": "GroundingDinoModelLoader (segment anything)",
+		"class_type": "MathExpression|pysssss",
 		"_meta": {
-			"title": "GroundingDinoModelLoader (segment anything)"
+			"title": "Math Expression 🐍"
 		}
 	},
-	"58": {
+	"138:119": {
 		"inputs": {
-			"model_name": "sam_vit_l (1.25GB)"
+			"value": 300
 		},
-		"class_type": "SAMModelLoader (segment anything)",
+		"class_type": "PrimitiveInt",
 		"_meta": {
-			"title": "SAMModelLoader (segment anything)"
+			"title": "Object scale (%)"
 		}
 	},
-	"59": {
+	"138:141": {
 		"inputs": {
-			"prompt": ["108", 0],
-			"threshold": 0.35,
-			"sam_model": ["58", 0],
-			"grounding_dino_model": ["57", 0],
-			"image": ["53", 0]
+			"int_": ["138:126", 0]
 		},
-		"class_type": "GroundingDinoSAMSegment (segment anything)",
+		"class_type": "CR Integer To String",
 		"_meta": {
-			"title": "GroundingDinoSAMSegment (segment anything)"
-		}
-	},
-	"60": {
-		"inputs": {
-			"expand": 64,
-			"incremental_expandrate": 0,
-			"tapered_corners": true,
-			"flip_input": false,
-			"blur_radius": 0,
-			"lerp_alpha": 1,
-			"decay_factor": 1,
-			"fill_holes": true,
-			"mask": ["84", 0]
-		},
-		"class_type": "GrowMaskWithBlur",
-		"_meta": {
-			"title": "Grow Mask With Blur"
-		}
-	},
-	"61": {
-		"inputs": {
-			"expand": -64,
-			"tapered_corners": true,
-			"mask": ["60", 0]
-		},
-		"class_type": "GrowMask",
-		"_meta": {
-			"title": "Grow Mask"
-		}
-	},
-	"62": {
-		"inputs": {
-			"x": 0,
-			"y": 0,
-			"operation": "subtract",
-			"destination": ["61", 0],
-			"source": ["84", 0]
-		},
-		"class_type": "MaskComposite",
-		"_meta": {
-			"title": "Combine Masks"
-		}
-	},
-	"63": {
-		"inputs": {
-			"expand": 10,
-			"tapered_corners": true,
-			"mask": ["78", 0]
-		},
-		"class_type": "GrowMask",
-		"_meta": {
-			"title": "Grow Mask"
-		}
-	},
-	"64": {
-		"inputs": {
-			"expand": 40,
-			"incremental_expandrate": 0,
-			"tapered_corners": true,
-			"flip_input": false,
-			"blur_radius": 10,
-			"lerp_alpha": 1,
-			"decay_factor": 1,
-			"fill_holes": true,
-			"mask": ["91", 0]
-		},
-		"class_type": "GrowMaskWithBlur",
-		"_meta": {
-			"title": "Grow Mask With Blur"
-		}
-	},
-	"65": {
-		"inputs": {
-			"x": 0,
-			"y": 0,
-			"operation": "subtract",
-			"destination": ["64", 0],
-			"source": ["63", 0]
-		},
-		"class_type": "MaskComposite",
-		"_meta": {
-			"title": "Combine Masks"
-		}
-	},
-	"66": {
-		"inputs": {
-			"image": ["1", 0]
-		},
-		"class_type": "GetImageSize",
-		"_meta": {
-			"title": "Get Image Size"
-		}
-	},
-	"67": {
-		"inputs": {
-			"width": ["66", 0],
-			"height": ["66", 1],
-			"upscale_method": "lanczos",
-			"keep_proportion": "stretch",
-			"pad_color": "0, 0, 0",
-			"crop_position": "center",
-			"divisible_by": 1,
-			"device": "cpu",
-			"image": ["101", 0],
-			"mask": ["65", 0]
-		},
-		"class_type": "ImageResizeKJv2",
-		"_meta": {
-			"title": "Resize Image v2"
-		}
-	},
-	"68": {
-		"inputs": {
-			"x": 0,
-			"y": 0,
-			"resize_source": false,
-			"destination": ["1", 0],
-			"source": ["67", 0],
-			"mask": ["67", 3]
-		},
-		"class_type": "ImageCompositeMasked",
-		"_meta": {
-			"title": "Image Composite Masked"
-		}
-	},
-	"69": {
-		"inputs": {
-			"mask": ["65", 0]
-		},
-		"class_type": "MaskToImage",
-		"_meta": {
-			"title": "Convert Mask to Image"
-		}
-	},
-	"70": {
-		"inputs": {
-			"images": ["69", 0]
-		},
-		"class_type": "PreviewImage",
-		"_meta": {
-			"title": "Preview Image"
-		}
-	},
-	"71": {
-		"inputs": {
-			"mask": ["63", 0]
-		},
-		"class_type": "MaskToImage",
-		"_meta": {
-			"title": "Convert Mask to Image"
-		}
-	},
-	"72": {
-		"inputs": {
-			"images": ["71", 0]
-		},
-		"class_type": "PreviewImage",
-		"_meta": {
-			"title": "Preview Image"
-		}
-	},
-	"73": {
-		"inputs": {
-			"prompt": "coffee table . dining table . side table . console table . chair .  armchair . potted plant . floor lamp . person .  box . basket . suitcase . dog . cat",
-			"threshold": 0.25,
-			"sam_model": ["58", 0],
-			"grounding_dino_model": ["57", 0],
-			"image": ["53", 0]
-		},
-		"class_type": "GroundingDinoSAMSegment (segment anything)",
-		"_meta": {
-			"title": "GroundingDinoSAMSegment (segment anything)"
-		}
-	},
-	"76": {
-		"inputs": {
-			"x": 0,
-			"y": 0,
-			"operation": "subtract",
-			"destination": ["86", 0],
-			"source": ["84", 0]
-		},
-		"class_type": "MaskComposite",
-		"_meta": {
-			"title": "Combine Masks"
-		}
-	},
-	"77": {
-		"inputs": {
-			"x": 0,
-			"y": 0,
-			"operation": "multiply",
-			"destination": ["62", 0],
-			"source": ["76", 0]
-		},
-		"class_type": "MaskComposite",
-		"_meta": {
-			"title": "Combine Masks"
-		}
-	},
-	"78": {
-		"inputs": {
-			"expand": -8,
-			"tapered_corners": true,
-			"mask": ["77", 0]
-		},
-		"class_type": "GrowMask",
-		"_meta": {
-			"title": "Grow Mask"
-		}
-	},
-	"79": {
-		"inputs": {
-			"mask": ["77", 0]
-		},
-		"class_type": "MaskPreview+",
-		"_meta": {
-			"title": "🔧 Mask Preview"
-		}
-	},
-	"84": {
-		"inputs": {
-			"mode": "largest",
-			"mask": ["59", 1]
-		},
-		"class_type": "MaskFlatten",
-		"_meta": {
-			"title": "Mask Flatten (union/largest)"
-		}
-	},
-	"86": {
-		"inputs": {
-			"max_coverage": 0.5,
-			"min_area": 0.001,
-			"threshold": 0.5,
-			"depth_margin": 0.02,
-			"masks": ["73", 1],
-			"reference": ["84", 0],
-			"depth": ["105", 0]
-		},
-		"class_type": "MaskFilterByOverlap",
-		"_meta": {
-			"title": "Mask Filter By Overlap"
-		}
-	},
-	"87": {
-		"inputs": {
-			"source": ["86", 1]
-		},
-		"class_type": "PreviewAny",
-		"_meta": {
-			"title": "Preview as Text"
-		}
-	},
-	"88": {
-		"inputs": {
-			"mask": ["86", 0]
-		},
-		"class_type": "MaskPreview+",
-		"_meta": {
-			"title": "🔧 Mask Preview"
-		}
-	},
-	"89": {
-		"inputs": {
-			"prompt": ["108", 0],
-			"threshold": 0.35,
-			"sam_model": ["58", 0],
-			"grounding_dino_model": ["57", 0],
-			"image": ["101", 0]
-		},
-		"class_type": "GroundingDinoSAMSegment (segment anything)",
-		"_meta": {
-			"title": "GroundingDinoSAMSegment (segment anything)"
-		}
-	},
-	"90": {
-		"inputs": {
-			"mode": "largest",
-			"mask": ["89", 1]
-		},
-		"class_type": "MaskFlatten",
-		"_meta": {
-			"title": "Mask Flatten (union/largest)"
-		}
-	},
-	"91": {
-		"inputs": {
-			"x": 0,
-			"y": 0,
-			"operation": "add",
-			"destination": ["61", 0],
-			"source": ["90", 0]
-		},
-		"class_type": "MaskComposite",
-		"_meta": {
-			"title": "Combine Masks"
-		}
-	},
-	"92": {
-		"inputs": {
-			"expand": 88,
-			"incremental_expandrate": 0,
-			"tapered_corners": true,
-			"flip_input": false,
-			"blur_radius": 24,
-			"lerp_alpha": 1,
-			"decay_factor": 1,
-			"fill_holes": false,
-			"mask": ["61", 0]
-		},
-		"class_type": "GrowMaskWithBlur",
-		"_meta": {
-			"title": "Grow Mask With Blur"
-		}
-	},
-	"93": {
-		"inputs": {
-			"x": 0,
-			"y": 0,
-			"operation": "subtract",
-			"destination": ["92", 0],
-			"source": ["63", 0]
-		},
-		"class_type": "MaskComposite",
-		"_meta": {
-			"title": "Combine Masks"
-		}
-	},
-	"94": {
-		"inputs": {
-			"samples": ["13", 0],
-			"mask": ["100", 2]
-		},
-		"class_type": "SetLatentNoiseMask",
-		"_meta": {
-			"title": "Set Latent Noise Mask"
-		}
-	},
-	"95": {
-		"inputs": {
-			"strength": 1,
-			"model": ["7", 0]
-		},
-		"class_type": "DifferentialDiffusion",
-		"_meta": {
-			"title": "Differential Diffusion"
-		}
-	},
-	"96": {
-		"inputs": {
-			"mask": ["93", 0]
-		},
-		"class_type": "MaskToImage",
-		"_meta": {
-			"title": "Convert Mask to Image"
-		}
-	},
-	"97": {
-		"inputs": {
-			"images": ["96", 0]
-		},
-		"class_type": "PreviewImage",
-		"_meta": {
-			"title": "Preview Image"
-		}
-	},
-	"100": {
-		"inputs": {
-			"downscale_algorithm": "bicubic",
-			"upscale_algorithm": "lanczos",
-			"preresize": false,
-			"preresize_mode": "ensure minimum resolution",
-			"preresize_min_width": 1024,
-			"preresize_min_height": 1024,
-			"preresize_max_width": 16384,
-			"preresize_max_height": 16384,
-			"mask_fill_holes": false,
-			"mask_expand_pixels": 0,
-			"mask_invert": false,
-			"mask_blend_pixels": 0,
-			"mask_hipass_filter": 0,
-			"extend_for_outpainting": false,
-			"extend_up_factor": 1,
-			"extend_down_factor": 1,
-			"extend_left_factor": 1,
-			"extend_right_factor": 1,
-			"context_from_mask_extend_factor": 1.45,
-			"output_resize_to_target_size": true,
-			"output_target_width": 1024,
-			"output_target_height": 1024,
-			"output_padding": "32",
-			"device_mode": "cpu (compatible)",
-			"image": ["53", 0],
-			"mask": ["93", 0]
-		},
-		"class_type": "InpaintCropImproved",
-		"_meta": {
-			"title": "✂️ Inpaint Crop"
-		}
-	},
-	"101": {
-		"inputs": {
-			"stitcher": ["100", 0],
-			"inpainted_image": ["52", 0]
-		},
-		"class_type": "InpaintStitchImproved",
-		"_meta": {
-			"title": "✂️ Inpaint Stitch"
-		}
-	},
-	"102": {
-		"inputs": {
-			"images": ["100", 1]
-		},
-		"class_type": "PreviewImage",
-		"_meta": {
-			"title": "Preview Image"
-		}
-	},
-	"104": {
-		"inputs": {
-			"model": "depth_anything_v2_vitb_fp16.safetensors",
-			"precision": "auto"
-		},
-		"class_type": "DownloadAndLoadDepthAnythingV2Model",
-		"_meta": {
-			"title": "DownloadAndLoadDepthAnythingV2Model"
-		}
-	},
-	"105": {
-		"inputs": {
-			"da_model": ["104", 0],
-			"images": ["53", 0]
-		},
-		"class_type": "DepthAnything_V2",
-		"_meta": {
-			"title": "Depth Anything V2"
-		}
-	},
-	"106": {
-		"inputs": {
-			"images": ["105", 0]
-		},
-		"class_type": "PreviewImage",
-		"_meta": {
-			"title": "Preview Image"
-		}
-	},
-	"107": {
-		"inputs": {
-			"conditioning": ["11", 0]
-		},
-		"class_type": "ConditioningZeroOut",
-		"_meta": {
-			"title": "ConditioningZeroOut (Negative · zeroed positive (matched refs))"
-		}
-	},
-	"108": {
-		"inputs": {
-			"max_words": 4,
-			"fallback": "",
-			"text": ["25", 0]
-		},
-		"class_type": "TextExtractNounPhrase",
-		"_meta": {
-			"title": "Text Extract Noun Phrase"
-		}
-	},
-	"109": {
-		"inputs": {
-			"source": ["108", 1]
-		},
-		"class_type": "PreviewAny",
-		"_meta": {
-			"title": "Preview as Text (clean state)"
+			"title": "🔧 CR Integer To String"
 		}
 	}
 }

@@ -17,6 +17,7 @@ import {
 	ComfyUiError,
 	type ComfyDownloadedImage,
 	type ComfyImageDescriptor,
+	type ComfyJsonValue,
 	type ComfyUiClient,
 	type ComfyQueuedWorkflow,
 	type ComfyWorkflow
@@ -32,6 +33,7 @@ export interface ObjectReplacementRequest {
 	clientId?: string | undefined;
 	reference: ObjectReplacementImage;
 	replacementObject: string;
+	scale: number;
 	scene: ObjectReplacementImage;
 	signal?: AbortSignal | undefined;
 	pollIntervalMs?: number | undefined;
@@ -55,7 +57,7 @@ function setWorkflowInput(
 	nodeId: string,
 	classType: string,
 	input: string,
-	value: string
+	value: ComfyJsonValue
 ): void {
 	const node = workflow[nodeId];
 	if (!node || node.class_type !== classType || !(input in node.inputs)) {
@@ -71,12 +73,14 @@ function setWorkflowInput(
 function objectReplacementWorkflow(
 	scene: ComfyImageDescriptor,
 	reference: ComfyImageDescriptor,
-	replacementObject: string
+	replacementObject: string,
+	scale: number
 ): ComfyWorkflow {
 	const workflow = structuredClone(workflowTemplate) as ComfyWorkflow;
 	setWorkflowInput(workflow, '1', 'LoadImage', 'image', uploadedImagePath(scene));
 	setWorkflowInput(workflow, '2', 'LoadImage', 'image', uploadedImagePath(reference));
-	setWorkflowInput(workflow, '19', 'PrimitiveString', 'value', replacementObject);
+	setWorkflowInput(workflow, '142:21', 'PromptTranslatorNode', 'prompt', replacementObject);
+	setWorkflowInput(workflow, '138:119', 'PrimitiveInt', 'value', scale);
 	const outputNode = workflow[FINAL_OUTPUT_NODE_ID];
 	if (!outputNode || outputNode.class_type !== 'SaveImage') {
 		throw new ComfyUiError(
@@ -116,6 +120,9 @@ export async function queueObjectReplacement(
 	if (replacementObject.length === 0) {
 		throw new ComfyUiError('invalid_request', 'workflow', 'Invalid replacement object');
 	}
+	if (!Number.isInteger(request.scale) || request.scale < 50 || request.scale > 200) {
+		throw new ComfyUiError('invalid_request', 'workflow', 'Invalid object scale');
+	}
 
 	const scene = await client.uploadImage(
 		{
@@ -135,7 +142,7 @@ export async function queueObjectReplacement(
 		},
 		{ signal: request.signal }
 	);
-	const workflow = objectReplacementWorkflow(scene, reference, replacementObject);
+	const workflow = objectReplacementWorkflow(scene, reference, replacementObject, request.scale);
 	return client.queueWorkflow(workflow, { clientId: request.clientId, signal: request.signal });
 }
 

@@ -154,6 +154,7 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 		imageKey: mediaKey(1),
 		referenceImageKey: mediaKey(2),
 		replacementObject: 'серый диван у окна',
+		scale: 100,
 		sessionId: E2E_SESSION_ID
 	});
 

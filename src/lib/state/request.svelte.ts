@@ -192,17 +192,6 @@ const sceneTypeSchema = z.enum(SCENE_TYPES);
 const imageSourceModeSchema = z.enum(IMAGE_SOURCE_MODES);
 const styleTransferStrengthSchema = z.number().min(0).max(1);
 const objectReplacementScaleSchema = z.number().min(0.5).max(2);
-// Bucketed, not continuous — text is the only lever that actually moves the
-// model's sense of size (a same-scale image reframing trick tested against
-// production had zero effect), and only a handful of tested phrasings exist,
-// not one per slider step.
-function objectReplacementSizeClauseKey(scale: number): TranslationKey | null {
-	if (scale <= 0.65) return 'objectReplacement.sizeExtremeSmall';
-	if (scale < 0.9) return 'objectReplacement.sizeModerateSmall';
-	if (scale <= 1.1) return null;
-	if (scale < 1.5) return 'objectReplacement.sizeModerateLarge';
-	return 'objectReplacement.sizeExtremeLarge';
-}
 const replacementObjectSchema = z.string().max(200);
 export const objectReplacementJobIdSchema = z.uuid();
 const replacementSurfaceSchema = z.string().max(200);
@@ -667,16 +656,6 @@ export class RequestState {
 			.map((preset) => t(preset.phrase));
 		const custom = this.lightSettingsInstruction.trim();
 		return [...phrases, ...(custom ? [custom] : [])].join(', ');
-	});
-
-	// What actually gets sent as replacementObject: the located-object
-	// description plus a translated size clause when the scale slider has
-	// moved off its 1 (as-shown) default — same comma-joined shape as
-	// lightSettingsPrompt above.
-	objectReplacementInstruction = $derived.by(() => {
-		const object = this.objectReplacementObject.trim();
-		const sizeClauseKey = objectReplacementSizeClauseKey(this.objectReplacementScale);
-		return sizeClauseKey ? `${object}, ${t(sizeClauseKey)}` : object;
 	});
 
 	get currentRender(): RenderResult | undefined {
@@ -1443,7 +1422,8 @@ export class RequestState {
 		return {
 			imageKey,
 			referenceImageKey,
-			replacementObject: this.objectReplacementInstruction,
+			replacementObject: this.objectReplacementObject.trim(),
+			scale: Math.round(this.objectReplacementScale * 100),
 			sessionId
 		};
 	}
