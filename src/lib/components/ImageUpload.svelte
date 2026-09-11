@@ -32,7 +32,8 @@ before the Change Date. See LICENSE for complete terms.
 		| 'styleReference'
 		| 'objectReference'
 		| 'textureReference'
-		| 'textureMask';
+		| 'textureMask'
+		| 'proModeReference';
 
 	interface Props {
 		target?: UploadTarget;
@@ -74,7 +75,9 @@ before the Change Date. See LICENSE for complete terms.
 						? request.textureMaskMatchesSource()
 							? request.textureMaskImage
 							: undefined
-						: request.image
+						: target === 'proModeReference'
+							? request.proModeReferenceImage
+							: request.image
 	);
 	const ariaLabelKey = $derived<TranslationKey>(
 		label ??
@@ -86,7 +89,9 @@ before the Change Date. See LICENSE for complete terms.
 						? 'textureReplacement.referenceImage'
 						: target === 'textureMask'
 							? 'textureReplacement.maskImage'
-							: 'upload.label')
+							: target === 'proModeReference'
+								? 'proMode.referenceImage'
+								: 'upload.label')
 	);
 	const buttonLabelKey = $derived<TranslationKey>(
 		label ??
@@ -98,7 +103,9 @@ before the Change Date. See LICENSE for complete terms.
 						? 'textureReplacement.referenceImage'
 						: target === 'textureMask'
 							? 'textureReplacement.maskImage'
-							: 'upload.button')
+							: target === 'proModeReference'
+								? 'proMode.referenceImage'
+								: 'upload.button')
 	);
 	const changeKey = $derived<TranslationKey>(
 		target === 'styleReference'
@@ -109,7 +116,9 @@ before the Change Date. See LICENSE for complete terms.
 					? 'textureReplacement.referenceChange'
 					: target === 'textureMask'
 						? 'textureReplacement.maskChange'
-						: 'upload.change'
+						: target === 'proModeReference'
+							? 'proMode.referenceChange'
+							: 'upload.change'
 	);
 	const dropTitleKey = $derived<TranslationKey>(
 		target === 'styleReference'
@@ -120,7 +129,9 @@ before the Change Date. See LICENSE for complete terms.
 					? 'textureReplacement.referenceDropTitle'
 					: target === 'textureMask'
 						? 'textureReplacement.maskDropTitle'
-						: 'upload.dropTitle'
+						: target === 'proModeReference'
+							? 'proMode.referenceDropTitle'
+							: 'upload.dropTitle'
 	);
 	const dropSubtitleKey = $derived<TranslationKey>(
 		target === 'styleReference'
@@ -131,7 +142,9 @@ before the Change Date. See LICENSE for complete terms.
 					? 'textureReplacement.referenceDropSubtitle'
 					: target === 'textureMask'
 						? 'textureReplacement.maskDropSubtitle'
-						: 'upload.dropSubtitle'
+						: target === 'proModeReference'
+							? 'proMode.referenceDropSubtitle'
+							: 'upload.dropSubtitle'
 	);
 	const imageUrl = $derived(resolveImageUrl(image) ?? null);
 	// For target 'room' the local preview lives on the shared store instead
@@ -163,6 +176,10 @@ before the Change Date. See LICENSE for complete terms.
 			request.setTextureReferenceImage(next);
 			return;
 		}
+		if (target === 'proModeReference') {
+			request.setProModeReferenceImage(next);
+			return;
+		}
 		if (target === 'textureMask') {
 			if (!textureMaskUpload) {
 				error = t('textureReplacement.maskEditor.saveFailed');
@@ -184,6 +201,8 @@ before the Change Date. See LICENSE for complete terms.
 			request.setObjectReferenceImage(undefined);
 		} else if (target === 'textureReference') {
 			request.setTextureReferenceImage(undefined);
+		} else if (target === 'proModeReference') {
+			request.setProModeReferenceImage(undefined);
 		} else if (target === 'textureMask') {
 			request.setTextureMaskImage(undefined);
 		} else {

@@ -24,6 +24,7 @@ before the Change Date. See LICENSE for complete terms.
 		Sparkles,
 		Trash2,
 		Wand,
+		WandSparkles,
 		X
 	} from '@lucide/svelte';
 	import { browser } from '$app/environment';
@@ -45,7 +46,8 @@ before the Change Date. See LICENSE for complete terms.
 		upscale: 'generatedImages.kind.upscale',
 		'object-replacement': 'generatedImages.kind.objectReplacement',
 		'texture-replacement': 'generatedImages.kind.textureReplacement',
-		'light-settings': 'generatedImages.kind.lightSettings'
+		'light-settings': 'generatedImages.kind.lightSettings',
+		'pro-mode': 'generatedImages.kind.proMode'
 	};
 
 	const generationKindIcons: Record<GenerationKind, Component<ComponentProps<typeof Sparkles>>> = {
@@ -55,7 +57,8 @@ before the Change Date. See LICENSE for complete terms.
 		upscale: Sparkles,
 		'object-replacement': Replace,
 		'texture-replacement': PaintRoller,
-		'light-settings': Lightbulb
+		'light-settings': Lightbulb,
+		'pro-mode': WandSparkles
 	};
 
 	interface Props {

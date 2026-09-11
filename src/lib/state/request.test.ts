@@ -195,6 +195,10 @@ describe('serialization', () => {
 		delete snapshot.textureReplacementSurface;
 		delete snapshot.textureReplacementSourceMode;
 		delete snapshot.textureReplacementMasked;
+		delete snapshot.proModeReferenceImage;
+		delete snapshot.proModePrompt;
+		delete snapshot.proModeSourceMode;
+		delete snapshot.proModeSpeedVsQuality;
 
 		request.fromJSON(snapshot);
 
@@ -206,6 +210,7 @@ describe('serialization', () => {
 			textureReferenceImage: undefined,
 			textureMaskImage: undefined,
 			textureMaskSourceKey: undefined,
+			proModeReferenceImage: undefined,
 			styleTransferPrompt: '',
 			styleTransferStrength: 0.7,
 			styleNegativePrompt: '',
@@ -216,6 +221,9 @@ describe('serialization', () => {
 			textureReplacementSurface: '',
 			textureReplacementSourceMode: 'current-result',
 			textureReplacementMasked: false,
+			proModePrompt: '',
+			proModeSourceMode: 'current-result',
+			proModeSpeedVsQuality: 0.5,
 			lightSettingsPresetIds: [],
 			lightSettingsInstruction: '',
 			currentRender: undefined
@@ -1167,6 +1175,101 @@ describe('toObjectReplacementRequest', () => {
 		expect(request.activeObjectReplacementJob).toEqual({
 			id: '123e4567-e89b-42d3-a456-426614174000',
 			instruction: 'gray sofa',
+			sourceRender: {
+				id: 'source-render',
+				outputKey: '201',
+				cost: 1,
+				balance: 19,
+				ts: 1
+			}
+		});
+	});
+});
+
+describe('toProModeRequest', () => {
+	const proModeReference = {
+		mediaKey: '103',
+		mime: 'image/webp'
+	};
+
+	it('reports every required field when the form is empty', async () => {
+		expect(request.validateProMode()).toEqual({
+			valid: false,
+			missing: ['image', 'prompt']
+		});
+		expect(await request.toProModeRequest()).toBeNull();
+	});
+
+	it('builds a request with no reference image when none was provided', async () => {
+		request.setImage(AC9_IMAGE);
+		request.setProModePrompt('  replace the sofa with a blue one  ');
+
+		expect(request.validateProMode()).toEqual({ valid: true, missing: [] });
+		expect(await request.toProModeRequest()).toEqual({
+			imageKey: AC9_IMAGE.mediaKey,
+			prompt: 'replace the sofa with a blue one',
+			speedVsQuality: 0.5,
+			sessionId: AC9_SESSION_ID
+		});
+	});
+
+	it('includes the reference image key only when one is set', async () => {
+		request.setImage(AC9_IMAGE);
+		request.setProModePrompt('sofa');
+		request.setProModeReferenceImage(proModeReference);
+
+		expect(await request.toProModeRequest()).toEqual({
+			imageKey: AC9_IMAGE.mediaKey,
+			referenceImageKey: proModeReference.mediaKey,
+			prompt: 'sofa',
+			speedVsQuality: 0.5,
+			sessionId: AC9_SESSION_ID
+		});
+
+		request.setProModeReferenceImage(undefined);
+		expect((await request.toProModeRequest())?.referenceImageKey).toBeUndefined();
+	});
+
+	it('uses the current result when selected and falls back to the room photo', async () => {
+		request.setImage(AC9_IMAGE);
+		request.setProModePrompt('sofa');
+		expect((await request.toProModeRequest())?.imageKey).toBe(AC9_IMAGE.mediaKey);
+
+		request.setCurrentRender({
+			id: 'render-1',
+			outputKey: '201',
+			cost: 2,
+			balance: 18,
+			ts: 0
+		});
+
+		expect((await request.toProModeRequest())?.imageKey).toBe('201');
+	});
+
+	it('enforces the endpoint text limit and job-id shape', () => {
+		expect(() => request.setProModePrompt('x'.repeat(501))).toThrow();
+		expect(() => request.setActiveProModeJobId('not-a-job-id')).toThrow();
+		request.setProModePrompt('x'.repeat(500));
+		request.setActiveProModeJobId('123e4567-e89b-42d3-a456-426614174000');
+		expect(request.proModePrompt).toHaveLength(500);
+		expect(request.activeProModeJobId).toBe('123e4567-e89b-42d3-a456-426614174000');
+	});
+
+	it('retains an immutable source snapshot and instruction for the accepted job', () => {
+		const source: RenderResult = {
+			id: 'source-render',
+			outputKey: '201',
+			cost: 1,
+			balance: 19,
+			ts: 1
+		};
+		request.setActiveProModeJob('123e4567-e89b-42d3-a456-426614174000', source, 'replace the sofa');
+		source.outputKey = '999';
+		request.setProModePrompt('changed after submission');
+
+		expect(request.activeProModeJob).toEqual({
+			id: '123e4567-e89b-42d3-a456-426614174000',
+			instruction: 'replace the sofa',
 			sourceRender: {
 				id: 'source-render',
 				outputKey: '201',
