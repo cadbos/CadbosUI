@@ -49,6 +49,7 @@ declare global {
 				OBJECT_REPLACEMENT_COST?: string;
 				TEXTURE_REPLACEMENT_COST?: string;
 				LIGHT_SETTINGS_COST?: string;
+				PRO_MODE_COST?: string;
 				S3_ACCESS_KEY_ID: string;
 				S3_PRESIGNED_PROVIDER_TTL_SECONDS?: string;
 				S3_PRESIGNED_UI_TTL_SECONDS?: string;

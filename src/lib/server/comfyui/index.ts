@@ -58,3 +58,11 @@ export {
 	type TextureReplacementRequest,
 	type QueueTextureReplacementRequest
 } from '$lib/server/comfyui/texture-replacement';
+export {
+	getProModeResult,
+	queueProMode,
+	runProMode,
+	type ProModeImage,
+	type ProModeRequest,
+	type QueueProModeRequest
+} from '$lib/server/comfyui/pro-mode';
