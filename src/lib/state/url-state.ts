@@ -34,7 +34,8 @@ export type ToolId =
 	| 'remove-object'
 	| 'light-settings'
 	| 'object-replacement'
-	| 'texture-replacement';
+	| 'texture-replacement'
+	| 'pro-mode';
 export type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
 
 // The sub-tab shown within the current mode — at most one of these applies,
@@ -78,7 +79,8 @@ const TOOL_IDS: readonly ToolId[] = [
 	'remove-object',
 	'light-settings',
 	'object-replacement',
-	'texture-replacement'
+	'texture-replacement',
+	'pro-mode'
 ];
 const REFERENCE_TABS: readonly ReferenceTab[] = ['photorealistic', 'conceptual', 'custom'];
 
@@ -138,6 +140,8 @@ export function destinationForGenerationKind(kind: GenerationKind): WorkspaceDes
 			return { mode: 'edit', subTab: { tool: 'texture-replacement' } };
 		case 'light-settings':
 			return { mode: 'edit', subTab: { tool: 'light-settings' } };
+		case 'pro-mode':
+			return { mode: 'edit', subTab: { tool: 'pro-mode' } };
 		case 'edit':
 		case 'upscale':
 			return { mode: 'edit', subTab: { tool: 'freeform' } };
@@ -169,7 +173,8 @@ export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): Sub
 		const job = searchParams.get('job');
 		return (tool === 'object-replacement' ||
 			tool === 'texture-replacement' ||
-			tool === 'light-settings') &&
+			tool === 'light-settings' ||
+			tool === 'pro-mode') &&
 			isJobId(job)
 			? { tool, job }
 			: { tool };
@@ -295,6 +300,14 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 				params.set('instruction', request.lightSettingsInstruction);
 			}
 			const job = subTab.job ?? request.activeLightSettingsJobId;
+			if (isJobId(job)) params.set('job', job);
+		} else if (tool === 'pro-mode') {
+			params.set('source', request.proModeSourceMode);
+			if (request.proModePrompt.trim() !== '') {
+				params.set('prompt', request.proModePrompt);
+			}
+			params.set('quality', String(request.proModeSpeedVsQuality));
+			const job = subTab.job ?? request.activeProModeJobId;
 			if (isJobId(job)) params.set('job', job);
 		} else if (tool === 'freeform' && request.editPrompt.trim() !== '') {
 			params.set('prompt', request.editPrompt);
@@ -486,6 +499,21 @@ export function applyShareParams(
 			request.setLightSettingsInstruction((searchParams.get('instruction') ?? '').slice(0, 500));
 			const job = searchParams.get('job');
 			request.setActiveLightSettingsJobId(isJobId(job) ? job : undefined);
+		} else if (tool === 'pro-mode') {
+			const source = searchParams.get('source');
+			request.setProModeSourceMode(
+				(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
+					? (source as ImageSourceMode)
+					: 'current-result'
+			);
+			request.setProModePrompt((searchParams.get('prompt') ?? '').slice(0, 500));
+			const qualityParam = searchParams.get('quality');
+			const quality = qualityParam !== null ? Number(qualityParam) : NaN;
+			request.setProModeSpeedVsQuality(
+				Number.isFinite(quality) && quality >= 0 && quality <= 1 ? quality : 0.5
+			);
+			const job = searchParams.get('job');
+			request.setActiveProModeJobId(isJobId(job) ? job : undefined);
 		} else if (tool === 'freeform') {
 			request.setEditPrompt(searchParams.get('prompt') ?? '');
 		}
