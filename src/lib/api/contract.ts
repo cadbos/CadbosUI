@@ -250,29 +250,32 @@ export interface ProModeRequest {
 	sessionId: string;
 }
 
-export interface ProModeProcessingResponse {
-	id: string;
-	status: 'processing';
-}
+export const proModeJobResponseSchema = z.discriminatedUnion('status', [
+	z.object({ id: z.uuid(), status: z.literal('processing') }).strict(),
+	z
+		.object({
+			id: z.uuid(),
+			status: z.literal('completed'),
+			output: z.object({
+				key: z.string().min(1),
+				url: z.url()
+			}),
+			cost: z.number().nonnegative(),
+			balance: z.number()
+		})
+		.strict(),
+	z
+		.object({
+			id: z.uuid(),
+			status: z.literal('failed'),
+			error: z.object({ code: z.string(), message: z.string() }).strict()
+		})
+		.strict()
+]);
 
-export interface ProModeCompletedResponse {
-	id: string;
-	status: 'completed';
-	output: MediaAccess;
-	cost: number;
-	balance: number;
-}
+export type ProModeJobResponse = z.infer<typeof proModeJobResponseSchema>;
 
-export interface ProModeFailedResponse {
-	id: string;
-	status: 'failed';
-	error: { code: string; message: string };
-}
-
-export type ProModeJobResponse =
-	| ProModeProcessingResponse
-	| ProModeCompletedResponse
-	| ProModeFailedResponse;
+export type ProModeCompletedResponse = Extract<ProModeJobResponse, { status: 'completed' }>;
 
 // Normalized response for image-generation endpoints. Provider outputs are
 // mirrored to managed storage before temporary access is issued. `balance` is the caller's own
