@@ -13,7 +13,15 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Eraser, Lightbulb, PaintRoller, Pencil, Plus, Replace } from '@lucide/svelte';
+	import {
+		Eraser,
+		Lightbulb,
+		PaintRoller,
+		Pencil,
+		Plus,
+		Replace,
+		WandSparkles
+	} from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -35,6 +43,7 @@ before the Change Date. See LICENSE for complete terms.
 	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
 	import LightSettingsPanel from '$lib/components/LightSettingsPanel.svelte';
 	import ObjectReplacementPanel from '$lib/components/ObjectReplacementPanel.svelte';
+	import ProModePanel from '$lib/components/ProModePanel.svelte';
 	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
 
 	type LucideIcon = typeof Pencil;
@@ -60,6 +69,12 @@ before the Change Date. See LICENSE for complete terms.
 			label: 'mode.textureReplacement',
 			Icon: PaintRoller,
 			alphaLabel: 'textureReplacement.alpha'
+		},
+		{
+			id: 'pro-mode',
+			label: 'mode.proMode',
+			Icon: WandSparkles,
+			alphaLabel: 'proMode.alpha'
 		}
 	];
 
@@ -72,11 +87,13 @@ before the Change Date. See LICENSE for complete terms.
 	let objectReplacementOpened = $state(false);
 	let textureReplacementOpened = $state(false);
 	let lightSettingsOpened = $state(false);
+	let proModeOpened = $state(false);
 
 	$effect(() => {
 		if (activeTool === 'object-replacement') objectReplacementOpened = true;
 		if (activeTool === 'texture-replacement') textureReplacementOpened = true;
 		if (activeTool === 'light-settings') lightSettingsOpened = true;
+		if (activeTool === 'pro-mode') proModeOpened = true;
 	});
 
 	const toolTabs = createTabController({
@@ -199,7 +216,7 @@ before the Change Date. See LICENSE for complete terms.
 		</div>
 
 		<div class="tool-content">
-			{#if activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'light-settings'}
+			{#if activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'light-settings' && activeTool !== 'pro-mode'}
 				<div
 					class="tool-panel"
 					role="tabpanel"
@@ -332,10 +349,31 @@ before the Change Date. See LICENSE for complete terms.
 					</svelte:boundary>
 				</div>
 			{/if}
+
+			{#if proModeOpened}
+				<div
+					class="tool-panel"
+					role="tabpanel"
+					id="edit-tool-panel-pro-mode"
+					aria-labelledby="edit-tool-tab-pro-mode"
+					tabindex="0"
+					hidden={activeTool !== 'pro-mode'}
+				>
+					<svelte:boundary onerror={(err: unknown) => logBoundaryError('editPanel.proMode', err)}>
+						<ProModePanel />
+						{#snippet failed(_error: unknown, reset: () => void)}
+							<p class="error">{t('boundary.failed')}</p>
+							<button type="button" class="btn-apply" onclick={reset}>
+								{t('boundary.retry')}
+							</button>
+						{/snippet}
+					</svelte:boundary>
+				</div>
+			{/if}
 		</div>
 	</div>
 
-	{#if !isAuthenticated && activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'light-settings'}
+	{#if !isAuthenticated && activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'light-settings' && activeTool !== 'pro-mode'}
 		<p class="auth-hint">{t('edit.signInToApply')}</p>
 	{/if}
 

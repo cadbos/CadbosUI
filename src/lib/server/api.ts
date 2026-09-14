@@ -102,6 +102,14 @@ export const textureReplacementRequestSchema = z.union([
 	})
 ]);
 
+export const proModeRequestSchema = z.strictObject({
+	imageKey: mediaKey,
+	referenceImageKey: mediaKey.optional(),
+	prompt: z.string().trim().min(1).max(500),
+	speedVsQuality: z.number().min(0).max(1),
+	sessionId
+});
+
 // Module 11 — Projects. Same shape for a project title and an explicit session
 // rename (both required, non-empty); session *creation* leaves title optional
 // (defaults to '' — see createSession/forkSession), since the fork/new-session

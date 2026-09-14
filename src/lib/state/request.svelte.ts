@@ -18,6 +18,7 @@ import {
 	type LightSettingsRequest,
 	type ObjectReplacementRequest,
 	type OutputFormat,
+	type ProModeRequest,
 	type RenderRequest,
 	type RenderResponse,
 	type StyleTransferRequest,
@@ -63,7 +64,8 @@ export const EDIT_OPERATION_TYPES = [
 	'add-object',
 	'remove-object',
 	'light-settings',
-	'upscale'
+	'upscale',
+	'pro-mode'
 ] as const;
 
 export type EditOperationType = (typeof EDIT_OPERATION_TYPES)[number];
@@ -96,6 +98,12 @@ export interface ActiveTextureReplacementJob {
 }
 
 export interface ActiveLightSettingsJob {
+	id: string;
+	instruction: string;
+	sourceRender?: RenderResult;
+}
+
+export interface ActiveProModeJob {
 	id: string;
 	instruction: string;
 	sourceRender?: RenderResult;
@@ -147,6 +155,10 @@ export interface RequestJSON {
 	textureReplacementSurface?: string;
 	textureReplacementSourceMode?: ImageSourceMode;
 	textureReplacementMasked?: boolean;
+	proModeReferenceImage?: ImageInput;
+	proModePrompt?: string;
+	proModeSourceMode?: ImageSourceMode;
+	proModeSpeedVsQuality?: number;
 	lightSettingsPresetIds?: string[];
 	lightSettingsInstruction?: string;
 	promptOverride: string | null;
@@ -160,6 +172,7 @@ export interface NormalizedRequest {
 	objectReferenceImage?: ImageInput;
 	textureReferenceImage?: ImageInput;
 	textureMaskImage?: ImageInput;
+	proModeReferenceImage?: ImageInput;
 	promptFragments: PromptFragment[];
 	outputFormat: OutputFormat;
 	sceneType: SceneType;
@@ -179,6 +192,10 @@ export interface NormalizedRequest {
 	textureReplacementSourceMode: ImageSourceMode;
 	textureReplacementSourceKey: string | undefined;
 	textureReplacementMasked: boolean;
+	proModePrompt: string;
+	proModeSourceMode: ImageSourceMode;
+	proModeSourceKey: string | undefined;
+	proModeSpeedVsQuality: number;
 	lightSettingsPresetIds: string[];
 	lightSettingsInstruction: string;
 	lightSettingsPrompt: string;
@@ -207,6 +224,9 @@ const replacementObjectSchema = z.string().max(200);
 export const objectReplacementJobIdSchema = z.uuid();
 const replacementSurfaceSchema = z.string().max(200);
 const textureReplacementJobIdSchema = z.uuid();
+const proModePromptSchema = z.string().max(500);
+const proModeSpeedVsQualitySchema = z.number().min(0).max(1);
+const proModeJobIdSchema = z.uuid();
 const lightSettingsInstructionSchema = z.string().max(500);
 export const lightSettingsJobIdSchema = z.uuid();
 // A fixture's on/off ids are mutually exclusive (setLightSettingsFixtureState
@@ -276,6 +296,7 @@ const requestJsonSchema = z
 		objectReferenceImage: optionalImageInputSchema,
 		textureReferenceImage: optionalImageInputSchema,
 		textureMaskImage: optionalImageInputSchema,
+		proModeReferenceImage: optionalImageInputSchema,
 		textureMaskSourceKey: z.string().min(1).optional(),
 		promptFragments: z.array(promptFragmentSchema),
 		editPrompt: z.string().default(''),
@@ -292,6 +313,9 @@ const requestJsonSchema = z
 		textureReplacementSurface: replacementSurfaceSchema.default(''),
 		textureReplacementSourceMode: imageSourceModeSchema.default('current-result'),
 		textureReplacementMasked: z.boolean().default(false),
+		proModePrompt: proModePromptSchema.default(''),
+		proModeSourceMode: imageSourceModeSchema.default('current-result'),
+		proModeSpeedVsQuality: proModeSpeedVsQualitySchema.default(0.5),
 		lightSettingsPresetIds: lightSettingsPresetIdsSchema.default([]),
 		lightSettingsInstruction: lightSettingsInstructionSchema.default(''),
 		promptOverride: z.string().nullable(),
@@ -475,6 +499,15 @@ function cloneActiveLightSettingsJob(
 	};
 }
 
+function cloneActiveProModeJob(job: ActiveProModeJob | undefined): ActiveProModeJob | undefined {
+	if (!job) return undefined;
+	return {
+		id: job.id,
+		instruction: job.instruction,
+		sourceRender: cloneRenderResult(job.sourceRender)
+	};
+}
+
 function insertFragment(
 	fragments: PromptFragment[],
 	fragment: PromptFragment,
@@ -633,6 +666,11 @@ export class RequestState {
 	textureReplacementMasked = $state(false);
 	textureMaskUploading = $state(false);
 	activeTextureReplacementJob = $state<ActiveTextureReplacementJob | undefined>(undefined);
+	proModeReferenceImage = $state<ImageInput | undefined>(undefined);
+	proModePrompt = $state('');
+	proModeSourceMode = $state<ImageSourceMode>('current-result');
+	proModeSpeedVsQuality = $state(0.5);
+	activeProModeJob = $state<ActiveProModeJob | undefined>(undefined);
 	// Ordered (click-order) selection of light-settings preset ids (see
 	// $lib/light-settings-presets) — the store of *selections*, not resolved
 	// text; lightSettingsPrompt below derives the actual instruction from this
@@ -711,6 +749,10 @@ export class RequestState {
 
 	get activeLightSettingsJobId(): string | undefined {
 		return this.activeLightSettingsJob?.id;
+	}
+
+	get activeProModeJobId(): string | undefined {
+		return this.activeProModeJob?.id;
 	}
 
 	addFragment(input: AddFragmentInput): string {
@@ -832,6 +874,10 @@ export class RequestState {
 
 	setTextureReferenceImage(image: ImageInput | undefined): void {
 		this.textureReferenceImage = cloneImage(optionalImageInputSchema.parse(image));
+	}
+
+	setProModeReferenceImage(image: ImageInput | undefined): void {
+		this.proModeReferenceImage = cloneImage(optionalImageInputSchema.parse(image));
 	}
 
 	setTextureMaskImage(image: ImageInput | undefined): void {
@@ -1029,6 +1075,38 @@ export class RequestState {
 		};
 	}
 
+	setProModePrompt(prompt: string): void {
+		this.proModePrompt = proModePromptSchema.parse(prompt);
+	}
+
+	setProModeSourceMode(mode: ImageSourceMode): void {
+		this.proModeSourceMode = imageSourceModeSchema.parse(mode);
+	}
+
+	setProModeSpeedVsQuality(value: number): void {
+		this.proModeSpeedVsQuality = proModeSpeedVsQualitySchema.parse(value);
+	}
+
+	setActiveProModeJobId(id: string | undefined): void {
+		const parsed = proModeJobIdSchema.optional().parse(id);
+		if (parsed === this.activeProModeJob?.id) return;
+		this.activeProModeJob = parsed
+			? { id: parsed, instruction: this.proModePrompt.trim() }
+			: undefined;
+	}
+
+	setActiveProModeJob(
+		id: string,
+		sourceRender: RenderResult | undefined,
+		instruction: string
+	): void {
+		this.activeProModeJob = {
+			id: proModeJobIdSchema.parse(id),
+			instruction: proModePromptSchema.parse(instruction).trim(),
+			sourceRender: cloneRenderResult(sourceRender)
+		};
+	}
+
 	setPromptOverride(text: string): void {
 		this.promptOverride = text;
 	}
@@ -1166,6 +1244,15 @@ export class RequestState {
 		const missing: ValidationField[] = [];
 		if (!this.hasEditSource()) missing.push('image');
 		if (!this.lightSettingsPrompt.trim()) missing.push('instruction');
+		return { valid: missing.length === 0, missing };
+	}
+
+	// The reference image is genuinely optional here — unlike object/texture
+	// replacement, there is no `referenceImage` check.
+	validateProMode(): ValidationResult {
+		const missing: ValidationField[] = [];
+		if (!this.hasProModeSource()) missing.push('image');
+		if (!this.proModePrompt.trim()) missing.push('prompt');
 		return { valid: missing.length === 0, missing };
 	}
 
@@ -1340,6 +1427,10 @@ export class RequestState {
 		return this.#hasSourceFor(this.textureReplacementSourceMode);
 	}
 
+	hasProModeSource(): boolean {
+		return this.#hasSourceFor(this.proModeSourceMode);
+	}
+
 	// The mask editor draws on, and later validates the finished mask against
 	// (textureMaskMatchesSource()), a stable server URL — a local blob:
 	// preview isn't enough for that. Workspace.svelte calls this eagerly the
@@ -1377,6 +1468,10 @@ export class RequestState {
 
 	textureReplacementSourceKey(): string | undefined {
 		return this.#sourceKeyFor(this.textureReplacementSourceMode);
+	}
+
+	proModeSourceKey(): string | undefined {
+		return this.#sourceKeyFor(this.proModeSourceMode);
 	}
 
 	#sourceKeyFor(mode: ImageSourceMode): string | undefined {
@@ -1486,6 +1581,22 @@ export class RequestState {
 		};
 	}
 
+	async toProModeRequest(): Promise<ProModeRequest | null> {
+		const validation = this.validateProMode();
+		if (!validation.valid) return null;
+		const imageKey = await this.#resolveSourceFor(this.proModeSourceMode);
+		if (!imageKey) return null;
+		const referenceImageKey = managedImageKey(this.proModeReferenceImage);
+		const { sessionId } = await this.ensureProjectSession();
+		return {
+			imageKey,
+			...(referenceImageKey ? { referenceImageKey } : {}),
+			prompt: this.proModePrompt.trim(),
+			speedVsQuality: this.proModeSpeedVsQuality,
+			sessionId
+		};
+	}
+
 	toJSON(): RequestJSON {
 		return {
 			id: this.id,
@@ -1495,6 +1606,7 @@ export class RequestState {
 			textureReferenceImage: cloneImage(this.textureReferenceImage),
 			textureMaskImage: cloneImage(this.textureMaskImage),
 			textureMaskSourceKey: this.textureMaskSourceKey,
+			proModeReferenceImage: cloneImage(this.proModeReferenceImage),
 			promptFragments: cloneFragments(this.promptFragments),
 			editPrompt: this.editPrompt,
 			outputFormat: this.outputFormat,
@@ -1509,6 +1621,9 @@ export class RequestState {
 			textureReplacementSurface: this.textureReplacementSurface,
 			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			textureReplacementMasked: this.textureReplacementMasked,
+			proModePrompt: this.proModePrompt,
+			proModeSourceMode: this.proModeSourceMode,
+			proModeSpeedVsQuality: this.proModeSpeedVsQuality,
 			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
 			lightSettingsInstruction: this.lightSettingsInstruction,
 			promptOverride: this.promptOverride,
@@ -1531,6 +1646,7 @@ export class RequestState {
 		this.textureReferenceImage = cloneImage(parsed.textureReferenceImage);
 		this.textureMaskImage = cloneImage(parsed.textureMaskImage);
 		this.textureMaskSourceKey = parsed.textureMaskImage ? parsed.textureMaskSourceKey : undefined;
+		this.proModeReferenceImage = cloneImage(parsed.proModeReferenceImage);
 		this.promptFragments = cloneFragments(parsed.promptFragments);
 		this.editPrompt = parsed.editPrompt;
 		this.outputFormat = parsed.outputFormat;
@@ -1547,6 +1663,10 @@ export class RequestState {
 		this.textureReplacementSourceMode = parsed.textureReplacementSourceMode;
 		this.textureReplacementMasked = parsed.textureReplacementMasked;
 		this.activeTextureReplacementJob = undefined;
+		this.proModePrompt = parsed.proModePrompt;
+		this.proModeSourceMode = parsed.proModeSourceMode;
+		this.proModeSpeedVsQuality = parsed.proModeSpeedVsQuality;
+		this.activeProModeJob = undefined;
 		this.lightSettingsPresetIds = [...parsed.lightSettingsPresetIds];
 		this.lightSettingsInstruction = parsed.lightSettingsInstruction;
 		this.activeLightSettingsJob = undefined;
@@ -1571,6 +1691,7 @@ export class RequestState {
 				this.textureReplacementMasked && this.textureMaskMatchesSource()
 					? cloneImage(this.textureMaskImage)
 					: undefined,
+			proModeReferenceImage: cloneImage(this.proModeReferenceImage),
 			promptFragments: cloneFragments(this.promptFragments),
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
@@ -1588,6 +1709,10 @@ export class RequestState {
 			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			textureReplacementSourceKey: this.textureReplacementSourceKey(),
 			textureReplacementMasked: this.textureReplacementMasked,
+			proModePrompt: this.proModePrompt,
+			proModeSourceMode: this.proModeSourceMode,
+			proModeSourceKey: this.proModeSourceKey(),
+			proModeSpeedVsQuality: this.proModeSpeedVsQuality,
 			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
 			lightSettingsInstruction: this.lightSettingsInstruction,
 			lightSettingsPrompt: this.lightSettingsPrompt,
@@ -1618,6 +1743,7 @@ export class RequestState {
 		this.textureReferenceImage = undefined;
 		this.textureMaskImage = undefined;
 		this.textureMaskSourceKey = undefined;
+		this.proModeReferenceImage = undefined;
 		this.promptFragments = [];
 		this.editPrompt = '';
 		this.outputFormat = 'webp';
@@ -1634,6 +1760,10 @@ export class RequestState {
 		this.textureReplacementSourceMode = 'current-result';
 		this.textureReplacementMasked = false;
 		this.activeTextureReplacementJob = undefined;
+		this.proModePrompt = '';
+		this.proModeSourceMode = 'current-result';
+		this.proModeSpeedVsQuality = 0.5;
+		this.activeProModeJob = undefined;
 		this.lightSettingsPresetIds = [];
 		this.lightSettingsInstruction = '';
 		this.activeLightSettingsJob = undefined;
@@ -1683,6 +1813,7 @@ export class RequestState {
 		this.textureReferenceImage = cloneImage(source.textureReferenceImage);
 		this.textureMaskImage = cloneImage(source.textureMaskImage);
 		this.textureMaskSourceKey = source.textureMaskSourceKey;
+		this.proModeReferenceImage = cloneImage(source.proModeReferenceImage);
 		this.promptFragments = cloneFragments(source.promptFragments);
 		this.editPrompt = source.editPrompt;
 		this.outputFormat = source.outputFormat;
@@ -1705,6 +1836,10 @@ export class RequestState {
 			source.activeTextureReplacementJob
 		);
 		this.textureReplacementResultReady = source.textureReplacementResultReady;
+		this.proModePrompt = source.proModePrompt;
+		this.proModeSourceMode = source.proModeSourceMode;
+		this.proModeSpeedVsQuality = source.proModeSpeedVsQuality;
+		this.activeProModeJob = cloneActiveProModeJob(source.activeProModeJob);
 		this.lightSettingsPresetIds = [...source.lightSettingsPresetIds];
 		this.lightSettingsInstruction = source.lightSettingsInstruction;
 		this.activeLightSettingsJob = cloneActiveLightSettingsJob(source.activeLightSettingsJob);

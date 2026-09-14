@@ -242,6 +242,41 @@ export type TextureReplacementJobResponse =
 	| TextureReplacementCompletedResponse
 	| TextureReplacementFailedResponse;
 
+export interface ProModeRequest {
+	imageKey: string;
+	referenceImageKey?: string;
+	prompt: string;
+	speedVsQuality: number;
+	sessionId: string;
+}
+
+export const proModeJobResponseSchema = z.discriminatedUnion('status', [
+	z.object({ id: z.uuid(), status: z.literal('processing') }).strict(),
+	z
+		.object({
+			id: z.uuid(),
+			status: z.literal('completed'),
+			output: z.object({
+				key: z.string().min(1),
+				url: z.url()
+			}),
+			cost: z.number().nonnegative(),
+			balance: z.number()
+		})
+		.strict(),
+	z
+		.object({
+			id: z.uuid(),
+			status: z.literal('failed'),
+			error: z.object({ code: z.string(), message: z.string() }).strict()
+		})
+		.strict()
+]);
+
+export type ProModeJobResponse = z.infer<typeof proModeJobResponseSchema>;
+
+export type ProModeCompletedResponse = Extract<ProModeJobResponse, { status: 'completed' }>;
+
 // Normalized response for image-generation endpoints. Provider outputs are
 // mirrored to managed storage before temporary access is issued. `balance` is the caller's own
 // remaining approved-account balance after this call — never archAI's raw
@@ -259,7 +294,8 @@ export const generationKinds = [
 	'upscale',
 	'object-replacement',
 	'texture-replacement',
-	'light-settings'
+	'light-settings',
+	'pro-mode'
 ] as const;
 
 export type GenerationKind = (typeof generationKinds)[number];

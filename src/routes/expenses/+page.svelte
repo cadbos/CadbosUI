@@ -35,7 +35,8 @@ before the Change Date. See LICENSE for complete terms.
 		'object-replacement': 'generatedImages.kind.objectReplacement',
 		'texture-replacement': 'generatedImages.kind.textureReplacement',
 		'light-settings': 'generatedImages.kind.lightSettings',
-		upscale: 'generatedImages.kind.upscale'
+		upscale: 'generatedImages.kind.upscale',
+		'pro-mode': 'generatedImages.kind.proMode'
 	};
 
 	function formatDate(createdAt: number): string {
