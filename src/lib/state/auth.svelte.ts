@@ -29,6 +29,7 @@ import { BunkerSigner, createNostrConnectURI } from 'nostr-tools/nip46';
 import { SimplePool } from 'nostr-tools/pool';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { Event, EventTemplate } from 'nostr-tools/pure';
+import { generationKinds } from '$lib/api/contract';
 import type {
 	NostrProfile,
 	ProfileUpdateRequest,
@@ -59,14 +60,7 @@ const creditTransactionSchema = z.object({
 	id: z.string(),
 	amount: z.number(),
 	balanceAfter: z.number(),
-	kind: z.enum([
-		'render',
-		'edit',
-		'style-transfer',
-		'object-replacement',
-		'texture-replacement',
-		'upscale'
-	]),
+	kind: z.enum(generationKinds),
 	createdAt: z.number(),
 	sessionId: z.uuid().nullable(),
 	projectId: z.uuid().nullable()
