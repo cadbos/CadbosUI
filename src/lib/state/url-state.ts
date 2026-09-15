@@ -167,12 +167,9 @@ export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): Sub
 	if (mode === 'edit') {
 		const tool = slugToTool(searchParams.get('tool') ?? undefined);
 		const job = searchParams.get('job');
-		return (tool === 'object-replacement' ||
-			tool === 'texture-replacement' ||
-			tool === 'light-settings') &&
-			isJobId(job)
-			? { tool, job }
-			: { tool };
+		// Every edit-mode tool is job-backed now (freeform/add-object/remove-object
+		// share the Flux Kontext job, the other three each have their own).
+		return isJobId(job) ? { tool, job } : { tool };
 	}
 	if (mode === 'styleTransfer') {
 		return { reference: slugToReference(searchParams.get('reference') ?? undefined) };
@@ -296,8 +293,12 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 			}
 			const job = subTab.job ?? request.activeLightSettingsJobId;
 			if (isJobId(job)) params.set('job', job);
-		} else if (tool === 'freeform' && request.editPrompt.trim() !== '') {
-			params.set('prompt', request.editPrompt);
+		} else if (tool === 'freeform' || tool === 'add-object' || tool === 'remove-object') {
+			if (tool === 'freeform' && request.editPrompt.trim() !== '') {
+				params.set('prompt', request.editPrompt);
+			}
+			const job = subTab.job ?? request.activeFluxKontextEditJobId;
+			if (isJobId(job)) params.set('job', job);
 		}
 	}
 
@@ -488,6 +489,11 @@ export function applyShareParams(
 			request.setActiveLightSettingsJobId(isJobId(job) ? job : undefined);
 		} else if (tool === 'freeform') {
 			request.setEditPrompt(searchParams.get('prompt') ?? '');
+			const job = searchParams.get('job');
+			request.setActiveFluxKontextEditJobId(isJobId(job) ? job : undefined, 'freeform');
+		} else if (tool === 'add-object' || tool === 'remove-object') {
+			const job = searchParams.get('job');
+			request.setActiveFluxKontextEditJobId(isJobId(job) ? job : undefined, tool);
 		}
 	} else if (mode === 'styleTransfer') {
 		const presetId = searchParams.get('preset');

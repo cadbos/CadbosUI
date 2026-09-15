@@ -19,7 +19,6 @@ import { TEST_S3_BUCKET, TEST_S3_ENV } from '$lib/server/testing/generation-fixt
 const archai = vi.hoisted(() => ({
 	postChangeTextures: vi.fn(),
 	postRenderInterior: vi.fn(),
-	postEditByPrompt: vi.fn(),
 	postStyleTransfer: vi.fn()
 }));
 const appEnvironment = vi.hoisted(() => ({ dev: true }));
@@ -47,7 +46,7 @@ vi.mock('$lib/server/s3', async (importOriginal) => ({
 	putS3Object: storage.putS3Object
 }));
 
-const { editInterior, renderInterior, replaceTexturesWithMask, styleTransferInterior } =
+const { renderInterior, replaceTexturesWithMask, styleTransferInterior } =
 	await import('./generation');
 
 const withoutKey = { env: {} } as App.Platform;
@@ -222,135 +221,6 @@ describe('renderInterior', () => {
 			});
 
 			await expect(render).rejects.toThrow('render/interior output storage failed');
-			expect(consoleError).toHaveBeenCalled();
-		} finally {
-			consoleError.mockRestore();
-		}
-	});
-});
-
-describe('editInterior', () => {
-	it('falls back to the dev mock when no API key is configured', async () => {
-		const result = await editInterior(withoutKey, TEST_S3_BUCKET, {
-			image: 'https://example.test/prev-render.jpg',
-			prompt: 'make the wall sage green'
-		});
-		expect(result.outputKey).toBeTruthy();
-	});
-
-	it('normalizes the single-string output (И-MA-ED2)', async () => {
-		const bucket = mockBucket();
-		mockDownloadedImage();
-		mockImageId('123e4567-e89b-12d3-a456-426614174002');
-		archai.postEditByPrompt.mockResolvedValue({
-			data: { output: 'https://example.test/edited.jpg', cost: 1, balance: 23 }
-		});
-
-		const result = await editInterior(withKey(bucket), TEST_S3_BUCKET, {
-			image: 'https://example.test/prev-render.jpg',
-			prompt: 'make the wall sage green'
-		});
-
-		expect(bucket.put).toHaveBeenCalledWith(
-			'123e4567-e89b-12d3-a456-426614174002.webp',
-			expect.any(ArrayBuffer),
-			{ httpMetadata: { contentType: 'image/webp' } }
-		);
-		expect(result).toEqual({
-			outputKey: '123e4567-e89b-12d3-a456-426614174002.webp',
-			outputHash: generatedImageHash,
-			cost: 1,
-			balance: 23
-		});
-	});
-
-	it('sends image/prompt with no outputFormat field (И-MA-ED1)', async () => {
-		mockDownloadedImage();
-		mockImageId('123e4567-e89b-12d3-a456-426614174003');
-		archai.postEditByPrompt.mockResolvedValue({
-			data: { output: 'https://example.test/edited.jpg', cost: 1, balance: 23 }
-		});
-
-		await editInterior(withKey(), TEST_S3_BUCKET, {
-			image: 'https://example.test/prev-render.jpg',
-			prompt: 'replace the sofa with a leather armchair'
-		});
-
-		const call = archai.postEditByPrompt.mock.calls[0][0];
-		expect(call.body).toEqual({
-			image: 'https://example.test/prev-render.jpg',
-			prompt: 'replace the sofa with a leather armchair'
-		});
-	});
-
-	it('throws a generic error without leaking provider details', async () => {
-		archai.postEditByPrompt.mockResolvedValue({
-			error: { message: 'internal provider trace 9f3a' }
-		});
-
-		await expect(
-			editInterior(withKey(), TEST_S3_BUCKET, {
-				image: 'https://example.test/prev-render.jpg',
-				prompt: 'replace the sofa'
-			})
-		).rejects.toThrow('Edit failed');
-	});
-
-	it('throws when the response has no output URL', async () => {
-		archai.postEditByPrompt.mockResolvedValue({
-			data: { output: '', cost: 0, balance: 25 }
-		});
-
-		await expect(
-			editInterior(withKey(), TEST_S3_BUCKET, {
-				image: 'https://example.test/prev-render.jpg',
-				prompt: 'replace the sofa'
-			})
-		).rejects.toThrow('Edit failed');
-	});
-
-	it('fails when S3 storage cannot be completed', async () => {
-		const providerUrl = 'https://example.test/edited.jpg';
-		const bucket = {
-			put: vi.fn(async () => {
-				throw new Error('S3 unavailable');
-			})
-		};
-		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		mockDownloadedImage();
-		archai.postEditByPrompt.mockResolvedValue({
-			data: { output: providerUrl, cost: 1, balance: 23 }
-		});
-
-		try {
-			const edit = editInterior(withKey(bucket), TEST_S3_BUCKET, {
-				image: 'https://example.test/prev-render.jpg',
-				prompt: 'replace the sofa'
-			});
-
-			await expect(edit).rejects.toThrow('edit-by-prompt output storage failed');
-			expect(bucket.put).toHaveBeenCalled();
-			expect(consoleError).toHaveBeenCalled();
-		} finally {
-			consoleError.mockRestore();
-		}
-	});
-
-	it('fails when the generated response is not an image', async () => {
-		const providerUrl = 'https://example.test/edited.jpg';
-		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		mockDownloadedImage('text/html');
-		archai.postEditByPrompt.mockResolvedValue({
-			data: { output: providerUrl, cost: 1, balance: 23 }
-		});
-
-		try {
-			const edit = editInterior(withKey(), TEST_S3_BUCKET, {
-				image: 'https://example.test/prev-render.jpg',
-				prompt: 'replace the sofa'
-			});
-
-			await expect(edit).rejects.toThrow('edit-by-prompt output storage failed');
 			expect(consoleError).toHaveBeenCalled();
 		} finally {
 			consoleError.mockRestore();

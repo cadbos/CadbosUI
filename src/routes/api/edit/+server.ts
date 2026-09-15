@@ -15,155 +15,224 @@
 import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RenderResponse } from '$lib/api/contract';
+import type { EditJobResponse } from '$lib/api/contract';
 import { apiError, editRequestSchema, parseBody } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
-import {
-	assertGenerationAllowed,
-	getCredit,
-	getUserIdByPubkey,
-	recordBalance
-} from '$lib/server/billing';
+import { assertGenerationAllowed, getUserIdByPubkey } from '$lib/server/billing';
+import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { editInterior, type StoredRenderResponse } from '$lib/server/generation';
-import { recordGeneration } from '$lib/server/generations';
-import { getOrCreateMediaByKey, mediaKey, uploadsBucketName } from '$lib/server/media';
-import { mediaAccess, providerMediaBatch } from '$lib/server/media-access';
+import {
+	cancelFluxKontextEdit,
+	fluxKontextEditCost,
+	submitFluxKontextEdit
+} from '$lib/server/flux-kontext-edit';
+import { createFluxKontextEditJob } from '$lib/server/flux-kontext-edit-jobs';
+import { providerMediaBatch } from '$lib/server/media-access';
 import { assertSessionOwnedByUser } from '$lib/server/projects';
+import { RemoteImageImportError } from '$lib/server/remote-image';
 
 // Anti-cost-abuse (FR-К5): each edit is its own paid call, so it gets its own
 // rate-limit bucket, bound to the authenticated pubkey rather than IP.
 const EDIT_RATE_LIMIT = { windowMs: 60_000, max: 10 } as const;
+const editInFlight = new Set<string>();
+
+function logRejection(status: number, reason: string): void {
+	console.warn(
+		JSON.stringify({
+			level: 'warn',
+			area: 'edit',
+			event: 'request_rejected',
+			status,
+			reason
+		})
+	);
+}
+
+interface FailureDetail {
+	operation: string;
+	providerCode?: string;
+	providerOperation?: string;
+	providerStatus?: number;
+}
+
+function logFailure(status: number, reason: string, detail: FailureDetail): void {
+	console.error(
+		JSON.stringify({
+			level: 'error',
+			area: 'edit',
+			event: 'request_failed',
+			status,
+			reason,
+			...detail
+		})
+	);
+}
+
+function remoteImageError(error: RemoteImageImportError): Response {
+	switch (error.code) {
+		case 'invalid_url':
+			return apiError(400, error.code, 'Invalid image URL');
+		case 'unsupported_image_type':
+			return apiError(415, error.code, 'Unsupported image type');
+		case 'image_too_large':
+			return apiError(413, error.code, 'Image exceeds the 8 MB limit');
+		case 'remote_fetch_failed':
+			logFailure(502, error.code, { operation: 'remote_image_import' });
+			return apiError(502, error.code, 'Failed to fetch image');
+	}
+}
 
 // Editing is restricted further, by design: only accounts an admin has
 // manually approved (a `credits` row, billing.ts) may edit at all — a fresh
-// Nostr login alone is not enough (mirrors /api/render).
-export const POST: RequestHandler = async ({ request, platform, locals }) => {
+// Nostr login alone is not enough (mirrors /api/render). ComfyUI jobs also
+// need a real D1 user row, so — unlike the old synchronous archAI-backed
+// handler — the dev demo account can't be used here (mirrors
+// object-replacement/light-settings).
+export const POST: RequestHandler = async ({ request, platform, locals, url }) => {
 	if (!locals.user) {
-		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+		const response = authenticationRequiredResponse(locals.sessionLookupUnavailable);
+		logRejection(
+			response.status,
+			locals.sessionLookupUnavailable ? 'authentication_unavailable' : 'unauthorized'
+		);
+		return response;
 	}
-
 	const parsed = await parseBody(request, editRequestSchema);
 	if (!parsed.ok) return parsed.response;
-
-	// The demo session bypasses D1 entirely (hooks.server.ts) — no balance to record
-	// and no rate-limit bucket to touch.
-	const demoUser = dev && locals.user.pubkey === DEMO_PUBKEY;
-	const db = demoUser ? null : getDb(platform);
-	const userId = db ? await getUserIdByPubkey(db, locals.user.pubkey) : null;
-
-	// A real session is only ever set from a D1 users↔sessions join (hooks.server.ts),
-	// so a resolvable session with no matching user row is a data-integrity fault, not
-	// a normal case — fail closed rather than charge a call we can't attribute.
-	if (db && !userId) return apiError(500, 'account_error', 'Account record not found');
-
-	if (db) {
-		const limited = await touchRateLimit(
-			db,
-			`edit:${locals.user.pubkey}`,
-			Date.now(),
-			EDIT_RATE_LIMIT
-		);
-		if (limited) return apiError(429, 'rate_limited', 'Too many requests');
+	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
+		logFailure(500, 'account_error', { operation: 'account_lookup' });
+		return apiError(500, 'account_error', 'Account record not found');
 	}
 
-	// The account's own balance right before this call — kept as the final,
-	// definitely-safe fallback if both recordGeneration and its own getCredit
-	// fallback fail below, so the response never falls through to
-	// editInterior's raw (shared) archAI balance.
-	let precheckBalance: number | undefined;
-	if (db && userId) {
+	// Concurrent submissions from the same account could both pass the balance
+	// check before either job is persisted; a per-pubkey in-flight guard closes
+	// that window (mirrors object-replacement/light-settings).
+	const pubkey = locals.user.pubkey;
+	if (editInFlight.has(pubkey)) {
+		logRejection(409, 'request_in_progress');
+		return apiError(409, 'request_in_progress', 'Edit request already in progress');
+	}
+	editInFlight.add(pubkey);
+
+	try {
+		const db = getDb(platform);
+		const userId = await getUserIdByPubkey(db, pubkey);
+		if (!userId) {
+			logFailure(500, 'account_error', { operation: 'account_lookup' });
+			return apiError(500, 'account_error', 'Account record not found');
+		}
+		const limited = await touchRateLimit(db, `edit:${pubkey}`, Date.now(), EDIT_RATE_LIMIT);
+		if (limited) {
+			logRejection(429, 'rate_limited');
+			return apiError(429, 'rate_limited', 'Too many requests');
+		}
+
+		if (!(await assertSessionOwnedByUser(db, userId, parsed.data.sessionId))) {
+			logRejection(404, 'session_not_found');
+			return apiError(404, 'session_not_found', 'Session not found');
+		}
+		const media = await providerMediaBatch(db, platform, [parsed.data.imageKey]);
+		if (!media) return apiError(404, 'image_not_found', 'Image not found');
+		const sceneMedia = media.get(parsed.data.imageKey)!.media;
+
+		let cost: number;
 		try {
+			cost = fluxKontextEditCost(platform);
 			const check = await assertGenerationAllowed(db, userId);
 			if (!check.allowed) {
-				return check.reason === 'not_approved'
-					? apiError(403, 'generation_restricted', 'Generation is limited to approved accounts')
-					: apiError(402, 'insufficient_credit', 'Test balance exhausted');
+				if (check.reason === 'not_approved') {
+					logRejection(403, 'generation_restricted');
+					return apiError(
+						403,
+						'generation_restricted',
+						'Generation is limited to approved accounts'
+					);
+				}
+				logRejection(402, 'insufficient_credit');
+				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
 			}
-			precheckBalance = check.balance;
-		} catch (err) {
-			console.error('credit pre-check failed:', err);
+			if (check.balance < cost) {
+				logRejection(402, 'insufficient_credit');
+				return apiError(402, 'insufficient_credit', 'Test balance exhausted');
+			}
+		} catch {
+			logFailure(500, 'edit_failed', { operation: 'billing_precheck' });
 			return apiError(500, 'edit_failed', 'Edit failed');
 		}
-	}
 
-	if (db && userId) {
-		const sessionOwned = await assertSessionOwnedByUser(db, userId, parsed.data.sessionId);
-		if (!sessionOwned) return apiError(404, 'session_not_found', 'Session not found');
-	}
-
-	const source =
-		db && userId ? await providerMediaBatch(db, platform, [parsed.data.imageKey]) : null;
-	if (db && userId && !source) return apiError(404, 'image_not_found', 'Image not found');
-	const sourceMedia = source?.get(parsed.data.imageKey)?.media;
-	const uploadsBucket = sourceMedia?.bucket;
-
-	let result: StoredRenderResponse;
-	try {
-		result = await editInterior(platform, uploadsBucket, {
-			...parsed.data,
-			image: source?.get(parsed.data.imageKey)?.url ?? 'https://example.test/demo.webp'
-		});
-	} catch (err) {
-		// generation.ts already sanitizes/logs the detail; this route is the last
-		// line of defense (NFR-6/8) — never forward err.message to the client.
-		console.error(err);
-		return apiError(500, 'edit_failed', 'Edit failed');
-	}
-
-	// The edit already succeeded and archAI already charged for it — a failure to
-	// cache the resulting balance/deduction is a bookkeeping gap, not a reason to
-	// make the user think a completed, paid edit failed.
-	if (db && userId) {
-		const outputMedia = await getOrCreateMediaByKey(
-			db,
-			uploadsBucket!,
-			result.outputKey,
-			result.outputHash
-		);
-		// recordBalance mirrors archAI's own (shared) account balance for ops
-		// visibility only — it must never reach the client, so read it before
-		// overwriting `result.balance` with the caller's own remaining limit.
+		const id = crypto.randomUUID();
+		let comfyPromptId: string;
 		try {
-			await recordBalance(db, userId, result.balance);
-		} catch (err) {
-			console.error('recordBalance failed after a successful edit:', err);
-		}
-		try {
-			const credit = await recordGeneration(db, userId, {
-				resultMediaId: outputMedia.id,
-				sourceMediaId: sourceMedia!.id,
-				sessionId: parsed.data.sessionId,
-				prompt: parsed.data.prompt,
-				kind: 'edit',
-				amount: result.cost
-			});
-			result = { ...result, balance: credit.balance };
-		} catch (err) {
-			console.error('recordGeneration failed after a successful edit:', err);
-			// Even on failure, never fall through to archAI's raw (shared) balance.
-			// Prefer a fresh read; if that also fails, fall back to the balance we
-			// already had from the precheck — still an approved-account balance,
-			// never the shared one.
-			const fallback = await getCredit(db, userId).catch((err) => {
-				console.error('getCredit fallback failed after a successful edit:', err);
-				return null;
-			});
-			result = { ...result, balance: fallback?.balance ?? precheckBalance ?? 0 };
-		}
-	}
-
-	const output =
-		db && userId
-			? await mediaAccess(
-					platform,
-					await getOrCreateMediaByKey(db, uploadsBucket!, result.outputKey, result.outputHash)
-				)
-			: {
-					key: mediaKey(uploadsBucketName(platform), result.outputKey),
-					url: `/${result.outputKey}`
+			comfyPromptId = await submitFluxKontextEdit(
+				platform,
+				{ image: media.get(parsed.data.imageKey)!.url, prompt: parsed.data.prompt },
+				url.origin,
+				id
+			);
+		} catch (error) {
+			if (error instanceof RemoteImageImportError) return remoteImageError(error);
+			if (error instanceof ComfyUiError) {
+				const detail: FailureDetail = {
+					operation: 'provider_submission',
+					providerCode: error.code,
+					providerOperation: error.operation,
+					...(error.status === undefined ? {} : { providerStatus: error.status })
 				};
-	return json({ output, cost: result.cost, balance: result.balance } satisfies RenderResponse);
+				if (error.code === 'invalid_configuration') {
+					logFailure(500, 'edit_failed', detail);
+					return apiError(500, 'edit_failed', 'Edit failed');
+				}
+				logFailure(502, 'edit_failed', detail);
+			} else {
+				logFailure(502, 'edit_failed', { operation: 'provider_submission' });
+			}
+			return apiError(502, 'edit_failed', 'Edit failed');
+		}
+
+		try {
+			await createFluxKontextEditJob(db, {
+				id,
+				userId,
+				comfyPromptId,
+				sceneMediaId: sceneMedia.id,
+				sessionId: parsed.data.sessionId,
+				instruction: parsed.data.prompt,
+				cost,
+				createdAt: Date.now()
+			});
+		} catch {
+			logFailure(500, 'edit_failed', { operation: 'job_persistence' });
+			try {
+				await cancelFluxKontextEdit(platform, comfyPromptId);
+			} catch (cleanupError) {
+				logFailure(
+					500,
+					'edit_failed',
+					cleanupError instanceof ComfyUiError
+						? {
+								operation: 'job_persistence_cleanup',
+								providerCode: cleanupError.code,
+								providerOperation: cleanupError.operation,
+								...(cleanupError.status === undefined
+									? {}
+									: { providerStatus: cleanupError.status })
+							}
+						: { operation: 'job_persistence_cleanup' }
+				);
+			}
+			return apiError(500, 'edit_failed', 'Edit failed');
+		}
+
+		return json({ id, status: 'processing' } satisfies EditJobResponse, {
+			status: 202,
+			headers: {
+				'cache-control': 'no-store',
+				location: `/api/edit/${id}`
+			}
+		});
+	} finally {
+		editInFlight.delete(pubkey);
+	}
 };

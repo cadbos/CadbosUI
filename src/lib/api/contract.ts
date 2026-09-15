@@ -113,12 +113,35 @@ export interface RenderRequest {
 	sessionId: string;
 }
 
-// POST /api/edit — edit by prompt (no outputFormat; aspect ratio is preserved).
+// POST /api/edit — edit by prompt via the Flux Kontext ComfyUI workflow
+// (freeform / add-object / remove-object tools), async job — see
+// EditJobResponse.
 export interface EditRequest {
 	imageKey: string;
 	prompt: string;
 	sessionId: string;
 }
+
+export interface EditProcessingResponse {
+	id: string;
+	status: 'processing';
+}
+
+export interface EditCompletedResponse {
+	id: string;
+	status: 'completed';
+	output: MediaAccess;
+	cost: number;
+	balance: number;
+}
+
+export interface EditFailedResponse {
+	id: string;
+	status: 'failed';
+	error: { code: string; message: string };
+}
+
+export type EditJobResponse = EditProcessingResponse | EditCompletedResponse | EditFailedResponse;
 
 // POST /api/style-transfer — apply a reference image's style to a source image.
 export interface StyleTransferRequest {

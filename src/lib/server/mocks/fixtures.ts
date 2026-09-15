@@ -63,15 +63,6 @@ export function mockRenderExterior(): MockGenerationResponse {
 	};
 }
 
-export function mockEdit(): MockGenerationResponse {
-	return {
-		// Different colour scheme after edit — Unsplash free
-		outputUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=1200&q=80',
-		cost: 2,
-		balance: 46
-	};
-}
-
 export function mockStyleTransfer(): MockGenerationResponse {
 	return {
 		outputUrl: 'https://images.unsplash.com/photo-1600210491892-03d54c0aaf87?w=1200&q=80',
