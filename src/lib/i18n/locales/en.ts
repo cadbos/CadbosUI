@@ -746,7 +746,7 @@ export const en = {
 	'edit.removeObject.promptTemplate':
 		'Remove {object} from the image, carefully restoring what was behind/underneath it.',
 	'generationOverlay.lightSettings': 'Adjusting the lighting…',
-	'generationOverlay.lightSettingsDetail': 'This usually takes about a minute',
+	'generationOverlay.lightSettingsDetail': 'This usually takes a couple of minutes',
 	'lightSettings.moodSectionLabel': 'Atmosphere',
 	'lightSettings.fixtureSectionLabel': 'Light fixtures',
 	'lightSettings.fixtureOn': 'On',

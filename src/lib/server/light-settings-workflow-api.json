@@ -1,23 +1,11 @@
 {
 	"1": {
 		"inputs": {
-			"image": "гост3.jpg"
+			"image": "s5_no_chandelier_003.jpg"
 		},
 		"class_type": "LoadImage",
 		"_meta": {
 			"title": "1 · СЦЕНА — комната со светильниками"
-		}
-	},
-	"3": {
-		"inputs": {
-			"upscale_method": "lanczos",
-			"megapixels": 1,
-			"resolution_steps": 1,
-			"image": ["1", 0]
-		},
-		"class_type": "ImageScaleToTotalPixels",
-		"_meta": {
-			"title": "Сцена · ~1 MP"
 		}
 	},
 	"6": {
@@ -28,28 +16,28 @@
 		},
 		"class_type": "LoraLoaderModelOnly",
 		"_meta": {
-			"title": "Lightning 8-step LoRA · strength 1.0"
+			"title": "Lightning 8-step LoRA · strength 1.00"
 		}
 	},
 	"7": {
 		"inputs": {
-			"shift": 2.8,
+			"shift": 2.2,
 			"model": ["6", 0]
 		},
 		"class_type": "ModelSamplingAuraFlow",
 		"_meta": {
-			"title": "AuraFlow shift · 2.8"
+			"title": "AuraFlow shift · 2.2"
 		}
 	},
 	"8": {
 		"inputs": {
-			"strength": 0.9,
+			"strength": 1,
 			"pre_cfg": true,
 			"model": ["7", 0]
 		},
 		"class_type": "CFGNorm",
 		"_meta": {
-			"title": "CFGNorm · 0.9"
+			"title": "CFGNorm · 1.0"
 		}
 	},
 	"9": {
@@ -74,10 +62,10 @@
 	},
 	"11": {
 		"inputs": {
-			"prompt": ["47", 0],
+			"prompt": ["116", 0],
 			"clip": ["9", 0],
 			"vae": ["10", 0],
-			"image1": ["3", 0]
+			"image1": ["110", 0]
 		},
 		"class_type": "TextEncodeQwenImageEditPlus",
 		"_meta": {
@@ -86,7 +74,7 @@
 	},
 	"13": {
 		"inputs": {
-			"pixels": ["3", 0],
+			"pixels": ["110", 0],
 			"vae": ["10", 0]
 		},
 		"class_type": "VAEEncode",
@@ -96,41 +84,17 @@
 	},
 	"17": {
 		"inputs": {
-			"filename_prefix": "light-toggle-v1",
-			"images": ["38", 0]
+			"filename_prefix": ["77", 2],
+			"images": ["78", 0]
 		},
 		"class_type": "SaveImage",
 		"_meta": {
 			"title": "SAVE RESULT"
 		}
 	},
-	"18": {
-		"inputs": {
-			"add_noise": "enable",
-			"noise_seed": 42,
-			"steps": 8,
-			"cfg": 1,
-			"sampler_name": "euler",
-			"scheduler": "simple",
-			"start_at_step": 0,
-			"end_at_step": 10000,
-			"return_with_leftover_noise": "disable",
-			"preview_method": "none",
-			"vae_decode": "true",
-			"model": ["8", 0],
-			"positive": ["11", 0],
-			"negative": ["32", 0],
-			"latent_image": ["13", 0],
-			"optional_vae": ["10", 0]
-		},
-		"class_type": "KSampler Adv. (Efficient)",
-		"_meta": {
-			"title": "KSampler Adv. (Efficient)"
-		}
-	},
 	"19": {
 		"inputs": {
-			"value": "сделай свет приглушенным"
+			"value": "зажги люстру"
 		},
 		"class_type": "PrimitiveString",
 		"_meta": {
@@ -140,8 +104,8 @@
 	"20": {
 		"inputs": {
 			"model": "Hy-MT2-1.8B-Q6_K.gguf",
-			"device": "cuda",
-			"n_gpu_layers": -1
+			"device": "cpu",
+			"n_gpu_layers": 0
 		},
 		"class_type": "GGUFLoader",
 		"_meta": {
@@ -162,28 +126,18 @@
 	},
 	"23": {
 		"inputs": {
-			"value": "Picture 1 shows a room that contains one or more lighting fixtures (chandeliers, lamps, sconces, spotlights, string lights, etc.).\n\nApply the following instruction exactly, and only to the fixture(s) it refers to: {}.\n\nCRITICAL — the physical fixture itself must stay 100% identical to Picture 1: the exact same silhouette, number of arms, number of bulbs/lights, shape, size, material, color and position. Do not add, remove, extend, duplicate or invent any arm, bulb, cable, bracket or ornament that is not already visible in Picture 1. Copy the fixture's geometry pixel-for-pixel from Picture 1; only its illumination state may change.\n\nWhen a fixture is turned ON: each bulb or light-emitting part that already exists in Picture 1 becomes bright and glowing (do not add new bulbs), and it casts warm, realistic light, highlights and soft shadows onto the nearby walls, ceiling, floor and furniture, consistent with the rest of the room's existing lighting.\n\nWhen a fixture is turned OFF: each bulb or light-emitting part that already exists in Picture 1 becomes dark and unlit, and any glow, light spill or cast shadows it was producing disappear completely, while the rest of the room's lighting stays exactly as it was.\n\nDo not change the state of any other lighting fixture unless the instruction explicitly mentions it.\n\nEverything else in Picture 1 stays pixel-identical: walls, floor, ceiling, windows, furniture, camera position, framing and perspective. The only allowed changes are the illumination effects (glow, cast light, shadows) that naturally follow from the instructed fixture(s) turning on or off — never a change to the fixture's physical geometry.\n\nPhotorealistic and seamless, as if the change was physically made in that room and photographed with the same camera under the same base conditions."
+			"value": "Picture 1 is a room containing one or more lighting fixtures (chandelier, pendant, lamp, sconce, spotlight, string lights).\n\nTASK: {}\n\nApply the instruction to the single fixture it refers to, and to no other fixture. If the instruction names a location (near the bed, on the wall, above the table), it refers to the one fixture standing at that location. Every other lighting fixture in the room keeps its current state exactly — if it was dark it stays dark, if it was lit it stays lit at the same intensity.\n\nGEOMETRY LOCK — the fixture's physical body is copied from Picture 1 pixel-for-pixel: identical silhouette, identical count of arms, identical count of bulbs, identical shape, size, thickness, material, colour and position. Never add, remove, extend, duplicate, lengthen or invent an arm, bulb, socket, cable, chain, bracket, shade or ornament that is not already visible in Picture 1. There must be exactly the same number of lighting fixtures in the output as in Picture 1 — never a second copy of a fixture, never a mirrored twin, never an extra unit beside it. The fixture must not become larger, wider or more elaborate. Only its illumination state may change.\n\nTURNING A FIXTURE ON: the bulbs that already exist become bright and emissive, and they cast warm realistic light, highlights and soft directional shadows onto the nearby ceiling, walls, floor and furniture, consistent with the room's existing light sources. The number of glowing points equals the number of bulbs visible in Picture 1.\n\nTURNING A FIXTURE OFF: the existing bulbs become dark and unlit, and the glow, light spill and cast shadows they produced disappear completely.\n\nEVERYTHING ELSE IS UNTOUCHED: walls, floor, ceiling, window, daylight, curtains, bedding, furniture, decor, camera position, framing, perspective, global white balance and overall exposure of the room stay pixel-identical to Picture 1. Do not warm up or cool down the whole image. Do not recolour the bedding, curtains or walls. The only permitted changes are the local illumination effects that physically follow from the instructed fixture switching state.\n\nPhotorealistic and seamless, as if the switch was flipped in that real room and re-photographed with the same camera, same lens and same base exposure."
 		},
 		"class_type": "PrimitiveStringMultiline",
 		"_meta": {
-			"title": "Prompt template (свет вкл/выкл)"
-		}
-	},
-	"25": {
-		"inputs": {
-			"string": ["21", 0],
-			"mode": "lowercase"
-		},
-		"class_type": "CaseConverter",
-		"_meta": {
-			"title": "Convert Text Case"
+			"title": "Prompt template · прогон A (без референса)"
 		}
 	},
 	"26": {
 		"inputs": {
-			"string": ["23", 0],
+			"string": ["102", 0],
 			"find": "{}",
-			"replace": ["25", 0]
+			"replace": ["21", 0]
 		},
 		"class_type": "StringReplace",
 		"_meta": {
@@ -201,7 +155,7 @@
 			"spacing_width": 5,
 			"background_color": "#FFFFFF",
 			"image1": ["1", 0],
-			"image2": ["38", 0]
+			"image2": ["78", 0]
 		},
 		"class_type": "AILab_ImageStitch",
 		"_meta": {
@@ -217,20 +171,9 @@
 			"title": "Preview Image"
 		}
 	},
-	"32": {
-		"inputs": {
-			"prompt": "deformed geometry, distorted proportions, duplicated objects, missing furniture, moved furniture, changed room layout, changed camera angle, blurry, low quality, watermark, text, extra light fixtures, fixture shape changed, fixture moved, extra bulbs, extra arms, extra lamps, added ornaments, invented fixture parts, extended chandelier, larger fixture, additional lights not in original, changed fixture silhouette, changed fixture size",
-			"clip": ["9", 0],
-			"vae": ["10", 0]
-		},
-		"class_type": "TextEncodeQwenImageEdit",
-		"_meta": {
-			"title": "Negative prompt"
-		}
-	},
 	"33": {
 		"inputs": {
-			"model_name": "4x-UltraSharp.pth"
+			"model_name": "RealESRGAN_x2.pth"
 		},
 		"class_type": "UpscaleModelLoader",
 		"_meta": {
@@ -240,30 +183,18 @@
 	"34": {
 		"inputs": {
 			"upscale_model": ["33", 0],
-			"image": ["18", 5]
+			"image": ["115", 0]
 		},
 		"class_type": "ImageUpscaleWithModel",
 		"_meta": {
 			"title": "Upscale Image (using Model)"
 		}
 	},
-	"36": {
-		"inputs": {
-			"resize_type": "scale total pixels",
-			"resize_type.megapixels": 2,
-			"scale_method": "area",
-			"input": ["34", 0]
-		},
-		"class_type": "ResizeImageMaskNode",
-		"_meta": {
-			"title": "Resize Image/Mask"
-		}
-	},
 	"38": {
 		"inputs": {
-			"seed": 15643179617000,
+			"seed": ["51", 0],
 			"strength": 0.02,
-			"image": ["36", 0]
+			"image": ["68", 0]
 		},
 		"class_type": "ImageAddNoise",
 		"_meta": {
@@ -281,31 +212,566 @@
 	},
 	"40": {
 		"inputs": {
-			"source": ["47", 0]
+			"source": ["116", 0]
 		},
 		"class_type": "PreviewAny",
 		"_meta": {
 			"title": "Positive prompt preview"
 		}
 	},
-	"47": {
-		"inputs": {
-			"string_a": ["26", 0],
-			"string_b": "",
-			"delimiter": "\n"
-		},
-		"class_type": "StringConcatenate",
-		"_meta": {
-			"title": "Concatenate Text"
-		}
-	},
 	"49": {
 		"inputs": {
-			"source": ["25", 0]
+			"source": ["21", 0]
 		},
 		"class_type": "PreviewAny",
 		"_meta": {
 			"title": "Translated instruction preview"
+		}
+	},
+	"50": {
+		"inputs": {
+			"conditioning": ["11", 0]
+		},
+		"class_type": "ConditioningZeroOut",
+		"_meta": {
+			"title": "ConditioningZeroOut"
+		}
+	},
+	"51": {
+		"inputs": {
+			"value": 4242
+		},
+		"class_type": "PrimitiveInt",
+		"_meta": {
+			"title": "Int (add noise to image seed)"
+		}
+	},
+	"52": {
+		"inputs": {
+			"image": ["1", 0]
+		},
+		"class_type": "GetImageSizeAndCount",
+		"_meta": {
+			"title": "Get Image Size & Count"
+		}
+	},
+	"55": {
+		"inputs": {
+			"upscale_method": "area",
+			"width": ["57", 0],
+			"height": ["58", 0],
+			"crop": "disabled",
+			"image": ["1", 0]
+		},
+		"class_type": "ImageScale",
+		"_meta": {
+			"title": "Upscale Image"
+		}
+	},
+	"57": {
+		"inputs": {
+			"expression": "round(a * sqrt(1048576 / (a*b)) / 32) * 32",
+			"a": ["52", 1],
+			"b": ["52", 2]
+		},
+		"class_type": "MathExpression|pysssss",
+		"_meta": {
+			"title": "Math Expression 🐍 (W)"
+		}
+	},
+	"58": {
+		"inputs": {
+			"expression": "round(b * sqrt(1048576 / (a*b)) / 32) * 32",
+			"a": ["52", 1],
+			"b": ["52", 2]
+		},
+		"class_type": "MathExpression|pysssss",
+		"_meta": {
+			"title": "Math Expression 🐍 (H)"
+		}
+	},
+	"68": {
+		"inputs": {
+			"upscale_method": "lanczos",
+			"width": ["52", 1],
+			"height": ["52", 2],
+			"crop": "disabled",
+			"image": ["34", 0]
+		},
+		"class_type": "ImageScale",
+		"_meta": {
+			"title": "Upscale Image"
+		}
+	},
+	"69": {
+		"inputs": {
+			"fallback_object": "lighting fixture",
+			"instruction": ["19", 0]
+		},
+		"class_type": "LightIntentParse",
+		"_meta": {
+			"title": "Light Intent Parse"
+		}
+	},
+	"70": {
+		"inputs": {
+			"source": ["69", 5]
+		},
+		"class_type": "PreviewAny",
+		"_meta": {
+			"title": "Preview as Text"
+		}
+	},
+	"71": {
+		"inputs": {
+			"model_name": "GroundingDINO_SwinT_OGC (694MB)"
+		},
+		"class_type": "GroundingDinoModelLoader (segment anything)",
+		"_meta": {
+			"title": "GroundingDinoModelLoader (segment anything)"
+		}
+	},
+	"72": {
+		"inputs": {
+			"model_name": "sam_vit_l (1.25GB)"
+		},
+		"class_type": "SAMModelLoader (segment anything)",
+		"_meta": {
+			"title": "SAMModelLoader (segment anything)"
+		}
+	},
+	"73": {
+		"inputs": {
+			"prompt": ["69", 0],
+			"threshold": ["69", 10],
+			"sam_model": ["72", 0],
+			"grounding_dino_model": ["71", 0],
+			"image": ["55", 0]
+		},
+		"class_type": "GroundingDinoSAMSegment (segment anything)",
+		"_meta": {
+			"title": "GroundingDinoSAMSegment (segment anything)"
+		}
+	},
+	"74": {
+		"inputs": {
+			"min_fraction": 0.0008,
+			"max_fraction": 0.15,
+			"mask": ["94", 0]
+		},
+		"class_type": "MaskArea",
+		"_meta": {
+			"title": "Mask Area"
+		}
+	},
+	"75": {
+		"inputs": {
+			"text_0": "absent",
+			"text": ["74", 3]
+		},
+		"class_type": "ShowText|pysssss",
+		"_meta": {
+			"title": "Show Text 🐍"
+		}
+	},
+	"77": {
+		"inputs": {
+			"prefix_root": "lt",
+			"parsed": ["69", 3],
+			"intent_status": ["69", 4],
+			"scope": ["69", 2],
+			"found": ["74", 2],
+			"mask_status": ["74", 3],
+			"run_tag": ["80", 0]
+		},
+		"class_type": "LightGate",
+		"_meta": {
+			"title": "Light Gate"
+		}
+	},
+	"78": {
+		"inputs": {
+			"proceed": ["77", 0],
+			"on_true": ["38", 0],
+			"on_false": ["1", 0]
+		},
+		"class_type": "LightImageBranch",
+		"_meta": {
+			"title": "Light Image Branch"
+		}
+	},
+	"79": {
+		"inputs": {
+			"source": ["77", 1]
+		},
+		"class_type": "PreviewAny",
+		"_meta": {
+			"title": "Preview as Text"
+		}
+	},
+	"80": {
+		"inputs": {
+			"value": "run"
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "Run tag — задаётся клиентом"
+		}
+	},
+	"82": {
+		"inputs": {
+			"images": ["110", 1]
+		},
+		"class_type": "PreviewImage",
+		"_meta": {
+			"title": "Lightmap (отладка)"
+		}
+	},
+	"83": {
+		"inputs": {
+			"text_0": "mode=plain on=0 off=0 peak=0.000 dim=0.00 start_at_step=0 0:empty_mask",
+			"text": ["110", 4]
+		},
+		"class_type": "ShowText|pysssss",
+		"_meta": {
+			"title": "Light layer report"
+		}
+	},
+	"84": {
+		"inputs": {
+			"base": ["69", 6],
+			"override": ["85", 0]
+		},
+		"class_type": "LightSpecMerge",
+		"_meta": {
+			"title": "Спецификация светильников"
+		}
+	},
+	"85": {
+		"inputs": {
+			"value": ""
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "Client spec override (JSON, пусто = из фразы)"
+		}
+	},
+	"86": {
+		"inputs": {
+			"text_0": "[{\"state\": \"on\", \"kelvin\": 2700, \"intensity\": 0.85, \"cone\": 360, \"dir_deg\": 0, \"reach\": 0.35}]",
+			"text": ["84", 0]
+		},
+		"class_type": "ShowText|pysssss",
+		"_meta": {
+			"title": "Итоговый spec"
+		}
+	},
+	"87": {
+		"inputs": {
+			"value": false
+		},
+		"class_type": "PrimitiveBoolean",
+		"_meta": {
+			"title": "prefer_client — клиент прислал маску"
+		}
+	},
+	"88": {
+		"inputs": {
+			"image": "_placeholder_mask.png",
+			"channel": "red"
+		},
+		"class_type": "LoadImageMask",
+		"_meta": {
+			"title": "Load Image (as Mask)"
+		}
+	},
+	"89": {
+		"inputs": {
+			"mask": ["88", 0]
+		},
+		"class_type": "MaskToImage",
+		"_meta": {
+			"title": "Convert Mask to Image"
+		}
+	},
+	"90": {
+		"inputs": {
+			"upscale_method": "nearest-exact",
+			"width": ["57", 0],
+			"height": ["58", 0],
+			"crop": "disabled",
+			"image": ["89", 0]
+		},
+		"class_type": "ImageScale",
+		"_meta": {
+			"title": "Upscale Image"
+		}
+	},
+	"91": {
+		"inputs": {
+			"channel": "red",
+			"image": ["90", 0]
+		},
+		"class_type": "ImageToMask",
+		"_meta": {
+			"title": "Convert Image to Mask"
+		}
+	},
+	"93": {
+		"inputs": {
+			"masks": ["73", 1],
+			"anchor_en": ["69", 7],
+			"side": ["69", 8],
+			"prior_json": ["69", 9],
+			"anchor": ["97", 1]
+		},
+		"class_type": "MaskPickByLocation",
+		"_meta": {
+			"title": "Mask Pick By Location"
+		}
+	},
+	"94": {
+		"inputs": {
+			"detected_note": ["93", 1],
+			"prefer_client": ["87", 0],
+			"client_mask": ["91", 0],
+			"detected_mask": ["93", 0]
+		},
+		"class_type": "LightMaskSelect",
+		"_meta": {
+			"title": "Light Mask Select"
+		}
+	},
+	"95": {
+		"inputs": {
+			"text_0": "detector:prior_reject_all_1[0:empty]",
+			"text": ["94", 1]
+		},
+		"class_type": "ShowText|pysssss",
+		"_meta": {
+			"title": "Show Text 🐍"
+		}
+	},
+	"97": {
+		"inputs": {
+			"prompt": ["69", 7],
+			"threshold": 0.3,
+			"sam_model": ["72", 0],
+			"grounding_dino_model": ["71", 0],
+			"image": ["55", 0]
+		},
+		"class_type": "GroundingDinoSAMSegment (segment anything)",
+		"_meta": {
+			"title": "GroundingDinoSAMSegment (segment anything)"
+		}
+	},
+	"98": {
+		"inputs": {
+			"value": "Picture 1 shows an interior where a lighting fixture is emitting light.\n\nMake this lighting physically believable. Add soft realistic shadows cast by\nthe illuminated objects, natural contact darkening where surfaces meet, correct\nmaterial response — specular highlights on glossy surfaces, subtle subsurface\nwarmth on fabric and wood — and smooth falloff into the unlit parts of the room.\n\nKeep the existing light direction, colour temperature and overall brightness\nexactly as they already are in Picture 1. Do not move, resize or restyle the\nfixture. Do not add or remove any object. Keep all geometry, furniture,\nmaterials and camera framing unchanged."
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "Prompt template · режим «свет наложен»"
+		}
+	},
+	"100": {
+		"inputs": {
+			"text_0": "plain_on",
+			"text": ["102", 1]
+		},
+		"class_type": "ShowText|pysssss",
+		"_meta": {
+			"title": "Show Text 🐍"
+		}
+	},
+	"101": {
+		"inputs": {
+			"value": "Picture 1 is an interior photograph showing {target}.\n\nChange only one thing: its candles are no longer burning. There is no flame on\nany wick and no bright point of light anywhere on it. Everything else about the\nfixture is untouched — same shape, same size, same position, same materials and\nsame colours as in Picture 1."
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "Prompt template · режим «выключено»"
+		}
+	},
+	"102": {
+		"inputs": {
+			"action": ["69", 1],
+			"mode": ["110", 6],
+			"tpl_lit": ["98", 0],
+			"tpl_off": ["101", 0],
+			"tpl_plain": ["23", 0]
+		},
+		"class_type": "LightTemplatePick",
+		"_meta": {
+			"title": "Light Template Pick"
+		}
+	},
+	"103": {
+		"inputs": {
+			"text_0": "instruction",
+			"text": ["84", 1]
+		},
+		"class_type": "ShowText|pysssss",
+		"_meta": {
+			"title": "Source preview"
+		}
+	},
+	"110": {
+		"inputs": {
+			"start_at_step_lit": 5,
+			"start_at_step_off": 0,
+			"start_at_step_plain": 0,
+			"procedural_off": false,
+			"off_cone": 0.75,
+			"off_reach_mul": 1.7,
+			"image": ["55", 0],
+			"masks": ["94", 0],
+			"spec": ["84", 0]
+		},
+		"class_type": "LightLayerBuild",
+		"_meta": {
+			"title": "Процедурный световой слой"
+		}
+	},
+	"111": {
+		"inputs": {
+			"prompt": "missing fixture, removed fixture, empty ceiling, glowing chandelier, lit candles,\ncandle flames, bright bulbs, dark silhouette, black candles, blackened fixture,\nsecond chandelier, duplicate chandelier, extra light fixture, floating chandelier",
+			"clip": ["9", 0],
+			"vae": ["10", 0],
+			"image1": ["55", 0]
+		},
+		"class_type": "TextEncodeQwenImageEditPlus",
+		"_meta": {
+			"title": "TextEncodeQwenImageEditPlus"
+		}
+	},
+	"112": {
+		"inputs": {
+			"seed": 42,
+			"steps": 20,
+			"cfg": 3,
+			"sampler_name": "euler",
+			"scheduler": "simple",
+			"denoise": 1,
+			"model": ["39", 0],
+			"positive": ["11", 0],
+			"negative": ["111", 0],
+			"latent_image": ["13", 0]
+		},
+		"class_type": "KSampler",
+		"_meta": {
+			"title": "KSampler"
+		}
+	},
+	"113": {
+		"inputs": {
+			"samples": ["112", 0],
+			"vae": ["10", 0]
+		},
+		"class_type": "VAEDecode",
+		"_meta": {
+			"title": "VAE Decode"
+		}
+	},
+	"114": {
+		"inputs": {
+			"start_at_step_lit": 5,
+			"start_at_step_off": 0,
+			"start_at_step_plain": 0,
+			"procedural_off": true,
+			"off_cone": 0.75,
+			"off_reach_mul": 1.7,
+			"image": ["113", 0],
+			"masks": ["94", 0],
+			"spec": ["84", 0]
+		},
+		"class_type": "LightLayerBuild",
+		"_meta": {
+			"title": "Light Layer Build"
+		}
+	},
+	"115": {
+		"inputs": {
+			"proceed": ["110", 7],
+			"on_true": ["114", 0],
+			"on_false": ["120", 0]
+		},
+		"class_type": "LightImageBranch",
+		"_meta": {
+			"title": "Light Image Branch"
+		}
+	},
+	"116": {
+		"inputs": {
+			"string": ["26", 0],
+			"find": "{target}",
+			"replace": ["117", 0]
+		},
+		"class_type": "StringReplace",
+		"_meta": {
+			"title": "Replace Text"
+		}
+	},
+	"117": {
+		"inputs": {
+			"max_items": 6,
+			"masks": ["94", 0],
+			"object_en": ["69", 0]
+		},
+		"class_type": "MaskToPhrase",
+		"_meta": {
+			"title": "Mask To Phrase"
+		}
+	},
+	"118": {
+		"inputs": {
+			"text_0": "no_centroids 0:empty",
+			"text": ["117", 1]
+		},
+		"class_type": "ShowText|pysssss",
+		"_meta": {
+			"title": "Show Text 🐍"
+		}
+	},
+	"119": {
+		"inputs": {
+			"add_noise": "enable",
+			"noise_seed": 42,
+			"steps": 8,
+			"cfg": 1,
+			"sampler_name": "euler",
+			"scheduler": "simple",
+			"start_at_step": ["110", 3],
+			"end_at_step": 10000,
+			"return_with_leftover_noise": "disable",
+			"model": ["8", 0],
+			"positive": ["11", 0],
+			"negative": ["50", 0],
+			"latent_image": ["13", 0]
+		},
+		"class_type": "KSamplerAdvanced",
+		"_meta": {
+			"title": "KSampler (Advanced)"
+		}
+	},
+	"120": {
+		"inputs": {
+			"samples": ["119", 0],
+			"vae": ["10", 0]
+		},
+		"class_type": "VAEDecode",
+		"_meta": {
+			"title": "VAE Decode"
+		}
+	},
+	"121": {
+		"inputs": {
+			"text_0": "mode=plain on=0 off=0 peak=0.000 dim=0.00 start_at_step=0 0:empty_mask",
+			"text": ["114", 4]
+		},
+		"class_type": "ShowText|pysssss",
+		"_meta": {
+			"title": "Show Text 🐍"
 		}
 	}
 }

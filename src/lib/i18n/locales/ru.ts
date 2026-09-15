@@ -763,7 +763,7 @@ export const ru = {
 	'edit.removeObject.promptTemplate':
 		'Убери с изображения {object}, аккуратно восстановив то, что было на его месте.',
 	'generationOverlay.lightSettings': 'Настраиваем освещение…',
-	'generationOverlay.lightSettingsDetail': 'Обычно это занимает около минуты',
+	'generationOverlay.lightSettingsDetail': 'Обычно это занимает несколько минут',
 	'lightSettings.moodSectionLabel': 'Атмосфера',
 	'lightSettings.fixtureSectionLabel': 'Светильники',
 	'lightSettings.fixtureOn': 'Вкл',
