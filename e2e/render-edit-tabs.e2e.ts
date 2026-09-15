@@ -590,16 +590,26 @@ test('switching from a custom reference upload back to a preset tab clears the u
 test('applying an edit directly from an uploaded image (no prior render) produces a result', async ({
 	page
 }) => {
+	const jobId = '00000000-0000-4000-8000-000000000106';
 	await authenticate(page);
 	await mockUpload(page);
 	let editBody: unknown;
 	await page.route('**/api/edit', async (route) => {
 		editBody = route.request().postDataJSON();
 		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: `/api/edit/${jobId}` },
+			body: JSON.stringify({ id: jobId, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/edit/${jobId}`, async (route) => {
+		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				id: '00000000-0000-4000-8000-000000000106',
+				id: jobId,
+				status: 'completed',
 				output: media(2, 'https://cdn.example.test/edited.webp'),
 				cost: 3,
 				balance: 97
@@ -619,7 +629,8 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/edited.webp'
+		'https://cdn.example.test/edited.webp',
+		{ timeout: 10_000 }
 	);
 	expect(editBody).toMatchObject({ imageKey: mediaKey(1) });
 	// Once a result exists, the Edit tab no longer offers a raw upload — it edits
@@ -839,10 +850,19 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	});
 	await page.route('**/api/edit', async (route) => {
 		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: '/api/edit/00000000-0000-4000-8000-000000000110' },
+			body: JSON.stringify({ id: '00000000-0000-4000-8000-000000000110', status: 'processing' })
+		});
+	});
+	await page.route('**/api/edit/00000000-0000-4000-8000-000000000110', async (route) => {
+		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000110',
+				status: 'completed',
 				output: media(3, 'https://cdn.example.test/edited.webp'),
 				cost: 3,
 				balance: 92
@@ -911,7 +931,9 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page.getByLabel('Инструкция для правки').fill('Replace the sofa with an armchair');
 	await page.getByRole('button', { name: 'Применить правку' }).click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/edited.webp');
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/edited.webp', {
+		timeout: 10_000
+	});
 
 	await expect(undoButton).toBeEnabled();
 	await expect(compareButton).toBeEnabled();
@@ -1026,16 +1048,26 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 });
 
 test('the Add Object tool applies a selected preset to the current image', async ({ page }) => {
+	const jobId = '00000000-0000-4000-8000-000000000114';
 	await authenticate(page);
 	await mockUpload(page);
 	let capturedPrompt: string | undefined;
 	await page.route('**/api/edit', async (route) => {
 		capturedPrompt = (route.request().postDataJSON() as { prompt: string }).prompt;
 		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: `/api/edit/${jobId}` },
+			body: JSON.stringify({ id: jobId, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/edit/${jobId}`, async (route) => {
+		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				id: '00000000-0000-4000-8000-000000000114',
+				id: jobId,
+				status: 'completed',
 				output: media(2, 'https://cdn.example.test/added-mirror.webp'),
 				cost: 2,
 				balance: 90
@@ -1058,7 +1090,8 @@ test('the Add Object tool applies a selected preset to the current image', async
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/added-mirror.webp'
+		'https://cdn.example.test/added-mirror.webp',
+		{ timeout: 10_000 }
 	);
 	expect(capturedPrompt).toBe(
 		'Выполни только добавочную локальную правку: добавь ровно одно декоративное зеркало на уже свободный видимый участок стены. Подбери размер, форму, раму, положение и угол под геометрию стены, масштаб и стиль интерьера; если места мало, используй зеркало меньшего размера. Не закрывай окна, двери, выключатели, розетки, молдинги, существующие картины или декор. Расположи зеркало так, чтобы оно преимущественно отражало известные по исходному изображению поверхности и объекты. Отражение должно точно соответствовать перспективе, планировке и освещению комнаты; для невидимой области за камерой используй нейтральное низкодетализированное продолжение существующих поверхностей без новой мебели, декора или дублированных предметов. Ничего из уже существующего не удаляй, не заменяй, не перемещай и не перерисовывай. Все области изображения, кроме нового зеркала, его физически корректного отражения и естественной контактной тени, должны остаться визуально идентичными исходному изображению.'
@@ -1068,16 +1101,26 @@ test('the Add Object tool applies a selected preset to the current image', async
 test('the Remove Object tool builds a removal prompt from the described object', async ({
 	page
 }) => {
+	const jobId = '00000000-0000-4000-8000-000000000115';
 	await authenticate(page);
 	await mockUpload(page);
 	let capturedPrompt: string | undefined;
 	await page.route('**/api/edit', async (route) => {
 		capturedPrompt = (route.request().postDataJSON() as { prompt: string }).prompt;
 		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: `/api/edit/${jobId}` },
+			body: JSON.stringify({ id: jobId, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/edit/${jobId}`, async (route) => {
+		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				id: '00000000-0000-4000-8000-000000000115',
+				id: jobId,
+				status: 'completed',
 				output: media(2, 'https://cdn.example.test/removed-sofa.webp'),
 				cost: 2,
 				balance: 90
@@ -1097,7 +1140,8 @@ test('the Remove Object tool builds a removal prompt from the described object',
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/removed-sofa.webp'
+		'https://cdn.example.test/removed-sofa.webp',
+		{ timeout: 10_000 }
 	);
 	expect(capturedPrompt).toBe(
 		'Убери с изображения старый диван, аккуратно восстановив то, что было на его месте.'
