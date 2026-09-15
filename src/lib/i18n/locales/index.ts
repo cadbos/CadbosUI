@@ -649,7 +649,6 @@ export interface Dictionary {
 	'edit.apply': string;
 	'edit.submitting': string;
 	'edit.processing': string;
-	'edit.completed': string;
 	'edit.tryAgain': string;
 	'edit.retryStatus': string;
 	'edit.failed': string;

@@ -638,6 +638,80 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 	await expect(page.locator('#mode-panel-edit input[type="file"]')).toHaveCount(0);
 });
 
+test('a completed freeform edit unlocks the form for the next edit on the same result', async ({
+	page
+}) => {
+	const firstJobId = '00000000-0000-4000-8000-000000000107';
+	const secondJobId = '00000000-0000-4000-8000-000000000108';
+	await authenticate(page);
+	await mockUpload(page);
+	await page.route('**/api/edit', async (route) => {
+		const body = route.request().postDataJSON() as { prompt: string };
+		const isFirst = body.prompt === 'Replace the sofa with an armchair';
+		const jobId = isFirst ? firstJobId : secondJobId;
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: `/api/edit/${jobId}` },
+			body: JSON.stringify({ id: jobId, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/edit/${firstJobId}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: firstJobId,
+				status: 'completed',
+				output: media(2, 'https://cdn.example.test/edited.webp'),
+				cost: 3,
+				balance: 97
+			})
+		});
+	});
+	await page.route(`**/api/edit/${secondJobId}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: secondJobId,
+				status: 'completed',
+				output: media(3, 'https://cdn.example.test/re-edited.webp'),
+				cost: 2,
+				balance: 95
+			})
+		});
+	});
+
+	await openCreate(page);
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
+	await page
+		.locator('#mode-panel-edit input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+
+	const applyButton = page.getByRole('button', { name: 'Применить правку' });
+	const instructionField = page.getByLabel('Инструкция для правки');
+	await instructionField.fill('Replace the sofa with an armchair');
+	await applyButton.click();
+	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/edited.webp',
+		{ timeout: 10_000 }
+	);
+
+	// A completed edit must not leave the field/button permanently disabled —
+	// the user can keep editing the same result without reloading.
+	await expect(instructionField).toBeEnabled();
+	await instructionField.fill('Make it brighter');
+	await expect(applyButton).toBeEnabled();
+	await applyButton.click();
+	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/re-edited.webp',
+		{ timeout: 10_000 }
+	);
+});
+
 test('a failed edit request surfaces the error in the Edit tab instead of a result', async ({
 	page
 }) => {

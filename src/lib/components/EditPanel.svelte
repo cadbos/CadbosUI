@@ -105,7 +105,6 @@ before the Change Date. See LICENSE for complete terms.
 	const activeTool = $derived(slugToTool(page.url.searchParams.get('tool') ?? undefined));
 	let toolTabButtons = $state<HTMLElement[]>([]);
 	let submitting = $state(false);
-	let terminalJob = $state<EditCompletedResponse | null>(null);
 	let terminalError = $state<PollFailure | null>(null);
 	let pollFailure = $state<PollFailure | null>(null);
 	let pollRun = 0;
@@ -141,11 +140,12 @@ before the Change Date. See LICENSE for complete terms.
 	// the actual upload is deferred, not skipped, see request.resolveEditSource().
 	const hasEditTarget = $derived(request.hasEditSource());
 	const jobId = $derived(request.activeFluxKontextEditJobId ?? null);
+	// Unlike the other three job-backed tools, a completed edit here clears
+	// the job immediately (see applyCompletedJob) rather than staying set
+	// until an explicit "new request" — so isPolling only has to rule out an
+	// already-failed job, never an already-completed one.
 	const isPolling = $derived(
-		jobId !== null &&
-			terminalJob?.id !== jobId &&
-			terminalError?.jobId !== jobId &&
-			pollFailure?.jobId !== jobId
+		jobId !== null && terminalError?.jobId !== jobId && pollFailure?.jobId !== jobId
 	);
 	const formLocked = $derived(submitting || jobId !== null);
 
@@ -214,6 +214,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	function applyCompletedJob(result: EditCompletedResponse): void {
 		if (request.currentRender?.id === result.id) {
+			request.setActiveFluxKontextEditJobId(undefined);
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 			return;
@@ -243,6 +244,12 @@ before the Change Date. See LICENSE for complete terms.
 			});
 		}
 		if (context?.type === 'freeform') request.setEditPrompt('');
+		// Unlike object-replacement/light-settings (a dedicated tab that locks
+		// until an explicit "new request"), freeform/add-object/remove-object
+		// share this inline panel and always supported applying another edit
+		// right away — clearing the job here keeps that continuous-editing UX
+		// instead of leaving the form locked once the async job completes.
+		request.setActiveFluxKontextEditJobId(undefined);
 		void auth.refreshCredit();
 		if (auth.canLoadGeneratedImages) void generatedImages.load();
 	}
@@ -326,7 +333,6 @@ before the Change Date. See LICENSE for complete terms.
 				terminalError = { jobId: id, key: errorKey(result.error.code) };
 				return;
 			}
-			terminalJob = result;
 			applyCompletedJob(result);
 			return;
 		}
@@ -336,7 +342,6 @@ before the Change Date. See LICENSE for complete terms.
 		const trimmed = prompt.trim();
 		if (!hasEditTarget || !trimmed || formLocked || !isAuthenticated) return;
 		submitting = true;
-		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
 		try {
@@ -459,8 +464,6 @@ before the Change Date. See LICENSE for complete terms.
 									{t('edit.submitting')}
 								{:else if isPolling}
 									{t('edit.processing')}
-								{:else if terminalJob?.id === jobId}
-									{t('edit.completed')}
 								{:else}
 									{t('edit.apply')}
 								{/if}
@@ -486,8 +489,6 @@ before the Change Date. See LICENSE for complete terms.
 								<span class="spinner" aria-hidden="true"></span>
 								{t('edit.processing')}
 							</p>
-						{:else if terminalJob?.id === jobId}
-							<p class="job-success">{t('edit.completed')}</p>
 						{/if}
 					</div>
 
@@ -831,22 +832,13 @@ before the Change Date. See LICENSE for complete terms.
 		display: none;
 	}
 
-	.job-status,
-	.job-success {
+	.job-status {
 		margin: 0;
 		font-size: 0.875rem;
-	}
-
-	.job-status {
 		display: flex;
 		align-items: center;
 		gap: 0.625rem;
 		color: var(--color-muted-strong);
-	}
-
-	.job-success {
-		font-weight: 600;
-		color: var(--color-accent-text);
 	}
 
 	.secondary-btn {

@@ -699,7 +699,6 @@ export const en = {
 	'edit.apply': 'Apply edit',
 	'edit.submitting': 'Starting…',
 	'edit.processing': 'Applying your edit. This can take a few minutes…',
-	'edit.completed': 'Edit applied.',
 	'edit.tryAgain': 'Try again',
 	'edit.retryStatus': 'Retry status check',
 	'edit.failed': 'Edit failed. Please try again.',
