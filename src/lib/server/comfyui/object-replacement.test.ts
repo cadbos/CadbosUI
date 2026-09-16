@@ -133,7 +133,7 @@ describe('runObjectReplacement', () => {
 		expect(workflowTemplate['19'].inputs.value).toBe('столик перед диваном');
 		expect(queuedWorkflow?.['11'].inputs.image1).toEqual(['100', 1]);
 		expect(queuedWorkflow?.['11'].inputs.image2).toEqual(['4', 0]);
-		expect(queuedWorkflow?.['21'].inputs.prompt).toEqual(['19', 0]);
+		expect(queuedWorkflow?.['153:152'].inputs.string_b).toEqual(['19', 0]);
 		expect(queuedWorkflow?.['26'].inputs.replace).toEqual(['108', 0]);
 		expect(queuedWorkflow?.['17']).toEqual({
 			inputs: { filename_prefix: 'obj-replace-v23', images: ['38', 0] },

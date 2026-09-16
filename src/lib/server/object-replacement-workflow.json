@@ -124,27 +124,46 @@
 			"title": "Target object"
 		}
 	},
-	"20": {
+	"153:147": {
 		"inputs": {
-			"model": "Hy-MT2-1.8B-Q6_K.gguf",
-			"device": "cpu",
-			"n_gpu_layers": -1
+			"clip_name": "Qwen3VL-4B-Instruct-Q8_0.gguf",
+			"type": "ltxv"
 		},
-		"class_type": "GGUFLoader",
+		"class_type": "CLIPLoaderGGUF",
 		"_meta": {
-			"title": "GGUFLoader"
+			"title": "CLIPLoader (GGUF)"
 		}
 	},
-	"21": {
+	"153:152": {
 		"inputs": {
-			"prompt": ["19", 0],
-			"target_language": "English",
-			"auto_release": false,
-			"llama_model": ["20", 0]
+			"string_a": "Translate the following text to English, preserving original meaning:",
+			"string_b": ["19", 0],
+			"delimiter": " "
 		},
-		"class_type": "PromptTranslatorNode",
+		"class_type": "StringConcatenate",
 		"_meta": {
-			"title": "Prompt Translator (GGUF)"
+			"title": "Concatenate Text"
+		}
+	},
+	"153:150": {
+		"inputs": {
+			"prompt": ["153:152", 0],
+			"max_length": 512,
+			"sampling_mode": "on",
+			"sampling_mode.temperature": 0.7,
+			"sampling_mode.top_k": 64,
+			"sampling_mode.top_p": 0.95,
+			"sampling_mode.min_p": 0.05,
+			"sampling_mode.repetition_penalty": 1.05,
+			"sampling_mode.seed": 0,
+			"sampling_mode.presence_penalty": 0,
+			"thinking": false,
+			"use_default_template": true,
+			"clip": ["153:147", 0]
+		},
+		"class_type": "TextGenerate",
+		"_meta": {
+			"title": "Generate Text"
 		}
 	},
 	"23": {
@@ -158,7 +177,7 @@
 	},
 	"25": {
 		"inputs": {
-			"string": ["21", 0],
+			"string": ["153:150", 0],
 			"mode": "lowercase"
 		},
 		"class_type": "CaseConverter",
