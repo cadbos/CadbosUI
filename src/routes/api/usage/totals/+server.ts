@@ -17,7 +17,7 @@ import type { RequestHandler } from './$types';
 import type { UsageTotals } from '$lib/api/contract';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUsageTotals } from '$lib/server/generations';
-import { getDb } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { authorizeUsageViewer } from '$lib/server/usage';
 
 export const GET: RequestHandler = async ({ platform, locals }) => {

@@ -12,9 +12,10 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { sql } from 'drizzle-orm';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { getBucketByName, getOrCreateMediaByKey, mediaKey } from '$lib/server/media';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { makeDb } from '$lib/server/testing/d1-shim';
 import { TEST_S3_BUCKET } from '$lib/server/testing/generation-fixtures';
 
 const presignS3Object = vi.hoisted(() => vi.fn());
@@ -46,10 +47,10 @@ it('returns an encoded bucket-qualified key and its stable /api/media link', () 
 });
 
 it('resolves identical object names against their qualified buckets', async () => {
-	const db = makeD1();
-	db.prepare('INSERT INTO buckets (name, url) VALUES (?, ?)')
-		.bind('archive', 'https://archive.example.test')
-		.run();
+	const db = makeDb();
+	await db.run(
+		sql`INSERT INTO buckets (name, url) VALUES ('archive', 'https://archive.example.test')`
+	);
 	const uploads = await getBucketByName(db, TEST_S3_BUCKET.name);
 	const archive = await getBucketByName(db, 'archive');
 	const filename = 'shared/name.webp';
@@ -73,7 +74,7 @@ it('resolves identical object names against their qualified buckets', async () =
 });
 
 it('presigns render-service URLs for RENDER_MEDIA_TTL_SECONDS', async () => {
-	const db = makeD1();
+	const db = makeDb();
 	const uploads = await getBucketByName(db, TEST_S3_BUCKET.name);
 	await getOrCreateMediaByKey(db, uploads, 'a.webp', '', null);
 	const platform = { env: { RENDER_MEDIA_TTL_SECONDS: '1200' } } as unknown as App.Platform;

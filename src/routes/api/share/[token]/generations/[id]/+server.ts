@@ -16,7 +16,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { ShareGenerationDetailResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
-import { getDb } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { getShareGenerationDetail } from '$lib/server/projects';
 
 // The public, unauthenticated share viewer's lazy per-generation settings

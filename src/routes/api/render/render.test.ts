@@ -16,6 +16,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { mediaKey } from '$lib/server/media';
+import { createDb } from '$lib/server/db';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedManagedMedia,
@@ -74,7 +75,7 @@ const { POST } = await import('./+server');
 // per db, so one constant session id, owned by that user, is enough everywhere.
 const TEST_SESSION_ID = '00000000-0000-4000-8000-000000000001';
 
-function seedUser(db: D1Database, id: string, pubkey: string): void {
+async function seedUser(db: D1Database, id: string, pubkey: string): Promise<void> {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
 		.run();
@@ -90,7 +91,7 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 	)
 		.bind(TEST_SESSION_ID, projectId, 'Test session', now, now)
 		.run();
-	seedManagedMedia(db);
+	await seedManagedMedia(createDb(db));
 }
 
 // The admin's manual approval step (migrations/0005) — no auto-provisioning
@@ -145,9 +146,9 @@ describe('POST /api/render — billing', () => {
 
 	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
-		const foreignSessionId = seedForeignSession(db);
+		const foreignSessionId = await seedForeignSession(createDb(db));
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
 			...body,
@@ -160,7 +161,7 @@ describe('POST /api/render — billing', () => {
 
 	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -179,7 +180,7 @@ describe('POST /api/render — billing', () => {
 
 	it('records the generated image, source and prompt against the authenticated profile', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
@@ -223,7 +224,7 @@ describe('POST /api/render — billing', () => {
 
 	it('overwrites the mirrored archAI balance rather than accumulating it across calls', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -238,7 +239,7 @@ describe('POST /api/render — billing', () => {
 
 	it('still returns the completed, already-charged render if recordGeneration fails', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 12);
 		generationsMock.failNextRecordGeneration = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -266,7 +267,7 @@ describe('POST /api/render — billing', () => {
 
 	it('still returns the completed, already-charged render if recording the balance fails', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 12);
 		billingMock.failNextRecordBalance = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -292,7 +293,7 @@ describe('POST /api/render — billing', () => {
 
 	it('never falls back to the raw archAI balance if recordGeneration and the getCredit fallback both fail', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 		generationsMock.failNextRecordGeneration = true;
 		billingMock.failNextGetCredit = true;
@@ -326,7 +327,7 @@ describe('POST /api/render — billing', () => {
 	describe('generation access control', () => {
 		it('blocks an account with no credits row at all', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
+			await seedUser(db, 'user-1', pubkey);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(403);
@@ -336,7 +337,7 @@ describe('POST /api/render — billing', () => {
 
 		it('blocks an account the admin disabled, even with balance remaining', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
+			await seedUser(db, 'user-1', pubkey);
 			grantAccess(db, 'user-1', 5, 0);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -347,7 +348,7 @@ describe('POST /api/render — billing', () => {
 
 		it('allows and deducts the real archAI cost for an approved, enabled account', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
+			await seedUser(db, 'user-1', pubkey);
 			grantAccess(db, 'user-1', 12);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -363,7 +364,7 @@ describe('POST /api/render — billing', () => {
 
 		it('blocks generation once an approved account exhausts its balance', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
+			await seedUser(db, 'user-1', pubkey);
 			grantAccess(db, 'user-1', 0);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -374,7 +375,7 @@ describe('POST /api/render — billing', () => {
 
 		it('returns a clean 500 instead of crashing if the credits table is missing (unapplied migration)', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
+			await seedUser(db, 'user-1', pubkey);
 			db.prepare('DROP TABLE credits').run();
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);

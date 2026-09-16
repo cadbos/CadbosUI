@@ -19,7 +19,7 @@ import type { UserUsageResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { listUserUsage } from '$lib/server/generations';
-import { getDb } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { authorizeUsageViewer } from '$lib/server/usage';
 
 const DEFAULT_USAGE_PAGE_OFFSET = 0;

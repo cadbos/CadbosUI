@@ -15,8 +15,9 @@
 // D1-backed storage for auth (SRS Appendix B.8). Identity is the Nostr pubkey; no
 // passwords or private keys are ever stored. All timestamps are epoch milliseconds.
 
-import type { D1Database } from '@cloudflare/workers-types';
+import { sql } from 'drizzle-orm';
 import type { SessionUser } from '$lib/api/contract';
+import type { Database } from '$lib/server/db';
 import { randomToken } from './session';
 
 interface UserRow {
@@ -26,92 +27,73 @@ interface UserRow {
 	last_name: string | null;
 }
 
-// Resolve the D1 binding from the request platform. Missing binding is a server
-// misconfiguration, surfaced as a generic 500 (never reached on public pages).
-export function getDb(platform: App.Platform | undefined): D1Database {
-	const db = platform?.env?.DB;
-	if (!db) throw new Error('D1 binding "DB" is not available');
-	return db;
-}
-
 export async function createChallenge(
-	db: D1Database,
+	db: Database,
 	nonce: string,
 	pubkey: string,
 	createdAt: number
 ): Promise<void> {
-	await db
-		.prepare('INSERT INTO auth_challenges (nonce, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind(nonce, pubkey, createdAt)
-		.run();
+	await db.run(
+		sql`INSERT INTO auth_challenges (nonce, pubkey, created_at) VALUES (${nonce}, ${pubkey}, ${createdAt})`
+	);
 }
 
 // Atomically consume a challenge: succeeds only if the nonce was issued to this
 // pubkey, is unused, and is still within its TTL. The single UPDATE makes replay
 // impossible even under concurrent verifies (second caller gets 0 changes).
 export async function consumeChallenge(
-	db: D1Database,
+	db: Database,
 	nonce: string,
 	pubkey: string,
 	minCreatedAt: number,
 	now: number
 ): Promise<boolean> {
-	const result = await db
-		.prepare(
-			'UPDATE auth_challenges SET used_at = ? ' +
-				'WHERE nonce = ? AND pubkey = ? AND used_at IS NULL AND created_at >= ?'
-		)
-		.bind(now, nonce, pubkey, minCreatedAt)
-		.run();
+	const result = await db.run(
+		sql`UPDATE auth_challenges SET used_at = ${now}
+			WHERE nonce = ${nonce} AND pubkey = ${pubkey} AND used_at IS NULL AND created_at >= ${minCreatedAt}`
+	);
 	return result.meta.changes === 1;
 }
 
 // Find the user for a pubkey, creating one on first sight (sign-up == first verify).
 export async function findOrCreateUser(
-	db: D1Database,
+	db: Database,
 	pubkey: string,
 	now: number
 ): Promise<UserRow> {
-	await db
-		.prepare('INSERT OR IGNORE INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind(randomToken(), pubkey, now)
-		.run();
-	const user = await db
-		.prepare('SELECT id, pubkey, first_name, last_name FROM users WHERE pubkey = ?')
-		.bind(pubkey)
-		.first<UserRow>();
+	await db.run(
+		sql`INSERT OR IGNORE INTO users (id, pubkey, created_at) VALUES (${randomToken()}, ${pubkey}, ${now})`
+	);
+	const user = await db.get<UserRow>(
+		sql`SELECT id, pubkey, first_name, last_name FROM users WHERE pubkey = ${pubkey}`
+	);
 	if (!user) throw new Error('user upsert failed');
 	return user;
 }
 
 export async function createSession(
-	db: D1Database,
+	db: Database,
 	id: string,
 	userId: string,
 	createdAt: number,
 	expiresAt: number,
 	userAgent: string | null
 ): Promise<void> {
-	await db
-		.prepare(
-			'INSERT INTO sessions (id, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, ?)'
-		)
-		.bind(id, userId, createdAt, expiresAt, userAgent)
-		.run();
+	await db.run(
+		sql`INSERT INTO sessions (id, user_id, created_at, expires_at, user_agent)
+			VALUES (${id}, ${userId}, ${createdAt}, ${expiresAt}, ${userAgent})`
+	);
 }
 
 export async function findValidSession(
-	db: D1Database,
+	db: Database,
 	id: string,
 	now: number
 ): Promise<SessionUser | null> {
-	const row = await db
-		.prepare(
-			'SELECT u.pubkey, u.first_name, u.last_name FROM sessions s ' +
-				'JOIN users u ON u.id = s.user_id WHERE s.id = ? AND s.expires_at > ?'
-		)
-		.bind(id, now)
-		.first<Pick<UserRow, 'pubkey' | 'first_name' | 'last_name'>>();
+	const row = await db.get<Pick<UserRow, 'pubkey' | 'first_name' | 'last_name'>>(
+		sql`SELECT u.pubkey, u.first_name, u.last_name FROM sessions s
+			JOIN users u ON u.id = s.user_id WHERE s.id = ${id} AND s.expires_at > ${now}`
+	);
 	if (!row) return null;
 	return {
 		pubkey: row.pubkey,
@@ -120,31 +102,28 @@ export async function findValidSession(
 	};
 }
 
-export async function deleteSession(db: D1Database, id: string): Promise<void> {
-	await db.prepare('DELETE FROM sessions WHERE id = ?').bind(id).run();
+export async function deleteSession(db: Database, id: string): Promise<void> {
+	await db.run(sql`DELETE FROM sessions WHERE id = ${id}`);
 }
 
 export async function updateUserProfile(
-	db: D1Database,
+	db: Database,
 	pubkey: string,
 	firstName: string | null | undefined,
 	lastName: string | null | undefined
 ): Promise<SessionUser> {
-	const existing = await db
-		.prepare('SELECT first_name, last_name FROM users WHERE pubkey = ?')
-		.bind(pubkey)
-		.first<Pick<UserRow, 'first_name' | 'last_name'>>();
+	const existing = await db.get<Pick<UserRow, 'first_name' | 'last_name'>>(
+		sql`SELECT first_name, last_name FROM users WHERE pubkey = ${pubkey}`
+	);
 	if (!existing) throw new Error('user profile update failed');
 	const firstNameValue = firstName === undefined ? existing.first_name : firstName;
 	const lastNameValue = lastName === undefined ? existing.last_name : lastName;
-	await db
-		.prepare('UPDATE users SET first_name = ?, last_name = ? WHERE pubkey = ?')
-		.bind(firstNameValue, lastNameValue, pubkey)
-		.run();
-	const row = await db
-		.prepare('SELECT pubkey, first_name, last_name FROM users WHERE pubkey = ?')
-		.bind(pubkey)
-		.first<Pick<UserRow, 'pubkey' | 'first_name' | 'last_name'>>();
+	await db.run(
+		sql`UPDATE users SET first_name = ${firstNameValue}, last_name = ${lastNameValue} WHERE pubkey = ${pubkey}`
+	);
+	const row = await db.get<Pick<UserRow, 'pubkey' | 'first_name' | 'last_name'>>(
+		sql`SELECT pubkey, first_name, last_name FROM users WHERE pubkey = ${pubkey}`
+	);
 	if (!row) throw new Error('user profile update failed');
 	return {
 		pubkey: row.pubkey,

@@ -13,6 +13,7 @@
  */
 
 import { json } from '@sveltejs/kit';
+import { sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import {
 	healthSnapshotSchema,
@@ -25,6 +26,7 @@ import { NOSTR_PROFILE_BOOTSTRAP_RELAYS } from '$lib/nostr/connect';
 import { getD1DailyLimits } from '$lib/server/d1-limits';
 import { getBucketByName, uploadsBucketName } from '$lib/server/media';
 import { isS3BucketAvailable } from '$lib/server/s3';
+import { createDb, getDb } from '$lib/server/db';
 import { getWalletBalance } from '$lib/server/wallet';
 
 const DEFAULT_HEALTH_CACHE_TTL_SECONDS = 30;
@@ -84,7 +86,7 @@ async function probeD1(
 	try {
 		liveHealthy =
 			env?.DB !== undefined &&
-			(await env.DB.prepare('SELECT 1 AS healthy').first<number>('healthy')) === 1;
+			(await createDb(env.DB).get<{ healthy: number }>(sql`SELECT 1 AS healthy`))?.healthy === 1;
 	} catch (error) {
 		console.error(
 			JSON.stringify({
@@ -181,7 +183,7 @@ async function collectHealthSnapshot(
 			if (!env?.DB) return false;
 			return isS3BucketAvailable(
 				platform,
-				await getBucketByName(env.DB, uploadsBucketName(platform))
+				await getBucketByName(getDb(platform), uploadsBucketName(platform))
 			);
 		})
 	]);

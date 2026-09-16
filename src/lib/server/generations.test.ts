@@ -12,9 +12,10 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { D1Database } from '@cloudflare/workers-types';
-import { makeD1 } from './testing/d1-shim';
+import type { Database } from '$lib/server/db';
+import { makeDb, type TestDatabase } from './testing/d1-shim';
 import {
 	seedGeneration as seedGenerationFixture,
 	TEST_FORM_SNAPSHOT,
@@ -43,40 +44,36 @@ const HASH_1 = '1'.repeat(64);
 const HASH_2 = '2'.repeat(64);
 const RESULT_HASH = 'a'.repeat(64);
 
-function seedUser(db: D1Database, id: string, pubkey: string): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind(id, pubkey, Date.now())
-		.run();
+async function seedUser(db: Database, id: string, pubkey: string): Promise<void> {
+	await db.run(
+		sql`INSERT INTO users (id, pubkey, created_at) VALUES (${id}, ${pubkey}, ${Date.now()})`
+	);
 }
 
 // The admin's manual approval step — no auto-provisioning exists anymore.
-function grantAccess(db: D1Database, userId: string, balance: number): void {
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-		.bind(userId, balance, Date.now())
-		.run();
+async function grantAccess(db: Database, userId: string, balance: number): Promise<void> {
+	await db.run(
+		sql`INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (${userId}, ${balance}, ${Date.now()}, 1)`
+	);
 }
 
 // Every generations row now has to attach to a session it belongs to — a minimal
 // project+session pair, direct SQL like the other seed helpers here.
-function seedSession(db: D1Database, userId: string): string {
+async function seedSession(db: Database, userId: string): Promise<string> {
 	const now = Date.now();
 	const projectId = crypto.randomUUID();
 	const sessionId = crypto.randomUUID();
-	db.prepare(
-		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
-		.bind(projectId, userId, 'Test project', now, now)
-		.run();
-	db.prepare(
-		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
-		.bind(sessionId, projectId, 'Test session', now, now)
-		.run();
+	await db.run(
+		sql`INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (${projectId}, ${userId}, 'Test project', ${now}, ${now})`
+	);
+	await db.run(
+		sql`INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (${sessionId}, ${projectId}, 'Test session', ${now}, ${now})`
+	);
 	return sessionId;
 }
 
 function seedGeneration(
-	db: D1Database,
+	db: TestDatabase,
 	id: string,
 	userId: string,
 	createdAt: number,
@@ -94,7 +91,7 @@ function seedGeneration(
 }
 
 function seedMedia(
-	db: D1Database,
+	db: TestDatabase,
 	url: string,
 	checksum: string,
 	size: number | null = null
@@ -112,29 +109,27 @@ function seedMedia(
 }
 
 // Unlike seedGeneration, lets the caller set source media and checksum directly.
-function seedGenerationWithSource(
-	db: D1Database,
+async function seedGenerationWithSource(
+	db: TestDatabase,
 	id: string,
 	userId: string,
 	sourceUrl: string,
 	sourceHash: string,
 	createdAt: number
-): number {
-	const resultMediaId = seedMedia(db, `https://cdn.example.test/${id}.webp`, '');
-	const sourceMediaId = seedMedia(db, sourceUrl, sourceHash);
-	db.prepare(
-		'INSERT INTO generations ' +
-			'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at) ' +
-			"VALUES (?, ?, ?, ?, 'cozy', 'render', 1, 10, ?)"
-	)
-		.bind(id, userId, resultMediaId, sourceMediaId, createdAt)
-		.run();
+): Promise<number> {
+	const resultMediaId = await seedMedia(db, `https://cdn.example.test/${id}.webp`, '');
+	const sourceMediaId = await seedMedia(db, sourceUrl, sourceHash);
+	await db.run(
+		sql`INSERT INTO generations
+			(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at)
+			VALUES (${id}, ${userId}, ${resultMediaId}, ${sourceMediaId}, 'cozy', 'render', 1, 10, ${createdAt})`
+	);
 	return sourceMediaId;
 }
 
 // A generation that took an uploaded reference image (migrations/0019).
 function seedGenerationWithReference(
-	db: D1Database,
+	db: TestDatabase,
 	id: string,
 	userId: string,
 	kind: 'style-transfer' | 'object-replacement' | 'texture-replacement',
@@ -154,13 +149,13 @@ function seedGenerationWithReference(
 	return referenceMediaId;
 }
 
-let db: D1Database;
+let db: TestDatabase;
 
-beforeEach(() => {
-	db = makeD1();
-	db.prepare('UPDATE buckets SET url = ? WHERE name = ?')
-		.bind('https://cdn.example.test', TEST_S3_BUCKET.name)
-		.run();
+beforeEach(async () => {
+	db = makeDb();
+	await db.run(
+		sql`UPDATE buckets SET url = 'https://cdn.example.test' WHERE name = ${TEST_S3_BUCKET.name}`
+	);
 });
 
 afterEach(() => {
@@ -169,11 +164,11 @@ afterEach(() => {
 
 describe('recordGeneration', () => {
 	it('subtracts the real cost and records the image against the same row', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 5);
-		const sessionId = seedSession(db, 'user-1');
-		const resultMediaId = seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
-		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await grantAccess(db, 'user-1', 5);
+		const sessionId = await seedSession(db, 'user-1');
+		const resultMediaId = await seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
+		const sourceMediaId = await seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 
 		const result = await recordGeneration(db, 'user-1', {
 			resultMediaId,
@@ -200,9 +195,9 @@ describe('recordGeneration', () => {
 	});
 
 	it('keeps the uploaded style reference a style transfer used, for Resources', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 5);
-		const sessionId = seedSession(db, 'user-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await grantAccess(db, 'user-1', 5);
+		const sessionId = await seedSession(db, 'user-1');
 		const resultMediaId = seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
 		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 		const referenceMediaId = seedMedia(db, 'https://cdn.example.test/style.jpg', HASH_2);
@@ -227,13 +222,13 @@ describe('recordGeneration', () => {
 	});
 
 	it('isolates credit balances per user', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
-		grantAccess(db, 'user-1', 5);
-		grantAccess(db, 'user-2', 5);
-		const sessionId = seedSession(db, 'user-1');
-		const resultMediaId = seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
-		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
+		await grantAccess(db, 'user-1', 5);
+		await grantAccess(db, 'user-2', 5);
+		const sessionId = await seedSession(db, 'user-1');
+		const resultMediaId = await seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
+		const sourceMediaId = await seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 
 		await recordGeneration(db, 'user-1', {
 			resultMediaId,
@@ -252,12 +247,12 @@ describe('recordGeneration', () => {
 	});
 
 	it('persists the form snapshot as JSON, and leaves it null when omitted', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 5);
-		const sessionId = seedSession(db, 'user-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await grantAccess(db, 'user-1', 5);
+		const sessionId = await seedSession(db, 'user-1');
 
-		const withSnapshotResultId = seedMedia(db, 'https://cdn.example.test/with.webp', '');
-		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		const withSnapshotResultId = await seedMedia(db, 'https://cdn.example.test/with.webp', '');
+		const sourceMediaId = await seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 		await recordGeneration(db, 'user-1', {
 			resultMediaId: withSnapshotResultId,
 			sourceMediaId,
@@ -270,15 +265,16 @@ describe('recordGeneration', () => {
 			archaiReuploadSec: 0,
 			formSnapshot: TEST_FORM_SNAPSHOT
 		});
-		const withSnapshotRow = await db
-			.prepare(
-				'SELECT form_snapshot FROM generations WHERE user_id = ? ORDER BY rowid DESC LIMIT 1'
-			)
-			.bind('user-1')
-			.first<{ form_snapshot: string | null }>();
+		const withSnapshotRow = await db.get<{ form_snapshot: string | null }>(
+			sql`SELECT form_snapshot FROM generations WHERE user_id = ${'user-1'} ORDER BY rowid DESC LIMIT 1`
+		);
 		expect(JSON.parse(withSnapshotRow!.form_snapshot!)).toEqual(TEST_FORM_SNAPSHOT);
 
-		const withoutSnapshotResultId = seedMedia(db, 'https://cdn.example.test/without.webp', '');
+		const withoutSnapshotResultId = await seedMedia(
+			db,
+			'https://cdn.example.test/without.webp',
+			''
+		);
 		await recordGeneration(db, 'user-1', {
 			resultMediaId: withoutSnapshotResultId,
 			sourceMediaId,
@@ -290,23 +286,20 @@ describe('recordGeneration', () => {
 			archaiDownloadSec: 0,
 			archaiReuploadSec: 0
 		});
-		const withoutSnapshotRow = await db
-			.prepare(
-				'SELECT form_snapshot FROM generations WHERE user_id = ? ORDER BY rowid DESC LIMIT 1'
-			)
-			.bind('user-1')
-			.first<{ form_snapshot: string | null }>();
+		const withoutSnapshotRow = await db.get<{ form_snapshot: string | null }>(
+			sql`SELECT form_snapshot FROM generations WHERE user_id = ${'user-1'} ORDER BY rowid DESC LIMIT 1`
+		);
 		expect(withoutSnapshotRow!.form_snapshot).toBeNull();
 	});
 });
 
 describe('getGenerationDetailForUser', () => {
 	it('returns the parsed form snapshot alongside the prompt and source media', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 5);
-		const sessionId = seedSession(db, 'user-1');
-		const resultMediaId = seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
-		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await grantAccess(db, 'user-1', 5);
+		const sessionId = await seedSession(db, 'user-1');
+		const resultMediaId = await seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
+		const sourceMediaId = await seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 		await recordGeneration(db, 'user-1', {
 			resultMediaId,
 			sourceMediaId,
@@ -343,41 +336,37 @@ describe('getGenerationDetailForUser', () => {
 	});
 
 	it('returns no session once the generation’s session or project is archived', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		const sessionId = seedSession(db, 'user-1');
-		seedGeneration(db, 'image-1', 'user-1', 1000);
-		db.prepare('UPDATE generations SET session_id = ? WHERE id = ?')
-			.bind(sessionId, 'image-1')
-			.run();
+		await seedUser(db, 'user-1', 'pubkey-1');
+		const sessionId = await seedSession(db, 'user-1');
+		await seedGeneration(db, 'image-1', 'user-1', 1000);
+		await db.run(sql`UPDATE generations SET session_id = ${sessionId} WHERE id = ${'image-1'}`);
 
 		expect((await getGenerationDetailForUser(db, 'user-1', 'image-1'))?.session?.sessionId).toBe(
 			sessionId
 		);
 
-		db.prepare('UPDATE project_sessions SET archived_at = ? WHERE id = ?')
-			.bind(Date.now(), sessionId)
-			.run();
+		await db.run(
+			sql`UPDATE project_sessions SET archived_at = ${Date.now()} WHERE id = ${sessionId}`
+		);
 		expect((await getGenerationDetailForUser(db, 'user-1', 'image-1'))?.session).toBeNull();
 
-		db.prepare('UPDATE project_sessions SET archived_at = NULL WHERE id = ?').bind(sessionId).run();
-		db.prepare(
-			'UPDATE projects SET archived_at = ? WHERE id = (SELECT project_id FROM project_sessions WHERE id = ?)'
-		)
-			.bind(Date.now(), sessionId)
-			.run();
+		await db.run(sql`UPDATE project_sessions SET archived_at = NULL WHERE id = ${sessionId}`);
+		await db.run(
+			sql`UPDATE projects SET archived_at = ${Date.now()} WHERE id = (SELECT project_id FROM project_sessions WHERE id = ${sessionId})`
+		);
 		expect((await getGenerationDetailForUser(db, 'user-1', 'image-1'))?.session).toBeNull();
 	});
 
 	it('returns null for another user’s generation', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
-		seedGeneration(db, 'image-1', 'user-1', 1000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
+		await seedGeneration(db, 'image-1', 'user-1', 1000);
 
 		expect(await getGenerationDetailForUser(db, 'user-2', 'image-1')).toBeNull();
 	});
 
 	it('still reads a snapshot stored with the removed addObjectPresetId or without addObjectInstruction', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		seedGeneration(db, 'image-1', 'user-1', 1000);
 		const stored: Record<string, unknown> = {
 			...TEST_FORM_SNAPSHOT,
@@ -395,11 +384,11 @@ describe('getGenerationDetailForUser', () => {
 	});
 
 	it('degrades to a null snapshot for a row whose stored JSON is malformed', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneration(db, 'image-1', 'user-1', 1000);
-		db.prepare('UPDATE generations SET form_snapshot = ? WHERE id = ?')
-			.bind('{not valid json', 'image-1')
-			.run();
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGeneration(db, 'image-1', 'user-1', 1000);
+		await db.run(
+			sql`UPDATE generations SET form_snapshot = ${'{not valid json'} WHERE id = ${'image-1'}`
+		);
 
 		const detail = await getGenerationDetailForUser(db, 'user-1', 'image-1');
 
@@ -407,11 +396,11 @@ describe('getGenerationDetailForUser', () => {
 	});
 
 	it('degrades to a null snapshot for a row whose stored JSON no longer matches the shape', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneration(db, 'image-1', 'user-1', 1000);
-		db.prepare('UPDATE generations SET form_snapshot = ? WHERE id = ?')
-			.bind(JSON.stringify({ unrelated: true }), 'image-1')
-			.run();
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGeneration(db, 'image-1', 'user-1', 1000);
+		await db.run(
+			sql`UPDATE generations SET form_snapshot = ${JSON.stringify({ unrelated: true })} WHERE id = ${'image-1'}`
+		);
 
 		const detail = await getGenerationDetailForUser(db, 'user-1', 'image-1');
 
@@ -421,17 +410,17 @@ describe('getGenerationDetailForUser', () => {
 
 describe('listCreditHistory', () => {
 	it('is empty before any generation', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 5);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await grantAccess(db, 'user-1', 5);
 		await expect(listCreditHistory(db, 'user-1')).resolves.toEqual([]);
 	});
 
 	it('orders entries most-recent first', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 5);
-		const sessionId = seedSession(db, 'user-1');
-		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
-		const firstResultMediaId = seedMedia(db, 'https://cdn.example.test/a.webp', RESULT_HASH);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await grantAccess(db, 'user-1', 5);
+		const sessionId = await seedSession(db, 'user-1');
+		const sourceMediaId = await seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		const firstResultMediaId = await seedMedia(db, 'https://cdn.example.test/a.webp', RESULT_HASH);
 		await recordGeneration(db, 'user-1', {
 			resultMediaId: firstResultMediaId,
 			sourceMediaId,
@@ -443,7 +432,7 @@ describe('listCreditHistory', () => {
 			archaiDownloadSec: 0,
 			archaiReuploadSec: 0
 		});
-		const secondResultMediaId = seedMedia(db, 'https://cdn.example.test/b.webp', RESULT_HASH);
+		const secondResultMediaId = await seedMedia(db, 'https://cdn.example.test/b.webp', RESULT_HASH);
 		await recordGeneration(db, 'user-1', {
 			resultMediaId: secondResultMediaId,
 			sourceMediaId: firstResultMediaId,
@@ -461,8 +450,8 @@ describe('listCreditHistory', () => {
 	});
 
 	it('skips a row with an unrecognized stored generation kind, logging a warning', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneration(db, 'invalid-kind', 'user-1', 1000, 'unknown');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGeneration(db, 'invalid-kind', 'user-1', 1000, 'unknown');
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
 		const history = await listCreditHistory(db, 'user-1');
@@ -482,17 +471,16 @@ describe('listCreditHistory', () => {
 	// The expenses page (routes/expenses/+page.svelte) resolves a clicked row
 	// straight back to its project/session via these two fields.
 	it('joins the owning session and project id for each entry', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 5);
-		const sessionId = seedSession(db, 'user-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await grantAccess(db, 'user-1', 5);
+		const sessionId = await seedSession(db, 'user-1');
 		const projectId = (
-			await db
-				.prepare('SELECT project_id FROM project_sessions WHERE id = ?')
-				.bind(sessionId)
-				.first<{ project_id: string }>()
+			await db.get<{ project_id: string }>(
+				sql`SELECT project_id FROM project_sessions WHERE id = ${sessionId}`
+			)
 		)?.project_id;
-		const resultMediaId = seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
-		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		const resultMediaId = await seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
+		const sourceMediaId = await seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 		await recordGeneration(db, 'user-1', {
 			resultMediaId,
 			sourceMediaId,
@@ -510,9 +498,9 @@ describe('listCreditHistory', () => {
 	});
 
 	it('scans past a newer invalid-kind row to reach a valid older one within the limit', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneration(db, 'invalid-newer', 'user-1', 2000, 'unknown');
-		seedGeneration(db, 'valid-older', 'user-1', 1000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGeneration(db, 'invalid-newer', 'user-1', 2000, 'unknown');
+		await seedGeneration(db, 'valid-older', 'user-1', 1000);
 		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
 		const history = await listCreditHistory(db, 'user-1', 1);
@@ -524,8 +512,8 @@ describe('listCreditHistory', () => {
 	// session) must not disappear from the history — it just can't be
 	// resolved back to a project/session.
 	it('leaves sessionId/projectId null for a generation with no session', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneration(db, 'no-session', 'user-1', 1000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGeneration(db, 'no-session', 'user-1', 1000);
 
 		const history = await listCreditHistory(db, 'user-1');
 		expect(history).toEqual([expect.objectContaining({ sessionId: null, projectId: null })]);
@@ -534,21 +522,21 @@ describe('listCreditHistory', () => {
 
 describe('getGeneratedImageForUser', () => {
 	it('returns null for an unknown generation id', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		await expect(getGeneratedImageForUser(db, 'user-1', 'no-such-image')).resolves.toBeNull();
 	});
 
 	it('returns null when the generation belongs to a different user', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
-		seedGeneration(db, 'image-1', 'user-2', 1000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
+		await seedGeneration(db, 'image-1', 'user-2', 1000);
 
 		await expect(getGeneratedImageForUser(db, 'user-1', 'image-1')).resolves.toBeNull();
 	});
 
 	it('returns the image for its owner', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneration(db, 'image-1', 'user-1', 1000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGeneration(db, 'image-1', 'user-1', 1000);
 
 		await expect(getGeneratedImageForUser(db, 'user-1', 'image-1')).resolves.toEqual({
 			id: 'image-1',
@@ -565,9 +553,9 @@ describe('getGeneratedImageForUser', () => {
 
 describe('deleteGeneratedImage', () => {
 	it('deletes only the owner’s row', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
-		seedGeneration(db, 'image-1', 'user-1', 1000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
+		await seedGeneration(db, 'image-1', 'user-1', 1000);
 		const image = await getGeneratedImageForUser(db, 'user-1', 'image-1');
 		if (!image) throw new Error('generated image seed failed');
 
@@ -580,20 +568,18 @@ describe('deleteGeneratedImage', () => {
 			mediaDeleted: true
 		});
 		await expect(getGeneratedImageForUser(db, 'user-1', 'image-1')).resolves.toBeNull();
-		expect(
-			await db.prepare('SELECT id FROM media WHERE id = ?').bind(image.mediaId).first()
-		).toBeNull();
+		expect(await db.get(sql`SELECT id FROM media WHERE id = ${image.mediaId}`)).toBeUndefined();
 	});
 });
 
 describe('listGeneratedImages', () => {
 	it('returns one user image page in newest-first order', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
-		seedGeneration(db, 'oldest', 'user-1', 1000);
-		seedGeneration(db, 'newest', 'user-1', 3000);
-		seedGeneration(db, 'middle', 'user-1', 2000);
-		seedGeneration(db, 'other-user-image', 'user-2', 4000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
+		await seedGeneration(db, 'oldest', 'user-1', 1000);
+		await seedGeneration(db, 'newest', 'user-1', 3000);
+		await seedGeneration(db, 'middle', 'user-1', 2000);
+		await seedGeneration(db, 'other-user-image', 'user-2', 4000);
 
 		const page = await listGeneratedImages(db, 'user-1', ALL_SCENES, 0, 2);
 
@@ -633,10 +619,10 @@ describe('listGeneratedImages', () => {
 	});
 
 	it('applies the requested offset', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneration(db, 'first', 'user-1', 3000);
-		seedGeneration(db, 'second', 'user-1', 2000);
-		seedGeneration(db, 'third', 'user-1', 1000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGeneration(db, 'first', 'user-1', 3000);
+		await seedGeneration(db, 'second', 'user-1', 2000);
+		await seedGeneration(db, 'third', 'user-1', 1000);
 
 		const page = await listGeneratedImages(db, 'user-1', ALL_SCENES, 1, 2);
 
@@ -645,8 +631,8 @@ describe('listGeneratedImages', () => {
 	});
 
 	it('skips a row with an unrecognized stored generation kind, logging a warning', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneration(db, 'invalid-kind', 'user-1', 1000, 'unknown');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGeneration(db, 'invalid-kind', 'user-1', 1000, 'unknown');
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
 		const page = await listGeneratedImages(db, 'user-1', ALL_SCENES, 0, 10);
@@ -665,13 +651,13 @@ describe('listGeneratedImages', () => {
 	});
 
 	it('scans past newer invalid-kind rows to fill the page with valid older ones', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneration(db, 'invalid-1', 'user-1', 6000, 'unknown');
-		seedGeneration(db, 'invalid-2', 'user-1', 5000, 'unknown');
-		seedGeneration(db, 'invalid-3', 'user-1', 4000, 'unknown');
-		seedGeneration(db, 'valid-1', 'user-1', 3000);
-		seedGeneration(db, 'valid-2', 'user-1', 2000);
-		seedGeneration(db, 'valid-3', 'user-1', 1000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGeneration(db, 'invalid-1', 'user-1', 6000, 'unknown');
+		await seedGeneration(db, 'invalid-2', 'user-1', 5000, 'unknown');
+		await seedGeneration(db, 'invalid-3', 'user-1', 4000, 'unknown');
+		await seedGeneration(db, 'valid-1', 'user-1', 3000);
+		await seedGeneration(db, 'valid-2', 'user-1', 2000);
+		await seedGeneration(db, 'valid-3', 'user-1', 1000);
 		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
 		const page = await listGeneratedImages(db, 'user-1', ALL_SCENES, 0, 2);
@@ -687,7 +673,7 @@ interface SeededSession {
 }
 
 function seedTitledSession(
-	db: D1Database,
+	db: TestDatabase,
 	userId: string,
 	projectTitle: string,
 	sessionTitle: string,
@@ -708,14 +694,14 @@ function seedTitledSession(
 	return { projectId, sessionId };
 }
 
-function seedSceneGeneration(
-	db: D1Database,
+async function seedSceneGeneration(
+	db: TestDatabase,
 	id: string,
 	sessionId: string | null,
 	createdAt: number,
 	kind = 'render'
-): void {
-	seedGenerationFixture(db, {
+): Promise<void> {
+	await seedGenerationFixture(db, {
 		id,
 		userId: 'user-1',
 		url: `https://cdn.example.test/${id}.webp`,
@@ -731,17 +717,17 @@ describe('listGeneratedImages filtering', () => {
 	let kitchenRedo: SeededSession;
 	let bedroom: SeededSession;
 
-	beforeEach(() => {
-		seedUser(db, 'user-1', 'pubkey-1');
+	beforeEach(async () => {
+		await seedUser(db, 'user-1', 'pubkey-1');
 		kitchen = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen');
 		kitchenRedo = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen redo', kitchen.projectId);
 		bedroom = seedTitledSession(db, 'user-1', 'House', 'Bedroom');
-		seedSceneGeneration(db, 'kitchen-1', kitchen.sessionId, 1000);
-		seedSceneGeneration(db, 'kitchen-2', kitchen.sessionId, 2000);
-		seedSceneGeneration(db, 'kitchen-3', kitchen.sessionId, 3000);
-		seedSceneGeneration(db, 'redo-1', kitchenRedo.sessionId, 1500);
-		seedSceneGeneration(db, 'bedroom-1', bedroom.sessionId, 2500);
-		seedSceneGeneration(db, 'no-session', null, 4000);
+		await seedSceneGeneration(db, 'kitchen-1', kitchen.sessionId, 1000);
+		await seedSceneGeneration(db, 'kitchen-2', kitchen.sessionId, 2000);
+		await seedSceneGeneration(db, 'kitchen-3', kitchen.sessionId, 3000);
+		await seedSceneGeneration(db, 'redo-1', kitchenRedo.sessionId, 1500);
+		await seedSceneGeneration(db, 'bedroom-1', bedroom.sessionId, 2500);
+		await seedSceneGeneration(db, 'no-session', null, 4000);
 	});
 
 	it("carries each scene's live session", async () => {
@@ -766,9 +752,9 @@ describe('listGeneratedImages filtering', () => {
 	});
 
 	it('points a base that is an earlier result at the generation that produced it', async () => {
-		seedUser(db, 'user-2', 'pubkey-2');
+		await seedUser(db, 'user-2', 'pubkey-2');
 		const session = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen');
-		seedGenerationFixture(db, {
+		await seedGenerationFixture(db, {
 			id: 'render-1',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/render-1.webp',
@@ -777,7 +763,7 @@ describe('listGeneratedImages filtering', () => {
 			sessionId: session.sessionId,
 			kind: 'render'
 		});
-		seedGenerationFixture(db, {
+		await seedGenerationFixture(db, {
 			id: 'styled-1',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/styled-1.webp',
@@ -786,7 +772,7 @@ describe('listGeneratedImages filtering', () => {
 			sessionId: session.sessionId,
 			kind: 'style-transfer'
 		});
-		seedGenerationFixture(db, {
+		await seedGenerationFixture(db, {
 			id: 'other-user',
 			userId: 'user-2',
 			url: 'https://cdn.example.test/render-1.webp',
@@ -794,7 +780,7 @@ describe('listGeneratedImages filtering', () => {
 			createdAt: 3000,
 			kind: 'edit'
 		});
-		seedGenerationFixture(db, {
+		await seedGenerationFixture(db, {
 			id: 'later-copy',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/render-1.webp',
@@ -813,7 +799,7 @@ describe('listGeneratedImages filtering', () => {
 
 	it('attributes a milestone base to the generation that preceded its first use', async () => {
 		const session = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen');
-		seedGenerationFixture(db, {
+		await seedGenerationFixture(db, {
 			id: 'origin',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/origin.webp',
@@ -821,7 +807,7 @@ describe('listGeneratedImages filtering', () => {
 			createdAt: 1000,
 			kind: 'render'
 		});
-		seedGenerationFixture(db, {
+		await seedGenerationFixture(db, {
 			id: 'first',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/first.webp',
@@ -830,7 +816,7 @@ describe('listGeneratedImages filtering', () => {
 			sessionId: session.sessionId,
 			kind: 'edit'
 		});
-		seedGenerationFixture(db, {
+		await seedGenerationFixture(db, {
 			id: 'later-copy',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/origin.webp',
@@ -838,7 +824,7 @@ describe('listGeneratedImages filtering', () => {
 			createdAt: 3000,
 			kind: 'render'
 		});
-		seedGenerationFixture(db, {
+		await seedGenerationFixture(db, {
 			id: 'latest',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/latest.webp',
@@ -908,7 +894,7 @@ describe('listGeneratedImages filtering', () => {
 	});
 
 	it('picks the latest recognized kind as a session milestone and pages sessions', async () => {
-		seedSceneGeneration(db, 'kitchen-unknown', kitchen.sessionId, 5000, 'unknown');
+		await seedSceneGeneration(db, 'kitchen-unknown', kitchen.sessionId, 5000, 'unknown');
 
 		const first = await listGeneratedImages(
 			db,
@@ -958,17 +944,17 @@ describe('listGeneratedImages filtering', () => {
 
 describe('listSceneFilterProjects', () => {
 	it('lists live projects and sessions with generations, most recently generated first', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
 		const kitchen = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen');
 		const hall = seedTitledSession(db, 'user-1', 'Flat', 'Hall', kitchen.projectId);
 		const bedroom = seedTitledSession(db, 'user-1', 'House', 'Bedroom');
 		const archived = seedTitledSession(db, 'user-1', 'House', 'Attic', bedroom.projectId);
 		seedTitledSession(db, 'user-1', 'Empty', 'Nothing yet');
-		seedSceneGeneration(db, 'kitchen-1', kitchen.sessionId, 1000);
-		seedSceneGeneration(db, 'hall-1', hall.sessionId, 3000);
-		seedSceneGeneration(db, 'bedroom-1', bedroom.sessionId, 2000);
-		seedSceneGeneration(db, 'attic-1', archived.sessionId, 4000);
+		await seedSceneGeneration(db, 'kitchen-1', kitchen.sessionId, 1000);
+		await seedSceneGeneration(db, 'hall-1', hall.sessionId, 3000);
+		await seedSceneGeneration(db, 'bedroom-1', bedroom.sessionId, 2000);
+		await seedSceneGeneration(db, 'attic-1', archived.sessionId, 4000);
 		db.prepare('UPDATE project_sessions SET archived_at = 1 WHERE id = ?')
 			.bind(archived.sessionId)
 			.run();
@@ -994,8 +980,8 @@ describe('listSceneFilterProjects', () => {
 
 describe('findGenerationSourceByHash', () => {
 	it('returns the most recent source media URL for a matching hash', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGenerationWithSource(
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGenerationWithSource(
 			db,
 			'a',
 			'user-1',
@@ -1003,7 +989,7 @@ describe('findGenerationSourceByHash', () => {
 			HASH_1,
 			1000
 		);
-		const expectedMediaId = seedGenerationWithSource(
+		const expectedMediaId = await seedGenerationWithSource(
 			db,
 			'b',
 			'user-1',
@@ -1018,9 +1004,16 @@ describe('findGenerationSourceByHash', () => {
 	});
 
 	it('never matches across users', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
-		seedGenerationWithSource(db, 'a', 'user-2', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
+		await seedGenerationWithSource(
+			db,
+			'a',
+			'user-2',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			1000
+		);
 
 		await expect(
 			findGenerationSourceByHash(db, 'user-1', HASH_1, TEST_S3_BUCKET.name)
@@ -1028,8 +1021,8 @@ describe('findGenerationSourceByHash', () => {
 	});
 
 	it('never matches an empty hash', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneration(db, 'empty-checksum', 'user-1', 1000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGeneration(db, 'empty-checksum', 'user-1', 1000);
 
 		await expect(
 			findGenerationSourceByHash(db, 'user-1', '', TEST_S3_BUCKET.name)
@@ -1039,8 +1032,8 @@ describe('findGenerationSourceByHash', () => {
 
 describe('listResourceImages', () => {
 	it('collapses repeat uploads of the same hash into one card', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		const mediaId = seedGenerationWithSource(
+		await seedUser(db, 'user-1', 'pubkey-1');
+		const mediaId = await seedGenerationWithSource(
 			db,
 			'a',
 			'user-1',
@@ -1048,7 +1041,14 @@ describe('listResourceImages', () => {
 			HASH_1,
 			1000
 		);
-		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
+		await seedGenerationWithSource(
+			db,
+			'b',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			2000
+		);
 
 		const page = await listResourceImages(db, 'user-1', 'sources', 0, 10);
 
@@ -1063,9 +1063,9 @@ describe('listResourceImages', () => {
 	// (RequestState#resolveWorkingImageKey) and no hash is attached, so the
 	// source media there is a previous generation's own output.
 	it('excludes rows whose source was a previous result, not an upload', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		// A real upload, mixed in so the exclusion isn't just "everything is empty".
-		const uploadMediaId = seedGenerationWithSource(
+		const uploadMediaId = await seedGenerationWithSource(
 			db,
 			'upload',
 			'user-1',
@@ -1075,7 +1075,7 @@ describe('listResourceImages', () => {
 		);
 		// An edit continuing from a previous render result — its checksum is
 		// always '' for this mode, even though the row itself is recent.
-		seedGenerationWithSource(
+		await seedGenerationWithSource(
 			db,
 			'edit-from-result',
 			'user-1',
@@ -1085,7 +1085,7 @@ describe('listResourceImages', () => {
 		);
 		// A legacy, pre-migration upload row — also '', indistinguishable from
 		// the case above by design.
-		seedGenerationWithSource(
+		await seedGenerationWithSource(
 			db,
 			'legacy-upload',
 			'user-1',
@@ -1103,8 +1103,8 @@ describe('listResourceImages', () => {
 	});
 
 	it('excludes a hashed source that is another generation’s result', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		const uploadMediaId = seedGenerationWithSource(
+		await seedUser(db, 'user-1', 'pubkey-1');
+		const uploadMediaId = await seedGenerationWithSource(
 			db,
 			'upload',
 			'user-1',
@@ -1113,7 +1113,7 @@ describe('listResourceImages', () => {
 			1000
 		);
 		const producedMediaId = seedMedia(db, 'https://cdn.example.test/produced.webp', HASH_2);
-		seedGenerationWithSource(
+		await seedGenerationWithSource(
 			db,
 			'produced',
 			'user-1',
@@ -1121,7 +1121,7 @@ describe('listResourceImages', () => {
 			HASH_1,
 			2000
 		);
-		seedGenerationWithSource(
+		await seedGenerationWithSource(
 			db,
 			'next',
 			'user-1',
@@ -1153,9 +1153,9 @@ describe('listResourceImages', () => {
 	});
 
 	it('never mixes another user’s photos into the page', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
-		const mediaId = seedGenerationWithSource(
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
+		const mediaId = await seedGenerationWithSource(
 			db,
 			'a',
 			'user-1',
@@ -1163,7 +1163,7 @@ describe('listResourceImages', () => {
 			HASH_1,
 			1000
 		);
-		seedGenerationWithSource(
+		await seedGenerationWithSource(
 			db,
 			'b',
 			'user-2',
@@ -1187,7 +1187,7 @@ describe('listResourceImages', () => {
 	});
 
 	it('lists each reference under the tool that took it', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const style = seedGenerationWithReference(
 			db,
 			'style',
@@ -1212,7 +1212,7 @@ describe('listResourceImages', () => {
 			'https://cdn.example.test/wood.png',
 			1000
 		);
-		seedGenerationWithSource(
+		await seedGenerationWithSource(
 			db,
 			'render',
 			'user-1',
@@ -1231,8 +1231,8 @@ describe('listResourceImages', () => {
 	});
 
 	it('shows an image used both as a source and a reference once, with both roles', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		const room = seedGenerationWithSource(
+		await seedUser(db, 'user-1', 'pubkey-1');
+		const room = await seedGenerationWithSource(
 			db,
 			'render',
 			'user-1',
@@ -1264,8 +1264,8 @@ describe('listResourceImages', () => {
 	});
 
 	it('pages across sources and references together', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGenerationWithSource(
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGenerationWithSource(
 			db,
 			'render',
 			'user-1',
@@ -1321,8 +1321,8 @@ describe('resource page queries', () => {
 	}
 
 	it('lists every generation an image took part in, with how it was used and where', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		const sessionId = seedSession(db, 'user-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		const sessionId = await seedSession(db, 'user-1');
 		const room = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 		const prior = seedMedia(db, 'https://cdn.example.test/prior.webp', '');
 		seedSessionGeneration('render', 'user-1', sessionId, {
@@ -1367,8 +1367,8 @@ describe('resource page queries', () => {
 	});
 
 	it('tells generations whose settings were saved apart from older ones', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		const sessionId = seedSession(db, 'user-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		const sessionId = await seedSession(db, 'user-1');
 		const room = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 		seedSessionGeneration('legacy', 'user-1', sessionId, {
 			source: room,
@@ -1400,8 +1400,8 @@ describe('resource page queries', () => {
 	});
 
 	it('leaves nothing to open once the generation’s session is archived', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		const sessionId = seedSession(db, 'user-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		const sessionId = await seedSession(db, 'user-1');
 		const room = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 		seedSessionGeneration('render', 'user-1', sessionId, {
 			source: room,
@@ -1416,9 +1416,9 @@ describe('resource page queries', () => {
 	});
 
 	it('treats another user’s image as not a resource at all', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
-		const theirs = seedGenerationWithSource(
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
+		const theirs = await seedGenerationWithSource(
 			db,
 			'theirs',
 			'user-2',
@@ -1432,8 +1432,8 @@ describe('resource page queries', () => {
 	});
 
 	it('pages through the generations newest first', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		const sessionId = seedSession(db, 'user-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		const sessionId = await seedSession(db, 'user-1');
 		const room = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
 		for (const [id, createdAt] of [
 			['a', 1000],
@@ -1453,7 +1453,7 @@ describe('resource page queries', () => {
 	});
 });
 
-function seedProject(db: D1Database, userId: string, archivedAt: number | null = null): string {
+function seedProject(db: TestDatabase, userId: string, archivedAt: number | null = null): string {
 	const now = Date.now();
 	const id = crypto.randomUUID();
 	db.prepare(
@@ -1466,7 +1466,7 @@ function seedProject(db: D1Database, userId: string, archivedAt: number | null =
 }
 
 function seedProjectSession(
-	db: D1Database,
+	db: TestDatabase,
 	projectId: string,
 	archivedAt: number | null = null
 ): void {
@@ -1483,7 +1483,7 @@ function seedProjectSession(
 // output_media_id/error_code/balance_after/completed_at all null — the
 // job's outcome is irrelevant to a reference-image count.
 function seedReplacementJob(
-	db: D1Database,
+	db: TestDatabase,
 	table: 'object_replacement_jobs' | 'texture_replacement_jobs',
 	userId: string,
 	referenceMediaId: number
@@ -1515,7 +1515,7 @@ function seedReplacementJob(
 
 describe('listUserUsage', () => {
 	it('returns zero counts for a fresh user with no data', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 
 		const page = await listUserUsage(db, 0, 10);
 
@@ -1534,7 +1534,7 @@ describe('listUserUsage', () => {
 	});
 
 	it('counts projects and sessions including archived ones', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const activeProject = seedProject(db, 'user-1');
 		seedProjectSession(db, activeProject);
 		const archivedProject = seedProject(db, 'user-1', Date.now());
@@ -1546,9 +1546,23 @@ describe('listUserUsage', () => {
 	});
 
 	it('counts each distinct source media once per user', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
-		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGenerationWithSource(
+			db,
+			'a',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			1000
+		);
+		await seedGenerationWithSource(
+			db,
+			'b',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			2000
+		);
 
 		const page = await listUserUsage(db, 0, 10);
 
@@ -1556,7 +1570,7 @@ describe('listUserUsage', () => {
 	});
 
 	it('counts references from replacement jobs and style-transfer generations, de-duplicated', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const referenceMediaId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '');
 		seedReplacementJob(db, 'object_replacement_jobs', 'user-1', referenceMediaId);
 		seedReplacementJob(db, 'texture_replacement_jobs', 'user-1', referenceMediaId);
@@ -1583,14 +1597,35 @@ describe('listUserUsage', () => {
 	});
 
 	it('totals source bytes over distinct media, skipping unknown sizes', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1, 1000);
 		seedMedia(db, 'https://cdn.example.test/hall.jpg', HASH_2, 500);
 		seedMedia(db, 'https://cdn.example.test/legacy.jpg', RESULT_HASH, null);
-		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
-		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
-		seedGenerationWithSource(db, 'c', 'user-1', 'https://cdn.example.test/hall.jpg', HASH_2, 3000);
-		seedGenerationWithSource(
+		await seedGenerationWithSource(
+			db,
+			'a',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			1000
+		);
+		await seedGenerationWithSource(
+			db,
+			'b',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			2000
+		);
+		await seedGenerationWithSource(
+			db,
+			'c',
+			'user-1',
+			'https://cdn.example.test/hall.jpg',
+			HASH_2,
+			3000
+		);
+		await seedGenerationWithSource(
 			db,
 			'd',
 			'user-1',
@@ -1607,8 +1642,15 @@ describe('listUserUsage', () => {
 	});
 
 	it('reports null source bytes when no source size is known', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedGenerationWithSource(
+			db,
+			'a',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			1000
+		);
 
 		const page = await listUserUsage(db, 0, 10);
 
@@ -1616,7 +1658,7 @@ describe('listUserUsage', () => {
 	});
 
 	it('totals reference bytes over distinct references, including style-transfer', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const sharedReferenceId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '', 700);
 		const textureReferenceId = seedMedia(db, 'https://cdn.example.test/texture.jpg', '', 300);
 		seedMedia(db, 'https://cdn.example.test/style-ref.jpg', HASH_2, 200);
@@ -1640,8 +1682,8 @@ describe('listUserUsage', () => {
 	});
 
 	it("does not count another user's size for a media both users reference", async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
 		const sharedReferenceId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '', 700);
 		seedReplacementJob(db, 'object_replacement_jobs', 'user-1', sharedReferenceId);
 
@@ -1653,8 +1695,8 @@ describe('listUserUsage', () => {
 	});
 
 	it('isolates counts per user', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
 		seedProject(db, 'user-1');
 		seedGeneration(db, 'a', 'user-2', 1000);
 
@@ -1686,9 +1728,9 @@ describe('getUsageTotals', () => {
 	});
 
 	it('totals users, projects, sessions and spend across all users, archived included', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
-		seedUser(db, 'user-3', 'pubkey-3');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
+		await seedUser(db, 'user-3', 'pubkey-3');
 		const active = seedProject(db, 'user-1');
 		seedProjectSession(db, active);
 		const archived = seedProject(db, 'user-2', Date.now());
@@ -1708,14 +1750,35 @@ describe('getUsageTotals', () => {
 	});
 
 	it('counts sources and sizes per distinct (user, media), skipping unknown sizes', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
 		seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1, 1000);
 		seedMedia(db, 'https://cdn.example.test/legacy.jpg', RESULT_HASH, null);
-		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
-		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
-		seedGenerationWithSource(db, 'c', 'user-2', 'https://cdn.example.test/room.jpg', HASH_1, 3000);
-		seedGenerationWithSource(
+		await seedGenerationWithSource(
+			db,
+			'a',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			1000
+		);
+		await seedGenerationWithSource(
+			db,
+			'b',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			2000
+		);
+		await seedGenerationWithSource(
+			db,
+			'c',
+			'user-2',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			3000
+		);
+		await seedGenerationWithSource(
 			db,
 			'd',
 			'user-2',
@@ -1730,8 +1793,8 @@ describe('getUsageTotals', () => {
 	});
 
 	it('counts references from replacement jobs and style-transfer, once per user and media', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
 		const sharedId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '', 700);
 		seedMedia(db, 'https://cdn.example.test/style-ref.jpg', HASH_2, 200);
 		seedReplacementJob(db, 'object_replacement_jobs', 'user-1', sharedId);
@@ -1752,12 +1815,26 @@ describe('getUsageTotals', () => {
 	});
 
 	it('equals the sum of the per-user usage rows', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
 		seedProjectSession(db, seedProject(db, 'user-1'));
 		seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1, 1000);
-		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
-		seedGenerationWithSource(db, 'b', 'user-2', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
+		await seedGenerationWithSource(
+			db,
+			'a',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			1000
+		);
+		await seedGenerationWithSource(
+			db,
+			'b',
+			'user-2',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			2000
+		);
 		seedGenerationWithReference(
 			db,
 			'style',

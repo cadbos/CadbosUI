@@ -30,6 +30,19 @@ const SCHEMA = readdirSync(MIGRATIONS_DIR)
 	.map((file) => readFileSync(new URL(file, MIGRATIONS_DIR), 'utf8'))
 	.join('\n');
 
+interface SyncStatement {
+	bind: (...next: SQLInputValue[]) => SyncStatement;
+	run: () => { success: true; meta: { changes: number } };
+	first: <T = Record<string, unknown>>(col?: string) => T | null;
+	all: <T = Record<string, unknown>>() => { results: T[] };
+}
+
+interface TestBinding extends D1Database {
+	prepareSync: (query: string) => SyncStatement;
+}
+
+export type TestDatabase = Database & { prepare: TestBinding['prepareSync'] };
+
 interface ShimStatement {
 	bind: (...next: SQLInputValue[]) => ShimStatement;
 	run: () => Promise<{ success: true; meta: { changes: number } }>;
@@ -48,6 +61,18 @@ export function makeD1(): D1Database {
 		TEST_S3_BUCKET.name,
 		'https://uploads.cadbos.example'
 	);
+	const syncStmt = (query: string, args: SQLInputValue[] = []): SyncStatement => ({
+		bind: (...next: SQLInputValue[]) => syncStmt(query, next),
+		run: () => ({
+			success: true,
+			meta: { changes: Number(db.prepare(query).run(...args).changes) }
+		}),
+		first: <T>(col?: string): T | null => {
+			const row = db.prepare(query).get(...args) as Record<string, unknown> | undefined;
+			return (row === undefined ? null : col ? row[col] : row) as T | null;
+		},
+		all: <T>(): { results: T[] } => ({ results: db.prepare(query).all(...args) as T[] })
+	});
 	const stmt = (sql: string, args: SQLInputValue[] = []): ShimStatement => ({
 		bind: (...next: SQLInputValue[]) => stmt(sql, next),
 		run: async () => ({
@@ -60,13 +85,17 @@ export function makeD1(): D1Database {
 			return col ? row[col] : row;
 		},
 		all: async () => ({ results: db.prepare(sql).all(...args) as Record<string, unknown>[] }),
-		raw: async () =>
-			(db.prepare(sql).all(...args) as Record<string, unknown>[]).map((row) => Object.values(row)),
+		raw: async () => {
+			const raw = db.prepare(sql);
+			raw.setReturnArrays(true);
+			return raw.all(...args) as unknown as unknown[][];
+		},
 		sql,
 		args
 	});
 	return {
 		prepare: (sql: string) => stmt(sql),
+		prepareSync: (query: string) => syncStmt(query),
 		// Mirrors D1's batch(): every statement commits or rolls back together.
 		batch: async (statements: ShimStatement[]) => {
 			db.exec('BEGIN');
@@ -83,9 +112,10 @@ export function makeD1(): D1Database {
 				throw err;
 			}
 		}
-	} as unknown as D1Database;
+	} as unknown as TestBinding;
 }
 
-export function makeDb(): Database {
-	return createDb(makeD1());
+export function makeDb(): TestDatabase {
+	const binding = makeD1() as TestBinding;
+	return Object.assign(createDb(binding), { prepare: binding.prepareSync });
 }

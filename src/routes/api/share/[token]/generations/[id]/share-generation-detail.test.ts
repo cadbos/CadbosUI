@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { ShareGenerationDetailResponse } from '$lib/api/contract';
+import { createDb } from '$lib/server/db';
 import { createProject, createSession, issueShareToken } from '$lib/server/projects';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
@@ -50,9 +51,9 @@ describe('GET /api/share/[token]/generations/[id]', () => {
 	it('returns the text settings for a generation in an actively-shared project — no auth required', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		const project = await createProject(db, 'user-1', 'Living room');
-		const session = await createSession(db, 'user-1', project.id, 'Main thread');
-		seedGenerationFixture(db, {
+		const project = await createProject(createDb(db), 'user-1', 'Living room');
+		const session = await createSession(createDb(db), 'user-1', project.id, 'Main thread');
+		await seedGenerationFixture(createDb(db), {
 			id: '00000000-0000-4000-8000-000000000101',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/out.webp',
@@ -65,7 +66,7 @@ describe('GET /api/share/[token]/generations/[id]', () => {
 				styleReferenceImage: { mediaKey: 'cadbos-uploads/reference.jpg' }
 			}
 		});
-		const token = await issueShareToken(db, 'user-1', project.id);
+		const token = await issueShareToken(createDb(db), 'user-1', project.id);
 
 		const response = await call(platform(db), token!, '00000000-0000-4000-8000-000000000101');
 		const result = (await response.json()) as ShareGenerationDetailResponse;
@@ -80,8 +81,8 @@ describe('GET /api/share/[token]/generations/[id]', () => {
 	it('returns 404 for an unknown generation id', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		const project = await createProject(db, 'user-1', 'Living room');
-		const token = await issueShareToken(db, 'user-1', project.id);
+		const project = await createProject(createDb(db), 'user-1', 'Living room');
+		const token = await issueShareToken(createDb(db), 'user-1', project.id);
 
 		const response = await call(platform(db), token!, 'missing-generation');
 

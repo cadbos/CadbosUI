@@ -12,40 +12,35 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
+import { sql } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
+import type { Database } from '$lib/server/db';
 import {
 	completeTextureReplacementJob,
 	createTextureReplacementJob
 } from '$lib/server/texture-replacement-jobs';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { makeDb } from '$lib/server/testing/d1-shim';
 import { seedManagedMedia } from '$lib/server/testing/generation-fixtures';
 
-function seedAccount(db: D1Database): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind('user-1', 'pubkey-1', 1)
-		.run();
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-		.bind('user-1', 1, 1)
-		.run();
-	db.prepare(
-		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
-		.bind('project-1', 'user-1', 'Test project', 1, 1)
-		.run();
-	db.prepare(
-		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
-		.bind('session-1', 'project-1', 'Test session', 1, 1)
-		.run();
+async function seedAccount(db: Database): Promise<void> {
+	await db.run(sql`INSERT INTO users (id, pubkey, created_at) VALUES ('user-1', 'pubkey-1', 1)`);
+	await db.run(
+		sql`INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES ('user-1', 1, 1, 1)`
+	);
+	await db.run(
+		sql`INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES ('project-1', 'user-1', 'Test project', 1, 1)`
+	);
+	await db.run(
+		sql`INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES ('session-1', 'project-1', 'Test session', 1, 1)`
+	);
 }
 
 describe('texture replacement jobs', () => {
 	it('clamps completion spending at zero and warns', async () => {
-		const db = makeD1();
-		seedAccount(db);
-		const sceneMediaId = seedManagedMedia(db, 'scene.jpg');
-		const referenceMediaId = seedManagedMedia(db, 'reference.jpg');
+		const db = makeDb();
+		await seedAccount(db);
+		const sceneMediaId = await seedManagedMedia(db, 'scene.jpg');
+		const referenceMediaId = await seedManagedMedia(db, 'reference.jpg');
 		await createTextureReplacementJob(db, {
 			id: 'job-1',
 			userId: 'user-1',
@@ -58,7 +53,7 @@ describe('texture replacement jobs', () => {
 			createdAt: 10,
 			uploadQueueSec: 3
 		});
-		const outputMediaId = seedManagedMedia(db, 'result.png');
+		const outputMediaId = await seedManagedMedia(db, 'result.png');
 		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
 		const job = await completeTextureReplacementJob(
@@ -74,25 +69,21 @@ describe('texture replacement jobs', () => {
 		);
 
 		expect(job).toMatchObject({ status: 'completed', balanceAfter: 0, cost: 2 });
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
-		const generation = await db
-			.prepare(
-				'SELECT amount, balance_after, comfyui_upload_queue_sec, comfyui_queue_wait_sec, ' +
-					'comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec FROM generations WHERE id = ?'
-			)
-			.bind('job-1')
-			.first<{
-				amount: number;
-				balance_after: number;
-				comfyui_upload_queue_sec: number;
-				comfyui_queue_wait_sec: number;
-				comfyui_execution_sec: number;
-				comfyui_download_sec: number;
-				comfyui_reupload_sec: number;
-			}>();
+		const credit = await db.get<{ balance: number }>(
+			sql`SELECT balance FROM credits WHERE user_id = 'user-1'`
+		);
+		const generation = await db.get<{
+			amount: number;
+			balance_after: number;
+			comfyui_upload_queue_sec: number;
+			comfyui_queue_wait_sec: number;
+			comfyui_execution_sec: number;
+			comfyui_download_sec: number;
+			comfyui_reupload_sec: number;
+		}>(
+			sql`SELECT amount, balance_after, comfyui_upload_queue_sec, comfyui_queue_wait_sec,
+				comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec FROM generations WHERE id = 'job-1'`
+		);
 		expect(credit?.balance).toBe(0);
 		expect(generation).toEqual({
 			amount: 2,
@@ -103,19 +94,16 @@ describe('texture replacement jobs', () => {
 			comfyui_download_sec: 2,
 			comfyui_reupload_sec: 1
 		});
-		const jobRow = await db
-			.prepare(
-				'SELECT upload_queue_sec, queue_wait_sec, execution_sec, download_sec, reupload_sec ' +
-					'FROM texture_replacement_jobs WHERE id = ?'
-			)
-			.bind('job-1')
-			.first<{
-				upload_queue_sec: number;
-				queue_wait_sec: number;
-				execution_sec: number;
-				download_sec: number;
-				reupload_sec: number;
-			}>();
+		const jobRow = await db.get<{
+			upload_queue_sec: number;
+			queue_wait_sec: number;
+			execution_sec: number;
+			download_sec: number;
+			reupload_sec: number;
+		}>(
+			sql`SELECT upload_queue_sec, queue_wait_sec, execution_sec, download_sec, reupload_sec
+				FROM texture_replacement_jobs WHERE id = 'job-1'`
+		);
 		expect(jobRow).toEqual({
 			upload_queue_sec: 3,
 			queue_wait_sec: 5,

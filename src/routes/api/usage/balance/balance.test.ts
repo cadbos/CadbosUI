@@ -76,7 +76,7 @@ describe('GET /api/usage/balance', () => {
 	it('returns the live wallet balance for an admin', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY);
-		seedAdmin(db, 'admin');
+		await seedAdmin(db, 'admin');
 		getWalletBalance.mockResolvedValue(123.45);
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db));
@@ -89,7 +89,7 @@ describe('GET /api/usage/balance', () => {
 	it('returns 502 when the live balance check fails', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY);
-		seedAdmin(db, 'admin');
+		await seedAdmin(db, 'admin');
 		getWalletBalance.mockRejectedValue(new Error('archAI unreachable'));
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db));

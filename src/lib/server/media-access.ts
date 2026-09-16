@@ -38,10 +38,7 @@ export function mediaAccess(media: Media): MediaAccess {
 	return mediaLink(media.bucket.name, media.filename);
 }
 
-export async function mediaAccessById(
-	db: Database,
-	mediaId: number
-): Promise<MediaAccess | null> {
+export async function mediaAccessById(db: Database, mediaId: number): Promise<MediaAccess | null> {
 	const media = await getMedia(db, mediaId);
 	return media ? mediaAccess(media) : null;
 }

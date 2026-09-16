@@ -23,14 +23,12 @@
 // touching Module 2's SessionUser contract — one extra indexed lookup on
 // users.pubkey per paid call.
 
-import type { D1Database } from '@cloudflare/workers-types';
+import { sql } from 'drizzle-orm';
 import type { Balance } from '$lib/api/contract';
+import type { Database } from '$lib/server/db';
 
-export async function getUserIdByPubkey(db: D1Database, pubkey: string): Promise<string | null> {
-	const row = await db
-		.prepare('SELECT id FROM users WHERE pubkey = ?')
-		.bind(pubkey)
-		.first<{ id: string }>();
+export async function getUserIdByPubkey(db: Database, pubkey: string): Promise<string | null> {
+	const row = await db.get<{ id: string }>(sql`SELECT id FROM users WHERE pubkey = ${pubkey}`);
 	return row?.id ?? null;
 }
 
@@ -48,18 +46,15 @@ function toBalance(row: BalanceRow): Balance {
 // failure) — it records what archAI said it had left after this charge, not
 // a locally-computed running total.
 export async function recordBalance(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	balance: number
 ): Promise<Balance> {
-	const row = await db
-		.prepare(
-			'INSERT INTO balances (user_id, balance, updated_at) VALUES (?, ?, ?) ' +
-				'ON CONFLICT (user_id) DO UPDATE SET balance = excluded.balance, updated_at = excluded.updated_at ' +
-				'RETURNING balance, updated_at'
-		)
-		.bind(userId, balance, Date.now())
-		.first<BalanceRow>();
+	const row = await db.get<BalanceRow>(
+		sql`INSERT INTO balances (user_id, balance, updated_at) VALUES (${userId}, ${balance}, ${Date.now()})
+			ON CONFLICT (user_id) DO UPDATE SET balance = excluded.balance, updated_at = excluded.updated_at
+			RETURNING balance, updated_at`
+	);
 	if (!row) throw new Error('balance upsert failed');
 	return toBalance(row);
 }
@@ -87,11 +82,10 @@ function toCreditAccess(row: CreditRow): CreditAccess {
 
 // Null when no admin has approved this account yet — the caller must treat
 // that as "not allowed to generate", not "unlimited".
-export async function getCredit(db: D1Database, userId: string): Promise<CreditAccess | null> {
-	const row = await db
-		.prepare('SELECT balance, updated_at, enabled FROM credits WHERE user_id = ?')
-		.bind(userId)
-		.first<CreditRow>();
+export async function getCredit(db: Database, userId: string): Promise<CreditAccess | null> {
+	const row = await db.get<CreditRow>(
+		sql`SELECT balance, updated_at, enabled FROM credits WHERE user_id = ${userId}`
+	);
 	return row ? toCreditAccess(row) : null;
 }
 
@@ -116,7 +110,7 @@ export type GenerationCheck =
 	| { allowed: false; reason: 'not_approved' | 'insufficient_credit' };
 
 export async function assertGenerationAllowed(
-	db: D1Database,
+	db: Database,
 	userId: string
 ): Promise<GenerationCheck> {
 	const credit = await getCredit(db, userId);
