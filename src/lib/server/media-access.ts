@@ -12,8 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
 import type { MediaAccess } from '$lib/api/contract';
+import type { Database } from '$lib/server/db';
 import {
 	getMedia,
 	getMediaBatch,
@@ -36,7 +36,7 @@ export async function mediaAccess(
 }
 
 export async function mediaAccessById(
-	db: D1Database,
+	db: Database,
 	platform: App.Platform | undefined,
 	mediaId: number,
 	purpose: S3PresignPurpose = 'ui'
@@ -46,7 +46,7 @@ export async function mediaAccessById(
 }
 
 export async function mediaAccessBatch(
-	db: D1Database,
+	db: Database,
 	platform: App.Platform | undefined,
 	mediaIds: number[]
 ): Promise<Map<number, MediaAccess> | null> {
@@ -81,7 +81,7 @@ export async function mediaAccessByKeyBatch(
 }
 
 export async function providerMediaBatch(
-	db: D1Database,
+	db: Database,
 	platform: App.Platform | undefined,
 	keys: string[]
 ): Promise<Map<string, { media: Media; url: string }> | null> {
