@@ -20,11 +20,10 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import type { D1Database } from '@cloudflare/workers-types';
+import { createDb, type Database } from '$lib/server/db';
 import { TEST_S3_BUCKET } from './generation-fixtures';
 
 const MIGRATIONS_DIR = new URL('../../../../migrations/', import.meta.url);
-// Mirrors `wrangler d1 migrations apply`: every *.sql file in the migrations
-// dir, applied in filename order.
 const SCHEMA = readdirSync(MIGRATIONS_DIR)
 	.filter((file) => file.endsWith('.sql'))
 	.sort()
@@ -33,9 +32,10 @@ const SCHEMA = readdirSync(MIGRATIONS_DIR)
 
 interface ShimStatement {
 	bind: (...next: SQLInputValue[]) => ShimStatement;
-	run: () => { success: true; meta: { changes: number } };
-	first: (col?: string) => unknown;
-	all: () => { results: Record<string, unknown>[] };
+	run: () => Promise<{ success: true; meta: { changes: number } }>;
+	first: (col?: string) => Promise<unknown>;
+	all: () => Promise<{ results: Record<string, unknown>[] }>;
+	raw: () => Promise<unknown[][]>;
 	sql: string;
 	args: SQLInputValue[];
 }
@@ -50,20 +50,25 @@ export function makeD1(): D1Database {
 	);
 	const stmt = (sql: string, args: SQLInputValue[] = []): ShimStatement => ({
 		bind: (...next: SQLInputValue[]) => stmt(sql, next),
-		run: () => ({ success: true, meta: { changes: Number(db.prepare(sql).run(...args).changes) } }),
-		first: (col?: string) => {
+		run: async () => ({
+			success: true,
+			meta: { changes: Number(db.prepare(sql).run(...args).changes) }
+		}),
+		first: async (col?: string) => {
 			const row = db.prepare(sql).get(...args) as Record<string, unknown> | undefined;
 			if (row === undefined) return null;
 			return col ? row[col] : row;
 		},
-		all: () => ({ results: db.prepare(sql).all(...args) as Record<string, unknown>[] }),
+		all: async () => ({ results: db.prepare(sql).all(...args) as Record<string, unknown>[] }),
+		raw: async () =>
+			(db.prepare(sql).all(...args) as Record<string, unknown>[]).map((row) => Object.values(row)),
 		sql,
 		args
 	});
 	return {
 		prepare: (sql: string) => stmt(sql),
 		// Mirrors D1's batch(): every statement commits or rolls back together.
-		batch: (statements: ShimStatement[]) => {
+		batch: async (statements: ShimStatement[]) => {
 			db.exec('BEGIN');
 			try {
 				const results = statements.map((statement) => ({
@@ -79,4 +84,8 @@ export function makeD1(): D1Database {
 			}
 		}
 	} as unknown as D1Database;
+}
+
+export function makeDb(): Database {
+	return createDb(makeD1());
 }

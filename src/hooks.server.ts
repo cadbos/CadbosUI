@@ -16,7 +16,8 @@ import { dev } from '$app/environment';
 import type { Handle } from '@sveltejs/kit';
 import { defaultLocale, t } from '$lib/i18n/index.svelte';
 import { SESSION_COOKIE } from '$lib/server/auth/config';
-import { findValidSession, getDb } from '$lib/server/auth/repository';
+import { findValidSession } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { clearSessionCookie } from '$lib/server/auth/session';
 import {
 	addIntegrityToHtml,
@@ -142,5 +143,9 @@ function safeErrorMessage(
 	error: unknown,
 	defaultMessage: string = 'Unknown client integrity error'
 ): string {
-	return error instanceof Error ? error.message : defaultMessage;
+	if (!(error instanceof Error)) return defaultMessage;
+	// Drizzle wraps driver errors in a DrizzleQueryError whose own .message is
+	// just the failed query + params — the original error (e.g. D1's message
+	// with its support reference id) survives only on .cause.
+	return error.cause instanceof Error ? `${error.message}: ${error.cause.message}` : error.message;
 }

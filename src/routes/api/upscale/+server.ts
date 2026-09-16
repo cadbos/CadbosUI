@@ -17,7 +17,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { RenderResponse } from '$lib/api/contract';
 import { apiError, parseBody, upscaleRequestSchema } from '$lib/server/api';
-import { getDb } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import {

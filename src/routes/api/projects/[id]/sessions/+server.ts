@@ -16,7 +16,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { CreateSessionResponse } from '$lib/api/contract';
 import { apiError, createSessionRequestSchema, parseBody } from '$lib/server/api';
-import { getDb } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { createSession } from '$lib/server/projects';
 
