@@ -62,7 +62,7 @@ it('returns the current UTC counters and configured limits to an admin', async (
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind('admin', 'admin-pubkey', 1000)
 		.run();
-	seedAdmin(db, 'admin');
+	await seedAdmin(db, 'admin');
 	const app = platform(db);
 	app.env.D1_DAILY_ROWS_READ_LIMIT = '6000000';
 	const fetcher = vi.fn<typeof fetch>(async () =>
@@ -96,7 +96,7 @@ it('surfaces analytics failure without exposing provider details', async () => {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind('admin', 'admin-pubkey', 1000)
 		.run();
-	seedAdmin(db, 'admin');
+	await seedAdmin(db, 'admin');
 	vi.spyOn(console, 'error').mockImplementation(() => undefined);
 	const response = await call(
 		{ pubkey: 'admin-pubkey' },

@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
+import { createDb } from '$lib/server/db';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { mediaKey } from '$lib/server/media';
 import { makeD1 } from '$lib/server/testing/d1-shim';
@@ -31,7 +32,7 @@ const { POST } = await import('./+server');
 // per db, so one constant session id, owned by that user, is enough everywhere.
 const TEST_SESSION_ID = '00000000-0000-4000-8000-000000000001';
 
-function seedUser(db: D1Database, id: string, pubkey: string): void {
+async function seedUser(db: D1Database, id: string, pubkey: string): Promise<void> {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
 		.run();
@@ -47,8 +48,9 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 	)
 		.bind(TEST_SESSION_ID, projectId, 'Test session', now, now)
 		.run();
-	seedManagedMedia(db);
-	seedManagedMedia(db, 'test/reference.webp');
+	const drizzleDb = createDb(db);
+	await seedManagedMedia(drizzleDb);
+	await seedManagedMedia(drizzleDb, 'test/reference.webp');
 }
 
 function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
@@ -94,9 +96,9 @@ describe('POST /api/style-transfer — billing', () => {
 
 	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
-		const foreignSessionId = seedForeignSession(db);
+		const foreignSessionId = await seedForeignSession(createDb(db));
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
 			...body,
@@ -109,7 +111,7 @@ describe('POST /api/style-transfer — billing', () => {
 
 	it('rejects a reference image value that is not a media key', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
@@ -121,7 +123,7 @@ describe('POST /api/style-transfer — billing', () => {
 
 	it('rejects URL fields from the previous contract', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 		const platform = { env: { DB: db } } as App.Platform;
 		const sourceResponse = await call({ pubkey }, platform, {
@@ -139,7 +141,7 @@ describe('POST /api/style-transfer — billing', () => {
 
 	it('rejects a style transfer strength outside the provider range', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
@@ -151,7 +153,7 @@ describe('POST /api/style-transfer — billing', () => {
 
 	it('mirrors the real archAI balance server-side without exposing it to the client', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -168,7 +170,7 @@ describe('POST /api/style-transfer — billing', () => {
 
 	it('records the styled image, source and prompt against the authenticated profile', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -212,7 +214,7 @@ describe('POST /api/style-transfer — billing', () => {
 
 	it('rate-limits repeated style transfers from the same account', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 1000);
 		const platform = { env: { DB: db } } as App.Platform;
 
@@ -227,7 +229,7 @@ describe('POST /api/style-transfer — billing', () => {
 
 	it('uses the approved-account balance for the dev-only demo session', async () => {
 		const db = makeD1();
-		seedUser(db, 'demo-user', DEMO_PUBKEY);
+		await seedUser(db, 'demo-user', DEMO_PUBKEY);
 		grantAccess(db, 'demo-user', 12);
 
 		const response = await call({ pubkey: DEMO_PUBKEY }, { env: { DB: db } } as App.Platform, body);
@@ -240,7 +242,7 @@ describe('POST /api/style-transfer — billing', () => {
 
 	it('blocks an account with no credits row at all', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(403);
@@ -250,7 +252,7 @@ describe('POST /api/style-transfer — billing', () => {
 
 	it('blocks style transfer once an approved account exhausts its balance', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 0);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);

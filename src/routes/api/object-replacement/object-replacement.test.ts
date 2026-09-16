@@ -23,6 +23,7 @@ import {
 	getObjectReplacementJob
 } from '$lib/server/object-replacement-jobs';
 import { RemoteImageImportError } from '$lib/server/remote-image';
+import { createDb } from '$lib/server/db';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedManagedMedia,
@@ -163,7 +164,12 @@ function sessionIdForPubkey(pubkey: string | undefined): string {
 	return (pubkey && SESSION_IDS[pubkey]) || FALLBACK_SESSION_ID;
 }
 
-function seedUser(db: D1Database, balance?: number, userId = 'user-1', pubkey = 'pubkey-1'): void {
+async function seedUser(
+	db: D1Database,
+	balance?: number,
+	userId = 'user-1',
+	pubkey = 'pubkey-1'
+): Promise<void> {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(userId, pubkey, Date.now())
 		.run();
@@ -184,8 +190,9 @@ function seedUser(db: D1Database, balance?: number, userId = 'user-1', pubkey = 
 	)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
-	seedManagedMedia(db, 'scene.jpg');
-	seedManagedMedia(db, 'reference.jpg');
+	const drizzleDb = createDb(db);
+	await seedManagedMedia(drizzleDb, 'scene.jpg');
+	await seedManagedMedia(drizzleDb, 'reference.jpg');
 }
 
 function bucket(): { put: ReturnType<typeof vi.fn> } {
@@ -252,8 +259,9 @@ function callGet(
 	} as GetEvent);
 }
 
-async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
-	setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
+async function seedJob(rawDb: D1Database, createdAt = Date.now()): Promise<void> {
+	const db = createDb(rawDb);
+	await setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
 	await createObjectReplacementJob(db, {
 		id: 'job-1',
 		userId: 'user-1',
@@ -310,7 +318,7 @@ describe('POST /api/object-replacement', () => {
 		expect(uploadsBucket.put).not.toHaveBeenCalled();
 		consoleWarn.mockClear();
 
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		const invalid = await callPost({ pubkey: 'pubkey-1' }, platform(db), {
 			...requestBody,
 			replacementObject: '',
@@ -323,9 +331,9 @@ describe('POST /api/object-replacement', () => {
 
 	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-		const foreignSessionId = seedForeignSession(db);
+		const foreignSessionId = await seedForeignSession(createDb(db));
 
 		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), {
 			sessionId: foreignSessionId
@@ -361,21 +369,21 @@ describe('POST /api/object-replacement', () => {
 	it('requires an approved account with enough credit for the snapshotted tariff', async () => {
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		const unapprovedDb = makeD1();
-		seedUser(unapprovedDb);
+		await seedUser(unapprovedDb);
 		const unapproved = await callPost({ pubkey: 'pubkey-1' }, platform(unapprovedDb));
 		expect(unapproved.status).toBe(403);
 		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(403, 'generation_restricted'));
 		consoleWarn.mockClear();
 
 		const exhaustedDb = makeD1();
-		seedUser(exhaustedDb, 0);
+		await seedUser(exhaustedDb, 0);
 		const exhausted = await callPost({ pubkey: 'pubkey-1' }, platform(exhaustedDb));
 		expect(exhausted.status).toBe(402);
 		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(402, 'insufficient_credit'));
 		consoleWarn.mockClear();
 
 		const underfundedDb = makeD1();
-		seedUser(underfundedDb, 1.5);
+		await seedUser(underfundedDb, 1.5);
 		const underfunded = await callPost({ pubkey: 'pubkey-1' }, platform(underfundedDb));
 		expect(underfunded.status).toBe(402);
 		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(402, 'insufficient_credit'));
@@ -384,7 +392,7 @@ describe('POST /api/object-replacement', () => {
 
 	it('logs billing pre-check failures without exception details', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		integration.costError = new Error('private billing detail');
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -404,7 +412,7 @@ describe('POST /api/object-replacement', () => {
 
 	it('submits once and returns a persisted polling resource', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		integration.cost = 3.5;
 		const id = '123e4567-e89b-12d3-a456-426614174000' as ReturnType<typeof crypto.randomUUID>;
 		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
@@ -426,7 +434,7 @@ describe('POST /api/object-replacement', () => {
 			'https://cadbos.example',
 			id
 		);
-		await expect(getObjectReplacementJob(db, 'user-1', id)).resolves.toMatchObject({
+		await expect(getObjectReplacementJob(createDb(db), 'user-1', id)).resolves.toMatchObject({
 			comfyPromptId: 'prompt-1',
 			cost: 3.5,
 			status: 'processing'
@@ -440,7 +448,7 @@ describe('POST /api/object-replacement', () => {
 		'maps %s submission failures without creating or charging a job',
 		async (code, expectedStatus, providerStatus) => {
 			const db = makeD1();
-			seedUser(db, 12);
+			await seedUser(db, 12);
 			integration.submit.mockRejectedValue(
 				new ComfyUiError(code, 'queue_workflow', 'private provider detail', {
 					status: providerStatus
@@ -477,7 +485,7 @@ describe('POST /api/object-replacement', () => {
 
 	it('logs remote-image fetch failures at the route boundary', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		integration.submit.mockRejectedValue(new RemoteImageImportError('remote_fetch_failed'));
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -495,7 +503,7 @@ describe('POST /api/object-replacement', () => {
 
 	it('logs unknown submission failures without exception details', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		integration.submit.mockRejectedValue(new Error('private submission detail'));
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -511,7 +519,7 @@ describe('POST /api/object-replacement', () => {
 
 	it('cancels the accepted prompt and logs job persistence failures without stored request data', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		jobStore.failNextCreate = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const requestPlatform = platform(db);
@@ -534,7 +542,7 @@ describe('POST /api/object-replacement', () => {
 
 	it('logs a sanitized failure when persistence cleanup also fails', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		jobStore.failNextCreate = true;
 		integration.cancel.mockRejectedValue(
 			new ComfyUiError('network_error', 'cancel_workflow', 'private cleanup detail')
@@ -558,7 +566,7 @@ describe('POST /api/object-replacement', () => {
 
 	it('does not attempt cleanup on a successful submission or a submission failure', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 
 		await callPost({ pubkey: 'pubkey-1' }, platform(db));
 		expect(integration.cancel).not.toHaveBeenCalled();
@@ -573,8 +581,8 @@ describe('POST /api/object-replacement', () => {
 
 	it('rejects a concurrent submission for the same account and isolates the guard by pubkey', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
-		seedUser(db, 12, 'user-2', 'pubkey-2');
+		await seedUser(db, 12);
+		await seedUser(db, 12, 'user-2', 'pubkey-2');
 		let resolveSubmission!: (promptId: string) => void;
 		integration.submit.mockImplementationOnce(
 			() =>
@@ -609,7 +617,7 @@ describe('POST /api/object-replacement', () => {
 
 	it('releases the in-flight guard when submission fails', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		let rejectSubmission!: (error: Error) => void;
 		integration.submit.mockImplementationOnce(
 			() =>
@@ -631,7 +639,7 @@ describe('POST /api/object-replacement', () => {
 
 	it('rate-limits repeated paid submissions for one account', async () => {
 		const db = makeD1();
-		seedUser(db, 100);
+		await seedUser(db, 100);
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		integration.submit.mockImplementation(
 			async () => `prompt-${integration.submit.mock.calls.length}`
@@ -670,7 +678,7 @@ describe('GET /api/object-replacement/[id]', () => {
 
 	it('hides missing jobs and jobs owned by another account', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 			.bind('user-2', 'pubkey-2', Date.now())
 			.run();
@@ -685,7 +693,7 @@ describe('GET /api/object-replacement/[id]', () => {
 
 	it('returns a retryable processing response without charging', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 
 		const response = await callGet({ pubkey: 'pubkey-1' }, platform(db), 'job-1');
@@ -698,7 +706,7 @@ describe('GET /api/object-replacement/[id]', () => {
 
 	it('finalizes and charges a completed result exactly once across concurrent polls', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 		integration.poll.mockResolvedValue(completedResult());
 		const uploadsBucket = bucket();
@@ -748,7 +756,7 @@ describe('GET /api/object-replacement/[id]', () => {
 
 	it('returns stored terminal results without polling ComfyUI again', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 		integration.poll.mockResolvedValue(completedResult());
 		const requestPlatform = platform(db);
@@ -763,7 +771,7 @@ describe('GET /api/object-replacement/[id]', () => {
 
 	it('marks provider execution failures terminal without charging', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 		integration.poll.mockRejectedValue(
 			new ComfyUiError('execution_failed', 'workflow', 'private provider detail')
@@ -786,7 +794,7 @@ describe('GET /api/object-replacement/[id]', () => {
 
 	it('leaves transient provider and storage failures retryable', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 		vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		integration.poll.mockRejectedValueOnce(
@@ -812,7 +820,7 @@ describe('GET /api/object-replacement/[id]', () => {
 
 	it('times out only after checking ComfyUI for a completed result', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db, Date.now() - 11 * 60_000);
 
 		const response = await callGet({ pubkey: 'pubkey-1' }, platform(db), 'job-1');

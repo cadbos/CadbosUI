@@ -16,6 +16,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { mediaKey } from '$lib/server/media';
+import { createDb } from '$lib/server/db';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedManagedMedia,
@@ -74,7 +75,7 @@ function sessionIdForPubkey(pubkey: string | undefined): string {
 	return (pubkey && SESSION_IDS[pubkey]) || FALLBACK_SESSION_ID;
 }
 
-function seedUser(db: D1Database, id: string, pubkey: string): void {
+async function seedUser(db: D1Database, id: string, pubkey: string): Promise<void> {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
 		.run();
@@ -90,7 +91,7 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 	)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
-	seedManagedMedia(db);
+	await seedManagedMedia(createDb(db));
 }
 
 // The admin's manual approval step (migrations/0005) — no auto-provisioning
@@ -131,7 +132,7 @@ describe('POST /api/upscale — billing', () => {
 
 	it('rejects an image value that is not a media key', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
@@ -142,9 +143,9 @@ describe('POST /api/upscale — billing', () => {
 
 	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
-		const foreignSessionId = seedForeignSession(db);
+		const foreignSessionId = await seedForeignSession(createDb(db));
 
 		// call() forces sessionId to the caller's own session — bypass it here to
 		// submit someone else's session id instead.
@@ -163,7 +164,7 @@ describe('POST /api/upscale — billing', () => {
 
 	it('upscales the given image and returns a URL', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -174,7 +175,7 @@ describe('POST /api/upscale — billing', () => {
 
 	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -193,7 +194,7 @@ describe('POST /api/upscale — billing', () => {
 
 	it('records the upscaled image and source against the authenticated profile', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
@@ -229,7 +230,7 @@ describe('POST /api/upscale — billing', () => {
 
 	it('still returns the completed, already-charged upscale if recordGeneration fails', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		grantAccess(db, 'user-1', 12);
 		generationsMock.failNextRecordGeneration = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -257,7 +258,7 @@ describe('POST /api/upscale — billing', () => {
 
 	it('still returns the completed, already-charged upscale if recording the balance fails', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 12);
 		billingMock.failNextRecordBalance = true;
 
@@ -270,7 +271,7 @@ describe('POST /api/upscale — billing', () => {
 
 	it('rate-limits repeated upscales from the same account (anti-cost-abuse)', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 		grantAccess(db, 'user-1', 1000);
 		const platform = { env: { DB: db } } as App.Platform;
 
@@ -285,8 +286,8 @@ describe('POST /api/upscale — billing', () => {
 
 	it('isolates the rate limit per account', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		seedUser(db, 'user-2', 'b'.repeat(64));
+		await seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-2', 'b'.repeat(64));
 		grantAccess(db, 'user-1', 1000);
 		grantAccess(db, 'user-2', 1000);
 		const platform = { env: { DB: db } } as App.Platform;
@@ -316,7 +317,7 @@ describe('POST /api/upscale — billing', () => {
 	describe('generation access control', () => {
 		it('blocks an account with no credits row at all', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
+			await seedUser(db, 'user-1', pubkey);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(403);
@@ -326,7 +327,7 @@ describe('POST /api/upscale — billing', () => {
 
 		it('blocks an account the admin disabled, even with balance remaining', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
+			await seedUser(db, 'user-1', pubkey);
 			grantAccess(db, 'user-1', 5, 0);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -337,7 +338,7 @@ describe('POST /api/upscale — billing', () => {
 
 		it('allows and deducts the real archAI cost for an approved, enabled account', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
+			await seedUser(db, 'user-1', pubkey);
 			grantAccess(db, 'user-1', 12);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -353,7 +354,7 @@ describe('POST /api/upscale — billing', () => {
 
 		it('blocks upscaling once an approved account exhausts its balance', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
+			await seedUser(db, 'user-1', pubkey);
 			grantAccess(db, 'user-1', 0);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -364,7 +365,7 @@ describe('POST /api/upscale — billing', () => {
 
 		it('returns a clean 500 instead of crashing if the credits table is missing (unapplied migration)', async () => {
 			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
+			await seedUser(db, 'user-1', pubkey);
 			db.prepare('DROP TABLE credits').run();
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);

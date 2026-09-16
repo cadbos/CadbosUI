@@ -17,15 +17,12 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { RepaintJobResponse, SessionUser } from '$lib/api/contract';
 import { ComfyUiError, type ComfyDownloadedImage } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+import { createDb } from '$lib/server/db';
 import { mediaKey, type Bucket } from '$lib/server/media';
 import { createRepaintJob, getRepaintJob } from '$lib/server/repaint-jobs';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 import { makeD1 } from '$lib/server/testing/d1-shim';
-import {
-	seedManagedMedia,
-	setBucketUrl,
-	TEST_S3_BUCKET
-} from '$lib/server/testing/generation-fixtures';
+import { setBucketUrl, TEST_S3_BUCKET } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 
 const integration = vi.hoisted(() => ({
@@ -170,7 +167,9 @@ function seedUser(db: D1Database, balance?: number, userId = 'user-1', pubkey = 
 	)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
-	seedManagedMedia(db, 'scene.jpg');
+	db.prepare(
+		"INSERT OR IGNORE INTO media (filename, bucket, checksum) VALUES ('scene.jpg', 1, '')"
+	).run();
 }
 
 function bucket(): { put: ReturnType<typeof vi.fn> } {
@@ -238,8 +237,8 @@ function callGet(
 }
 
 async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
-	setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
-	await createRepaintJob(db, {
+	await setBucketUrl(createDb(db), TEST_S3_BUCKET.name, 'https://cdn.example.test');
+	await createRepaintJob(createDb(db), {
 		id: 'job-1',
 		userId: 'user-1',
 		comfyPromptId: 'prompt-1',
@@ -306,7 +305,7 @@ describe('POST /api/repaint', () => {
 		const db = makeD1();
 		seedUser(db, 12);
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-		const foreignSessionId = seedForeignSession(db);
+		const foreignSessionId = await seedForeignSession(createDb(db));
 
 		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), {
 			sessionId: foreignSessionId
@@ -368,7 +367,7 @@ describe('POST /api/repaint', () => {
 			'https://cadbos.example',
 			id
 		);
-		await expect(getRepaintJob(db, 'user-1', id)).resolves.toMatchObject({
+		await expect(getRepaintJob(createDb(db), 'user-1', id)).resolves.toMatchObject({
 			comfyPromptId: 'prompt-1',
 			target: requestBody.target,
 			color: requestBody.color,
