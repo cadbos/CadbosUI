@@ -61,8 +61,11 @@ export function makeD1(): D1Database {
 			return col ? row[col] : row;
 		},
 		all: async () => ({ results: db.prepare(sql).all(...args) as Record<string, unknown>[] }),
-		raw: async () =>
-			(db.prepare(sql).all(...args) as Record<string, unknown>[]).map((row) => Object.values(row)),
+		raw: async () => {
+			const raw = db.prepare(sql);
+			raw.setReturnArrays(true);
+			return raw.all(...args) as unknown as unknown[][];
+		},
 		sql,
 		args
 	});

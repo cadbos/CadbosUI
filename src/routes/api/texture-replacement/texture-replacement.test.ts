@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { mediaKey } from '$lib/server/media';
+import { createDb } from '$lib/server/db';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedManagedMedia,
@@ -86,12 +87,12 @@ function sessionIdForPubkey(pubkey: string | null | undefined): string {
 	return (pubkey && SESSION_IDS[pubkey]) || FALLBACK_SESSION_ID;
 }
 
-function seedUser(
+async function seedUser(
 	db: D1Database,
 	id = 'user-1',
 	pubkey = 'pubkey-1',
 	balance: number | null = 12
-): void {
+): Promise<void> {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
 		.run();
@@ -112,9 +113,10 @@ function seedUser(
 	)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
-	seedManagedMedia(db, 'scene.jpg');
-	seedManagedMedia(db, 'reference.jpg');
-	seedManagedMedia(db, 'mask.png');
+	const drizzleDb = createDb(db);
+	await seedManagedMedia(drizzleDb, 'scene.jpg');
+	await seedManagedMedia(drizzleDb, 'reference.jpg');
+	await seedManagedMedia(drizzleDb, 'mask.png');
 }
 
 function platform(db: D1Database): App.Platform {
@@ -168,9 +170,9 @@ afterEach(() => {
 describe('POST /api/texture-replacement', () => {
 	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
 		const db = makeD1();
-		seedUser(db);
+		await seedUser(db);
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-		const foreignSessionId = seedForeignSession(db);
+		const foreignSessionId = await seedForeignSession(createDb(db));
 
 		// callPost() forces sessionId to the caller's own session — bypass it here
 		// to submit someone else's session id instead.
@@ -193,7 +195,7 @@ describe('POST /api/texture-replacement', () => {
 
 	it('uses ArchAI for a masked request and completes without creating a ComfyUI job', async () => {
 		const db = makeD1();
-		seedUser(db);
+		await seedUser(db);
 		const maskedRequest = {
 			imageKey: requestBody.imageKey,
 			referenceImageKey: requestBody.referenceImageKey,
@@ -241,7 +243,7 @@ describe('POST /api/texture-replacement', () => {
 
 	it('returns a sanitized upstream error when masked replacement fails', async () => {
 		const db = makeD1();
-		seedUser(db);
+		await seedUser(db);
 		archai.replaceTexturesWithMask.mockRejectedValue(new Error('private provider trace'));
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -263,7 +265,7 @@ describe('POST /api/texture-replacement', () => {
 
 	it('rejects requests that mix automatic surface detection with a mask', async () => {
 		const db = makeD1();
-		seedUser(db);
+		await seedUser(db);
 
 		const response = await callPost(platform(db), 'pubkey-1', {
 			...requestBody,
@@ -290,7 +292,7 @@ describe('POST /api/texture-replacement', () => {
 	it('logs quota rejections without changing their API errors', async () => {
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		const unapprovedDb = makeD1();
-		seedUser(unapprovedDb, 'user-1', 'pubkey-1', null);
+		await seedUser(unapprovedDb, 'user-1', 'pubkey-1', null);
 
 		const unapproved = await callPost(platform(unapprovedDb));
 		expect(unapproved.status).toBe(403);
@@ -304,7 +306,7 @@ describe('POST /api/texture-replacement', () => {
 		consoleWarn.mockClear();
 
 		const exhaustedDb = makeD1();
-		seedUser(exhaustedDb, 'user-1', 'pubkey-1', 0);
+		await seedUser(exhaustedDb, 'user-1', 'pubkey-1', 0);
 		const exhausted = await callPost(platform(exhaustedDb));
 		expect(exhausted.status).toBe(402);
 		expect(await exhausted.json()).toEqual({
@@ -314,7 +316,7 @@ describe('POST /api/texture-replacement', () => {
 		consoleWarn.mockClear();
 
 		const underfundedDb = makeD1();
-		seedUser(underfundedDb, 'user-1', 'pubkey-1', 1);
+		await seedUser(underfundedDb, 'user-1', 'pubkey-1', 1);
 		const underfunded = await callPost(platform(underfundedDb));
 		expect(underfunded.status).toBe(402);
 		expect(await underfunded.json()).toEqual({
@@ -326,7 +328,7 @@ describe('POST /api/texture-replacement', () => {
 
 	it('logs rate-limit rejection without changing the API error', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1', 100);
+		await seedUser(db, 'user-1', 'pubkey-1', 100);
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
 		for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -344,8 +346,8 @@ describe('POST /api/texture-replacement', () => {
 
 	it('rejects a concurrent submission for the same account and isolates the guard by pubkey', async () => {
 		const db = makeD1();
-		seedUser(db);
-		seedUser(db, 'user-2', 'pubkey-2');
+		await seedUser(db);
+		await seedUser(db, 'user-2', 'pubkey-2');
 		let resolveSubmission!: (promptId: string) => void;
 		integration.submit.mockImplementationOnce(
 			() =>
@@ -383,7 +385,7 @@ describe('POST /api/texture-replacement', () => {
 
 	it('releases the in-flight guard when submission fails', async () => {
 		const db = makeD1();
-		seedUser(db);
+		await seedUser(db);
 		let rejectSubmission!: (error: Error) => void;
 		integration.submit.mockImplementationOnce(
 			() =>
@@ -405,7 +407,7 @@ describe('POST /api/texture-replacement', () => {
 
 	it('preserves the accepted response without cancelling a persisted prompt', async () => {
 		const db = makeD1();
-		seedUser(db);
+		await seedUser(db);
 
 		const response = await callPost(platform(db));
 
@@ -415,7 +417,7 @@ describe('POST /api/texture-replacement', () => {
 
 	it('preserves submission errors without attempting cleanup', async () => {
 		const db = makeD1();
-		seedUser(db);
+		await seedUser(db);
 		integration.submit.mockRejectedValue(
 			new ComfyUiError('network_error', 'queue_workflow', 'private provider detail')
 		);
@@ -430,7 +432,7 @@ describe('POST /api/texture-replacement', () => {
 
 	it('cancels an accepted prompt when job persistence fails', async () => {
 		const db = makeD1();
-		seedUser(db);
+		await seedUser(db);
 		jobs.create.mockRejectedValue(new Error('private persistence detail'));
 		vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const requestPlatform = platform(db);
@@ -444,7 +446,7 @@ describe('POST /api/texture-replacement', () => {
 
 	it('surfaces a sanitized log when persistence cleanup also fails', async () => {
 		const db = makeD1();
-		seedUser(db);
+		await seedUser(db);
 		jobs.create.mockRejectedValue(new Error('private persistence detail'));
 		integration.cancel.mockRejectedValue(
 			new ComfyUiError('network_error', 'cancel_workflow', 'private cleanup detail')

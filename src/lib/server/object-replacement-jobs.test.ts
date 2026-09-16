@@ -12,16 +12,17 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { sql } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
-import type { D1Database } from '@cloudflare/workers-types';
 import type { RequestFormSnapshot } from '$lib/api/contract';
+import type { Database } from '$lib/server/db';
 import {
 	completeObjectReplacementJob,
 	createObjectReplacementJob,
 	failObjectReplacementJob,
 	getObjectReplacementJob
 } from '$lib/server/object-replacement-jobs';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { makeDb } from '$lib/server/testing/d1-shim';
 import { seedManagedMedia } from '$lib/server/testing/generation-fixtures';
 
 const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
@@ -44,28 +45,22 @@ const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	lightSettingsInstruction: ''
 };
 
-function seedAccount(db: D1Database, balance = 12): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind('user-1', 'pubkey-1', 1)
-		.run();
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-		.bind('user-1', balance, 1)
-		.run();
-	db.prepare(
-		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
-		.bind('project-1', 'user-1', 'Test project', 1, 1)
-		.run();
-	db.prepare(
-		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
-		.bind('session-1', 'project-1', 'Test session', 1, 1)
-		.run();
+async function seedAccount(db: Database, balance = 12): Promise<void> {
+	await db.run(sql`INSERT INTO users (id, pubkey, created_at) VALUES ('user-1', 'pubkey-1', 1)`);
+	await db.run(
+		sql`INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES ('user-1', ${balance}, 1, 1)`
+	);
+	await db.run(
+		sql`INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES ('project-1', 'user-1', 'Test project', 1, 1)`
+	);
+	await db.run(
+		sql`INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES ('session-1', 'project-1', 'Test session', 1, 1)`
+	);
 }
 
-async function seedJob(db: D1Database, id = 'job-1') {
-	const sceneMediaId = seedManagedMedia(db, 'scene.jpg');
-	const referenceMediaId = seedManagedMedia(db, 'reference.jpg');
+async function seedJob(db: Database, id = 'job-1') {
+	const sceneMediaId = await seedManagedMedia(db, 'scene.jpg');
+	const referenceMediaId = await seedManagedMedia(db, 'reference.jpg');
 	return createObjectReplacementJob(db, {
 		id,
 		userId: 'user-1',
@@ -83,8 +78,8 @@ async function seedJob(db: D1Database, id = 'job-1') {
 
 describe('object replacement jobs', () => {
 	it('stores the provider prompt and snapshotted request', async () => {
-		const db = makeD1();
-		seedAccount(db);
+		const db = makeDb();
+		await seedAccount(db);
 
 		await seedJob(db);
 
@@ -99,10 +94,10 @@ describe('object replacement jobs', () => {
 	});
 
 	it('atomically completes, deducts, and records one generation', async () => {
-		const db = makeD1();
-		seedAccount(db);
+		const db = makeDb();
+		await seedAccount(db);
 		await seedJob(db);
-		const outputMediaId = seedManagedMedia(db, 'result.png');
+		const outputMediaId = await seedManagedMedia(db, 'result.png');
 
 		const job = await completeObjectReplacementJob(
 			db,
@@ -117,13 +112,10 @@ describe('object replacement jobs', () => {
 		);
 
 		expect(job).toMatchObject({ status: 'completed', balanceAfter: 10, cost: 2 });
-		const generation = await db
-			.prepare(
-				'SELECT id, kind, amount, balance_after, comfyui_upload_queue_sec, comfyui_queue_wait_sec, ' +
-					'comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot FROM generations WHERE id = ?'
-			)
-			.bind('job-1')
-			.first<{ form_snapshot: string | null } & Record<string, unknown>>();
+		const generation = await db.get<{ form_snapshot: string | null } & Record<string, unknown>>(
+			sql`SELECT id, kind, amount, balance_after, comfyui_upload_queue_sec, comfyui_queue_wait_sec,
+				comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot FROM generations WHERE id = 'job-1'`
+		);
 		expect(JSON.parse(generation!.form_snapshot!)).toEqual(TEST_FORM_SNAPSHOT);
 		const generationWithoutSnapshot = { ...generation! };
 		delete (generationWithoutSnapshot as { form_snapshot?: string | null }).form_snapshot;
@@ -138,19 +130,16 @@ describe('object replacement jobs', () => {
 			comfyui_download_sec: 2,
 			comfyui_reupload_sec: 1
 		});
-		const jobRow = await db
-			.prepare(
-				'SELECT upload_queue_sec, queue_wait_sec, execution_sec, download_sec, reupload_sec ' +
-					'FROM object_replacement_jobs WHERE id = ?'
-			)
-			.bind('job-1')
-			.first<{
-				upload_queue_sec: number;
-				queue_wait_sec: number;
-				execution_sec: number;
-				download_sec: number;
-				reupload_sec: number;
-			}>();
+		const jobRow = await db.get<{
+			upload_queue_sec: number;
+			queue_wait_sec: number;
+			execution_sec: number;
+			download_sec: number;
+			reupload_sec: number;
+		}>(
+			sql`SELECT upload_queue_sec, queue_wait_sec, execution_sec, download_sec, reupload_sec
+				FROM object_replacement_jobs WHERE id = 'job-1'`
+		);
 		expect(jobRow).toEqual({
 			upload_queue_sec: 3,
 			queue_wait_sec: 5,
@@ -161,10 +150,10 @@ describe('object replacement jobs', () => {
 	});
 
 	it('returns the same completion without charging again', async () => {
-		const db = makeD1();
-		seedAccount(db);
+		const db = makeDb();
+		await seedAccount(db);
 		await seedJob(db);
-		const outputMediaId = seedManagedMedia(db, 'result.png');
+		const outputMediaId = await seedManagedMedia(db, 'result.png');
 
 		const [first, second] = await Promise.all([
 			completeObjectReplacementJob(db, 'user-1', 'job-1', outputMediaId, 20, 5, 10, 2, 1),
@@ -173,25 +162,23 @@ describe('object replacement jobs', () => {
 
 		expect(first.balanceAfter).toBe(10);
 		expect(second.balanceAfter).toBe(10);
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
-		const count = await db
-			.prepare('SELECT COUNT(*) AS count FROM generations WHERE id = ?')
-			.bind('job-1')
-			.first<{ count: number }>();
+		const credit = await db.get<{ balance: number }>(
+			sql`SELECT balance FROM credits WHERE user_id = 'user-1'`
+		);
+		const count = await db.get<{ count: number }>(
+			sql`SELECT COUNT(*) AS count FROM generations WHERE id = 'job-1'`
+		);
 		expect(credit?.balance).toBe(10);
 		expect(count?.count).toBe(1);
 	});
 
 	it('clamps concurrent completion spending at zero and warns once', async () => {
-		const db = makeD1();
-		seedAccount(db, 3);
+		const db = makeDb();
+		await seedAccount(db, 3);
 		await seedJob(db, 'job-1');
 		await seedJob(db, 'job-2');
-		const firstOutputMediaId = seedManagedMedia(db, 'result-1.png');
-		const secondOutputMediaId = seedManagedMedia(db, 'result-2.png');
+		const firstOutputMediaId = await seedManagedMedia(db, 'result-1.png');
+		const secondOutputMediaId = await seedManagedMedia(db, 'result-2.png');
 		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
 		const jobs = await Promise.all([
@@ -201,16 +188,14 @@ describe('object replacement jobs', () => {
 		await completeObjectReplacementJob(db, 'user-1', 'job-2', secondOutputMediaId, 22, 7, 12, 4, 3);
 
 		expect(jobs.map((job) => job.balanceAfter).sort()).toEqual([0, 1]);
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
-		const generations = await db
-			.prepare('SELECT id, amount, balance_after FROM generations WHERE user_id = ? ORDER BY id')
-			.bind('user-1')
-			.all<{ id: string; amount: number; balance_after: number }>();
+		const credit = await db.get<{ balance: number }>(
+			sql`SELECT balance FROM credits WHERE user_id = 'user-1'`
+		);
+		const generations = await db.all<{ id: string; amount: number; balance_after: number }>(
+			sql`SELECT id, amount, balance_after FROM generations WHERE user_id = 'user-1' ORDER BY id`
+		);
 		expect(credit?.balance).toBe(0);
-		expect(generations.results).toEqual([
+		expect(generations).toEqual([
 			{ id: 'job-1', amount: 2, balance_after: 1 },
 			{ id: 'job-2', amount: 2, balance_after: 0 }
 		]);
@@ -223,8 +208,8 @@ describe('object replacement jobs', () => {
 	});
 
 	it('marks a provider failure without deducting credit', async () => {
-		const db = makeD1();
-		seedAccount(db);
+		const db = makeDb();
+		await seedAccount(db);
 		await seedJob(db);
 
 		const job = await failObjectReplacementJob(
@@ -241,15 +226,13 @@ describe('object replacement jobs', () => {
 			status: 'failed',
 			errorCode: 'object_replacement_failed'
 		});
-		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
+		const credit = await db.get<{ balance: number }>(
+			sql`SELECT balance FROM credits WHERE user_id = 'user-1'`
+		);
 		expect(credit?.balance).toBe(12);
-		const jobRow = await db
-			.prepare('SELECT queue_wait_sec, execution_sec FROM object_replacement_jobs WHERE id = ?')
-			.bind('job-1')
-			.first<{ queue_wait_sec: number; execution_sec: number }>();
+		const jobRow = await db.get<{ queue_wait_sec: number; execution_sec: number }>(
+			sql`SELECT queue_wait_sec, execution_sec FROM object_replacement_jobs WHERE id = 'job-1'`
+		);
 		expect(jobRow).toEqual({ queue_wait_sec: 0, execution_sec: 10 });
 	});
 });

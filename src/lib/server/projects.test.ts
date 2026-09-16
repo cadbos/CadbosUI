@@ -13,8 +13,9 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { D1Database } from '@cloudflare/workers-types';
-import { makeD1 } from './testing/d1-shim';
+import { sql } from 'drizzle-orm';
+import type { Database } from '$lib/server/db';
+import { makeDb } from '$lib/server/testing/d1-shim';
 import {
 	seedGeneration as seedGenerationFixture,
 	TEST_FORM_SNAPSHOT
@@ -35,20 +36,20 @@ import {
 	revokeActiveShareToken
 } from './projects';
 
-function seedUser(db: D1Database, id: string, pubkey: string): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind(id, pubkey, Date.now())
-		.run();
+async function seedUser(db: Database, id: string, pubkey: string): Promise<void> {
+	await db.run(
+		sql`INSERT INTO users (id, pubkey, created_at) VALUES (${id}, ${pubkey}, ${Date.now()})`
+	);
 }
 
-function seedGeneration(
-	db: D1Database,
+async function seedGeneration(
+	db: Database,
 	id: string,
 	userId: string,
 	sessionId: string,
 	createdAt: number
-): void {
-	seedGenerationFixture(db, {
+): Promise<void> {
+	await seedGenerationFixture(db, {
 		id,
 		userId,
 		url: `https://cdn.example.test/${id}.webp`,
@@ -59,12 +60,12 @@ function seedGeneration(
 }
 
 describe('projects repository', () => {
-	let db: D1Database;
+	let db: Database;
 
-	beforeEach(() => {
-		db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
+	beforeEach(async () => {
+		db = makeDb();
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
 	});
 
 	afterEach(() => {
@@ -107,7 +108,7 @@ describe('projects repository', () => {
 		const project = await createProject(db, 'user-1', 'Living room');
 		const session = await createSession(db, 'user-1', project.id, 'Main thread');
 		expect(session).not.toBeNull();
-		seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
+		await seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
 
 		const detail = await getProjectDetail(db, 'user-1', project.id);
 		expect(detail?.sessions).toHaveLength(1);
@@ -129,7 +130,7 @@ describe('projects repository', () => {
 		if (!session) {
 			throw new Error('createSession returned null for a valid owner/project');
 		}
-		seedGenerationFixture(db, {
+		await seedGenerationFixture(db, {
 			id: 'invalid-kind',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/invalid-kind.webp',
@@ -161,7 +162,7 @@ describe('projects repository', () => {
 			const session = await createSession(db, 'user-1', project.id, `Session ${i}`);
 			expect(session).not.toBeNull();
 			sessionIds.push(session!.id);
-			seedGeneration(db, `gen-${i}`, 'user-1', session!.id, Date.now());
+			await seedGeneration(db, `gen-${i}`, 'user-1', session!.id, Date.now());
 		}
 
 		const detail = await getProjectDetail(db, 'user-1', project.id);
@@ -223,7 +224,7 @@ describe('projects repository', () => {
 	it('exposes a project detail by valid share token, and nothing for revoked/unknown tokens', async () => {
 		const project = await createProject(db, 'user-1', 'Living room');
 		const session = await createSession(db, 'user-1', project.id, 'Main thread');
-		seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
+		await seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
 		const token = await issueShareToken(db, 'user-1', project.id);
 
 		const detail = await getProjectDetailByShareToken(db, token!);
@@ -256,7 +257,7 @@ describe('projects repository', () => {
 		it('returns the settings for a generation in an actively-shared project, image fields stripped', async () => {
 			const project = await createProject(db, 'user-1', 'Living room');
 			const session = await createSession(db, 'user-1', project.id, 'Main thread');
-			seedGenerationFixture(db, {
+			await seedGenerationFixture(db, {
 				id: 'gen-1',
 				userId: 'user-1',
 				url: 'https://cdn.example.test/gen-1.webp',
@@ -307,7 +308,7 @@ describe('projects repository', () => {
 		it('returns null for an unknown generation, a revoked token, or a generation outside the shared project', async () => {
 			const project = await createProject(db, 'user-1', 'Living room');
 			const session = await createSession(db, 'user-1', project.id, 'Main thread');
-			seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
+			await seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
 			const token = await issueShareToken(db, 'user-1', project.id);
 
 			expect(await getShareGenerationDetail(db, token!, 'missing-generation')).toBeNull();
@@ -315,7 +316,7 @@ describe('projects repository', () => {
 
 			const otherProject = await createProject(db, 'user-2', "Someone else's project");
 			const otherSession = await createSession(db, 'user-2', otherProject.id, 'Thread');
-			seedGeneration(db, 'gen-2', 'user-2', otherSession!.id, Date.now());
+			await seedGeneration(db, 'gen-2', 'user-2', otherSession!.id, Date.now());
 			expect(await getShareGenerationDetail(db, token!, 'gen-2')).toBeNull();
 
 			await revokeActiveShareToken(db, 'user-1', project.id);
@@ -325,7 +326,7 @@ describe('projects repository', () => {
 		it('degrades to a null snapshot for a generation recorded before migrations/0018', async () => {
 			const project = await createProject(db, 'user-1', 'Living room');
 			const session = await createSession(db, 'user-1', project.id, 'Main thread');
-			seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
+			await seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
 			const token = await issueShareToken(db, 'user-1', project.id);
 
 			const detail = await getShareGenerationDetail(db, token!, 'gen-1');
@@ -347,7 +348,7 @@ describe('projects repository', () => {
 	it('archives a project — hides it from listing/detail/share, keeps generations intact, idempotent', async () => {
 		const project = await createProject(db, 'user-1', 'Living room');
 		const session = await createSession(db, 'user-1', project.id, 'Main thread');
-		seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
+		await seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
 		const token = await issueShareToken(db, 'user-1', project.id);
 
 		expect(await archiveProject(db, 'user-2', project.id)).toBe(false);
@@ -359,10 +360,7 @@ describe('projects repository', () => {
 		expect(await assertSessionOwnedByUser(db, 'user-1', session!.id)).toBe(false);
 		expect(await createSession(db, 'user-1', project.id, 'New thread')).toBeNull();
 
-		const generation = await db
-			.prepare('SELECT id FROM generations WHERE id = ?')
-			.bind('gen-1')
-			.first();
+		const generation = await db.get(sql`SELECT id FROM generations WHERE id = 'gen-1'`);
 		expect(generation).not.toBeNull();
 
 		expect(await archiveProject(db, 'user-1', project.id)).toBe(false);
@@ -371,7 +369,7 @@ describe('projects repository', () => {
 	it('archives a session — hides it from the project detail, keeps its generations, idempotent', async () => {
 		const project = await createProject(db, 'user-1', 'Living room');
 		const session = await createSession(db, 'user-1', project.id, 'Main thread');
-		seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
+		await seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
 
 		expect(await archiveSession(db, 'user-2', session!.id)).toBe(false);
 		expect(await archiveSession(db, 'user-1', session!.id)).toBe(true);
@@ -380,10 +378,7 @@ describe('projects repository', () => {
 		expect(detail?.sessions).toHaveLength(0);
 		expect(await assertSessionOwnedByUser(db, 'user-1', session!.id)).toBe(false);
 
-		const generation = await db
-			.prepare('SELECT id FROM generations WHERE id = ?')
-			.bind('gen-1')
-			.first();
+		const generation = await db.get(sql`SELECT id FROM generations WHERE id = 'gen-1'`);
 		expect(generation).not.toBeNull();
 
 		expect(await archiveSession(db, 'user-1', session!.id)).toBe(false);

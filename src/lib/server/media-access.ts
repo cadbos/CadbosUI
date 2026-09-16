@@ -64,7 +64,7 @@ export async function mediaAccessBatch(
 // omitted rather than failing the whole batch — the caller degrades that one
 // field instead of discarding every other restored setting.
 export async function mediaAccessByKeyBatch(
-	db: D1Database,
+	db: Database,
 	platform: App.Platform | undefined,
 	keys: string[]
 ): Promise<Map<string, MediaAccess>> {
