@@ -12,8 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
 import type { MediaAccess } from '$lib/api/contract';
+import type { Database } from '$lib/server/db';
 import {
 	getMedia,
 	getMediaBatch,
@@ -39,7 +39,7 @@ export function mediaAccess(media: Media): MediaAccess {
 }
 
 export async function mediaAccessById(
-	db: D1Database,
+	db: Database,
 	mediaId: number
 ): Promise<MediaAccess | null> {
 	const media = await getMedia(db, mediaId);
@@ -47,7 +47,7 @@ export async function mediaAccessById(
 }
 
 export async function mediaAccessBatch(
-	db: D1Database,
+	db: Database,
 	mediaIds: number[]
 ): Promise<Map<number, MediaAccess> | null> {
 	const uniqueIds = [...new Set(mediaIds)];
@@ -61,7 +61,7 @@ export async function mediaAccessBatch(
 // image) are simply omitted rather than failing the whole batch — the caller
 // degrades that one field instead of discarding every other restored setting.
 export async function mediaAccessByKeyBatch(
-	db: D1Database,
+	db: Database,
 	keys: string[]
 ): Promise<Map<string, MediaAccess>> {
 	const uniqueKeys = [...new Set(keys)];
@@ -79,7 +79,7 @@ export async function mediaAccessByKeyBatch(
 // Render services fetch input images after the request returns, so they get
 // presigned URLs instead of the app's own /api/media links.
 export async function providerMediaBatch(
-	db: D1Database,
+	db: Database,
 	platform: App.Platform | undefined,
 	keys: string[]
 ): Promise<Map<string, { media: Media; url: string }> | null> {

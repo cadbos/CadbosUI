@@ -15,7 +15,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { parseBody, profileUpdateRequestSchema } from '$lib/server/api';
-import { getDb, updateUserProfile } from '$lib/server/auth/repository';
+import { updateUserProfile } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 
 export const PATCH: RequestHandler = async ({ request, platform, locals }) => {
