@@ -14,6 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
+import { createDb } from '$lib/server/db';
 import { getBucketByName, getOrCreateMediaByKey } from '$lib/server/media';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { TEST_S3_BUCKET } from '$lib/server/testing/generation-fixtures';
@@ -56,8 +57,8 @@ afterEach(() => {
 describe('GET /api/download/<bucket>/<filename>', () => {
 	it('streams registered media without authentication', async () => {
 		const db = makeD1();
-		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
-		await getOrCreateMediaByKey(db, bucket, 'rooms/result.webp', '');
+		const bucket = await getBucketByName(createDb(db), TEST_S3_BUCKET.name);
+		await getOrCreateMediaByKey(createDb(db), bucket, 'rooms/result.webp', '');
 		const fetch = vi.fn(
 			async () =>
 				new Response('image-bytes', {
@@ -97,8 +98,8 @@ describe('GET /api/download/<bucket>/<filename>', () => {
 
 	it('returns a sanitized 502 when S3 access fails', async () => {
 		const db = makeD1();
-		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
-		await getOrCreateMediaByKey(db, bucket, 'result.webp', '');
+		const bucket = await getBucketByName(createDb(db), TEST_S3_BUCKET.name);
+		await getOrCreateMediaByKey(createDb(db), bucket, 'result.webp', '');
 		presignS3Object.mockRejectedValue(new Error('private provider detail'));
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -122,8 +123,8 @@ describe('GET /api/download/<bucket>/<filename>', () => {
 		]
 	])('rejects an upstream response with %s', async (_case, upstream) => {
 		const db = makeD1();
-		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
-		await getOrCreateMediaByKey(db, bucket, 'result.webp', '');
+		const bucket = await getBucketByName(createDb(db), TEST_S3_BUCKET.name);
+		await getOrCreateMediaByKey(createDb(db), bucket, 'result.webp', '');
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 		const response = await call(

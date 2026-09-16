@@ -13,8 +13,9 @@
  */
 
 import { beforeEach, describe, it, expect } from 'vitest';
-import type { D1Database } from '@cloudflare/workers-types';
-import { makeD1 } from './testing/d1-shim';
+import { sql } from 'drizzle-orm';
+import type { Database } from '$lib/server/db';
+import { makeDb } from './testing/d1-shim';
 import {
 	getCredit,
 	getUserIdByPubkey,
@@ -24,35 +25,41 @@ import {
 	type CreditAccess
 } from './billing';
 
-async function readBalanceRow(db: D1Database, userId: string): Promise<{ balance: number } | null> {
-	return db
-		.prepare('SELECT balance FROM balances WHERE user_id = ?')
-		.bind(userId)
-		.first<{ balance: number }>();
+async function readBalanceRow(db: Database, userId: string): Promise<{ balance: number } | null> {
+	return (
+		(await db.get<{ balance: number }>(
+			sql`SELECT balance FROM balances WHERE user_id = ${userId}`
+		)) ?? null
+	);
 }
 
-function seedUser(db: D1Database, id: string, pubkey: string): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind(id, pubkey, Date.now())
-		.run();
+async function seedUser(db: Database, id: string, pubkey: string): Promise<void> {
+	await db.run(
+		sql`INSERT INTO users (id, pubkey, created_at) VALUES (${id}, ${pubkey}, ${Date.now()})`
+	);
 }
 
 // The admin's manual approval step — no auto-provisioning exists anymore.
-function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
-		.bind(userId, balance, Date.now(), enabled)
-		.run();
+async function grantAccess(
+	db: Database,
+	userId: string,
+	balance: number,
+	enabled: 0 | 1 = 1
+): Promise<void> {
+	await db.run(
+		sql`INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (${userId}, ${balance}, ${Date.now()}, ${enabled})`
+	);
 }
 
-let db: D1Database;
+let db: Database;
 
 beforeEach(() => {
-	db = makeD1();
+	db = makeDb();
 });
 
 describe('getUserIdByPubkey', () => {
 	it('resolves the internal user id for a known pubkey', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		await expect(getUserIdByPubkey(db, 'pubkey-1')).resolves.toBe('user-1');
 	});
 
@@ -63,13 +70,13 @@ describe('getUserIdByPubkey', () => {
 
 describe('recordBalance', () => {
 	it('creates a row on first generation', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const balance = await recordBalance(db, 'user-1', 25);
 		expect(balance.balance).toBe(25);
 	});
 
 	it('overwrites the previous balance rather than accumulating it', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		await recordBalance(db, 'user-1', 25);
 		await recordBalance(db, 'user-1', 24.97);
 
@@ -77,8 +84,8 @@ describe('recordBalance', () => {
 	});
 
 	it('isolates balances per user', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		seedUser(db, 'user-2', 'pubkey-2');
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-2', 'pubkey-2');
 		await recordBalance(db, 'user-1', 25);
 		await recordBalance(db, 'user-2', 10);
 
@@ -89,21 +96,21 @@ describe('recordBalance', () => {
 
 describe('getCredit', () => {
 	it('is null when no admin has approved this account', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		await expect(getCredit(db, 'user-1')).resolves.toBeNull();
 	});
 
 	it('returns the admin-chosen balance and enabled flag for an approved account', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12, 1);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await grantAccess(db, 'user-1', 12, 1);
 
 		const credit = await getCredit(db, 'user-1');
 		expect(credit).toEqual(expect.objectContaining({ balance: 12, enabled: true }));
 	});
 
 	it('reflects an account the admin disabled', async () => {
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12, 0);
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await grantAccess(db, 'user-1', 12, 0);
 
 		const credit = await getCredit(db, 'user-1');
 		expect(credit?.enabled).toBe(false);

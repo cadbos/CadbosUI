@@ -16,6 +16,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { GeneratedImagesResponse, SessionUser } from '$lib/api/contract';
 import { mediaKey, type Bucket } from '$lib/server/media';
+import { createDb } from '$lib/server/db';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedGeneration as seedGenerationFixture,
@@ -43,9 +44,15 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 		.run();
 }
 
-function seedGeneratedImage(db: D1Database, id: string, userId: string, createdAt: number): void {
-	setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
-	seedGenerationFixture(db, {
+async function seedGeneratedImage(
+	rawDb: D1Database,
+	id: string,
+	userId: string,
+	createdAt: number
+): Promise<void> {
+	const db = createDb(rawDb);
+	await setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
+	await seedGenerationFixture(db, {
 		id,
 		userId,
 		url: `https://cdn.example.test/${id}.webp`,
@@ -135,7 +142,7 @@ describe('GET /api/generated-images', () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 
 		for (let index = 0; index < 21; index += 1) {
-			seedGeneratedImage(db, `user-1-image-${index}`, 'user-1', 10_000 + index);
+			await seedGeneratedImage(db, `user-1-image-${index}`, 'user-1', 10_000 + index);
 		}
 
 		const response = await call({ pubkey: 'pubkey-1' }, platform(db));
@@ -171,9 +178,9 @@ describe('GET /api/generated-images', () => {
 	it('applies offset and size search params', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'first', 'user-1', 3000);
-		seedGeneratedImage(db, 'second', 'user-1', 2000);
-		seedGeneratedImage(db, 'third', 'user-1', 1000);
+		await seedGeneratedImage(db, 'first', 'user-1', 3000);
+		await seedGeneratedImage(db, 'second', 'user-1', 2000);
+		await seedGeneratedImage(db, 'third', 'user-1', 1000);
 
 		const response = await call({ pubkey: 'pubkey-1' }, platform(db), '?offset=1&size=2');
 		const result = (await response.json()) as GeneratedImagesResponse;
@@ -261,7 +268,7 @@ describe('DELETE /api/generated-images', () => {
 	it('deletes the authenticated user image from S3 and D1', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		await seedGeneratedImage(db, 'image-1', 'user-1', 1000);
 		const uploadsBucket = bucket();
 
 		const response = await callDelete({ pubkey: 'pubkey-1' }, platform(db), { id: 'image-1' });
@@ -279,7 +286,7 @@ describe('DELETE /api/generated-images', () => {
 	it('retains media referenced by a light settings job', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		await seedGeneratedImage(db, 'image-1', 'user-1', 1000);
 		const image = await db
 			.prepare('SELECT result_media_id FROM generations WHERE id = ?')
 			.bind('image-1')
@@ -308,7 +315,7 @@ describe('DELETE /api/generated-images', () => {
 	it('retains media when a reference is added immediately before the deletion batch', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		await seedGeneratedImage(db, 'image-1', 'user-1', 1000);
 		const image = await db
 			.prepare('SELECT result_media_id FROM generations WHERE id = ?')
 			.bind('image-1')
@@ -353,8 +360,8 @@ describe('DELETE /api/generated-images', () => {
 	it('keeps S3 media referenced by another generation', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
-		seedGenerationFixture(db, {
+		await seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		await seedGenerationFixture(createDb(db), {
 			id: 'image-2',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/image-2.webp',
@@ -379,7 +386,7 @@ describe('DELETE /api/generated-images', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
-		seedGeneratedImage(db, 'image-2', 'user-2', 1000);
+		await seedGeneratedImage(db, 'image-2', 'user-2', 1000);
 		const uploadsBucket = bucket();
 
 		const response = await callDelete({ pubkey: 'pubkey-1' }, platform(db), { id: 'image-2' });
@@ -396,7 +403,7 @@ describe('DELETE /api/generated-images', () => {
 	it('keeps the committed D1 deletion when S3 deletion fails', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		await seedGeneratedImage(db, 'image-1', 'user-1', 1000);
 		const image = await db
 			.prepare('SELECT result_media_id FROM generations WHERE id = ?')
 			.bind('image-1')
