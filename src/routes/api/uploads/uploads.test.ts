@@ -14,6 +14,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SessionUser } from '$lib/api/contract';
+import { createDb } from '$lib/server/db';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { mediaKey, type Bucket } from '$lib/server/media';
 import { MAX_IMAGE_UPLOAD_SIZE } from '$lib/server/remote-image';
@@ -48,13 +49,14 @@ import { POST } from './+server';
 type UploadEvent = Parameters<typeof POST>[0];
 
 const UPLOADS_URL = 'https://uploads.cadbos.example';
-function platform(
+
+async function platform(
 	bucket = {
 		put: vi.fn(async (_key: string, _bytes: ArrayBuffer, _metadata: unknown) => undefined)
 	},
 	db = makeD1()
-): App.Platform {
-	setBucketUrl(db, TEST_S3_BUCKET.name, UPLOADS_URL);
+): Promise<App.Platform> {
+	await setBucketUrl(createDb(db), TEST_S3_BUCKET.name, UPLOADS_URL);
 	storage.putS3Object.mockImplementation(async (_platform, _bucket, key, bytes, mime) => {
 		await bucket.put(key, bytes, { httpMetadata: { contentType: mime } });
 	});
@@ -68,18 +70,18 @@ function platform(
 
 // Demo requests still use D1 for the canonical uploads URL, but skip account
 // lookup and deduplication.
-function call(
+async function call(
 	body: unknown,
-	uploadPlatform = platform(),
+	uploadPlatform?: App.Platform,
 	user: SessionUser | null = { pubkey: DEMO_PUBKEY }
-): ReturnType<typeof POST> {
+): Promise<Awaited<ReturnType<typeof POST>>> {
 	return POST({
 		request: new Request('https://cadbos.example/api/uploads', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify(body)
 		}),
-		platform: uploadPlatform,
+		platform: uploadPlatform ?? (await platform()),
 		url: new URL('https://cadbos.example/api/uploads'),
 		locals: { sessionLookupUnavailable: false, user }
 	} as UploadEvent);
@@ -91,17 +93,18 @@ function seedUser(db: ReturnType<typeof makeD1>, id: string, pubkey: string): vo
 		.run();
 }
 
-function seedGenerationWithSource(
+async function seedGenerationWithSource(
 	db: ReturnType<typeof makeD1>,
 	id: string,
 	userId: string,
 	sourceUrl: string,
 	sourceHash: string
-): void {
+): Promise<void> {
+	const wrapped = createDb(db);
 	if (sourceUrl.startsWith(UPLOADS_URL)) {
-		setBucketUrl(db, TEST_S3_BUCKET.name, UPLOADS_URL);
+		await setBucketUrl(wrapped, TEST_S3_BUCKET.name, UPLOADS_URL);
 	}
-	seedGeneration(db, {
+	await seedGeneration(wrapped, {
 		id,
 		userId,
 		url: `https://cdn.example.test/${id}.webp`,
@@ -133,7 +136,7 @@ describe('POST /api/uploads remote import', () => {
 
 		const response = await call(
 			{ url: 'https://images.example.com/room.webp' },
-			platform(undefined, db),
+			await platform(undefined, db),
 			{ pubkey: 'pubkey-1' }
 		);
 
@@ -210,7 +213,10 @@ describe('POST /api/uploads remote import', () => {
 			new Response('image-bytes', { headers: { 'content-type': 'image/jpeg' } })
 		);
 
-		const response = await call({ url: 'https://images.example.com/room.jpg' }, platform(bucket));
+		const response = await call(
+			{ url: 'https://images.example.com/room.jpg' },
+			await platform(bucket)
+		);
 
 		expect(response.status).toBe(500);
 		expect(await response.json()).toEqual({
@@ -221,7 +227,11 @@ describe('POST /api/uploads remote import', () => {
 
 describe('POST /api/uploads auth', () => {
 	it('returns 401 when the request has no authenticated user', async () => {
-		const response = await call({ url: 'https://images.example.com/room.webp' }, platform(), null);
+		const response = await call(
+			{ url: 'https://images.example.com/room.webp' },
+			await platform(),
+			null
+		);
 
 		expect(response.status).toBe(401);
 		expect(await response.json()).toEqual({
@@ -239,7 +249,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		const hash = await sha256Hex('image-bytes');
-		seedGenerationWithSource(db, 'a', 'user-1', `${UPLOADS_URL}/existing.webp`, hash);
+		await seedGenerationWithSource(db, 'a', 'user-1', `${UPLOADS_URL}/existing.webp`, hash);
 		const bucket = { put: vi.fn(async () => undefined) };
 		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
 			new Response('image-bytes', { headers: { 'content-type': 'image/webp' } })
@@ -247,7 +257,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 
 		const response = await call(
 			{ url: 'https://images.example.com/room.webp' },
-			platform(bucket, db),
+			await platform(bucket, db),
 			{ pubkey: 'pubkey-1' }
 		);
 
@@ -268,7 +278,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 		// A render/edit call can use generation output media as its source,
 		// so a hash match here isn't necessarily a stored upload — reusing it as
 		// one would hand back an arbitrary, attacker-influenced URL.
-		seedGenerationWithSource(
+		await seedGenerationWithSource(
 			db,
 			'a',
 			'user-1',
@@ -282,7 +292,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 
 		const response = await call(
 			{ url: 'https://images.example.com/room.webp' },
-			platform(bucket, db),
+			await platform(bucket, db),
 			{ pubkey: 'pubkey-1' }
 		);
 

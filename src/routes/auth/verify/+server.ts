@@ -17,16 +17,12 @@ import type { RequestHandler } from './$types';
 import type { SessionUser } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { AUTH_RATE_LIMIT, CHALLENGE_TTL_MS, SESSION_TTL_MS } from '$lib/server/auth/config';
-import {
-	consumeChallenge,
-	createSession,
-	findOrCreateUser,
-	getDb
-} from '$lib/server/auth/repository';
+import { consumeChallenge, createSession, findOrCreateUser } from '$lib/server/auth/repository';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import { parseAuthorizationHeader, verifyLoginEvent } from '$lib/server/auth/nip98';
 import { randomToken, setSessionCookie } from '$lib/server/auth/session';
 import { logAuthFailure } from '$lib/server/auth/events';
+import { getDb } from '$lib/server/db';
 
 export const POST: RequestHandler = async ({
 	request,

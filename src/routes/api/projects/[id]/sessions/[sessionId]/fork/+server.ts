@@ -16,7 +16,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { ForkSessionResponse } from '$lib/api/contract';
 import { apiError, forkSessionRequestSchema, parseBody } from '$lib/server/api';
-import { getDb } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { forkSession } from '$lib/server/projects';
 

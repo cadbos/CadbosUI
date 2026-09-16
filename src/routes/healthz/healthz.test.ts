@@ -86,13 +86,13 @@ function cachedSnapshot(status: 'healthy' | 'unhealthy' = 'healthy'): Response {
 function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 	const assetsFetch = vi.fn(async () => new Response('<svg/>', { status: 200 }));
 	const comfyuiFetch = vi.fn(async () => Response.json({ system: {} }));
-	const dbFirst = vi.fn(async () => 1);
+	const dbFirst = vi.fn(async () => ({ healthy: 1 }));
 	const s3BucketExists = vi.fn(async () => true);
 	storage.isS3BucketAvailable.mockImplementation(async () => s3BucketExists());
 	const prepare = vi.fn((sql: string) =>
 		sql.includes('FROM buckets')
 			? { bind: () => ({ first: async () => TEST_S3_BUCKET }) }
-			: { first: dbFirst }
+			: { bind: () => ({ first: dbFirst }) }
 	);
 	return {
 		platform: {
@@ -223,7 +223,7 @@ describe('GET /healthz', () => {
 		expect(stored?.headers.get('cache-control')).toBe('public, max-age=30');
 		expect(await stored?.json()).toMatchObject({ status: 'healthy' });
 		expect(getWalletBalance).toHaveBeenCalledWith(healthy.platform);
-		expect(healthy.dbFirst).toHaveBeenCalledWith('healthy');
+		expect(healthy.dbFirst).toHaveBeenCalledWith();
 		expect(healthy.s3BucketExists).toHaveBeenCalledOnce();
 		expect(healthy.assetsFetch.mock.calls[0][0].url).toBe('https://assets.internal/favicon.svg');
 		expect(healthy.comfyuiFetch.mock.calls[0][0].url).toBe('http://localhost:8188/system_stats');

@@ -17,7 +17,7 @@
 // for that call — all written atomically, so there's no way for the image
 // record and the deduction to fall out of sync with each other.
 
-import type { D1Database } from '@cloudflare/workers-types';
+import { sql } from 'drizzle-orm';
 import {
 	generationKinds,
 	type Balance,
@@ -25,6 +25,7 @@ import {
 	type GenerationKind,
 	type UserUsageRecord
 } from '$lib/api/contract';
+import type { Database } from '$lib/server/db';
 
 function isGenerationKind(kind: string): kind is GenerationKind {
 	return generationKinds.some((candidate) => candidate === kind);
@@ -140,102 +141,70 @@ export interface RecordGenerationInput {
 // UPDATE's RETURNING value) because batched statements can't pass results to
 // each other — only to the caller, after the whole batch has committed.
 export async function recordGeneration(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	input: RecordGenerationInput
 ): Promise<Balance> {
 	const now = Date.now();
-	const [updateResult] = await db.batch<BalanceRow>([
-		db
-			.prepare(
-				'UPDATE credits SET balance = balance - ?, updated_at = ? WHERE user_id = ? ' +
-					'RETURNING balance, updated_at'
-			)
-			.bind(input.amount, now, userId),
-		db
-			.prepare(
-				'INSERT INTO generations ' +
-					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id) ' +
-					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ?, ? FROM credits WHERE user_id = ?'
-			)
-			.bind(
-				crypto.randomUUID(),
-				userId,
-				input.resultMediaId,
-				input.sourceMediaId,
-				input.prompt,
-				input.kind,
-				input.amount,
-				now,
-				input.sessionId,
-				userId
-			)
+	const [updateRows] = await db.batch([
+		db.all<BalanceRow>(
+			sql`UPDATE credits SET balance = balance - ${input.amount}, updated_at = ${now} WHERE user_id = ${userId}
+				RETURNING balance, updated_at`
+		),
+		db.run(
+			sql`INSERT INTO generations
+				(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id)
+				SELECT ${crypto.randomUUID()}, ${userId}, ${input.resultMediaId}, ${input.sourceMediaId}, ${input.prompt}, ${input.kind}, ${input.amount}, balance, ${now}, ${input.sessionId}
+				FROM credits WHERE user_id = ${userId}`
+		)
 	]);
-	const row = updateResult.results[0];
+	const row = updateRows[0];
 	if (!row) throw new Error('credit deduction failed: no credit row for user');
 
 	return toBalance(row);
 }
 
 export async function getGeneratedImageForUser(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	id: string
 ): Promise<GeneratedImage | null> {
-	const row = await db
-		.prepare(
-			'SELECT g.id, g.user_id, g.result_media_id, g.source_media_id, result_media.filename AS result_filename, ' +
-				'result_bucket.name AS result_bucket_name, ' +
-				'g.kind, g.created_at FROM generations g ' +
-				'JOIN media result_media ON result_media.id = g.result_media_id ' +
-				'JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ' +
-				'JOIN media source_media ON source_media.id = g.source_media_id ' +
-				'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
-				'WHERE g.id = ? AND g.user_id = ?'
-		)
-		.bind(id, userId)
-		.first<GenerationRow>();
+	const row = await db.get<GenerationRow>(
+		sql`SELECT g.id, g.user_id, g.result_media_id, g.source_media_id, result_media.filename AS result_filename,
+			result_bucket.name AS result_bucket_name,
+			g.kind, g.created_at FROM generations g
+			JOIN media result_media ON result_media.id = g.result_media_id
+			JOIN buckets result_bucket ON result_bucket.id = result_media.bucket
+			JOIN media source_media ON source_media.id = g.source_media_id
+			JOIN buckets source_bucket ON source_bucket.id = source_media.bucket
+			WHERE g.id = ${id} AND g.user_id = ${userId}`
+	);
 	return row ? toGeneratedImage(row) : null;
 }
 
 export async function deleteGeneratedImage(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	id: string,
 	mediaId: number
 ): Promise<{ generationDeleted: boolean; mediaDeleted: boolean }> {
-	const [generationResult, mediaResult] = await db.batch<{ deleted: number }>([
-		db
-			.prepare(
-				'DELETE FROM generations WHERE id = ? AND user_id = ? AND result_media_id = ? RETURNING 1 AS deleted'
-			)
-			.bind(id, userId, mediaId),
-		db
-			.prepare(
-				'DELETE FROM media WHERE id = ? AND changes() = 1 AND NOT EXISTS (' +
-					'SELECT 1 FROM generations WHERE result_media_id = ? OR source_media_id = ? ' +
-					'UNION ALL SELECT 1 FROM object_replacement_jobs WHERE scene_media_id = ? OR reference_media_id = ? OR output_media_id = ? ' +
-					'UNION ALL SELECT 1 FROM texture_replacement_jobs WHERE scene_media_id = ? OR reference_media_id = ? OR output_media_id = ? ' +
-					'UNION ALL SELECT 1 FROM light_settings_jobs WHERE scene_media_id = ? OR output_media_id = ?' +
-					') RETURNING 1 AS deleted'
-			)
-			.bind(
-				mediaId,
-				mediaId,
-				mediaId,
-				mediaId,
-				mediaId,
-				mediaId,
-				mediaId,
-				mediaId,
-				mediaId,
-				mediaId,
-				mediaId
-			)
+	const [generationRows, mediaRows] = await db.batch([
+		db.all<{ deleted: number }>(
+			sql`DELETE FROM generations WHERE id = ${id} AND user_id = ${userId} AND result_media_id = ${mediaId}
+				RETURNING 1 AS deleted`
+		),
+		db.all<{ deleted: number }>(
+			sql`DELETE FROM media WHERE id = ${mediaId} AND changes() = 1 AND NOT EXISTS (
+				SELECT 1 FROM generations WHERE result_media_id = ${mediaId} OR source_media_id = ${mediaId}
+				UNION ALL SELECT 1 FROM object_replacement_jobs WHERE scene_media_id = ${mediaId} OR reference_media_id = ${mediaId} OR output_media_id = ${mediaId}
+				UNION ALL SELECT 1 FROM texture_replacement_jobs WHERE scene_media_id = ${mediaId} OR reference_media_id = ${mediaId} OR output_media_id = ${mediaId}
+				UNION ALL SELECT 1 FROM light_settings_jobs WHERE scene_media_id = ${mediaId} OR output_media_id = ${mediaId}
+			) RETURNING 1 AS deleted`
+		)
 	]);
 	return {
-		generationDeleted: generationResult.results.length === 1,
-		mediaDeleted: mediaResult.results.length === 1
+		generationDeleted: generationRows.length === 1,
+		mediaDeleted: mediaRows.length === 1
 	};
 }
 
@@ -268,28 +237,23 @@ async function collectValidRows<Row, T>(
 }
 
 export async function listGeneratedImages(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	offset: number,
 	size: number
 ): Promise<GeneratedImagesPage> {
 	const { items } = await collectValidRows(
-		async (limit, rawOffset) => {
-			const result = await db
-				.prepare(
-					'SELECT g.id, g.user_id, g.result_media_id, g.source_media_id, result_media.filename AS result_filename, ' +
-						'result_bucket.name AS result_bucket_name, ' +
-						'g.kind, g.created_at FROM generations g ' +
-						'JOIN media result_media ON result_media.id = g.result_media_id ' +
-						'JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ' +
-						'JOIN media source_media ON source_media.id = g.source_media_id ' +
-						'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
-						'WHERE g.user_id = ? ORDER BY g.created_at DESC, g.id DESC LIMIT ? OFFSET ?'
-				)
-				.bind(userId, limit, rawOffset)
-				.all<GenerationRow>();
-			return result.results ?? [];
-		},
+		(limit, rawOffset) =>
+			db.all<GenerationRow>(
+				sql`SELECT g.id, g.user_id, g.result_media_id, g.source_media_id, result_media.filename AS result_filename,
+					result_bucket.name AS result_bucket_name,
+					g.kind, g.created_at FROM generations g
+					JOIN media result_media ON result_media.id = g.result_media_id
+					JOIN buckets result_bucket ON result_bucket.id = result_media.bucket
+					JOIN media source_media ON source_media.id = g.source_media_id
+					JOIN buckets source_bucket ON source_bucket.id = source_media.bucket
+					WHERE g.user_id = ${userId} ORDER BY g.created_at DESC, g.id DESC LIMIT ${limit} OFFSET ${rawOffset}`
+			),
 		toGeneratedImage,
 		offset + size + 1
 	);
@@ -302,22 +266,19 @@ export async function listGeneratedImages(
 // Dedup lookup for /api/uploads: reuse an already-stored object when this user
 // has uploaded identical bytes before. Empty checksums never match.
 export async function findGenerationSourceByHash(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	hash: string,
 	uploadsBucketName: string
 ): Promise<number | null> {
 	if (hash.length === 0) return null;
-	const row = await db
-		.prepare(
-			'SELECT media.id FROM generations ' +
-				'JOIN media ON media.id = generations.source_media_id ' +
-				'JOIN buckets ON buckets.id = media.bucket ' +
-				'WHERE generations.user_id = ? AND media.checksum = ? AND buckets.name = ? ' +
-				'ORDER BY generations.created_at DESC LIMIT 1'
-		)
-		.bind(userId, hash, uploadsBucketName)
-		.first<{ id: number }>();
+	const row = await db.get<{ id: number }>(
+		sql`SELECT media.id FROM generations
+			JOIN media ON media.id = generations.source_media_id
+			JOIN buckets ON buckets.id = media.bucket
+			WHERE generations.user_id = ${userId} AND media.checksum = ${hash} AND buckets.name = ${uploadsBucketName}
+			ORDER BY generations.created_at DESC LIMIT 1`
+	);
 	return row?.id ?? null;
 }
 
@@ -329,26 +290,22 @@ interface ResourceImageRow {
 // Gallery of source photos the user uploaded: non-empty checksums identify
 // uploads, while excluding generated outputs removes current-result sources.
 export async function listDistinctSourceImages(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	offset: number,
 	size: number
 ): Promise<ResourceImagesPage> {
-	const result = await db
-		.prepare(
-			'SELECT g.source_media_id AS media_id, ' +
-				'MAX(g.created_at) AS created_at FROM generations g ' +
-				'JOIN media source_media ON source_media.id = g.source_media_id ' +
-				'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
-				"WHERE g.user_id = ? AND source_media.checksum != '' " +
-				'AND NOT EXISTS (SELECT 1 FROM generations produced ' +
-				'WHERE produced.result_media_id = g.source_media_id) ' +
-				'GROUP BY g.source_media_id ' +
-				'ORDER BY created_at DESC, g.source_media_id DESC LIMIT ? OFFSET ?'
-		)
-		.bind(userId, size + 1, offset)
-		.all<ResourceImageRow>();
-	const rows = result.results ?? [];
+	const rows = await db.all<ResourceImageRow>(
+		sql`SELECT g.source_media_id AS media_id,
+			MAX(g.created_at) AS created_at FROM generations g
+			JOIN media source_media ON source_media.id = g.source_media_id
+			JOIN buckets source_bucket ON source_bucket.id = source_media.bucket
+			WHERE g.user_id = ${userId} AND source_media.checksum != ''
+			AND NOT EXISTS (SELECT 1 FROM generations produced
+			WHERE produced.result_media_id = g.source_media_id)
+			GROUP BY g.source_media_id
+			ORDER BY created_at DESC, g.source_media_id DESC LIMIT ${size + 1} OFFSET ${offset}`
+	);
 	return {
 		images: rows.slice(0, size).map((row) => ({
 			mediaId: row.media_id,
@@ -379,23 +336,19 @@ function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
 }
 
 export async function listUserUsage(
-	db: D1Database,
+	db: Database,
 	offset: number,
 	size: number
 ): Promise<UserUsagePage> {
-	const result = await db
-		.prepare(
-			'SELECT u.pubkey, COALESCE(c.balance, 0) AS balance, ' +
-				'COUNT(g.id) AS generation_count, COALESCE(SUM(g.amount), 0) AS total_spend, ' +
-				'MAX(g.created_at) AS latest_spend_at FROM users u ' +
-				'LEFT JOIN credits c ON c.user_id = u.id ' +
-				'LEFT JOIN generations g ON g.user_id = u.id ' +
-				'GROUP BY u.id, u.pubkey, u.created_at, c.balance ' +
-				'ORDER BY u.created_at DESC, u.id DESC LIMIT ? OFFSET ?'
-		)
-		.bind(size + 1, offset)
-		.all<UserUsageRow>();
-	const rows = result.results ?? [];
+	const rows = await db.all<UserUsageRow>(
+		sql`SELECT u.pubkey, COALESCE(c.balance, 0) AS balance,
+			COUNT(g.id) AS generation_count, COALESCE(SUM(g.amount), 0) AS total_spend,
+			MAX(g.created_at) AS latest_spend_at FROM users u
+			LEFT JOIN credits c ON c.user_id = u.id
+			LEFT JOIN generations g ON g.user_id = u.id
+			GROUP BY u.id, u.pubkey, u.created_at, c.balance
+			ORDER BY u.created_at DESC, u.id DESC LIMIT ${size + 1} OFFSET ${offset}`
+	);
 	return {
 		users: rows.slice(0, size).map(toUserUsageRecord),
 		hasMore: rows.length > size
@@ -427,7 +380,7 @@ function toCreditTransaction(row: CreditTransactionRow): CreditTransaction | nul
 }
 
 export async function listCreditHistory(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	limit = 50
 ): Promise<CreditTransaction[]> {
@@ -437,18 +390,13 @@ export async function listCreditHistory(
 	// a row without one must still appear in the history, just without a
 	// session/project to link it to.
 	const { items } = await collectValidRows(
-		async (chunkLimit, rawOffset) => {
-			const { results } = await db
-				.prepare(
-					'SELECT g.id, g.amount, g.balance_after, g.kind, g.created_at, ' +
-						'g.session_id, ps.project_id FROM generations g ' +
-						'LEFT JOIN project_sessions ps ON ps.id = g.session_id ' +
-						'WHERE g.user_id = ? ORDER BY g.created_at DESC, g.rowid DESC LIMIT ? OFFSET ?'
-				)
-				.bind(userId, chunkLimit, rawOffset)
-				.all<CreditTransactionRow>();
-			return results ?? [];
-		},
+		(chunkLimit, rawOffset) =>
+			db.all<CreditTransactionRow>(
+				sql`SELECT g.id, g.amount, g.balance_after, g.kind, g.created_at,
+					g.session_id, ps.project_id FROM generations g
+					LEFT JOIN project_sessions ps ON ps.id = g.session_id
+					WHERE g.user_id = ${userId} ORDER BY g.created_at DESC, g.rowid DESC LIMIT ${chunkLimit} OFFSET ${rawOffset}`
+			),
 		toCreditTransaction,
 		limit
 	);

@@ -15,7 +15,7 @@
 import type { RequestHandler } from './$types';
 import { normalizeImageContentType } from '$lib/image-mime';
 import { apiError } from '$lib/server/api';
-import { getDb } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { getMediaByBucketKey } from '$lib/server/media';
 import { presignS3Object } from '$lib/server/s3';
 

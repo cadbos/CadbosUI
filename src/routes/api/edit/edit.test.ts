@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { EditJobResponse, SessionUser } from '$lib/api/contract';
 import { ComfyUiError, type ComfyDownloadedImage } from '$lib/server/comfyui';
+import { createDb } from '$lib/server/db';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { mediaKey, type Bucket } from '$lib/server/media';
 import {
@@ -138,7 +139,12 @@ function sessionIdForPubkey(pubkey: string | undefined): string {
 	return (pubkey && SESSION_IDS[pubkey]) || FALLBACK_SESSION_ID;
 }
 
-function seedUser(db: D1Database, balance?: number, userId = 'user-1', pubkey = 'pubkey-1'): void {
+async function seedUser(
+	db: D1Database,
+	balance?: number,
+	userId = 'user-1',
+	pubkey = 'pubkey-1'
+): Promise<void> {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(userId, pubkey, Date.now())
 		.run();
@@ -159,7 +165,7 @@ function seedUser(db: D1Database, balance?: number, userId = 'user-1', pubkey = 
 	)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
-	seedManagedMedia(db, 'scene.jpg');
+	await seedManagedMedia(createDb(db), 'scene.jpg');
 }
 
 function bucket(): { put: ReturnType<typeof vi.fn> } {
@@ -226,8 +232,9 @@ function callGet(
 	} as GetEvent);
 }
 
-async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
-	setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
+async function seedJob(rawDb: D1Database, createdAt = Date.now()): Promise<void> {
+	const db = createDb(rawDb);
+	await setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
 	await createFluxKontextEditJob(db, {
 		id: 'job-1',
 		userId: 'user-1',
@@ -272,7 +279,7 @@ describe('POST /api/edit', () => {
 		expect(createFluxKontextEditJob).not.toHaveBeenCalled();
 		consoleWarn.mockClear();
 
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		const invalid = await callPost({ pubkey: 'pubkey-1' }, platform(db), { prompt: '' });
 		expect(invalid.status).toBe(400);
 		expect(integration.submit).not.toHaveBeenCalled();
@@ -280,9 +287,9 @@ describe('POST /api/edit', () => {
 
 	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-		const foreignSessionId = seedForeignSession(db);
+		const foreignSessionId = await seedForeignSession(createDb(db));
 
 		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), {
 			sessionId: foreignSessionId
@@ -309,20 +316,20 @@ describe('POST /api/edit', () => {
 	it('requires an approved account with enough credit for the snapshotted tariff', async () => {
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		const unapprovedDb = makeD1();
-		seedUser(unapprovedDb);
+		await seedUser(unapprovedDb);
 		expect((await callPost({ pubkey: 'pubkey-1' }, platform(unapprovedDb))).status).toBe(403);
 		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(403, 'generation_restricted'));
 		consoleWarn.mockClear();
 
 		const exhaustedDb = makeD1();
-		seedUser(exhaustedDb, 0);
+		await seedUser(exhaustedDb, 0);
 		expect((await callPost({ pubkey: 'pubkey-1' }, platform(exhaustedDb))).status).toBe(402);
 		expect(integration.submit).not.toHaveBeenCalled();
 	});
 
 	it('submits once and returns a persisted polling resource', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		integration.cost = 3.5;
 		const id = '123e4567-e89b-12d3-a456-426614174000' as ReturnType<typeof crypto.randomUUID>;
 		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
@@ -340,7 +347,7 @@ describe('POST /api/edit', () => {
 			'https://cadbos.example',
 			id
 		);
-		await expect(getFluxKontextEditJob(db, 'user-1', id)).resolves.toMatchObject({
+		await expect(getFluxKontextEditJob(createDb(db), 'user-1', id)).resolves.toMatchObject({
 			comfyPromptId: 'prompt-1',
 			cost: 3.5,
 			status: 'processing'
@@ -354,7 +361,7 @@ describe('POST /api/edit', () => {
 		'maps %s submission failures without creating or charging a job',
 		async (code, expectedStatus, providerStatus) => {
 			const db = makeD1();
-			seedUser(db, 12);
+			await seedUser(db, 12);
 			integration.submit.mockRejectedValue(
 				new ComfyUiError(code, 'queue_workflow', 'private provider detail', {
 					status: providerStatus
@@ -386,7 +393,7 @@ describe('POST /api/edit', () => {
 
 	it('logs remote-image fetch failures at the route boundary', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		integration.submit.mockRejectedValue(new RemoteImageImportError('remote_fetch_failed'));
 		vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -400,7 +407,7 @@ describe('POST /api/edit', () => {
 
 	it('cancels the accepted prompt and logs job persistence failures without stored request data', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		jobStore.failNextCreate = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const requestPlatform = platform(db);
@@ -420,8 +427,8 @@ describe('POST /api/edit', () => {
 
 	it('rejects a concurrent submission for the same account and isolates the guard by pubkey', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
-		seedUser(db, 12, 'user-2', 'pubkey-2');
+		await seedUser(db, 12);
+		await seedUser(db, 12, 'user-2', 'pubkey-2');
 		let resolveSubmission!: (promptId: string) => void;
 		integration.submit.mockImplementationOnce(
 			() =>
@@ -447,7 +454,7 @@ describe('POST /api/edit', () => {
 
 	it('rate-limits repeated paid submissions for one account', async () => {
 		const db = makeD1();
-		seedUser(db, 100);
+		await seedUser(db, 100);
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		integration.submit.mockImplementation(
 			async () => `prompt-${integration.submit.mock.calls.length}`
@@ -465,7 +472,7 @@ describe('POST /api/edit', () => {
 describe('GET /api/edit/[id]', () => {
 	it('hides missing jobs and jobs owned by another account', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 			.bind('user-2', 'pubkey-2', Date.now())
 			.run();
@@ -477,7 +484,7 @@ describe('GET /api/edit/[id]', () => {
 
 	it('returns a retryable processing response without charging', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 
 		const response = await callGet({ pubkey: 'pubkey-1' }, platform(db), 'job-1');
@@ -490,7 +497,7 @@ describe('GET /api/edit/[id]', () => {
 
 	it('finalizes and charges a completed result exactly once across concurrent polls', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 		integration.poll.mockResolvedValue(completedImage);
 		const uploadsBucket = bucket();
@@ -540,7 +547,7 @@ describe('GET /api/edit/[id]', () => {
 
 	it('returns stored terminal results without polling ComfyUI again', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 		integration.poll.mockResolvedValue(completedImage);
 		const requestPlatform = platform(db);
@@ -555,7 +562,7 @@ describe('GET /api/edit/[id]', () => {
 
 	it('marks provider execution failures terminal without charging', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 		integration.poll.mockRejectedValue(
 			new ComfyUiError('execution_failed', 'workflow', 'private provider detail')
@@ -578,7 +585,7 @@ describe('GET /api/edit/[id]', () => {
 
 	it('times out only after checking ComfyUI for a completed result', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db, Date.now() - 11 * 60_000);
 
 		const response = await callGet({ pubkey: 'pubkey-1' }, platform(db), 'job-1');

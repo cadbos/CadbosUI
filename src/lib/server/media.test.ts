@@ -12,8 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { makeDb } from '$lib/server/testing/d1-shim';
 import { TEST_S3_BUCKET } from '$lib/server/testing/generation-fixtures';
 import {
 	getBucketByName,
@@ -27,7 +28,7 @@ import {
 
 describe('media repository', () => {
 	it('stores and resolves managed bearer keys', async () => {
-		const db = makeD1();
+		const db = makeDb();
 		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
 
 		const created = await getOrCreateMediaByKey(
@@ -52,10 +53,10 @@ describe('media repository', () => {
 	});
 
 	it('composes and resolves bucket-qualified keys without splitting object paths', async () => {
-		const db = makeD1();
-		db.prepare('INSERT INTO buckets (name, url) VALUES (?, ?)')
-			.bind('external:https://images.example.test', 'https://images.example.test')
-			.run();
+		const db = makeDb();
+		await db.run(
+			sql`INSERT INTO buckets (name, url) VALUES ('external:https://images.example.test', 'https://images.example.test')`
+		);
 		const uploads = await getBucketByName(db, TEST_S3_BUCKET.name);
 		const external = await getBucketByName(db, 'external:https://images.example.test');
 		const filename = 'rooms/shared/name.webp';
@@ -83,7 +84,7 @@ describe('media repository', () => {
 	});
 
 	it('loads batches of 100 media without exceeding D1 parameter limits', async () => {
-		const db = makeD1();
+		const db = makeDb();
 		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
 		const media = await Promise.all(
 			Array.from({ length: 100 }, (_, index) =>
