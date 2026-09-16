@@ -306,7 +306,6 @@ before the Change Date. See LICENSE for complete terms.
 				return;
 			}
 
-			failures = 0;
 			let result: EditJobResponse;
 			try {
 				result = await parseJobResponse(response, id);
@@ -324,6 +323,7 @@ before the Change Date. See LICENSE for complete terms.
 				pollFailure = { jobId: id, key: 'edit.pollFailed' };
 				return;
 			}
+			failures = 0;
 			if (signal.aborted || run !== pollRun) return;
 			if (result.status === 'processing') {
 				await waitFor(parseRetryAfter(response), signal);

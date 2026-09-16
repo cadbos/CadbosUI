@@ -203,6 +203,59 @@ describe('texture replacement edit URL state', () => {
 	});
 });
 
+describe('flux kontext edit URL state (freeform/add-object/remove-object)', () => {
+	it('serializes the job under whichever tab is active, tagged with the job’s own type', () => {
+		const state = new RequestState();
+		state.setActiveFluxKontextEditJob(JOB_ID, undefined, 'add a mirror', 'add-object');
+
+		// The user can switch tabs while the shared job is still polling — the
+		// URL must keep tagging it with the type that actually submitted it,
+		// not whichever tab happens to be showing right now.
+		expect(buildShareUrl('edit', state, { tool: 'freeform' })).toBe(
+			`/edit?tool=freeform&job=${JOB_ID}&jobType=add-object`
+		);
+	});
+
+	it('restores the job’s type from jobType, not from the current tab', () => {
+		const state = new RequestState();
+		const params = new URLSearchParams({ tool: 'freeform', job: JOB_ID, jobType: 'remove-object' });
+
+		applyShareParams('edit', undefined, params, state);
+
+		expect(state.activeFluxKontextEditJobId).toBe(JOB_ID);
+		expect(state.activeFluxKontextEditJob?.type).toBe('remove-object');
+	});
+
+	it('falls back to freeform when jobType is missing or not a recognized edit type', () => {
+		const state = new RequestState();
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({ tool: 'add-object', job: JOB_ID }),
+			state
+		);
+		expect(state.activeFluxKontextEditJob?.type).toBe('freeform');
+
+		const otherState = new RequestState();
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({ tool: 'add-object', job: JOB_ID, jobType: 'object-replacement' }),
+			otherState
+		);
+		expect(otherState.activeFluxKontextEditJob?.type).toBe('freeform');
+	});
+
+	it('keeps only validated job ids on the sub-tab, regardless of which of the three tools is active', () => {
+		expect(
+			subTabFromSearch('edit', new URLSearchParams({ tool: 'add-object', job: JOB_ID }))
+		).toEqual({ tool: 'add-object', job: JOB_ID });
+		expect(
+			subTabFromSearch('edit', new URLSearchParams({ tool: 'remove-object', job: 'invalid' }))
+		).toEqual({ tool: 'remove-object' });
+	});
+});
+
 const PROJECT_ID = '223e4567-e89b-42d3-a456-426614174001';
 const SESSION_ID = '323e4567-e89b-42d3-a456-426614174002';
 
