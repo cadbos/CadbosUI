@@ -1,0 +1,1847 @@
+{
+	"version": "7",
+	"dialect": "sqlite",
+	"id": "95da045f-abcd-43f6-990a-e03713c3a771",
+	"prevIds": ["00000000-0000-0000-0000-000000000000"],
+	"ddl": [
+		{
+			"name": "auth_challenges",
+			"entityType": "tables"
+		},
+		{
+			"name": "balances",
+			"entityType": "tables"
+		},
+		{
+			"name": "buckets",
+			"entityType": "tables"
+		},
+		{
+			"name": "credits",
+			"entityType": "tables"
+		},
+		{
+			"name": "generations",
+			"entityType": "tables"
+		},
+		{
+			"name": "light_settings_jobs",
+			"entityType": "tables"
+		},
+		{
+			"name": "media",
+			"entityType": "tables"
+		},
+		{
+			"name": "object_replacement_jobs",
+			"entityType": "tables"
+		},
+		{
+			"name": "project_sessions",
+			"entityType": "tables"
+		},
+		{
+			"name": "project_shares",
+			"entityType": "tables"
+		},
+		{
+			"name": "projects",
+			"entityType": "tables"
+		},
+		{
+			"name": "rate_limits",
+			"entityType": "tables"
+		},
+		{
+			"name": "sessions",
+			"entityType": "tables"
+		},
+		{
+			"name": "texture_replacement_jobs",
+			"entityType": "tables"
+		},
+		{
+			"name": "users",
+			"entityType": "tables"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "nonce",
+			"entityType": "columns",
+			"table": "auth_challenges"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "pubkey",
+			"entityType": "columns",
+			"table": "auth_challenges"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "created_at",
+			"entityType": "columns",
+			"table": "auth_challenges"
+		},
+		{
+			"type": "integer",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "used_at",
+			"entityType": "columns",
+			"table": "auth_challenges"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "user_id",
+			"entityType": "columns",
+			"table": "balances"
+		},
+		{
+			"type": "real",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "balance",
+			"entityType": "columns",
+			"table": "balances"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "updated_at",
+			"entityType": "columns",
+			"table": "balances"
+		},
+		{
+			"type": "integer",
+			"notNull": false,
+			"autoincrement": true,
+			"default": null,
+			"generated": null,
+			"name": "id",
+			"entityType": "columns",
+			"table": "buckets"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "name",
+			"entityType": "columns",
+			"table": "buckets"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "url",
+			"entityType": "columns",
+			"table": "buckets"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "memo",
+			"entityType": "columns",
+			"table": "buckets"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": "'auto'",
+			"generated": null,
+			"name": "region",
+			"entityType": "columns",
+			"table": "buckets"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "user_id",
+			"entityType": "columns",
+			"table": "credits"
+		},
+		{
+			"type": "real",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "balance",
+			"entityType": "columns",
+			"table": "credits"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "updated_at",
+			"entityType": "columns",
+			"table": "credits"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": "1",
+			"generated": null,
+			"name": "enabled",
+			"entityType": "columns",
+			"table": "credits"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "id",
+			"entityType": "columns",
+			"table": "generations"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "user_id",
+			"entityType": "columns",
+			"table": "generations"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "result_media_id",
+			"entityType": "columns",
+			"table": "generations"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "source_media_id",
+			"entityType": "columns",
+			"table": "generations"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "prompt",
+			"entityType": "columns",
+			"table": "generations"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "kind",
+			"entityType": "columns",
+			"table": "generations"
+		},
+		{
+			"type": "real",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "amount",
+			"entityType": "columns",
+			"table": "generations"
+		},
+		{
+			"type": "real",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "balance_after",
+			"entityType": "columns",
+			"table": "generations"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "created_at",
+			"entityType": "columns",
+			"table": "generations"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "session_id",
+			"entityType": "columns",
+			"table": "generations"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "id",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "user_id",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "comfy_prompt_id",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "scene_media_id",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "session_id",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "instruction",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "real",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "cost",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "status",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "output_media_id",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "error_code",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "real",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "balance_after",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "created_at",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "updated_at",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "completed_at",
+			"entityType": "columns",
+			"table": "light_settings_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": false,
+			"autoincrement": true,
+			"default": null,
+			"generated": null,
+			"name": "id",
+			"entityType": "columns",
+			"table": "media"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "filename",
+			"entityType": "columns",
+			"table": "media"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "bucket",
+			"entityType": "columns",
+			"table": "media"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "checksum",
+			"entityType": "columns",
+			"table": "media"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "id",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "user_id",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "comfy_prompt_id",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "scene_media_id",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "reference_media_id",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "replacement_object",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "real",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "cost",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "status",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "output_media_id",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "error_code",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "real",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "balance_after",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "created_at",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "updated_at",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "completed_at",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "session_id",
+			"entityType": "columns",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "id",
+			"entityType": "columns",
+			"table": "project_sessions"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "project_id",
+			"entityType": "columns",
+			"table": "project_sessions"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": "''",
+			"generated": null,
+			"name": "title",
+			"entityType": "columns",
+			"table": "project_sessions"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "parent_session_id",
+			"entityType": "columns",
+			"table": "project_sessions"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "forked_from_generation_id",
+			"entityType": "columns",
+			"table": "project_sessions"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "created_at",
+			"entityType": "columns",
+			"table": "project_sessions"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "updated_at",
+			"entityType": "columns",
+			"table": "project_sessions"
+		},
+		{
+			"type": "integer",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "archived_at",
+			"entityType": "columns",
+			"table": "project_sessions"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "token",
+			"entityType": "columns",
+			"table": "project_shares"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "project_id",
+			"entityType": "columns",
+			"table": "project_shares"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "created_at",
+			"entityType": "columns",
+			"table": "project_shares"
+		},
+		{
+			"type": "integer",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "revoked_at",
+			"entityType": "columns",
+			"table": "project_shares"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "id",
+			"entityType": "columns",
+			"table": "projects"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "user_id",
+			"entityType": "columns",
+			"table": "projects"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": "''",
+			"generated": null,
+			"name": "title",
+			"entityType": "columns",
+			"table": "projects"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "created_at",
+			"entityType": "columns",
+			"table": "projects"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "updated_at",
+			"entityType": "columns",
+			"table": "projects"
+		},
+		{
+			"type": "integer",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "archived_at",
+			"entityType": "columns",
+			"table": "projects"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "bucket",
+			"entityType": "columns",
+			"table": "rate_limits"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "count",
+			"entityType": "columns",
+			"table": "rate_limits"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "reset_at",
+			"entityType": "columns",
+			"table": "rate_limits"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "id",
+			"entityType": "columns",
+			"table": "sessions"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "user_id",
+			"entityType": "columns",
+			"table": "sessions"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "created_at",
+			"entityType": "columns",
+			"table": "sessions"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "expires_at",
+			"entityType": "columns",
+			"table": "sessions"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "user_agent",
+			"entityType": "columns",
+			"table": "sessions"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "id",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "user_id",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "comfy_prompt_id",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "scene_media_id",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "reference_media_id",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "replacement_surface",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "real",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "cost",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "status",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "output_media_id",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "error_code",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "real",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "balance_after",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "created_at",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "updated_at",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "integer",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "completed_at",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "session_id",
+			"entityType": "columns",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "id",
+			"entityType": "columns",
+			"table": "users"
+		},
+		{
+			"type": "text",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "pubkey",
+			"entityType": "columns",
+			"table": "users"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "first_name",
+			"entityType": "columns",
+			"table": "users"
+		},
+		{
+			"type": "text",
+			"notNull": false,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "last_name",
+			"entityType": "columns",
+			"table": "users"
+		},
+		{
+			"type": "integer",
+			"notNull": true,
+			"autoincrement": false,
+			"default": null,
+			"generated": null,
+			"name": "created_at",
+			"entityType": "columns",
+			"table": "users"
+		},
+		{
+			"columns": ["user_id"],
+			"tableTo": "users",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_balances_user_id_users_id_fk",
+			"entityType": "fks",
+			"table": "balances"
+		},
+		{
+			"columns": ["user_id"],
+			"tableTo": "users",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_credits_user_id_users_id_fk",
+			"entityType": "fks",
+			"table": "credits"
+		},
+		{
+			"columns": ["user_id"],
+			"tableTo": "users",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_generations_user_id_users_id_fk",
+			"entityType": "fks",
+			"table": "generations"
+		},
+		{
+			"columns": ["result_media_id"],
+			"tableTo": "media",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_generations_result_media_id_media_id_fk",
+			"entityType": "fks",
+			"table": "generations"
+		},
+		{
+			"columns": ["source_media_id"],
+			"tableTo": "media",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_generations_source_media_id_media_id_fk",
+			"entityType": "fks",
+			"table": "generations"
+		},
+		{
+			"columns": ["session_id"],
+			"tableTo": "project_sessions",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_generations_session_id_project_sessions_id_fk",
+			"entityType": "fks",
+			"table": "generations"
+		},
+		{
+			"columns": ["user_id"],
+			"tableTo": "users",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_light_settings_jobs_user_id_users_id_fk",
+			"entityType": "fks",
+			"table": "light_settings_jobs"
+		},
+		{
+			"columns": ["scene_media_id"],
+			"tableTo": "media",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_light_settings_jobs_scene_media_id_media_id_fk",
+			"entityType": "fks",
+			"table": "light_settings_jobs"
+		},
+		{
+			"columns": ["session_id"],
+			"tableTo": "project_sessions",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_light_settings_jobs_session_id_project_sessions_id_fk",
+			"entityType": "fks",
+			"table": "light_settings_jobs"
+		},
+		{
+			"columns": ["output_media_id"],
+			"tableTo": "media",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_light_settings_jobs_output_media_id_media_id_fk",
+			"entityType": "fks",
+			"table": "light_settings_jobs"
+		},
+		{
+			"columns": ["bucket"],
+			"tableTo": "buckets",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_media_bucket_buckets_id_fk",
+			"entityType": "fks",
+			"table": "media"
+		},
+		{
+			"columns": ["user_id"],
+			"tableTo": "users",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_object_replacement_jobs_user_id_users_id_fk",
+			"entityType": "fks",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"columns": ["scene_media_id"],
+			"tableTo": "media",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_object_replacement_jobs_scene_media_id_media_id_fk",
+			"entityType": "fks",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"columns": ["reference_media_id"],
+			"tableTo": "media",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_object_replacement_jobs_reference_media_id_media_id_fk",
+			"entityType": "fks",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"columns": ["output_media_id"],
+			"tableTo": "media",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_object_replacement_jobs_output_media_id_media_id_fk",
+			"entityType": "fks",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"columns": ["session_id"],
+			"tableTo": "project_sessions",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_object_replacement_jobs_session_id_project_sessions_id_fk",
+			"entityType": "fks",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"columns": ["project_id"],
+			"tableTo": "projects",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_project_sessions_project_id_projects_id_fk",
+			"entityType": "fks",
+			"table": "project_sessions"
+		},
+		{
+			"columns": ["parent_session_id"],
+			"tableTo": "project_sessions",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_project_sessions_parent_session_id_project_sessions_id_fk",
+			"entityType": "fks",
+			"table": "project_sessions"
+		},
+		{
+			"columns": ["forked_from_generation_id"],
+			"tableTo": "generations",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_project_sessions_forked_from_generation_id_generations_id_fk",
+			"entityType": "fks",
+			"table": "project_sessions"
+		},
+		{
+			"columns": ["project_id"],
+			"tableTo": "projects",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_project_shares_project_id_projects_id_fk",
+			"entityType": "fks",
+			"table": "project_shares"
+		},
+		{
+			"columns": ["user_id"],
+			"tableTo": "users",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_projects_user_id_users_id_fk",
+			"entityType": "fks",
+			"table": "projects"
+		},
+		{
+			"columns": ["user_id"],
+			"tableTo": "users",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_sessions_user_id_users_id_fk",
+			"entityType": "fks",
+			"table": "sessions"
+		},
+		{
+			"columns": ["user_id"],
+			"tableTo": "users",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_texture_replacement_jobs_user_id_users_id_fk",
+			"entityType": "fks",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"columns": ["scene_media_id"],
+			"tableTo": "media",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_texture_replacement_jobs_scene_media_id_media_id_fk",
+			"entityType": "fks",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"columns": ["reference_media_id"],
+			"tableTo": "media",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_texture_replacement_jobs_reference_media_id_media_id_fk",
+			"entityType": "fks",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"columns": ["output_media_id"],
+			"tableTo": "media",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_texture_replacement_jobs_output_media_id_media_id_fk",
+			"entityType": "fks",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"columns": ["session_id"],
+			"tableTo": "project_sessions",
+			"columnsTo": ["id"],
+			"onUpdate": "NO ACTION",
+			"onDelete": "NO ACTION",
+			"nameExplicit": false,
+			"name": "fk_texture_replacement_jobs_session_id_project_sessions_id_fk",
+			"entityType": "fks",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"columns": ["nonce"],
+			"nameExplicit": false,
+			"name": "auth_challenges_pk",
+			"entityType": "pks",
+			"table": "auth_challenges"
+		},
+		{
+			"columns": ["user_id"],
+			"nameExplicit": false,
+			"name": "balances_pk",
+			"entityType": "pks",
+			"table": "balances"
+		},
+		{
+			"columns": ["user_id"],
+			"nameExplicit": false,
+			"name": "credits_pk",
+			"entityType": "pks",
+			"table": "credits"
+		},
+		{
+			"columns": ["id"],
+			"nameExplicit": false,
+			"name": "generations_pk",
+			"entityType": "pks",
+			"table": "generations"
+		},
+		{
+			"columns": ["id"],
+			"nameExplicit": false,
+			"name": "light_settings_jobs_pk",
+			"entityType": "pks",
+			"table": "light_settings_jobs"
+		},
+		{
+			"columns": ["id"],
+			"nameExplicit": false,
+			"name": "object_replacement_jobs_pk",
+			"entityType": "pks",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"columns": ["id"],
+			"nameExplicit": false,
+			"name": "project_sessions_pk",
+			"entityType": "pks",
+			"table": "project_sessions"
+		},
+		{
+			"columns": ["token"],
+			"nameExplicit": false,
+			"name": "project_shares_pk",
+			"entityType": "pks",
+			"table": "project_shares"
+		},
+		{
+			"columns": ["id"],
+			"nameExplicit": false,
+			"name": "projects_pk",
+			"entityType": "pks",
+			"table": "projects"
+		},
+		{
+			"columns": ["bucket"],
+			"nameExplicit": false,
+			"name": "rate_limits_pk",
+			"entityType": "pks",
+			"table": "rate_limits"
+		},
+		{
+			"columns": ["id"],
+			"nameExplicit": false,
+			"name": "sessions_pk",
+			"entityType": "pks",
+			"table": "sessions"
+		},
+		{
+			"columns": ["id"],
+			"nameExplicit": false,
+			"name": "texture_replacement_jobs_pk",
+			"entityType": "pks",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"columns": ["id"],
+			"nameExplicit": false,
+			"name": "users_pk",
+			"entityType": "pks",
+			"table": "users"
+		},
+		{
+			"columns": ["id"],
+			"nameExplicit": false,
+			"name": "buckets_pk",
+			"table": "buckets",
+			"entityType": "pks"
+		},
+		{
+			"columns": ["id"],
+			"nameExplicit": false,
+			"name": "media_pk",
+			"table": "media",
+			"entityType": "pks"
+		},
+		{
+			"columns": [
+				{
+					"value": "created_at",
+					"isExpression": false
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"origin": "manual",
+			"name": "auth_challenges_created_at",
+			"entityType": "indexes",
+			"table": "auth_challenges"
+		},
+		{
+			"columns": [
+				{
+					"value": "name",
+					"isExpression": false
+				}
+			],
+			"isUnique": true,
+			"where": null,
+			"origin": "manual",
+			"name": "buckets_name",
+			"entityType": "indexes",
+			"table": "buckets"
+		},
+		{
+			"columns": [
+				{
+					"value": "user_id",
+					"isExpression": false
+				},
+				{
+					"value": "\"created_at\" desc",
+					"isExpression": true
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"origin": "manual",
+			"name": "generations_user_created_at",
+			"entityType": "indexes",
+			"table": "generations"
+		},
+		{
+			"columns": [
+				{
+					"value": "user_id",
+					"isExpression": false
+				},
+				{
+					"value": "source_media_id",
+					"isExpression": false
+				},
+				{
+					"value": "created_at",
+					"isExpression": false
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"origin": "manual",
+			"name": "generations_user_source_media",
+			"entityType": "indexes",
+			"table": "generations"
+		},
+		{
+			"columns": [
+				{
+					"value": "session_id",
+					"isExpression": false
+				},
+				{
+					"value": "\"created_at\" desc",
+					"isExpression": true
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"origin": "manual",
+			"name": "generations_session_id",
+			"entityType": "indexes",
+			"table": "generations"
+		},
+		{
+			"columns": [
+				{
+					"value": "user_id",
+					"isExpression": false
+				},
+				{
+					"value": "\"created_at\" desc",
+					"isExpression": true
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"origin": "manual",
+			"name": "light_settings_jobs_user_created_at",
+			"entityType": "indexes",
+			"table": "light_settings_jobs"
+		},
+		{
+			"columns": [
+				{
+					"value": "checksum",
+					"isExpression": false
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"origin": "manual",
+			"name": "media_checksum",
+			"entityType": "indexes",
+			"table": "media"
+		},
+		{
+			"columns": [
+				{
+					"value": "user_id",
+					"isExpression": false
+				},
+				{
+					"value": "\"created_at\" desc",
+					"isExpression": true
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"origin": "manual",
+			"name": "object_replacement_jobs_user_created_at",
+			"entityType": "indexes",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"columns": [
+				{
+					"value": "project_id",
+					"isExpression": false
+				},
+				{
+					"value": "\"updated_at\" desc",
+					"isExpression": true
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"origin": "manual",
+			"name": "project_sessions_project_updated_at",
+			"entityType": "indexes",
+			"table": "project_sessions"
+		},
+		{
+			"columns": [
+				{
+					"value": "project_id",
+					"isExpression": false
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"origin": "manual",
+			"name": "project_shares_project_id",
+			"entityType": "indexes",
+			"table": "project_shares"
+		},
+		{
+			"columns": [
+				{
+					"value": "user_id",
+					"isExpression": false
+				},
+				{
+					"value": "\"updated_at\" desc",
+					"isExpression": true
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"origin": "manual",
+			"name": "projects_user_updated_at",
+			"entityType": "indexes",
+			"table": "projects"
+		},
+		{
+			"columns": [
+				{
+					"value": "expires_at",
+					"isExpression": false
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"origin": "manual",
+			"name": "sessions_expires_at",
+			"entityType": "indexes",
+			"table": "sessions"
+		},
+		{
+			"columns": [
+				{
+					"value": "user_id",
+					"isExpression": false
+				},
+				{
+					"value": "\"created_at\" desc",
+					"isExpression": true
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"origin": "manual",
+			"name": "texture_replacement_jobs_user_created_at",
+			"entityType": "indexes",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"columns": ["url"],
+			"nameExplicit": true,
+			"name": "buckets_url_unique",
+			"entityType": "uniques",
+			"table": "buckets"
+		},
+		{
+			"columns": ["comfy_prompt_id"],
+			"nameExplicit": true,
+			"name": "light_settings_jobs_comfy_prompt_id_unique",
+			"entityType": "uniques",
+			"table": "light_settings_jobs"
+		},
+		{
+			"columns": ["bucket", "filename"],
+			"nameExplicit": true,
+			"name": "media_bucket_filename_unique",
+			"entityType": "uniques",
+			"table": "media"
+		},
+		{
+			"columns": ["comfy_prompt_id"],
+			"nameExplicit": true,
+			"name": "object_replacement_jobs_comfy_prompt_id_unique",
+			"entityType": "uniques",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"columns": ["comfy_prompt_id"],
+			"nameExplicit": true,
+			"name": "texture_replacement_jobs_comfy_prompt_id_unique",
+			"entityType": "uniques",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"columns": ["pubkey"],
+			"nameExplicit": true,
+			"name": "users_pubkey_unique",
+			"entityType": "uniques",
+			"table": "users"
+		},
+		{
+			"value": "\"cost\" > 0",
+			"name": "light_settings_jobs_cost_positive",
+			"entityType": "checks",
+			"table": "light_settings_jobs"
+		},
+		{
+			"value": "\"status\" IN ('processing', 'completed', 'failed')",
+			"name": "light_settings_jobs_status_valid",
+			"entityType": "checks",
+			"table": "light_settings_jobs"
+		},
+		{
+			"value": "(\"status\" = 'processing' AND \"output_media_id\" IS NULL AND \"error_code\" IS NULL AND \"balance_after\" IS NULL AND \"completed_at\" IS NULL) OR (\"status\" = 'completed' AND \"output_media_id\" IS NOT NULL AND \"error_code\" IS NULL AND \"balance_after\" IS NOT NULL AND \"completed_at\" IS NOT NULL) OR (\"status\" = 'failed' AND \"output_media_id\" IS NULL AND \"error_code\" IS NOT NULL AND \"balance_after\" IS NULL AND \"completed_at\" IS NOT NULL)",
+			"name": "light_settings_jobs_status_fields",
+			"entityType": "checks",
+			"table": "light_settings_jobs"
+		},
+		{
+			"value": "\"checksum\" = '' OR (length(\"checksum\") = 64 AND \"checksum\" NOT GLOB '*[^0-9a-f]*')",
+			"name": "media_checksum_format",
+			"entityType": "checks",
+			"table": "media"
+		},
+		{
+			"value": "\"cost\" > 0",
+			"name": "object_replacement_jobs_cost_positive",
+			"entityType": "checks",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"value": "\"status\" IN ('processing', 'completed', 'failed')",
+			"name": "object_replacement_jobs_status_valid",
+			"entityType": "checks",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"value": "(\"status\" = 'processing' AND \"output_media_id\" IS NULL AND \"error_code\" IS NULL AND \"balance_after\" IS NULL AND \"completed_at\" IS NULL) OR (\"status\" = 'completed' AND \"output_media_id\" IS NOT NULL AND \"error_code\" IS NULL AND \"balance_after\" IS NOT NULL AND \"completed_at\" IS NOT NULL) OR (\"status\" = 'failed' AND \"output_media_id\" IS NULL AND \"error_code\" IS NOT NULL AND \"balance_after\" IS NULL AND \"completed_at\" IS NOT NULL)",
+			"name": "object_replacement_jobs_status_fields",
+			"entityType": "checks",
+			"table": "object_replacement_jobs"
+		},
+		{
+			"value": "(\"parent_session_id\" IS NULL AND \"forked_from_generation_id\" IS NULL) OR (\"parent_session_id\" IS NOT NULL AND \"forked_from_generation_id\" IS NOT NULL)",
+			"name": "project_sessions_fork_lineage",
+			"entityType": "checks",
+			"table": "project_sessions"
+		},
+		{
+			"value": "\"cost\" > 0",
+			"name": "texture_replacement_jobs_cost_positive",
+			"entityType": "checks",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"value": "\"status\" IN ('processing', 'completed', 'failed')",
+			"name": "texture_replacement_jobs_status_valid",
+			"entityType": "checks",
+			"table": "texture_replacement_jobs"
+		},
+		{
+			"value": "(\"status\" = 'processing' AND \"output_media_id\" IS NULL AND \"error_code\" IS NULL AND \"balance_after\" IS NULL AND \"completed_at\" IS NULL) OR (\"status\" = 'completed' AND \"output_media_id\" IS NOT NULL AND \"error_code\" IS NULL AND \"balance_after\" IS NOT NULL AND \"completed_at\" IS NOT NULL) OR (\"status\" = 'failed' AND \"output_media_id\" IS NULL AND \"error_code\" IS NOT NULL AND \"balance_after\" IS NULL AND \"completed_at\" IS NOT NULL)",
+			"name": "texture_replacement_jobs_status_fields",
+			"entityType": "checks",
+			"table": "texture_replacement_jobs"
+		}
+	],
+	"renames": []
+}
