@@ -927,7 +927,11 @@ before the Change Date. See LICENSE for complete terms.
 		border: 1px solid rgb(255 255 255 / 0.68);
 		border-radius: var(--radius-sm);
 		background: rgb(255 255 255 / 0.92);
-		color: var(--color-text);
+		/* Fixed, not var(--color-text): this glass background is intentionally
+		   the same light color in both themes (it floats over an arbitrary
+		   photo, not app chrome), so the icon needs a fixed dark color too —
+		   following the theme text color made it invisible in dark mode. */
+		color: #1d1d1f;
 		box-shadow: 0 2px 8px rgb(29 29 31 / 0.18);
 		backdrop-filter: blur(8px);
 		cursor: pointer;
