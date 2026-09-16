@@ -324,12 +324,22 @@ test('draws a mask and applies the synchronous result without polling', async ({
 	});
 	expect(pollCount).toBe(0);
 
+	const editJobId = '00000000-0000-4000-8000-000000000301';
 	await page.route('**/api/edit', async (route) => {
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: `/api/edit/${editJobId}` },
+			body: JSON.stringify({ id: editJobId, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/edit/${editJobId}`, async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				id: '00000000-0000-4000-8000-000000000301',
+				id: editJobId,
+				status: 'completed',
 				output: media(5, 'https://cdn.example.test/follow-up-edit.webp'),
 				cost: 1,
 				balance: 17.5
@@ -341,7 +351,8 @@ test('draws a mask and applies the synchronous result without polling', async ({
 	await page.getByRole('button', { name: 'Применить правку' }).click();
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/follow-up-edit.webp'
+		'https://cdn.example.test/follow-up-edit.webp',
+		{ timeout: 10_000 }
 	);
 
 	await page.getByRole('tab', { name: /Замена текстуры/ }).click();

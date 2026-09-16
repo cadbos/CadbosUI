@@ -19,6 +19,7 @@ import {
 	SCENE_TYPES,
 	IMAGE_SOURCE_MODES,
 	objectReplacementJobIdSchema,
+	type EditOperationType,
 	type ImageSourceMode,
 	type RequestState,
 	type SceneType
@@ -167,12 +168,9 @@ export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): Sub
 	if (mode === 'edit') {
 		const tool = slugToTool(searchParams.get('tool') ?? undefined);
 		const job = searchParams.get('job');
-		return (tool === 'object-replacement' ||
-			tool === 'texture-replacement' ||
-			tool === 'light-settings') &&
-			isJobId(job)
-			? { tool, job }
-			: { tool };
+		// Every edit-mode tool is job-backed now (freeform/add-object/remove-object
+		// share the Flux Kontext job, the other three each have their own).
+		return isJobId(job) ? { tool, job } : { tool };
 	}
 	if (mode === 'styleTransfer') {
 		return { reference: slugToReference(searchParams.get('reference') ?? undefined) };
@@ -296,8 +294,20 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 			}
 			const job = subTab.job ?? request.activeLightSettingsJobId;
 			if (isJobId(job)) params.set('job', job);
-		} else if (tool === 'freeform' && request.editPrompt.trim() !== '') {
-			params.set('prompt', request.editPrompt);
+		} else if (tool === 'freeform' || tool === 'add-object' || tool === 'remove-object') {
+			if (tool === 'freeform' && request.editPrompt.trim() !== '') {
+				params.set('prompt', request.editPrompt);
+			}
+			const job = subTab.job ?? request.activeFluxKontextEditJobId;
+			if (isJobId(job)) {
+				params.set('job', job);
+				// The job's own type, not the currently-selected tab — they can
+				// diverge if the user switches tabs while it's still polling (the
+				// job is shared across all three tools), and restoring from the
+				// wrong one would mislabel the eventual edit history entry.
+				const jobType = request.activeFluxKontextEditJob?.type;
+				if (jobType) params.set('jobType', jobType);
+			}
 		}
 	}
 
@@ -486,8 +496,22 @@ export function applyShareParams(
 			request.setLightSettingsInstruction((searchParams.get('instruction') ?? '').slice(0, 500));
 			const job = searchParams.get('job');
 			request.setActiveLightSettingsJobId(isJobId(job) ? job : undefined);
-		} else if (tool === 'freeform') {
-			request.setEditPrompt(searchParams.get('prompt') ?? '');
+		} else if (tool === 'freeform' || tool === 'add-object' || tool === 'remove-object') {
+			if (tool === 'freeform') {
+				request.setEditPrompt(searchParams.get('prompt') ?? '');
+			}
+			const job = searchParams.get('job');
+			// The job's own type (see buildShareUrl), not the currently-selected
+			// tab — a reload can land on a different tab than the one that
+			// actually submitted the still-polling job.
+			const jobTypeParam = searchParams.get('jobType');
+			const jobType: EditOperationType =
+				jobTypeParam === 'freeform' ||
+				jobTypeParam === 'add-object' ||
+				jobTypeParam === 'remove-object'
+					? jobTypeParam
+					: 'freeform';
+			request.setActiveFluxKontextEditJobId(isJobId(job) ? job : undefined, jobType);
 		}
 	} else if (mode === 'styleTransfer') {
 		const presetId = searchParams.get('preset');

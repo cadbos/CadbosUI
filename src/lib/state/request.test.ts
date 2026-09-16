@@ -1435,6 +1435,46 @@ describe('toLightSettingsRequest', () => {
 	});
 });
 
+describe('flux kontext edit job (freeform/add-object/remove-object)', () => {
+	it('enforces the job-id shape and clears on undefined', () => {
+		expect(() => request.setActiveFluxKontextEditJobId('not-a-job-id')).toThrow();
+		request.setActiveFluxKontextEditJobId('123e4567-e89b-42d3-a456-426614174000');
+		expect(request.activeFluxKontextEditJobId).toBe('123e4567-e89b-42d3-a456-426614174000');
+		request.setActiveFluxKontextEditJobId(undefined);
+		expect(request.activeFluxKontextEditJobId).toBeUndefined();
+	});
+
+	it('retains an immutable source snapshot, instruction, and type for the accepted job', () => {
+		const source: RenderResult = {
+			id: 'source-render',
+			outputKey: '201',
+			cost: 1,
+			balance: 19,
+			ts: 1
+		};
+		request.setActiveFluxKontextEditJob(
+			'123e4567-e89b-42d3-a456-426614174000',
+			source,
+			'remove the sofa',
+			'remove-object'
+		);
+		source.outputKey = '999';
+
+		expect(request.activeFluxKontextEditJob).toEqual({
+			id: '123e4567-e89b-42d3-a456-426614174000',
+			type: 'remove-object',
+			instruction: 'remove the sofa',
+			sourceRender: {
+				id: 'source-render',
+				outputKey: '201',
+				cost: 1,
+				balance: 19,
+				ts: 1
+			}
+		});
+	});
+});
+
 describe('edit lifecycle (FR-К4/К6)', () => {
 	function render(id: string): RenderResult {
 		return {

@@ -16,7 +16,6 @@ import { dev } from '$app/environment';
 import { createClient } from '$lib/server/archai/client';
 import {
 	postChangeTextures,
-	postEditByPrompt,
 	postRenderExterior,
 	postRenderInterior,
 	postStyleTransfer,
@@ -27,7 +26,6 @@ import type { OutputFormat } from '$lib/api/contract';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import type { Bucket } from '$lib/server/media';
 import {
-	mockEdit,
 	mockMaskedTextureReplacement,
 	mockRender,
 	mockRenderExterior,
@@ -242,71 +240,6 @@ export async function renderExterior(
 			}
 		})
 	);
-}
-
-// Д-17: `image` is a freshly signed URL for the managed render being edited.
-// No outputFormat — aspect
-// ratio is preserved automatically (И-MA-ED1).
-export async function editInterior(
-	platform: App.Platform | undefined,
-	bucket: Bucket | undefined,
-	params: { image: string; prompt: string }
-): Promise<StoredRenderResponse> {
-	const apiKey = platform?.env?.ARCHAI_API_KEY;
-	const apiUrl = platform?.env?.ARCHAI_API_URL;
-
-	if (!apiKey || !apiUrl) {
-		if (dev) {
-			const mock = mockEdit();
-			return {
-				...mock,
-				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
-				outputHash: ''
-			};
-		}
-		generationFailed(
-			'edit-by-prompt',
-			'Edit failed',
-			`${!apiKey ? 'ARCHAI_API_KEY' : 'ARCHAI_API_URL'} not configured`
-		);
-	}
-	if (!bucket) generationFailed('edit-by-prompt', 'Edit failed', 'bucket not configured');
-
-	let result: Awaited<ReturnType<typeof postEditByPrompt>>;
-	try {
-		result = await postEditByPrompt({
-			client: requestClientFor(apiKey, apiUrl),
-			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
-			body: { image: params.image, prompt: params.prompt }
-		});
-	} catch (err) {
-		generationFailed('edit-by-prompt', 'Edit failed', err);
-	}
-
-	if (result.error) generationFailed('edit-by-prompt', 'Edit failed', result.error);
-
-	const data = result.data;
-	if (!data) {
-		generationFailed('edit-by-prompt', 'Edit failed', 'empty response from edit service');
-	}
-
-	// И-MA-ED2: output is always a single URL string, unlike render/interior's
-	// array-or-string response (И-MA-4).
-	if (!data.output) {
-		generationFailed(
-			'edit-by-prompt',
-			'Edit failed',
-			`no image URL in output: ${JSON.stringify(data.output)}`
-		);
-	}
-
-	const output = await storeGeneratedImage(platform, bucket, data.output, 'edit-by-prompt');
-	return {
-		outputKey: output.key,
-		outputHash: output.hash,
-		cost: data.cost,
-		balance: data.balance
-	};
 }
 
 export async function styleTransferInterior(

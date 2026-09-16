@@ -1,0 +1,190 @@
+{
+	"1": {
+		"inputs": {
+			"unet_name": "flux1-kontext-dev.safetensors",
+			"weight_dtype": "fp8_e4m3fn"
+		},
+		"class_type": "UNETLoader",
+		"_meta": {
+			"title": "Load Diffusion Model"
+		}
+	},
+	"2": {
+		"inputs": {
+			"clip_name1": "clip_l.safetensors",
+			"clip_name2": "t5xxl_fp8_e4m3fn.safetensors",
+			"type": "flux",
+			"device": "default"
+		},
+		"class_type": "DualCLIPLoader",
+		"_meta": {
+			"title": "DualCLIPLoader"
+		}
+	},
+	"3": {
+		"inputs": {
+			"vae_name": "ae.safetensors"
+		},
+		"class_type": "VAELoader",
+		"_meta": {
+			"title": "Load VAE"
+		}
+	},
+	"4": {
+		"inputs": {
+			"image": "1236ded5-d9e7-4d88-b4ae-95de3cf74d68-scene.png"
+		},
+		"class_type": "LoadImage",
+		"_meta": {
+			"title": "Исходное изображение"
+		}
+	},
+	"6": {
+		"inputs": {
+			"image": ["4", 0]
+		},
+		"class_type": "FluxKontextImageScale",
+		"_meta": {
+			"title": "FluxKontextImageScale"
+		}
+	},
+	"8": {
+		"inputs": {
+			"pixels": ["6", 0],
+			"vae": ["3", 0]
+		},
+		"class_type": "VAEEncode",
+		"_meta": {
+			"title": "VAE Encode"
+		}
+	},
+	"11": {
+		"inputs": {
+			"text": "",
+			"clip": ["2", 0]
+		},
+		"class_type": "CLIPTextEncode",
+		"_meta": {
+			"title": "Negative (обычно пусто)"
+		}
+	},
+	"12": {
+		"inputs": {
+			"conditioning": ["154", 0],
+			"latent": ["8", 0]
+		},
+		"class_type": "ReferenceLatent",
+		"_meta": {
+			"title": "ReferenceLatent (исходник)"
+		}
+	},
+	"14": {
+		"inputs": {
+			"guidance": 2.5,
+			"conditioning": ["12", 0]
+		},
+		"class_type": "FluxGuidance",
+		"_meta": {
+			"title": "FluxGuidance"
+		}
+	},
+	"15": {
+		"inputs": {
+			"seed": 1036508066225443,
+			"steps": 20,
+			"cfg": 1,
+			"sampler_name": "euler",
+			"scheduler": "normal",
+			"denoise": 1,
+			"model": ["1", 0],
+			"positive": ["14", 0],
+			"negative": ["11", 0],
+			"latent_image": ["8", 0]
+		},
+		"class_type": "KSampler",
+		"_meta": {
+			"title": "KSampler"
+		}
+	},
+	"16": {
+		"inputs": {
+			"samples": ["15", 0],
+			"vae": ["3", 0]
+		},
+		"class_type": "VAEDecode",
+		"_meta": {
+			"title": "VAE Decode"
+		}
+	},
+	"17": {
+		"inputs": {
+			"filename_prefix": "FluxKontext_edit",
+			"images": ["16", 0]
+		},
+		"class_type": "SaveImage",
+		"_meta": {
+			"title": "Save Image"
+		}
+	},
+	"154": {
+		"inputs": {
+			"text": ["153:150", 0],
+			"clip": ["2", 0]
+		},
+		"class_type": "CLIPTextEncode",
+		"_meta": {
+			"title": "CLIP Text Encode (Prompt)"
+		}
+	},
+	"155": {
+		"inputs": {
+			"source": ["153:150", 0]
+		},
+		"class_type": "PreviewAny",
+		"_meta": {
+			"title": "Preview as Text"
+		}
+	},
+	"153:147": {
+		"inputs": {
+			"clip_name": "Qwen3VL-4B-Instruct-Q8_0.gguf",
+			"type": "ltxv"
+		},
+		"class_type": "CLIPLoaderGGUF",
+		"_meta": {
+			"title": "CLIPLoader (GGUF)"
+		}
+	},
+	"153:152": {
+		"inputs": {
+			"string_a": "Translate the following text to English, preserving original meaning:",
+			"string_b": "добавить кофейный столик перед диваном",
+			"delimiter": " "
+		},
+		"class_type": "StringConcatenate",
+		"_meta": {
+			"title": "Concatenate Text"
+		}
+	},
+	"153:150": {
+		"inputs": {
+			"prompt": ["153:152", 0],
+			"max_length": 512,
+			"sampling_mode": "on",
+			"sampling_mode.temperature": 0.7,
+			"sampling_mode.top_k": 64,
+			"sampling_mode.top_p": 0.95,
+			"sampling_mode.min_p": 0.05,
+			"sampling_mode.repetition_penalty": 1.05,
+			"sampling_mode.seed": 0,
+			"sampling_mode.presence_penalty": 0,
+			"thinking": false,
+			"use_default_template": true,
+			"clip": ["153:147", 0]
+		},
+		"class_type": "TextGenerate",
+		"_meta": {
+			"title": "Generate Text"
+		}
+	}
+}

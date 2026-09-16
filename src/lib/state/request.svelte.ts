@@ -101,6 +101,17 @@ export interface ActiveLightSettingsJob {
 	sourceRender?: RenderResult;
 }
 
+// The one Flux Kontext ComfyUI job backing all three edit-panel tools
+// (freeform/add-object/remove-object share one endpoint) — unlike the three
+// single-purpose jobs above, it needs `type` to rebuild RenderResult.editOp
+// once the job completes.
+export interface ActiveFluxKontextEditJob {
+	id: string;
+	type: EditOperationType;
+	instruction: string;
+	sourceRender?: RenderResult;
+}
+
 export interface TextureMaskUploadOperation {
 	epoch: number;
 	sourceKey: string;
@@ -209,6 +220,8 @@ const replacementSurfaceSchema = z.string().max(200);
 const textureReplacementJobIdSchema = z.uuid();
 const lightSettingsInstructionSchema = z.string().max(500);
 export const lightSettingsJobIdSchema = z.uuid();
+const fluxKontextEditJobIdSchema = z.uuid();
+const fluxKontextEditInstructionSchema = z.string();
 // A fixture's on/off ids are mutually exclusive (setLightSettingsFixtureState
 // enforces that in the UI), but ids arriving here — from a shared URL or a
 // persisted session — aren't guaranteed to respect that. Collapse each
@@ -475,6 +488,18 @@ function cloneActiveLightSettingsJob(
 	};
 }
 
+function cloneActiveFluxKontextEditJob(
+	job: ActiveFluxKontextEditJob | undefined
+): ActiveFluxKontextEditJob | undefined {
+	if (!job) return undefined;
+	return {
+		id: job.id,
+		type: job.type,
+		instruction: job.instruction,
+		sourceRender: cloneRenderResult(job.sourceRender)
+	};
+}
+
 function insertFragment(
 	fragments: PromptFragment[],
 	fragment: PromptFragment,
@@ -618,6 +643,7 @@ export class RequestState {
 	textureMaskSourceKey = $state<string | undefined>(undefined);
 	promptFragments = $state<PromptFragment[]>([]);
 	editPrompt = $state('');
+	activeFluxKontextEditJob = $state<ActiveFluxKontextEditJob | undefined>(undefined);
 	outputFormat = $state<OutputFormat>('webp');
 	sceneType = $state<SceneType>('interior');
 	styleTransferPrompt = $state('');
@@ -711,6 +737,10 @@ export class RequestState {
 
 	get activeLightSettingsJobId(): string | undefined {
 		return this.activeLightSettingsJob?.id;
+	}
+
+	get activeFluxKontextEditJobId(): string | undefined {
+		return this.activeFluxKontextEditJob?.id;
 	}
 
 	addFragment(input: AddFragmentInput): string {
@@ -983,6 +1013,36 @@ export class RequestState {
 		this.activeLightSettingsJob = {
 			id: lightSettingsJobIdSchema.parse(id),
 			instruction: lightSettingsInstructionSchema.parse(instruction).trim(),
+			sourceRender: cloneRenderResult(sourceRender)
+		};
+	}
+
+	// `type` only matters for the id-only (URL-restore) path — the submit-time
+	// path below always has the real type from the tool that just submitted.
+	// add-object/remove-object have no persisted instruction field (unlike
+	// freeform's `editPrompt`), so a restored job for those two loses its exact
+	// wording; the job id itself (what actually resumes polling) is unaffected.
+	setActiveFluxKontextEditJobId(
+		id: string | undefined,
+		type: EditOperationType = 'freeform'
+	): void {
+		const parsed = fluxKontextEditJobIdSchema.optional().parse(id);
+		if (parsed === this.activeFluxKontextEditJob?.id) return;
+		this.activeFluxKontextEditJob = parsed
+			? { id: parsed, type, instruction: type === 'freeform' ? this.editPrompt.trim() : '' }
+			: undefined;
+	}
+
+	setActiveFluxKontextEditJob(
+		id: string,
+		sourceRender: RenderResult | undefined,
+		instruction: string,
+		type: EditOperationType
+	): void {
+		this.activeFluxKontextEditJob = {
+			id: fluxKontextEditJobIdSchema.parse(id),
+			type,
+			instruction: fluxKontextEditInstructionSchema.parse(instruction).trim(),
 			sourceRender: cloneRenderResult(sourceRender)
 		};
 	}
@@ -1550,6 +1610,7 @@ export class RequestState {
 		this.lightSettingsPresetIds = [...parsed.lightSettingsPresetIds];
 		this.lightSettingsInstruction = parsed.lightSettingsInstruction;
 		this.activeLightSettingsJob = undefined;
+		this.activeFluxKontextEditJob = undefined;
 		this.promptOverride = parsed.promptOverride;
 		const restoredRender = cloneRenderResult(parsed.currentRender);
 		if (restoredRender) {
@@ -1637,6 +1698,7 @@ export class RequestState {
 		this.lightSettingsPresetIds = [];
 		this.lightSettingsInstruction = '';
 		this.activeLightSettingsJob = undefined;
+		this.activeFluxKontextEditJob = undefined;
 		this.promptOverride = null;
 		this.#renderHistory = [];
 		this.#historyIndex = -1;
@@ -1685,6 +1747,7 @@ export class RequestState {
 		this.textureMaskSourceKey = source.textureMaskSourceKey;
 		this.promptFragments = cloneFragments(source.promptFragments);
 		this.editPrompt = source.editPrompt;
+		this.activeFluxKontextEditJob = cloneActiveFluxKontextEditJob(source.activeFluxKontextEditJob);
 		this.outputFormat = source.outputFormat;
 		this.sceneType = source.sceneType;
 		this.styleTransferPrompt = source.styleTransferPrompt;

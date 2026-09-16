@@ -12,69 +12,125 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
-import type { SessionUser } from '$lib/api/contract';
-import { getUserIdByPubkey } from '$lib/server/billing';
-import { mediaKey } from '$lib/server/media';
+import type { EditJobResponse, SessionUser } from '$lib/api/contract';
+import { ComfyUiError, type ComfyDownloadedImage } from '$lib/server/comfyui';
+import { DEMO_PUBKEY } from '$lib/server/demo';
+import { mediaKey, type Bucket } from '$lib/server/media';
+import {
+	createFluxKontextEditJob,
+	getFluxKontextEditJob
+} from '$lib/server/flux-kontext-edit-jobs';
+import { RemoteImageImportError } from '$lib/server/remote-image';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedManagedMedia,
-	TEST_S3_BUCKET,
-	TEST_S3_ENV
+	setBucketUrl,
+	TEST_S3_BUCKET
 } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
-import { DEMO_PUBKEY } from '$lib/server/demo';
-import { editInterior } from '$lib/server/generation';
 
-// Lets a single test force recordBalance/recordGeneration to reject, to prove
-// a bookkeeping failure doesn't discard an already-successful, already-charged edit.
-const billingMock = vi.hoisted(() => ({ failNextRecordBalance: false }));
-const generationsMock = vi.hoisted(() => ({ failNextRecordGeneration: false }));
+const integration = vi.hoisted(() => ({
+	cancel: vi.fn(),
+	cost: 2,
+	costError: null as Error | null,
+	poll: vi.fn(),
+	submit: vi.fn()
+}));
+const jobStore = vi.hoisted(() => ({ failNextCreate: false }));
+const storage = vi.hoisted(() => ({
+	putS3Object:
+		vi.fn<
+			(
+				platform: App.Platform | undefined,
+				bucket: Bucket,
+				key: string,
+				bytes: ArrayBuffer,
+				mime: string
+			) => Promise<void>
+		>()
+}));
 
-vi.mock('$lib/server/billing', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/billing')>();
+vi.mock('$lib/server/flux-kontext-edit', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/flux-kontext-edit')>();
 	return {
 		...actual,
-		getUserIdByPubkey: vi.fn(actual.getUserIdByPubkey),
-		recordBalance: vi.fn((...args: Parameters<typeof actual.recordBalance>) => {
-			if (billingMock.failNextRecordBalance) {
-				billingMock.failNextRecordBalance = false;
-				return Promise.reject(new Error('simulated D1 failure'));
-			}
-			return actual.recordBalance(...args);
-		})
+		cancelFluxKontextEdit: integration.cancel,
+		fluxKontextEditCost: vi.fn(() => {
+			if (integration.costError) throw integration.costError;
+			return integration.cost;
+		}),
+		pollFluxKontextEdit: integration.poll,
+		submitFluxKontextEdit: integration.submit
 	};
 });
 
-vi.mock('$lib/server/generation', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/generation')>();
-	return { ...actual, editInterior: vi.fn(actual.editInterior) };
-});
-
-vi.mock('$lib/server/generations', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/server/generations')>();
+vi.mock('$lib/server/flux-kontext-edit-jobs', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/flux-kontext-edit-jobs')>();
 	return {
 		...actual,
-		recordGeneration: vi.fn((...args: Parameters<typeof actual.recordGeneration>) => {
-			if (generationsMock.failNextRecordGeneration) {
-				generationsMock.failNextRecordGeneration = false;
-				return Promise.reject(new Error('simulated D1 failure'));
+		createFluxKontextEditJob: vi.fn(
+			(...args: Parameters<typeof actual.createFluxKontextEditJob>) => {
+				if (jobStore.failNextCreate) {
+					jobStore.failNextCreate = false;
+					return Promise.reject(new Error('private persistence detail'));
+				}
+				return actual.createFluxKontextEditJob(...args);
 			}
-			return actual.recordGeneration(...args);
-		})
+		),
+		getFluxKontextEditJob: vi.fn(actual.getFluxKontextEditJob)
 	};
 });
+
+vi.mock('$lib/server/s3', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/server/s3')>()),
+	putS3Object: storage.putS3Object
+}));
 
 const { POST } = await import('./+server');
+const { GET } = await import('./[id]/+server');
 
-// Deterministic, UUID-shaped (sessionId: z.uuid()) — keyed by pubkey since some
-// tests seed two users (two pubkeys) in the same db, so a single fixed id would
-// collide on the project_sessions primary key.
+const requestBody = {
+	imageKey: mediaKey(TEST_S3_BUCKET.name, 'scene.jpg'),
+	prompt: 'сделай стены белыми'
+};
+const completedImage: ComfyDownloadedImage = {
+	filename: 'result.png',
+	subfolder: 'output',
+	type: 'output',
+	bytes: new TextEncoder().encode('result-image').buffer,
+	contentType: 'image/png'
+};
+
+function rejectionLog(status: number, reason: string): Record<string, unknown> {
+	return { level: 'warn', area: 'edit', event: 'request_rejected', status, reason };
+}
+
+function failureLog(
+	status: number,
+	reason: string,
+	operation: string,
+	detail: Record<string, unknown> = {}
+): Record<string, unknown> {
+	return {
+		level: 'error',
+		area: 'edit',
+		event: 'request_failed',
+		status,
+		reason,
+		operation,
+		...detail
+	};
+}
+
+function expectSingleLog(messages: unknown[], expected: Record<string, unknown>): void {
+	expect(messages).toEqual([JSON.stringify(expected)]);
+}
+
 const SESSION_IDS: Record<string, string> = {
-	['a'.repeat(64)]: '00000000-0000-4000-8000-000000000001',
-	'pubkey-1': '00000000-0000-4000-8000-000000000002',
-	['b'.repeat(64)]: '00000000-0000-4000-8000-000000000003'
+	'pubkey-1': '00000000-0000-4000-8000-000000000001',
+	'pubkey-2': '00000000-0000-4000-8000-000000000002'
 };
 const FALLBACK_SESSION_ID = '00000000-0000-4000-8000-0000000000ff';
 
@@ -82,383 +138,457 @@ function sessionIdForPubkey(pubkey: string | undefined): string {
 	return (pubkey && SESSION_IDS[pubkey]) || FALLBACK_SESSION_ID;
 }
 
-function seedUser(db: D1Database, id: string, pubkey: string): void {
+function seedUser(db: D1Database, balance?: number, userId = 'user-1', pubkey = 'pubkey-1'): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind(id, pubkey, Date.now())
+		.bind(userId, pubkey, Date.now())
 		.run();
+	if (balance !== undefined) {
+		db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
+			.bind(userId, balance, Date.now())
+			.run();
+	}
 	const now = Date.now();
-	const projectId = `project-${id}`;
+	const projectId = `project-${userId}`;
 	db.prepare(
 		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
 	)
-		.bind(projectId, id, 'Test project', now, now)
+		.bind(projectId, userId, 'Test project', now, now)
 		.run();
 	db.prepare(
 		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
 	)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
-	seedManagedMedia(db);
+	seedManagedMedia(db, 'scene.jpg');
 }
 
-// The admin's manual approval step (migrations/0005) — no auto-provisioning
-// exists anymore, so every test that expects an edit to succeed must grant
-// access first.
-function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
-		.bind(userId, balance, Date.now(), enabled)
-		.run();
+function bucket(): { put: ReturnType<typeof vi.fn> } {
+	return { put: vi.fn(async (_key: string, _bytes: ArrayBuffer, _metadata: unknown) => undefined) };
 }
 
-type EditEvent = Parameters<typeof POST>[0];
+function platform(
+	db: D1Database,
+	uploadsBucket: ReturnType<typeof bucket> = bucket()
+): App.Platform {
+	storage.putS3Object.mockImplementation(async (_platform, _bucket, key, bytes, mime) => {
+		const put = uploadsBucket.put as unknown as (
+			key: string,
+			bytes: ArrayBuffer,
+			metadata: { httpMetadata: { contentType: string } }
+		) => Promise<void>;
+		await put(key, bytes, { httpMetadata: { contentType: mime } });
+	});
+	return {
+		env: {
+			DB: db,
+			COMFYUI_BASE_URL: 'http://comfy.internal:8188',
+			S3_ACCESS_KEY_ID: 'test-access-key',
+			S3_SECRET_ACCESS_KEY: 'test-secret-key'
+		}
+	} as unknown as App.Platform;
+}
 
-function call(
+type PostEvent = Parameters<typeof POST>[0];
+type GetEvent = Parameters<typeof GET>[0];
+
+function callPost(
 	user: SessionUser | null,
-	platform: App.Platform,
-	body: Record<string, unknown>,
+	requestPlatform: App.Platform,
+	bodyOverrides: Record<string, unknown> = {},
 	sessionLookupUnavailable = false
 ): ReturnType<typeof POST> {
-	const testPlatform = { ...platform, env: { ...TEST_S3_ENV, ...platform.env } } as App.Platform;
+	const body = {
+		...requestBody,
+		sessionId: sessionIdForPubkey(user?.pubkey),
+		...bodyOverrides
+	};
 	return POST({
 		request: new Request('https://cadbos.example/api/edit', {
 			method: 'POST',
-			body: JSON.stringify({ ...body, sessionId: sessionIdForPubkey(user?.pubkey) })
+			body: JSON.stringify(body)
 		}),
-		platform: testPlatform,
-		locals: { sessionLookupUnavailable, user }
-	} as EditEvent);
+		platform: requestPlatform,
+		locals: { sessionLookupUnavailable, user },
+		url: new URL('https://cadbos.example/api/edit')
+	} as PostEvent);
 }
 
-const body = {
-	imageKey: mediaKey(TEST_S3_BUCKET.name, 'test/source.webp'),
-	prompt: 'replace the sofa with a leather armchair'
-};
-const pubkey = 'a'.repeat(64);
+function callGet(
+	user: SessionUser | null,
+	requestPlatform: App.Platform,
+	id: string,
+	sessionLookupUnavailable = false
+): ReturnType<typeof GET> {
+	return GET({
+		params: { id },
+		platform: requestPlatform,
+		locals: { sessionLookupUnavailable, user }
+	} as GetEvent);
+}
 
-describe('POST /api/edit — billing', () => {
-	it('rejects unauthenticated requests', async () => {
-		const response = await call(null, { env: { DB: makeD1() } } as App.Platform, body);
-		expect(response.status).toBe(401);
+async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
+	setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
+	await createFluxKontextEditJob(db, {
+		id: 'job-1',
+		userId: 'user-1',
+		comfyPromptId: 'prompt-1',
+		sceneMediaId: 1,
+		sessionId: sessionIdForPubkey('pubkey-1'),
+		instruction: requestBody.prompt,
+		cost: 2,
+		createdAt
 	});
+}
 
-	it('returns 503 without validation, billing, storage, provider, or edit processing', async () => {
-		const requestJson = vi.spyOn(Request.prototype, 'json');
-		vi.mocked(getUserIdByPubkey).mockClear();
-		vi.mocked(editInterior).mockClear();
+beforeEach(() => {
+	integration.cancel.mockReset().mockResolvedValue(undefined);
+	integration.cost = 2;
+	integration.costError = null;
+	integration.poll.mockReset().mockResolvedValue(null);
+	integration.submit.mockReset().mockResolvedValue('prompt-1');
+	jobStore.failNextCreate = false;
+});
 
-		const response = await call(null, { env: {} } as App.Platform, { invalid: true }, true);
+afterEach(() => {
+	vi.restoreAllMocks();
+});
 
-		try {
-			expect(response.status).toBe(503);
-			expect(response.headers.get('retry-after')).toBe('5');
-			expect(requestJson).not.toHaveBeenCalled();
-			expect(getUserIdByPubkey).not.toHaveBeenCalled();
-			expect(editInterior).not.toHaveBeenCalled();
-		} finally {
-			requestJson.mockRestore();
-		}
-		expect(await response.json()).toEqual({
-			error: {
-				code: 'authentication_unavailable',
-				message: 'Authentication service temporarily unavailable'
-			}
-		});
+describe('POST /api/edit', () => {
+	it('requires authentication and a non-empty prompt', async () => {
+		const db = makeD1();
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+		const unauthenticated = await callPost(null, platform(db));
+		expect(unauthenticated.status).toBe(401);
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(401, 'unauthorized'));
+		consoleWarn.mockClear();
+
+		const uploadsBucket = bucket();
+		const unavailable = await callPost(null, platform(db, uploadsBucket), requestBody, true);
+		expect(unavailable.status).toBe(503);
+		expect(unavailable.headers.get('retry-after')).toBe('5');
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(503, 'authentication_unavailable'));
+		expect(integration.submit).not.toHaveBeenCalled();
+		expect(createFluxKontextEditJob).not.toHaveBeenCalled();
+		consoleWarn.mockClear();
+
+		seedUser(db, 12);
+		const invalid = await callPost({ pubkey: 'pubkey-1' }, platform(db), { prompt: '' });
+		expect(invalid.status).toBe(400);
+		expect(integration.submit).not.toHaveBeenCalled();
 	});
 
 	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		seedUser(db, 12);
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		const foreignSessionId = seedForeignSession(db);
 
-		// call() forces sessionId to the caller's own session — bypass it here to
-		// submit someone else's session id instead.
-		const response = await POST({
-			request: new Request('https://cadbos.example/api/edit', {
-				method: 'POST',
-				body: JSON.stringify({ ...body, sessionId: foreignSessionId })
-			}),
-			platform: { env: { DB: db } } as App.Platform,
-			locals: { user: { pubkey } }
-		} as EditEvent);
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), {
+			sessionId: foreignSessionId
+		});
+
 		expect(response.status).toBe(404);
-		const result = (await response.json()) as { error: { code: string } };
-		expect(result.error.code).toBe('session_not_found');
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(404, 'session_not_found'));
+		expect(integration.submit).not.toHaveBeenCalled();
 	});
 
-	it('rejects an empty instruction — edit-by-prompt has no enhance fallback', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
-
-		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
-			...body,
-			prompt: '  '
-		});
-		expect(response.status).toBe(400);
-	});
-
-	it('rejects an image value that is not a media key', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
-
-		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
-			...body,
-			imageKey: 1
-		});
-		expect(response.status).toBe(400);
-	});
-
-	it('chains the edit onto the previous render (Д-17: image = prior render URL)', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
-
-		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(200);
-		const result = (await response.json()) as { output: { url: string } };
-		expect(result.output.url).toMatch(/^https:\/\//);
-	});
-
-	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
-
-		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(200);
-		const result = (await response.json()) as { balance: number; cost: number };
-
-		// The archAI mock reports balance 46 — that must land in the ops-only
-		// mirror, never in the response the client sees.
-		const balanceRow = await db
-			.prepare('SELECT balance FROM balances WHERE user_id = ?')
-			.bind('user-1')
-			.first<{ balance: number }>();
-		expect(balanceRow?.balance).toBe(46);
-		expect(result.balance).toBe(12 - result.cost);
-	});
-
-	it('records the edited image, source and prompt against the authenticated profile', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12);
-
-		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(200);
-		const result = (await response.json()) as { output: { key: string; url: string } };
-
-		const row = await db
-			.prepare(
-				"SELECT g.user_id, result_bucket.url || '/' || result_media.filename AS url, " +
-					"source_bucket.url || '/' || source_media.filename AS source_url, g.prompt, g.kind " +
-					'FROM generations g ' +
-					'JOIN media result_media ON result_media.id = g.result_media_id ' +
-					'JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ' +
-					'JOIN media source_media ON source_media.id = g.source_media_id ' +
-					'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
-					'WHERE g.user_id = ?'
-			)
-			.bind('user-1')
-			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
-		expect(row).toEqual({
-			user_id: 'user-1',
-			url: expect.stringMatching(/^https:\/\/uploads\.cadbos\.example\//),
-			source_url: 'https://uploads.cadbos.example/test/source.webp',
-			prompt: body.prompt,
-			kind: 'edit'
-		});
-		expect(result.output.key).toBeTruthy();
-		expect(result.output.url).toContain('X-Amz-Expires=43200');
-	});
-
-	it('records the checksum from the owned source media', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12);
-
-		db.prepare('UPDATE media SET checksum = ? WHERE id = ?').bind('a'.repeat(64), 1).run();
-		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(200);
-
-		const row = await db
-			.prepare(
-				'SELECT media.checksum AS source_hash FROM generations ' +
-					'JOIN media ON media.id = generations.source_media_id WHERE generations.user_id = ?'
-			)
-			.bind('user-1')
-			.first<{ source_hash: string }>();
-		expect(row?.source_hash).toBe('a'.repeat(64));
-	});
-
-	it('records an empty checksum when the source has none', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12);
-
-		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(200);
-
-		const row = await db
-			.prepare(
-				'SELECT media.checksum AS source_hash FROM generations ' +
-					'JOIN media ON media.id = generations.source_media_id WHERE generations.user_id = ?'
-			)
-			.bind('user-1')
-			.first<{ source_hash: string }>();
-		expect(row?.source_hash).toBe('');
-	});
-
-	it('still returns the completed, already-charged edit if recordGeneration fails', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12);
-		generationsMock.failNextRecordGeneration = true;
+	it('rejects the dev demo account since ComfyUI jobs need a real D1 user row', async () => {
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-		try {
-			const response = await call(
-				{ pubkey: 'pubkey-1' },
-				{ env: { DB: db } } as App.Platform,
-				body
-			);
+		const response = await callPost({ pubkey: DEMO_PUBKEY }, platform(makeD1()));
 
-			expect(response.status).toBe(200);
-			const result = (await response.json()) as { output: { url: string } };
-			expect(result.output.url).toMatch(/^https:\/\//);
-			expect(consoleError).toHaveBeenCalledWith(
-				'recordGeneration failed after a successful edit:',
-				expect.any(Error)
-			);
-		} finally {
-			consoleError.mockRestore();
-		}
+		expect(response.status).toBe(500);
+		expectSingleLog(
+			consoleError.mock.calls.flat(),
+			failureLog(500, 'account_error', 'account_lookup')
+		);
+		expect(JSON.stringify(consoleError.mock.calls.flat())).not.toContain(DEMO_PUBKEY);
 	});
 
-	it('still returns the completed, already-charged edit if recording the balance fails', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
-		billingMock.failNextRecordBalance = true;
+	it('requires an approved account with enough credit for the snapshotted tariff', async () => {
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const unapprovedDb = makeD1();
+		seedUser(unapprovedDb);
+		expect((await callPost({ pubkey: 'pubkey-1' }, platform(unapprovedDb))).status).toBe(403);
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(403, 'generation_restricted'));
+		consoleWarn.mockClear();
 
-		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
+		const exhaustedDb = makeD1();
+		seedUser(exhaustedDb, 0);
+		expect((await callPost({ pubkey: 'pubkey-1' }, platform(exhaustedDb))).status).toBe(402);
+		expect(integration.submit).not.toHaveBeenCalled();
+	});
+
+	it('submits once and returns a persisted polling resource', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		integration.cost = 3.5;
+		const id = '123e4567-e89b-12d3-a456-426614174000' as ReturnType<typeof crypto.randomUUID>;
+		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db));
+		const result = (await response.json()) as EditJobResponse;
+
+		expect(response.status).toBe(202);
+		expect(response.headers.get('location')).toBe(`/api/edit/${id}`);
+		expect(response.headers.get('cache-control')).toBe('no-store');
+		expect(result).toEqual({ id, status: 'processing' });
+		expect(integration.submit).toHaveBeenCalledWith(
+			expect.anything(),
+			{ image: expect.stringContaining('/scene.jpg?'), prompt: requestBody.prompt },
+			'https://cadbos.example',
+			id
+		);
+		await expect(getFluxKontextEditJob(db, 'user-1', id)).resolves.toMatchObject({
+			comfyPromptId: 'prompt-1',
+			cost: 3.5,
+			status: 'processing'
+		});
+	});
+
+	it.each([
+		['network_error', 502, 503],
+		['invalid_configuration', 500, undefined]
+	] as const)(
+		'maps %s submission failures without creating or charging a job',
+		async (code, expectedStatus, providerStatus) => {
+			const db = makeD1();
+			seedUser(db, 12);
+			integration.submit.mockRejectedValue(
+				new ComfyUiError(code, 'queue_workflow', 'private provider detail', {
+					status: providerStatus
+				})
+			);
+			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+			const response = await callPost({ pubkey: 'pubkey-1' }, platform(db));
+
+			expect(response.status).toBe(expectedStatus);
+			expect(await response.json()).toEqual({
+				error: { code: 'edit_failed', message: 'Edit failed' }
+			});
+			expectSingleLog(
+				consoleError.mock.calls.flat(),
+				failureLog(expectedStatus, 'edit_failed', 'provider_submission', {
+					providerCode: code,
+					providerOperation: 'queue_workflow',
+					...(providerStatus === undefined ? {} : { providerStatus })
+				})
+			);
+			expect(consoleError.mock.calls.flat().join(' ')).not.toContain('private provider detail');
+			const count = await db
+				.prepare('SELECT COUNT(*) AS count FROM flux_kontext_edit_jobs')
+				.first<{ count: number }>();
+			expect(count?.count).toBe(0);
+		}
+	);
+
+	it('logs remote-image fetch failures at the route boundary', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		integration.submit.mockRejectedValue(new RemoteImageImportError('remote_fetch_failed'));
+		vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db));
+
+		expect(response.status).toBe(502);
+		expect(await response.json()).toEqual({
+			error: { code: 'remote_fetch_failed', message: 'Failed to fetch image' }
+		});
+	});
+
+	it('cancels the accepted prompt and logs job persistence failures without stored request data', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		jobStore.failNextCreate = true;
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const requestPlatform = platform(db);
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, requestPlatform);
+
+		expect(response.status).toBe(500);
+		expect(integration.cancel).toHaveBeenCalledWith(requestPlatform, 'prompt-1');
+		expectSingleLog(
+			consoleError.mock.calls.flat(),
+			failureLog(500, 'edit_failed', 'job_persistence')
+		);
+		const logged = consoleError.mock.calls.flat().join(' ');
+		expect(logged).not.toContain(requestBody.prompt);
+		expect(logged).not.toContain('private persistence detail');
+	});
+
+	it('rejects a concurrent submission for the same account and isolates the guard by pubkey', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		seedUser(db, 12, 'user-2', 'pubkey-2');
+		let resolveSubmission!: (promptId: string) => void;
+		integration.submit.mockImplementationOnce(
+			() =>
+				new Promise<string>((resolve) => {
+					resolveSubmission = resolve;
+				})
+		);
+		const requestPlatform = platform(db);
+
+		const first = callPost({ pubkey: 'pubkey-1' }, requestPlatform);
+		await vi.waitFor(() => expect(integration.submit).toHaveBeenCalledTimes(1));
+
+		const duplicate = await callPost({ pubkey: 'pubkey-1' }, requestPlatform);
+		expect(duplicate.status).toBe(409);
+		expect(integration.submit).toHaveBeenCalledTimes(1);
+
+		integration.submit.mockResolvedValueOnce('prompt-2');
+		expect((await callPost({ pubkey: 'pubkey-2' }, requestPlatform)).status).toBe(202);
+
+		resolveSubmission('prompt-1');
+		expect((await first).status).toBe(202);
+	});
+
+	it('rate-limits repeated paid submissions for one account', async () => {
+		const db = makeD1();
+		seedUser(db, 100);
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		integration.submit.mockImplementation(
+			async () => `prompt-${integration.submit.mock.calls.length}`
+		);
+
+		for (let attempt = 0; attempt < 10; attempt += 1) {
+			expect((await callPost({ pubkey: 'pubkey-1' }, platform(db))).status).toBe(202);
+		}
+		const limited = await callPost({ pubkey: 'pubkey-1' }, platform(db));
+		expect(limited.status).toBe(429);
+		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(429, 'rate_limited'));
+	});
+});
+
+describe('GET /api/edit/[id]', () => {
+	it('hides missing jobs and jobs owned by another account', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+			.bind('user-2', 'pubkey-2', Date.now())
+			.run();
+		await seedJob(db);
+
+		expect((await callGet({ pubkey: 'pubkey-1' }, platform(db), 'missing')).status).toBe(404);
+		expect((await callGet({ pubkey: 'pubkey-2' }, platform(db), 'job-1')).status).toBe(404);
+	});
+
+	it('returns a retryable processing response without charging', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		await seedJob(db);
+
+		const response = await callGet({ pubkey: 'pubkey-1' }, platform(db), 'job-1');
+		const result = (await response.json()) as EditJobResponse;
 
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { output: { url: string }; cost: number };
-		expect(result.output.url).toMatch(/^https:\/\//);
+		expect(response.headers.get('retry-after')).toBe('2');
+		expect(result).toEqual({ id: 'job-1', status: 'processing' });
+	});
 
-		// recordBalance mirrors archAI's own (shared) balance for ops visibility only —
-		// its failure must not skip the actual credit ledger deduction.
-		const creditRow = await db
+	it('finalizes and charges a completed result exactly once across concurrent polls', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		await seedJob(db);
+		integration.poll.mockResolvedValue(completedImage);
+		const uploadsBucket = bucket();
+		const requestPlatform = platform(db, uploadsBucket);
+
+		const responses = await Promise.all([
+			callGet({ pubkey: 'pubkey-1' }, requestPlatform, 'job-1'),
+			callGet({ pubkey: 'pubkey-1' }, requestPlatform, 'job-1')
+		]);
+		const results = (await Promise.all(
+			responses.map((response) => response.json())
+		)) as EditJobResponse[];
+
+		expect(results).toEqual([
+			{
+				id: 'job-1',
+				status: 'completed',
+				output: {
+					key: mediaKey(TEST_S3_BUCKET.name, 'edits/job-1.png'),
+					url: expect.stringContaining('edits/job-1.png')
+				},
+				cost: 2,
+				balance: 10
+			},
+			{
+				id: 'job-1',
+				status: 'completed',
+				output: {
+					key: mediaKey(TEST_S3_BUCKET.name, 'edits/job-1.png'),
+					url: expect.stringContaining('edits/job-1.png')
+				},
+				cost: 2,
+				balance: 10
+			}
+		]);
+		const credit = await db
 			.prepare('SELECT balance FROM credits WHERE user_id = ?')
 			.bind('user-1')
 			.first<{ balance: number }>();
-		expect(creditRow?.balance).toBe(12 - result.cost);
+		const generations = await db
+			.prepare('SELECT COUNT(*) AS count FROM generations WHERE id = ?')
+			.bind('job-1')
+			.first<{ count: number }>();
+		expect(credit?.balance).toBe(10);
+		expect(generations?.count).toBe(1);
 	});
 
-	it('rate-limits repeated edits from the same account (anti-cost-abuse, FR-К5)', async () => {
+	it('returns stored terminal results without polling ComfyUI again', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 1000);
-		const platform = { env: { DB: db } } as App.Platform;
+		seedUser(db, 12);
+		await seedJob(db);
+		integration.poll.mockResolvedValue(completedImage);
+		const requestPlatform = platform(db);
+		await callGet({ pubkey: 'pubkey-1' }, requestPlatform, 'job-1');
+		integration.poll.mockClear();
 
-		const responses = [];
-		for (let i = 0; i < 11; i += 1) {
-			responses.push(await call({ pubkey }, platform, body));
-		}
+		const response = await callGet({ pubkey: 'pubkey-1' }, requestPlatform, 'job-1');
 
-		expect(responses.slice(0, 10).every((response) => response.status === 200)).toBe(true);
-		expect(responses[10].status).toBe(429);
-	});
-
-	it('isolates the rate limit per account', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		seedUser(db, 'user-2', 'b'.repeat(64));
-		grantAccess(db, 'user-1', 1000);
-		grantAccess(db, 'user-2', 1000);
-		const platform = { env: { DB: db } } as App.Platform;
-
-		for (let i = 0; i < 10; i += 1) {
-			await call({ pubkey }, platform, body);
-		}
-		const otherAccount = await call({ pubkey: 'b'.repeat(64) }, platform, body);
-		expect(otherAccount.status).toBe(200);
-	});
-
-	it('bypasses balance recording and rate-limiting entirely for the dev-only demo session', async () => {
-		// No D1 binding at all — proves the demo path never touches billing.
-		const response = await call({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform, body);
 		expect(response.status).toBe(200);
+		expect(integration.poll).not.toHaveBeenCalled();
 	});
 
-	it('fails closed if a real session has no matching D1 user row', async () => {
+	it('marks provider execution failures terminal without charging', async () => {
 		const db = makeD1();
-		const response = await call(
-			{ pubkey: 'ghost-pubkey' },
-			{ env: { DB: db } } as App.Platform,
-			body
+		seedUser(db, 12);
+		await seedJob(db);
+		integration.poll.mockRejectedValue(
+			new ComfyUiError('execution_failed', 'workflow', 'private provider detail')
 		);
-		expect(response.status).toBe(500);
+
+		const response = await callGet({ pubkey: 'pubkey-1' }, platform(db), 'job-1');
+		const result = (await response.json()) as EditJobResponse;
+
+		expect(result).toEqual({
+			id: 'job-1',
+			status: 'failed',
+			error: { code: 'edit_failed', message: 'Edit failed' }
+		});
+		const credit = await db
+			.prepare('SELECT balance FROM credits WHERE user_id = ?')
+			.bind('user-1')
+			.first<{ balance: number }>();
+		expect(credit?.balance).toBe(12);
 	});
 
-	describe('generation access control', () => {
-		it('blocks an account with no credits row at all', async () => {
-			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
+	it('times out only after checking ComfyUI for a completed result', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		await seedJob(db, Date.now() - 11 * 60_000);
 
-			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-			expect(response.status).toBe(403);
-			const result = (await response.json()) as { error: { code: string } };
-			expect(result.error.code).toBe('generation_restricted');
-		});
+		const response = await callGet({ pubkey: 'pubkey-1' }, platform(db), 'job-1');
+		const result = (await response.json()) as EditJobResponse;
 
-		it('blocks an account the admin disabled, even with balance remaining', async () => {
-			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
-			grantAccess(db, 'user-1', 5, 0);
-
-			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-			expect(response.status).toBe(403);
-			const result = (await response.json()) as { error: { code: string } };
-			expect(result.error.code).toBe('generation_restricted');
-		});
-
-		it('allows and deducts the real archAI cost for an approved, enabled account', async () => {
-			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
-			grantAccess(db, 'user-1', 12);
-
-			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-			expect(response.status).toBe(200);
-			const result = (await response.json()) as { cost: number };
-
-			const creditRow = await db
-				.prepare('SELECT balance FROM credits WHERE user_id = ?')
-				.bind('user-1')
-				.first<{ balance: number }>();
-			expect(creditRow?.balance).toBe(12 - result.cost);
-		});
-
-		it('blocks editing once an approved account exhausts its balance', async () => {
-			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
-			grantAccess(db, 'user-1', 0);
-
-			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-			expect(response.status).toBe(402);
-			const result = (await response.json()) as { error: { code: string } };
-			expect(result.error.code).toBe('insufficient_credit');
-		});
-
-		it('returns a clean 500 instead of crashing if the credits table is missing (unapplied migration)', async () => {
-			const db = makeD1();
-			seedUser(db, 'user-1', pubkey);
-			db.prepare('DROP TABLE credits').run();
-
-			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
-			expect(response.status).toBe(500);
+		expect(integration.poll).toHaveBeenCalledWith(expect.anything(), 'prompt-1');
+		expect(result).toEqual({
+			id: 'job-1',
+			status: 'failed',
+			error: { code: 'edit_timeout', message: 'Edit timed out' }
 		});
 	});
 });

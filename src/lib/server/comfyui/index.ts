@@ -58,3 +58,11 @@ export {
 	type TextureReplacementRequest,
 	type QueueTextureReplacementRequest
 } from '$lib/server/comfyui/texture-replacement';
+export {
+	getFluxKontextEditResult,
+	queueFluxKontextEdit,
+	runFluxKontextEdit,
+	type FluxKontextEditImage,
+	type FluxKontextEditRequest,
+	type QueueFluxKontextEditRequest
+} from '$lib/server/comfyui/flux-kontext-edit';

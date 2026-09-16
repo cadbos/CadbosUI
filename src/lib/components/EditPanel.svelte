@@ -16,19 +16,20 @@ before the Change Date. See LICENSE for complete terms.
 	import { Eraser, Lightbulb, PaintRoller, Pencil, Plus, Replace } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { z } from 'zod';
+	import type { EditCompletedResponse, EditJobResponse } from '$lib/api/contract';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import {
-		creditErrorKey,
 		extractApiErrorCode,
 		request,
 		RequestImageUploadError,
-		renderResultFromResponse,
 		type EditOperationType
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
+	import { mediaAccess } from '$lib/state/media-access.svelte';
 	import { buildWorkspaceUrl, slugToTool, type ToolId } from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 	import EditAddObjectTool from '$lib/components/EditAddObjectTool.svelte';
@@ -36,6 +37,42 @@ before the Change Date. See LICENSE for complete terms.
 	import LightSettingsPanel from '$lib/components/LightSettingsPanel.svelte';
 	import ObjectReplacementPanel from '$lib/components/ObjectReplacementPanel.svelte';
 	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
+
+	const MAX_TRANSIENT_FAILURES = 5;
+	const DEFAULT_POLL_DELAY_MS = 2_000;
+	const MAX_POLL_DELAY_MS = 30_000;
+	// Generous enough to outlast the server's own ComfyUI wait (2min) plus
+	// upload/finalize time, but finite so a stalled connection is retried
+	// instead of leaving pollJob awaiting a response that never arrives.
+	const POLL_REQUEST_TIMEOUT_MS = 150_000;
+
+	const jobResponseSchema = z.discriminatedUnion('status', [
+		z.object({ id: z.uuid(), status: z.literal('processing') }).strict(),
+		z
+			.object({
+				id: z.uuid(),
+				status: z.literal('completed'),
+				output: z.object({
+					key: z.string().min(1),
+					url: z.url()
+				}),
+				cost: z.number().nonnegative(),
+				balance: z.number()
+			})
+			.strict(),
+		z
+			.object({
+				id: z.uuid(),
+				status: z.literal('failed'),
+				error: z.object({ code: z.string(), message: z.string() }).strict()
+			})
+			.strict()
+	]);
+
+	interface PollFailure {
+		jobId: string;
+		key: TranslationKey;
+	}
 
 	type LucideIcon = typeof Pencil;
 
@@ -67,8 +104,10 @@ before the Change Date. See LICENSE for complete terms.
 	// `tool` query param is this component's tab state.
 	const activeTool = $derived(slugToTool(page.url.searchParams.get('tool') ?? undefined));
 	let toolTabButtons = $state<HTMLElement[]>([]);
-	let applying = $state(false);
-	let error = $state<string | null>(null);
+	let submitting = $state(false);
+	let terminalError = $state<PollFailure | null>(null);
+	let pollFailure = $state<PollFailure | null>(null);
+	let pollRun = 0;
 	let objectReplacementOpened = $state(false);
 	let textureReplacementOpened = $state(false);
 	let lightSettingsOpened = $state(false);
@@ -100,62 +139,237 @@ before the Change Date. See LICENSE for complete terms.
 	// picked but not yet uploaded (request.pendingImageFile) already counts here —
 	// the actual upload is deferred, not skipped, see request.resolveEditSource().
 	const hasEditTarget = $derived(request.hasEditSource());
-	const toolDisabled = $derived(applying || !isAuthenticated);
+	const jobId = $derived(request.activeFluxKontextEditJobId ?? null);
+	// Unlike the other three job-backed tools, a completed edit here clears
+	// the job immediately (see applyCompletedJob) rather than staying set
+	// until an explicit "new request" — so isPolling only has to rule out an
+	// already-failed job, never an already-completed one.
+	const isPolling = $derived(
+		jobId !== null && terminalError?.jobId !== jobId && pollFailure?.jobId !== jobId
+	);
+	const formLocked = $derived(submitting || jobId !== null);
 
 	function applyTemplate(fill: string): void {
 		request.setEditPrompt(fill);
 	}
 
+	function pollingEffect(): void | (() => void) {
+		const id = jobId;
+		const authenticated = isAuthenticated;
+		const failedPoll = pollFailure;
+		const run = ++pollRun;
+		if (!id || !authenticated || failedPoll?.jobId === id) return;
+		const controller = new AbortController();
+		void pollJob(id, controller.signal, run);
+		return () => controller.abort();
+	}
+
+	$effect(pollingEffect);
+
+	function overlayEffect(): void | (() => void) {
+		if (!(submitting || isPolling)) return;
+		const overlayId = generationOverlay.start(
+			'generationOverlay.edit',
+			'generationOverlay.editDetail'
+		);
+		return () => generationOverlay.stop(overlayId);
+	}
+
+	$effect(overlayEffect);
+
+	function parseRetryAfter(response: Response): number {
+		const value = response.headers.get('retry-after');
+		if (value === null) return DEFAULT_POLL_DELAY_MS;
+		const seconds = Number(value);
+		const delay = Number.isFinite(seconds) ? seconds * 1_000 : Date.parse(value) - Date.now();
+		if (!Number.isFinite(delay)) return DEFAULT_POLL_DELAY_MS;
+		return Math.min(Math.max(delay, 1_000), MAX_POLL_DELAY_MS);
+	}
+
+	function transientDelay(failures: number): number {
+		return Math.min(DEFAULT_POLL_DELAY_MS * 2 ** (failures - 1), MAX_POLL_DELAY_MS);
+	}
+
+	function waitFor(ms: number, signal: AbortSignal): Promise<void> {
+		return new Promise((resolve) => {
+			const timeout = setTimeout(done, ms);
+			function done(): void {
+				clearTimeout(timeout);
+				signal.removeEventListener('abort', done);
+				resolve();
+			}
+			signal.addEventListener('abort', done, { once: true });
+		});
+	}
+
+	function errorKey(code: string): TranslationKey {
+		if (code === 'unauthorized') return 'edit.signInToApply';
+		if (code === 'insufficient_credit') return 'edit.insufficientCredit';
+		if (code === 'generation_restricted') return 'edit.generationRestricted';
+		if (code === 'rate_limited') return 'edit.rateLimited';
+		if (code === 'edit_not_found') return 'edit.notFound';
+		if (code === 'edit_timeout') return 'edit.timedOut';
+		return 'edit.failed';
+	}
+
+	function applyCompletedJob(result: EditCompletedResponse): void {
+		if (request.currentRender?.id === result.id) {
+			request.setActiveFluxKontextEditJobId(undefined);
+			void auth.refreshCredit();
+			if (auth.canLoadGeneratedImages) void generatedImages.load();
+			return;
+		}
+		const context = request.activeFluxKontextEditJob;
+		if (context?.id === result.id && context.sourceRender) {
+			request.applyEditResult(
+				{
+					id: result.id,
+					outputKey: mediaAccess.normalize(result.output).key,
+					cost: result.cost,
+					balance: result.balance,
+					parentId: context.sourceRender.id,
+					editOp: { type: context.type, instruction: context.instruction },
+					ts: Date.now()
+				},
+				context.sourceRender
+			);
+		} else {
+			request.applyEditResult({
+				id: result.id,
+				outputKey: mediaAccess.normalize(result.output).key,
+				cost: result.cost,
+				balance: result.balance,
+				editOp: { type: context?.type ?? 'freeform', instruction: context?.instruction ?? '' },
+				ts: Date.now()
+			});
+		}
+		if (context?.type === 'freeform') request.setEditPrompt('');
+		// Unlike object-replacement/light-settings (a dedicated tab that locks
+		// until an explicit "new request"), freeform/add-object/remove-object
+		// share this inline panel and always supported applying another edit
+		// right away — clearing the job here keeps that continuous-editing UX
+		// instead of leaving the form locked once the async job completes.
+		request.setActiveFluxKontextEditJobId(undefined);
+		void auth.refreshCredit();
+		if (auth.canLoadGeneratedImages) void generatedImages.load();
+	}
+
+	async function parseJobResponse(
+		response: Response,
+		expectedId?: string
+	): Promise<EditJobResponse> {
+		const body: unknown = await response.json().catch(() => null);
+		const parsed = jobResponseSchema.safeParse(body);
+		if (!parsed.success || (expectedId !== undefined && parsed.data.id !== expectedId)) {
+			throw new Error('invalid_response');
+		}
+		return parsed.data;
+	}
+
+	async function pollJob(id: string, signal: AbortSignal, run: number): Promise<void> {
+		let failures = 0;
+		while (!signal.aborted && run === pollRun) {
+			let response: Response;
+			const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(POLL_REQUEST_TIMEOUT_MS)]);
+			try {
+				response = await fetch(`/api/edit/${encodeURIComponent(id)}`, {
+					signal: requestSignal
+				});
+			} catch (error) {
+				if (signal.aborted || run !== pollRun) return;
+				failures += 1;
+				if (failures > MAX_TRANSIENT_FAILURES) {
+					pollFailure = { jobId: id, key: 'edit.pollFailed' };
+					return;
+				}
+				if (!(error instanceof Error)) {
+					logBoundaryError('edit.poll', error);
+				}
+				await waitFor(transientDelay(failures), signal);
+				continue;
+			}
+			if (signal.aborted || run !== pollRun) return;
+
+			if (!response.ok) {
+				const code = await extractApiErrorCode(response, 'edit_poll_failed');
+				if (signal.aborted || run !== pollRun) return;
+				if (response.status >= 500 && failures < MAX_TRANSIENT_FAILURES) {
+					failures += 1;
+					await waitFor(transientDelay(failures), signal);
+					continue;
+				}
+				if (response.status >= 500) {
+					pollFailure = { jobId: id, key: errorKey(code) };
+				} else {
+					terminalError = { jobId: id, key: errorKey(code) };
+				}
+				return;
+			}
+
+			let result: EditJobResponse;
+			try {
+				result = await parseJobResponse(response, id);
+			} catch {
+				if (signal.aborted || run !== pollRun) return;
+				if (requestSignal.aborted) {
+					failures += 1;
+					if (failures > MAX_TRANSIENT_FAILURES) {
+						pollFailure = { jobId: id, key: 'edit.pollFailed' };
+						return;
+					}
+					await waitFor(transientDelay(failures), signal);
+					continue;
+				}
+				pollFailure = { jobId: id, key: 'edit.pollFailed' };
+				return;
+			}
+			failures = 0;
+			if (signal.aborted || run !== pollRun) return;
+			if (result.status === 'processing') {
+				await waitFor(parseRetryAfter(response), signal);
+				continue;
+			}
+			if (result.status === 'failed') {
+				terminalError = { jobId: id, key: errorKey(result.error.code) };
+				return;
+			}
+			applyCompletedJob(result);
+			return;
+		}
+	}
+
 	async function submit(prompt: string, type: EditOperationType): Promise<void> {
 		const trimmed = prompt.trim();
-		if (!hasEditTarget || !trimmed || applying || !isAuthenticated) return;
-		applying = true;
-		error = null;
-		const overlayId = generationOverlay.start('generationOverlay.edit');
-
+		if (!hasEditTarget || !trimmed || formLocked || !isAuthenticated) return;
+		submitting = true;
+		terminalError = null;
+		pollFailure = null;
 		try {
+			const sourceRender = request.currentRender;
 			const source = await request.resolveEditSource();
 			if (!source) return;
 			const { sessionId } = await request.ensureProjectSession();
 			const response = await fetch('/api/edit', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					imageKey: source,
-					prompt: trimmed,
-					sessionId
-				})
+				body: JSON.stringify({ imageKey: source, prompt: trimmed, sessionId })
 			});
 			if (!response.ok) {
-				throw new Error(await extractApiErrorCode(response, 'edit_failed'));
+				const code = await extractApiErrorCode(response, 'edit_failed');
+				terminalError = { jobId: '', key: errorKey(code) };
+				return;
 			}
-			const result = await response.json();
-			const newRender = renderResultFromResponse(result, {
-				parentId: currentRender?.id,
-				editOp: { type, instruction: trimmed }
-			});
-			request.applyEditResult(newRender);
-			void auth.refreshCredit();
-			if (type === 'freeform') request.setEditPrompt('');
-			if (auth.canLoadGeneratedImages) void generatedImages.load();
+			const result = await parseJobResponse(response);
+			if (result.status !== 'processing') throw new Error('invalid_response');
+			request.setActiveFluxKontextEditJob(result.id, sourceRender, trimmed, type);
 		} catch (err) {
-			error = t(editErrorKey(err));
+			terminalError = {
+				jobId: '',
+				key: err instanceof RequestImageUploadError ? 'upload.errorUpload' : 'edit.failed'
+			};
 		} finally {
-			applying = false;
-			generationOverlay.stop(overlayId);
+			submitting = false;
 		}
-	}
-
-	function editErrorKey(err: unknown): TranslationKey {
-		if (err instanceof RequestImageUploadError) return 'upload.errorUpload';
-		return creditErrorKey(
-			{
-				failed: 'edit.failed',
-				insufficientCredit: 'edit.insufficientCredit',
-				generationRestricted: 'edit.generationRestricted'
-			},
-			err
-		);
 	}
 </script>
 
@@ -231,7 +445,7 @@ before the Change Date. See LICENSE for complete terms.
 								value={request.editPrompt}
 								oninput={(event) => request.setEditPrompt(event.currentTarget.value)}
 								rows="3"
-								disabled={applying}
+								disabled={formLocked}
 								placeholder={t('edit.templateReplaceFill')}></textarea>
 						</label>
 
@@ -239,27 +453,64 @@ before the Change Date. See LICENSE for complete terms.
 							<button
 								type="button"
 								class="btn-apply"
-								disabled={!request.editPrompt.trim() || toolDisabled || !hasEditTarget}
+								disabled={!request.editPrompt.trim() ||
+									formLocked ||
+									!isAuthenticated ||
+									!hasEditTarget}
 								onclick={() => void submit(request.editPrompt, 'freeform')}
 							>
-								{#if applying}
+								{#if submitting}
 									<span class="spinner" aria-hidden="true"></span>
+									{t('edit.submitting')}
+								{:else if isPolling}
+									{t('edit.processing')}
+								{:else}
+									{t('edit.apply')}
 								{/if}
-								{applying ? t('edit.applying') : t('edit.apply')}
 							</button>
 						</div>
 					{:else if activeTool === 'add-object'}
 						<EditAddObjectTool
-							disabled={toolDisabled || !hasEditTarget}
-							{applying}
+							disabled={formLocked || !hasEditTarget}
+							applying={submitting || isPolling}
 							onApply={(prompt) => void submit(prompt, 'add-object')}
 						/>
 					{:else if activeTool === 'remove-object'}
 						<EditRemoveObjectTool
-							disabled={toolDisabled || !hasEditTarget}
-							{applying}
+							disabled={formLocked || !hasEditTarget}
+							applying={submitting || isPolling}
 							onApply={(prompt) => void submit(prompt, 'remove-object')}
 						/>
+					{/if}
+
+					<div class="job-live" role="status" aria-live="polite" aria-atomic="true">
+						{#if isPolling}
+							<p class="job-status">
+								<span class="spinner" aria-hidden="true"></span>
+								{t('edit.processing')}
+							</p>
+						{/if}
+					</div>
+
+					{#if terminalError?.jobId === jobId || (terminalError?.jobId === '' && jobId === null)}
+						<p class="submit-error" role="alert">{t(terminalError.key)}</p>
+						{#if jobId !== null}
+							<button
+								type="button"
+								class="secondary-btn"
+								onclick={() => {
+									request.setActiveFluxKontextEditJobId(undefined);
+									terminalError = null;
+								}}
+							>
+								{t('edit.tryAgain')}
+							</button>
+						{/if}
+					{:else if pollFailure?.jobId === jobId}
+						<p class="submit-error" role="alert">{t(pollFailure.key)}</p>
+						<button type="button" class="secondary-btn" onclick={() => (pollFailure = null)}>
+							{t('edit.retryStatus')}
+						</button>
 					{/if}
 				</div>
 			{/if}
@@ -345,10 +596,6 @@ before the Change Date. See LICENSE for complete terms.
 			<span class="sep">·</span>
 			<span>{ti('edit.balance', { balance: currency.format(currentRender.balance) })}</span>
 		</div>
-	{/if}
-
-	{#if error}
-		<p class="error" role="alert">{error}</p>
 	{/if}
 </section>
 
@@ -576,6 +823,42 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.error {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--color-danger);
+	}
+
+	.job-live:empty {
+		display: none;
+	}
+
+	.job-status {
+		margin: 0;
+		font-size: 0.875rem;
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+		color: var(--color-muted-strong);
+	}
+
+	.secondary-btn {
+		align-self: flex-start;
+		padding: 0.625rem 1rem;
+		border: 1px solid var(--color-muted-strong);
+		border-radius: var(--radius);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font: inherit;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.secondary-btn:hover {
+		border-color: var(--color-accent);
+		color: var(--color-accent-text);
+	}
+
+	.submit-error {
 		margin: 0;
 		font-size: 0.8125rem;
 		color: var(--color-danger);

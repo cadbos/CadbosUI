@@ -85,6 +85,7 @@ export interface Dictionary {
 	'boundary.retry': string;
 	'generationOverlay.render': string;
 	'generationOverlay.edit': string;
+	'generationOverlay.editDetail': string;
 	'generationOverlay.styleTransfer': string;
 	'generationOverlay.objectReplacement': string;
 	'generationOverlay.objectReplacementDetail': string;
@@ -646,8 +647,15 @@ export interface Dictionary {
 	'edit.templateColorFill': string;
 	'edit.instruction': string;
 	'edit.apply': string;
-	'edit.applying': string;
+	'edit.submitting': string;
+	'edit.processing': string;
+	'edit.tryAgain': string;
+	'edit.retryStatus': string;
 	'edit.failed': string;
+	'edit.pollFailed': string;
+	'edit.timedOut': string;
+	'edit.notFound': string;
+	'edit.rateLimited': string;
 	'edit.insufficientCredit': string;
 	'edit.generationRestricted': string;
 	'edit.cost': string;
