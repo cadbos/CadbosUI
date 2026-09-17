@@ -415,6 +415,14 @@ interface CreditTransactionRow {
 	balance_after: number;
 	kind: string;
 	created_at: number;
+	comfyui_upload_queue_sec: number;
+	comfyui_queue_wait_sec: number;
+	comfyui_execution_sec: number;
+	comfyui_download_sec: number;
+	comfyui_reupload_sec: number;
+	archai_render_sec: number;
+	archai_download_sec: number;
+	archai_reupload_sec: number;
 	session_id: string | null;
 	project_id: string | null;
 }
@@ -428,6 +436,14 @@ function toCreditTransaction(row: CreditTransactionRow): CreditTransaction | nul
 		balanceAfter: row.balance_after,
 		kind,
 		createdAt: row.created_at,
+		comfyuiUploadQueueSec: row.comfyui_upload_queue_sec,
+		comfyuiQueueWaitSec: row.comfyui_queue_wait_sec,
+		comfyuiExecutionSec: row.comfyui_execution_sec,
+		comfyuiDownloadSec: row.comfyui_download_sec,
+		comfyuiReuploadSec: row.comfyui_reupload_sec,
+		archaiRenderSec: row.archai_render_sec,
+		archaiDownloadSec: row.archai_download_sec,
+		archaiReuploadSec: row.archai_reupload_sec,
 		sessionId: row.session_id,
 		projectId: row.project_id
 	};
@@ -448,6 +464,9 @@ export async function listCreditHistory(
 			const { results } = await db
 				.prepare(
 					'SELECT g.id, g.amount, g.balance_after, g.kind, g.created_at, ' +
+						'g.comfyui_upload_queue_sec, g.comfyui_queue_wait_sec, g.comfyui_execution_sec, ' +
+						'g.comfyui_download_sec, g.comfyui_reupload_sec, ' +
+						'g.archai_render_sec, g.archai_download_sec, g.archai_reupload_sec, ' +
 						'g.session_id, ps.project_id FROM generations g ' +
 						'LEFT JOIN project_sessions ps ON ps.id = g.session_id ' +
 						'WHERE g.user_id = ? ORDER BY g.created_at DESC, g.rowid DESC LIMIT ? OFFSET ?'

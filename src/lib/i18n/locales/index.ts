@@ -243,8 +243,14 @@ export interface Dictionary {
 	'expenses.openFailed': string;
 	'expenses.column.date': string;
 	'expenses.column.time': string;
+	'expenses.column.duration': string;
+	'expenses.column.duration.upload': string;
+	'expenses.column.duration.processing': string;
+	'expenses.column.duration.download': string;
 	'expenses.column.value': string;
 	'expenses.column.action': string;
+	'expenses.duration.seconds': string;
+	'expenses.emptyValue': string;
 	'health.warning': string;
 	'health.statusPage': string;
 	'status.title': string;

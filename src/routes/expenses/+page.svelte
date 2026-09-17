@@ -14,8 +14,10 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { ArrowDown, ArrowUp, Clock } from '@lucide/svelte';
 	import type { CreditTransaction } from '$lib/api/contract';
-	import { getLocale, t, type TranslationKey } from '$lib/i18n/index.svelte';
+	import HintIcon from '$lib/components/HintIcon.svelte';
+	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
@@ -52,6 +54,15 @@ before the Change Date. See LICENSE for complete terms.
 			minute: '2-digit',
 			hourCycle: 'h23'
 		}).format(new Date(createdAt));
+	}
+
+	function formatDuration(durationSec: number): string {
+		if (durationSec <= 0) return t('expenses.emptyValue');
+		return ti('expenses.duration.seconds', { seconds: durationSec });
+	}
+
+	function formatDurationSum(...values: number[]): string {
+		return formatDuration(values.reduce((sum, value) => sum + value, 0));
 	}
 
 	let openError = $state<string | null>(null);
@@ -129,34 +140,82 @@ before the Change Date. See LICENSE for complete terms.
 			{#if !credit || credit.history.length === 0}
 				<p class="status">{t('auth.credit.historyEmpty')}</p>
 			{:else}
-				<div class="expenses-columns-header">
-					<span>{t('expenses.column.date')}</span>
-					<span>{t('expenses.column.time')}</span>
-					<span class="value-cell">{t('expenses.column.value')}</span>
-					<span>{t('expenses.column.action')}</span>
-				</div>
+				<div class="expenses-table">
+					<div class="expenses-columns-header">
+						<span>{t('expenses.column.date')}</span>
+						<span>{t('expenses.column.time')}</span>
+						<div class="duration-header">
+							<span class="duration-group-label">{t('expenses.column.duration')}</span>
+							<div class="duration-icons">
+								<HintIcon icon={ArrowUp} label={t('expenses.column.duration.upload')} />
+								<HintIcon icon={Clock} label={t('expenses.column.duration.processing')} />
+								<HintIcon icon={ArrowDown} label={t('expenses.column.duration.download')} />
+							</div>
+						</div>
+						<span class="value-cell">{t('expenses.column.value')}</span>
+						<span>{t('expenses.column.action')}</span>
+					</div>
 
-				<ul class="history-list" aria-label={t('auth.credit.history')}>
-					{#each credit.history as entry (entry.id)}
-						<li>
-							{#if entry.projectId && entry.sessionId}
-								<button type="button" class="history-entry" onclick={() => openGeneration(entry)}>
-									<span class="cell">{formatDate(entry.createdAt)}</span>
-									<span class="cell">{formatTime(entry.createdAt)}</span>
-									<span class="cell value-cell">{currency.format(entry.amount)}</span>
-									<span class="cell">{t(generationKindKeys[entry.kind])}</span>
-								</button>
-							{:else}
-								<span class="history-entry">
-									<span class="cell">{formatDate(entry.createdAt)}</span>
-									<span class="cell">{formatTime(entry.createdAt)}</span>
-									<span class="cell value-cell">{currency.format(entry.amount)}</span>
-									<span class="cell">{t(generationKindKeys[entry.kind])}</span>
-								</span>
-							{/if}
-						</li>
-					{/each}
-				</ul>
+					<ul class="history-list" aria-label={t('auth.credit.history')}>
+						{#each credit.history as entry (entry.id)}
+							<li>
+								{#if entry.projectId && entry.sessionId}
+									<button type="button" class="history-entry" onclick={() => openGeneration(entry)}>
+										<span class="cell">{formatDate(entry.createdAt)}</span>
+										<span class="cell">{formatTime(entry.createdAt)}</span>
+										<div class="duration-values">
+											<span class="cell"
+												>{formatDurationSum(
+													entry.comfyuiUploadQueueSec,
+													entry.comfyuiQueueWaitSec
+												)}</span
+											>
+											<span class="cell"
+												>{formatDurationSum(entry.comfyuiExecutionSec, entry.archaiRenderSec)}</span
+											>
+											<span class="cell"
+												>{formatDurationSum(
+													entry.comfyuiDownloadSec,
+													entry.comfyuiReuploadSec,
+													entry.archaiDownloadSec,
+													entry.archaiReuploadSec
+												)}</span
+											>
+										</div>
+										<span class="cell value-cell">{currency.format(entry.amount)}</span>
+										<span class="cell">{t(generationKindKeys[entry.kind])}</span>
+									</button>
+								{:else}
+									<span class="history-entry">
+										<span class="cell">{formatDate(entry.createdAt)}</span>
+										<span class="cell">{formatTime(entry.createdAt)}</span>
+										<div class="duration-values">
+											<span class="cell"
+												>{formatDurationSum(
+													entry.comfyuiUploadQueueSec,
+													entry.comfyuiQueueWaitSec
+												)}</span
+											>
+											<span class="cell"
+												>{formatDurationSum(entry.comfyuiExecutionSec, entry.archaiRenderSec)}</span
+											>
+											<span class="cell"
+												>{formatDurationSum(
+													entry.comfyuiDownloadSec,
+													entry.comfyuiReuploadSec,
+													entry.archaiDownloadSec,
+													entry.archaiReuploadSec
+												)}</span
+											>
+										</div>
+										<span class="cell value-cell">{currency.format(entry.amount)}</span>
+										<span class="cell">{t(generationKindKeys[entry.kind])}</span>
+									</span>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				</div>
 			{/if}
 		{/if}
 	</section>
@@ -211,17 +270,21 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-danger);
 	}
 
+	.expenses-table {
+		overflow-x: auto;
+	}
+
 	.expenses-columns-header {
 		position: sticky;
 		top: 0;
 		z-index: 1;
 		display: grid;
-		grid-template-columns: minmax(7rem, 1.4fr) minmax(5rem, 0.9fr) minmax(5rem, 0.9fr) minmax(
-				8rem,
-				1.8fr
-			);
-		align-items: center;
+		grid-template-columns:
+			minmax(7rem, 1.4fr) minmax(5rem, 0.9fr) minmax(9rem, 1.8fr) minmax(5rem, 0.9fr)
+			minmax(8rem, 1.8fr);
+		align-items: baseline;
 		gap: 2rem;
+		min-width: 52rem;
 		padding: 0 0.75rem 0.5rem;
 		background: var(--color-surface);
 		border-bottom: 1px solid var(--color-border);
@@ -240,6 +303,25 @@ before the Change Date. See LICENSE for complete terms.
 		text-align: right;
 	}
 
+	.duration-header {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+
+	.duration-group-label {
+		align-self: stretch;
+		text-align: center;
+	}
+
+	.duration-icons,
+	.duration-values {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
 	.history-list {
 		display: flex;
 		flex-direction: column;
@@ -255,13 +337,13 @@ before the Change Date. See LICENSE for complete terms.
 
 	.history-entry {
 		display: grid;
-		grid-template-columns: minmax(7rem, 1.4fr) minmax(5rem, 0.9fr) minmax(5rem, 0.9fr) minmax(
-				8rem,
-				1.8fr
-			);
+		grid-template-columns:
+			minmax(7rem, 1.4fr) minmax(5rem, 0.9fr) minmax(9rem, 1.8fr) minmax(5rem, 0.9fr)
+			minmax(8rem, 1.8fr);
 		align-items: center;
 		gap: 2rem;
 		width: 100%;
+		min-width: 52rem;
 		padding: 0.875rem 0.75rem;
 		font: inherit;
 		text-align: left;
@@ -284,7 +366,7 @@ before the Change Date. See LICENSE for complete terms.
 		text-align: right;
 	}
 
-	.history-entry .cell:last-child {
+	.history-entry > .cell:last-child {
 		color: var(--color-text);
 	}
 
@@ -313,12 +395,18 @@ before the Change Date. See LICENSE for complete terms.
 
 		.expenses-columns-header,
 		.history-entry {
-			grid-template-columns: 5.5rem 4rem minmax(4.5rem, 0.9fr) minmax(0, 1.2fr);
+			grid-template-columns: 5.5rem 4rem minmax(7rem, 1.4fr) minmax(4.5rem, 0.9fr) minmax(0, 1.2fr);
 			gap: 0.75rem;
+			min-width: 30rem;
 		}
 
 		.expenses-columns-header span {
 			white-space: normal;
+		}
+
+		.duration-icons,
+		.duration-values {
+			gap: 0.375rem;
 		}
 	}
 </style>

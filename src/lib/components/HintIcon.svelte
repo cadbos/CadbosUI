@@ -13,13 +13,14 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Info } from '@lucide/svelte';
+	import { Info, type LucideIcon } from '@lucide/svelte';
 
 	interface Props {
 		label: string;
+		icon?: LucideIcon;
 	}
 
-	let { label }: Props = $props();
+	let { label, icon: Icon = Info }: Props = $props();
 
 	const GAP = 8;
 	const VIEWPORT_MARGIN = 8;
@@ -61,7 +62,7 @@ before the Change Date. See LICENSE for complete terms.
 	onfocus={show}
 	onblur={hide}
 >
-	<Info size={15} strokeWidth={1.8} aria-hidden="true" />
+	<Icon size={15} strokeWidth={1.8} aria-hidden="true" />
 </button>
 
 {#if visible}

@@ -52,6 +52,14 @@ test('shows rounded object-replacement credit history on the expenses page', asy
 				balanceAfter: 4.9399999999999995,
 				kind: 'object-replacement',
 				createdAt: 1,
+				comfyuiUploadQueueSec: 1,
+				comfyuiQueueWaitSec: 1,
+				comfyuiExecutionSec: 4,
+				comfyuiDownloadSec: 1,
+				comfyuiReuploadSec: 1,
+				archaiRenderSec: 0,
+				archaiDownloadSec: 0,
+				archaiReuploadSec: 0,
 				sessionId: null,
 				projectId: null
 			}
@@ -82,6 +90,14 @@ test('shows restored texture-replacement credit history on the expenses page', a
 				balanceAfter: 10,
 				kind: 'texture-replacement',
 				createdAt: 2,
+				comfyuiUploadQueueSec: 0,
+				comfyuiQueueWaitSec: 0,
+				comfyuiExecutionSec: 0,
+				comfyuiDownloadSec: 0,
+				comfyuiReuploadSec: 0,
+				archaiRenderSec: 0,
+				archaiDownloadSec: 0,
+				archaiReuploadSec: 0,
 				sessionId: null,
 				projectId: null
 			}

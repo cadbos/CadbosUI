@@ -424,6 +424,14 @@ export interface CreditTransaction {
 	balanceAfter: number;
 	kind: GenerationKind;
 	createdAt: number;
+	comfyuiUploadQueueSec: number;
+	comfyuiQueueWaitSec: number;
+	comfyuiExecutionSec: number;
+	comfyuiDownloadSec: number;
+	comfyuiReuploadSec: number;
+	archaiRenderSec: number;
+	archaiDownloadSec: number;
+	archaiReuploadSec: number;
 	sessionId: string | null;
 	projectId: string | null;
 }
