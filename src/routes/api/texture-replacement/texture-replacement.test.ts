@@ -151,7 +151,10 @@ beforeEach(() => {
 		outputKey: 'masked-result.webp',
 		outputHash: 'a'.repeat(64),
 		cost: 1.5,
-		balance: 100
+		balance: 100,
+		renderSec: 4,
+		downloadSec: 0,
+		reuploadSec: 0
 	});
 	integration.cancel.mockReset().mockResolvedValue(undefined);
 	integration.submit.mockReset().mockResolvedValue('prompt-1');

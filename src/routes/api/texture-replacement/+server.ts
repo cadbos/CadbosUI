@@ -180,7 +180,10 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 					sessionId: maskedRequest.sessionId,
 					prompt: '',
 					kind: 'texture-replacement',
-					amount: result.cost
+					amount: result.cost,
+					archaiRenderSec: result.renderSec,
+					archaiDownloadSec: result.downloadSec,
+					archaiReuploadSec: result.reuploadSec
 				});
 				result = { ...result, balance: credit.balance };
 			} catch (error) {

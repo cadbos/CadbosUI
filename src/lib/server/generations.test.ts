@@ -142,7 +142,10 @@ describe('recordGeneration', () => {
 			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
-			amount: 1.5
+			amount: 1.5,
+			archaiRenderSec: 5,
+			archaiDownloadSec: 0,
+			archaiReuploadSec: 0
 		});
 		expect(result.balance).toBe(3.5);
 
@@ -172,7 +175,10 @@ describe('recordGeneration', () => {
 			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
-			amount: 2
+			amount: 2,
+			archaiRenderSec: 5,
+			archaiDownloadSec: 0,
+			archaiReuploadSec: 0
 		});
 
 		expect((await getCredit(db, 'user-1'))?.balance).toBe(3);
@@ -199,7 +205,10 @@ describe('listCreditHistory', () => {
 			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
-			amount: 1
+			amount: 1,
+			archaiRenderSec: 5,
+			archaiDownloadSec: 0,
+			archaiReuploadSec: 0
 		});
 		const secondResultMediaId = seedMedia(db, 'https://cdn.example.test/b.webp', RESULT_HASH);
 		await recordGeneration(db, 'user-1', {
@@ -208,7 +217,10 @@ describe('listCreditHistory', () => {
 			sessionId,
 			prompt: 'change the sofa',
 			kind: 'edit',
-			amount: 2
+			amount: 2,
+			archaiRenderSec: 5,
+			archaiDownloadSec: 0,
+			archaiReuploadSec: 0
 		});
 
 		const history = await listCreditHistory(db, 'user-1');
@@ -254,7 +266,10 @@ describe('listCreditHistory', () => {
 			sessionId,
 			prompt: 'cozy',
 			kind: 'render',
-			amount: 1
+			amount: 1,
+			archaiRenderSec: 5,
+			archaiDownloadSec: 0,
+			archaiReuploadSec: 0
 		});
 
 		const history = await listCreditHistory(db, 'user-1');
