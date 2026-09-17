@@ -284,6 +284,14 @@ it('loads approved-account credit after sign-in', async () => {
 				balanceAfter: 4.9399999999999995,
 				kind: 'object-replacement' as const,
 				createdAt: 1,
+				comfyuiUploadQueueSec: 1,
+				comfyuiQueueWaitSec: 1,
+				comfyuiExecutionSec: 4,
+				comfyuiDownloadSec: 1,
+				comfyuiReuploadSec: 1,
+				archaiRenderSec: 0,
+				archaiDownloadSec: 0,
+				archaiReuploadSec: 0,
 				sessionId: null,
 				projectId: null
 			}
@@ -317,6 +325,14 @@ it('restores a texture-replacement entry in credit state', async () => {
 							balanceAfter: 10,
 							kind: 'texture-replacement',
 							createdAt: 2,
+							comfyuiUploadQueueSec: 0,
+							comfyuiQueueWaitSec: 0,
+							comfyuiExecutionSec: 0,
+							comfyuiDownloadSec: 0,
+							comfyuiReuploadSec: 0,
+							archaiRenderSec: 0,
+							archaiDownloadSec: 0,
+							archaiReuploadSec: 0,
 							sessionId: null,
 							projectId: null
 						}

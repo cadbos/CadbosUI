@@ -62,6 +62,14 @@ const creditTransactionSchema = z.object({
 	balanceAfter: z.number(),
 	kind: z.enum(generationKinds),
 	createdAt: z.number(),
+	comfyuiUploadQueueSec: z.number(),
+	comfyuiQueueWaitSec: z.number(),
+	comfyuiExecutionSec: z.number(),
+	comfyuiDownloadSec: z.number(),
+	comfyuiReuploadSec: z.number(),
+	archaiRenderSec: z.number(),
+	archaiDownloadSec: z.number(),
+	archaiReuploadSec: z.number(),
 	sessionId: z.uuid().nullable(),
 	projectId: z.uuid().nullable()
 });
