@@ -45,6 +45,9 @@ export interface StoredRenderResponse {
 	outputHash: string;
 	cost: number;
 	balance: number;
+	renderSec: number;
+	downloadSec: number;
+	reuploadSec: number;
 }
 
 // Provider error details (raw response text, internal ids) must stay server-side
@@ -89,8 +92,9 @@ async function storeGeneratedImage(
 	bucket: Bucket,
 	imageUrl: string,
 	operation: string
-): Promise<{ key: string; hash: string }> {
+): Promise<{ key: string; hash: string; downloadSec: number; reuploadSec: number }> {
 	try {
+		const downloadStartedAt = Date.now();
 		const downloaded = await retry('download', async () => {
 			const image = await downloadRemoteImage(
 				imageUrl,
@@ -102,7 +106,9 @@ async function storeGeneratedImage(
 			if (extension === null) throw new Error('unexpected content type');
 			return { ...image, contentType: image.mime, extension };
 		});
+		const downloadSec = Math.round((Date.now() - downloadStartedAt) / 1000);
 		const key = `${crypto.randomUUID()}.${downloaded.extension}`;
+		const reuploadStartedAt = Date.now();
 		const stored = await uploadGeneratedImageBytes(
 			platform,
 			bucket,
@@ -110,7 +116,8 @@ async function storeGeneratedImage(
 			downloaded.contentType,
 			key
 		);
-		return { key: stored.key, hash: stored.hash };
+		const reuploadSec = Math.round((Date.now() - reuploadStartedAt) / 1000);
+		return { key: stored.key, hash: stored.hash, downloadSec, reuploadSec };
 	} catch (err) {
 		console.error(
 			`archAI ${operation} image mirror failed after successful generation:`,
@@ -133,12 +140,14 @@ async function processRenderResult(
 		error?: unknown;
 	}>
 ): Promise<StoredRenderResponse> {
+	const startedAt = Date.now();
 	let result: Awaited<ReturnType<typeof call>>;
 	try {
 		result = await call();
 	} catch (err) {
 		generationFailed(operation, clientMessage, err);
 	}
+	const renderSec = Math.round((Date.now() - startedAt) / 1000);
 
 	if (result.error) generationFailed(operation, clientMessage, result.error);
 
@@ -161,7 +170,10 @@ async function processRenderResult(
 		outputKey: output.key,
 		outputHash: output.hash,
 		cost: data.cost,
-		balance: data.balance
+		balance: data.balance,
+		renderSec,
+		downloadSec: output.downloadSec,
+		reuploadSec: output.reuploadSec
 	};
 }
 
@@ -179,7 +191,10 @@ export async function renderInterior(
 			return {
 				...mock,
 				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
-				outputHash: ''
+				outputHash: '',
+				renderSec: 0,
+				downloadSec: 0,
+				reuploadSec: 0
 			};
 		}
 		generationFailed(
@@ -218,7 +233,10 @@ export async function renderExterior(
 			return {
 				...mock,
 				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
-				outputHash: ''
+				outputHash: '',
+				renderSec: 0,
+				downloadSec: 0,
+				reuploadSec: 0
 			};
 		}
 		generationFailed(
@@ -263,7 +281,10 @@ export async function styleTransferInterior(
 			return {
 				...mock,
 				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
-				outputHash: ''
+				outputHash: '',
+				renderSec: 0,
+				downloadSec: 0,
+				reuploadSec: 0
 			};
 		}
 		generationFailed(
@@ -274,6 +295,7 @@ export async function styleTransferInterior(
 	}
 	if (!bucket) generationFailed('style-transfer', 'Style transfer failed', 'bucket not configured');
 
+	const startedAt = Date.now();
 	let result: Awaited<ReturnType<typeof postStyleTransfer>>;
 	try {
 		result = await postStyleTransfer({
@@ -293,6 +315,7 @@ export async function styleTransferInterior(
 	} catch (err) {
 		generationFailed('style-transfer', 'Style transfer failed', err);
 	}
+	const renderSec = Math.round((Date.now() - startedAt) / 1000);
 
 	if (result.error) generationFailed('style-transfer', 'Style transfer failed', result.error);
 
@@ -319,7 +342,10 @@ export async function styleTransferInterior(
 		outputKey: output.key,
 		outputHash: output.hash,
 		cost: data.cost,
-		balance: data.balance
+		balance: data.balance,
+		renderSec,
+		downloadSec: output.downloadSec,
+		reuploadSec: output.reuploadSec
 	};
 }
 
@@ -337,7 +363,10 @@ export async function replaceTexturesWithMask(
 			return {
 				...mock,
 				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
-				outputHash: ''
+				outputHash: '',
+				renderSec: 0,
+				downloadSec: 0,
+				reuploadSec: 0
 			};
 		}
 		generationFailed(
@@ -380,7 +409,10 @@ export async function upscale4k(
 			return {
 				...mock,
 				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
-				outputHash: ''
+				outputHash: '',
+				renderSec: 0,
+				downloadSec: 0,
+				reuploadSec: 0
 			};
 		}
 		generationFailed(

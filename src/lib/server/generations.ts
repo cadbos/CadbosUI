@@ -119,6 +119,9 @@ export interface RecordGenerationInput {
 	prompt: string;
 	kind: CreditTransaction['kind'];
 	amount: number;
+	archaiRenderSec: number;
+	archaiDownloadSec: number;
+	archaiReuploadSec: number;
 }
 
 // Deducts the real cost archAI charged (not a fixed fee) and records the
@@ -155,8 +158,9 @@ export async function recordGeneration(
 		db
 			.prepare(
 				'INSERT INTO generations ' +
-					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id) ' +
-					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ?, ? FROM credits WHERE user_id = ?'
+					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id, ' +
+					'archai_render_sec, archai_download_sec, archai_reupload_sec) ' +
+					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ?, ?, ?, ?, ? FROM credits WHERE user_id = ?'
 			)
 			.bind(
 				crypto.randomUUID(),
@@ -168,6 +172,9 @@ export async function recordGeneration(
 				input.amount,
 				now,
 				input.sessionId,
+				input.archaiRenderSec,
+				input.archaiDownloadSec,
+				input.archaiReuploadSec,
 				userId
 			)
 	]);

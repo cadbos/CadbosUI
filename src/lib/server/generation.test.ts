@@ -137,7 +137,10 @@ describe('renderInterior', () => {
 			outputKey: '123e4567-e89b-12d3-a456-426614174000.webp',
 			outputHash: generatedImageHash,
 			cost: 1,
-			balance: 24
+			balance: 24,
+			renderSec: expect.any(Number),
+			downloadSec: expect.any(Number),
+			reuploadSec: expect.any(Number)
 		});
 	});
 
@@ -294,7 +297,10 @@ describe('styleTransferInterior', () => {
 			outputKey: '123e4567-e89b-12d3-a456-426614174004.png',
 			outputHash: generatedImageHash,
 			cost: 2,
-			balance: 22
+			balance: 22,
+			renderSec: expect.any(Number),
+			downloadSec: expect.any(Number),
+			reuploadSec: expect.any(Number)
 		});
 	});
 
@@ -365,7 +371,10 @@ describe('replaceTexturesWithMask', () => {
 			outputKey: '123e4567-e89b-12d3-a456-426614174005.png',
 			outputHash: generatedImageHash,
 			cost: 1.5,
-			balance: 20
+			balance: 20,
+			renderSec: expect.any(Number),
+			downloadSec: expect.any(Number),
+			reuploadSec: expect.any(Number)
 		});
 	});
 
