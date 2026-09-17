@@ -51,7 +51,12 @@ function history(outputs: ComfyHistoryEntry['outputs']): ComfyHistoryEntry {
 	return {
 		outputs,
 		promptId: 'prompt-1',
-		status: { completed: true, status: 'success' }
+		status: {
+			completed: true,
+			status: 'success',
+			executionStartedAt: 1000,
+			executionSucceededAt: 1500
+		}
 	};
 }
 

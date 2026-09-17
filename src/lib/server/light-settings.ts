@@ -91,7 +91,13 @@ export async function submitLightSettings(
 export async function pollLightSettings(
 	platform: App.Platform | undefined,
 	promptId: string
-): Promise<ComfyDownloadedImage | null> {
+): Promise<{
+	completedAt: number;
+	executionStartedAt: number | null;
+	executionSucceededAt: number | null;
+	downloadSec: number;
+	image: ComfyDownloadedImage;
+} | null> {
 	return getLightSettingsResult(
 		createClient(platform),
 		promptId,

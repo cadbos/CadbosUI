@@ -123,12 +123,24 @@ describe('flux kontext edit integration', () => {
 			'prompt-1'
 		);
 
-		expect(result).toEqual<ComfyDownloadedImage>({
-			filename: 'final.png',
-			subfolder: 'results',
-			type: 'output',
-			bytes: expect.any(ArrayBuffer),
-			contentType: 'image/png'
+		expect(result).toEqual<{
+			completedAt: number;
+			executionStartedAt: number | null;
+			executionSucceededAt: number | null;
+			downloadSec: number;
+			image: ComfyDownloadedImage;
+		}>({
+			completedAt: expect.any(Number),
+			executionStartedAt: null,
+			executionSucceededAt: null,
+			downloadSec: expect.any(Number),
+			image: {
+				filename: 'final.png',
+				subfolder: 'results',
+				type: 'output',
+				bytes: expect.any(ArrayBuffer),
+				contentType: 'image/png'
+			}
 		});
 		expect(vpcFetch).toHaveBeenCalledTimes(2);
 	});

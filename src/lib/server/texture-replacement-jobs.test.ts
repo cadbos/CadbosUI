@@ -55,12 +55,23 @@ describe('texture replacement jobs', () => {
 			referenceMediaId,
 			replacementSurface: 'oak flooring',
 			cost: 2,
-			createdAt: 10
+			createdAt: 10,
+			uploadQueueSec: 3
 		});
 		const outputMediaId = seedManagedMedia(db, 'result.png');
 		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-		const job = await completeTextureReplacementJob(db, 'user-1', 'job-1', outputMediaId, 20);
+		const job = await completeTextureReplacementJob(
+			db,
+			'user-1',
+			'job-1',
+			outputMediaId,
+			20,
+			5,
+			10,
+			2,
+			1
+		);
 
 		expect(job).toMatchObject({ status: 'completed', balanceAfter: 0, cost: 2 });
 		const credit = await db
@@ -68,11 +79,50 @@ describe('texture replacement jobs', () => {
 			.bind('user-1')
 			.first<{ balance: number }>();
 		const generation = await db
-			.prepare('SELECT amount, balance_after FROM generations WHERE id = ?')
+			.prepare(
+				'SELECT amount, balance_after, comfyui_upload_queue_sec, comfyui_queue_wait_sec, ' +
+					'comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec FROM generations WHERE id = ?'
+			)
 			.bind('job-1')
-			.first<{ amount: number; balance_after: number }>();
+			.first<{
+				amount: number;
+				balance_after: number;
+				comfyui_upload_queue_sec: number;
+				comfyui_queue_wait_sec: number;
+				comfyui_execution_sec: number;
+				comfyui_download_sec: number;
+				comfyui_reupload_sec: number;
+			}>();
 		expect(credit?.balance).toBe(0);
-		expect(generation).toEqual({ amount: 2, balance_after: 0 });
+		expect(generation).toEqual({
+			amount: 2,
+			balance_after: 0,
+			comfyui_upload_queue_sec: 3,
+			comfyui_queue_wait_sec: 5,
+			comfyui_execution_sec: 10,
+			comfyui_download_sec: 2,
+			comfyui_reupload_sec: 1
+		});
+		const jobRow = await db
+			.prepare(
+				'SELECT upload_queue_sec, queue_wait_sec, execution_sec, download_sec, reupload_sec ' +
+					'FROM texture_replacement_jobs WHERE id = ?'
+			)
+			.bind('job-1')
+			.first<{
+				upload_queue_sec: number;
+				queue_wait_sec: number;
+				execution_sec: number;
+				download_sec: number;
+				reupload_sec: number;
+			}>();
+		expect(jobRow).toEqual({
+			upload_queue_sec: 3,
+			queue_wait_sec: 5,
+			execution_sec: 10,
+			download_sec: 2,
+			reupload_sec: 1
+		});
 		expect(warning).toHaveBeenCalledOnce();
 		expect(warning).toHaveBeenCalledWith(
 			'Texture replacement credit deduction exceeded available balance:',

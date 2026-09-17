@@ -47,7 +47,12 @@ function history(outputs: ComfyHistoryEntry['outputs']): ComfyHistoryEntry {
 	return {
 		outputs,
 		promptId: 'prompt-1',
-		status: { completed: true, status: 'success' }
+		status: {
+			completed: true,
+			status: 'success',
+			executionStartedAt: 1000,
+			executionSucceededAt: 1500
+		}
 	};
 }
 
@@ -195,7 +200,13 @@ describe('flux kontext edit polling', () => {
 		vi.mocked(client.getHistory).mockResolvedValue(history({ '17': { images: [finalOutput] } }));
 		vi.mocked(client.downloadImage).mockResolvedValue(downloadedImage);
 
-		await expect(getFluxKontextEditResult(client, 'prompt-1')).resolves.toBe(downloadedImage);
+		await expect(getFluxKontextEditResult(client, 'prompt-1')).resolves.toEqual({
+			completedAt: expect.any(Number),
+			executionStartedAt: 1000,
+			executionSucceededAt: 1500,
+			downloadSec: expect.any(Number),
+			image: downloadedImage
+		});
 		expect(client.downloadImage).toHaveBeenCalledWith(finalOutput, { signal: undefined });
 	});
 
@@ -203,7 +214,12 @@ describe('flux kontext edit polling', () => {
 		const client = mockClient();
 		vi.mocked(client.getHistory).mockResolvedValue({
 			...history({}),
-			status: { completed: true, status: 'error' }
+			status: {
+				completed: true,
+				status: 'error',
+				executionStartedAt: null,
+				executionSucceededAt: null
+			}
 		});
 
 		await expect(getFluxKontextEditResult(client, 'prompt-1')).rejects.toMatchObject({

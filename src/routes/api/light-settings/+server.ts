@@ -160,6 +160,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		}
 
 		const id = crypto.randomUUID();
+		const uploadStartedAt = Date.now();
 		let comfyPromptId: string;
 		try {
 			comfyPromptId = await submitLightSettings(
@@ -190,6 +191,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			}
 			return apiError(502, 'light_settings_failed', 'Light settings failed');
 		}
+		const uploadQueueSec = Math.round((Date.now() - uploadStartedAt) / 1000);
 
 		try {
 			await createLightSettingsJob(db, {
@@ -200,7 +202,8 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				sessionId: parsed.data.sessionId,
 				instruction: parsed.data.instruction,
 				cost,
-				createdAt: Date.now()
+				createdAt: Date.now(),
+				uploadQueueSec
 			});
 		} catch {
 			logFailure(500, 'light_settings_failed', { operation: 'job_persistence' });

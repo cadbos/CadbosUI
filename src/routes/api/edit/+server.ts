@@ -163,6 +163,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		}
 
 		const id = crypto.randomUUID();
+		const uploadStartedAt = Date.now();
 		let comfyPromptId: string;
 		try {
 			comfyPromptId = await submitFluxKontextEdit(
@@ -190,6 +191,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			}
 			return apiError(502, 'edit_failed', 'Edit failed');
 		}
+		const uploadQueueSec = Math.round((Date.now() - uploadStartedAt) / 1000);
 
 		try {
 			await createFluxKontextEditJob(db, {
@@ -200,7 +202,8 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				sessionId: parsed.data.sessionId,
 				instruction: parsed.data.prompt,
 				cost,
-				createdAt: Date.now()
+				createdAt: Date.now(),
+				uploadQueueSec
 			});
 		} catch {
 			logFailure(500, 'edit_failed', { operation: 'job_persistence' });

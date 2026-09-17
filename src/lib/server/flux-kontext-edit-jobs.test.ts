@@ -57,12 +57,64 @@ describe('flux kontext edit jobs', () => {
 			sessionId: 'session-1',
 			instruction: 'make the walls white',
 			cost: 2,
-			createdAt: 10
+			createdAt: 10,
+			uploadQueueSec: 3
 		});
 		expect(created).toMatchObject({ sceneMediaId, status: 'processing', outputMediaId: null });
 
-		const completed = await completeFluxKontextEditJob(db, 'user-1', 'job-1', outputMediaId, 20);
+		const completed = await completeFluxKontextEditJob(
+			db,
+			'user-1',
+			'job-1',
+			outputMediaId,
+			20,
+			5,
+			10,
+			2,
+			1
+		);
 		expect(completed).toMatchObject({ outputMediaId, status: 'completed', balanceAfter: 10 });
+
+		const jobRow = await db
+			.prepare(
+				'SELECT upload_queue_sec, queue_wait_sec, execution_sec, download_sec, reupload_sec ' +
+					'FROM flux_kontext_edit_jobs WHERE id = ?'
+			)
+			.bind('job-1')
+			.first<{
+				upload_queue_sec: number;
+				queue_wait_sec: number;
+				execution_sec: number;
+				download_sec: number;
+				reupload_sec: number;
+			}>();
+		expect(jobRow).toEqual({
+			upload_queue_sec: 3,
+			queue_wait_sec: 5,
+			execution_sec: 10,
+			download_sec: 2,
+			reupload_sec: 1
+		});
+		const generationRow = await db
+			.prepare(
+				'SELECT comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, ' +
+					'comfyui_download_sec, comfyui_reupload_sec FROM generations WHERE id = ?'
+			)
+			.bind('job-1')
+			.first<{
+				comfyui_upload_queue_sec: number;
+				comfyui_queue_wait_sec: number;
+				comfyui_execution_sec: number;
+				comfyui_download_sec: number;
+				comfyui_reupload_sec: number;
+			}>();
+		expect(generationRow).toEqual({
+			comfyui_upload_queue_sec: 3,
+			comfyui_queue_wait_sec: 5,
+			comfyui_execution_sec: 10,
+			comfyui_download_sec: 2,
+			comfyui_reupload_sec: 1
+		});
 
 		const references = await db
 			.prepare(
@@ -96,10 +148,11 @@ describe('flux kontext edit jobs', () => {
 			sessionId: 'session-1',
 			instruction: 'remove the sofa',
 			cost: 2,
-			createdAt: 10
+			createdAt: 10,
+			uploadQueueSec: 1
 		});
 
-		const failed = await failFluxKontextEditJob(db, 'user-1', 'job-1', 'edit_timeout', 30);
+		const failed = await failFluxKontextEditJob(db, 'user-1', 'job-1', 'edit_timeout', 30, 0, 20);
 
 		expect(failed).toMatchObject({
 			status: 'failed',
@@ -109,5 +162,12 @@ describe('flux kontext edit jobs', () => {
 		await expect(getFluxKontextEditJob(db, 'user-1', 'job-1')).resolves.toMatchObject({
 			status: 'failed'
 		});
+		const jobRow = await db
+			.prepare(
+				'SELECT queue_wait_sec, execution_sec, download_sec FROM flux_kontext_edit_jobs WHERE id = ?'
+			)
+			.bind('job-1')
+			.first<{ queue_wait_sec: number; execution_sec: number; download_sec: number }>();
+		expect(jobRow).toEqual({ queue_wait_sec: 0, execution_sec: 20, download_sec: 0 });
 	});
 });

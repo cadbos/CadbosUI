@@ -56,6 +56,18 @@ function parseImageDescriptor(value: unknown): ComfyImageDescriptor | null {
 	return { filename, subfolder: value.subfolder, type: value.type };
 }
 
+function executionTimestamp(messages: unknown, event: string): number | null {
+	if (!Array.isArray(messages)) return null;
+	for (const message of messages) {
+		if (!Array.isArray(message) || message.length !== 2) continue;
+		const [name, payload] = message;
+		if (name !== event || !isRecord(payload)) continue;
+		const timestamp = payload.timestamp;
+		if (typeof timestamp === 'number' && Number.isFinite(timestamp)) return timestamp;
+	}
+	return null;
+}
+
 function parseHistoryEntry(promptId: string, value: unknown): ComfyHistoryEntry | null {
 	if (!isRecord(value) || !isRecord(value.status) || !isRecord(value.outputs)) return null;
 	const completed = value.status.completed;
@@ -75,7 +87,16 @@ function parseHistoryEntry(promptId: string, value: unknown): ComfyHistoryEntry 
 		outputs[nodeId] = { images: images as ComfyImageDescriptor[] };
 	}
 
-	return { promptId, outputs, status: { completed, status } };
+	return {
+		promptId,
+		outputs,
+		status: {
+			completed,
+			status,
+			executionStartedAt: executionTimestamp(value.status.messages, 'execution_start'),
+			executionSucceededAt: executionTimestamp(value.status.messages, 'execution_success')
+		}
+	};
 }
 
 function normalizeBaseUrl(value: string | URL): URL {

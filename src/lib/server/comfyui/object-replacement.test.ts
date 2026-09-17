@@ -52,7 +52,12 @@ function history(outputs: ComfyHistoryEntry['outputs']): ComfyHistoryEntry {
 	return {
 		outputs,
 		promptId: 'prompt-1',
-		status: { completed: true, status: 'success' }
+		status: {
+			completed: true,
+			status: 'success',
+			executionStartedAt: 1000,
+			executionSucceededAt: 1500
+		}
 	};
 }
 
@@ -229,7 +234,13 @@ describe('object replacement polling', () => {
 		);
 		vi.mocked(client.downloadImage).mockResolvedValue(downloadedImage);
 
-		await expect(getObjectReplacementResult(client, 'prompt-1')).resolves.toBe(downloadedImage);
+		await expect(getObjectReplacementResult(client, 'prompt-1')).resolves.toEqual({
+			completedAt: expect.any(Number),
+			executionStartedAt: 1000,
+			executionSucceededAt: 1500,
+			downloadSec: expect.any(Number),
+			image: downloadedImage
+		});
 		expect(client.downloadImage).toHaveBeenCalledWith(finalOutput, { signal: undefined });
 	});
 
@@ -237,7 +248,12 @@ describe('object replacement polling', () => {
 		const client = mockClient();
 		vi.mocked(client.getHistory).mockResolvedValue({
 			...history({}),
-			status: { completed: true, status: 'error' }
+			status: {
+				completed: true,
+				status: 'error',
+				executionStartedAt: null,
+				executionSucceededAt: null
+			}
 		});
 
 		await expect(getObjectReplacementResult(client, 'prompt-1')).rejects.toMatchObject({

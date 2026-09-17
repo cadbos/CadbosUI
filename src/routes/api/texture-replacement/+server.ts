@@ -213,6 +213,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		}
 
 		const id = crypto.randomUUID();
+		const uploadStartedAt = Date.now();
 		let comfyPromptId: string;
 		try {
 			comfyPromptId = await submitTextureReplacement(
@@ -241,6 +242,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			}
 			return apiError(502, 'texture_replacement_failed', 'Texture replacement failed');
 		}
+		const uploadQueueSec = Math.round((Date.now() - uploadStartedAt) / 1000);
 
 		try {
 			await createTextureReplacementJob(db, {
@@ -252,7 +254,8 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				referenceMediaId: referenceMedia.id,
 				replacementSurface: automaticRequest.replacementSurface,
 				cost: comfyCost,
-				createdAt: Date.now()
+				createdAt: Date.now(),
+				uploadQueueSec
 			});
 		} catch {
 			console.error('Texture replacement job persistence failed');

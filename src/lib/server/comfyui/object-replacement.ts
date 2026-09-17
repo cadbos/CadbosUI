@@ -88,7 +88,11 @@ function objectReplacementWorkflow(
 	return workflow;
 }
 
-function completedOutput(history: Awaited<ReturnType<ComfyUiClient['getHistory']>>) {
+function completedOutput(history: Awaited<ReturnType<ComfyUiClient['getHistory']>>): {
+	output: ComfyImageDescriptor;
+	executionStartedAt: number | null;
+	executionSucceededAt: number | null;
+} | null {
 	if (history === null) return null;
 	if (
 		history.status.status === 'error' ||
@@ -105,7 +109,11 @@ function completedOutput(history: Awaited<ReturnType<ComfyUiClient['getHistory']
 			'ComfyUI workflow did not produce a final image'
 		);
 	}
-	return output;
+	return {
+		output,
+		executionStartedAt: history.status.executionStartedAt,
+		executionSucceededAt: history.status.executionSucceededAt
+	};
 }
 
 export async function queueObjectReplacement(
@@ -143,9 +151,25 @@ export async function getObjectReplacementResult(
 	client: ComfyUiClient,
 	promptId: string,
 	signal?: AbortSignal
-): Promise<ComfyDownloadedImage | null> {
-	const output = completedOutput(await client.getHistory(promptId, { signal }));
-	return output ? client.downloadImage(output, { signal }) : null;
+): Promise<{
+	completedAt: number;
+	executionStartedAt: number | null;
+	executionSucceededAt: number | null;
+	downloadSec: number;
+	image: ComfyDownloadedImage;
+} | null> {
+	const completed = completedOutput(await client.getHistory(promptId, { signal }));
+	if (!completed) return null;
+	const completedAt = Date.now();
+	const image = await client.downloadImage(completed.output, { signal });
+	const downloadSec = Math.round((Date.now() - completedAt) / 1000);
+	return {
+		completedAt,
+		executionStartedAt: completed.executionStartedAt,
+		executionSucceededAt: completed.executionSucceededAt,
+		downloadSec,
+		image
+	};
 }
 
 export async function runObjectReplacement(
@@ -158,7 +182,7 @@ export async function runObjectReplacement(
 		signal: request.signal,
 		timeoutMs: request.timeoutMs
 	});
-	const output = completedOutput(history);
-	if (!output) throw new ComfyUiError('invalid_response', 'workflow', 'Invalid workflow status');
-	return client.downloadImage(output, { signal: request.signal });
+	const completed = completedOutput(history);
+	if (!completed) throw new ComfyUiError('invalid_response', 'workflow', 'Invalid workflow status');
+	return client.downloadImage(completed.output, { signal: request.signal });
 }

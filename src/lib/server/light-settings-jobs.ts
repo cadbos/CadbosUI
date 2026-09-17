@@ -85,13 +85,14 @@ export async function createLightSettingsJob(
 		instruction: string;
 		cost: number;
 		createdAt: number;
+		uploadQueueSec: number;
 	}
 ): Promise<LightSettingsJob> {
 	await db
 		.prepare(
 			'INSERT INTO light_settings_jobs ' +
-				'(id, user_id, comfy_prompt_id, scene_media_id, session_id, instruction, cost, status, created_at, updated_at) ' +
-				"VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?)"
+				'(id, user_id, comfy_prompt_id, scene_media_id, session_id, instruction, cost, status, created_at, updated_at, upload_queue_sec) ' +
+				"VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?)"
 		)
 		.bind(
 			input.id,
@@ -102,7 +103,8 @@ export async function createLightSettingsJob(
 			input.instruction,
 			input.cost,
 			input.createdAt,
-			input.createdAt
+			input.createdAt,
+			input.uploadQueueSec
 		)
 		.run();
 	const job = await getLightSettingsJob(db, input.userId, input.id);
@@ -133,14 +135,18 @@ export async function failLightSettingsJob(
 	userId: string,
 	id: string,
 	errorCode: string,
-	completedAt: number
+	completedAt: number,
+	queueWaitSec: number,
+	executionSec: number,
+	downloadSec = 0
 ): Promise<LightSettingsJob> {
 	await db
 		.prepare(
-			"UPDATE light_settings_jobs SET status = 'failed', error_code = ?, updated_at = ?, completed_at = ? " +
+			"UPDATE light_settings_jobs SET status = 'failed', error_code = ?, updated_at = ?, " +
+				'completed_at = ?, queue_wait_sec = ?, execution_sec = ?, download_sec = ? ' +
 				"WHERE id = ? AND user_id = ? AND status = 'processing'"
 		)
-		.bind(errorCode, completedAt, completedAt, id, userId)
+		.bind(errorCode, completedAt, completedAt, queueWaitSec, executionSec, downloadSec, id, userId)
 		.run();
 	const job = await getLightSettingsJob(db, userId, id);
 	if (!job) throw new Error('light settings job not found');
@@ -152,7 +158,11 @@ export async function completeLightSettingsJob(
 	userId: string,
 	id: string,
 	outputMediaId: number,
-	completedAt: number
+	completedAt: number,
+	queueWaitSec: number,
+	executionSec: number,
+	downloadSec: number,
+	reuploadSec: number
 ): Promise<LightSettingsJob> {
 	const results = await db.batch<LightSettingsDeductionSnapshotRow>([
 		db
@@ -174,20 +184,44 @@ export async function completeLightSettingsJob(
 		db
 			.prepare(
 				'INSERT INTO generations ' +
-					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id) ' +
-					"SELECT j.id, j.user_id, ?, j.scene_media_id, j.instruction, 'light-settings', j.cost, c.balance, ?, j.session_id " +
+					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id, ' +
+					'comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec) ' +
+					"SELECT j.id, j.user_id, ?, j.scene_media_id, j.instruction, 'light-settings', j.cost, c.balance, ?, j.session_id, " +
+					'j.upload_queue_sec, ?, ?, ?, ? ' +
 					'FROM light_settings_jobs j JOIN credits c ON c.user_id = j.user_id ' +
 					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
 			)
-			.bind(outputMediaId, completedAt, id, userId),
+			.bind(
+				outputMediaId,
+				completedAt,
+				queueWaitSec,
+				executionSec,
+				downloadSec,
+				reuploadSec,
+				id,
+				userId
+			),
 		db
 			.prepare(
 				"UPDATE light_settings_jobs SET status = 'completed', output_media_id = ?, " +
-					'balance_after = (SELECT balance FROM credits WHERE user_id = ?), updated_at = ?, completed_at = ? ' +
+					'balance_after = (SELECT balance FROM credits WHERE user_id = ?), updated_at = ?, completed_at = ?, ' +
+					'queue_wait_sec = ?, execution_sec = ?, download_sec = ?, reupload_sec = ? ' +
 					"WHERE id = ? AND user_id = ? AND status = 'processing' " +
 					'AND EXISTS (SELECT 1 FROM credits WHERE user_id = ?)'
 			)
-			.bind(outputMediaId, userId, completedAt, completedAt, id, userId, userId)
+			.bind(
+				outputMediaId,
+				userId,
+				completedAt,
+				completedAt,
+				queueWaitSec,
+				executionSec,
+				downloadSec,
+				reuploadSec,
+				id,
+				userId,
+				userId
+			)
 	]);
 	const snapshot = results[0]?.results[0];
 	if (snapshot && snapshot.available_balance < snapshot.cost) {
