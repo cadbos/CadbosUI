@@ -102,6 +102,21 @@ const completedImage: ComfyDownloadedImage = {
 	bytes: new TextEncoder().encode('result-image').buffer,
 	contentType: 'image/png'
 };
+function completedResult(): {
+	completedAt: number;
+	executionStartedAt: number | null;
+	executionSucceededAt: number | null;
+	downloadSec: number;
+	image: ComfyDownloadedImage;
+} {
+	return {
+		completedAt: Date.now(),
+		executionStartedAt: null,
+		executionSucceededAt: null,
+		downloadSec: 0,
+		image: completedImage
+	};
+}
 
 function rejectionLog(status: number, reason: string): Record<string, unknown> {
 	return { level: 'warn', area: 'edit', event: 'request_rejected', status, reason };
@@ -236,7 +251,8 @@ async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
 		sessionId: sessionIdForPubkey('pubkey-1'),
 		instruction: requestBody.prompt,
 		cost: 2,
-		createdAt
+		createdAt,
+		uploadQueueSec: 1
 	});
 }
 
@@ -492,7 +508,7 @@ describe('GET /api/edit/[id]', () => {
 		const db = makeD1();
 		seedUser(db, 12);
 		await seedJob(db);
-		integration.poll.mockResolvedValue(completedImage);
+		integration.poll.mockResolvedValue(completedResult());
 		const uploadsBucket = bucket();
 		const requestPlatform = platform(db, uploadsBucket);
 
@@ -542,7 +558,7 @@ describe('GET /api/edit/[id]', () => {
 		const db = makeD1();
 		seedUser(db, 12);
 		await seedJob(db);
-		integration.poll.mockResolvedValue(completedImage);
+		integration.poll.mockResolvedValue(completedResult());
 		const requestPlatform = platform(db);
 		await callGet({ pubkey: 'pubkey-1' }, requestPlatform, 'job-1');
 		integration.poll.mockClear();

@@ -57,6 +57,8 @@ export interface ComfyQueuedWorkflow {
 export interface ComfyHistoryStatus {
 	completed: boolean;
 	status: string;
+	executionStartedAt: number | null;
+	executionSucceededAt: number | null;
 }
 
 export interface ComfyHistoryNodeOutput {

@@ -31,7 +31,11 @@ function jsonResponse(body: unknown, status = 200): Response {
 	});
 }
 
-function completedHistory(promptId: string, status = 'success'): Record<string, unknown> {
+function completedHistory(
+	promptId: string,
+	status = 'success',
+	messages?: unknown[]
+): Record<string, unknown> {
 	return {
 		[promptId]: {
 			outputs: {
@@ -39,7 +43,7 @@ function completedHistory(promptId: string, status = 'success'): Record<string, 
 					images: [{ filename: 'final.png', subfolder: 'results', type: 'output' }]
 				}
 			},
-			status: { completed: true, status_str: status }
+			status: { completed: true, status_str: status, ...(messages ? { messages } : {}) }
 		}
 	};
 }
@@ -204,9 +208,32 @@ describe('createComfyUiClient', () => {
 				}
 			},
 			promptId: 'prompt/1',
-			status: { completed: true, status: 'success' }
+			status: {
+				completed: true,
+				status: 'success',
+				executionStartedAt: null,
+				executionSucceededAt: null
+			}
 		});
 		expect(fetcher.mock.calls[0]?.[0].toString()).toContain('history/prompt%2F1');
+	});
+
+	it('parses execution_start/execution_success timestamps from status.messages', async () => {
+		const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+			jsonResponse(
+				completedHistory('prompt-1', 'success', [
+					['execution_start', { prompt_id: 'prompt-1', timestamp: 1000 }],
+					['execution_cached', { nodes: ['1'], prompt_id: 'prompt-1', timestamp: 1010 }],
+					['execution_success', { prompt_id: 'prompt-1', timestamp: 1500 }]
+				])
+			)
+		);
+		const client = createComfyUiClient({ baseUrl: 'http://localhost:8188', fetch: fetcher });
+
+		const entry = await client.getHistory('prompt-1');
+
+		expect(entry?.status.executionStartedAt).toBe(1000);
+		expect(entry?.status.executionSucceededAt).toBe(1500);
 	});
 
 	it('polls history until completion', async () => {
@@ -221,7 +248,12 @@ describe('createComfyUiClient', () => {
 			timeoutMs: 100
 		});
 
-		expect(result.status).toEqual({ completed: true, status: 'success' });
+		expect(result.status).toEqual({
+			completed: true,
+			status: 'success',
+			executionStartedAt: null,
+			executionSucceededAt: null
+		});
 		expect(fetcher).toHaveBeenCalledTimes(2);
 	});
 

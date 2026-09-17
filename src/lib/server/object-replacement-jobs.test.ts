@@ -54,7 +54,8 @@ async function seedJob(db: D1Database, id = 'job-1') {
 		referenceMediaId,
 		replacementObject: 'sofa',
 		cost: 2,
-		createdAt: 10
+		createdAt: 10,
+		uploadQueueSec: 3
 	});
 }
 
@@ -81,18 +82,56 @@ describe('object replacement jobs', () => {
 		await seedJob(db);
 		const outputMediaId = seedManagedMedia(db, 'result.png');
 
-		const job = await completeObjectReplacementJob(db, 'user-1', 'job-1', outputMediaId, 20);
+		const job = await completeObjectReplacementJob(
+			db,
+			'user-1',
+			'job-1',
+			outputMediaId,
+			20,
+			5,
+			10,
+			2,
+			1
+		);
 
 		expect(job).toMatchObject({ status: 'completed', balanceAfter: 10, cost: 2 });
 		const generation = await db
-			.prepare('SELECT id, kind, amount, balance_after FROM generations WHERE id = ?')
+			.prepare(
+				'SELECT id, kind, amount, balance_after, comfyui_upload_queue_sec, comfyui_queue_wait_sec, ' +
+					'comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec FROM generations WHERE id = ?'
+			)
 			.bind('job-1')
 			.first();
 		expect(generation).toEqual({
 			id: 'job-1',
 			kind: 'object-replacement',
 			amount: 2,
-			balance_after: 10
+			balance_after: 10,
+			comfyui_upload_queue_sec: 3,
+			comfyui_queue_wait_sec: 5,
+			comfyui_execution_sec: 10,
+			comfyui_download_sec: 2,
+			comfyui_reupload_sec: 1
+		});
+		const jobRow = await db
+			.prepare(
+				'SELECT upload_queue_sec, queue_wait_sec, execution_sec, download_sec, reupload_sec ' +
+					'FROM object_replacement_jobs WHERE id = ?'
+			)
+			.bind('job-1')
+			.first<{
+				upload_queue_sec: number;
+				queue_wait_sec: number;
+				execution_sec: number;
+				download_sec: number;
+				reupload_sec: number;
+			}>();
+		expect(jobRow).toEqual({
+			upload_queue_sec: 3,
+			queue_wait_sec: 5,
+			execution_sec: 10,
+			download_sec: 2,
+			reupload_sec: 1
 		});
 	});
 
@@ -103,8 +142,8 @@ describe('object replacement jobs', () => {
 		const outputMediaId = seedManagedMedia(db, 'result.png');
 
 		const [first, second] = await Promise.all([
-			completeObjectReplacementJob(db, 'user-1', 'job-1', outputMediaId, 20),
-			completeObjectReplacementJob(db, 'user-1', 'job-1', outputMediaId, 21)
+			completeObjectReplacementJob(db, 'user-1', 'job-1', outputMediaId, 20, 5, 10, 2, 1),
+			completeObjectReplacementJob(db, 'user-1', 'job-1', outputMediaId, 21, 6, 11, 3, 2)
 		]);
 
 		expect(first.balanceAfter).toBe(10);
@@ -131,10 +170,10 @@ describe('object replacement jobs', () => {
 		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
 		const jobs = await Promise.all([
-			completeObjectReplacementJob(db, 'user-1', 'job-1', firstOutputMediaId, 20),
-			completeObjectReplacementJob(db, 'user-1', 'job-2', secondOutputMediaId, 21)
+			completeObjectReplacementJob(db, 'user-1', 'job-1', firstOutputMediaId, 20, 5, 10, 2, 1),
+			completeObjectReplacementJob(db, 'user-1', 'job-2', secondOutputMediaId, 21, 6, 11, 3, 2)
 		]);
-		await completeObjectReplacementJob(db, 'user-1', 'job-2', secondOutputMediaId, 22);
+		await completeObjectReplacementJob(db, 'user-1', 'job-2', secondOutputMediaId, 22, 7, 12, 4, 3);
 
 		expect(jobs.map((job) => job.balanceAfter).sort()).toEqual([0, 1]);
 		const credit = await db
@@ -168,7 +207,9 @@ describe('object replacement jobs', () => {
 			'user-1',
 			'job-1',
 			'object_replacement_failed',
-			20
+			20,
+			0,
+			10
 		);
 
 		expect(job).toMatchObject({
@@ -180,5 +221,10 @@ describe('object replacement jobs', () => {
 			.bind('user-1')
 			.first<{ balance: number }>();
 		expect(credit?.balance).toBe(12);
+		const jobRow = await db
+			.prepare('SELECT queue_wait_sec, execution_sec FROM object_replacement_jobs WHERE id = ?')
+			.bind('job-1')
+			.first<{ queue_wait_sec: number; execution_sec: number }>();
+		expect(jobRow).toEqual({ queue_wait_sec: 0, execution_sec: 10 });
 	});
 });

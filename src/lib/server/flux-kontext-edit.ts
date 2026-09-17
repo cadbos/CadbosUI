@@ -95,7 +95,13 @@ export async function submitFluxKontextEdit(
 export async function pollFluxKontextEdit(
 	platform: App.Platform | undefined,
 	promptId: string
-): Promise<ComfyDownloadedImage | null> {
+): Promise<{
+	completedAt: number;
+	executionStartedAt: number | null;
+	executionSucceededAt: number | null;
+	downloadSec: number;
+	image: ComfyDownloadedImage;
+} | null> {
 	return getFluxKontextEditResult(
 		createClient(platform),
 		promptId,

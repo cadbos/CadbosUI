@@ -102,7 +102,13 @@ export async function submitTextureReplacement(
 export async function pollTextureReplacement(
 	platform: App.Platform | undefined,
 	promptId: string
-): Promise<ComfyDownloadedImage | null> {
+): Promise<{
+	completedAt: number;
+	executionStartedAt: number | null;
+	executionSucceededAt: number | null;
+	downloadSec: number;
+	image: ComfyDownloadedImage;
+} | null> {
 	return getTextureReplacementResult(
 		createClient(platform),
 		promptId,

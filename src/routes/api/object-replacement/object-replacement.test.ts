@@ -103,6 +103,21 @@ const completedImage: ComfyDownloadedImage = {
 	bytes: new TextEncoder().encode('result-image').buffer,
 	contentType: 'image/png'
 };
+function completedResult(): {
+	completedAt: number;
+	executionStartedAt: number | null;
+	executionSucceededAt: number | null;
+	downloadSec: number;
+	image: ComfyDownloadedImage;
+} {
+	return {
+		completedAt: Date.now(),
+		executionStartedAt: null,
+		executionSucceededAt: null,
+		downloadSec: 0,
+		image: completedImage
+	};
+}
 
 function rejectionLog(status: number, reason: string): Record<string, unknown> {
 	return {
@@ -248,7 +263,8 @@ async function seedJob(db: D1Database, createdAt = Date.now()): Promise<void> {
 		referenceMediaId: 2,
 		replacementObject: requestBody.replacementObject,
 		cost: 2,
-		createdAt
+		createdAt,
+		uploadQueueSec: 1
 	});
 }
 
@@ -684,7 +700,7 @@ describe('GET /api/object-replacement/[id]', () => {
 		const db = makeD1();
 		seedUser(db, 12);
 		await seedJob(db);
-		integration.poll.mockResolvedValue(completedImage);
+		integration.poll.mockResolvedValue(completedResult());
 		const uploadsBucket = bucket();
 		const requestPlatform = platform(db, uploadsBucket);
 
@@ -734,7 +750,7 @@ describe('GET /api/object-replacement/[id]', () => {
 		const db = makeD1();
 		seedUser(db, 12);
 		await seedJob(db);
-		integration.poll.mockResolvedValue(completedImage);
+		integration.poll.mockResolvedValue(completedResult());
 		const requestPlatform = platform(db);
 		await callGet({ pubkey: 'pubkey-1' }, requestPlatform, 'job-1');
 		integration.poll.mockClear();
@@ -786,7 +802,7 @@ describe('GET /api/object-replacement/[id]', () => {
 
 		const pollFailure = await callGet({ pubkey: 'pubkey-1' }, requestPlatform, 'job-1');
 		expect(pollFailure.status).toBe(502);
-		integration.poll.mockResolvedValue(completedImage);
+		integration.poll.mockResolvedValue(completedResult());
 		const storageFailure = await callGet({ pubkey: 'pubkey-1' }, requestPlatform, 'job-1');
 		expect(storageFailure.status).toBe(500);
 		const completed = await callGet({ pubkey: 'pubkey-1' }, requestPlatform, 'job-1');

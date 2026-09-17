@@ -96,7 +96,16 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			error instanceof ComfyUiError &&
 			(error.code === 'execution_failed' || error.code === 'missing_output')
 		) {
-			job = await failFluxKontextEditJob(db, userId, job.id, 'edit_failed', Date.now());
+			const now = Date.now();
+			job = await failFluxKontextEditJob(
+				db,
+				userId,
+				job.id,
+				'edit_failed',
+				now,
+				0,
+				Math.round((now - job.createdAt) / 1000)
+			);
 			return responseForJob(job, db, platform);
 		}
 		if (error instanceof ComfyUiError) {
@@ -117,28 +126,65 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (result === null) {
 		const now = Date.now();
 		if (now - job.createdAt >= FLUX_KONTEXT_EDIT_TIMEOUT_MS) {
-			job = await failFluxKontextEditJob(db, userId, job.id, 'edit_timeout', now);
+			job = await failFluxKontextEditJob(
+				db,
+				userId,
+				job.id,
+				'edit_timeout',
+				now,
+				0,
+				Math.round((now - job.createdAt) / 1000)
+			);
 		}
 		return responseForJob(job, db, platform);
 	}
 
-	const extension = imageExtensionFromMime(result.contentType);
+	const queueWaitSec =
+		result.executionStartedAt === null
+			? 0
+			: Math.max(0, Math.round((result.executionStartedAt - job.createdAt) / 1000));
+	const executionSec =
+		result.executionStartedAt === null || result.executionSucceededAt === null
+			? 0
+			: Math.max(0, Math.round((result.executionSucceededAt - result.executionStartedAt) / 1000));
+	const extension = imageExtensionFromMime(result.image.contentType);
 	if (extension === null) {
-		job = await failFluxKontextEditJob(db, userId, job.id, 'edit_failed', Date.now());
+		job = await failFluxKontextEditJob(
+			db,
+			userId,
+			job.id,
+			'edit_failed',
+			Date.now(),
+			queueWaitSec,
+			executionSec,
+			result.downloadSec
+		);
 		return responseForJob(job, db, platform);
 	}
 
 	try {
 		const uploadsBucket = await getBucketByName(db, uploadsBucketName(platform));
+		const reuploadStartedAt = Date.now();
 		const stored = await uploadGeneratedImageBytes(
 			platform,
 			uploadsBucket,
-			result.bytes,
-			result.contentType,
+			result.image.bytes,
+			result.image.contentType,
 			`edits/${job.id}.${extension}`
 		);
+		const reuploadSec = Math.round((Date.now() - reuploadStartedAt) / 1000);
 		const output = await getOrCreateMediaByKey(db, uploadsBucket, stored.key, stored.hash);
-		job = await completeFluxKontextEditJob(db, userId, job.id, output.id, Date.now());
+		job = await completeFluxKontextEditJob(
+			db,
+			userId,
+			job.id,
+			output.id,
+			Date.now(),
+			queueWaitSec,
+			executionSec,
+			result.downloadSec,
+			reuploadSec
+		);
 		return responseForJob(job, db, platform);
 	} catch (error) {
 		console.error('Edit finalization failed:', error);

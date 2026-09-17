@@ -164,6 +164,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		}
 
 		const id = crypto.randomUUID();
+		const uploadStartedAt = Date.now();
 		let comfyPromptId: string;
 		try {
 			comfyPromptId = await submitObjectReplacement(
@@ -195,6 +196,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			}
 			return apiError(502, 'object_replacement_failed', 'Object replacement failed');
 		}
+		const uploadQueueSec = Math.round((Date.now() - uploadStartedAt) / 1000);
 
 		try {
 			await createObjectReplacementJob(db, {
@@ -206,7 +208,8 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				referenceMediaId: referenceMedia.id,
 				replacementObject: parsed.data.replacementObject,
 				cost,
-				createdAt: Date.now()
+				createdAt: Date.now(),
+				uploadQueueSec
 			});
 		} catch {
 			logFailure(500, 'object_replacement_failed', { operation: 'job_persistence' });

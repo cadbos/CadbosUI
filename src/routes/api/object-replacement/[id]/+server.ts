@@ -100,12 +100,15 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			error instanceof ComfyUiError &&
 			(error.code === 'execution_failed' || error.code === 'missing_output')
 		) {
+			const now = Date.now();
 			job = await failObjectReplacementJob(
 				db,
 				userId,
 				job.id,
 				'object_replacement_failed',
-				Date.now()
+				now,
+				0,
+				Math.round((now - job.createdAt) / 1000)
 			);
 			return responseForJob(job, db, platform);
 		}
@@ -127,34 +130,65 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (result === null) {
 		const now = Date.now();
 		if (now - job.createdAt >= OBJECT_REPLACEMENT_TIMEOUT_MS) {
-			job = await failObjectReplacementJob(db, userId, job.id, 'object_replacement_timeout', now);
+			job = await failObjectReplacementJob(
+				db,
+				userId,
+				job.id,
+				'object_replacement_timeout',
+				now,
+				0,
+				Math.round((now - job.createdAt) / 1000)
+			);
 		}
 		return responseForJob(job, db, platform);
 	}
 
-	const extension = imageExtensionFromMime(result.contentType);
+	const queueWaitSec =
+		result.executionStartedAt === null
+			? 0
+			: Math.max(0, Math.round((result.executionStartedAt - job.createdAt) / 1000));
+	const executionSec =
+		result.executionStartedAt === null || result.executionSucceededAt === null
+			? 0
+			: Math.max(0, Math.round((result.executionSucceededAt - result.executionStartedAt) / 1000));
+	const extension = imageExtensionFromMime(result.image.contentType);
 	if (extension === null) {
 		job = await failObjectReplacementJob(
 			db,
 			userId,
 			job.id,
 			'object_replacement_failed',
-			Date.now()
+			Date.now(),
+			queueWaitSec,
+			executionSec,
+			result.downloadSec
 		);
 		return responseForJob(job, db, platform);
 	}
 
 	try {
 		const uploadsBucket = await getBucketByName(db, uploadsBucketName(platform));
+		const reuploadStartedAt = Date.now();
 		const stored = await uploadGeneratedImageBytes(
 			platform,
 			uploadsBucket,
-			result.bytes,
-			result.contentType,
+			result.image.bytes,
+			result.image.contentType,
 			`object-replacements/${job.id}.${extension}`
 		);
+		const reuploadSec = Math.round((Date.now() - reuploadStartedAt) / 1000);
 		const output = await getOrCreateMediaByKey(db, uploadsBucket, stored.key, stored.hash);
-		job = await completeObjectReplacementJob(db, userId, job.id, output.id, Date.now());
+		job = await completeObjectReplacementJob(
+			db,
+			userId,
+			job.id,
+			output.id,
+			Date.now(),
+			queueWaitSec,
+			executionSec,
+			result.downloadSec,
+			reuploadSec
+		);
 		return responseForJob(job, db, platform);
 	} catch (error) {
 		console.error('Object replacement finalization failed:', error);
