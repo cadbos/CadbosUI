@@ -83,7 +83,12 @@ before the Change Date. See LICENSE for complete terms.
 			terminalError?.jobId !== jobId &&
 			pollFailure?.jobId !== jobId
 	);
-	const formLocked = $derived(submitting || jobId !== null);
+	// Locked while genuinely in flight (submitting) or unresolved (processing/
+	// failed) — a *successfully completed* job (terminalJob matching jobId)
+	// deliberately does NOT lock the form, so settings (including the
+	// reference image) stay editable for another replacement right away,
+	// same as freeform/add-object/remove-object (see EditPanel.svelte).
+	const formLocked = $derived(submitting || (jobId !== null && terminalJob?.id !== jobId));
 	const canSubmit = $derived(validation.valid && !formLocked && isAuthenticated);
 	const validationKey = $derived.by((): TranslationKey | null => {
 		const field = validation.missing[0];
@@ -379,14 +384,12 @@ before the Change Date. See LICENSE for complete terms.
 		pollFailure = null;
 	}
 
+	// Clears job tracking only — settings (reference image, description,
+	// source mode, scale) and the current result stay exactly as they are,
+	// so the user can tweak and submit another replacement instead of
+	// starting over from a blank form.
 	async function clearJob(): Promise<void> {
 		request.setActiveObjectReplacementJobId(undefined);
-		request.setObjectReferenceImage(undefined);
-		request.setObjectReplacementObject('');
-		request.setObjectReplacementSourceMode('current-result');
-		request.setObjectReplacementScale(1);
-		request.setImage(undefined);
-		request.setCurrentRender(undefined);
 		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
