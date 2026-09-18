@@ -111,7 +111,11 @@ before the Change Date. See LICENSE for complete terms.
 										{healthLabel(service.status)}
 									</span>
 								</td>
-								<td>{ti('status.latencyValue', { latency: service.latencyMs })}</td>
+								<td>
+									{service.status === 'healthy'
+										? ti('status.latencyValue', { latency: service.latencyMs })
+										: t('status.latencyUnavailable')}
+								</td>
 								<td>
 									{#if key === 'nostr'}
 										{ti('status.nostrAvailability', {

@@ -186,7 +186,9 @@ test('deduplicates the direct status load and preserves cache-driven polling', a
 	await page.clock.fastForward(1);
 
 	await expect.poll(() => requests).toBe(2);
-	await expect(page.getByRole('row', { name: /Хранилище S3.*Не работает 17 мс/s })).toBeVisible();
+	const unavailableS3Row = page.getByRole('row', { name: /Хранилище S3.*Не работает —/s });
+	await expect(unavailableS3Row).toBeVisible();
+	await expect(unavailableS3Row).not.toContainText('17 мс');
 	await expect(page.getByRole('link', { name: 'странице состояния' })).toHaveCount(0);
 	await expect(page.getByText('Проверено', { exact: false })).toBeVisible();
 	await expect(page.getByRole('tab')).toHaveCount(0);

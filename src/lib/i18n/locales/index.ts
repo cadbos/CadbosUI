@@ -268,6 +268,7 @@ export interface Dictionary {
 	'status.column.latency': string;
 	'status.column.details': string;
 	'status.latencyValue': string;
+	'status.latencyUnavailable': string;
 	'status.noDetails': string;
 	'status.nostrAvailability': string;
 	'status.service.archai': string;

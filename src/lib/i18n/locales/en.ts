@@ -273,6 +273,7 @@ export const en = {
 	'status.column.latency': 'Latency',
 	'status.column.details': 'Details',
 	'status.latencyValue': '{latency} ms',
+	'status.latencyUnavailable': '—',
 	'status.noDetails': '—',
 	'status.nostrAvailability': '{reachable} of {total} relays reachable',
 	'status.service.archai': 'archAI',
