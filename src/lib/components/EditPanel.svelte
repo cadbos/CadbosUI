@@ -20,7 +20,7 @@ before the Change Date. See LICENSE for complete terms.
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { z } from 'zod';
 	import type { EditCompletedResponse, EditJobResponse } from '$lib/api/contract';
-	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import {
 		extractApiErrorCode,
 		request,
@@ -28,7 +28,6 @@ before the Change Date. See LICENSE for complete terms.
 		type EditOperationType
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
-	import { currency } from '$lib/state/currency.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
@@ -139,7 +138,6 @@ before the Change Date. See LICENSE for complete terms.
 		focusTab: (index) => toolTabButtons[index]?.focus()
 	});
 
-	const currentRender = $derived(request.currentRender);
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	// Editing targets the latest render/edit result once one exists; before that,
 	// it falls back to the room photo uploaded on the Render tab (same underlying
@@ -602,14 +600,6 @@ before the Change Date. See LICENSE for complete terms.
 	{#if !isAuthenticated && activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'light-settings'}
 		<p class="auth-hint">{t('edit.signInToApply')}</p>
 	{/if}
-
-	{#if currentRender?.editOp}
-		<div class="meta">
-			<span>{ti('edit.cost', { cost: currency.format(currentRender.cost) })}</span>
-			<span class="sep">·</span>
-			<span>{ti('edit.balance', { balance: currency.format(currentRender.balance) })}</span>
-		</div>
-	{/if}
 </section>
 
 <style>
@@ -805,18 +795,6 @@ before the Change Date. See LICENSE for complete terms.
 	.btn-apply:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
-	}
-
-	.meta {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.8125rem;
-		color: var(--color-muted);
-	}
-
-	.meta .sep {
-		opacity: 0.4;
 	}
 
 	.spinner {

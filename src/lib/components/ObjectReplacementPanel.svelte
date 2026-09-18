@@ -207,17 +207,18 @@ before the Change Date. See LICENSE for complete terms.
 				context.sourceRender
 			);
 		} else {
-			// No sourceRender to anchor a parentId against (the very first object
-			// replacement, applied straight from the uploaded photo) — deliberately
-			// left untagged, same as request.svelte.ts's synthetic root step (see
-			// url-state.ts's renderOrigin): tagging editOp here would also turn on
-			// EditPanel's generic cost/balance meta block, duplicating this panel's
-			// own "Стоимость/Баланс" line.
-			request.setCurrentRender({
+			// No sourceRender to anchor a parentId against — the very first object
+			// replacement, applied straight from the uploaded photo (or a job
+			// restored from the URL after a reload, which has no sourceRender
+			// either). Still tagged with editOp so url-state.ts's renderOrigin can
+			// switch back to this tool on undo/redo.
+			request.applyEditResult({
 				id: result.id,
 				outputKey: mediaAccess.normalize(result.output).key,
 				cost: result.cost,
 				balance: result.balance,
+				editOp: { type: 'replace-object', instruction: context?.instruction ?? '' },
+				formSnapshot: context?.formSnapshot,
 				ts: Date.now()
 			});
 		}
