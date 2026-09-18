@@ -1268,6 +1268,130 @@ test('undo/redo across different edit tools restores both the settings and the a
 	);
 });
 
+test('undo restores the object-replacement tool tab and its settings after switching to freeform', async ({
+	page
+}) => {
+	// Regression test: object/texture-replacement's very first step (applied
+	// straight from the uploaded photo, with no prior render to anchor a
+	// parentId against) used to be pushed onto history without an editOp,
+	// so url-state.ts's renderOrigin couldn't tell undo/redo which tool
+	// produced it — undoing back to it left the freeform tab active over an
+	// image that tab had nothing to do with, and its own settings hidden.
+	const objectReplacementJobId = '00000000-0000-4000-8000-000000000130';
+	const freeformJobId = '00000000-0000-4000-8000-000000000131';
+	await authenticate(page);
+
+	await page.route('**/api/uploads', async (route) => {
+		const body = route.request().postDataBuffer();
+		if (body === null) throw new Error('Upload request body is missing');
+		const isReference = body.includes(Buffer.from('chair'));
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				image: isReference
+					? media(2, 'https://cdn.example.test/reference-chair.webp')
+					: media(1, 'https://cdn.example.test/room.webp'),
+				mime: 'image/webp',
+				size: 1024,
+				dimensions: [800, 600]
+			})
+		});
+	});
+
+	await page.route('**/api/object-replacement', async (route) => {
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			body: JSON.stringify({ id: objectReplacementJobId, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/object-replacement/${objectReplacementJobId}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: objectReplacementJobId,
+				status: 'completed',
+				output: media(3, 'https://cdn.example.test/replaced-sofa.webp'),
+				cost: 2,
+				balance: 18
+			})
+		});
+	});
+
+	await page.route('**/api/edit', async (route) => {
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: `/api/edit/${freeformJobId}` },
+			body: JSON.stringify({ id: freeformJobId, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/edit/${freeformJobId}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: freeformJobId,
+				status: 'completed',
+				output: media(4, 'https://cdn.example.test/brighter.webp'),
+				cost: 1,
+				balance: 17
+			})
+		});
+	});
+
+	await page.goto('/edit?tool=object-replacement');
+	const inputs = page.locator('#mode-panel-edit input[type="file"]');
+	await inputs.nth(0).setInputFiles({
+		name: 'scene.webp',
+		mimeType: 'image/webp',
+		buffer: Buffer.from('scene')
+	});
+	await expect(page.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		inputs.nth(1).setInputFiles({
+			name: 'chair.webp',
+			mimeType: 'image/webp',
+			buffer: Buffer.from('chair')
+		})
+	]);
+
+	const objectReplacementTab = page.getByRole('tab', { name: /Замена объекта/ });
+	const freeformTab = page.getByRole('tab', { name: 'Свой промпт' });
+	const objectField = page
+		.locator('#edit-tool-panel-object-replacement')
+		.getByLabel(/Точно опишите существующий объект/);
+	const instructionField = page.getByLabel('Инструкция для правки');
+	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
+	const undoButton = page.getByRole('button', { name: 'Отменить' });
+
+	await objectField.fill('серый диван у окна');
+	await page.getByRole('button', { name: 'Заменить объект' }).click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/replaced-sofa.webp', {
+		timeout: 10_000
+	});
+
+	// Switching to a different edit-panel tool and generating from it is a new
+	// history step, anchored on the object-replacement result above.
+	await freeformTab.click();
+	await instructionField.fill('сделать светлее');
+	await page.getByRole('button', { name: 'Применить правку' }).click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/brighter.webp', {
+		timeout: 10_000
+	});
+
+	// Undoing back to the object-replacement step switches the active tool tab
+	// to match it and restores its settings, instead of leaving the freeform
+	// tab active over an image that tab had nothing to do with.
+	await undoButton.click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/replaced-sofa.webp');
+	await expect(objectReplacementTab).toHaveAttribute('aria-selected', 'true');
+	await expect(objectField).toHaveValue('серый диван у окна');
+});
+
 test('the Remove Object tool builds a removal prompt from the described object', async ({
 	page
 }) => {
