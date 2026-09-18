@@ -246,15 +246,16 @@ before the Change Date. See LICENSE for complete terms.
 			);
 		} else {
 			// No sourceRender to anchor a parentId against (the very first texture
-			// replacement, applied straight from the uploaded photo) — still tags
-			// editOp so undo/redo can bring the user back to this tool's tab
-			// (see url-state.ts's renderOrigin), same as the anchored branch above.
-			request.applyEditResult({
+			// replacement, applied straight from the uploaded photo) — deliberately
+			// left untagged, same as request.svelte.ts's synthetic root step (see
+			// url-state.ts's renderOrigin): tagging editOp here would also turn on
+			// EditPanel's generic cost/balance meta block, duplicating this panel's
+			// own "Стоимость/Баланс" line.
+			request.setCurrentRender({
 				id: result.id,
 				outputKey: mediaAccess.normalize(result.output).key,
 				cost: result.cost,
 				balance: result.balance,
-				editOp: { type: 'change-surface-color', instruction: context?.instruction ?? '' },
 				ts: Date.now()
 			});
 		}
