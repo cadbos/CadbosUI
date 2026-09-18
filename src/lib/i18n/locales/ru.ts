@@ -275,6 +275,7 @@ export const ru = {
 	'status.column.latency': 'Задержка',
 	'status.column.details': 'Подробности',
 	'status.latencyValue': '{latency} мс',
+	'status.latencyUnavailable': '—',
 	'status.noDetails': '—',
 	'status.nostrAvailability': 'Доступно ретрансляторов: {reachable} из {total}',
 	'status.service.archai': 'archAI',
