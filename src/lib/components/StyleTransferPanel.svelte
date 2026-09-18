@@ -180,7 +180,7 @@ before the Change Date. See LICENSE for complete terms.
 				throw new Error(await extractApiErrorCode(response, 'style_transfer_failed'));
 			}
 			const result = (await response.json()) as RenderResponse;
-			request.setCurrentRender(renderResultFromResponse(result));
+			request.setCurrentRender(renderResultFromResponse(result, { sourceMode: 'styleTransfer' }));
 			request.setStatus('idle');
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();

@@ -1172,6 +1172,102 @@ test('the Add Object tool applies a selected preset to the current image', async
 	);
 });
 
+test('undo/redo across different edit tools restores both the settings and the active tool tab', async ({
+	page
+}) => {
+	const freeformJobId = '00000000-0000-4000-8000-000000000120';
+	const addObjectJobId = '00000000-0000-4000-8000-000000000121';
+	await authenticate(page);
+	await mockUpload(page);
+
+	let editCalls = 0;
+	await page.route('**/api/edit', async (route) => {
+		editCalls += 1;
+		const jobId = editCalls === 1 ? freeformJobId : addObjectJobId;
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: `/api/edit/${jobId}` },
+			body: JSON.stringify({ id: jobId, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/edit/${freeformJobId}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: freeformJobId,
+				status: 'completed',
+				output: media(2, 'https://cdn.example.test/freeform-a.webp'),
+				cost: 2,
+				balance: 90
+			})
+		});
+	});
+	await page.route(`**/api/edit/${addObjectJobId}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: addObjectJobId,
+				status: 'completed',
+				output: media(3, 'https://cdn.example.test/added-plant.webp'),
+				cost: 2,
+				balance: 88
+			})
+		});
+	});
+
+	await openCreate(page);
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
+	await page
+		.locator('#mode-panel-edit input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+
+	const freeformTab = page.getByRole('tab', { name: 'Свой промпт' });
+	const addObjectTab = page.getByRole('tab', { name: 'Добавить объект' });
+	const instructionField = page.getByLabel('Инструкция для правки');
+	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
+	const undoButton = page.getByRole('button', { name: 'Отменить' });
+	const redoButton = page.getByRole('button', { name: 'Повторить' });
+
+	await instructionField.fill('сделай стены голубыми');
+	await page.getByRole('button', { name: 'Применить правку' }).click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/freeform-a.webp', {
+		timeout: 10_000
+	});
+
+	// Switching to a different edit-panel tool and generating from it is a new
+	// history step, sharing the same monolithic form store as the freeform
+	// step above (see request.svelte.ts's RequestFormSnapshot) — the bug this
+	// test guards against.
+	await addObjectTab.click();
+	await page.getByRole('radio', { name: 'Комнатное растение' }).click();
+	await page.getByRole('button', { name: 'Добавить объект' }).click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/added-plant.webp', {
+		timeout: 10_000
+	});
+
+	await freeformTab.click();
+	await expect(instructionField).toHaveValue('сделай стены голубыми');
+
+	// Undoing back to the freeform step (produced from a different tool tab)
+	// switches the active tab to match it, instead of leaving the freeform tab
+	// merely showing a leftover value that happens to look unchanged.
+	await undoButton.click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/freeform-a.webp');
+	await expect(freeformTab).toHaveAttribute('aria-selected', 'true');
+	await expect(instructionField).toHaveValue('сделай стены голубыми');
+
+	await redoButton.click();
+	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/added-plant.webp');
+	await expect(addObjectTab).toHaveAttribute('aria-selected', 'true');
+	await expect(page.getByRole('radio', { name: 'Комнатное растение' })).toHaveAttribute(
+		'aria-checked',
+		'true'
+	);
+});
+
 test('the Remove Object tool builds a removal prompt from the described object', async ({
 	page
 }) => {

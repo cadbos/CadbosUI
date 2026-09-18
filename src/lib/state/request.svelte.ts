@@ -74,6 +74,15 @@ export interface EditOperation {
 	instruction: string;
 }
 
+// Which top-level mode produced a render that has no `editOp` of its own —
+// a plain "Создание" generation or a style-transfer result. Every other
+// mode/tool already has a unique `editOp.type` (see EDIT_OPERATION_TYPES),
+// so this only needs to cover the two that don't. Consumed by url-state.ts's
+// renderOrigin() to keep the active mode/tool in sync with whichever render
+// undo/redo is currently showing (see Workspace.svelte).
+export const RENDER_SOURCE_MODES = ['render', 'styleTransfer'] as const;
+export type RenderSourceMode = (typeof RENDER_SOURCE_MODES)[number];
+
 // The full set of editable form fields, captured at the moment a generation
 // or edit is pushed onto render history (see RequestState#pushRender) so
 // undo/redo (FR-К6) can restore the exact settings that produced a given
@@ -110,6 +119,7 @@ export interface RenderResult {
 	balance: number;
 	parentId?: string;
 	editOp?: EditOperation;
+	sourceMode?: RenderSourceMode;
 	formSnapshot?: RequestFormSnapshot;
 	ts: number;
 }
@@ -341,6 +351,7 @@ const renderResultSchema = z.object({
 	balance: z.number(),
 	parentId: z.string().optional(),
 	editOp: editOperationSchema.optional(),
+	sourceMode: z.enum(RENDER_SOURCE_MODES).optional(),
 	formSnapshot: requestFormSnapshotSchema.optional(),
 	ts: z.number()
 });
@@ -417,6 +428,7 @@ export interface UpdateFragmentPatch {
 export interface RenderResultFromResponseOptions {
 	parentId?: string;
 	editOp?: EditOperation;
+	sourceMode?: RenderSourceMode;
 }
 
 export class RequestReorderError extends Error {
@@ -544,6 +556,7 @@ function cloneRenderResult(render: RenderResult | undefined): RenderResult | und
 		balance: render.balance,
 		...(render.parentId !== undefined ? { parentId: render.parentId } : {}),
 		...(render.editOp ? { editOp: cloneEditOperation(render.editOp) } : {}),
+		...(render.sourceMode !== undefined ? { sourceMode: render.sourceMode } : {}),
 		...(render.formSnapshot ? { formSnapshot: cloneFormSnapshot(render.formSnapshot) } : {}),
 		ts: render.ts
 	};
@@ -630,6 +643,7 @@ export function renderResultFromResponse(
 		balance: response.balance,
 		parentId: opts?.parentId,
 		editOp: opts?.editOp,
+		sourceMode: opts?.sourceMode,
 		ts: Date.now()
 	};
 }

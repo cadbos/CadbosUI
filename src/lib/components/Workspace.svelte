@@ -56,6 +56,7 @@ before the Change Date. See LICENSE for complete terms.
 		buildWorkspaceUrl,
 		generationIdFromSearch,
 		projectSessionFromSearch,
+		renderOrigin,
 		routeIdToMode,
 		slugToTool,
 		subTabFromSearch,
@@ -362,6 +363,33 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	});
 
+	// Keeps the active mode/tool in lockstep with whichever render undo/redo
+	// (RenderResult.svelte's toolbar) is currently showing. Each step's
+	// restored form fields only make sense under the mode/tool that actually
+	// produced it (request.svelte.ts's RequestFormSnapshot) — without this,
+	// stepping back to a freeform edit while still looking at, say, the Add
+	// object tab would show that tab's leftover fields as if they belonged to
+	// the freeform step. Tracks only the render's own id, not mode/
+	// activeEditTool themselves — switching tabs by hand must never be
+	// mistaken for "the step changed" and snapped back.
+	let lastSyncedRenderId: string | undefined;
+	$effect(() => {
+		if (!hydrated) return;
+		const renderId = request.currentRender?.id;
+		if (renderId === lastSyncedRenderId) return;
+		lastSyncedRenderId = renderId;
+		const origin = renderOrigin(request.currentRender);
+		if (!origin) return;
+		if (origin.mode === mode && (origin.mode !== 'edit' || origin.tool === activeEditTool)) {
+			return;
+		}
+		goto(buildWorkspaceUrl(origin.mode, request, origin.tool ? { tool: origin.tool } : {}), {
+			replaceState: true,
+			keepFocus: true,
+			noScroll: true
+		}).catch((error: unknown) => logBoundaryError('workspace.renderOriginSync', error));
+	});
+
 	async function generate(): Promise<void> {
 		if (!canGenerate) return;
 		submitting = true;
@@ -384,7 +412,7 @@ before the Change Date. See LICENSE for complete terms.
 				throw new Error(await extractApiErrorCode(response, 'render_failed'));
 			}
 			const result = await response.json();
-			request.setCurrentRender(renderResultFromResponse(result));
+			request.setCurrentRender(renderResultFromResponse(result, { sourceMode: 'render' }));
 			request.setStatus('idle');
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();

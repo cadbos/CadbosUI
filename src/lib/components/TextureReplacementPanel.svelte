@@ -245,11 +245,16 @@ before the Change Date. See LICENSE for complete terms.
 				context.sourceRender
 			);
 		} else {
-			request.setCurrentRender({
+			// No sourceRender to anchor a parentId against (the very first texture
+			// replacement, applied straight from the uploaded photo) — still tags
+			// editOp so undo/redo can bring the user back to this tool's tab
+			// (see url-state.ts's renderOrigin), same as the anchored branch above.
+			request.applyEditResult({
 				id: result.id,
 				outputKey: mediaAccess.normalize(result.output).key,
 				cost: result.cost,
 				balance: result.balance,
+				editOp: { type: 'change-surface-color', instruction: context?.instruction ?? '' },
 				ts: Date.now()
 			});
 		}
