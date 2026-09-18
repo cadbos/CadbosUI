@@ -201,6 +201,7 @@ before the Change Date. See LICENSE for complete terms.
 						type: 'replace-object',
 						instruction: context.instruction
 					},
+					formSnapshot: context.formSnapshot,
 					ts: Date.now()
 				},
 				context.sourceRender

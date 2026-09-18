@@ -237,6 +237,7 @@ before the Change Date. See LICENSE for complete terms.
 					balance: result.balance,
 					parentId: context.sourceRender.id,
 					editOp: { type: context.type, instruction: context.instruction },
+					formSnapshot: context.formSnapshot,
 					ts: Date.now()
 				},
 				context.sourceRender

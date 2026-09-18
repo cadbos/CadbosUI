@@ -240,6 +240,7 @@ before the Change Date. See LICENSE for complete terms.
 						type: 'change-surface-color',
 						instruction: context.instruction
 					},
+					formSnapshot: context.formSnapshot,
 					ts: Date.now()
 				},
 				context.sourceRender

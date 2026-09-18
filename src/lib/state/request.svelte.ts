@@ -102,12 +102,17 @@ export interface RequestFormSnapshot {
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
 	styleSourceMode: ImageSourceMode;
+	styleReferenceImage?: ImageInput;
 	objectReplacementObject: string;
 	objectReplacementSourceMode: ImageSourceMode;
 	objectReplacementScale: number;
+	objectReferenceImage?: ImageInput;
 	textureReplacementSurface: string;
 	textureReplacementSourceMode: ImageSourceMode;
 	textureReplacementMasked: boolean;
+	textureReferenceImage?: ImageInput;
+	textureMaskImage?: ImageInput;
+	textureMaskSourceKey?: string;
 	lightSettingsPresetIds: string[];
 	lightSettingsInstruction: string;
 }
@@ -124,22 +129,30 @@ export interface RenderResult {
 	ts: number;
 }
 
+// formSnapshot is only ever set by the submit-time constructor
+// (setActiveObjectReplacementJob), captured before the request goes out — not
+// by the id-only restore path (setActiveObjectReplacementJobId, used after a
+// page reload), which has no original submission left to snapshot and relies
+// on #pushRender's own fallback capture once the job completes.
 export interface ActiveObjectReplacementJob {
 	id: string;
 	instruction: string;
 	sourceRender?: RenderResult;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export interface ActiveTextureReplacementJob {
 	id: string;
 	instruction: string;
 	sourceRender?: RenderResult;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export interface ActiveLightSettingsJob {
 	id: string;
 	instruction: string;
 	sourceRender?: RenderResult;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 // The one Flux Kontext ComfyUI job backing all three edit-panel tools
@@ -151,6 +164,7 @@ export interface ActiveFluxKontextEditJob {
 	type: EditOperationType;
 	instruction: string;
 	sourceRender?: RenderResult;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export interface TextureMaskUploadOperation {
@@ -334,12 +348,17 @@ const requestFormSnapshotSchema = z.object({
 	styleTransferStrength: styleTransferStrengthSchema,
 	styleNegativePrompt: z.string(),
 	styleSourceMode: imageSourceModeSchema,
+	styleReferenceImage: optionalImageInputSchema,
 	objectReplacementObject: replacementObjectSchema,
 	objectReplacementSourceMode: imageSourceModeSchema,
 	objectReplacementScale: objectReplacementScaleSchema,
+	objectReferenceImage: optionalImageInputSchema,
 	textureReplacementSurface: replacementSurfaceSchema,
 	textureReplacementSourceMode: imageSourceModeSchema,
 	textureReplacementMasked: z.boolean(),
+	textureReferenceImage: optionalImageInputSchema,
+	textureMaskImage: optionalImageInputSchema,
+	textureMaskSourceKey: z.string().min(1).optional(),
 	lightSettingsPresetIds: lightSettingsPresetIdsSchema,
 	lightSettingsInstruction: lightSettingsInstructionSchema
 });
@@ -429,6 +448,7 @@ export interface RenderResultFromResponseOptions {
 	parentId?: string;
 	editOp?: EditOperation;
 	sourceMode?: RenderSourceMode;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export class RequestReorderError extends Error {
@@ -534,12 +554,27 @@ function cloneFormSnapshot(
 		styleTransferStrength: snapshot.styleTransferStrength,
 		styleNegativePrompt: snapshot.styleNegativePrompt,
 		styleSourceMode: snapshot.styleSourceMode,
+		...(snapshot.styleReferenceImage
+			? { styleReferenceImage: cloneImage(snapshot.styleReferenceImage) }
+			: {}),
 		objectReplacementObject: snapshot.objectReplacementObject,
 		objectReplacementSourceMode: snapshot.objectReplacementSourceMode,
 		objectReplacementScale: snapshot.objectReplacementScale,
+		...(snapshot.objectReferenceImage
+			? { objectReferenceImage: cloneImage(snapshot.objectReferenceImage) }
+			: {}),
 		textureReplacementSurface: snapshot.textureReplacementSurface,
 		textureReplacementSourceMode: snapshot.textureReplacementSourceMode,
 		textureReplacementMasked: snapshot.textureReplacementMasked,
+		...(snapshot.textureReferenceImage
+			? { textureReferenceImage: cloneImage(snapshot.textureReferenceImage) }
+			: {}),
+		...(snapshot.textureMaskImage
+			? { textureMaskImage: cloneImage(snapshot.textureMaskImage) }
+			: {}),
+		...(snapshot.textureMaskSourceKey !== undefined
+			? { textureMaskSourceKey: snapshot.textureMaskSourceKey }
+			: {}),
 		lightSettingsPresetIds: [...snapshot.lightSettingsPresetIds],
 		lightSettingsInstruction: snapshot.lightSettingsInstruction
 	};
@@ -569,7 +604,8 @@ function cloneActiveObjectReplacementJob(
 	return {
 		id: job.id,
 		instruction: job.instruction,
-		sourceRender: cloneRenderResult(job.sourceRender)
+		sourceRender: cloneRenderResult(job.sourceRender),
+		formSnapshot: cloneFormSnapshot(job.formSnapshot)
 	};
 }
 
@@ -580,7 +616,8 @@ function cloneActiveTextureReplacementJob(
 	return {
 		id: job.id,
 		instruction: job.instruction,
-		sourceRender: cloneRenderResult(job.sourceRender)
+		sourceRender: cloneRenderResult(job.sourceRender),
+		formSnapshot: cloneFormSnapshot(job.formSnapshot)
 	};
 }
 
@@ -591,7 +628,8 @@ function cloneActiveLightSettingsJob(
 	return {
 		id: job.id,
 		instruction: job.instruction,
-		sourceRender: cloneRenderResult(job.sourceRender)
+		sourceRender: cloneRenderResult(job.sourceRender),
+		formSnapshot: cloneFormSnapshot(job.formSnapshot)
 	};
 }
 
@@ -603,7 +641,8 @@ function cloneActiveFluxKontextEditJob(
 		id: job.id,
 		type: job.type,
 		instruction: job.instruction,
-		sourceRender: cloneRenderResult(job.sourceRender)
+		sourceRender: cloneRenderResult(job.sourceRender),
+		formSnapshot: cloneFormSnapshot(job.formSnapshot)
 	};
 }
 
@@ -644,6 +683,7 @@ export function renderResultFromResponse(
 		parentId: opts?.parentId,
 		editOp: opts?.editOp,
 		sourceMode: opts?.sourceMode,
+		formSnapshot: opts?.formSnapshot,
 		ts: Date.now()
 	};
 }
@@ -1086,7 +1126,8 @@ export class RequestState {
 		this.activeObjectReplacementJob = {
 			id: objectReplacementJobIdSchema.parse(id),
 			instruction: replacementObjectSchema.parse(instruction).trim(),
-			sourceRender: cloneRenderResult(sourceRender)
+			sourceRender: cloneRenderResult(sourceRender),
+			formSnapshot: this.captureFormSnapshot()
 		};
 	}
 
@@ -1136,7 +1177,8 @@ export class RequestState {
 		this.activeLightSettingsJob = {
 			id: lightSettingsJobIdSchema.parse(id),
 			instruction: lightSettingsInstructionSchema.parse(instruction).trim(),
-			sourceRender: cloneRenderResult(sourceRender)
+			sourceRender: cloneRenderResult(sourceRender),
+			formSnapshot: this.captureFormSnapshot()
 		};
 	}
 
@@ -1166,7 +1208,8 @@ export class RequestState {
 			id: fluxKontextEditJobIdSchema.parse(id),
 			type,
 			instruction: fluxKontextEditInstructionSchema.parse(instruction).trim(),
-			sourceRender: cloneRenderResult(sourceRender)
+			sourceRender: cloneRenderResult(sourceRender),
+			formSnapshot: this.captureFormSnapshot()
 		};
 	}
 
@@ -1208,7 +1251,8 @@ export class RequestState {
 		this.activeTextureReplacementJob = {
 			id: textureReplacementJobIdSchema.parse(id),
 			instruction: replacementSurfaceSchema.parse(instruction).trim(),
-			sourceRender: cloneRenderResult(sourceRender)
+			sourceRender: cloneRenderResult(sourceRender),
+			formSnapshot: this.captureFormSnapshot()
 		};
 	}
 
@@ -1253,11 +1297,15 @@ export class RequestState {
 	// snapshot fell out of the chain) lands on the current tip instead of
 	// discarding whatever happened in between.
 	// The form fields that produced whichever render is about to be pushed —
-	// callers push right after their fetch resolves, and every submit path
-	// locks its own inputs for the duration of that request (formLocked/
-	// submitting flags across every panel), so "what the form holds right
-	// now" is still exactly what was submitted.
-	#captureFormSnapshot(): RequestFormSnapshot {
+	// a fallback for a render that doesn't already carry one. Every submit
+	// path that can run for more than an instant (the async job tools, whose
+	// own tests confirm the user may switch tabs/modes while one is polling)
+	// captures its own snapshot with captureFormSnapshot() up front, at
+	// submit time, and attaches it before calling setCurrentRender()/
+	// applyEditResult() — "what the form holds right now", captured here,
+	// would otherwise reflect whatever the user has since typed elsewhere,
+	// not what was actually submitted.
+	captureFormSnapshot(): RequestFormSnapshot {
 		return {
 			promptFragments: cloneFragments(this.promptFragments),
 			promptOverride: this.promptOverride,
@@ -1270,12 +1318,25 @@ export class RequestState {
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
 			styleSourceMode: this.styleSourceMode,
+			...(this.styleReferenceImage
+				? { styleReferenceImage: cloneImage(this.styleReferenceImage) }
+				: {}),
 			objectReplacementObject: this.objectReplacementObject,
 			objectReplacementSourceMode: this.objectReplacementSourceMode,
 			objectReplacementScale: this.objectReplacementScale,
+			...(this.objectReferenceImage
+				? { objectReferenceImage: cloneImage(this.objectReferenceImage) }
+				: {}),
 			textureReplacementSurface: this.textureReplacementSurface,
 			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			textureReplacementMasked: this.textureReplacementMasked,
+			...(this.textureReferenceImage
+				? { textureReferenceImage: cloneImage(this.textureReferenceImage) }
+				: {}),
+			...(this.textureMaskImage ? { textureMaskImage: cloneImage(this.textureMaskImage) } : {}),
+			...(this.textureMaskSourceKey !== undefined
+				? { textureMaskSourceKey: this.textureMaskSourceKey }
+				: {}),
 			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
 			lightSettingsInstruction: this.lightSettingsInstruction
 		};
@@ -1298,12 +1359,17 @@ export class RequestState {
 		this.styleTransferStrength = snapshot.styleTransferStrength;
 		this.styleNegativePrompt = snapshot.styleNegativePrompt;
 		this.styleSourceMode = snapshot.styleSourceMode;
+		this.styleReferenceImage = cloneImage(snapshot.styleReferenceImage);
 		this.objectReplacementObject = snapshot.objectReplacementObject;
 		this.objectReplacementSourceMode = snapshot.objectReplacementSourceMode;
 		this.objectReplacementScale = snapshot.objectReplacementScale;
+		this.objectReferenceImage = cloneImage(snapshot.objectReferenceImage);
 		this.textureReplacementSurface = snapshot.textureReplacementSurface;
 		this.textureReplacementSourceMode = snapshot.textureReplacementSourceMode;
 		this.textureReplacementMasked = snapshot.textureReplacementMasked;
+		this.textureReferenceImage = cloneImage(snapshot.textureReferenceImage);
+		this.textureMaskImage = cloneImage(snapshot.textureMaskImage);
+		this.textureMaskSourceKey = snapshot.textureMaskSourceKey;
 		this.lightSettingsPresetIds = [...snapshot.lightSettingsPresetIds];
 		this.lightSettingsInstruction = snapshot.lightSettingsInstruction;
 	}
@@ -1311,7 +1377,7 @@ export class RequestState {
 	#pushRender(render: RenderResult, after: RenderResult | undefined): void {
 		const withFormSnapshot: RenderResult = render.formSnapshot
 			? render
-			: { ...render, formSnapshot: this.#captureFormSnapshot() };
+			: { ...render, formSnapshot: this.captureFormSnapshot() };
 		if (this.#renderHistory.length === 0) {
 			this.#seedHistory(withFormSnapshot);
 			return;

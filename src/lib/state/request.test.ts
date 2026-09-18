@@ -1163,6 +1163,7 @@ describe('toObjectReplacementRequest', () => {
 			source,
 			'gray sofa'
 		);
+		const formSnapshot = request.activeObjectReplacementJob?.formSnapshot;
 		source.outputKey = '999';
 		request.setObjectReplacementObject('changed after submission');
 
@@ -1175,7 +1176,8 @@ describe('toObjectReplacementRequest', () => {
 				cost: 1,
 				balance: 19,
 				ts: 1
-			}
+			},
+			formSnapshot
 		});
 	});
 });
@@ -1420,6 +1422,7 @@ describe('toLightSettingsRequest', () => {
 			source,
 			'turn on the chandelier'
 		);
+		const formSnapshot = request.activeLightSettingsJob?.formSnapshot;
 		source.outputKey = '999';
 		request.setLightSettingsInstruction('changed after submission');
 
@@ -1432,7 +1435,8 @@ describe('toLightSettingsRequest', () => {
 				cost: 1,
 				balance: 19,
 				ts: 1
-			}
+			},
+			formSnapshot
 		});
 	});
 });
@@ -1460,6 +1464,7 @@ describe('flux kontext edit job (freeform/add-object/remove-object)', () => {
 			'remove the sofa',
 			'remove-object'
 		);
+		const formSnapshot = request.activeFluxKontextEditJob?.formSnapshot;
 		source.outputKey = '999';
 
 		expect(request.activeFluxKontextEditJob).toEqual({
@@ -1472,7 +1477,8 @@ describe('flux kontext edit job (freeform/add-object/remove-object)', () => {
 				cost: 1,
 				balance: 19,
 				ts: 1
-			}
+			},
+			formSnapshot
 		});
 	});
 });

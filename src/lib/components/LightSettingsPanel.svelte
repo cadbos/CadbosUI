@@ -190,6 +190,7 @@ before the Change Date. See LICENSE for complete terms.
 						type: 'light-settings',
 						instruction: context.instruction
 					},
+					formSnapshot: context.formSnapshot,
 					ts: Date.now()
 				},
 				context.sourceRender

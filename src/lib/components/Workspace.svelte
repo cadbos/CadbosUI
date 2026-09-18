@@ -395,6 +395,11 @@ before the Change Date. See LICENSE for complete terms.
 		submitting = true;
 		submitError = null;
 		request.setStatus('rendering');
+		// Captured before the upload/fetch below (both async) so the settings
+		// attached to this render are what was actually submitted — not
+		// whatever the user has since typed, if they kept editing the form
+		// while this request was still in flight.
+		const formSnapshot = request.captureFormSnapshot();
 		const overlayId = generationOverlay.start('generationOverlay.render');
 		try {
 			const body = await request.toRenderRequest();
@@ -412,7 +417,9 @@ before the Change Date. See LICENSE for complete terms.
 				throw new Error(await extractApiErrorCode(response, 'render_failed'));
 			}
 			const result = await response.json();
-			request.setCurrentRender(renderResultFromResponse(result, { sourceMode: 'render' }));
+			request.setCurrentRender(
+				renderResultFromResponse(result, { sourceMode: 'render', formSnapshot })
+			);
 			request.setStatus('idle');
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
