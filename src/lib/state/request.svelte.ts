@@ -74,6 +74,35 @@ export interface EditOperation {
 	instruction: string;
 }
 
+// The full set of editable form fields, captured at the moment a generation
+// or edit is pushed onto render history (see RequestState#pushRender) so
+// undo/redo (FR-К6) can restore the exact settings that produced a given
+// step — not just its image — instead of leaving whatever the form happens
+// to hold right now. Deliberately the same shape reset()/copyFrom()/
+// fromJSON() already assign field-by-field, minus image/session identity,
+// which undo/redo has no business touching.
+export interface RequestFormSnapshot {
+	promptFragments: PromptFragment[];
+	promptOverride: string | null;
+	editPrompt: string;
+	addObjectPresetId: string | null;
+	removeObjectText: string;
+	outputFormat: OutputFormat;
+	sceneType: SceneType;
+	styleTransferPrompt: string;
+	styleTransferStrength: number;
+	styleNegativePrompt: string;
+	styleSourceMode: ImageSourceMode;
+	objectReplacementObject: string;
+	objectReplacementSourceMode: ImageSourceMode;
+	objectReplacementScale: number;
+	textureReplacementSurface: string;
+	textureReplacementSourceMode: ImageSourceMode;
+	textureReplacementMasked: boolean;
+	lightSettingsPresetIds: string[];
+	lightSettingsInstruction: string;
+}
+
 export interface RenderResult {
 	id: string;
 	outputKey: string;
@@ -81,6 +110,7 @@ export interface RenderResult {
 	balance: number;
 	parentId?: string;
 	editOp?: EditOperation;
+	formSnapshot?: RequestFormSnapshot;
 	ts: number;
 }
 
@@ -282,6 +312,28 @@ const editOperationSchema = z.object({
 	instruction: z.string()
 });
 
+const requestFormSnapshotSchema = z.object({
+	promptFragments: z.array(promptFragmentSchema),
+	promptOverride: z.string().nullable(),
+	editPrompt: z.string(),
+	addObjectPresetId: addObjectPresetIdSchema,
+	removeObjectText: z.string(),
+	outputFormat: outputFormatSchema,
+	sceneType: sceneTypeSchema,
+	styleTransferPrompt: z.string(),
+	styleTransferStrength: styleTransferStrengthSchema,
+	styleNegativePrompt: z.string(),
+	styleSourceMode: imageSourceModeSchema,
+	objectReplacementObject: replacementObjectSchema,
+	objectReplacementSourceMode: imageSourceModeSchema,
+	objectReplacementScale: objectReplacementScaleSchema,
+	textureReplacementSurface: replacementSurfaceSchema,
+	textureReplacementSourceMode: imageSourceModeSchema,
+	textureReplacementMasked: z.boolean(),
+	lightSettingsPresetIds: lightSettingsPresetIdsSchema,
+	lightSettingsInstruction: lightSettingsInstructionSchema
+});
+
 const renderResultSchema = z.object({
 	id: z.string().min(1),
 	outputKey: z.string().min(1),
@@ -289,6 +341,7 @@ const renderResultSchema = z.object({
 	balance: z.number(),
 	parentId: z.string().optional(),
 	editOp: editOperationSchema.optional(),
+	formSnapshot: requestFormSnapshotSchema.optional(),
 	ts: z.number()
 });
 
@@ -453,6 +506,33 @@ function cloneEditOperation(editOp: EditOperation | undefined): EditOperation | 
 	return { type: editOp.type, instruction: editOp.instruction };
 }
 
+function cloneFormSnapshot(
+	snapshot: RequestFormSnapshot | undefined
+): RequestFormSnapshot | undefined {
+	if (!snapshot) return undefined;
+	return {
+		promptFragments: cloneFragments(snapshot.promptFragments),
+		promptOverride: snapshot.promptOverride,
+		editPrompt: snapshot.editPrompt,
+		addObjectPresetId: snapshot.addObjectPresetId,
+		removeObjectText: snapshot.removeObjectText,
+		outputFormat: snapshot.outputFormat,
+		sceneType: snapshot.sceneType,
+		styleTransferPrompt: snapshot.styleTransferPrompt,
+		styleTransferStrength: snapshot.styleTransferStrength,
+		styleNegativePrompt: snapshot.styleNegativePrompt,
+		styleSourceMode: snapshot.styleSourceMode,
+		objectReplacementObject: snapshot.objectReplacementObject,
+		objectReplacementSourceMode: snapshot.objectReplacementSourceMode,
+		objectReplacementScale: snapshot.objectReplacementScale,
+		textureReplacementSurface: snapshot.textureReplacementSurface,
+		textureReplacementSourceMode: snapshot.textureReplacementSourceMode,
+		textureReplacementMasked: snapshot.textureReplacementMasked,
+		lightSettingsPresetIds: [...snapshot.lightSettingsPresetIds],
+		lightSettingsInstruction: snapshot.lightSettingsInstruction
+	};
+}
+
 function cloneRenderResult(render: RenderResult): RenderResult;
 function cloneRenderResult(render: RenderResult | undefined): RenderResult | undefined;
 function cloneRenderResult(render: RenderResult | undefined): RenderResult | undefined {
@@ -464,6 +544,7 @@ function cloneRenderResult(render: RenderResult | undefined): RenderResult | und
 		balance: render.balance,
 		...(render.parentId !== undefined ? { parentId: render.parentId } : {}),
 		...(render.editOp ? { editOp: cloneEditOperation(render.editOp) } : {}),
+		...(render.formSnapshot ? { formSnapshot: cloneFormSnapshot(render.formSnapshot) } : {}),
 		ts: render.ts
 	};
 }
@@ -1157,9 +1238,68 @@ export class RequestState {
 	// by another push, e.g. a late-arriving async edit whose sourceRender
 	// snapshot fell out of the chain) lands on the current tip instead of
 	// discarding whatever happened in between.
+	// The form fields that produced whichever render is about to be pushed —
+	// callers push right after their fetch resolves, and every submit path
+	// locks its own inputs for the duration of that request (formLocked/
+	// submitting flags across every panel), so "what the form holds right
+	// now" is still exactly what was submitted.
+	#captureFormSnapshot(): RequestFormSnapshot {
+		return {
+			promptFragments: cloneFragments(this.promptFragments),
+			promptOverride: this.promptOverride,
+			editPrompt: this.editPrompt,
+			addObjectPresetId: this.addObjectPresetId,
+			removeObjectText: this.removeObjectText,
+			outputFormat: this.outputFormat,
+			sceneType: this.sceneType,
+			styleTransferPrompt: this.styleTransferPrompt,
+			styleTransferStrength: this.styleTransferStrength,
+			styleNegativePrompt: this.styleNegativePrompt,
+			styleSourceMode: this.styleSourceMode,
+			objectReplacementObject: this.objectReplacementObject,
+			objectReplacementSourceMode: this.objectReplacementSourceMode,
+			objectReplacementScale: this.objectReplacementScale,
+			textureReplacementSurface: this.textureReplacementSurface,
+			textureReplacementSourceMode: this.textureReplacementSourceMode,
+			textureReplacementMasked: this.textureReplacementMasked,
+			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
+			lightSettingsInstruction: this.lightSettingsInstruction
+		};
+	}
+
+	// Restores the form to a past step's settings (FR-К6 undo/redo) — a no-op
+	// when the step predates this feature or has none (the synthetic
+	// original-photo root step, see #syntheticOriginalStep), leaving whatever
+	// the user currently has typed untouched rather than blanking it.
+	#applyFormSnapshot(snapshot: RequestFormSnapshot | undefined): void {
+		if (!snapshot) return;
+		this.promptFragments = cloneFragments(snapshot.promptFragments);
+		this.promptOverride = snapshot.promptOverride;
+		this.editPrompt = snapshot.editPrompt;
+		this.addObjectPresetId = snapshot.addObjectPresetId;
+		this.removeObjectText = snapshot.removeObjectText;
+		this.outputFormat = snapshot.outputFormat;
+		this.sceneType = snapshot.sceneType;
+		this.styleTransferPrompt = snapshot.styleTransferPrompt;
+		this.styleTransferStrength = snapshot.styleTransferStrength;
+		this.styleNegativePrompt = snapshot.styleNegativePrompt;
+		this.styleSourceMode = snapshot.styleSourceMode;
+		this.objectReplacementObject = snapshot.objectReplacementObject;
+		this.objectReplacementSourceMode = snapshot.objectReplacementSourceMode;
+		this.objectReplacementScale = snapshot.objectReplacementScale;
+		this.textureReplacementSurface = snapshot.textureReplacementSurface;
+		this.textureReplacementSourceMode = snapshot.textureReplacementSourceMode;
+		this.textureReplacementMasked = snapshot.textureReplacementMasked;
+		this.lightSettingsPresetIds = [...snapshot.lightSettingsPresetIds];
+		this.lightSettingsInstruction = snapshot.lightSettingsInstruction;
+	}
+
 	#pushRender(render: RenderResult, after: RenderResult | undefined): void {
+		const withFormSnapshot: RenderResult = render.formSnapshot
+			? render
+			: { ...render, formSnapshot: this.#captureFormSnapshot() };
 		if (this.#renderHistory.length === 0) {
-			this.#seedHistory(render);
+			this.#seedHistory(withFormSnapshot);
 			return;
 		}
 		const afterIndex =
@@ -1168,7 +1308,7 @@ export class RequestState {
 			afterIndex === -1
 				? this.#renderHistory.slice(0, this.#historyIndex + 1)
 				: this.#renderHistory.slice(0, afterIndex + 1);
-		this.#renderHistory = [...base, render];
+		this.#renderHistory = [...base, withFormSnapshot];
 		this.#historyIndex = this.#renderHistory.length - 1;
 	}
 
@@ -1198,19 +1338,24 @@ export class RequestState {
 		this.#pushRender(cloneRenderResult(render), cloneRenderResult(sourceRender));
 	}
 
-	// Steps back to the previous render in history (FR-К6). No-op if already
-	// at the first step.
+	// Steps back to the previous render in history (FR-К6), restoring the form
+	// to the settings that produced it so the user can see and, if they want,
+	// tweak and re-submit them (see #applyFormSnapshot). No-op if already at
+	// the first step.
 	undoLastEdit(): void {
 		if (this.#historyIndex <= 0) return;
 		this.viewingGenerationId = undefined;
 		this.#historyIndex -= 1;
+		this.#applyFormSnapshot(this.currentRender?.formSnapshot);
 	}
 
-	// Steps forward to the render that undo just left. No-op if already at the
-	// most recent step.
+	// Steps forward to the render that undo just left, restoring its form
+	// settings the same way undoLastEdit() does. No-op if already at the most
+	// recent step.
 	redoEdit(): void {
 		if (this.#historyIndex < 0 || this.#historyIndex >= this.#renderHistory.length - 1) return;
 		this.#historyIndex += 1;
+		this.#applyFormSnapshot(this.currentRender?.formSnapshot);
 	}
 
 	setStatus(status: RequestStatus): void {

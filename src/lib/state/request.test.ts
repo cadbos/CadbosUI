@@ -1719,6 +1719,118 @@ describe('redo (multi-step history navigation, FR-К6)', () => {
 	});
 });
 
+describe('undo/redo restores the form settings used for each step (FR-К6)', () => {
+	function render(id: string): RenderResult {
+		return {
+			id,
+			outputKey: String(id.length * 100 + id.charCodeAt(0)),
+			cost: 1,
+			balance: 24,
+			ts: 0
+		};
+	}
+
+	it('restores style-transfer settings too — Создание and Миграция стиля both push through setCurrentRender', () => {
+		// Первый шаг: обычная генерация в режиме "Создание".
+		request.setFragments([{ text: 'Scandinavian living room' }]);
+		request.setCurrentRender(render('gen-1'));
+
+		// Второй шаг: применение "Миграции стиля" поверх результата — тот же
+		// setCurrentRender(), что и обычная генерация (см. StyleTransferPanel.svelte).
+		request.setStyleTransferPrompt('mid-century modern');
+		request.setStyleTransferStrength(0.9);
+		request.setStyleNegativePrompt('no clutter');
+		request.setStyleSourceMode('room-photo');
+		request.setCurrentRender(render('style-1'));
+
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('gen-1');
+		expect(request.promptFragments.map((fragment) => fragment.text)).toEqual([
+			'Scandinavian living room'
+		]);
+		expect(request.styleTransferPrompt).toBe('');
+		expect(request.styleTransferStrength).toBe(0.7);
+		expect(request.styleNegativePrompt).toBe('');
+		expect(request.styleSourceMode).toBe('current-result');
+
+		request.redoEdit();
+		expect(request.currentRender?.id).toBe('style-1');
+		expect(request.styleTransferPrompt).toBe('mid-century modern');
+		expect(request.styleTransferStrength).toBe(0.9);
+		expect(request.styleNegativePrompt).toBe('no clutter');
+		expect(request.styleSourceMode).toBe('room-photo');
+	});
+
+	it('undo brings back the fragments/format used for the previous step, redo brings back the later ones', () => {
+		request.setFragments([{ text: 'Scandinavian living room' }]);
+		request.setOutputFormat('png');
+		request.setCurrentRender(render('gen-1'));
+
+		request.setFragments([{ text: 'warm evening light' }]);
+		request.setOutputFormat('jpg');
+		request.setCurrentRender(render('gen-2'));
+
+		expect(request.promptFragments.map((fragment) => fragment.text)).toEqual([
+			'warm evening light'
+		]);
+		expect(request.outputFormat).toBe('jpg');
+
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('gen-1');
+		expect(request.promptFragments.map((fragment) => fragment.text)).toEqual([
+			'Scandinavian living room'
+		]);
+		expect(request.outputFormat).toBe('png');
+
+		request.redoEdit();
+		expect(request.currentRender?.id).toBe('gen-2');
+		expect(request.promptFragments.map((fragment) => fragment.text)).toEqual([
+			'warm evening light'
+		]);
+		expect(request.outputFormat).toBe('jpg');
+	});
+
+	it('restores the add-object preset and remove-object text an edit step was submitted with', () => {
+		request.setCurrentRender(render('gen-1'));
+
+		request.setAddObjectPresetId('houseplant');
+		request.applyEditResult({
+			...render('edit-1'),
+			editOp: { type: 'add-object', instruction: 'add a houseplant' }
+		});
+
+		request.setAddObjectPresetId(null);
+		request.setRemoveObjectText('the floor lamp');
+		request.applyEditResult({
+			...render('edit-2'),
+			editOp: { type: 'remove-object', instruction: 'remove the floor lamp' }
+		});
+
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('edit-1');
+		expect(request.addObjectPresetId).toBe('houseplant');
+		expect(request.removeObjectText).toBe('');
+
+		request.redoEdit();
+		expect(request.currentRender?.id).toBe('edit-2');
+		expect(request.addObjectPresetId).toBeNull();
+		expect(request.removeObjectText).toBe('the floor lamp');
+	});
+
+	it('does not overwrite the form for a snapshot-less step, e.g. the synthetic uploaded-photo root', () => {
+		request.setImage({ mediaKey: '101' });
+		request.setFragments([{ text: 'Scandinavian living room' }]);
+		request.setCurrentRender(render('gen-1'));
+
+		request.undoLastEdit();
+
+		expect(request.currentRender?.outputKey).toBe('101');
+		expect(request.promptFragments.map((fragment) => fragment.text)).toEqual([
+			'Scandinavian living room'
+		]);
+	});
+});
+
 describe('the originally uploaded photo as the root history step (FR-К6)', () => {
 	function render(id: string, cost = 5, balance = 95): RenderResult {
 		return { id, outputKey: String(id.length * 100 + id.charCodeAt(0)), cost, balance, ts: 0 };
