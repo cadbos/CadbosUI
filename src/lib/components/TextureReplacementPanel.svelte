@@ -101,8 +101,14 @@ before the Change Date. See LICENSE for complete terms.
 		terminalJob !== null &&
 			(jobId === null ? request.currentRender?.id === terminalJob.id : terminalJob.id === jobId)
 	);
+	// Locked while genuinely in flight (submitting/uploading a mask) or
+	// unresolved (processing/failed) — a *successfully completed* job
+	// (completedJobMatches) deliberately does NOT lock the form, so settings
+	// (including the reference/mask images) stay editable for another
+	// replacement right away, same as freeform/add-object/remove-object (see
+	// EditPanel.svelte).
 	const formLocked = $derived(
-		submitting || request.textureMaskUploading || jobId !== null || completedJobMatches
+		submitting || request.textureMaskUploading || (jobId !== null && terminalJob?.id !== jobId)
 	);
 	const canSubmit = $derived(validation.valid && !formLocked && isAuthenticated);
 	const validationKey = $derived.by((): TranslationKey | null => {
@@ -240,16 +246,24 @@ before the Change Date. See LICENSE for complete terms.
 						type: 'change-surface-color',
 						instruction: context.instruction
 					},
+					formSnapshot: context.formSnapshot,
 					ts: Date.now()
 				},
 				context.sourceRender
 			);
 		} else {
-			request.setCurrentRender({
+			// No sourceRender to anchor a parentId against — the very first texture
+			// replacement, applied straight from the uploaded photo (or a job
+			// restored from the URL after a reload, which has no sourceRender
+			// either). Still tagged with editOp so url-state.ts's renderOrigin can
+			// switch back to this tool on undo/redo.
+			request.applyEditResult({
 				id: result.id,
 				outputKey: mediaAccess.normalize(result.output).key,
 				cost: result.cost,
 				balance: result.balance,
+				editOp: { type: 'change-surface-color', instruction: context?.instruction ?? '' },
+				formSnapshot: context?.formSnapshot,
 				ts: Date.now()
 			});
 		}
@@ -419,16 +433,16 @@ before the Change Date. See LICENSE for complete terms.
 		pollFailure = null;
 	}
 
+	// Clears job tracking and the now-stale mask (its pixel coordinates were
+	// drawn against the *previous* result and don't line up with the new
+	// one) so the mask editor reopens for a fresh draw — but keeps every
+	// other setting (reference image, surface description, source mode) and
+	// the current result exactly as they are, so the user can adjust and
+	// submit another replacement instead of starting over from a blank form.
 	async function clearJob(): Promise<void> {
 		request.setActiveTextureReplacementJobId(undefined);
-		request.setTextureReferenceImage(undefined);
 		request.setTextureMaskImage(undefined);
-		request.setTextureReplacementMasked(true);
 		request.setTextureReplacementResultReady(false);
-		request.setTextureReplacementSurface('');
-		request.setTextureReplacementSourceMode('current-result');
-		request.setImage(undefined);
-		request.setCurrentRender(undefined);
 		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;

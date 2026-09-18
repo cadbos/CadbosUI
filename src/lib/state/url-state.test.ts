@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { RequestState } from '$lib/state/request.svelte';
+import { RequestState, type RenderResult } from '$lib/state/request.svelte';
 import {
 	applyShareParams,
 	buildShareUrl,
@@ -21,12 +21,61 @@ import {
 	generationIdFromSearch,
 	isEditToolRoute,
 	isWorkspaceRoute,
+	renderOrigin,
 	slugToTool,
 	subTabFromSearch,
 	withProjectSession
 } from '$lib/state/url-state';
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
+
+function render(overrides: Partial<RenderResult> = {}): RenderResult {
+	return { id: 'r1', outputKey: 'a/b.webp', cost: 1, balance: 99, ts: 0, ...overrides };
+}
+
+describe('renderOrigin (keeps mode/tool in sync with undo/redo)', () => {
+	it('has no known origin for a render with neither sourceMode nor editOp', () => {
+		expect(renderOrigin(undefined)).toBeUndefined();
+		expect(renderOrigin(render())).toBeUndefined();
+	});
+
+	it('maps sourceMode to render/styleTransfer directly, ignoring any editOp', () => {
+		expect(renderOrigin(render({ sourceMode: 'render' }))).toEqual({ mode: 'render' });
+		expect(renderOrigin(render({ sourceMode: 'styleTransfer' }))).toEqual({
+			mode: 'styleTransfer'
+		});
+	});
+
+	it('maps every edit-panel tool editOp.type to its own tab', () => {
+		expect(renderOrigin(render({ editOp: { type: 'freeform', instruction: '' } }))).toEqual({
+			mode: 'edit',
+			tool: 'freeform'
+		});
+		expect(renderOrigin(render({ editOp: { type: 'add-object', instruction: '' } }))).toEqual({
+			mode: 'edit',
+			tool: 'add-object'
+		});
+		expect(renderOrigin(render({ editOp: { type: 'remove-object', instruction: '' } }))).toEqual({
+			mode: 'edit',
+			tool: 'remove-object'
+		});
+		expect(renderOrigin(render({ editOp: { type: 'light-settings', instruction: '' } }))).toEqual({
+			mode: 'edit',
+			tool: 'light-settings'
+		});
+		expect(renderOrigin(render({ editOp: { type: 'replace-object', instruction: '' } }))).toEqual({
+			mode: 'edit',
+			tool: 'object-replacement'
+		});
+		expect(
+			renderOrigin(render({ editOp: { type: 'change-surface-color', instruction: '' } }))
+		).toEqual({ mode: 'edit', tool: 'texture-replacement' });
+	});
+
+	it('has no known origin for an upscale — applied from a toolbar shared by every mode', () => {
+		expect(renderOrigin(render({ editOp: { type: 'upscale', instruction: '' } }))).toBeUndefined();
+	});
+});
 
 describe('generation history destinations', () => {
 	it('restores the processing mode represented by each generation kind', () => {

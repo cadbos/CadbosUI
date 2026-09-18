@@ -164,9 +164,21 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 	await page.getByRole('tab', { name: /Замена объекта/ }).click();
 	await expect(page).toHaveURL(new RegExp(`job=${JOB_ID}`));
 
+	// A completed job must not lock the form (the reference-image "change"
+	// control included) — the user should be free to tweak the reference or
+	// the description and submit another replacement right away instead of
+	// being forced through "Новая замена" first.
+	await expect(panel.getByRole('button', { name: 'Изменить референс объекта' })).toBeEnabled();
+
 	await panel.getByRole('button', { name: 'Новая замена' }).click();
 	await expect(page).not.toHaveURL(/job=/);
-	await expect(panel.getByLabel(/Точно опишите существующий объект/)).toHaveValue('');
+	// "Новая замена" clears job tracking only — the settings that produced the
+	// current result (reference image, description, scale) stay exactly as
+	// they are, so the user can adjust and resubmit instead of starting over.
+	await expect(panel.getByLabel(/Точно опишите существующий объект/)).toHaveValue(
+		'  серый диван у окна  '
+	);
+	await expect(panel.getByRole('button', { name: 'Изменить референс объекта' })).toBeEnabled();
 });
 
 test('resumes a stored completed job after reload without submitting again', async ({ page }) => {

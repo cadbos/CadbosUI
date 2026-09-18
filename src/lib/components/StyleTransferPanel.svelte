@@ -147,6 +147,11 @@ before the Change Date. See LICENSE for complete terms.
 		applying = true;
 		error = null;
 		request.setStatus('rendering');
+		// Captured before any of the awaits below (session fork, upload, fetch)
+		// so the settings attached to this render are what was actually
+		// submitted — not whatever the user has since typed, if they kept
+		// editing the form while this request was still in flight.
+		const formSnapshot = request.captureFormSnapshot();
 		const overlayId = generationOverlay.start('generationOverlay.styleTransfer');
 		try {
 			if (request.projectId && request.sessionId && request.currentRender) {
@@ -180,7 +185,9 @@ before the Change Date. See LICENSE for complete terms.
 				throw new Error(await extractApiErrorCode(response, 'style_transfer_failed'));
 			}
 			const result = (await response.json()) as RenderResponse;
-			request.setCurrentRender(renderResultFromResponse(result));
+			request.setCurrentRender(
+				renderResultFromResponse(result, { sourceMode: 'styleTransfer', formSnapshot })
+			);
 			request.setStatus('idle');
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();

@@ -658,8 +658,6 @@ export interface Dictionary {
 	'edit.rateLimited': string;
 	'edit.insufficientCredit': string;
 	'edit.generationRestricted': string;
-	'edit.cost': string;
-	'edit.balance': string;
 	'edit.tool.switcher.label': string;
 	'edit.tool.freeform': string;
 	'edit.tool.addObject': string;

@@ -24,6 +24,7 @@ import {
 	type TextureReplacementRequest,
 	uploadResultSchema
 } from '$lib/api/contract';
+import { ADD_OBJECT_PRESETS } from '$lib/add-object-presets';
 import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 import { LIGHT_SETTINGS_FIXTURES, LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 import { mediaAccess } from '$lib/state/media-access.svelte';
@@ -73,6 +74,49 @@ export interface EditOperation {
 	instruction: string;
 }
 
+// Which top-level mode produced a render that has no `editOp` of its own —
+// a plain "Создание" generation or a style-transfer result. Every other
+// mode/tool already has a unique `editOp.type` (see EDIT_OPERATION_TYPES),
+// so this only needs to cover the two that don't. Consumed by url-state.ts's
+// renderOrigin() to keep the active mode/tool in sync with whichever render
+// undo/redo is currently showing (see Workspace.svelte).
+export const RENDER_SOURCE_MODES = ['render', 'styleTransfer'] as const;
+export type RenderSourceMode = (typeof RENDER_SOURCE_MODES)[number];
+
+// The full set of editable form fields, captured at the moment a generation
+// or edit is pushed onto render history (see RequestState#pushRender) so
+// undo/redo (FR-К6) can restore the exact settings that produced a given
+// step — not just its image — instead of leaving whatever the form happens
+// to hold right now. Deliberately the same shape reset()/copyFrom()/
+// fromJSON() already assign field-by-field, minus image/session identity,
+// which undo/redo has no business touching.
+export interface RequestFormSnapshot {
+	promptFragments: PromptFragment[];
+	promptOverride: string | null;
+	editPrompt: string;
+	addObjectPresetId: string | null;
+	removeObjectText: string;
+	outputFormat: OutputFormat;
+	sceneType: SceneType;
+	styleTransferPrompt: string;
+	styleTransferStrength: number;
+	styleNegativePrompt: string;
+	styleSourceMode: ImageSourceMode;
+	styleReferenceImage?: ImageInput;
+	objectReplacementObject: string;
+	objectReplacementSourceMode: ImageSourceMode;
+	objectReplacementScale: number;
+	objectReferenceImage?: ImageInput;
+	textureReplacementSurface: string;
+	textureReplacementSourceMode: ImageSourceMode;
+	textureReplacementMasked: boolean;
+	textureReferenceImage?: ImageInput;
+	textureMaskImage?: ImageInput;
+	textureMaskSourceKey?: string;
+	lightSettingsPresetIds: string[];
+	lightSettingsInstruction: string;
+}
+
 export interface RenderResult {
 	id: string;
 	outputKey: string;
@@ -80,25 +124,35 @@ export interface RenderResult {
 	balance: number;
 	parentId?: string;
 	editOp?: EditOperation;
+	sourceMode?: RenderSourceMode;
+	formSnapshot?: RequestFormSnapshot;
 	ts: number;
 }
 
+// formSnapshot is only ever set by the submit-time constructor
+// (setActiveObjectReplacementJob), captured before the request goes out — not
+// by the id-only restore path (setActiveObjectReplacementJobId, used after a
+// page reload), which has no original submission left to snapshot and relies
+// on #pushRender's own fallback capture once the job completes.
 export interface ActiveObjectReplacementJob {
 	id: string;
 	instruction: string;
 	sourceRender?: RenderResult;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export interface ActiveTextureReplacementJob {
 	id: string;
 	instruction: string;
 	sourceRender?: RenderResult;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export interface ActiveLightSettingsJob {
 	id: string;
 	instruction: string;
 	sourceRender?: RenderResult;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 // The one Flux Kontext ComfyUI job backing all three edit-panel tools
@@ -110,6 +164,7 @@ export interface ActiveFluxKontextEditJob {
 	type: EditOperationType;
 	instruction: string;
 	sourceRender?: RenderResult;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export interface TextureMaskUploadOperation {
@@ -146,6 +201,8 @@ export interface RequestJSON {
 	textureMaskSourceKey?: string;
 	promptFragments: PromptFragment[];
 	editPrompt: string;
+	addObjectPresetId?: string | null;
+	removeObjectText?: string;
 	outputFormat: OutputFormat;
 	sceneType: SceneType;
 	styleTransferPrompt: string;
@@ -194,6 +251,8 @@ export interface NormalizedRequest {
 	lightSettingsInstruction: string;
 	lightSettingsPrompt: string;
 	editPrompt: string;
+	addObjectPresetId: string | null;
+	removeObjectText: string;
 	styleTransferPrompt: string;
 	prompt: string;
 }
@@ -233,6 +292,12 @@ const lightSettingsPresetGroupKey = (id: string): string => {
 	);
 	return fixture?.id ?? id;
 };
+const addObjectPresetIdSchema = z
+	.string()
+	.nullable()
+	.transform((id) =>
+		id !== null && ADD_OBJECT_PRESETS.some((preset) => preset.id === id) ? id : null
+	);
 const lightSettingsPresetIdsSchema = z.array(z.string()).transform((ids) => {
 	const validIds = ids.filter((id) => LIGHT_SETTINGS_PRESETS.some((preset) => preset.id === id));
 	const lastIndexByGroup: Record<string, number> = {};
@@ -271,6 +336,33 @@ const editOperationSchema = z.object({
 	instruction: z.string()
 });
 
+const requestFormSnapshotSchema = z.object({
+	promptFragments: z.array(promptFragmentSchema),
+	promptOverride: z.string().nullable(),
+	editPrompt: z.string(),
+	addObjectPresetId: addObjectPresetIdSchema,
+	removeObjectText: z.string(),
+	outputFormat: outputFormatSchema,
+	sceneType: sceneTypeSchema,
+	styleTransferPrompt: z.string(),
+	styleTransferStrength: styleTransferStrengthSchema,
+	styleNegativePrompt: z.string(),
+	styleSourceMode: imageSourceModeSchema,
+	styleReferenceImage: optionalImageInputSchema,
+	objectReplacementObject: replacementObjectSchema,
+	objectReplacementSourceMode: imageSourceModeSchema,
+	objectReplacementScale: objectReplacementScaleSchema,
+	objectReferenceImage: optionalImageInputSchema,
+	textureReplacementSurface: replacementSurfaceSchema,
+	textureReplacementSourceMode: imageSourceModeSchema,
+	textureReplacementMasked: z.boolean(),
+	textureReferenceImage: optionalImageInputSchema,
+	textureMaskImage: optionalImageInputSchema,
+	textureMaskSourceKey: z.string().min(1).optional(),
+	lightSettingsPresetIds: lightSettingsPresetIdsSchema,
+	lightSettingsInstruction: lightSettingsInstructionSchema
+});
+
 const renderResultSchema = z.object({
 	id: z.string().min(1),
 	outputKey: z.string().min(1),
@@ -278,6 +370,8 @@ const renderResultSchema = z.object({
 	balance: z.number(),
 	parentId: z.string().optional(),
 	editOp: editOperationSchema.optional(),
+	sourceMode: z.enum(RENDER_SOURCE_MODES).optional(),
+	formSnapshot: requestFormSnapshotSchema.optional(),
 	ts: z.number()
 });
 
@@ -292,6 +386,8 @@ const requestJsonSchema = z
 		textureMaskSourceKey: z.string().min(1).optional(),
 		promptFragments: z.array(promptFragmentSchema),
 		editPrompt: z.string().default(''),
+		addObjectPresetId: addObjectPresetIdSchema.default(null),
+		removeObjectText: z.string().default(''),
 		outputFormat: outputFormatSchema,
 		// Defaults to interior for persisted requests saved before this field existed.
 		sceneType: sceneTypeSchema.default('interior'),
@@ -351,6 +447,8 @@ export interface UpdateFragmentPatch {
 export interface RenderResultFromResponseOptions {
 	parentId?: string;
 	editOp?: EditOperation;
+	sourceMode?: RenderSourceMode;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export class RequestReorderError extends Error {
@@ -440,6 +538,48 @@ function cloneEditOperation(editOp: EditOperation | undefined): EditOperation | 
 	return { type: editOp.type, instruction: editOp.instruction };
 }
 
+function cloneFormSnapshot(
+	snapshot: RequestFormSnapshot | undefined
+): RequestFormSnapshot | undefined {
+	if (!snapshot) return undefined;
+	return {
+		promptFragments: cloneFragments(snapshot.promptFragments),
+		promptOverride: snapshot.promptOverride,
+		editPrompt: snapshot.editPrompt,
+		addObjectPresetId: snapshot.addObjectPresetId,
+		removeObjectText: snapshot.removeObjectText,
+		outputFormat: snapshot.outputFormat,
+		sceneType: snapshot.sceneType,
+		styleTransferPrompt: snapshot.styleTransferPrompt,
+		styleTransferStrength: snapshot.styleTransferStrength,
+		styleNegativePrompt: snapshot.styleNegativePrompt,
+		styleSourceMode: snapshot.styleSourceMode,
+		...(snapshot.styleReferenceImage
+			? { styleReferenceImage: cloneImage(snapshot.styleReferenceImage) }
+			: {}),
+		objectReplacementObject: snapshot.objectReplacementObject,
+		objectReplacementSourceMode: snapshot.objectReplacementSourceMode,
+		objectReplacementScale: snapshot.objectReplacementScale,
+		...(snapshot.objectReferenceImage
+			? { objectReferenceImage: cloneImage(snapshot.objectReferenceImage) }
+			: {}),
+		textureReplacementSurface: snapshot.textureReplacementSurface,
+		textureReplacementSourceMode: snapshot.textureReplacementSourceMode,
+		textureReplacementMasked: snapshot.textureReplacementMasked,
+		...(snapshot.textureReferenceImage
+			? { textureReferenceImage: cloneImage(snapshot.textureReferenceImage) }
+			: {}),
+		...(snapshot.textureMaskImage
+			? { textureMaskImage: cloneImage(snapshot.textureMaskImage) }
+			: {}),
+		...(snapshot.textureMaskSourceKey !== undefined
+			? { textureMaskSourceKey: snapshot.textureMaskSourceKey }
+			: {}),
+		lightSettingsPresetIds: [...snapshot.lightSettingsPresetIds],
+		lightSettingsInstruction: snapshot.lightSettingsInstruction
+	};
+}
+
 function cloneRenderResult(render: RenderResult): RenderResult;
 function cloneRenderResult(render: RenderResult | undefined): RenderResult | undefined;
 function cloneRenderResult(render: RenderResult | undefined): RenderResult | undefined {
@@ -451,6 +591,8 @@ function cloneRenderResult(render: RenderResult | undefined): RenderResult | und
 		balance: render.balance,
 		...(render.parentId !== undefined ? { parentId: render.parentId } : {}),
 		...(render.editOp ? { editOp: cloneEditOperation(render.editOp) } : {}),
+		...(render.sourceMode !== undefined ? { sourceMode: render.sourceMode } : {}),
+		...(render.formSnapshot ? { formSnapshot: cloneFormSnapshot(render.formSnapshot) } : {}),
 		ts: render.ts
 	};
 }
@@ -462,7 +604,8 @@ function cloneActiveObjectReplacementJob(
 	return {
 		id: job.id,
 		instruction: job.instruction,
-		sourceRender: cloneRenderResult(job.sourceRender)
+		sourceRender: cloneRenderResult(job.sourceRender),
+		formSnapshot: cloneFormSnapshot(job.formSnapshot)
 	};
 }
 
@@ -473,7 +616,8 @@ function cloneActiveTextureReplacementJob(
 	return {
 		id: job.id,
 		instruction: job.instruction,
-		sourceRender: cloneRenderResult(job.sourceRender)
+		sourceRender: cloneRenderResult(job.sourceRender),
+		formSnapshot: cloneFormSnapshot(job.formSnapshot)
 	};
 }
 
@@ -484,7 +628,8 @@ function cloneActiveLightSettingsJob(
 	return {
 		id: job.id,
 		instruction: job.instruction,
-		sourceRender: cloneRenderResult(job.sourceRender)
+		sourceRender: cloneRenderResult(job.sourceRender),
+		formSnapshot: cloneFormSnapshot(job.formSnapshot)
 	};
 }
 
@@ -496,7 +641,8 @@ function cloneActiveFluxKontextEditJob(
 		id: job.id,
 		type: job.type,
 		instruction: job.instruction,
-		sourceRender: cloneRenderResult(job.sourceRender)
+		sourceRender: cloneRenderResult(job.sourceRender),
+		formSnapshot: cloneFormSnapshot(job.formSnapshot)
 	};
 }
 
@@ -536,6 +682,8 @@ export function renderResultFromResponse(
 		balance: response.balance,
 		parentId: opts?.parentId,
 		editOp: opts?.editOp,
+		sourceMode: opts?.sourceMode,
+		formSnapshot: opts?.formSnapshot,
 		ts: Date.now()
 	};
 }
@@ -643,6 +791,12 @@ export class RequestState {
 	textureMaskSourceKey = $state<string | undefined>(undefined);
 	promptFragments = $state<PromptFragment[]>([]);
 	editPrompt = $state('');
+	// The Add object/Remove object edit-panel tools' own selections — kept
+	// here (like every other edit tool's fields) rather than as component-
+	// local state, so they survive a panel remount and stay visible as "the
+	// settings used for this generation" instead of silently resetting.
+	addObjectPresetId = $state<string | null>(null);
+	removeObjectText = $state('');
 	activeFluxKontextEditJob = $state<ActiveFluxKontextEditJob | undefined>(undefined);
 	outputFormat = $state<OutputFormat>('webp');
 	sceneType = $state<SceneType>('interior');
@@ -799,6 +953,15 @@ export class RequestState {
 
 	setEditPrompt(prompt: string): void {
 		this.editPrompt = prompt;
+	}
+
+	setAddObjectPresetId(id: string | null): void {
+		this.addObjectPresetId =
+			id !== null && ADD_OBJECT_PRESETS.some((preset) => preset.id === id) ? id : null;
+	}
+
+	setRemoveObjectText(text: string): void {
+		this.removeObjectText = text;
 	}
 
 	reorder(orderedIds: string[]): void {
@@ -963,7 +1126,8 @@ export class RequestState {
 		this.activeObjectReplacementJob = {
 			id: objectReplacementJobIdSchema.parse(id),
 			instruction: replacementObjectSchema.parse(instruction).trim(),
-			sourceRender: cloneRenderResult(sourceRender)
+			sourceRender: cloneRenderResult(sourceRender),
+			formSnapshot: this.captureFormSnapshot()
 		};
 	}
 
@@ -1013,7 +1177,8 @@ export class RequestState {
 		this.activeLightSettingsJob = {
 			id: lightSettingsJobIdSchema.parse(id),
 			instruction: lightSettingsInstructionSchema.parse(instruction).trim(),
-			sourceRender: cloneRenderResult(sourceRender)
+			sourceRender: cloneRenderResult(sourceRender),
+			formSnapshot: this.captureFormSnapshot()
 		};
 	}
 
@@ -1043,7 +1208,8 @@ export class RequestState {
 			id: fluxKontextEditJobIdSchema.parse(id),
 			type,
 			instruction: fluxKontextEditInstructionSchema.parse(instruction).trim(),
-			sourceRender: cloneRenderResult(sourceRender)
+			sourceRender: cloneRenderResult(sourceRender),
+			formSnapshot: this.captureFormSnapshot()
 		};
 	}
 
@@ -1085,7 +1251,8 @@ export class RequestState {
 		this.activeTextureReplacementJob = {
 			id: textureReplacementJobIdSchema.parse(id),
 			instruction: replacementSurfaceSchema.parse(instruction).trim(),
-			sourceRender: cloneRenderResult(sourceRender)
+			sourceRender: cloneRenderResult(sourceRender),
+			formSnapshot: this.captureFormSnapshot()
 		};
 	}
 
@@ -1129,9 +1296,90 @@ export class RequestState {
 	// by another push, e.g. a late-arriving async edit whose sourceRender
 	// snapshot fell out of the chain) lands on the current tip instead of
 	// discarding whatever happened in between.
+	// The form fields that produced whichever render is about to be pushed —
+	// a fallback for a render that doesn't already carry one. Every submit
+	// path that can run for more than an instant (the async job tools, whose
+	// own tests confirm the user may switch tabs/modes while one is polling)
+	// captures its own snapshot with captureFormSnapshot() up front, at
+	// submit time, and attaches it before calling setCurrentRender()/
+	// applyEditResult() — "what the form holds right now", captured here,
+	// would otherwise reflect whatever the user has since typed elsewhere,
+	// not what was actually submitted.
+	captureFormSnapshot(): RequestFormSnapshot {
+		return {
+			promptFragments: cloneFragments(this.promptFragments),
+			promptOverride: this.promptOverride,
+			editPrompt: this.editPrompt,
+			addObjectPresetId: this.addObjectPresetId,
+			removeObjectText: this.removeObjectText,
+			outputFormat: this.outputFormat,
+			sceneType: this.sceneType,
+			styleTransferPrompt: this.styleTransferPrompt,
+			styleTransferStrength: this.styleTransferStrength,
+			styleNegativePrompt: this.styleNegativePrompt,
+			styleSourceMode: this.styleSourceMode,
+			...(this.styleReferenceImage
+				? { styleReferenceImage: cloneImage(this.styleReferenceImage) }
+				: {}),
+			objectReplacementObject: this.objectReplacementObject,
+			objectReplacementSourceMode: this.objectReplacementSourceMode,
+			objectReplacementScale: this.objectReplacementScale,
+			...(this.objectReferenceImage
+				? { objectReferenceImage: cloneImage(this.objectReferenceImage) }
+				: {}),
+			textureReplacementSurface: this.textureReplacementSurface,
+			textureReplacementSourceMode: this.textureReplacementSourceMode,
+			textureReplacementMasked: this.textureReplacementMasked,
+			...(this.textureReferenceImage
+				? { textureReferenceImage: cloneImage(this.textureReferenceImage) }
+				: {}),
+			...(this.textureMaskImage ? { textureMaskImage: cloneImage(this.textureMaskImage) } : {}),
+			...(this.textureMaskSourceKey !== undefined
+				? { textureMaskSourceKey: this.textureMaskSourceKey }
+				: {}),
+			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
+			lightSettingsInstruction: this.lightSettingsInstruction
+		};
+	}
+
+	// Restores the form to a past step's settings (FR-К6 undo/redo) — a no-op
+	// when the step predates this feature or has none (the synthetic
+	// original-photo root step, see #syntheticOriginalStep), leaving whatever
+	// the user currently has typed untouched rather than blanking it.
+	#applyFormSnapshot(snapshot: RequestFormSnapshot | undefined): void {
+		if (!snapshot) return;
+		this.promptFragments = cloneFragments(snapshot.promptFragments);
+		this.promptOverride = snapshot.promptOverride;
+		this.editPrompt = snapshot.editPrompt;
+		this.addObjectPresetId = snapshot.addObjectPresetId;
+		this.removeObjectText = snapshot.removeObjectText;
+		this.outputFormat = snapshot.outputFormat;
+		this.sceneType = snapshot.sceneType;
+		this.styleTransferPrompt = snapshot.styleTransferPrompt;
+		this.styleTransferStrength = snapshot.styleTransferStrength;
+		this.styleNegativePrompt = snapshot.styleNegativePrompt;
+		this.styleSourceMode = snapshot.styleSourceMode;
+		this.styleReferenceImage = cloneImage(snapshot.styleReferenceImage);
+		this.objectReplacementObject = snapshot.objectReplacementObject;
+		this.objectReplacementSourceMode = snapshot.objectReplacementSourceMode;
+		this.objectReplacementScale = snapshot.objectReplacementScale;
+		this.objectReferenceImage = cloneImage(snapshot.objectReferenceImage);
+		this.textureReplacementSurface = snapshot.textureReplacementSurface;
+		this.textureReplacementSourceMode = snapshot.textureReplacementSourceMode;
+		this.textureReplacementMasked = snapshot.textureReplacementMasked;
+		this.textureReferenceImage = cloneImage(snapshot.textureReferenceImage);
+		this.textureMaskImage = cloneImage(snapshot.textureMaskImage);
+		this.textureMaskSourceKey = snapshot.textureMaskSourceKey;
+		this.lightSettingsPresetIds = [...snapshot.lightSettingsPresetIds];
+		this.lightSettingsInstruction = snapshot.lightSettingsInstruction;
+	}
+
 	#pushRender(render: RenderResult, after: RenderResult | undefined): void {
+		const withFormSnapshot: RenderResult = render.formSnapshot
+			? render
+			: { ...render, formSnapshot: this.captureFormSnapshot() };
 		if (this.#renderHistory.length === 0) {
-			this.#seedHistory(render);
+			this.#seedHistory(withFormSnapshot);
 			return;
 		}
 		const afterIndex =
@@ -1140,7 +1388,7 @@ export class RequestState {
 			afterIndex === -1
 				? this.#renderHistory.slice(0, this.#historyIndex + 1)
 				: this.#renderHistory.slice(0, afterIndex + 1);
-		this.#renderHistory = [...base, render];
+		this.#renderHistory = [...base, withFormSnapshot];
 		this.#historyIndex = this.#renderHistory.length - 1;
 	}
 
@@ -1170,19 +1418,24 @@ export class RequestState {
 		this.#pushRender(cloneRenderResult(render), cloneRenderResult(sourceRender));
 	}
 
-	// Steps back to the previous render in history (FR-К6). No-op if already
-	// at the first step.
+	// Steps back to the previous render in history (FR-К6), restoring the form
+	// to the settings that produced it so the user can see and, if they want,
+	// tweak and re-submit them (see #applyFormSnapshot). No-op if already at
+	// the first step.
 	undoLastEdit(): void {
 		if (this.#historyIndex <= 0) return;
 		this.viewingGenerationId = undefined;
 		this.#historyIndex -= 1;
+		this.#applyFormSnapshot(this.currentRender?.formSnapshot);
 	}
 
-	// Steps forward to the render that undo just left. No-op if already at the
-	// most recent step.
+	// Steps forward to the render that undo just left, restoring its form
+	// settings the same way undoLastEdit() does. No-op if already at the most
+	// recent step.
 	redoEdit(): void {
 		if (this.#historyIndex < 0 || this.#historyIndex >= this.#renderHistory.length - 1) return;
 		this.#historyIndex += 1;
+		this.#applyFormSnapshot(this.currentRender?.formSnapshot);
 	}
 
 	setStatus(status: RequestStatus): void {
@@ -1557,6 +1810,8 @@ export class RequestState {
 			textureMaskSourceKey: this.textureMaskSourceKey,
 			promptFragments: cloneFragments(this.promptFragments),
 			editPrompt: this.editPrompt,
+			addObjectPresetId: this.addObjectPresetId,
+			removeObjectText: this.removeObjectText,
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
 			styleTransferPrompt: this.styleTransferPrompt,
@@ -1593,6 +1848,8 @@ export class RequestState {
 		this.textureMaskSourceKey = parsed.textureMaskImage ? parsed.textureMaskSourceKey : undefined;
 		this.promptFragments = cloneFragments(parsed.promptFragments);
 		this.editPrompt = parsed.editPrompt;
+		this.addObjectPresetId = parsed.addObjectPresetId;
+		this.removeObjectText = parsed.removeObjectText;
 		this.outputFormat = parsed.outputFormat;
 		this.sceneType = parsed.sceneType;
 		this.styleTransferPrompt = parsed.styleTransferPrompt;
@@ -1653,6 +1910,8 @@ export class RequestState {
 			lightSettingsInstruction: this.lightSettingsInstruction,
 			lightSettingsPrompt: this.lightSettingsPrompt,
 			editPrompt: this.editPrompt,
+			addObjectPresetId: this.addObjectPresetId,
+			removeObjectText: this.removeObjectText,
 			styleTransferPrompt: this.styleTransferPrompt,
 			prompt: this.prompt
 		};
@@ -1681,6 +1940,8 @@ export class RequestState {
 		this.textureMaskSourceKey = undefined;
 		this.promptFragments = [];
 		this.editPrompt = '';
+		this.addObjectPresetId = null;
+		this.removeObjectText = '';
 		this.outputFormat = 'webp';
 		this.sceneType = 'interior';
 		this.styleTransferPrompt = '';
@@ -1747,6 +2008,8 @@ export class RequestState {
 		this.textureMaskSourceKey = source.textureMaskSourceKey;
 		this.promptFragments = cloneFragments(source.promptFragments);
 		this.editPrompt = source.editPrompt;
+		this.addObjectPresetId = source.addObjectPresetId;
+		this.removeObjectText = source.removeObjectText;
 		this.activeFluxKontextEditJob = cloneActiveFluxKontextEditJob(source.activeFluxKontextEditJob);
 		this.outputFormat = source.outputFormat;
 		this.sceneType = source.sceneType;

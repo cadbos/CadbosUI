@@ -708,8 +708,6 @@ export const en = {
 	'edit.rateLimited': 'Too many requests. Please wait and try again.',
 	'edit.insufficientCredit': 'Test balance exhausted.',
 	'edit.generationRestricted': 'Generation is available to a limited set of accounts.',
-	'edit.cost': 'Edit cost: {cost}',
-	'edit.balance': 'Balance: {balance}',
 	'edit.tool.switcher.label': 'Editing method',
 	'edit.tool.freeform': 'Custom prompt',
 	'edit.tool.addObject': 'Add object',

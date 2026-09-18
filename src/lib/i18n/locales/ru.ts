@@ -725,8 +725,6 @@ export const ru = {
 	'edit.rateLimited': 'Слишком много запросов. Подождите и повторите.',
 	'edit.insufficientCredit': 'Тестовый баланс исчерпан.',
 	'edit.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
-	'edit.cost': 'Стоимость правки: {cost}',
-	'edit.balance': 'Баланс: {balance}',
 	'edit.tool.switcher.label': 'Способ редактирования',
 	'edit.tool.freeform': 'Свой промпт',
 	'edit.tool.addObject': 'Добавить объект',

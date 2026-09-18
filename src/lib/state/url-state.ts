@@ -21,6 +21,7 @@ import {
 	objectReplacementJobIdSchema,
 	type EditOperationType,
 	type ImageSourceMode,
+	type RenderResult,
 	type RequestState,
 	type SceneType
 } from '$lib/state/request.svelte';
@@ -125,6 +126,44 @@ export function routeIdToMode(routeId: string | null): Mode {
 	if (routeId?.startsWith('/edit')) return 'edit';
 	if (routeId?.startsWith('/style-transfer')) return 'styleTransfer';
 	return 'render';
+}
+
+// Every edit-panel tool tags its renders with a unique editOp.type (see
+// EDIT_OPERATION_TYPES) except 'upscale' — applied from RenderResult.svelte's
+// toolbar, which is shared by every mode, so it has no tool tab of its own
+// and is deliberately left out here.
+const EDIT_OP_TOOL: Partial<Record<EditOperationType, ToolId>> = {
+	freeform: 'freeform',
+	'add-object': 'add-object',
+	'remove-object': 'remove-object',
+	'light-settings': 'light-settings',
+	'replace-object': 'object-replacement',
+	'change-surface-color': 'texture-replacement'
+};
+
+export interface RenderOrigin {
+	mode: Mode;
+	tool?: ToolId;
+}
+
+// Which mode/tool actually produced a render step — the counterpart to
+// routeIdToMode, but derived from the render itself rather than the URL.
+// Undo/redo (request.svelte.ts) walks a single history shared across every
+// mode and tool, and each step's restored form fields (RequestFormSnapshot)
+// only make sense under whichever mode/tool actually created that step — so
+// Workspace.svelte uses this to keep the active mode/tool in lockstep with
+// whichever step is on screen, rather than leaving the user looking at a
+// tool tab whose fields have nothing to do with what they're seeing.
+// Returns undefined for a step with no known origin (the synthetic
+// uploaded-photo root, an upscale, or a generation loaded from project
+// history before this field existed) — the caller leaves the current
+// mode/tool alone rather than guessing.
+export function renderOrigin(render: RenderResult | undefined): RenderOrigin | undefined {
+	if (!render) return undefined;
+	if (render.sourceMode === 'render') return { mode: 'render' };
+	if (render.sourceMode === 'styleTransfer') return { mode: 'styleTransfer' };
+	const tool = render.editOp ? EDIT_OP_TOOL[render.editOp.type] : undefined;
+	return tool ? { mode: 'edit', tool } : undefined;
 }
 
 export function destinationForGenerationKind(kind: GenerationKind): WorkspaceDestination {

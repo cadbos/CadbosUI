@@ -15,10 +15,12 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { Eraser, Lightbulb, PaintRoller, Pencil, Plus, Replace } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { z } from 'zod';
 	import type { EditCompletedResponse, EditJobResponse } from '$lib/api/contract';
-	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import {
 		extractApiErrorCode,
 		request,
@@ -26,7 +28,6 @@ before the Change Date. See LICENSE for complete terms.
 		type EditOperationType
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
-	import { currency } from '$lib/state/currency.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
@@ -122,16 +123,21 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => TOOLS.length,
 		getActiveIndex: () => TOOLS.findIndex((tool) => tool.id === activeTool),
 		setActiveIndex: (index) => {
-			return goto(buildWorkspaceUrl('edit', request, { tool: TOOLS[index].id }), {
-				replaceState: true,
-				keepFocus: true,
-				noScroll: true
-			}).catch((err: unknown) => logBoundaryError('editPanel.toolNavigation', err));
+			return goto(
+				resolve(
+					buildWorkspaceUrl('edit', request, { tool: TOOLS[index].id }) as PathnameWithSearchOrHash,
+					{}
+				),
+				{
+					replaceState: true,
+					keepFocus: true,
+					noScroll: true
+				}
+			).catch((err: unknown) => logBoundaryError('editPanel.toolNavigation', err));
 		},
 		focusTab: (index) => toolTabButtons[index]?.focus()
 	});
 
-	const currentRender = $derived(request.currentRender);
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	// Editing targets the latest render/edit result once one exists; before that,
 	// it falls back to the room photo uploaded on the Render tab (same underlying
@@ -229,6 +235,7 @@ before the Change Date. See LICENSE for complete terms.
 					balance: result.balance,
 					parentId: context.sourceRender.id,
 					editOp: { type: context.type, instruction: context.instruction },
+					formSnapshot: context.formSnapshot,
 					ts: Date.now()
 				},
 				context.sourceRender
@@ -243,7 +250,11 @@ before the Change Date. See LICENSE for complete terms.
 				ts: Date.now()
 			});
 		}
-		if (context?.type === 'freeform') request.setEditPrompt('');
+		// The instruction/preset/object fields deliberately stay filled after a
+		// completed edit — same as every other edit tool (light-settings,
+		// object/texture-replacement) — so the form keeps showing the settings
+		// that produced the current result, and the user can tweak and re-apply
+		// instead of retyping from scratch.
 		// Unlike object-replacement/light-settings (a dedicated tab that locks
 		// until an explicit "new request"), freeform/add-object/remove-object
 		// share this inline panel and always supported applying another edit
@@ -589,14 +600,6 @@ before the Change Date. See LICENSE for complete terms.
 	{#if !isAuthenticated && activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'light-settings'}
 		<p class="auth-hint">{t('edit.signInToApply')}</p>
 	{/if}
-
-	{#if currentRender?.editOp}
-		<div class="meta">
-			<span>{ti('edit.cost', { cost: currency.format(currentRender.cost) })}</span>
-			<span class="sep">·</span>
-			<span>{ti('edit.balance', { balance: currency.format(currentRender.balance) })}</span>
-		</div>
-	{/if}
 </section>
 
 <style>
@@ -792,18 +795,6 @@ before the Change Date. See LICENSE for complete terms.
 	.btn-apply:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
-	}
-
-	.meta {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.8125rem;
-		color: var(--color-muted);
-	}
-
-	.meta .sep {
-		opacity: 0.4;
 	}
 
 	.spinner {

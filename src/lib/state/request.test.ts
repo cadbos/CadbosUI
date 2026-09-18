@@ -201,6 +201,8 @@ describe('serialization', () => {
 		expect(request.toJSON()).toEqual({
 			...snapshot,
 			editPrompt: '',
+			addObjectPresetId: null,
+			removeObjectText: '',
 			styleReferenceImage: undefined,
 			objectReferenceImage: undefined,
 			textureReferenceImage: undefined,
@@ -1161,6 +1163,7 @@ describe('toObjectReplacementRequest', () => {
 			source,
 			'gray sofa'
 		);
+		const formSnapshot = request.activeObjectReplacementJob?.formSnapshot;
 		source.outputKey = '999';
 		request.setObjectReplacementObject('changed after submission');
 
@@ -1173,7 +1176,8 @@ describe('toObjectReplacementRequest', () => {
 				cost: 1,
 				balance: 19,
 				ts: 1
-			}
+			},
+			formSnapshot
 		});
 	});
 });
@@ -1418,6 +1422,7 @@ describe('toLightSettingsRequest', () => {
 			source,
 			'turn on the chandelier'
 		);
+		const formSnapshot = request.activeLightSettingsJob?.formSnapshot;
 		source.outputKey = '999';
 		request.setLightSettingsInstruction('changed after submission');
 
@@ -1430,7 +1435,8 @@ describe('toLightSettingsRequest', () => {
 				cost: 1,
 				balance: 19,
 				ts: 1
-			}
+			},
+			formSnapshot
 		});
 	});
 });
@@ -1458,6 +1464,7 @@ describe('flux kontext edit job (freeform/add-object/remove-object)', () => {
 			'remove the sofa',
 			'remove-object'
 		);
+		const formSnapshot = request.activeFluxKontextEditJob?.formSnapshot;
 		source.outputKey = '999';
 
 		expect(request.activeFluxKontextEditJob).toEqual({
@@ -1470,8 +1477,52 @@ describe('flux kontext edit job (freeform/add-object/remove-object)', () => {
 				cost: 1,
 				balance: 19,
 				ts: 1
-			}
+			},
+			formSnapshot
 		});
+	});
+});
+
+describe('add object / remove object edit tool selections', () => {
+	it('keeps a valid add-object preset id and rejects unknown ones', () => {
+		request.setAddObjectPresetId('houseplant');
+		expect(request.addObjectPresetId).toBe('houseplant');
+		request.setAddObjectPresetId('not-a-real-preset');
+		expect(request.addObjectPresetId).toBeNull();
+		request.setAddObjectPresetId(null);
+		expect(request.addObjectPresetId).toBeNull();
+	});
+
+	it('stores the remove-object free text verbatim', () => {
+		request.setRemoveObjectText('the floor lamp');
+		expect(request.removeObjectText).toBe('the floor lamp');
+	});
+
+	it('survives a completed-edit cycle — settings used for a generation are not reset', () => {
+		request.setAddObjectPresetId('mirror');
+		request.setRemoveObjectText('the coffee table');
+		request.applyEditResult({
+			id: 'edit-result-1',
+			outputKey: '301',
+			cost: 1,
+			balance: 19,
+			editOp: { type: 'add-object', instruction: 'add a mirror' },
+			ts: 1
+		});
+		expect(request.addObjectPresetId).toBe('mirror');
+		expect(request.removeObjectText).toBe('the coffee table');
+	});
+
+	it('round-trips through toJSON/fromJSON and clears on reset', () => {
+		request.setAddObjectPresetId('bookshelf');
+		request.setRemoveObjectText('the rug');
+		const snapshot = request.toJSON();
+		request.reset();
+		expect(request.addObjectPresetId).toBeNull();
+		expect(request.removeObjectText).toBe('');
+		request.fromJSON(snapshot);
+		expect(request.addObjectPresetId).toBe('bookshelf');
+		expect(request.removeObjectText).toBe('the rug');
 	});
 });
 
@@ -1671,6 +1722,118 @@ describe('redo (multi-step history navigation, FR-К6)', () => {
 		request.reset();
 
 		expect(request.canRedoEdit).toBe(false);
+	});
+});
+
+describe('undo/redo restores the form settings used for each step (FR-К6)', () => {
+	function render(id: string): RenderResult {
+		return {
+			id,
+			outputKey: String(id.length * 100 + id.charCodeAt(0)),
+			cost: 1,
+			balance: 24,
+			ts: 0
+		};
+	}
+
+	it('restores style-transfer settings too — Создание and Миграция стиля both push through setCurrentRender', () => {
+		// Первый шаг: обычная генерация в режиме "Создание".
+		request.setFragments([{ text: 'Scandinavian living room' }]);
+		request.setCurrentRender(render('gen-1'));
+
+		// Второй шаг: применение "Миграции стиля" поверх результата — тот же
+		// setCurrentRender(), что и обычная генерация (см. StyleTransferPanel.svelte).
+		request.setStyleTransferPrompt('mid-century modern');
+		request.setStyleTransferStrength(0.9);
+		request.setStyleNegativePrompt('no clutter');
+		request.setStyleSourceMode('room-photo');
+		request.setCurrentRender(render('style-1'));
+
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('gen-1');
+		expect(request.promptFragments.map((fragment) => fragment.text)).toEqual([
+			'Scandinavian living room'
+		]);
+		expect(request.styleTransferPrompt).toBe('');
+		expect(request.styleTransferStrength).toBe(0.7);
+		expect(request.styleNegativePrompt).toBe('');
+		expect(request.styleSourceMode).toBe('current-result');
+
+		request.redoEdit();
+		expect(request.currentRender?.id).toBe('style-1');
+		expect(request.styleTransferPrompt).toBe('mid-century modern');
+		expect(request.styleTransferStrength).toBe(0.9);
+		expect(request.styleNegativePrompt).toBe('no clutter');
+		expect(request.styleSourceMode).toBe('room-photo');
+	});
+
+	it('undo brings back the fragments/format used for the previous step, redo brings back the later ones', () => {
+		request.setFragments([{ text: 'Scandinavian living room' }]);
+		request.setOutputFormat('png');
+		request.setCurrentRender(render('gen-1'));
+
+		request.setFragments([{ text: 'warm evening light' }]);
+		request.setOutputFormat('jpg');
+		request.setCurrentRender(render('gen-2'));
+
+		expect(request.promptFragments.map((fragment) => fragment.text)).toEqual([
+			'warm evening light'
+		]);
+		expect(request.outputFormat).toBe('jpg');
+
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('gen-1');
+		expect(request.promptFragments.map((fragment) => fragment.text)).toEqual([
+			'Scandinavian living room'
+		]);
+		expect(request.outputFormat).toBe('png');
+
+		request.redoEdit();
+		expect(request.currentRender?.id).toBe('gen-2');
+		expect(request.promptFragments.map((fragment) => fragment.text)).toEqual([
+			'warm evening light'
+		]);
+		expect(request.outputFormat).toBe('jpg');
+	});
+
+	it('restores the add-object preset and remove-object text an edit step was submitted with', () => {
+		request.setCurrentRender(render('gen-1'));
+
+		request.setAddObjectPresetId('houseplant');
+		request.applyEditResult({
+			...render('edit-1'),
+			editOp: { type: 'add-object', instruction: 'add a houseplant' }
+		});
+
+		request.setAddObjectPresetId(null);
+		request.setRemoveObjectText('the floor lamp');
+		request.applyEditResult({
+			...render('edit-2'),
+			editOp: { type: 'remove-object', instruction: 'remove the floor lamp' }
+		});
+
+		request.undoLastEdit();
+		expect(request.currentRender?.id).toBe('edit-1');
+		expect(request.addObjectPresetId).toBe('houseplant');
+		expect(request.removeObjectText).toBe('');
+
+		request.redoEdit();
+		expect(request.currentRender?.id).toBe('edit-2');
+		expect(request.addObjectPresetId).toBeNull();
+		expect(request.removeObjectText).toBe('the floor lamp');
+	});
+
+	it('does not overwrite the form for a snapshot-less step, e.g. the synthetic uploaded-photo root', () => {
+		request.setImage({ mediaKey: '101' });
+		request.setFragments([{ text: 'Scandinavian living room' }]);
+		request.setCurrentRender(render('gen-1'));
+
+		request.undoLastEdit();
+
+		expect(request.currentRender?.outputKey).toBe('101');
+		expect(request.promptFragments.map((fragment) => fragment.text)).toEqual([
+			'Scandinavian living room'
+		]);
 	});
 });
 

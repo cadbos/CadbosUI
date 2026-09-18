@@ -83,7 +83,12 @@ before the Change Date. See LICENSE for complete terms.
 			terminalError?.jobId !== jobId &&
 			pollFailure?.jobId !== jobId
 	);
-	const formLocked = $derived(submitting || jobId !== null);
+	// Locked while genuinely in flight (submitting) or unresolved (processing/
+	// failed) — a *successfully completed* job (terminalJob matching jobId)
+	// deliberately does NOT lock the form, so settings (including the
+	// reference image) stay editable for another replacement right away,
+	// same as freeform/add-object/remove-object (see EditPanel.svelte).
+	const formLocked = $derived(submitting || (jobId !== null && terminalJob?.id !== jobId));
 	const canSubmit = $derived(validation.valid && !formLocked && isAuthenticated);
 	const validationKey = $derived.by((): TranslationKey | null => {
 		const field = validation.missing[0];
@@ -201,16 +206,24 @@ before the Change Date. See LICENSE for complete terms.
 						type: 'replace-object',
 						instruction: context.instruction
 					},
+					formSnapshot: context.formSnapshot,
 					ts: Date.now()
 				},
 				context.sourceRender
 			);
 		} else {
-			request.setCurrentRender({
+			// No sourceRender to anchor a parentId against — the very first object
+			// replacement, applied straight from the uploaded photo (or a job
+			// restored from the URL after a reload, which has no sourceRender
+			// either). Still tagged with editOp so url-state.ts's renderOrigin can
+			// switch back to this tool on undo/redo.
+			request.applyEditResult({
 				id: result.id,
 				outputKey: mediaAccess.normalize(result.output).key,
 				cost: result.cost,
 				balance: result.balance,
+				editOp: { type: 'replace-object', instruction: context?.instruction ?? '' },
+				formSnapshot: context?.formSnapshot,
 				ts: Date.now()
 			});
 		}
@@ -371,14 +384,12 @@ before the Change Date. See LICENSE for complete terms.
 		pollFailure = null;
 	}
 
+	// Clears job tracking only — settings (reference image, description,
+	// source mode, scale) and the current result stay exactly as they are,
+	// so the user can tweak and submit another replacement instead of
+	// starting over from a blank form.
 	async function clearJob(): Promise<void> {
 		request.setActiveObjectReplacementJobId(undefined);
-		request.setObjectReferenceImage(undefined);
-		request.setObjectReplacementObject('');
-		request.setObjectReplacementSourceMode('current-result');
-		request.setObjectReplacementScale(1);
-		request.setImage(undefined);
-		request.setCurrentRender(undefined);
 		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
