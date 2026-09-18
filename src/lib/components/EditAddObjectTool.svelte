@@ -13,84 +13,10 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import {
-		Frame,
-		Lamp,
-		Library,
-		Lightbulb,
-		MirrorRectangular,
-		Sparkles,
-		Sprout,
-		Users
-	} from '@lucide/svelte';
-	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { ADD_OBJECT_PRESETS } from '$lib/add-object-presets';
+	import { t } from '$lib/i18n/index.svelte';
+	import { request } from '$lib/state/request.svelte';
 	import { createTabController } from '$lib/utils';
-
-	type LucideIcon = typeof Lamp;
-
-	interface Preset {
-		id: string;
-		label: TranslationKey;
-		prompt: TranslationKey;
-		Icon: LucideIcon;
-	}
-
-	const PRESETS: Preset[] = [
-		{
-			id: 'led-strip',
-			label: 'edit.addObject.ledStrip.label',
-			prompt: 'edit.addObject.ledStrip.prompt',
-			Icon: Lamp
-		},
-		{
-			id: 'recessed-lights',
-			label: 'edit.addObject.recessedLights.label',
-			prompt: 'edit.addObject.recessedLights.prompt',
-			Icon: Lightbulb
-		},
-		{
-			id: 'cove-lighting',
-			label: 'edit.addObject.coveLighting.label',
-			prompt: 'edit.addObject.coveLighting.prompt',
-			Icon: Sparkles
-		},
-		{
-			id: 'people',
-			label: 'edit.addObject.people.label',
-			prompt: 'edit.addObject.people.prompt',
-			Icon: Users
-		},
-		{
-			id: 'people-motion',
-			label: 'edit.addObject.peopleMotion.label',
-			prompt: 'edit.addObject.peopleMotion.prompt',
-			Icon: Users
-		},
-		{
-			id: 'houseplant',
-			label: 'edit.addObject.houseplant.label',
-			prompt: 'edit.addObject.houseplant.prompt',
-			Icon: Sprout
-		},
-		{
-			id: 'wall-art',
-			label: 'edit.addObject.wallArt.label',
-			prompt: 'edit.addObject.wallArt.prompt',
-			Icon: Frame
-		},
-		{
-			id: 'bookshelf',
-			label: 'edit.addObject.bookshelf.label',
-			prompt: 'edit.addObject.bookshelf.prompt',
-			Icon: Library
-		},
-		{
-			id: 'mirror',
-			label: 'edit.addObject.mirror.label',
-			prompt: 'edit.addObject.mirror.prompt',
-			Icon: MirrorRectangular
-		}
-	];
 
 	interface Props {
 		disabled: boolean;
@@ -99,21 +25,22 @@ before the Change Date. See LICENSE for complete terms.
 	}
 	let { disabled, applying, onApply }: Props = $props();
 
-	let selectedId = $state<string | null>(null);
 	let presetButtons = $state<HTMLElement[]>([]);
-	const selected = $derived(PRESETS.find((preset) => preset.id === selectedId));
+	const selected = $derived(
+		ADD_OBJECT_PRESETS.find((preset) => preset.id === request.addObjectPresetId)
+	);
 	const activePresetIndex = $derived(
 		Math.max(
-			PRESETS.findIndex((preset) => preset.id === selectedId),
+			ADD_OBJECT_PRESETS.findIndex((preset) => preset.id === request.addObjectPresetId),
 			0
 		)
 	);
 
 	const presetRadios = createTabController({
-		itemCount: () => PRESETS.length,
+		itemCount: () => ADD_OBJECT_PRESETS.length,
 		getActiveIndex: () => activePresetIndex,
 		setActiveIndex: (index) => {
-			selectedId = PRESETS[index].id;
+			request.setAddObjectPresetId(ADD_OBJECT_PRESETS[index].id);
 		},
 		focusTab: (index) => presetButtons[index]?.focus()
 	});
@@ -128,15 +55,17 @@ before the Change Date. See LICENSE for complete terms.
 	<p class="hint" id="add-object-select-hint">{t('edit.addObject.selectHint')}</p>
 
 	<div class="grid" role="radiogroup" aria-labelledby="add-object-select-hint">
-		{#each PRESETS as preset, index (preset.id)}
+		{#each ADD_OBJECT_PRESETS as preset, index (preset.id)}
 			{@const Icon = preset.Icon}
 			<button
-				bind:this={presetButtons[index]}
+				{@attach (node) => {
+					presetButtons[index] = node as HTMLElement;
+				}}
 				type="button"
 				role="radio"
 				class="preset"
-				class:selected={selectedId === preset.id}
-				aria-checked={selectedId === preset.id}
+				class:selected={request.addObjectPresetId === preset.id}
+				aria-checked={request.addObjectPresetId === preset.id}
 				tabindex={index === activePresetIndex ? 0 : -1}
 				{disabled}
 				onclick={() => presetRadios.activate(index)}

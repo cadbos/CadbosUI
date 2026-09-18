@@ -201,6 +201,8 @@ describe('serialization', () => {
 		expect(request.toJSON()).toEqual({
 			...snapshot,
 			editPrompt: '',
+			addObjectPresetId: null,
+			removeObjectText: '',
 			styleReferenceImage: undefined,
 			objectReferenceImage: undefined,
 			textureReferenceImage: undefined,
@@ -1472,6 +1474,49 @@ describe('flux kontext edit job (freeform/add-object/remove-object)', () => {
 				ts: 1
 			}
 		});
+	});
+});
+
+describe('add object / remove object edit tool selections', () => {
+	it('keeps a valid add-object preset id and rejects unknown ones', () => {
+		request.setAddObjectPresetId('houseplant');
+		expect(request.addObjectPresetId).toBe('houseplant');
+		request.setAddObjectPresetId('not-a-real-preset');
+		expect(request.addObjectPresetId).toBeNull();
+		request.setAddObjectPresetId(null);
+		expect(request.addObjectPresetId).toBeNull();
+	});
+
+	it('stores the remove-object free text verbatim', () => {
+		request.setRemoveObjectText('the floor lamp');
+		expect(request.removeObjectText).toBe('the floor lamp');
+	});
+
+	it('survives a completed-edit cycle — settings used for a generation are not reset', () => {
+		request.setAddObjectPresetId('mirror');
+		request.setRemoveObjectText('the coffee table');
+		request.applyEditResult({
+			id: 'edit-result-1',
+			outputKey: '301',
+			cost: 1,
+			balance: 19,
+			editOp: { type: 'add-object', instruction: 'add a mirror' },
+			ts: 1
+		});
+		expect(request.addObjectPresetId).toBe('mirror');
+		expect(request.removeObjectText).toBe('the coffee table');
+	});
+
+	it('round-trips through toJSON/fromJSON and clears on reset', () => {
+		request.setAddObjectPresetId('bookshelf');
+		request.setRemoveObjectText('the rug');
+		const snapshot = request.toJSON();
+		request.reset();
+		expect(request.addObjectPresetId).toBeNull();
+		expect(request.removeObjectText).toBe('');
+		request.fromJSON(snapshot);
+		expect(request.addObjectPresetId).toBe('bookshelf');
+		expect(request.removeObjectText).toBe('the rug');
 	});
 });
 

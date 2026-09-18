@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { Eraser } from '@lucide/svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
+	import { request } from '$lib/state/request.svelte';
 
 	interface Props {
 		disabled: boolean;
@@ -23,10 +24,8 @@ before the Change Date. See LICENSE for complete terms.
 	}
 	let { disabled, applying, onApply }: Props = $props();
 
-	let objectText = $state('');
-
 	function submit(): void {
-		const trimmed = objectText.trim();
+		const trimmed = request.removeObjectText.trim();
 		if (!trimmed) return;
 		onApply(ti('edit.removeObject.promptTemplate', { object: trimmed }));
 	}
@@ -37,7 +36,8 @@ before the Change Date. See LICENSE for complete terms.
 		<span class="field-label">{t('edit.removeObject.label')}</span>
 		<input
 			type="text"
-			bind:value={objectText}
+			value={request.removeObjectText}
+			oninput={(event) => request.setRemoveObjectText(event.currentTarget.value)}
 			{disabled}
 			placeholder={t('edit.removeObject.placeholder')}
 		/>
@@ -48,7 +48,7 @@ before the Change Date. See LICENSE for complete terms.
 	<button
 		type="button"
 		class="btn-apply"
-		disabled={disabled || !objectText.trim()}
+		disabled={disabled || !request.removeObjectText.trim()}
 		onclick={submit}
 	>
 		{#if applying}

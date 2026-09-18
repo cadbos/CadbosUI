@@ -24,6 +24,7 @@ import {
 	type TextureReplacementRequest,
 	uploadResultSchema
 } from '$lib/api/contract';
+import { ADD_OBJECT_PRESETS } from '$lib/add-object-presets';
 import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 import { LIGHT_SETTINGS_FIXTURES, LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 import { mediaAccess } from '$lib/state/media-access.svelte';
@@ -146,6 +147,8 @@ export interface RequestJSON {
 	textureMaskSourceKey?: string;
 	promptFragments: PromptFragment[];
 	editPrompt: string;
+	addObjectPresetId?: string | null;
+	removeObjectText?: string;
 	outputFormat: OutputFormat;
 	sceneType: SceneType;
 	styleTransferPrompt: string;
@@ -194,6 +197,8 @@ export interface NormalizedRequest {
 	lightSettingsInstruction: string;
 	lightSettingsPrompt: string;
 	editPrompt: string;
+	addObjectPresetId: string | null;
+	removeObjectText: string;
 	styleTransferPrompt: string;
 	prompt: string;
 }
@@ -233,6 +238,12 @@ const lightSettingsPresetGroupKey = (id: string): string => {
 	);
 	return fixture?.id ?? id;
 };
+const addObjectPresetIdSchema = z
+	.string()
+	.nullable()
+	.transform((id) =>
+		id !== null && ADD_OBJECT_PRESETS.some((preset) => preset.id === id) ? id : null
+	);
 const lightSettingsPresetIdsSchema = z.array(z.string()).transform((ids) => {
 	const validIds = ids.filter((id) => LIGHT_SETTINGS_PRESETS.some((preset) => preset.id === id));
 	const lastIndexByGroup: Record<string, number> = {};
@@ -292,6 +303,8 @@ const requestJsonSchema = z
 		textureMaskSourceKey: z.string().min(1).optional(),
 		promptFragments: z.array(promptFragmentSchema),
 		editPrompt: z.string().default(''),
+		addObjectPresetId: addObjectPresetIdSchema.default(null),
+		removeObjectText: z.string().default(''),
 		outputFormat: outputFormatSchema,
 		// Defaults to interior for persisted requests saved before this field existed.
 		sceneType: sceneTypeSchema.default('interior'),
@@ -643,6 +656,12 @@ export class RequestState {
 	textureMaskSourceKey = $state<string | undefined>(undefined);
 	promptFragments = $state<PromptFragment[]>([]);
 	editPrompt = $state('');
+	// The Add object/Remove object edit-panel tools' own selections — kept
+	// here (like every other edit tool's fields) rather than as component-
+	// local state, so they survive a panel remount and stay visible as "the
+	// settings used for this generation" instead of silently resetting.
+	addObjectPresetId = $state<string | null>(null);
+	removeObjectText = $state('');
 	activeFluxKontextEditJob = $state<ActiveFluxKontextEditJob | undefined>(undefined);
 	outputFormat = $state<OutputFormat>('webp');
 	sceneType = $state<SceneType>('interior');
@@ -799,6 +818,15 @@ export class RequestState {
 
 	setEditPrompt(prompt: string): void {
 		this.editPrompt = prompt;
+	}
+
+	setAddObjectPresetId(id: string | null): void {
+		this.addObjectPresetId =
+			id !== null && ADD_OBJECT_PRESETS.some((preset) => preset.id === id) ? id : null;
+	}
+
+	setRemoveObjectText(text: string): void {
+		this.removeObjectText = text;
 	}
 
 	reorder(orderedIds: string[]): void {
@@ -1557,6 +1585,8 @@ export class RequestState {
 			textureMaskSourceKey: this.textureMaskSourceKey,
 			promptFragments: cloneFragments(this.promptFragments),
 			editPrompt: this.editPrompt,
+			addObjectPresetId: this.addObjectPresetId,
+			removeObjectText: this.removeObjectText,
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
 			styleTransferPrompt: this.styleTransferPrompt,
@@ -1593,6 +1623,8 @@ export class RequestState {
 		this.textureMaskSourceKey = parsed.textureMaskImage ? parsed.textureMaskSourceKey : undefined;
 		this.promptFragments = cloneFragments(parsed.promptFragments);
 		this.editPrompt = parsed.editPrompt;
+		this.addObjectPresetId = parsed.addObjectPresetId;
+		this.removeObjectText = parsed.removeObjectText;
 		this.outputFormat = parsed.outputFormat;
 		this.sceneType = parsed.sceneType;
 		this.styleTransferPrompt = parsed.styleTransferPrompt;
@@ -1653,6 +1685,8 @@ export class RequestState {
 			lightSettingsInstruction: this.lightSettingsInstruction,
 			lightSettingsPrompt: this.lightSettingsPrompt,
 			editPrompt: this.editPrompt,
+			addObjectPresetId: this.addObjectPresetId,
+			removeObjectText: this.removeObjectText,
 			styleTransferPrompt: this.styleTransferPrompt,
 			prompt: this.prompt
 		};
@@ -1681,6 +1715,8 @@ export class RequestState {
 		this.textureMaskSourceKey = undefined;
 		this.promptFragments = [];
 		this.editPrompt = '';
+		this.addObjectPresetId = null;
+		this.removeObjectText = '';
 		this.outputFormat = 'webp';
 		this.sceneType = 'interior';
 		this.styleTransferPrompt = '';
@@ -1747,6 +1783,8 @@ export class RequestState {
 		this.textureMaskSourceKey = source.textureMaskSourceKey;
 		this.promptFragments = cloneFragments(source.promptFragments);
 		this.editPrompt = source.editPrompt;
+		this.addObjectPresetId = source.addObjectPresetId;
+		this.removeObjectText = source.removeObjectText;
 		this.activeFluxKontextEditJob = cloneActiveFluxKontextEditJob(source.activeFluxKontextEditJob);
 		this.outputFormat = source.outputFormat;
 		this.sceneType = source.sceneType;

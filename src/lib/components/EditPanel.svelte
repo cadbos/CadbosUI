@@ -15,7 +15,9 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { Eraser, Lightbulb, PaintRoller, Pencil, Plus, Replace } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { z } from 'zod';
 	import type { EditCompletedResponse, EditJobResponse } from '$lib/api/contract';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -122,11 +124,17 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => TOOLS.length,
 		getActiveIndex: () => TOOLS.findIndex((tool) => tool.id === activeTool),
 		setActiveIndex: (index) => {
-			return goto(buildWorkspaceUrl('edit', request, { tool: TOOLS[index].id }), {
-				replaceState: true,
-				keepFocus: true,
-				noScroll: true
-			}).catch((err: unknown) => logBoundaryError('editPanel.toolNavigation', err));
+			return goto(
+				resolve(
+					buildWorkspaceUrl('edit', request, { tool: TOOLS[index].id }) as PathnameWithSearchOrHash,
+					{}
+				),
+				{
+					replaceState: true,
+					keepFocus: true,
+					noScroll: true
+				}
+			).catch((err: unknown) => logBoundaryError('editPanel.toolNavigation', err));
 		},
 		focusTab: (index) => toolTabButtons[index]?.focus()
 	});
@@ -243,7 +251,11 @@ before the Change Date. See LICENSE for complete terms.
 				ts: Date.now()
 			});
 		}
-		if (context?.type === 'freeform') request.setEditPrompt('');
+		// The instruction/preset/object fields deliberately stay filled after a
+		// completed edit — same as every other edit tool (light-settings,
+		// object/texture-replacement) — so the form keeps showing the settings
+		// that produced the current result, and the user can tweak and re-apply
+		// instead of retyping from scratch.
 		// Unlike object-replacement/light-settings (a dedicated tab that locks
 		// until an explicit "new request"), freeform/add-object/remove-object
 		// share this inline panel and always supported applying another edit
