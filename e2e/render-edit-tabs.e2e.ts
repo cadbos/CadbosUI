@@ -419,7 +419,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 	]);
 
 	expect(renderBody).toEqual({
-		imageKey: mediaKey(1),
+		imageKey: mediaKey(4),
 		prompt: 'render prompt for paid generation',
 		outputFormat: 'webp',
 		sessionId: E2E_SESSION_ID
@@ -1056,8 +1056,10 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 	const startingBalance = 95;
 	const renderCost = 5;
 	let renders = 0;
+	const renderBodies: Array<{ imageKey: string }> = [];
 	await page.route('**/api/render', async (route) => {
 		renders += 1;
+		renderBodies.push(route.request().postDataJSON() as { imageKey: string });
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -1084,6 +1086,7 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
 	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-1.webp');
+	expect(renderBodies.map(({ imageKey }) => imageKey)).toEqual([mediaKey(1)]);
 
 	const undoButton = page.getByRole('button', { name: 'Отменить' });
 	const redoButton = page.getByRole('button', { name: 'Повторить' });
@@ -1100,6 +1103,7 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 		page.getByRole('button', { name: 'Сгенерировать' }).click()
 	]);
 	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-2.webp');
+	expect(renderBodies.map(({ imageKey }) => imageKey)).toEqual([mediaKey(1), mediaKey(2)]);
 	await expect(undoButton).toBeEnabled();
 	await expect(redoButton).toBeDisabled();
 

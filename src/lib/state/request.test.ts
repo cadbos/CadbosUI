@@ -609,6 +609,22 @@ describe('toRenderRequest', () => {
 		expect(request.prompt).toBe(AC9_PROMPT);
 	});
 
+	it('uses the current render as the source for a subsequent generation', async () => {
+		applyAc9Fixture();
+		request.setCurrentRender({
+			id: 'render-1',
+			outputKey: '201',
+			cost: 2,
+			balance: 18,
+			ts: 0
+		});
+
+		expect(await request.toRenderRequest()).toEqual({
+			...AC9_RENDER_REQUEST,
+			imageKey: '201'
+		});
+	});
+
 	it('returns null when invalid', async () => {
 		expect(await request.toRenderRequest()).toBeNull();
 	});
