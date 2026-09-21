@@ -1518,9 +1518,7 @@ export class RequestState {
 	}
 
 	// Uploads the pending main photo the first time a generate call actually
-	// needs its media key, then caches the result on `image` (via
-	// setImage) so a second generate call in the same session — e.g.
-	// re-generating with a tweaked prompt — reuses it instead of re-uploading.
+	// needs its media key, then caches the result on `image` (via setImage).
 	// Throws RequestImageUploadError on failure so callers can show an
 	// upload-specific message instead of a generic "render failed" one.
 	async #ensureImageUploaded(): Promise<ImageInput | undefined> {
@@ -1713,8 +1711,7 @@ export class RequestState {
 	async toRenderRequest(): Promise<RenderRequest | null> {
 		const validation = this.validate();
 		if (!validation.valid) return null;
-		const image = await this.#ensureImageUploaded();
-		const imageKey = managedImageKey(image);
+		const imageKey = await this.#resolveSourceFor('current-result');
 		if (!imageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
