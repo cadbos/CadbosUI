@@ -30,6 +30,7 @@ const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	editPrompt: '',
 	addObjectPresetId: null,
 	removeObjectText: '',
+	editOperationType: null,
 	outputFormat: 'webp',
 	sceneType: 'interior',
 	styleTransferPrompt: '',

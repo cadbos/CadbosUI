@@ -52,6 +52,24 @@ export interface PromptFragment {
 	order: number;
 }
 
+// Which tool/operation actually produced (or would produce) a render step —
+// the same tag RenderResult.editOp carries for session undo/redo
+// (url-state.ts's renderOrigin). 'edit' is the one GenerationKind shared by
+// three distinct edit-panel tools (freeform/add-object/remove-object), so
+// this is the only way a restored RequestFormSnapshot can say which of them
+// it actually came from.
+export const EDIT_OPERATION_TYPES = [
+	'replace-object',
+	'change-surface-color',
+	'freeform',
+	'add-object',
+	'remove-object',
+	'light-settings',
+	'upscale'
+] as const;
+
+export type EditOperationType = (typeof EDIT_OPERATION_TYPES)[number];
+
 // The full set of editable form fields for a single generation call, captured
 // client-side (RequestState#captureFormSnapshot) at submit time and persisted
 // alongside the resulting `generations`/`*_jobs` row so a past generation can
@@ -65,6 +83,12 @@ export interface RequestFormSnapshot {
 	editPrompt: string;
 	addObjectPresetId: string | null;
 	removeObjectText: string;
+	// Only meaningful (non-null) for a kind: 'edit' generation — which of
+	// freeform/add-object/remove-object actually produced it, since those
+	// three share both the 'edit' GenerationKind and this one snapshot shape.
+	// Restoring uses it to land on the right edit-panel tool instead of
+	// always defaulting to freeform.
+	editOperationType: EditOperationType | null;
 	outputFormat: OutputFormat;
 	sceneType: SceneType;
 	styleTransferPrompt: string;

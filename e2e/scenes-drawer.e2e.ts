@@ -60,6 +60,61 @@ async function authenticate(page: Page): Promise<void> {
 	});
 }
 
+const ADD_OBJECT_GENERATION_ID = '00000000-0000-4000-8000-000000000201';
+
+// A snapshot from the 'add-object' edit-panel tool, submitted after a
+// freeform edit left stale text in `editPrompt` — the bug this test guards
+// against: without `editOperationType`, restoring an 'edit'-kind generation
+// couldn't tell freeform/add-object/remove-object apart and always landed on
+// the freeform tab, showing that leftover text as if it belonged here.
+const ADD_OBJECT_FORM_SNAPSHOT = {
+	...FORM_SNAPSHOT,
+	editPrompt: 'сделай стены голубыми',
+	addObjectPresetId: 'houseplant',
+	editOperationType: 'add-object'
+};
+
+async function mockAddObjectScene(page: Page): Promise<void> {
+	await page.route('**/api/generated-images**', async (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				images: [
+					{
+						id: ADD_OBJECT_GENERATION_ID,
+						image: media(2, 'https://cdn.example.test/added-plant.webp'),
+						source: media(1, 'https://cdn.example.test/scene.jpg'),
+						kind: 'edit',
+						createdAt: Date.UTC(2026, 0, 1)
+					}
+				],
+				pagination: { offset: 0, size: 100, hasMore: false }
+			})
+		});
+	});
+	await page.route(`**/api/generated-images/${ADD_OBJECT_GENERATION_ID}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: ADD_OBJECT_GENERATION_ID,
+				prompt: '',
+				kind: 'edit',
+				createdAt: Date.UTC(2026, 0, 1),
+				image: media(2, 'https://cdn.example.test/added-plant.webp'),
+				source: media(1, 'https://cdn.example.test/scene.jpg'),
+				formSnapshot: ADD_OBJECT_FORM_SNAPSHOT,
+				media: [
+					media(2, 'https://cdn.example.test/added-plant.webp'),
+					media(1, 'https://cdn.example.test/scene.jpg')
+				]
+			})
+		});
+	});
+}
+
 async function mockSingleStyleTransferScene(page: Page): Promise<void> {
 	await page.route('**/api/generated-images**', async (route) => {
 		if (route.request().method() !== 'GET') return route.fallback();
@@ -121,6 +176,32 @@ test('restores a past generation’s exact settings from the scenes drawer', asy
 		'https://cdn.example.test/result.webp'
 	);
 	await expect(page.getByLabel('Уточнение стиля')).toHaveValue('archived style note');
+});
+
+test('restores an edit-kind generation onto the edit-panel tool that actually produced it', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockAddObjectScene(page);
+
+	await page.goto('/create/interior?view=chat&format=webp');
+	await page.getByRole('button', { name: 'Сцены' }).click();
+	await page.locator('.image-frame.result-frame').hover();
+	await page.getByRole('button', { name: /Восстановить настройки сцены/ }).click();
+
+	// Lands on the Add object tab — not the freeform tab every 'edit'-kind
+	// generation used to default to — with its own preset selected, not the
+	// stale freeform instruction left over from the earlier edit.
+	await expect(page).toHaveURL(/\/edit/);
+	await expect(page).toHaveURL(/tool=add-object/);
+	await expect(page.getByRole('tab', { name: 'Добавить объект' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await expect(page.getByRole('radio', { name: 'Комнатное растение' })).toHaveAttribute(
+		'aria-checked',
+		'true'
+	);
 });
 
 test('asks for confirmation before restoring over unsaved form changes', async ({ page }) => {

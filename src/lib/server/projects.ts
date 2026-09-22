@@ -326,6 +326,7 @@ function toPublicFormSnapshot(
 		editPrompt: snapshot.editPrompt,
 		addObjectPresetId: snapshot.addObjectPresetId,
 		removeObjectText: snapshot.removeObjectText,
+		editOperationType: snapshot.editOperationType,
 		outputFormat: snapshot.outputFormat,
 		sceneType: snapshot.sceneType,
 		styleTransferPrompt: snapshot.styleTransferPrompt,

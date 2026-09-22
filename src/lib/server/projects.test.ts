@@ -306,6 +306,7 @@ describe('projects repository', () => {
 					editPrompt: TEST_FORM_SNAPSHOT.editPrompt,
 					addObjectPresetId: TEST_FORM_SNAPSHOT.addObjectPresetId,
 					removeObjectText: TEST_FORM_SNAPSHOT.removeObjectText,
+					editOperationType: TEST_FORM_SNAPSHOT.editOperationType,
 					outputFormat: TEST_FORM_SNAPSHOT.outputFormat,
 					sceneType: TEST_FORM_SNAPSHOT.sceneType,
 					styleTransferPrompt: TEST_FORM_SNAPSHOT.styleTransferPrompt,

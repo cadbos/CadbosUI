@@ -166,7 +166,16 @@ export function renderOrigin(render: RenderResult | undefined): RenderOrigin | u
 	return tool ? { mode: 'edit', tool } : undefined;
 }
 
-export function destinationForGenerationKind(kind: GenerationKind): WorkspaceDestination {
+// `editOperationType` (RequestFormSnapshot's own field, absent when there's
+// no snapshot to restore — e.g. the Scenes drawer's plain "use this image")
+// disambiguates a `kind: 'edit'` generation between the three tools that
+// share it (freeform/add-object/remove-object) — without it, every 'edit'
+// generation would restore onto the freeform tab regardless of which of the
+// three actually produced it.
+export function destinationForGenerationKind(
+	kind: GenerationKind,
+	editOperationType?: EditOperationType | null
+): WorkspaceDestination {
 	switch (kind) {
 		case 'render':
 			return { mode: 'render', subTab: { view: 'chat' } };
@@ -180,7 +189,12 @@ export function destinationForGenerationKind(kind: GenerationKind): WorkspaceDes
 			return { mode: 'edit', subTab: { tool: 'light-settings' } };
 		case 'edit':
 		case 'upscale':
-			return { mode: 'edit', subTab: { tool: 'freeform' } };
+			return {
+				mode: 'edit',
+				subTab: {
+					tool: (editOperationType ? EDIT_OP_TOOL[editOperationType] : undefined) ?? 'freeform'
+				}
+			};
 	}
 }
 

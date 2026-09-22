@@ -104,6 +104,27 @@ describe('generation history destinations', () => {
 			subTab: { tool: 'texture-replacement' }
 		});
 	});
+
+	it('picks the edit-panel tool an editOperationType names, for a kind shared by several tools', () => {
+		expect(destinationForGenerationKind('edit', 'add-object')).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'add-object' }
+		});
+		expect(destinationForGenerationKind('edit', 'remove-object')).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'remove-object' }
+		});
+		// null/undefined (no snapshot, or one recorded before this field
+		// existed) falls back to the same 'freeform' default as before.
+		expect(destinationForGenerationKind('edit', null)).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'freeform' }
+		});
+		expect(destinationForGenerationKind('edit', undefined)).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'freeform' }
+		});
+	});
 });
 
 describe('edit tool route matching', () => {

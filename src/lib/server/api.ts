@@ -15,6 +15,7 @@
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import {
+	EDIT_OPERATION_TYPES,
 	IMAGE_SOURCE_MODES,
 	SCENE_TYPES,
 	type ApiError,
@@ -78,6 +79,8 @@ export const formSnapshotSchema = z.object({
 	editPrompt: z.string(),
 	addObjectPresetId: z.string().nullable(),
 	removeObjectText: z.string(),
+	// Absent/null for a snapshot recorded before this field existed.
+	editOperationType: z.enum(EDIT_OPERATION_TYPES).nullable().default(null),
 	outputFormat,
 	sceneType,
 	styleTransferPrompt: z.string(),

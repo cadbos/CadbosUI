@@ -37,7 +37,11 @@ before the Change Date. See LICENSE for complete terms.
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
-	import { request, requestFormSnapshotSchema } from '$lib/state/request.svelte';
+	import {
+		request,
+		requestFormSnapshotSchema,
+		type EditOperationType
+	} from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, destinationForGenerationKind } from '$lib/state/url-state';
 	import { logBoundaryError, openModal } from '$lib/utils';
 
@@ -306,8 +310,12 @@ before the Change Date. See LICENSE for complete terms.
 		request.setStatus('idle');
 	}
 
-	function navigateToDestination(kind: GenerationKind, boundary: string): void {
-		const destination = destinationForGenerationKind(kind);
+	function navigateToDestination(
+		kind: GenerationKind,
+		boundary: string,
+		editOperationType?: EditOperationType | null
+	): void {
+		const destination = destinationForGenerationKind(kind, editOperationType);
 		onClose();
 		goto(
 			resolve(
@@ -369,7 +377,11 @@ before the Change Date. See LICENSE for complete terms.
 				request.setObjectReplacementSourceMode('room-photo');
 				request.setTextureReplacementSourceMode('room-photo');
 			}
-			navigateToDestination(kind, 'scenesDrawer.restoreNavigation');
+			navigateToDestination(
+				kind,
+				'scenesDrawer.restoreNavigation',
+				parsed.data.formSnapshot?.editOperationType
+			);
 		} catch (error) {
 			restoreFailedId = id;
 			logBoundaryError('scenesDrawer.restoreGeneration', error);

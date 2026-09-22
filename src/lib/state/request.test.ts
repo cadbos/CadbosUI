@@ -1123,7 +1123,7 @@ describe('toObjectReplacementRequest', () => {
 			referenceImageKey: objectReference.mediaKey,
 			replacementObject: 'gray sofa by the window',
 			sessionId: AC9_SESSION_ID,
-			formSnapshot: request.captureFormSnapshot()
+			formSnapshot: request.captureFormSnapshot('replace-object')
 		});
 	});
 
@@ -1257,7 +1257,7 @@ describe('toTextureReplacementRequest', () => {
 			referenceImageKey: textureReference.mediaKey,
 			replacementSurface: 'sofa upholstery',
 			sessionId: AC9_SESSION_ID,
-			formSnapshot: request.captureFormSnapshot()
+			formSnapshot: request.captureFormSnapshot('change-surface-color')
 		});
 	});
 
@@ -1283,7 +1283,7 @@ describe('toTextureReplacementRequest', () => {
 			referenceImageKey: textureReference.mediaKey,
 			maskImageKey: textureMask.mediaKey,
 			sessionId: AC9_SESSION_ID,
-			formSnapshot: request.captureFormSnapshot()
+			formSnapshot: request.captureFormSnapshot('change-surface-color')
 		});
 	});
 
@@ -1410,7 +1410,7 @@ describe('toLightSettingsRequest', () => {
 			imageKey: AC9_IMAGE.mediaKey,
 			instruction: request.lightSettingsPrompt,
 			sessionId: AC9_SESSION_ID,
-			formSnapshot: request.captureFormSnapshot()
+			formSnapshot: request.captureFormSnapshot('light-settings')
 		});
 	});
 

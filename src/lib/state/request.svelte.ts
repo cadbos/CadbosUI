@@ -14,9 +14,11 @@
 
 import { z } from 'zod';
 import {
+	EDIT_OPERATION_TYPES,
 	IMAGE_SOURCE_MODES,
 	OUTPUT_FORMATS,
 	SCENE_TYPES,
+	type EditOperationType,
 	type ImageInput,
 	type ImageSourceMode,
 	type LightSettingsRequest,
@@ -39,8 +41,10 @@ import { LIGHT_SETTINGS_FIXTURES, LIGHT_SETTINGS_PRESETS } from '$lib/light-sett
 import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export {
+	EDIT_OPERATION_TYPES,
 	IMAGE_SOURCE_MODES,
 	SCENE_TYPES,
+	type EditOperationType,
 	type ImageInput,
 	type ImageSourceMode,
 	type ManagedImageInput,
@@ -50,18 +54,6 @@ export {
 	type SceneType,
 	type StylePresetImageInput
 };
-
-export const EDIT_OPERATION_TYPES = [
-	'replace-object',
-	'change-surface-color',
-	'freeform',
-	'add-object',
-	'remove-object',
-	'light-settings',
-	'upscale'
-] as const;
-
-export type EditOperationType = (typeof EDIT_OPERATION_TYPES)[number];
 
 export interface EditOperation {
 	type: EditOperationType;
@@ -313,6 +305,9 @@ export const requestFormSnapshotSchema = z.object({
 	editPrompt: z.string(),
 	addObjectPresetId: addObjectPresetIdSchema,
 	removeObjectText: z.string(),
+	// Absent/null for a snapshot recorded before this field existed — restore
+	// degrades to the 'freeform' default tool the same way it always did.
+	editOperationType: z.enum(EDIT_OPERATION_TYPES).nullable().default(null),
 	outputFormat: outputFormatSchema,
 	sceneType: sceneTypeSchema,
 	styleTransferPrompt: z.string(),
@@ -519,6 +514,7 @@ function cloneFormSnapshot(
 		editPrompt: snapshot.editPrompt,
 		addObjectPresetId: snapshot.addObjectPresetId,
 		removeObjectText: snapshot.removeObjectText,
+		editOperationType: snapshot.editOperationType,
 		outputFormat: snapshot.outputFormat,
 		sceneType: snapshot.sceneType,
 		styleTransferPrompt: snapshot.styleTransferPrompt,
@@ -1098,7 +1094,7 @@ export class RequestState {
 			id: objectReplacementJobIdSchema.parse(id),
 			instruction: replacementObjectSchema.parse(instruction).trim(),
 			sourceRender: cloneRenderResult(sourceRender),
-			formSnapshot: this.captureFormSnapshot()
+			formSnapshot: this.captureFormSnapshot('replace-object')
 		};
 	}
 
@@ -1149,7 +1145,7 @@ export class RequestState {
 			id: lightSettingsJobIdSchema.parse(id),
 			instruction: lightSettingsInstructionSchema.parse(instruction).trim(),
 			sourceRender: cloneRenderResult(sourceRender),
-			formSnapshot: this.captureFormSnapshot()
+			formSnapshot: this.captureFormSnapshot('light-settings')
 		};
 	}
 
@@ -1180,7 +1176,7 @@ export class RequestState {
 			type,
 			instruction: fluxKontextEditInstructionSchema.parse(instruction).trim(),
 			sourceRender: cloneRenderResult(sourceRender),
-			formSnapshot: this.captureFormSnapshot()
+			formSnapshot: this.captureFormSnapshot(type)
 		};
 	}
 
@@ -1223,7 +1219,7 @@ export class RequestState {
 			id: textureReplacementJobIdSchema.parse(id),
 			instruction: replacementSurfaceSchema.parse(instruction).trim(),
 			sourceRender: cloneRenderResult(sourceRender),
-			formSnapshot: this.captureFormSnapshot()
+			formSnapshot: this.captureFormSnapshot('change-surface-color')
 		};
 	}
 
@@ -1276,13 +1272,18 @@ export class RequestState {
 	// applyEditResult() — "what the form holds right now", captured here,
 	// would otherwise reflect whatever the user has since typed elsewhere,
 	// not what was actually submitted.
-	captureFormSnapshot(): RequestFormSnapshot {
+	// `editOperationType` disambiguates a `kind: 'edit'` generation between the
+	// three tools that share it (freeform/add-object/remove-object) — pass the
+	// one the caller knows it's capturing for; omit for kinds with no such
+	// ambiguity (render, style-transfer), where it stays null.
+	captureFormSnapshot(editOperationType: EditOperationType | null = null): RequestFormSnapshot {
 		return {
 			promptFragments: cloneFragments(this.promptFragments),
 			promptOverride: this.promptOverride,
 			editPrompt: this.editPrompt,
 			addObjectPresetId: this.addObjectPresetId,
 			removeObjectText: this.removeObjectText,
+			editOperationType,
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
 			styleTransferPrompt: this.styleTransferPrompt,
@@ -1735,7 +1736,7 @@ export class RequestState {
 	async toObjectReplacementRequest(): Promise<ObjectReplacementRequest | null> {
 		const validation = this.validateObjectReplacement();
 		if (!validation.valid) return null;
-		const formSnapshot = this.captureFormSnapshot();
+		const formSnapshot = this.captureFormSnapshot('replace-object');
 		const imageKey = await this.#resolveSourceFor(this.objectReplacementSourceMode);
 		const referenceImageKey = managedImageKey(this.objectReferenceImage);
 		if (!imageKey || !referenceImageKey) return null;
@@ -1752,7 +1753,7 @@ export class RequestState {
 	async toTextureReplacementRequest(): Promise<TextureReplacementRequest | null> {
 		const validation = this.validateTextureReplacement();
 		if (!validation.valid) return null;
-		const formSnapshot = this.captureFormSnapshot();
+		const formSnapshot = this.captureFormSnapshot('change-surface-color');
 		const imageKey = await this.#resolveSourceFor(this.textureReplacementSourceMode);
 		const referenceImageKey = managedImageKey(this.textureReferenceImage);
 		if (!imageKey || !referenceImageKey) return null;
@@ -1780,7 +1781,7 @@ export class RequestState {
 	async toLightSettingsRequest(): Promise<LightSettingsRequest | null> {
 		const validation = this.validateLightSettings();
 		if (!validation.valid) return null;
-		const formSnapshot = this.captureFormSnapshot();
+		const formSnapshot = this.captureFormSnapshot('light-settings');
 		const imageKey = await this.resolveEditSource();
 		if (!imageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
