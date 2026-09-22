@@ -252,7 +252,7 @@ export function parseStoredFormSnapshot(
 				area: 'generations',
 				event: 'form_snapshot_json_invalid',
 				id,
-				error: error instanceof Error ? error.message : String(error)
+				errorType: error instanceof Error ? error.name : 'unknown'
 			})
 		);
 		return null;
