@@ -261,6 +261,7 @@ describe('getGenerationDetailForUser', () => {
 		expect(detail).toEqual({
 			id,
 			sourceMediaId,
+			resultMediaId,
 			prompt: 'cozy',
 			kind: 'render',
 			createdAt: expect.any(Number),

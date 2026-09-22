@@ -89,9 +89,13 @@ async function mockSingleStyleTransferScene(page: Page): Promise<void> {
 				prompt: '',
 				kind: 'style-transfer',
 				createdAt: Date.UTC(2026, 0, 1),
+				image: media(2, 'https://cdn.example.test/result.webp'),
 				source: media(1, 'https://cdn.example.test/scene.jpg'),
 				formSnapshot: FORM_SNAPSHOT,
-				media: [media(1, 'https://cdn.example.test/scene.jpg')]
+				media: [
+					media(2, 'https://cdn.example.test/result.webp'),
+					media(1, 'https://cdn.example.test/scene.jpg')
+				]
 			})
 		});
 	});
@@ -108,14 +112,13 @@ test('restores a past generation’s exact settings from the scenes drawer', asy
 	await page.locator('.image-frame.result-frame').hover();
 	await page.getByRole('button', { name: /Восстановить настройки сцены/ }).click();
 
-	// Navigated to the tool the restored generation was made with, with the
-	// original source image and the archived settings both in place — not
-	// just the image (that much "use result" already did before this
-	// feature).
+	// Navigated to the tool the restored generation was made with, showing
+	// that generation's own result — the same image its "Результат" thumbnail
+	// (useImage) would set — with the archived settings applied on top.
 	await expect(page).toHaveURL(/\/style-transfer/);
 	await expect(page.locator('.image-wrapper img').first()).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/scene.jpg'
+		'https://cdn.example.test/result.webp'
 	);
 	await expect(page.getByLabel('Уточнение стиля')).toHaveValue('archived style note');
 });

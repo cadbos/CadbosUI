@@ -381,16 +381,21 @@ export interface GeneratedImagesResponse {
 // GET /api/generated-images/[id] — the exact settings a past generation was
 // submitted with (migrations/0018), for restoring them into the current form.
 // `formSnapshot` is null both for generations recorded before that column
-// existed and for `upscale` (nothing to restore). `media` resolves every
-// media key the snapshot's reference/mask images point to (plus the source
-// image), for the client to register with its media-access cache before
-// applying the snapshot — restoring settings whose reference image can no
-// longer be resolved degrades to `formSnapshot: null` rather than failing.
+// existed and for `upscale` (nothing to restore). `image` is this
+// generation's own result — what restoring should show as the current
+// working photo, the same field name/meaning as GeneratedImageRecord['image']
+// — while `source` is what it was generated from, kept for display/reference.
+// `media` resolves every media key the snapshot's reference/mask images point
+// to (plus `image` and `source` themselves), for the client to register with
+// its media-access cache before applying the snapshot — restoring settings
+// whose reference image can no longer be resolved degrades to
+// `formSnapshot: null` rather than failing.
 export interface GeneratedImageDetailResponse {
 	id: string;
 	prompt: string;
 	kind: GenerationKind;
 	createdAt: number;
+	image: MediaAccess;
 	source: MediaAccess;
 	formSnapshot: RequestFormSnapshot | null;
 	media: MediaAccess[];

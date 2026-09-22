@@ -491,7 +491,7 @@ describe('GET /api/generated-images/[id]', () => {
 		expect(response.status).toBe(404);
 	});
 
-	it('resolves the source image and a null snapshot for a row recorded without one', async () => {
+	it('resolves the result and source images and a null snapshot for a row recorded without one', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
@@ -501,11 +501,15 @@ describe('GET /api/generated-images/[id]', () => {
 
 		expect(response.status).toBe(200);
 		expect(result.formSnapshot).toBeNull();
+		expect(result.image).toEqual({
+			key: mediaKey(TEST_S3_BUCKET.name, 'image-1.webp'),
+			url: expect.stringContaining('/image-1.webp?')
+		});
 		expect(result.source).toEqual({
 			key: mediaKey(TEST_S3_BUCKET.name, 'source.jpg'),
 			url: expect.stringContaining('/source.jpg?')
 		});
-		expect(result.media).toEqual([result.source]);
+		expect(result.media).toEqual([result.image, result.source]);
 	});
 
 	it('resolves the snapshot and every media key its reference images point to', async () => {
@@ -535,6 +539,7 @@ describe('GET /api/generated-images/[id]', () => {
 		});
 		expect(result.media.map((access) => access.key).sort()).toEqual(
 			[
+				mediaKey(TEST_S3_BUCKET.name, 'image-1.webp'),
 				mediaKey(TEST_S3_BUCKET.name, 'source.jpg'),
 				mediaKey(TEST_S3_BUCKET.name, 'reference.jpg')
 			].sort()
@@ -562,7 +567,7 @@ describe('GET /api/generated-images/[id]', () => {
 
 		expect(response.status).toBe(200);
 		expect(result.formSnapshot).toBeNull();
-		expect(result.media).toEqual([result.source]);
+		expect(result.media).toEqual([result.image, result.source]);
 	});
 
 	it('fails closed for the dev-only demo session without touching D1', async () => {

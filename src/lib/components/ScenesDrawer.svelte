@@ -48,6 +48,7 @@ before the Change Date. See LICENSE for complete terms.
 		prompt: z.string(),
 		kind: z.enum(generationKinds),
 		createdAt: z.number(),
+		image: mediaAccessSchema,
 		source: mediaAccessSchema,
 		formSnapshot: requestFormSnapshotSchema.nullable(),
 		media: z.array(mediaAccessSchema)
@@ -354,7 +355,10 @@ before the Change Date. See LICENSE for complete terms.
 			if (!parsed.success) throw new Error('restore_failed');
 
 			for (const access of parsed.data.media) mediaAccess.normalize(access);
-			resetForNewScene(parsed.data.source.key);
+			// The generation's own result, not its source — restoring a scene
+			// should bring back what that scene actually looked like, the same
+			// image clicking its "Результат" thumbnail (useImage) would set.
+			resetForNewScene(parsed.data.image.key);
 			if (parsed.data.formSnapshot) {
 				request.restoreFormSnapshot(parsed.data.formSnapshot);
 				// The snapshot's own source-mode fields may point at a prior

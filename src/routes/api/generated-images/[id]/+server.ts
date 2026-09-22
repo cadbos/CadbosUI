@@ -58,8 +58,11 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	const detail = await getGenerationDetailForUser(db, userId, params.id);
 	if (!detail) return apiError(404, 'generation_not_found', 'Generation not found');
 
-	const source = await mediaAccessById(db, platform, detail.sourceMediaId);
-	if (!source) return apiError(404, 'image_not_found', 'Image not found');
+	const [image, source] = await Promise.all([
+		mediaAccessById(db, platform, detail.resultMediaId),
+		mediaAccessById(db, platform, detail.sourceMediaId)
+	]);
+	if (!image || !source) return apiError(404, 'image_not_found', 'Image not found');
 
 	const referencedKeys = detail.formSnapshot ? referencedMediaKeys(detail.formSnapshot) : [];
 	const referencedAccess = referencedKeys.length
@@ -75,9 +78,10 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			prompt: detail.prompt,
 			kind: detail.kind,
 			createdAt: detail.createdAt,
+			image,
 			source,
 			formSnapshot,
-			media: referencedAccess ? [source, ...referencedAccess.values()] : [source]
+			media: referencedAccess ? [image, source, ...referencedAccess.values()] : [image, source]
 		} satisfies GeneratedImageDetailResponse,
 		{ headers: { 'cache-control': 'private, no-store' } }
 	);

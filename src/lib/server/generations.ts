@@ -215,6 +215,7 @@ export async function getGeneratedImageForUser(
 export interface GenerationDetail {
 	id: string;
 	sourceMediaId: number;
+	resultMediaId: number;
 	prompt: string;
 	kind: GenerationKind;
 	createdAt: number;
@@ -224,6 +225,7 @@ export interface GenerationDetail {
 interface GenerationDetailRow {
 	id: string;
 	source_media_id: number;
+	result_media_id: number;
 	prompt: string;
 	kind: string;
 	created_at: number;
@@ -281,7 +283,7 @@ export async function getGenerationDetailForUser(
 ): Promise<GenerationDetail | null> {
 	const row = await db
 		.prepare(
-			'SELECT id, source_media_id, prompt, kind, created_at, form_snapshot ' +
+			'SELECT id, source_media_id, result_media_id, prompt, kind, created_at, form_snapshot ' +
 				'FROM generations WHERE id = ? AND user_id = ?'
 		)
 		.bind(id, userId)
@@ -292,6 +294,7 @@ export async function getGenerationDetailForUser(
 	return {
 		id: row.id,
 		sourceMediaId: row.source_media_id,
+		resultMediaId: row.result_media_id,
 		prompt: row.prompt,
 		kind,
 		createdAt: row.created_at,
