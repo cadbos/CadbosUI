@@ -108,7 +108,7 @@
 	"17": {
 		"inputs": {
 			"filename_prefix": "obj-replace-v23",
-			"images": ["38", 0]
+			"images": ["68", 0]
 		},
 		"class_type": "SaveImage",
 		"_meta": {
@@ -208,7 +208,7 @@
 			"background_color": "#FFFFFF",
 			"image1": ["1", 0],
 			"image2": ["2", 0],
-			"image3": ["38", 0]
+			"image3": ["68", 0]
 		},
 		"class_type": "AILab_ImageStitch",
 		"_meta": {
@@ -222,17 +222,6 @@
 		"class_type": "PreviewImage",
 		"_meta": {
 			"title": "Preview Image"
-		}
-	},
-	"38": {
-		"inputs": {
-			"seed": 42,
-			"strength": 0.02,
-			"image": ["68", 0]
-		},
-		"class_type": "ImageAddNoise",
-		"_meta": {
-			"title": "Add Noise to Image"
 		}
 	},
 	"39": {

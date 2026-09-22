@@ -141,7 +141,7 @@ describe('runObjectReplacement', () => {
 		expect(queuedWorkflow?.['153:152'].inputs.string_b).toEqual(['19', 0]);
 		expect(queuedWorkflow?.['26'].inputs.replace).toEqual(['108', 0]);
 		expect(queuedWorkflow?.['17']).toEqual({
-			inputs: { filename_prefix: 'obj-replace-v23', images: ['38', 0] },
+			inputs: { filename_prefix: 'obj-replace-v23', images: ['68', 0] },
 			class_type: 'SaveImage',
 			_meta: { title: 'SAVE RESULT' }
 		});
