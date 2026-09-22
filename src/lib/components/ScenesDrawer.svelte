@@ -27,36 +27,21 @@ before the Change Date. See LICENSE for complete terms.
 		Wand,
 		X
 	} from '@lucide/svelte';
-	import { z } from 'zod';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import type { Component, ComponentProps } from 'svelte';
-	import { generationKinds, type GenerationKind } from '$lib/api/contract';
+	import type { GenerationKind } from '$lib/api/contract';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
-	import { mediaAccess } from '$lib/state/media-access.svelte';
 	import {
-		request,
-		requestFormSnapshotSchema,
-		type EditOperationType
-	} from '$lib/state/request.svelte';
+		applyGeneratedImageFormSnapshot,
+		fetchGeneratedImageDetail
+	} from '$lib/state/generation-restore';
+	import { request, type RequestFormSnapshot } from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, destinationForGenerationKind } from '$lib/state/url-state';
 	import { logBoundaryError, openModal } from '$lib/utils';
-
-	const mediaAccessSchema = z.object({ key: z.string().min(1), url: z.url() });
-
-	const generatedImageDetailResponseSchema = z.object({
-		id: z.string().min(1),
-		prompt: z.string(),
-		kind: z.enum(generationKinds),
-		createdAt: z.number(),
-		image: mediaAccessSchema,
-		source: mediaAccessSchema,
-		formSnapshot: requestFormSnapshotSchema.nullable(),
-		media: z.array(mediaAccessSchema)
-	});
 
 	const generationKindKeys: Record<GenerationKind, TranslationKey> = {
 		render: 'generatedImages.kind.render',
@@ -313,9 +298,9 @@ before the Change Date. See LICENSE for complete terms.
 	function navigateToDestination(
 		kind: GenerationKind,
 		boundary: string,
-		editOperationType?: EditOperationType | null
+		formSnapshot?: RequestFormSnapshot | null
 	): void {
-		const destination = destinationForGenerationKind(kind, editOperationType);
+		const destination = destinationForGenerationKind(kind, formSnapshot);
 		onClose();
 		goto(
 			resolve(
@@ -356,32 +341,15 @@ before the Change Date. See LICENSE for complete terms.
 		restoringId = id;
 		restoreFailedId = null;
 		try {
-			const response = await fetch(`/api/generated-images/${encodeURIComponent(id)}`);
-			if (!response.ok) throw new Error('restore_failed');
-			const body: unknown = await response.json();
-			const parsed = generatedImageDetailResponseSchema.safeParse(body);
-			if (!parsed.success) throw new Error('restore_failed');
+			const detail = await fetchGeneratedImageDetail(id);
+			if (!detail) throw new Error('restore_failed');
 
-			for (const access of parsed.data.media) mediaAccess.normalize(access);
 			// The generation's own result, not its source — restoring a scene
 			// should bring back what that scene actually looked like, the same
 			// image clicking its "Результат" thumbnail (useImage) would set.
-			resetForNewScene(parsed.data.image.key);
-			if (parsed.data.formSnapshot) {
-				request.restoreFormSnapshot(parsed.data.formSnapshot);
-				// The snapshot's own source-mode fields may point at a prior
-				// render's output ('current-result') — meaningless here, since
-				// restoring never reconstructs that render chain, only the
-				// single image resetForNewScene() just set above.
-				request.setStyleSourceMode('room-photo');
-				request.setObjectReplacementSourceMode('room-photo');
-				request.setTextureReplacementSourceMode('room-photo');
-			}
-			navigateToDestination(
-				kind,
-				'scenesDrawer.restoreNavigation',
-				parsed.data.formSnapshot?.editOperationType
-			);
+			resetForNewScene(detail.image.key);
+			applyGeneratedImageFormSnapshot(detail);
+			navigateToDestination(kind, 'scenesDrawer.restoreNavigation', detail.formSnapshot);
 		} catch (error) {
 			restoreFailedId = id;
 			logBoundaryError('scenesDrawer.restoreGeneration', error);

@@ -22,6 +22,7 @@ import {
 	type EditOperationType,
 	type ImageSourceMode,
 	type RenderResult,
+	type RequestFormSnapshot,
 	type RequestState,
 	type SceneType
 } from '$lib/state/request.svelte';
@@ -166,21 +167,42 @@ export function renderOrigin(render: RenderResult | undefined): RenderOrigin | u
 	return tool ? { mode: 'edit', tool } : undefined;
 }
 
-// `editOperationType` (RequestFormSnapshot's own field, absent when there's
-// no snapshot to restore — e.g. the Scenes drawer's plain "use this image")
-// disambiguates a `kind: 'edit'` generation between the three tools that
-// share it (freeform/add-object/remove-object) — without it, every 'edit'
-// generation would restore onto the freeform tab regardless of which of the
-// three actually produced it.
+// Which reference tab a style-transfer snapshot's own reference image belongs
+// under — a built-in preset lives under whichever category it was defined
+// with (StyleTransferPanel.svelte's `stylePresetsFor` only lists presets from
+// the active tab, so landing on the wrong one leaves the restored preset
+// selected in the store but absent from the grid, showing nothing selected),
+// an uploaded reference is always 'custom', and no reference at all falls
+// back to the default 'photorealistic' tab.
+function styleReferenceTab(image: RequestFormSnapshot['styleReferenceImage']): ReferenceTab {
+	if (!image) return 'photorealistic';
+	if (!('stylePresetId' in image)) return 'custom';
+	return (
+		STYLE_PRESETS.find((preset) => preset.id === image.stylePresetId)?.category ?? 'photorealistic'
+	);
+}
+
+// `formSnapshot` (absent when there's no snapshot to restore — e.g. the
+// Scenes drawer's plain "use this image") disambiguates two kinds that share
+// one GenerationKind across several distinct UI destinations:
+// - `edit`: freeform/add-object/remove-object all share it, told apart by
+//   `formSnapshot.editOperationType` — without it, every 'edit' generation
+//   would restore onto the freeform tab regardless of which tool produced it.
+// - `style-transfer`: its reference image may be a preset from either the
+//   photorealistic or conceptual tab, or a custom upload — see
+//   styleReferenceTab() above.
 export function destinationForGenerationKind(
 	kind: GenerationKind,
-	editOperationType?: EditOperationType | null
+	formSnapshot?: RequestFormSnapshot | null
 ): WorkspaceDestination {
 	switch (kind) {
 		case 'render':
 			return { mode: 'render', subTab: { view: 'chat' } };
 		case 'style-transfer':
-			return { mode: 'styleTransfer', subTab: { reference: 'photorealistic' } };
+			return {
+				mode: 'styleTransfer',
+				subTab: { reference: styleReferenceTab(formSnapshot?.styleReferenceImage) }
+			};
 		case 'object-replacement':
 			return { mode: 'edit', subTab: { tool: 'object-replacement' } };
 		case 'texture-replacement':
@@ -188,13 +210,11 @@ export function destinationForGenerationKind(
 		case 'light-settings':
 			return { mode: 'edit', subTab: { tool: 'light-settings' } };
 		case 'edit':
-		case 'upscale':
-			return {
-				mode: 'edit',
-				subTab: {
-					tool: (editOperationType ? EDIT_OP_TOOL[editOperationType] : undefined) ?? 'freeform'
-				}
-			};
+		case 'upscale': {
+			const editOperationType = formSnapshot?.editOperationType;
+			const tool = editOperationType ? EDIT_OP_TOOL[editOperationType] : undefined;
+			return { mode: 'edit', subTab: { tool: tool ?? 'freeform' } };
+		}
 	}
 }
 

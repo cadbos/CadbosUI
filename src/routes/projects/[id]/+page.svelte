@@ -22,7 +22,11 @@ before the Change Date. See LICENSE for complete terms.
 	import { projectDetail } from '$lib/state/project-detail.svelte';
 	import { projectShare } from '$lib/state/project-share.svelte';
 	import { request } from '$lib/state/request.svelte';
-	import { buildShareUrl } from '$lib/state/url-state';
+	import {
+		applyGeneratedImageFormSnapshot,
+		fetchGeneratedImageDetail
+	} from '$lib/state/generation-restore';
+	import { buildShareUrl, destinationForGenerationKind } from '$lib/state/url-state';
 	import { initializeSessionState, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError, openModal } from '$lib/utils';
 
@@ -79,7 +83,7 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
-	function continueSession(session: ProjectSessionRecord): void {
+	async function continueSession(session: ProjectSessionRecord): Promise<void> {
 		const project = projectDetail.project;
 		if (!project) return;
 		workspaceTabs.openProject({
@@ -89,9 +93,24 @@ before the Change Date. See LICENSE for complete terms.
 			sessionTitle: session.title.trim() === '' ? null : session.title,
 			initialize: (state) => initializeSessionState(state, project.id, session)
 		});
-		goto(buildShareUrl('render', request, { view: 'chat' }), { replaceState: false }).catch(
-			(error: unknown) => logBoundaryError('projectDetailPage.continueSession', error)
-		);
+
+		// initializeSessionState() above already set the base image from the
+		// session's latest generation; this layers its exact form settings on
+		// top (and picks the matching mode/tool below), the same restore a
+		// past scene gets from the Scenes drawer — a session someone continues
+		// days later should pick back up exactly where they left it, not just
+		// with the last photo and a blank form.
+		const latest = session.generations[0];
+		const detail = latest ? await fetchGeneratedImageDetail(latest.id) : null;
+		if (detail) applyGeneratedImageFormSnapshot(detail);
+		const destination =
+			latest && detail
+				? destinationForGenerationKind(latest.kind, detail.formSnapshot)
+				: { mode: 'render' as const, subTab: { view: 'chat' as const } };
+
+		goto(buildShareUrl(destination.mode, request, destination.subTab), {
+			replaceState: false
+		}).catch((error: unknown) => logBoundaryError('projectDetailPage.continueSession', error));
 	}
 
 	function requestDeleteProject(): void {

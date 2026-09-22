@@ -299,6 +299,105 @@ test('continues a session into the render workspace with its latest render as th
 	expect(renderBody).toMatchObject({ sessionId: SESSION_ID });
 });
 
+test('continuing a session restores its latest generation’s exact settings, not just the image', async ({
+	page
+}) => {
+	const generationId = '00000000-0000-4000-8000-000000000100';
+	await authenticate(page);
+	await page.route('**/api/generated-images**', async (route) => {
+		if (route.request().url().includes(generationId)) return route.fallback();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ images: [], pagination: { offset: 0, size: 100, hasMore: false } })
+		});
+	});
+	// The bug this guards against: continuing a session only ever restored
+	// the last generation's *image*, dropping every other setting — here, a
+	// conceptual-category style preset that also can't be recovered by simply
+	// falling back to the default (photorealistic) reference tab.
+	await page.route(`**/api/generated-images/${generationId}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: generationId,
+				prompt: '',
+				kind: 'style-transfer',
+				createdAt: Date.UTC(2026, 0, 1),
+				image: media(2, 'https://cdn.example.test/styled.webp'),
+				source: media(1, 'https://cdn.example.test/room.jpg'),
+				formSnapshot: {
+					promptFragments: [],
+					promptOverride: null,
+					editPrompt: '',
+					addObjectPresetId: null,
+					removeObjectText: '',
+					editOperationType: null,
+					outputFormat: 'webp',
+					sceneType: 'interior',
+					styleTransferPrompt: 'warm scandinavian wood tones',
+					styleTransferStrength: 0.6,
+					styleNegativePrompt: '',
+					styleSourceMode: 'room-photo',
+					styleReferenceImage: {
+						stylePresetId: 'interior-watercolor-v1',
+						url: 'https://style-presets.cadbos.com/interior/conceptual/watercolor-v1.jpg'
+					},
+					objectReplacementObject: '',
+					objectReplacementSourceMode: 'current-result',
+					objectReplacementScale: 1,
+					textureReplacementSurface: '',
+					textureReplacementSourceMode: 'current-result',
+					textureReplacementMasked: false,
+					lightSettingsPresetIds: [],
+					lightSettingsInstruction: ''
+				},
+				media: [
+					media(2, 'https://cdn.example.test/styled.webp'),
+					media(1, 'https://cdn.example.test/room.jpg')
+				]
+			})
+		});
+	});
+	await mockProjectDetail(page, {
+		sessions: [
+			session({
+				title: 'Main thread',
+				generations: [
+					{
+						id: generationId,
+						image: media(2, 'https://cdn.example.test/styled.webp'),
+						source: media(1, 'https://cdn.example.test/room.jpg'),
+						kind: 'style-transfer',
+						createdAt: Date.UTC(2026, 0, 1),
+						amount: 5,
+						balanceAfter: 95
+					}
+				]
+			})
+		]
+	});
+
+	await page.goto(`/projects/${PROJECT_ID}`);
+	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
+
+	// Not just the right mode, but the conceptual reference tab specifically —
+	// landing on the default photorealistic tab would leave this preset
+	// selected in the store but absent from the grid, showing nothing chosen.
+	await expect(page).toHaveURL(/\/style-transfer\/interior\?/);
+	await expect(page).toHaveURL(/reference=conceptual/);
+	await expect(page.getByRole('tab', { name: 'Концептуальные' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await expect(page.getByRole('radio', { name: /Акварель v1/ })).toHaveAttribute(
+		'aria-checked',
+		'true'
+	);
+	await expect(page.getByLabel('Уточнение стиля')).toHaveValue('warm scandinavian wood tones');
+});
+
 test('issues a share link and copies it, then revokes it after confirming', async ({
 	page,
 	context,
