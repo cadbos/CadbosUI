@@ -19,6 +19,7 @@ import type {
 	GeneratedImageDetailResponse,
 	ImageInput,
 	ManagedImageInput,
+	MediaAccess,
 	RequestFormSnapshot
 } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
@@ -41,6 +42,30 @@ function referencedMediaKeys(snapshot: RequestFormSnapshot): string[] {
 	return images
 		.filter((image): image is ManagedImageInput => image !== undefined && 'mediaKey' in image)
 		.map((image) => image.mediaKey);
+}
+
+// A reference/mask image the snapshot points to may since have been deleted —
+// drop just that field rather than the whole snapshot, so the rest of the
+// restored settings (prompt, sceneType, etc.) still come back.
+function withAvailableReferenceImages(
+	snapshot: RequestFormSnapshot,
+	referencedAccess: Map<string, MediaAccess>
+): RequestFormSnapshot {
+	const isAvailable = (image: ImageInput | undefined): boolean =>
+		image === undefined || !('mediaKey' in image) || referencedAccess.has(image.mediaKey);
+	return {
+		...snapshot,
+		styleReferenceImage: isAvailable(snapshot.styleReferenceImage)
+			? snapshot.styleReferenceImage
+			: undefined,
+		objectReferenceImage: isAvailable(snapshot.objectReferenceImage)
+			? snapshot.objectReferenceImage
+			: undefined,
+		textureReferenceImage: isAvailable(snapshot.textureReferenceImage)
+			? snapshot.textureReferenceImage
+			: undefined,
+		textureMaskImage: isAvailable(snapshot.textureMaskImage) ? snapshot.textureMaskImage : undefined
+	};
 }
 
 export const GET: RequestHandler = async ({ params, platform, locals }) => {
@@ -67,10 +92,10 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	const referencedKeys = detail.formSnapshot ? referencedMediaKeys(detail.formSnapshot) : [];
 	const referencedAccess = referencedKeys.length
 		? await mediaAccessByKeyBatch(db, platform, referencedKeys)
-		: new Map();
-	// A reference image the snapshot points to may since have been deleted —
-	// degrade to a prompt-only restore rather than failing the whole read.
-	const formSnapshot = referencedAccess ? detail.formSnapshot : null;
+		: new Map<string, MediaAccess>();
+	const formSnapshot = detail.formSnapshot
+		? withAvailableReferenceImages(detail.formSnapshot, referencedAccess)
+		: null;
 
 	return json(
 		{
@@ -81,7 +106,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			image,
 			source,
 			formSnapshot,
-			media: referencedAccess ? [image, source, ...referencedAccess.values()] : [image, source]
+			media: [image, source, ...referencedAccess.values()]
 		} satisfies GeneratedImageDetailResponse,
 		{ headers: { 'cache-control': 'private, no-store' } }
 	);

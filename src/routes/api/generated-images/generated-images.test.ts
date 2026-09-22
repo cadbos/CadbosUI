@@ -546,7 +546,7 @@ describe('GET /api/generated-images/[id]', () => {
 		);
 	});
 
-	it('degrades to a null snapshot when a referenced image can no longer be resolved', async () => {
+	it('drops only the unresolved reference image, keeping the rest of the snapshot', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
@@ -566,7 +566,7 @@ describe('GET /api/generated-images/[id]', () => {
 		const result = (await response.json()) as GeneratedImageDetailResponse;
 
 		expect(response.status).toBe(200);
-		expect(result.formSnapshot).toBeNull();
+		expect(result.formSnapshot).toEqual({ ...TEST_FORM_SNAPSHOT, styleReferenceImage: undefined });
 		expect(result.media).toEqual([result.image, result.source]);
 	});
 
