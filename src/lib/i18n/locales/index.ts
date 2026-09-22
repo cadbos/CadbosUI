@@ -209,6 +209,13 @@ export interface Dictionary {
 	'generatedImages.confirmDeleteConfirm': string;
 	'generatedImages.confirmDeleteDeleting': string;
 	'generatedImages.resizeHandle': string;
+	'generatedImages.restore': string;
+	'generatedImages.restoreFailed': string;
+	'generatedImages.confirmRestoreTitle': string;
+	'generatedImages.confirmRestoreDescription': string;
+	'generatedImages.confirmRestoreCancel': string;
+	'generatedImages.confirmRestoreConfirm': string;
+	'generatedImages.confirmRestoreRestoring': string;
 	'usage.title': string;
 	'usage.subtitle': string;
 	'usage.signInRequired': string;

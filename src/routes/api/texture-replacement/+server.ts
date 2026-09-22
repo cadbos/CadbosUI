@@ -183,7 +183,8 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 					amount: result.cost,
 					archaiRenderSec: result.renderSec,
 					archaiDownloadSec: result.downloadSec,
-					archaiReuploadSec: result.reuploadSec
+					archaiReuploadSec: result.reuploadSec,
+					formSnapshot: maskedRequest.formSnapshot
 				});
 				result = { ...result, balance: credit.balance };
 			} catch (error) {
@@ -255,7 +256,8 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				replacementSurface: automaticRequest.replacementSurface,
 				cost: comfyCost,
 				createdAt: Date.now(),
-				uploadQueueSec
+				uploadQueueSec,
+				formSnapshot: automaticRequest.formSnapshot
 			});
 		} catch {
 			console.error('Texture replacement job persistence failed');

@@ -214,6 +214,14 @@ export const ru = {
 	'generatedImages.confirmDeleteConfirm': 'Удалить',
 	'generatedImages.confirmDeleteDeleting': 'Удаление…',
 	'generatedImages.resizeHandle': 'Изменить ширину панели сцен',
+	'generatedImages.restore': 'Восстановить настройки сцены {order}',
+	'generatedImages.restoreFailed': 'Не удалось восстановить настройки сцены.',
+	'generatedImages.confirmRestoreTitle': 'Восстановить настройки?',
+	'generatedImages.confirmRestoreDescription':
+		'Восстановить настройки из сцены {order}? Текущие несохранённые изменения формы будут заменены.',
+	'generatedImages.confirmRestoreCancel': 'Отмена',
+	'generatedImages.confirmRestoreConfirm': 'Восстановить',
+	'generatedImages.confirmRestoreRestoring': 'Восстановление…',
 	'usage.title': 'Использование',
 	'usage.subtitle': 'Балансы аккаунтов и траты на генерации по пользователям Cadbos.',
 	'usage.signInRequired':

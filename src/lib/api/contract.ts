@@ -22,6 +22,70 @@ export const OUTPUT_FORMATS = ['webp', 'jpg', 'png', 'avif'] as const;
 
 export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
 
+export const SCENE_TYPES = ['interior', 'exterior'] as const;
+
+export type SceneType = (typeof SCENE_TYPES)[number];
+
+export const IMAGE_SOURCE_MODES = ['room-photo', 'current-result'] as const;
+
+export type ImageSourceMode = (typeof IMAGE_SOURCE_MODES)[number];
+
+export interface ManagedImageInput {
+	mediaKey: string;
+	mime?: string;
+	size?: number;
+	dimensions?: [number, number];
+}
+
+export interface StylePresetImageInput {
+	stylePresetId: string;
+	url: string;
+	mime?: string;
+}
+
+export type ImageInput = ManagedImageInput | StylePresetImageInput;
+
+export interface PromptFragment {
+	id: string;
+	label?: string;
+	text: string;
+	order: number;
+}
+
+// The full set of editable form fields for a single generation call, captured
+// client-side (RequestState#captureFormSnapshot) at submit time and persisted
+// alongside the resulting `generations`/`*_jobs` row so a past generation can
+// later be reopened with its exact settings restored — not just its image.
+// Defined here (not in $lib/state/request.svelte.ts) so both the client store
+// and the server-side request schemas (src/lib/server/api.ts) share one shape
+// without the server depending on Svelte-only modules.
+export interface RequestFormSnapshot {
+	promptFragments: PromptFragment[];
+	promptOverride: string | null;
+	editPrompt: string;
+	addObjectPresetId: string | null;
+	removeObjectText: string;
+	outputFormat: OutputFormat;
+	sceneType: SceneType;
+	styleTransferPrompt: string;
+	styleTransferStrength: number;
+	styleNegativePrompt: string;
+	styleSourceMode: ImageSourceMode;
+	styleReferenceImage?: ImageInput;
+	objectReplacementObject: string;
+	objectReplacementSourceMode: ImageSourceMode;
+	objectReplacementScale: number;
+	objectReferenceImage?: ImageInput;
+	textureReplacementSurface: string;
+	textureReplacementSourceMode: ImageSourceMode;
+	textureReplacementMasked: boolean;
+	textureReferenceImage?: ImageInput;
+	textureMaskImage?: ImageInput;
+	textureMaskSourceKey?: string;
+	lightSettingsPresetIds: string[];
+	lightSettingsInstruction: string;
+}
+
 export interface MediaAccess {
 	key: string;
 	url: string;
@@ -111,6 +175,10 @@ export interface RenderRequest {
 	// The project session this generation attaches to (Module 11) — the server
 	// verifies ownership before charging or calling the render provider.
 	sessionId: string;
+	// The full form state that produced this call (RequestState#captureFormSnapshot),
+	// persisted alongside the resulting generation so it can be reopened later
+	// with its exact settings restored — see migrations/0018.
+	formSnapshot?: RequestFormSnapshot;
 }
 
 // POST /api/edit — edit by prompt via the Flux Kontext ComfyUI workflow
@@ -120,6 +188,7 @@ export interface EditRequest {
 	imageKey: string;
 	prompt: string;
 	sessionId: string;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export interface EditProcessingResponse {
@@ -153,6 +222,7 @@ export interface StyleTransferRequest {
 	negativePrompt?: string;
 	styleTransferStrength?: number;
 	sessionId: string;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 // POST /api/upscale — upscale an existing render/edit result to 4K.
@@ -167,6 +237,7 @@ export interface ObjectReplacementRequest {
 	referenceImageKey: string;
 	replacementObject: string;
 	sessionId: string;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export interface ObjectReplacementProcessingResponse {
@@ -197,6 +268,7 @@ export interface LightSettingsRequest {
 	imageKey: string;
 	instruction: string;
 	sessionId: string;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export interface LightSettingsProcessingResponse {
@@ -228,6 +300,7 @@ export interface AutomaticTextureReplacementRequest {
 	referenceImageKey: string;
 	replacementSurface: string;
 	sessionId: string;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export interface MaskedTextureReplacementRequest {
@@ -235,6 +308,7 @@ export interface MaskedTextureReplacementRequest {
 	referenceImageKey: string;
 	maskImageKey: string;
 	sessionId: string;
+	formSnapshot?: RequestFormSnapshot;
 }
 
 export type TextureReplacementRequest =
@@ -302,6 +376,24 @@ export interface GeneratedImagesResponse {
 		size: number;
 		hasMore: boolean;
 	};
+}
+
+// GET /api/generated-images/[id] — the exact settings a past generation was
+// submitted with (migrations/0018), for restoring them into the current form.
+// `formSnapshot` is null both for generations recorded before that column
+// existed and for `upscale` (nothing to restore). `media` resolves every
+// media key the snapshot's reference/mask images point to (plus the source
+// image), for the client to register with its media-access cache before
+// applying the snapshot — restoring settings whose reference image can no
+// longer be resolved degrades to `formSnapshot: null` rather than failing.
+export interface GeneratedImageDetailResponse {
+	id: string;
+	prompt: string;
+	kind: GenerationKind;
+	createdAt: number;
+	source: MediaAccess;
+	formSnapshot: RequestFormSnapshot | null;
+	media: MediaAccess[];
 }
 
 // GET /api/resources — distinct source photos the user has actually

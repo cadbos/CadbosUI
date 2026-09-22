@@ -311,7 +311,10 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 		prompt: 'keep layout, use warmer materials',
 		negativePrompt: 'people',
 		styleTransferStrength: 0.35,
-		sessionId: E2E_SESSION_ID
+		sessionId: E2E_SESSION_ID,
+		// The full form settings this call was submitted with (migrations/0018)
+		// — its own shape is covered by request.test.ts, not this flow test.
+		formSnapshot: expect.any(Object)
 	});
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
@@ -409,7 +412,8 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		outputFormat: 'webp',
 		prompt: 'style transfer guidance only',
 		styleTransferStrength: 0.7,
-		sessionId: E2E_SESSION_ID
+		sessionId: E2E_SESSION_ID,
+		formSnapshot: expect.any(Object)
 	});
 
 	await page.getByRole('tab', { name: 'Создание' }).click();
@@ -422,7 +426,8 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		imageKey: mediaKey(4),
 		prompt: 'render prompt for paid generation',
 		outputFormat: 'webp',
-		sessionId: E2E_SESSION_ID
+		sessionId: E2E_SESSION_ID,
+		formSnapshot: expect.any(Object)
 	});
 });
 
@@ -1500,6 +1505,9 @@ test('the Light settings tool composes an instruction from selected presets and 
 	expect(submittedBody).toEqual({
 		imageKey: mediaKey(1),
 		instruction: 'сделай тёплый золотой свет заката, зажги торшер',
-		sessionId: E2E_SESSION_ID
+		sessionId: E2E_SESSION_ID,
+		// The full form settings this call was submitted with (migrations/0018)
+		// — its own shape is covered by request.test.ts, not this flow test.
+		formSnapshot: expect.any(Object)
 	});
 });
