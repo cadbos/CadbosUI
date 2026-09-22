@@ -181,20 +181,12 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	);
 
 	await scenesButton.click();
-	const useResultButton = page.getByRole('button', { name: 'Обработать результат сцены 2' });
-	await useResultButton.focus();
-	await useResultButton.press('Enter');
-	await expect(page).toHaveURL(/\/edit\?tool=freeform/);
-	await expect(page.getByRole('tab', { name: 'Свой промпт' })).toHaveAttribute(
-		'aria-selected',
-		'true'
-	);
-	await expect(page.getByRole('img', { name: 'Фото комнаты' })).toHaveAttribute(
-		'src',
-		'https://cdn.example.test/middle.webp'
-	);
-
-	await scenesButton.click();
+	// The result column has no plain "use this image" action for a
+	// restorable kind — the neighboring restore button already covers it
+	// (see ScenesDrawer.svelte); only the source column keeps one, since
+	// there's no restore equivalent for a scene's source photo.
+	await expect(page.getByRole('button', { name: 'Обработать результат сцены 2' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Восстановить настройки сцены 2' })).toBeVisible();
 
 	const downloadLink = page.getByRole('link', {
 		name: 'Скачать результат сцены 1'
