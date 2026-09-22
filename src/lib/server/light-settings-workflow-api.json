@@ -1,7 +1,7 @@
 {
 	"1": {
 		"inputs": {
-			"image": "s5_no_chandelier_003.jpg"
+			"image": "s1_dark_chandelier_001.jpg"
 		},
 		"class_type": "LoadImage",
 		"_meta": {
@@ -62,7 +62,7 @@
 	},
 	"11": {
 		"inputs": {
-			"prompt": ["116", 0],
+			"prompt": ["127", 0],
 			"clip": ["9", 0],
 			"vae": ["10", 0],
 			"image1": ["110", 0]
@@ -84,7 +84,7 @@
 	},
 	"17": {
 		"inputs": {
-			"filename_prefix": ["77", 2],
+			"filename_prefix": ["123", 2],
 			"images": ["78", 0]
 		},
 		"class_type": "SaveImage",
@@ -101,46 +101,27 @@
 			"title": "Инструкция (что сделать со светом) — пишите как угодно: 'зажги люстру', 'выключи бра над кроватью', 'выключи все светильники'"
 		}
 	},
-	"153:147": {
+	"20": {
 		"inputs": {
-			"clip_name": "Qwen3VL-4B-Instruct-Q8_0.gguf",
-			"type": "ltxv"
+			"model": "Hy-MT2-1.8B-Q6_K.gguf",
+			"device": "cpu",
+			"n_gpu_layers": 0
 		},
-		"class_type": "CLIPLoaderGGUF",
+		"class_type": "GGUFLoader",
 		"_meta": {
-			"title": "CLIPLoader (GGUF)"
+			"title": "GGUFLoader"
 		}
 	},
-	"153:152": {
+	"21": {
 		"inputs": {
-			"string_a": "Translate the following text to English, preserving original meaning:",
-			"string_b": ["19", 0],
-			"delimiter": " "
+			"prompt": ["19", 0],
+			"target_language": "English",
+			"auto_release": false,
+			"llama_model": ["20", 0]
 		},
-		"class_type": "StringConcatenate",
+		"class_type": "PromptTranslatorNode",
 		"_meta": {
-			"title": "Concatenate Text"
-		}
-	},
-	"153:150": {
-		"inputs": {
-			"prompt": ["153:152", 0],
-			"max_length": 512,
-			"sampling_mode": "on",
-			"sampling_mode.temperature": 0.7,
-			"sampling_mode.top_k": 64,
-			"sampling_mode.top_p": 0.95,
-			"sampling_mode.min_p": 0.05,
-			"sampling_mode.repetition_penalty": 1.05,
-			"sampling_mode.seed": 0,
-			"sampling_mode.presence_penalty": 0,
-			"thinking": false,
-			"use_default_template": true,
-			"clip": ["153:147", 0]
-		},
-		"class_type": "TextGenerate",
-		"_meta": {
-			"title": "Generate Text"
+			"title": "Prompt Translator (GGUF)"
 		}
 	},
 	"23": {
@@ -156,7 +137,7 @@
 		"inputs": {
 			"string": ["102", 0],
 			"find": "{}",
-			"replace": ["153:150", 0]
+			"replace": ["21", 0]
 		},
 		"class_type": "StringReplace",
 		"_meta": {
@@ -209,17 +190,6 @@
 			"title": "Upscale Image (using Model)"
 		}
 	},
-	"38": {
-		"inputs": {
-			"seed": ["51", 0],
-			"strength": 0.02,
-			"image": ["68", 0]
-		},
-		"class_type": "ImageAddNoise",
-		"_meta": {
-			"title": "Add Noise to Image"
-		}
-	},
 	"39": {
 		"inputs": {
 			"unet_name": "qwen-image-edit-2511-Q8_0.gguf"
@@ -231,7 +201,7 @@
 	},
 	"40": {
 		"inputs": {
-			"source": ["116", 0]
+			"source": ["127", 0]
 		},
 		"class_type": "PreviewAny",
 		"_meta": {
@@ -240,7 +210,7 @@
 	},
 	"49": {
 		"inputs": {
-			"source": ["153:150", 0]
+			"source": ["21", 0]
 		},
 		"class_type": "PreviewAny",
 		"_meta": {
@@ -254,15 +224,6 @@
 		"class_type": "ConditioningZeroOut",
 		"_meta": {
 			"title": "ConditioningZeroOut"
-		}
-	},
-	"51": {
-		"inputs": {
-			"value": 4242
-		},
-		"class_type": "PrimitiveInt",
-		"_meta": {
-			"title": "Int (add noise to image seed)"
 		}
 	},
 	"52": {
@@ -338,7 +299,7 @@
 		},
 		"class_type": "PreviewAny",
 		"_meta": {
-			"title": "Preview as Text"
+			"title": "Light Intent Parse summary"
 		}
 	},
 	"71": {
@@ -372,46 +333,20 @@
 			"title": "GroundingDinoSAMSegment (segment anything)"
 		}
 	},
-	"74": {
-		"inputs": {
-			"min_fraction": 0.0008,
-			"max_fraction": 0.15,
-			"mask": ["94", 0]
-		},
-		"class_type": "MaskArea",
-		"_meta": {
-			"title": "Mask Area"
-		}
-	},
 	"75": {
 		"inputs": {
-			"text_0": "absent",
-			"text": ["74", 3]
+			"text_0": "found_n1",
+			"text": ["122", 3]
 		},
 		"class_type": "ShowText|pysssss",
 		"_meta": {
-			"title": "Show Text 🐍"
-		}
-	},
-	"77": {
-		"inputs": {
-			"prefix_root": "lt",
-			"parsed": ["69", 3],
-			"intent_status": ["69", 4],
-			"scope": ["69", 2],
-			"found": ["74", 2],
-			"mask_status": ["74", 3],
-			"run_tag": ["80", 0]
-		},
-		"class_type": "LightGate",
-		"_meta": {
-			"title": "Light Gate"
+			"title": "Mask Area status"
 		}
 	},
 	"78": {
 		"inputs": {
-			"proceed": ["77", 0],
-			"on_true": ["38", 0],
+			"proceed": ["123", 0],
+			"on_true": ["68", 0],
 			"on_false": ["1", 0]
 		},
 		"class_type": "LightImageBranch",
@@ -421,11 +356,11 @@
 	},
 	"79": {
 		"inputs": {
-			"source": ["77", 1]
+			"source": ["123", 1]
 		},
 		"class_type": "PreviewAny",
 		"_meta": {
-			"title": "Preview as Text"
+			"title": "Light Gate status"
 		}
 	},
 	"80": {
@@ -448,7 +383,7 @@
 	},
 	"83": {
 		"inputs": {
-			"text_0": "mode=plain on=0 off=0 peak=0.000 dim=0.00 start_at_step=0 0:empty_mask",
+			"text_0": "mode=lit on=1 off=0 peak=0.000 dim=0.00 start_at_step=5 0:on_addressing_only",
 			"text": ["110", 4]
 		},
 		"class_type": "ShowText|pysssss",
@@ -536,25 +471,12 @@
 			"title": "Convert Image to Mask"
 		}
 	},
-	"93": {
-		"inputs": {
-			"masks": ["73", 1],
-			"anchor_en": ["69", 7],
-			"side": ["69", 8],
-			"prior_json": ["69", 9],
-			"anchor": ["97", 1]
-		},
-		"class_type": "MaskPickByLocation",
-		"_meta": {
-			"title": "Mask Pick By Location"
-		}
-	},
 	"94": {
 		"inputs": {
-			"detected_note": ["93", 1],
+			"detected_note": ["137", 1],
 			"prefer_client": ["87", 0],
 			"client_mask": ["91", 0],
-			"detected_mask": ["93", 0]
+			"detected_mask": ["137", 0]
 		},
 		"class_type": "LightMaskSelect",
 		"_meta": {
@@ -563,12 +485,12 @@
 	},
 	"95": {
 		"inputs": {
-			"text_0": "detector:prior_reject_all_1[0:empty]",
+			"text_0": "detector:single_of_1",
 			"text": ["94", 1]
 		},
 		"class_type": "ShowText|pysssss",
 		"_meta": {
-			"title": "Show Text 🐍"
+			"title": "source_note"
 		}
 	},
 	"97": {
@@ -586,7 +508,7 @@
 	},
 	"98": {
 		"inputs": {
-			"value": "Picture 1 shows an interior where a lighting fixture is emitting light.\n\nMake this lighting physically believable. Add soft realistic shadows cast by\nthe illuminated objects, natural contact darkening where surfaces meet, correct\nmaterial response — specular highlights on glossy surfaces, subtle subsurface\nwarmth on fabric and wood — and smooth falloff into the unlit parts of the room.\n\nKeep the existing light direction, colour temperature and overall brightness\nexactly as they already are in Picture 1. Do not move, resize or restyle the\nfixture. Do not add or remove any object. Keep all geometry, furniture,\nmaterials and camera framing unchanged."
+			"value": "Picture 1 is an interior photograph showing {target}.\n\nChange only one thing: its bulbs and candles are switched on and glow warmly, as\nsmall bright points of light. The rest of the fixture — its frame, arms, crystals\nand shades — keeps exactly the same shape, colour and material as in Picture 1.\nOnly the light sources themselves glow; the body of the fixture does not burn,\ndoes not blaze and does not turn into a bright blob. The surrounding room is lit\nby this fixture with soft, believable falloff."
 		},
 		"class_type": "PrimitiveStringMultiline",
 		"_meta": {
@@ -595,17 +517,17 @@
 	},
 	"100": {
 		"inputs": {
-			"text_0": "plain_on",
+			"text_0": "lit_on",
 			"text": ["102", 1]
 		},
 		"class_type": "ShowText|pysssss",
 		"_meta": {
-			"title": "Show Text 🐍"
+			"title": "Режим (mode)"
 		}
 	},
 	"101": {
 		"inputs": {
-			"value": "Picture 1 is an interior photograph showing {target}.\n\nChange only one thing: its candles are no longer burning. There is no flame on\nany wick and no bright point of light anywhere on it. Everything else about the\nfixture is untouched — same shape, same size, same position, same materials and\nsame colours as in Picture 1."
+			"value": "Picture 1 is an interior photograph showing {target}.\n\nChange only one thing: it is switched off and gives out no light. There is no\nflame, no glowing bulb and no bright point of light anywhere on it. Everything\nelse about the fixture is untouched — same shape, same size, same position, same\nmaterials and same colours as in Picture 1."
 		},
 		"class_type": "PrimitiveStringMultiline",
 		"_meta": {
@@ -618,7 +540,11 @@
 			"mode": ["110", 6],
 			"tpl_lit": ["98", 0],
 			"tpl_off": ["101", 0],
-			"tpl_plain": ["23", 0]
+			"tpl_plain": ["23", 0],
+			"tpl_daylight": ["125", 0],
+			"tpl_ambient": ["126", 0],
+			"tpl_off_many": ["138", 0],
+			"count": ["117", 2]
 		},
 		"class_type": "LightTemplatePick",
 		"_meta": {
@@ -640,12 +566,13 @@
 			"start_at_step_lit": 5,
 			"start_at_step_off": 0,
 			"start_at_step_plain": 0,
-			"procedural_off": false,
-			"off_cone": 0.75,
+			"procedural_on": false,
+			"procedural_off": 0.75,
+			"off_cone": 1.7,
 			"off_reach_mul": 1.7,
 			"image": ["55", 0],
-			"masks": ["94", 0],
-			"spec": ["84", 0]
+			"spec": ["84", 0],
+			"masks": ["94", 0]
 		},
 		"class_type": "LightLayerBuild",
 		"_meta": {
@@ -654,7 +581,7 @@
 	},
 	"111": {
 		"inputs": {
-			"prompt": "missing fixture, removed fixture, empty ceiling, glowing chandelier, lit candles,\ncandle flames, bright bulbs, dark silhouette, black candles, blackened fixture,\nsecond chandelier, duplicate chandelier, extra light fixture, floating chandelier",
+			"prompt": ["130", 0],
 			"clip": ["9", 0],
 			"vae": ["10", 0],
 			"image1": ["55", 0]
@@ -697,12 +624,13 @@
 			"start_at_step_lit": 5,
 			"start_at_step_off": 0,
 			"start_at_step_plain": 0,
+			"procedural_on": true,
 			"procedural_off": true,
-			"off_cone": 0.75,
+			"off_cone": 1.7,
 			"off_reach_mul": 1.7,
 			"image": ["113", 0],
-			"masks": ["94", 0],
-			"spec": ["84", 0]
+			"spec": ["84", 0],
+			"masks": ["94", 0]
 		},
 		"class_type": "LightLayerBuild",
 		"_meta": {
@@ -711,7 +639,7 @@
 	},
 	"115": {
 		"inputs": {
-			"proceed": ["110", 7],
+			"proceed": ["69", 12],
 			"on_true": ["114", 0],
 			"on_false": ["120", 0]
 		},
@@ -734,8 +662,9 @@
 	"117": {
 		"inputs": {
 			"max_items": 6,
-			"masks": ["94", 0],
-			"object_en": ["69", 0]
+			"object_en": ["69", 0],
+			"enabled": ["69", 13],
+			"masks": ["94", 0]
 		},
 		"class_type": "MaskToPhrase",
 		"_meta": {
@@ -744,12 +673,12 @@
 	},
 	"118": {
 		"inputs": {
-			"text_0": "no_centroids 0:empty",
+			"text_0": "0:x=0.54,y=0.22,a=0.0162,ytop=0.00",
 			"text": ["117", 1]
 		},
 		"class_type": "ShowText|pysssss",
 		"_meta": {
-			"title": "Show Text 🐍"
+			"title": "Mask To Phrase debug"
 		}
 	},
 	"119": {
@@ -785,12 +714,216 @@
 	},
 	"121": {
 		"inputs": {
-			"text_0": "mode=plain on=0 off=0 peak=0.000 dim=0.00 start_at_step=0 0:empty_mask",
+			"text_0": "mode=lit on=1 off=0 peak=0.363 dim=0.00 start_at_step=5 0:on_2700K_360deg",
 			"text": ["114", 4]
 		},
 		"class_type": "ShowText|pysssss",
 		"_meta": {
-			"title": "Show Text 🐍"
+			"title": "Light Layer Build report"
+		}
+	},
+	"122": {
+		"inputs": {
+			"min_fraction": 0.0008,
+			"max_fraction": 0.15,
+			"lit_ratio": 1.8,
+			"mask": ["94", 0]
+		},
+		"class_type": "MaskArea",
+		"_meta": {
+			"title": "Mask Area"
+		}
+	},
+	"123": {
+		"inputs": {
+			"prefix_root": "lt",
+			"parsed": ["69", 3],
+			"intent_status": ["69", 4],
+			"scope": ["69", 2],
+			"found": ["122", 2],
+			"mask_status": ["122", 3],
+			"run_tag": ["80", 0],
+			"action": ["69", 1],
+			"fixture_state": ["122", 5]
+		},
+		"class_type": "LightGate",
+		"_meta": {
+			"title": "Light Gate"
+		}
+	},
+	"124": {
+		"inputs": {
+			"source": ["122", 4]
+		},
+		"class_type": "PreviewAny",
+		"_meta": {
+			"title": "Mask Area rel_lum"
+		}
+	},
+	"125": {
+		"inputs": {
+			"value": "Picture 1 is an interior photograph. Keep the room exactly as it is: the same\nfurniture in the same places, the same materials and colours of walls, floor and\nceiling, the same camera framing, the same windows, and every lamp in exactly the\nstate it is already in.\n\nChange only what comes in through the windows: outside it is now {scene}. The\ndaylight entering the room matches that outdoor light in colour, direction and\nstrength, and the room is lit by it accordingly, with shadows falling the way\nthat light would cast them."
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "tpl_daylight"
+		}
+	},
+	"126": {
+		"inputs": {
+			"value": "Picture 1 is an interior photograph. Keep the room exactly as it is: the same\nfurniture in the same places, the same materials and colours, the same camera\nframing, the same windows, and every lamp in exactly the state it is already in.\nDo not add or remove any light fixture.\n\nChange only the overall lighting of the room: {scene}. The change is even and\ncomes from no visible source; shadows and highlights follow it consistently."
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "tpl_ambient"
+		}
+	},
+	"127": {
+		"inputs": {
+			"string": ["116", 0],
+			"find": "{scene}",
+			"replace": ["69", 11]
+		},
+		"class_type": "StringReplace",
+		"_meta": {
+			"title": "Replace Text"
+		}
+	},
+	"128": {
+		"inputs": {
+			"value": "new furniture, changed furniture, rearranged room, different room,\nadded light fixture, removed light fixture, changed wall colour,\ndifferent camera angle, changed window shape, people, text, watermark"
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "негатив сцены"
+		}
+	},
+	"129": {
+		"inputs": {
+			"value": "missing fixture, removed fixture, empty ceiling, glowing chandelier, lit candles,\ncandle flames, bright bulbs, dark silhouette, black candles, blackened fixture,\nsecond chandelier, duplicate chandelier, extra light fixture, floating chandelier"
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "негатив светильника"
+		}
+	},
+	"130": {
+		"inputs": {
+			"action": ["69", 1],
+			"mode": ["102", 1],
+			"tpl_lit": ["139", 0],
+			"tpl_off": ["129", 0],
+			"tpl_plain": ["129", 0],
+			"tpl_daylight": ["128", 0],
+			"tpl_ambient": ["128", 0]
+		},
+		"class_type": "LightTemplatePick",
+		"_meta": {
+			"title": "выбор негатива"
+		}
+	},
+	"131": {
+		"inputs": {
+			"text": ["69", 11]
+		},
+		"class_type": "ShowText|pysssss",
+		"_meta": {
+			"title": "scene_phrase"
+		}
+	},
+	"132": {
+		"inputs": {
+			"prompt": "wall sconce",
+			"threshold": 0.2,
+			"sam_model": ["72", 0],
+			"grounding_dino_model": ["71", 0],
+			"image": ["55", 0]
+		},
+		"class_type": "GroundingDinoSAMSegment (segment anything)",
+		"_meta": {
+			"title": "GroundingDinoSAMSegment (segment anything)"
+		}
+	},
+	"133": {
+		"inputs": {
+			"prompt": "table lamp",
+			"threshold": 0.2,
+			"sam_model": ["72", 0],
+			"grounding_dino_model": ["71", 0],
+			"image": ["55", 0]
+		},
+		"class_type": "GroundingDinoSAMSegment (segment anything)",
+		"_meta": {
+			"title": "GroundingDinoSAMSegment (segment anything)"
+		}
+	},
+	"134": {
+		"inputs": {
+			"prompt": "chandelier",
+			"threshold": 0.2,
+			"sam_model": ["72", 0],
+			"grounding_dino_model": ["71", 0],
+			"image": ["55", 0]
+		},
+		"class_type": "GroundingDinoSAMSegment (segment anything)",
+		"_meta": {
+			"title": "GroundingDinoSAMSegment (segment anything)"
+		}
+	},
+	"135": {
+		"inputs": {
+			"iou_dedup": 0.35,
+			"masks_1": ["73", 1],
+			"masks_2": ["132", 1],
+			"masks_3": ["133", 1],
+			"masks_4": ["134", 1]
+		},
+		"class_type": "MaskBatchMerge",
+		"_meta": {
+			"title": "Mask Batch Merge"
+		}
+	},
+	"136": {
+		"inputs": {
+			"text_0": "merged 1 of 4",
+			"text": ["135", 1]
+		},
+		"class_type": "ShowText|pysssss",
+		"_meta": {
+			"title": "Mask Batch Merge report"
+		}
+	},
+	"137": {
+		"inputs": {
+			"ambiguous_mode": "all",
+			"masks": ["135", 0],
+			"anchor_en": ["69", 7],
+			"side": ["69", 8],
+			"prior_json": ["69", 9],
+			"anchor": ["97", 1],
+			"scope": ["69", 2]
+		},
+		"class_type": "MaskPickByLocation",
+		"_meta": {
+			"title": "Mask Pick By Location"
+		}
+	},
+	"138": {
+		"inputs": {
+			"value": "Picture 1 is an interior photograph showing {target}.\n\nChange only one thing: all of these fixtures are switched off. None of them gives\nout any light — there is no flame, no glowing bulb and no bright point of light on\nany of them, and no glow on the wall or ceiling around them. Everything else is\nuntouched: the fixtures keep the same shape, size, position, materials and colours\nas in Picture 1, and every other light in the room stays exactly as it is."
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "tpl_off_many"
+		}
+	},
+	"139": {
+		"inputs": {
+			"value": "fixture on fire, blazing fixture, bright blob, glowing metal frame, overexposed\nfixture, missing fixture, removed fixture, different fixture, restyled fixture,\nextra light fixture, dark bulbs, unlit candles"
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "tpl_lit"
 		}
 	}
 }
