@@ -1698,13 +1698,15 @@ export class RequestState {
 		// settings attached to the request are what's on the form right now —
 		// not whatever the user has since typed while those were in flight.
 		const formSnapshot = this.captureFormSnapshot();
+		const prompt = this.prompt;
+		const outputFormat = this.outputFormat;
 		const imageKey = await this.#resolveSourceFor('current-result');
 		if (!imageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
 			imageKey,
-			prompt: this.prompt,
-			outputFormat: this.outputFormat,
+			prompt,
+			outputFormat,
 			sessionId,
 			formSnapshot
 		};
@@ -1714,20 +1716,23 @@ export class RequestState {
 		const validation = this.validateStyleTransfer();
 		if (!validation.valid) return null;
 		const formSnapshot = this.captureFormSnapshot();
-		const imageKey = await this.#resolveSourceFor(this.styleSourceMode);
-		if (!imageKey || !this.styleReferenceImage) return null;
-		const { sessionId } = await this.ensureProjectSession();
+		const styleReferenceImage = this.styleReferenceImage;
+		const outputFormat = this.outputFormat;
 		const prompt = this.styleTransferPrompt.trim();
 		const negativePrompt = this.styleNegativePrompt.trim();
+		const styleTransferStrength = this.styleTransferStrength;
+		const imageKey = await this.#resolveSourceFor(this.styleSourceMode);
+		if (!imageKey || !styleReferenceImage) return null;
+		const { sessionId } = await this.ensureProjectSession();
 		return {
 			imageKey,
-			...('stylePresetId' in this.styleReferenceImage
-				? { stylePresetId: this.styleReferenceImage.stylePresetId }
-				: { referenceImageKey: this.styleReferenceImage.mediaKey }),
-			outputFormat: this.outputFormat,
+			...('stylePresetId' in styleReferenceImage
+				? { stylePresetId: styleReferenceImage.stylePresetId }
+				: { referenceImageKey: styleReferenceImage.mediaKey }),
+			outputFormat,
 			...(prompt ? { prompt } : {}),
 			...(negativePrompt ? { negativePrompt } : {}),
-			styleTransferStrength: this.styleTransferStrength,
+			styleTransferStrength,
 			sessionId,
 			formSnapshot
 		};
@@ -1737,14 +1742,15 @@ export class RequestState {
 		const validation = this.validateObjectReplacement();
 		if (!validation.valid) return null;
 		const formSnapshot = this.captureFormSnapshot('replace-object');
-		const imageKey = await this.#resolveSourceFor(this.objectReplacementSourceMode);
 		const referenceImageKey = managedImageKey(this.objectReferenceImage);
+		const replacementObject = this.objectReplacementInstruction;
+		const imageKey = await this.#resolveSourceFor(this.objectReplacementSourceMode);
 		if (!imageKey || !referenceImageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
 			imageKey,
 			referenceImageKey,
-			replacementObject: this.objectReplacementInstruction,
+			replacementObject,
 			sessionId,
 			formSnapshot
 		};
@@ -1754,13 +1760,16 @@ export class RequestState {
 		const validation = this.validateTextureReplacement();
 		if (!validation.valid) return null;
 		const formSnapshot = this.captureFormSnapshot('change-surface-color');
-		const imageKey = await this.#resolveSourceFor(this.textureReplacementSourceMode);
 		const referenceImageKey = managedImageKey(this.textureReferenceImage);
+		const masked = this.textureReplacementMasked;
+		const maskImageKey = managedImageKey(this.textureMaskImage);
+		const maskMatchesSource = this.textureMaskMatchesSource();
+		const replacementSurface = this.textureReplacementSurface.trim();
+		const imageKey = await this.#resolveSourceFor(this.textureReplacementSourceMode);
 		if (!imageKey || !referenceImageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
-		if (this.textureReplacementMasked) {
-			const maskImageKey = managedImageKey(this.textureMaskImage);
-			if (!maskImageKey || !this.textureMaskMatchesSource()) return null;
+		if (masked) {
+			if (!maskImageKey || !maskMatchesSource) return null;
 			return {
 				imageKey,
 				referenceImageKey,
@@ -1772,7 +1781,7 @@ export class RequestState {
 		return {
 			imageKey,
 			referenceImageKey,
-			replacementSurface: this.textureReplacementSurface.trim(),
+			replacementSurface,
 			sessionId,
 			formSnapshot
 		};
@@ -1782,12 +1791,13 @@ export class RequestState {
 		const validation = this.validateLightSettings();
 		if (!validation.valid) return null;
 		const formSnapshot = this.captureFormSnapshot('light-settings');
+		const instruction = this.lightSettingsPrompt.trim();
 		const imageKey = await this.resolveEditSource();
 		if (!imageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
 			imageKey,
-			instruction: this.lightSettingsPrompt.trim(),
+			instruction,
 			sessionId,
 			formSnapshot
 		};
