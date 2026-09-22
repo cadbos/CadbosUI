@@ -15,7 +15,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { makeD1 } from './testing/d1-shim';
-import { seedGeneration as seedGenerationFixture } from '$lib/server/testing/generation-fixtures';
+import {
+	seedGeneration as seedGenerationFixture,
+	TEST_FORM_SNAPSHOT
+} from '$lib/server/testing/generation-fixtures';
 import {
 	archiveProject,
 	archiveSession,
@@ -25,6 +28,7 @@ import {
 	forkSession,
 	getProjectDetail,
 	getProjectDetailByShareToken,
+	getShareGenerationDetail,
 	issueShareToken,
 	listProjects,
 	renameProject,
@@ -267,6 +271,90 @@ describe('projects repository', () => {
 		await revokeActiveShareToken(db, 'user-1', project.id);
 		const afterRevoke = await getProjectDetail(db, 'user-1', project.id);
 		expect(afterRevoke?.shareActive).toBe(false);
+	});
+
+	describe('getShareGenerationDetail', () => {
+		it('returns the settings for a generation in an actively-shared project, image fields stripped', async () => {
+			const project = await createProject(db, 'user-1', 'Living room');
+			const session = await createSession(db, 'user-1', project.id, 'Main thread');
+			seedGenerationFixture(db, {
+				id: 'gen-1',
+				userId: 'user-1',
+				url: 'https://cdn.example.test/gen-1.webp',
+				sourceUrl: 'https://cdn.example.test/source.jpg',
+				createdAt: Date.now(),
+				sessionId: session!.id,
+				prompt: 'cozy scandinavian',
+				kind: 'style-transfer',
+				formSnapshot: {
+					...TEST_FORM_SNAPSHOT,
+					styleReferenceImage: { mediaKey: 'cadbos-uploads/reference.jpg' }
+				}
+			});
+			const token = await issueShareToken(db, 'user-1', project.id);
+
+			const detail = await getShareGenerationDetail(db, token!, 'gen-1');
+
+			expect(detail).toEqual({
+				id: 'gen-1',
+				prompt: 'cozy scandinavian',
+				kind: 'style-transfer',
+				createdAt: expect.any(Number),
+				formSnapshot: {
+					promptFragments: TEST_FORM_SNAPSHOT.promptFragments,
+					promptOverride: TEST_FORM_SNAPSHOT.promptOverride,
+					editPrompt: TEST_FORM_SNAPSHOT.editPrompt,
+					addObjectPresetId: TEST_FORM_SNAPSHOT.addObjectPresetId,
+					removeObjectText: TEST_FORM_SNAPSHOT.removeObjectText,
+					outputFormat: TEST_FORM_SNAPSHOT.outputFormat,
+					sceneType: TEST_FORM_SNAPSHOT.sceneType,
+					styleTransferPrompt: TEST_FORM_SNAPSHOT.styleTransferPrompt,
+					styleTransferStrength: TEST_FORM_SNAPSHOT.styleTransferStrength,
+					styleNegativePrompt: TEST_FORM_SNAPSHOT.styleNegativePrompt,
+					styleSourceMode: TEST_FORM_SNAPSHOT.styleSourceMode,
+					objectReplacementObject: TEST_FORM_SNAPSHOT.objectReplacementObject,
+					objectReplacementSourceMode: TEST_FORM_SNAPSHOT.objectReplacementSourceMode,
+					objectReplacementScale: TEST_FORM_SNAPSHOT.objectReplacementScale,
+					textureReplacementSurface: TEST_FORM_SNAPSHOT.textureReplacementSurface,
+					textureReplacementSourceMode: TEST_FORM_SNAPSHOT.textureReplacementSourceMode,
+					textureReplacementMasked: TEST_FORM_SNAPSHOT.textureReplacementMasked,
+					lightSettingsPresetIds: TEST_FORM_SNAPSHOT.lightSettingsPresetIds,
+					lightSettingsInstruction: TEST_FORM_SNAPSHOT.lightSettingsInstruction
+				}
+			});
+			// The one field the fixture set beyond TEST_FORM_SNAPSHOT — proving it
+			// was actually stripped, not just absent from the input.
+			expect(detail?.formSnapshot).not.toHaveProperty('styleReferenceImage');
+		});
+
+		it('returns null for an unknown generation, a revoked token, or a generation outside the shared project', async () => {
+			const project = await createProject(db, 'user-1', 'Living room');
+			const session = await createSession(db, 'user-1', project.id, 'Main thread');
+			seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
+			const token = await issueShareToken(db, 'user-1', project.id);
+
+			expect(await getShareGenerationDetail(db, token!, 'missing-generation')).toBeNull();
+			expect(await getShareGenerationDetail(db, 'never-issued', 'gen-1')).toBeNull();
+
+			const otherProject = await createProject(db, 'user-2', "Someone else's project");
+			const otherSession = await createSession(db, 'user-2', otherProject.id, 'Thread');
+			seedGeneration(db, 'gen-2', 'user-2', otherSession!.id, Date.now());
+			expect(await getShareGenerationDetail(db, token!, 'gen-2')).toBeNull();
+
+			await revokeActiveShareToken(db, 'user-1', project.id);
+			expect(await getShareGenerationDetail(db, token!, 'gen-1')).toBeNull();
+		});
+
+		it('degrades to a null snapshot for a generation recorded before migrations/0018', async () => {
+			const project = await createProject(db, 'user-1', 'Living room');
+			const session = await createSession(db, 'user-1', project.id, 'Main thread');
+			seedGeneration(db, 'gen-1', 'user-1', session!.id, Date.now());
+			const token = await issueShareToken(db, 'user-1', project.id);
+
+			const detail = await getShareGenerationDetail(db, token!, 'gen-1');
+
+			expect(detail?.formSnapshot).toBeNull();
+		});
 	});
 
 	it('renames a session only when owned and not archived', async () => {

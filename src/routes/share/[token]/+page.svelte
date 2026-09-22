@@ -15,11 +15,107 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { X } from '@lucide/svelte';
 	import { page } from '$app/state';
-	import type { ProjectSessionRecord } from '$lib/api/contract';
-	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
+	import type {
+		GenerationKind,
+		ProjectSessionRecord,
+		PublicFormSnapshot,
+		ShareGenerationDetailResponse
+	} from '$lib/api/contract';
+	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 	import { shareViewer } from '$lib/state/share-viewer.svelte';
 
 	const token = $derived(page.params.token);
+
+	const OUTPUT_FORMAT_LABELS: Record<PublicFormSnapshot['outputFormat'], string> = {
+		webp: 'WebP',
+		jpg: 'JPG',
+		png: 'PNG',
+		avif: 'AVIF'
+	};
+
+	interface SettingsRow {
+		label: string;
+		value: string;
+	}
+
+	// Text-only, per-kind summary of what produced this generation — deliberately
+	// terser than the owner's own editable form: this is a read-only preview for
+	// someone who can't act on any of it (see PublicFormSnapshot for what the
+	// server already stripped before this ever reached the client).
+	function formatSettingsRows(detail: ShareGenerationDetailResponse): SettingsRow[] {
+		const snapshot = detail.formSnapshot;
+		if (!snapshot) return [];
+		const rows: SettingsRow[] = [];
+		const kind: GenerationKind = detail.kind;
+		if (kind === 'render') {
+			const prompt =
+				snapshot.promptOverride ??
+				snapshot.promptFragments.map((fragment) => fragment.text).join(' ');
+			if (prompt.trim() !== '')
+				rows.push({ label: t('share.settingsPrompt'), value: prompt.trim() });
+			rows.push({
+				label: t('render.outputFormat'),
+				value: OUTPUT_FORMAT_LABELS[snapshot.outputFormat]
+			});
+		} else if (kind === 'edit') {
+			if (snapshot.editPrompt.trim() !== '') {
+				rows.push({ label: t('edit.instruction'), value: snapshot.editPrompt });
+			}
+		} else if (kind === 'style-transfer') {
+			if (snapshot.styleTransferPrompt.trim() !== '') {
+				rows.push({ label: t('styleTransfer.guidance'), value: snapshot.styleTransferPrompt });
+			}
+			rows.push({
+				label: t('styleTransfer.strength'),
+				value: `${Math.round(snapshot.styleTransferStrength * 100)}%`
+			});
+			if (snapshot.styleNegativePrompt.trim() !== '') {
+				rows.push({
+					label: t('styleTransfer.negativePrompt'),
+					value: snapshot.styleNegativePrompt
+				});
+			}
+		} else if (kind === 'object-replacement') {
+			if (snapshot.objectReplacementObject.trim() !== '') {
+				rows.push({
+					label: t('objectReplacement.objectLabel'),
+					value: snapshot.objectReplacementObject
+				});
+			}
+			rows.push({
+				label: t('objectReplacement.scale'),
+				value: `${Math.round(snapshot.objectReplacementScale * 100)}%`
+			});
+		} else if (kind === 'texture-replacement') {
+			if (snapshot.textureReplacementMasked) {
+				rows.push({
+					label: t('textureReplacement.maskImage'),
+					value: t('textureReplacement.maskedLabel')
+				});
+			} else if (snapshot.textureReplacementSurface.trim() !== '') {
+				rows.push({
+					label: t('textureReplacement.surfaceLabel'),
+					value: snapshot.textureReplacementSurface
+				});
+			}
+		} else if (kind === 'light-settings') {
+			const presetLabels = snapshot.lightSettingsPresetIds
+				.map((id) => LIGHT_SETTINGS_PRESETS.find((preset) => preset.id === id)?.label)
+				.filter((label): label is TranslationKey => label !== undefined)
+				.map((label) => t(label));
+			if (presetLabels.length > 0) {
+				rows.push({ label: t('lightSettings.moodSectionLabel'), value: presetLabels.join(', ') });
+			}
+			if (snapshot.lightSettingsInstruction.trim() !== '') {
+				rows.push({
+					label: t('lightSettings.customLabel'),
+					value: snapshot.lightSettingsInstruction
+				});
+			}
+		}
+		return rows;
+	}
 
 	let lightbox = $state<{ generationId: string; alt: string } | null>(null);
 	const lightboxImage = $derived.by(() => {
@@ -30,6 +126,9 @@ before the Change Date. See LICENSE for complete terms.
 			.find((candidate) => candidate.id === selected.generationId);
 		return generation ? { url: generation.image.url, alt: selected.alt } : null;
 	});
+	const settingsRows = $derived(
+		shareViewer.generationDetail ? formatSettingsRows(shareViewer.generationDetail) : []
+	);
 
 	$effect(() => {
 		void shareViewer.load(token);
@@ -66,10 +165,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	function openLightbox(generationId: string, alt: string): void {
 		lightbox = { generationId, alt };
+		void shareViewer.loadGenerationDetail(token, generationId);
 	}
 
 	function closeLightbox(): void {
 		lightbox = null;
+		shareViewer.clearGenerationDetail();
 	}
 </script>
 
@@ -158,7 +259,30 @@ before the Change Date. See LICENSE for complete terms.
 				<X size={18} strokeWidth={1.8} aria-hidden="true" />
 				<span class="visually-hidden">{t('share.lightboxClose')}</span>
 			</button>
-			<img src={image.url} alt={image.alt} />
+			<div class="lightbox-body">
+				<img src={image.url} alt={image.alt} />
+				<div class="lightbox-settings" aria-live="polite">
+					{#if shareViewer.generationDetailStatus === 'loading'}
+						<p class="status">{t('share.settingsLoading')}</p>
+					{:else if shareViewer.generationDetailStatus === 'error'}
+						<p class="status error" role="alert">{t('share.settingsFailed')}</p>
+					{:else if shareViewer.generationDetailStatus === 'ready'}
+						{#if settingsRows.length > 0}
+							<h2>{t('share.settingsTitle')}</h2>
+							<dl class="settings-list">
+								{#each settingsRows as row (row.label)}
+									<div class="settings-row">
+										<dt>{row.label}</dt>
+										<dd>{row.value}</dd>
+									</div>
+								{/each}
+							</dl>
+						{:else}
+							<p class="status">{t('share.settingsEmpty')}</p>
+						{/if}
+					{/if}
+				</div>
+			</div>
 		</dialog>
 	{/if}
 </main>
@@ -301,13 +425,64 @@ before the Change Date. See LICENSE for complete terms.
 		backdrop-filter: blur(4px);
 	}
 
-	.lightbox-dialog img {
+	.lightbox-body {
+		display: flex;
+		flex-direction: column;
+		max-height: 90dvh;
+		overflow-y: auto;
+		border-radius: var(--radius-lg);
+	}
+
+	.lightbox-body img {
 		display: block;
 		width: 100%;
-		max-height: 90dvh;
-		border-radius: var(--radius-lg);
+		max-height: 70dvh;
 		object-fit: contain;
 		background: var(--color-surface);
+	}
+
+	.lightbox-settings {
+		flex: 0 0 auto;
+		padding: 1rem 1.25rem 1.25rem;
+		background: var(--color-surface);
+		border-top: 1px solid var(--color-border);
+		border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+	}
+
+	.lightbox-settings h2 {
+		margin: 0 0 0.625rem;
+		color: var(--color-text);
+		font-size: 0.9375rem;
+		font-weight: 650;
+	}
+
+	.settings-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin: 0;
+	}
+
+	.settings-row {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+
+	.settings-row dt {
+		color: var(--color-muted);
+		font-size: 0.75rem;
+		font-weight: 650;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+
+	.settings-row dd {
+		margin: 0;
+		color: var(--color-text);
+		font-size: 0.875rem;
+		line-height: 1.4;
+		white-space: pre-wrap;
 	}
 
 	.lightbox-close {

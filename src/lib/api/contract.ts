@@ -396,6 +396,34 @@ export interface GeneratedImageDetailResponse {
 	media: MediaAccess[];
 }
 
+// The subset of RequestFormSnapshot safe to hand to an unauthenticated viewer
+// of a public /share/[token] link — every image-shaped field is stripped
+// (mediaKey values aren't meant for public exposure, and the share viewer
+// never renders reference-image thumbnails, only text settings), leaving the
+// prompt/instruction/preset fields a visitor can actually read.
+export type PublicFormSnapshot = Omit<
+	RequestFormSnapshot,
+	| 'styleReferenceImage'
+	| 'objectReferenceImage'
+	| 'textureReferenceImage'
+	| 'textureMaskImage'
+	| 'textureMaskSourceKey'
+>;
+
+// GET /api/share/[token]/generations/[id] — the text settings behind one
+// generation in a shared project, fetched lazily when a visitor opens that
+// generation's preview (not bundled into GET /api/share/[token], which can
+// list many generations at once). `formSnapshot` is null for generations
+// recorded before migrations/0018, for `upscale`, or if the stored snapshot
+// no longer parses/validates.
+export interface ShareGenerationDetailResponse {
+	id: string;
+	prompt: string;
+	kind: GenerationKind;
+	createdAt: number;
+	formSnapshot: PublicFormSnapshot | null;
+}
+
 // GET /api/resources — distinct source photos the user has actually
 // uploaded (one card per source media row). Rows whose source
 // was a previous generation's own result rather than a fresh upload (edit,

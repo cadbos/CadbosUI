@@ -388,6 +388,11 @@ export interface Dictionary {
 	'share.generationAlt': string;
 	'share.generationOpenAria': string;
 	'share.lightboxClose': string;
+	'share.settingsTitle': string;
+	'share.settingsLoading': string;
+	'share.settingsFailed': string;
+	'share.settingsEmpty': string;
+	'share.settingsPrompt': string;
 	'render.insufficientCredit': string;
 	'render.generationRestricted': string;
 	'styleTransfer.referenceImage': string;

@@ -23,6 +23,39 @@ async function mockShare(page: Page, body: unknown, status = 200): Promise<void>
 	});
 }
 
+async function mockShareGenerationDetail(
+	page: Page,
+	generationId: string,
+	body: unknown,
+	status = 200
+): Promise<void> {
+	await page.route(`**/api/share/${TOKEN}/generations/${generationId}`, async (route) => {
+		await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+	});
+}
+
+const FULL_FORM_SNAPSHOT = {
+	promptFragments: [],
+	promptOverride: null,
+	editPrompt: '',
+	addObjectPresetId: null,
+	removeObjectText: '',
+	outputFormat: 'webp',
+	sceneType: 'interior',
+	styleTransferPrompt: '',
+	styleTransferStrength: 0.7,
+	styleNegativePrompt: '',
+	styleSourceMode: 'current-result',
+	objectReplacementObject: '',
+	objectReplacementSourceMode: 'current-result',
+	objectReplacementScale: 1,
+	textureReplacementSurface: '',
+	textureReplacementSourceMode: 'current-result',
+	textureReplacementMasked: false,
+	lightSettingsPresetIds: [],
+	lightSettingsInstruction: ''
+};
+
 test('shows a shared project read-only, without auth, with no editing controls', async ({
 	page
 }) => {
@@ -89,15 +122,125 @@ test('shows a shared project read-only, without auth, with no editing controls',
 	await expect(page.locator('input')).toHaveCount(0);
 	await expect(page.locator('main').getByRole('button')).toHaveCount(2);
 
-	// Clicking a thumbnail opens it full-size in a read-only lightbox.
+	// Clicking a thumbnail opens it full-size in a read-only lightbox, which
+	// also lazily loads that generation's settings.
+	await mockShareGenerationDetail(page, '00000000-0000-4000-8000-000000000100', {
+		id: '00000000-0000-4000-8000-000000000100',
+		prompt: 'cozy scandinavian living room',
+		kind: 'render',
+		createdAt: Date.UTC(2026, 0, 2),
+		formSnapshot: {
+			...FULL_FORM_SNAPSHOT,
+			promptFragments: [{ id: 'f1', text: 'cozy scandinavian living room', order: 0 }]
+		}
+	});
 	await firstThumb.click();
 	const lightbox = page.getByRole('dialog');
 	await expect(lightbox.getByRole('img')).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/render-2.webp'
 	);
+	await expect(lightbox.getByRole('heading', { name: 'Настройки генерации' })).toBeVisible();
+	await expect(lightbox.getByText('cozy scandinavian living room')).toBeVisible();
+	await expect(lightbox.getByText('WebP')).toBeVisible();
+
+	// Still no inputs and still only the two thumbnail buttons plus the
+	// lightbox's own close button — the settings panel is text, not a form.
+	await expect(page.locator('input')).toHaveCount(0);
+	await expect(page.locator('main').getByRole('button')).toHaveCount(3);
+
 	await lightbox.getByRole('button', { name: 'Закрыть полноразмерный просмотр' }).click();
 	await expect(lightbox).toBeHidden();
+});
+
+test('shows a per-kind settings summary for the generation being previewed', async ({ page }) => {
+	const generationId = '00000000-0000-4000-8000-000000000200';
+	await mockShare(page, {
+		id: '00000000-0000-4000-8000-000000000001',
+		title: 'Living room',
+		createdAt: Date.UTC(2026, 0, 1),
+		updatedAt: Date.UTC(2026, 0, 1),
+		shareActive: true,
+		sessions: [
+			{
+				id: '00000000-0000-4000-8000-000000000010',
+				title: 'Main thread',
+				parentSessionId: null,
+				forkedFromGenerationId: null,
+				createdAt: Date.UTC(2026, 0, 1),
+				updatedAt: Date.UTC(2026, 0, 1),
+				generations: [
+					{
+						id: generationId,
+						image: media(2, 'https://cdn.example.test/styled.webp'),
+						source: media(1, 'https://cdn.example.test/room.jpg'),
+						kind: 'style-transfer',
+						createdAt: Date.UTC(2026, 0, 1)
+					}
+				]
+			}
+		]
+	});
+	await mockShareGenerationDetail(page, generationId, {
+		id: generationId,
+		prompt: '',
+		kind: 'style-transfer',
+		createdAt: Date.UTC(2026, 0, 1),
+		formSnapshot: {
+			...FULL_FORM_SNAPSHOT,
+			styleTransferPrompt: 'warm scandinavian wood tones',
+			styleTransferStrength: 0.42,
+			styleNegativePrompt: 'clutter'
+		}
+	});
+
+	await page.goto(`/share/${TOKEN}`);
+	await page.getByRole('button', { name: /Открыть рендер/ }).click();
+
+	const lightbox = page.getByRole('dialog');
+	await expect(lightbox.getByText('warm scandinavian wood tones')).toBeVisible();
+	await expect(lightbox.getByText('42%')).toBeVisible();
+	await expect(lightbox.getByText('clutter')).toBeVisible();
+});
+
+test('shows an error message when a generation preview fails to load its settings', async ({
+	page
+}) => {
+	const generationId = '00000000-0000-4000-8000-000000000300';
+	await mockShare(page, {
+		id: '00000000-0000-4000-8000-000000000001',
+		title: 'Living room',
+		createdAt: Date.UTC(2026, 0, 1),
+		updatedAt: Date.UTC(2026, 0, 1),
+		shareActive: true,
+		sessions: [
+			{
+				id: '00000000-0000-4000-8000-000000000010',
+				title: 'Main thread',
+				parentSessionId: null,
+				forkedFromGenerationId: null,
+				createdAt: Date.UTC(2026, 0, 1),
+				updatedAt: Date.UTC(2026, 0, 1),
+				generations: [
+					{
+						id: generationId,
+						image: media(2, 'https://cdn.example.test/render.webp'),
+						source: media(1, 'https://cdn.example.test/room.jpg'),
+						kind: 'render',
+						createdAt: Date.UTC(2026, 0, 1)
+					}
+				]
+			}
+		]
+	});
+	await mockShareGenerationDetail(page, generationId, null, 500);
+
+	await page.goto(`/share/${TOKEN}`);
+	await page.getByRole('button', { name: /Открыть рендер/ }).click();
+
+	await expect(page.getByRole('dialog').getByRole('alert')).toHaveText(
+		'Не удалось загрузить настройки.'
+	);
 });
 
 test('shows a not-found message for a revoked or unknown token', async ({ page }) => {

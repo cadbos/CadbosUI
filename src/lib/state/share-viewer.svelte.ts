@@ -14,9 +14,30 @@
 
 import { z } from 'zod';
 import { generationKinds } from '$lib/api/contract';
-import type { ProjectDetailResponse } from '$lib/api/contract';
+import type { ProjectDetailResponse, ShareGenerationDetailResponse } from '$lib/api/contract';
+import { requestFormSnapshotSchema } from '$lib/state/request.svelte';
 
 export type ShareViewerStatus = 'idle' | 'loading' | 'ready' | 'not-found' | 'error';
+export type ShareGenerationDetailStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+// PublicFormSnapshot ($lib/api/contract) — the same shape, minus every
+// image-carrying field, which GET /api/share/[token]/generations/[id] never
+// sends to an unauthenticated viewer in the first place.
+const publicFormSnapshotSchema = requestFormSnapshotSchema.omit({
+	styleReferenceImage: true,
+	objectReferenceImage: true,
+	textureReferenceImage: true,
+	textureMaskImage: true,
+	textureMaskSourceKey: true
+});
+
+const shareGenerationDetailSchema = z.object({
+	id: z.uuid(),
+	prompt: z.string(),
+	kind: z.enum(generationKinds),
+	createdAt: z.number().int().min(0),
+	formSnapshot: publicFormSnapshotSchema.nullable()
+});
 
 const sessionGenerationSchema = z.object({
 	id: z.uuid(),
@@ -102,6 +123,48 @@ class ShareViewerState {
 		this.#abort = null;
 		this.project = null;
 		this.status = 'idle';
+	}
+
+	generationDetail = $state<ShareGenerationDetailResponse | null>(null);
+	generationDetailStatus = $state<ShareGenerationDetailStatus>('idle');
+	#detailAbort: AbortController | null = null;
+
+	// Lazy, opened only when a visitor expands one generation's preview — see
+	// this store's own doc comment on why the settings aren't bundled into
+	// load() itself.
+	async loadGenerationDetail(token: string, generationId: string): Promise<void> {
+		this.#detailAbort?.abort();
+		const controller = new AbortController();
+		this.#detailAbort = controller;
+		this.generationDetailStatus = 'loading';
+
+		try {
+			const response = await fetch(`/api/share/${token}/generations/${generationId}`, {
+				signal: controller.signal
+			});
+			if (this.#detailAbort !== controller) return;
+			if (!response.ok) throw new ShareViewerLoadError('share generation detail request failed');
+
+			const parsed = shareGenerationDetailSchema.safeParse(await response.json().catch(() => null));
+			if (!parsed.success) throw new ShareViewerLoadError('share generation detail invalid');
+
+			this.generationDetail = parsed.data;
+			this.generationDetailStatus = 'ready';
+		} catch (error) {
+			if (controller.signal.aborted) return;
+			this.generationDetail = null;
+			this.generationDetailStatus = 'error';
+			console.error('Share generation detail load failed:', error);
+		} finally {
+			if (this.#detailAbort === controller) this.#detailAbort = null;
+		}
+	}
+
+	clearGenerationDetail(): void {
+		this.#detailAbort?.abort();
+		this.#detailAbort = null;
+		this.generationDetail = null;
+		this.generationDetailStatus = 'idle';
 	}
 }
 
