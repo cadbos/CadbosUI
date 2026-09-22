@@ -568,16 +568,20 @@ before the Change Date. See LICENSE for complete terms.
 											loading="lazy"
 										/>
 										<div class="actions">
-											<button
-												type="button"
-												class="icon-button"
-												aria-label={ti('generatedImages.useResult', { order: index + 1 })}
-												title={ti('generatedImages.useResult', { order: index + 1 })}
-												onclick={() => useImage(image.image.key, image.kind)}
-											>
-												<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
-											</button>
-											{#if image.kind !== 'upscale'}
+											{#if image.kind === 'upscale'}
+												<!-- Upscale has no restorable form settings (see
+												destinationForGenerationKind), so this is the only way
+												to pick up its result as the new starting image. -->
+												<button
+													type="button"
+													class="icon-button"
+													aria-label={ti('generatedImages.useResult', { order: index + 1 })}
+													title={ti('generatedImages.useResult', { order: index + 1 })}
+													onclick={() => useImage(image.image.key, image.kind)}
+												>
+													<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
+												</button>
+											{:else}
 												<button
 													type="button"
 													class="icon-button"
