@@ -51,7 +51,10 @@ before the Change Date. See LICENSE for complete terms.
 		if (kind === 'render') {
 			const prompt =
 				snapshot.promptOverride ??
-				snapshot.promptFragments.map((fragment) => fragment.text).join(' ');
+				[...snapshot.promptFragments]
+					.sort((a, b) => a.order - b.order)
+					.map((fragment) => fragment.text)
+					.join(' ');
 			if (prompt.trim() !== '')
 				rows.push({ label: t('share.settingsPrompt'), value: prompt.trim() });
 			rows.push({
