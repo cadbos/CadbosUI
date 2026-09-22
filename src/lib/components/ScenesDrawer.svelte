@@ -39,7 +39,7 @@ before the Change Date. See LICENSE for complete terms.
 		applyGeneratedImageFormSnapshot,
 		fetchGeneratedImageDetail
 	} from '$lib/state/generation-restore';
-	import { request, type RequestFormSnapshot } from '$lib/state/request.svelte';
+	import { request, RequestState, type RequestFormSnapshot } from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, destinationForGenerationKind } from '$lib/state/url-state';
 	import { logBoundaryError, openModal } from '$lib/utils';
 
@@ -328,13 +328,22 @@ before the Change Date. See LICENSE for complete terms.
 	// form has nothing to lose, and a form that already matches the last
 	// generation it produced (nothing typed since) is effectively saved.
 	function hasUnsavedFormChanges(): boolean {
-		// A picked-but-not-yet-uploaded photo (request.pendingImageFile) is work
-		// the user would lose just as much as an already-uploaded one — see
-		// ImageUpload.svelte's own comment on why it stays pending until submit.
-		if (!request.image && !request.pendingImageFile) return false;
 		const lastApplied = request.currentRender?.formSnapshot;
-		if (!lastApplied) return true;
-		return JSON.stringify(request.captureFormSnapshot()) !== JSON.stringify(lastApplied);
+		if (lastApplied) {
+			return JSON.stringify(request.captureFormSnapshot()) !== JSON.stringify(lastApplied);
+		}
+		// No render has happened yet this session, so there's nothing saved to
+		// diff against. A picked-but-not-yet-uploaded photo
+		// (request.pendingImageFile) is work the user would lose just as much
+		// as an already-uploaded one — see ImageUpload.svelte's own comment on
+		// why it stays pending until submit — so either counts as unsaved on
+		// its own; otherwise fall back to comparing against a freshly created,
+		// untouched form so a truly empty one still counts as clean.
+		if (request.image || request.pendingImageFile) return true;
+		return (
+			JSON.stringify(request.captureFormSnapshot()) !==
+			JSON.stringify(new RequestState().captureFormSnapshot())
+		);
 	}
 
 	async function performRestore(id: string, kind: GenerationKind): Promise<void> {
