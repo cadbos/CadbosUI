@@ -13,6 +13,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
+import type { RequestFormSnapshot } from '$lib/api/contract';
 
 export type LightSettingsJobStatus = 'processing' | 'completed' | 'failed';
 
@@ -86,13 +87,14 @@ export async function createLightSettingsJob(
 		cost: number;
 		createdAt: number;
 		uploadQueueSec: number;
+		formSnapshot?: RequestFormSnapshot;
 	}
 ): Promise<LightSettingsJob> {
 	await db
 		.prepare(
 			'INSERT INTO light_settings_jobs ' +
-				'(id, user_id, comfy_prompt_id, scene_media_id, session_id, instruction, cost, status, created_at, updated_at, upload_queue_sec) ' +
-				"VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?)"
+				'(id, user_id, comfy_prompt_id, scene_media_id, session_id, instruction, cost, status, created_at, updated_at, upload_queue_sec, form_snapshot) ' +
+				"VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?)"
 		)
 		.bind(
 			input.id,
@@ -104,7 +106,8 @@ export async function createLightSettingsJob(
 			input.cost,
 			input.createdAt,
 			input.createdAt,
-			input.uploadQueueSec
+			input.uploadQueueSec,
+			input.formSnapshot ? JSON.stringify(input.formSnapshot) : null
 		)
 		.run();
 	const job = await getLightSettingsJob(db, input.userId, input.id);
@@ -185,9 +188,9 @@ export async function completeLightSettingsJob(
 			.prepare(
 				'INSERT INTO generations ' +
 					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id, ' +
-					'comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec) ' +
+					'comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot) ' +
 					"SELECT j.id, j.user_id, ?, j.scene_media_id, j.instruction, 'light-settings', j.cost, c.balance, ?, j.session_id, " +
-					'j.upload_queue_sec, ?, ?, ?, ? ' +
+					'j.upload_queue_sec, ?, ?, ?, ?, j.form_snapshot ' +
 					'FROM light_settings_jobs j JOIN credits c ON c.user_id = j.user_id ' +
 					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
 			)

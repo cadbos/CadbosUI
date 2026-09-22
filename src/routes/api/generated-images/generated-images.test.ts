@@ -14,12 +14,18 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
-import type { GeneratedImagesResponse, SessionUser } from '$lib/api/contract';
+import type {
+	GeneratedImageDetailResponse,
+	GeneratedImagesResponse,
+	SessionUser
+} from '$lib/api/contract';
 import { mediaKey, type Bucket } from '$lib/server/media';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedGeneration as seedGenerationFixture,
+	seedMedia,
 	setBucketUrl,
+	TEST_FORM_SNAPSHOT,
 	TEST_S3_BUCKET,
 	TEST_S3_ENV
 } from '$lib/server/testing/generation-fixtures';
@@ -36,6 +42,7 @@ vi.mock('$lib/server/s3', async (importOriginal) => ({
 }));
 
 import { DELETE, GET } from './+server';
+import { GET as GET_DETAIL } from './[id]/+server';
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -56,6 +63,7 @@ function seedGeneratedImage(db: D1Database, id: string, userId: string, createdA
 
 type GeneratedImagesEvent = Parameters<typeof GET>[0];
 type DeleteGeneratedImageEvent = Parameters<typeof DELETE>[0];
+type GeneratedImageDetailEvent = Parameters<typeof GET_DETAIL>[0];
 
 function call(
 	user: SessionUser | null,
@@ -101,6 +109,19 @@ function callDelete(
 		platform,
 		locals: { sessionLookupUnavailable, user }
 	} as DeleteGeneratedImageEvent);
+}
+
+function callDetail(
+	user: SessionUser | null,
+	platform: App.Platform,
+	id: string,
+	sessionLookupUnavailable = false
+): ReturnType<typeof GET_DETAIL> {
+	return GET_DETAIL({
+		params: { id },
+		platform,
+		locals: { sessionLookupUnavailable, user }
+	} as GeneratedImageDetailEvent);
 }
 
 describe('GET /api/generated-images', () => {
@@ -437,6 +458,123 @@ describe('DELETE /api/generated-images', () => {
 			{ pubkey: 'ghost-pubkey' },
 			{ env: { DB: makeD1() } } as App.Platform,
 			{ id: 'image-1' }
+		);
+
+		expect(response.status).toBe(500);
+	});
+});
+
+describe('GET /api/generated-images/[id]', () => {
+	it('returns 401 for non-authenticated users', async () => {
+		const response = await callDetail(null, { env: { DB: makeD1() } } as App.Platform, 'image-1');
+
+		expect(response.status).toBe(401);
+	});
+
+	it('returns 404 for a generation owned by another user', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		seedGeneratedImage(db, 'image-2', 'user-2', 1000);
+
+		const response = await callDetail({ pubkey: 'pubkey-1' }, platform(db), 'image-2');
+
+		expect(response.status).toBe(404);
+	});
+
+	it('returns 404 for an id that does not exist', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+
+		const response = await callDetail({ pubkey: 'pubkey-1' }, platform(db), 'missing');
+
+		expect(response.status).toBe(404);
+	});
+
+	it('resolves the result and source images and a null snapshot for a row recorded without one', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+
+		const response = await callDetail({ pubkey: 'pubkey-1' }, platform(db), 'image-1');
+		const result = (await response.json()) as GeneratedImageDetailResponse;
+
+		expect(response.status).toBe(200);
+		expect(result.formSnapshot).toBeNull();
+		expect(result.image).toEqual({
+			key: mediaKey(TEST_S3_BUCKET.name, 'image-1.webp'),
+			url: expect.stringContaining('/image-1.webp?')
+		});
+		expect(result.source).toEqual({
+			key: mediaKey(TEST_S3_BUCKET.name, 'source.jpg'),
+			url: expect.stringContaining('/source.jpg?')
+		});
+		expect(result.media).toEqual([result.image, result.source]);
+	});
+
+	it('resolves the snapshot and every media key its reference images point to', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
+		seedMedia(db, 'https://cdn.example.test/reference.jpg');
+		seedGenerationFixture(db, {
+			id: 'image-1',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/image-1.webp',
+			sourceUrl: 'https://cdn.example.test/source.jpg',
+			createdAt: 1000,
+			formSnapshot: {
+				...TEST_FORM_SNAPSHOT,
+				styleReferenceImage: { mediaKey: mediaKey(TEST_S3_BUCKET.name, 'reference.jpg') }
+			}
+		});
+
+		const response = await callDetail({ pubkey: 'pubkey-1' }, platform(db), 'image-1');
+		const result = (await response.json()) as GeneratedImageDetailResponse;
+
+		expect(response.status).toBe(200);
+		expect(result.formSnapshot).toEqual({
+			...TEST_FORM_SNAPSHOT,
+			styleReferenceImage: { mediaKey: mediaKey(TEST_S3_BUCKET.name, 'reference.jpg') }
+		});
+		expect(result.media.map((access) => access.key).sort()).toEqual(
+			[
+				mediaKey(TEST_S3_BUCKET.name, 'image-1.webp'),
+				mediaKey(TEST_S3_BUCKET.name, 'source.jpg'),
+				mediaKey(TEST_S3_BUCKET.name, 'reference.jpg')
+			].sort()
+		);
+	});
+
+	it('drops only the unresolved reference image, keeping the rest of the snapshot', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
+		seedGenerationFixture(db, {
+			id: 'image-1',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/image-1.webp',
+			sourceUrl: 'https://cdn.example.test/source.jpg',
+			createdAt: 1000,
+			formSnapshot: {
+				...TEST_FORM_SNAPSHOT,
+				styleReferenceImage: { mediaKey: mediaKey(TEST_S3_BUCKET.name, 'never-uploaded.jpg') }
+			}
+		});
+
+		const response = await callDetail({ pubkey: 'pubkey-1' }, platform(db), 'image-1');
+		const result = (await response.json()) as GeneratedImageDetailResponse;
+
+		expect(response.status).toBe(200);
+		expect(result.formSnapshot).toEqual({ ...TEST_FORM_SNAPSHOT, styleReferenceImage: undefined });
+		expect(result.media).toEqual([result.image, result.source]);
+	});
+
+	it('fails closed for the dev-only demo session without touching D1', async () => {
+		const response = await callDetail(
+			{ pubkey: DEMO_PUBKEY },
+			{ env: {} } as App.Platform,
+			'image-1'
 		);
 
 		expect(response.status).toBe(500);

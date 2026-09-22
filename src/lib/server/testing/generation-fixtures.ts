@@ -13,6 +13,7 @@
  */
 
 import type { D1Database, D1Result } from '@cloudflare/workers-types';
+import type { RequestFormSnapshot } from '$lib/api/contract';
 import { DEFAULT_UPLOADS_BUCKET_NAME, type Bucket } from '$lib/server/media';
 
 interface BucketRow {
@@ -31,6 +32,29 @@ export const TEST_S3_BUCKET: Bucket = {
 	name: DEFAULT_UPLOADS_BUCKET_NAME,
 	url: 'https://s3.example.test/cadbos',
 	region: 'auto'
+};
+
+export const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
+	promptFragments: [{ id: 'frag-1', text: 'cozy', order: 0 }],
+	promptOverride: null,
+	editPrompt: '',
+	addObjectPresetId: null,
+	removeObjectText: '',
+	editOperationType: null,
+	outputFormat: 'webp',
+	sceneType: 'interior',
+	styleTransferPrompt: '',
+	styleTransferStrength: 0.7,
+	styleNegativePrompt: '',
+	styleSourceMode: 'current-result',
+	objectReplacementObject: '',
+	objectReplacementSourceMode: 'current-result',
+	objectReplacementScale: 1,
+	textureReplacementSurface: '',
+	textureReplacementSourceMode: 'current-result',
+	textureReplacementMasked: false,
+	lightSettingsPresetIds: [],
+	lightSettingsInstruction: ''
 };
 
 function syncFirst<T>(value: Promise<T | null>): T | null {
@@ -98,14 +122,15 @@ export function seedGeneration(
 		kind?: string;
 		amount?: number;
 		balanceAfter?: number;
+		formSnapshot?: RequestFormSnapshot;
 	}
 ): void {
 	const resultMediaId = seedMedia(db, input.url, input.resultChecksum);
 	const sourceMediaId = seedMedia(db, input.sourceUrl, input.sourceChecksum);
 	db.prepare(
 		'INSERT INTO generations ' +
-			'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id) ' +
-			'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+			'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id, form_snapshot) ' +
+			'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
 	)
 		.bind(
 			input.id,
@@ -117,7 +142,8 @@ export function seedGeneration(
 			input.amount ?? 1,
 			input.balanceAfter ?? 10,
 			input.createdAt,
-			input.sessionId ?? null
+			input.sessionId ?? null,
+			input.formSnapshot ? JSON.stringify(input.formSnapshot) : null
 		)
 		.run();
 }

@@ -357,13 +357,16 @@ before the Change Date. See LICENSE for complete terms.
 		pollFailure = null;
 		try {
 			const sourceRender = request.currentRender;
+			// Captured before the async calls below so the settings attached to
+			// this request are what was actually submitted — see toRenderRequest().
+			const formSnapshot = request.captureFormSnapshot();
 			const source = await request.resolveEditSource();
 			if (!source) return;
 			const { sessionId } = await request.ensureProjectSession();
 			const response = await fetch('/api/edit', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ imageKey: source, prompt: trimmed, sessionId })
+				body: JSON.stringify({ imageKey: source, prompt: trimmed, sessionId, formSnapshot })
 			});
 			if (!response.ok) {
 				const code = await extractApiErrorCode(response, 'edit_failed');

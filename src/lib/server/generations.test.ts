@@ -15,12 +15,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { makeD1 } from './testing/d1-shim';
-import { TEST_S3_BUCKET } from './testing/generation-fixtures';
+import { TEST_FORM_SNAPSHOT, TEST_S3_BUCKET } from './testing/generation-fixtures';
 import { getCredit } from './billing';
 import {
 	deleteGeneratedImage,
 	findGenerationSourceByHash,
 	getGeneratedImageForUser,
+	getGenerationDetailForUser,
 	listCreditHistory,
 	listDistinctSourceImages,
 	listGeneratedImages,
@@ -183,6 +184,121 @@ describe('recordGeneration', () => {
 
 		expect((await getCredit(db, 'user-1'))?.balance).toBe(3);
 		expect((await getCredit(db, 'user-2'))?.balance).toBe(5);
+	});
+
+	it('persists the form snapshot as JSON, and leaves it null when omitted', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 5);
+		const sessionId = seedSession(db, 'user-1');
+
+		const withSnapshotResultId = seedMedia(db, 'https://cdn.example.test/with.webp', '');
+		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		await recordGeneration(db, 'user-1', {
+			resultMediaId: withSnapshotResultId,
+			sourceMediaId,
+			sessionId,
+			prompt: 'cozy',
+			kind: 'render',
+			amount: 1,
+			archaiRenderSec: 0,
+			archaiDownloadSec: 0,
+			archaiReuploadSec: 0,
+			formSnapshot: TEST_FORM_SNAPSHOT
+		});
+		const withSnapshotRow = await db
+			.prepare(
+				'SELECT form_snapshot FROM generations WHERE user_id = ? ORDER BY rowid DESC LIMIT 1'
+			)
+			.bind('user-1')
+			.first<{ form_snapshot: string | null }>();
+		expect(JSON.parse(withSnapshotRow!.form_snapshot!)).toEqual(TEST_FORM_SNAPSHOT);
+
+		const withoutSnapshotResultId = seedMedia(db, 'https://cdn.example.test/without.webp', '');
+		await recordGeneration(db, 'user-1', {
+			resultMediaId: withoutSnapshotResultId,
+			sourceMediaId,
+			sessionId,
+			prompt: 'cozy',
+			kind: 'upscale',
+			amount: 1,
+			archaiRenderSec: 0,
+			archaiDownloadSec: 0,
+			archaiReuploadSec: 0
+		});
+		const withoutSnapshotRow = await db
+			.prepare(
+				'SELECT form_snapshot FROM generations WHERE user_id = ? ORDER BY rowid DESC LIMIT 1'
+			)
+			.bind('user-1')
+			.first<{ form_snapshot: string | null }>();
+		expect(withoutSnapshotRow!.form_snapshot).toBeNull();
+	});
+});
+
+describe('getGenerationDetailForUser', () => {
+	it('returns the parsed form snapshot alongside the prompt and source media', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 5);
+		const sessionId = seedSession(db, 'user-1');
+		const resultMediaId = seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
+		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		await recordGeneration(db, 'user-1', {
+			resultMediaId,
+			sourceMediaId,
+			sessionId,
+			prompt: 'cozy',
+			kind: 'render',
+			amount: 1,
+			archaiRenderSec: 0,
+			archaiDownloadSec: 0,
+			archaiReuploadSec: 0,
+			formSnapshot: TEST_FORM_SNAPSHOT
+		});
+		const [{ id }] = (await listGeneratedImages(db, 'user-1', 0, 1)).images;
+
+		const detail = await getGenerationDetailForUser(db, 'user-1', id);
+
+		expect(detail).toEqual({
+			id,
+			sourceMediaId,
+			resultMediaId,
+			prompt: 'cozy',
+			kind: 'render',
+			createdAt: expect.any(Number),
+			formSnapshot: TEST_FORM_SNAPSHOT
+		});
+	});
+
+	it('returns null for another user’s generation', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		seedGeneration(db, 'image-1', 'user-1', 1000);
+
+		expect(await getGenerationDetailForUser(db, 'user-2', 'image-1')).toBeNull();
+	});
+
+	it('degrades to a null snapshot for a row whose stored JSON is malformed', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneration(db, 'image-1', 'user-1', 1000);
+		db.prepare('UPDATE generations SET form_snapshot = ? WHERE id = ?')
+			.bind('{not valid json', 'image-1')
+			.run();
+
+		const detail = await getGenerationDetailForUser(db, 'user-1', 'image-1');
+
+		expect(detail?.formSnapshot).toBeNull();
+	});
+
+	it('degrades to a null snapshot for a row whose stored JSON no longer matches the shape', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneration(db, 'image-1', 'user-1', 1000);
+		db.prepare('UPDATE generations SET form_snapshot = ? WHERE id = ?')
+			.bind(JSON.stringify({ unrelated: true }), 'image-1')
+			.run();
+
+		const detail = await getGenerationDetailForUser(db, 'user-1', 'image-1');
+
+		expect(detail?.formSnapshot).toBeNull();
 	});
 });
 

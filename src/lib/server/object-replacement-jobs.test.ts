@@ -14,6 +14,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
+import type { RequestFormSnapshot } from '$lib/api/contract';
 import {
 	completeObjectReplacementJob,
 	createObjectReplacementJob,
@@ -22,6 +23,29 @@ import {
 } from '$lib/server/object-replacement-jobs';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { seedManagedMedia } from '$lib/server/testing/generation-fixtures';
+
+const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
+	promptFragments: [],
+	promptOverride: null,
+	editPrompt: '',
+	addObjectPresetId: null,
+	removeObjectText: '',
+	editOperationType: null,
+	outputFormat: 'webp',
+	sceneType: 'interior',
+	styleTransferPrompt: '',
+	styleTransferStrength: 0.7,
+	styleNegativePrompt: '',
+	styleSourceMode: 'current-result',
+	objectReplacementObject: 'sofa',
+	objectReplacementSourceMode: 'room-photo',
+	objectReplacementScale: 1,
+	textureReplacementSurface: '',
+	textureReplacementSourceMode: 'current-result',
+	textureReplacementMasked: false,
+	lightSettingsPresetIds: [],
+	lightSettingsInstruction: ''
+};
 
 function seedAccount(db: D1Database, balance = 12): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -55,7 +79,8 @@ async function seedJob(db: D1Database, id = 'job-1') {
 		replacementObject: 'sofa',
 		cost: 2,
 		createdAt: 10,
-		uploadQueueSec: 3
+		uploadQueueSec: 3,
+		formSnapshot: TEST_FORM_SNAPSHOT
 	});
 }
 
@@ -98,11 +123,14 @@ describe('object replacement jobs', () => {
 		const generation = await db
 			.prepare(
 				'SELECT id, kind, amount, balance_after, comfyui_upload_queue_sec, comfyui_queue_wait_sec, ' +
-					'comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec FROM generations WHERE id = ?'
+					'comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot FROM generations WHERE id = ?'
 			)
 			.bind('job-1')
-			.first();
-		expect(generation).toEqual({
+			.first<{ form_snapshot: string | null } & Record<string, unknown>>();
+		expect(JSON.parse(generation!.form_snapshot!)).toEqual(TEST_FORM_SNAPSHOT);
+		const generationWithoutSnapshot = { ...generation! };
+		delete (generationWithoutSnapshot as { form_snapshot?: string | null }).form_snapshot;
+		expect(generationWithoutSnapshot).toEqual({
 			id: 'job-1',
 			kind: 'object-replacement',
 			amount: 2,

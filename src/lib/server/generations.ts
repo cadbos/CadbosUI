@@ -23,8 +23,10 @@ import {
 	type Balance,
 	type CreditTransaction,
 	type GenerationKind,
+	type RequestFormSnapshot,
 	type UserUsageRecord
 } from '$lib/api/contract';
+import { formSnapshotSchema } from '$lib/server/api';
 
 function isGenerationKind(kind: string): kind is GenerationKind {
 	return generationKinds.some((candidate) => candidate === kind);
@@ -122,6 +124,10 @@ export interface RecordGenerationInput {
 	archaiRenderSec: number;
 	archaiDownloadSec: number;
 	archaiReuploadSec: number;
+	// The full form settings this call was submitted with (migrations/0018),
+	// so the generation can later be reopened with them restored — undefined
+	// for kinds with nothing to restore (e.g. upscale).
+	formSnapshot?: RequestFormSnapshot;
 }
 
 // Deducts the real cost archAI charged (not a fixed fee) and records the
@@ -159,8 +165,8 @@ export async function recordGeneration(
 			.prepare(
 				'INSERT INTO generations ' +
 					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id, ' +
-					'archai_render_sec, archai_download_sec, archai_reupload_sec) ' +
-					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ?, ?, ?, ?, ? FROM credits WHERE user_id = ?'
+					'archai_render_sec, archai_download_sec, archai_reupload_sec, form_snapshot) ' +
+					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ?, ?, ?, ?, ?, ? FROM credits WHERE user_id = ?'
 			)
 			.bind(
 				crypto.randomUUID(),
@@ -175,6 +181,7 @@ export async function recordGeneration(
 				input.archaiRenderSec,
 				input.archaiDownloadSec,
 				input.archaiReuploadSec,
+				input.formSnapshot ? JSON.stringify(input.formSnapshot) : null,
 				userId
 			)
 	]);
@@ -203,6 +210,96 @@ export async function getGeneratedImageForUser(
 		.bind(id, userId)
 		.first<GenerationRow>();
 	return row ? toGeneratedImage(row) : null;
+}
+
+export interface GenerationDetail {
+	id: string;
+	sourceMediaId: number;
+	resultMediaId: number;
+	prompt: string;
+	kind: GenerationKind;
+	createdAt: number;
+	formSnapshot: RequestFormSnapshot | null;
+}
+
+interface GenerationDetailRow {
+	id: string;
+	source_media_id: number;
+	result_media_id: number;
+	prompt: string;
+	kind: string;
+	created_at: number;
+	form_snapshot: string | null;
+}
+
+// Re-validates the stored JSON against the same shape schema the write path
+// enforces (formSnapshotSchema, $lib/server/api) rather than trusting it
+// blindly — a row could in principle predate a later, stricter version of
+// that shape. A row that fails degrades to `formSnapshot: null` (prompt-only
+// restore) instead of failing the whole read.
+export function parseStoredFormSnapshot(
+	id: string,
+	raw: string | null
+): RequestFormSnapshot | null {
+	if (!raw) return null;
+	let parsedJson: unknown;
+	try {
+		parsedJson = JSON.parse(raw);
+	} catch (error) {
+		console.error(
+			JSON.stringify({
+				level: 'error',
+				area: 'generations',
+				event: 'form_snapshot_json_invalid',
+				id,
+				errorType: error instanceof Error ? error.name : 'unknown'
+			})
+		);
+		return null;
+	}
+	const result = formSnapshotSchema.safeParse(parsedJson);
+	if (!result.success) {
+		console.error(
+			JSON.stringify({
+				level: 'error',
+				area: 'generations',
+				event: 'form_snapshot_shape_invalid',
+				id
+			})
+		);
+		return null;
+	}
+	return result.data;
+}
+
+// For the "restore this generation's settings" feature (migrations/0018) —
+// unlike getGeneratedImageForUser (used for the history gallery/delete), this
+// carries the full form snapshot, so it's only queried when a specific
+// generation is opened, not for every row in a list.
+export async function getGenerationDetailForUser(
+	db: D1Database,
+	userId: string,
+	id: string
+): Promise<GenerationDetail | null> {
+	const row = await db
+		.prepare(
+			'SELECT id, source_media_id, result_media_id, prompt, kind, created_at, form_snapshot ' +
+				'FROM generations WHERE id = ? AND user_id = ?'
+		)
+		.bind(id, userId)
+		.first<GenerationDetailRow>();
+	if (!row) return null;
+	const kind = generationKindForRow(row.id, row.kind);
+	if (kind === null) return null;
+	return {
+		id: row.id,
+		sourceMediaId: row.source_media_id,
+		resultMediaId: row.result_media_id,
+		prompt: row.prompt,
+		kind,
+		createdAt: row.created_at,
+		formSnapshot: parseStoredFormSnapshot(row.id, row.form_snapshot)
+	};
 }
 
 export async function deleteGeneratedImage(

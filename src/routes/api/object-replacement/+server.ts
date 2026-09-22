@@ -209,7 +209,8 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				replacementObject: parsed.data.replacementObject,
 				cost,
 				createdAt: Date.now(),
-				uploadQueueSec
+				uploadQueueSec,
+				formSnapshot: parsed.data.formSnapshot
 			});
 		} catch {
 			logFailure(500, 'object_replacement_failed', { operation: 'job_persistence' });

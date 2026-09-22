@@ -203,7 +203,8 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				instruction: parsed.data.instruction,
 				cost,
 				createdAt: Date.now(),
-				uploadQueueSec
+				uploadQueueSec,
+				formSnapshot: parsed.data.formSnapshot
 			});
 		} catch {
 			logFailure(500, 'light_settings_failed', { operation: 'job_persistence' });

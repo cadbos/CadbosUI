@@ -14,12 +14,23 @@
 
 import { z } from 'zod';
 import {
+	EDIT_OPERATION_TYPES,
+	IMAGE_SOURCE_MODES,
 	OUTPUT_FORMATS,
+	SCENE_TYPES,
+	type EditOperationType,
+	type ImageInput,
+	type ImageSourceMode,
 	type LightSettingsRequest,
+	type ManagedImageInput,
 	type ObjectReplacementRequest,
 	type OutputFormat,
+	type PromptFragment,
 	type RenderRequest,
 	type RenderResponse,
+	type RequestFormSnapshot,
+	type SceneType,
+	type StylePresetImageInput,
 	type StyleTransferRequest,
 	type TextureReplacementRequest,
 	uploadResultSchema
@@ -29,45 +40,20 @@ import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 import { LIGHT_SETTINGS_FIXTURES, LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 
-export type { OutputFormat };
-
-export const SCENE_TYPES = ['interior', 'exterior'] as const;
-
-export type SceneType = (typeof SCENE_TYPES)[number];
-
-export interface ManagedImageInput {
-	mediaKey: string;
-	mime?: string;
-	size?: number;
-	dimensions?: [number, number];
-}
-
-export interface StylePresetImageInput {
-	stylePresetId: string;
-	url: string;
-	mime?: string;
-}
-
-export type ImageInput = ManagedImageInput | StylePresetImageInput;
-
-export interface PromptFragment {
-	id: string;
-	label?: string;
-	text: string;
-	order: number;
-}
-
-export const EDIT_OPERATION_TYPES = [
-	'replace-object',
-	'change-surface-color',
-	'freeform',
-	'add-object',
-	'remove-object',
-	'light-settings',
-	'upscale'
-] as const;
-
-export type EditOperationType = (typeof EDIT_OPERATION_TYPES)[number];
+export {
+	EDIT_OPERATION_TYPES,
+	IMAGE_SOURCE_MODES,
+	SCENE_TYPES,
+	type EditOperationType,
+	type ImageInput,
+	type ImageSourceMode,
+	type ManagedImageInput,
+	type OutputFormat,
+	type PromptFragment,
+	type RequestFormSnapshot,
+	type SceneType,
+	type StylePresetImageInput
+};
 
 export interface EditOperation {
 	type: EditOperationType;
@@ -83,39 +69,15 @@ export interface EditOperation {
 export const RENDER_SOURCE_MODES = ['render', 'styleTransfer'] as const;
 export type RenderSourceMode = (typeof RENDER_SOURCE_MODES)[number];
 
-// The full set of editable form fields, captured at the moment a generation
-// or edit is pushed onto render history (see RequestState#pushRender) so
-// undo/redo (FR-К6) can restore the exact settings that produced a given
-// step — not just its image — instead of leaving whatever the form happens
-// to hold right now. Deliberately the same shape reset()/copyFrom()/
-// fromJSON() already assign field-by-field, minus image/session identity,
-// which undo/redo has no business touching.
-export interface RequestFormSnapshot {
-	promptFragments: PromptFragment[];
-	promptOverride: string | null;
-	editPrompt: string;
-	addObjectPresetId: string | null;
-	removeObjectText: string;
-	outputFormat: OutputFormat;
-	sceneType: SceneType;
-	styleTransferPrompt: string;
-	styleTransferStrength: number;
-	styleNegativePrompt: string;
-	styleSourceMode: ImageSourceMode;
-	styleReferenceImage?: ImageInput;
-	objectReplacementObject: string;
-	objectReplacementSourceMode: ImageSourceMode;
-	objectReplacementScale: number;
-	objectReferenceImage?: ImageInput;
-	textureReplacementSurface: string;
-	textureReplacementSourceMode: ImageSourceMode;
-	textureReplacementMasked: boolean;
-	textureReferenceImage?: ImageInput;
-	textureMaskImage?: ImageInput;
-	textureMaskSourceKey?: string;
-	lightSettingsPresetIds: string[];
-	lightSettingsInstruction: string;
-}
+// RequestFormSnapshot itself lives in $lib/api/contract.ts (re-exported
+// above) so the server can validate it without depending on Svelte-only
+// modules — see that file for the field list and rationale. Captured at the
+// moment a generation or edit is pushed onto render history (see
+// RequestState#pushRender) so undo/redo (FR-К6) can restore the exact
+// settings that produced a given step — not just its image — instead of
+// leaving whatever the form happens to hold right now. Deliberately the same
+// shape reset()/copyFrom()/fromJSON() already assign field-by-field, minus
+// image/session identity, which undo/redo has no business touching.
 
 export interface RenderResult {
 	id: string;
@@ -173,9 +135,6 @@ export interface TextureMaskUploadOperation {
 }
 
 export type RequestStatus = 'idle' | 'rendering' | 'error';
-
-export const IMAGE_SOURCE_MODES = ['room-photo', 'current-result'] as const;
-export type ImageSourceMode = (typeof IMAGE_SOURCE_MODES)[number];
 
 export type ValidationField =
 	| 'prompt'
@@ -336,12 +295,19 @@ const editOperationSchema = z.object({
 	instruction: z.string()
 });
 
-const requestFormSnapshotSchema = z.object({
+// Exported for callers that receive a snapshot from outside this session
+// (ScenesDrawer.svelte's restore flow, GET /api/generated-images/[id]) and
+// need to validate it — including catalog membership (ADD_OBJECT_PRESETS,
+// LIGHT_SETTINGS_PRESETS) — before handing it to restoreFormSnapshot().
+export const requestFormSnapshotSchema = z.object({
 	promptFragments: z.array(promptFragmentSchema),
 	promptOverride: z.string().nullable(),
 	editPrompt: z.string(),
 	addObjectPresetId: addObjectPresetIdSchema,
 	removeObjectText: z.string(),
+	// Absent/null for a snapshot recorded before this field existed — restore
+	// degrades to the 'freeform' default tool the same way it always did.
+	editOperationType: z.enum(EDIT_OPERATION_TYPES).nullable().default(null),
 	outputFormat: outputFormatSchema,
 	sceneType: sceneTypeSchema,
 	styleTransferPrompt: z.string(),
@@ -548,6 +514,7 @@ function cloneFormSnapshot(
 		editPrompt: snapshot.editPrompt,
 		addObjectPresetId: snapshot.addObjectPresetId,
 		removeObjectText: snapshot.removeObjectText,
+		editOperationType: snapshot.editOperationType,
 		outputFormat: snapshot.outputFormat,
 		sceneType: snapshot.sceneType,
 		styleTransferPrompt: snapshot.styleTransferPrompt,
@@ -1127,7 +1094,7 @@ export class RequestState {
 			id: objectReplacementJobIdSchema.parse(id),
 			instruction: replacementObjectSchema.parse(instruction).trim(),
 			sourceRender: cloneRenderResult(sourceRender),
-			formSnapshot: this.captureFormSnapshot()
+			formSnapshot: this.captureFormSnapshot('replace-object')
 		};
 	}
 
@@ -1178,7 +1145,7 @@ export class RequestState {
 			id: lightSettingsJobIdSchema.parse(id),
 			instruction: lightSettingsInstructionSchema.parse(instruction).trim(),
 			sourceRender: cloneRenderResult(sourceRender),
-			formSnapshot: this.captureFormSnapshot()
+			formSnapshot: this.captureFormSnapshot('light-settings')
 		};
 	}
 
@@ -1209,7 +1176,7 @@ export class RequestState {
 			type,
 			instruction: fluxKontextEditInstructionSchema.parse(instruction).trim(),
 			sourceRender: cloneRenderResult(sourceRender),
-			formSnapshot: this.captureFormSnapshot()
+			formSnapshot: this.captureFormSnapshot(type)
 		};
 	}
 
@@ -1252,7 +1219,7 @@ export class RequestState {
 			id: textureReplacementJobIdSchema.parse(id),
 			instruction: replacementSurfaceSchema.parse(instruction).trim(),
 			sourceRender: cloneRenderResult(sourceRender),
-			formSnapshot: this.captureFormSnapshot()
+			formSnapshot: this.captureFormSnapshot('change-surface-color')
 		};
 	}
 
@@ -1305,13 +1272,18 @@ export class RequestState {
 	// applyEditResult() — "what the form holds right now", captured here,
 	// would otherwise reflect whatever the user has since typed elsewhere,
 	// not what was actually submitted.
-	captureFormSnapshot(): RequestFormSnapshot {
+	// `editOperationType` disambiguates a `kind: 'edit'` generation between the
+	// three tools that share it (freeform/add-object/remove-object) — pass the
+	// one the caller knows it's capturing for; omit for kinds with no such
+	// ambiguity (render, style-transfer), where it stays null.
+	captureFormSnapshot(editOperationType: EditOperationType | null = null): RequestFormSnapshot {
 		return {
 			promptFragments: cloneFragments(this.promptFragments),
 			promptOverride: this.promptOverride,
 			editPrompt: this.editPrompt,
 			addObjectPresetId: this.addObjectPresetId,
 			removeObjectText: this.removeObjectText,
+			editOperationType,
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
 			styleTransferPrompt: this.styleTransferPrompt,
@@ -1372,6 +1344,17 @@ export class RequestState {
 		this.textureMaskSourceKey = snapshot.textureMaskSourceKey;
 		this.lightSettingsPresetIds = [...snapshot.lightSettingsPresetIds];
 		this.lightSettingsInstruction = snapshot.lightSettingsInstruction;
+	}
+
+	// Public entry point for restoring a past generation's exact settings from
+	// a snapshot fetched from the server (GET /api/generated-images/[id]) —
+	// the DB-backed counterpart to undo/redo's own #applyFormSnapshot, which
+	// only replays snapshots already held in this session's render history.
+	// Doesn't touch image, session, or render-history identity; the caller
+	// sets those around this call the same way it already does for
+	// setImage()/setCurrentRender() (see ScenesDrawer.svelte's restore flow).
+	restoreFormSnapshot(snapshot: RequestFormSnapshot): void {
+		this.#applyFormSnapshot(snapshot);
 	}
 
 	#pushRender(render: RenderResult, after: RenderResult | undefined): void {
@@ -1711,88 +1694,112 @@ export class RequestState {
 	async toRenderRequest(): Promise<RenderRequest | null> {
 		const validation = this.validate();
 		if (!validation.valid) return null;
+		// Captured before the upload/session calls below (both async), so the
+		// settings attached to the request are what's on the form right now —
+		// not whatever the user has since typed while those were in flight.
+		const formSnapshot = this.captureFormSnapshot();
+		const prompt = this.prompt;
+		const outputFormat = this.outputFormat;
 		const imageKey = await this.#resolveSourceFor('current-result');
 		if (!imageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
 			imageKey,
-			prompt: this.prompt,
-			outputFormat: this.outputFormat,
-			sessionId
+			prompt,
+			outputFormat,
+			sessionId,
+			formSnapshot
 		};
 	}
 
 	async toStyleTransferRequest(): Promise<StyleTransferRequest | null> {
 		const validation = this.validateStyleTransfer();
 		if (!validation.valid) return null;
-		const imageKey = await this.#resolveSourceFor(this.styleSourceMode);
-		if (!imageKey || !this.styleReferenceImage) return null;
-		const { sessionId } = await this.ensureProjectSession();
+		const formSnapshot = this.captureFormSnapshot();
+		const styleReferenceImage = this.styleReferenceImage;
+		const outputFormat = this.outputFormat;
 		const prompt = this.styleTransferPrompt.trim();
 		const negativePrompt = this.styleNegativePrompt.trim();
+		const styleTransferStrength = this.styleTransferStrength;
+		const imageKey = await this.#resolveSourceFor(this.styleSourceMode);
+		if (!imageKey || !styleReferenceImage) return null;
+		const { sessionId } = await this.ensureProjectSession();
 		return {
 			imageKey,
-			...('stylePresetId' in this.styleReferenceImage
-				? { stylePresetId: this.styleReferenceImage.stylePresetId }
-				: { referenceImageKey: this.styleReferenceImage.mediaKey }),
-			outputFormat: this.outputFormat,
+			...('stylePresetId' in styleReferenceImage
+				? { stylePresetId: styleReferenceImage.stylePresetId }
+				: { referenceImageKey: styleReferenceImage.mediaKey }),
+			outputFormat,
 			...(prompt ? { prompt } : {}),
 			...(negativePrompt ? { negativePrompt } : {}),
-			styleTransferStrength: this.styleTransferStrength,
-			sessionId
+			styleTransferStrength,
+			sessionId,
+			formSnapshot
 		};
 	}
 
 	async toObjectReplacementRequest(): Promise<ObjectReplacementRequest | null> {
 		const validation = this.validateObjectReplacement();
 		if (!validation.valid) return null;
-		const imageKey = await this.#resolveSourceFor(this.objectReplacementSourceMode);
+		const formSnapshot = this.captureFormSnapshot('replace-object');
 		const referenceImageKey = managedImageKey(this.objectReferenceImage);
+		const replacementObject = this.objectReplacementInstruction;
+		const imageKey = await this.#resolveSourceFor(this.objectReplacementSourceMode);
 		if (!imageKey || !referenceImageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
 			imageKey,
 			referenceImageKey,
-			replacementObject: this.objectReplacementInstruction,
-			sessionId
+			replacementObject,
+			sessionId,
+			formSnapshot
 		};
 	}
 
 	async toTextureReplacementRequest(): Promise<TextureReplacementRequest | null> {
 		const validation = this.validateTextureReplacement();
 		if (!validation.valid) return null;
-		const imageKey = await this.#resolveSourceFor(this.textureReplacementSourceMode);
+		const formSnapshot = this.captureFormSnapshot('change-surface-color');
 		const referenceImageKey = managedImageKey(this.textureReferenceImage);
+		const masked = this.textureReplacementMasked;
+		const maskImageKey = managedImageKey(this.textureMaskImage);
+		const maskMatchesSource = this.textureMaskMatchesSource();
+		const replacementSurface = this.textureReplacementSurface.trim();
+		const imageKey = await this.#resolveSourceFor(this.textureReplacementSourceMode);
 		if (!imageKey || !referenceImageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
-		if (this.textureReplacementMasked) {
-			const maskImageKey = managedImageKey(this.textureMaskImage);
-			if (!maskImageKey || !this.textureMaskMatchesSource()) return null;
+		if (masked) {
+			if (!maskImageKey || !maskMatchesSource) return null;
 			return {
 				imageKey,
 				referenceImageKey,
 				maskImageKey,
-				sessionId
+				sessionId,
+				formSnapshot
 			};
 		}
 		return {
 			imageKey,
 			referenceImageKey,
-			replacementSurface: this.textureReplacementSurface.trim(),
-			sessionId
+			replacementSurface,
+			sessionId,
+			formSnapshot
 		};
 	}
 
 	async toLightSettingsRequest(): Promise<LightSettingsRequest | null> {
 		const validation = this.validateLightSettings();
 		if (!validation.valid) return null;
+		const formSnapshot = this.captureFormSnapshot('light-settings');
+		const instruction = this.lightSettingsPrompt.trim();
 		const imageKey = await this.resolveEditSource();
 		if (!imageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
 			imageKey,
-			instruction: this.lightSettingsPrompt.trim(),
-			sessionId
+			instruction,
+			sessionId,
+			formSnapshot
 		};
 	}
 

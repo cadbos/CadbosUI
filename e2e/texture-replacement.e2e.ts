@@ -320,7 +320,8 @@ test('draws a mask and applies the synchronous result without polling', async ({
 		imageKey: mediaKey(1),
 		referenceImageKey: mediaKey(2),
 		maskImageKey: mediaKey(3),
-		sessionId: E2E_SESSION_ID
+		sessionId: E2E_SESSION_ID,
+		formSnapshot: expect.any(Object)
 	});
 	expect(pollCount).toBe(0);
 

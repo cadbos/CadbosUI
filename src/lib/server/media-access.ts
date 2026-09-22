@@ -57,6 +57,29 @@ export async function mediaAccessBatch(
 	return new Map(media.map((item, index) => [item.id, access[index]]));
 }
 
+// UI-purpose counterpart to providerMediaBatch (which resolves short-lived
+// provider URLs) — used to resolve the media keys a restored form snapshot's
+// reference/mask images point to, for the client's media-access cache. Keys
+// that no longer resolve (e.g. a since-deleted reference image) are simply
+// omitted rather than failing the whole batch — the caller degrades that one
+// field instead of discarding every other restored setting.
+export async function mediaAccessByKeyBatch(
+	db: D1Database,
+	platform: App.Platform | undefined,
+	keys: string[]
+): Promise<Map<string, MediaAccess>> {
+	const uniqueKeys = [...new Set(keys)];
+	const result = new Map<string, MediaAccess>();
+	for (const key of uniqueKeys) {
+		const parsed = parseMediaKey(key);
+		if (!parsed) continue;
+		const media = await getMediaByBucketKey(db, parsed.bucketName, parsed.filename);
+		if (!media) continue;
+		result.set(key, await mediaAccess(platform, media));
+	}
+	return result;
+}
+
 export async function providerMediaBatch(
 	db: D1Database,
 	platform: App.Platform | undefined,

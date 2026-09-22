@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import {
 		Download,
+		History,
 		Lightbulb,
 		Palette,
 		PaintRoller,
@@ -34,7 +35,11 @@ before the Change Date. See LICENSE for complete terms.
 	import type { GenerationKind } from '$lib/api/contract';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
-	import { request } from '$lib/state/request.svelte';
+	import {
+		applyGeneratedImageFormSnapshot,
+		fetchGeneratedImageDetail
+	} from '$lib/state/generation-restore';
+	import { request, RequestState, type RequestFormSnapshot } from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, destinationForGenerationKind } from '$lib/state/url-state';
 	import { logBoundaryError, openModal } from '$lib/utils';
 
@@ -68,6 +73,12 @@ before the Change Date. See LICENSE for complete terms.
 		order: number;
 	}
 
+	interface RestoreCandidate {
+		id: string;
+		kind: GenerationKind;
+		order: number;
+	}
+
 	interface GeneratedDate {
 		datetime: string;
 		dateLabel: string;
@@ -79,6 +90,12 @@ before the Change Date. See LICENSE for complete terms.
 	const isDeletingCandidate = $derived(
 		deleteCandidate ? generatedImages.deletingIds.has(deleteCandidate.id) : false
 	);
+	// Confirmation is only needed when restoring would actually overwrite
+	// something — set once the user is asked and cleared once they answer.
+	let restoreConfirmCandidate = $state<RestoreCandidate | null>(null);
+	let restoringId = $state<string | null>(null);
+	let restoreFailedId = $state<string | null>(null);
+	const anyModalOpen = $derived(deleteCandidate !== null || restoreConfirmCandidate !== null);
 
 	const MIN_DRAWER_WIDTH = 320;
 	const RESIZE_STEP = 24;
@@ -266,18 +283,24 @@ before the Change Date. See LICENSE for complete terms.
 		deleteCandidate = { id, order };
 	}
 
-	function useImage(mediaKey: string, kind: GenerationKind): void {
+	// The form fields any "switch to this scene's image" action needs reset
+	// regardless of whether it's also restoring the rest of the settings
+	// (image, session/history identity, in-flight async jobs).
+	function resetForNewScene(mediaKey: string): void {
 		request.setImage({ mediaKey });
 		request.setCurrentRender(undefined);
-		request.setStyleSourceMode('room-photo');
-		request.setObjectReplacementSourceMode('room-photo');
-		request.setTextureReplacementSourceMode('room-photo');
-		request.setTextureMaskImage(undefined);
 		request.setActiveObjectReplacementJobId(undefined);
 		request.setActiveTextureReplacementJobId(undefined);
 		request.setActiveLightSettingsJobId(undefined);
 		request.setStatus('idle');
-		const destination = destinationForGenerationKind(kind);
+	}
+
+	function navigateToDestination(
+		kind: GenerationKind,
+		boundary: string,
+		formSnapshot?: RequestFormSnapshot | null
+	): void {
+		const destination = destinationForGenerationKind(kind, formSnapshot);
 		onClose();
 		goto(
 			resolve(
@@ -288,14 +311,90 @@ before the Change Date. See LICENSE for complete terms.
 				) as PathnameWithSearchOrHash,
 				{}
 			),
-			{
-				replaceState: false
-			}
-		).catch((error: unknown) => logBoundaryError('scenesDrawer.imageNavigation', error));
+			{ replaceState: false }
+		).catch((error: unknown) => logBoundaryError(boundary, error));
+	}
+
+	function useImage(mediaKey: string, kind: GenerationKind): void {
+		resetForNewScene(mediaKey);
+		request.setStyleSourceMode('room-photo');
+		request.setObjectReplacementSourceMode('room-photo');
+		request.setTextureReplacementSourceMode('room-photo');
+		request.setTextureMaskImage(undefined);
+		navigateToDestination(kind, 'scenesDrawer.imageNavigation');
+	}
+
+	// True once there's something a restore would actually discard — an empty
+	// form has nothing to lose, and a form that already matches the last
+	// generation it produced (nothing typed since) is effectively saved.
+	function hasUnsavedFormChanges(): boolean {
+		const lastApplied = request.currentRender?.formSnapshot;
+		if (lastApplied) {
+			return JSON.stringify(request.captureFormSnapshot()) !== JSON.stringify(lastApplied);
+		}
+		// No render has happened yet this session, so there's nothing saved to
+		// diff against. A picked-but-not-yet-uploaded photo
+		// (request.pendingImageFile) is work the user would lose just as much
+		// as an already-uploaded one — see ImageUpload.svelte's own comment on
+		// why it stays pending until submit — so either counts as unsaved on
+		// its own; otherwise fall back to comparing against a freshly created,
+		// untouched form so a truly empty one still counts as clean.
+		if (request.image || request.pendingImageFile) return true;
+		return (
+			JSON.stringify(request.captureFormSnapshot()) !==
+			JSON.stringify(new RequestState().captureFormSnapshot())
+		);
+	}
+
+	async function performRestore(id: string, kind: GenerationKind): Promise<void> {
+		restoringId = id;
+		restoreFailedId = null;
+		try {
+			const detail = await fetchGeneratedImageDetail(id);
+			if (!detail) throw new Error('restore_failed');
+
+			// The generation's own result, not its source — restoring a scene
+			// should bring back what that scene actually looked like, the same
+			// image clicking its "Результат" thumbnail (useImage) would set.
+			resetForNewScene(detail.image.key);
+			applyGeneratedImageFormSnapshot(detail);
+			navigateToDestination(kind, 'scenesDrawer.restoreNavigation', detail.formSnapshot);
+		} catch (error) {
+			restoreFailedId = id;
+			logBoundaryError('scenesDrawer.restoreGeneration', error);
+		} finally {
+			restoringId = null;
+		}
+	}
+
+	function requestRestore(id: string, kind: GenerationKind, order: number): void {
+		if (restoringId) return;
+		if (hasUnsavedFormChanges()) {
+			restoreConfirmCandidate = { id, kind, order };
+			return;
+		}
+		void performRestore(id, kind);
+	}
+
+	function cancelRestore(): void {
+		if (restoringId) return;
+		restoreConfirmCandidate = null;
+	}
+
+	async function confirmRestore(): Promise<void> {
+		const candidate = restoreConfirmCandidate;
+		if (!candidate || restoringId) return;
+		restoreConfirmCandidate = null;
+		await performRestore(candidate.id, candidate.kind);
+	}
+
+	function handleRestoreCancel(event: Event): void {
+		event.preventDefault();
+		cancelRestore();
 	}
 
 	function closeDrawer(): void {
-		if (deleteCandidate) return;
+		if (anyModalOpen) return;
 		onClose();
 	}
 
@@ -365,7 +464,7 @@ before the Change Date. See LICENSE for complete terms.
 		onkeydown={onResizeHandleKeydown}
 	></div>
 
-	<div class="drawer-panel" inert={deleteCandidate !== null} aria-hidden={deleteCandidate !== null}>
+	<div class="drawer-panel" inert={anyModalOpen} aria-hidden={anyModalOpen}>
 		<header class="drawer-header">
 			<div>
 				<h2 id="scenes-title">{t('generatedImages.title')}</h2>
@@ -478,6 +577,22 @@ before the Change Date. See LICENSE for complete terms.
 											>
 												<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
 											</button>
+											{#if image.kind !== 'upscale'}
+												<button
+													type="button"
+													class="icon-button"
+													disabled={restoringId !== null}
+													aria-label={ti('generatedImages.restore', { order: index + 1 })}
+													title={ti('generatedImages.restore', { order: index + 1 })}
+													onclick={() => requestRestore(image.id, image.kind, index + 1)}
+												>
+													{#if restoringId === image.id}
+														<span class="spinner" aria-hidden="true"></span>
+													{:else}
+														<History size={17} strokeWidth={1.8} aria-hidden="true" />
+													{/if}
+												</button>
+											{/if}
 											<a
 												href={resolve('/api/download/[bucket]/[...filename]', {
 													bucket: image.image.key.slice(0, image.image.key.indexOf('/')),
@@ -510,6 +625,9 @@ before the Change Date. See LICENSE for complete terms.
 				{/if}
 				{#if generatedImages.deleteFailed}
 					<p class="status error" role="alert">{t('generatedImages.deleteFailed')}</p>
+				{/if}
+				{#if restoreFailedId}
+					<p class="status error" role="alert">{t('generatedImages.restoreFailed')}</p>
 				{/if}
 			{/if}
 		</div>
@@ -549,6 +667,41 @@ before the Change Date. See LICENSE for complete terms.
 				{isDeletingCandidate
 					? t('generatedImages.confirmDeleteDeleting')
 					: t('generatedImages.confirmDeleteConfirm')}
+			</button>
+		</div>
+	</dialog>
+{/if}
+
+{#if restoreConfirmCandidate}
+	<dialog
+		class="delete-dialog"
+		{@attach openModal}
+		aria-labelledby="generated-images-restore-title"
+		aria-describedby="generated-images-restore-description"
+		oncancel={handleRestoreCancel}
+	>
+		<h3 id="generated-images-restore-title">{t('generatedImages.confirmRestoreTitle')}</h3>
+		<p id="generated-images-restore-description">
+			{ti('generatedImages.confirmRestoreDescription', { order: restoreConfirmCandidate.order })}
+		</p>
+		<div class="dialog-actions">
+			<button
+				type="button"
+				class="secondary-button"
+				disabled={restoringId !== null}
+				onclick={cancelRestore}
+			>
+				{t('generatedImages.confirmRestoreCancel')}
+			</button>
+			<button
+				type="button"
+				class="primary-button"
+				disabled={restoringId !== null}
+				onclick={() => void confirmRestore()}
+			>
+				{restoringId !== null
+					? t('generatedImages.confirmRestoreRestoring')
+					: t('generatedImages.confirmRestoreConfirm')}
 			</button>
 		</div>
 	</dialog>
@@ -952,6 +1105,25 @@ before the Change Date. See LICENSE for complete terms.
 		opacity: 0.55;
 	}
 
+	/* Fixed dark border, not currentColor: this spinner only ever sits on the
+	   .icon-button's fixed light-glass background (see its own color comment
+	   above), never on an accent-colored surface. */
+	.spinner {
+		width: 0.875rem;
+		height: 0.875rem;
+		border: 2px solid rgb(29 29 31 / 0.25);
+		border-top-color: #1d1d1f;
+		border-radius: 50%;
+		animation: spin 0.7s linear infinite;
+		flex-shrink: 0;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
 	.load-more-sentinel {
 		min-height: 2.5rem;
 		display: flex;
@@ -1003,7 +1175,8 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.secondary-button,
-	.primary-danger-button {
+	.primary-danger-button,
+	.primary-button {
 		min-height: 2.5rem;
 		padding: 0.625rem 0.75rem;
 		border-radius: var(--radius-sm);
@@ -1040,8 +1213,19 @@ before the Change Date. See LICENSE for complete terms.
 		background: color-mix(in srgb, var(--color-danger) 86%, black);
 	}
 
+	.primary-button {
+		border: 1px solid var(--color-accent);
+		background: var(--color-accent);
+		color: var(--color-accent-contrast);
+	}
+
+	.primary-button:hover {
+		background: var(--color-accent-hover);
+	}
+
 	.secondary-button:disabled,
-	.primary-danger-button:disabled {
+	.primary-danger-button:disabled,
+	.primary-button:disabled {
 		cursor: progress;
 		opacity: 0.65;
 	}

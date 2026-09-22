@@ -129,7 +129,8 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				amount: result.cost,
 				archaiRenderSec: result.renderSec,
 				archaiDownloadSec: result.downloadSec,
-				archaiReuploadSec: result.reuploadSec
+				archaiReuploadSec: result.reuploadSec,
+				formSnapshot: parsed.data.formSnapshot
 			});
 			result = { ...result, balance: credit.balance };
 		} catch (err) {

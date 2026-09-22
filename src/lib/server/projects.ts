@@ -24,9 +24,9 @@
 // layer, not the route.
 
 import type { D1Database } from '@cloudflare/workers-types';
-import type { GenerationKind } from '$lib/api/contract';
+import type { GenerationKind, PublicFormSnapshot } from '$lib/api/contract';
 import { randomToken } from './auth/session';
-import { generationKindForRow } from './generations';
+import { generationKindForRow, parseStoredFormSnapshot } from './generations';
 
 export interface Project {
 	id: string;
@@ -310,6 +310,88 @@ export async function getProjectDetailByShareToken(
 	if (!projectRow) return null;
 
 	return loadProjectDetail(db, projectRow);
+}
+
+// Explicit field-by-field pick (not a spread + delete of the image keys) so
+// a future field added to RequestFormSnapshot fails to compile here until
+// someone decides whether it's safe for a public, unauthenticated viewer —
+// the same reasoning as every other explicit field whitelist in this file.
+function toPublicFormSnapshot(
+	snapshot: ReturnType<typeof parseStoredFormSnapshot>
+): PublicFormSnapshot | null {
+	if (!snapshot) return null;
+	return {
+		promptFragments: snapshot.promptFragments,
+		promptOverride: snapshot.promptOverride,
+		editPrompt: snapshot.editPrompt,
+		addObjectPresetId: snapshot.addObjectPresetId,
+		removeObjectText: snapshot.removeObjectText,
+		editOperationType: snapshot.editOperationType,
+		outputFormat: snapshot.outputFormat,
+		sceneType: snapshot.sceneType,
+		styleTransferPrompt: snapshot.styleTransferPrompt,
+		styleTransferStrength: snapshot.styleTransferStrength,
+		styleNegativePrompt: snapshot.styleNegativePrompt,
+		styleSourceMode: snapshot.styleSourceMode,
+		objectReplacementObject: snapshot.objectReplacementObject,
+		objectReplacementSourceMode: snapshot.objectReplacementSourceMode,
+		objectReplacementScale: snapshot.objectReplacementScale,
+		textureReplacementSurface: snapshot.textureReplacementSurface,
+		textureReplacementSourceMode: snapshot.textureReplacementSourceMode,
+		textureReplacementMasked: snapshot.textureReplacementMasked,
+		lightSettingsPresetIds: snapshot.lightSettingsPresetIds,
+		lightSettingsInstruction: snapshot.lightSettingsInstruction
+	};
+}
+
+export interface ShareGenerationDetail {
+	id: string;
+	prompt: string;
+	kind: GenerationKind;
+	createdAt: number;
+	formSnapshot: PublicFormSnapshot | null;
+}
+
+interface ShareGenerationDetailRow {
+	id: string;
+	prompt: string;
+	kind: string;
+	created_at: number;
+	form_snapshot: string | null;
+}
+
+// The public share viewer's lazy per-generation settings fetch (opened from
+// its preview/lightbox — see GET /api/share/[token]/generations/[id]). Joins
+// all the way from the token to the generation itself, so this returns null
+// — not just "no snapshot" — whenever the generation doesn't belong to a
+// session in a project with a currently-active share, the same
+// no-enumeration-signal rule as getProjectDetailByShareToken.
+export async function getShareGenerationDetail(
+	db: D1Database,
+	token: string,
+	generationId: string
+): Promise<ShareGenerationDetail | null> {
+	const row = await db
+		.prepare(
+			'SELECT g.id, g.prompt, g.kind, g.created_at, g.form_snapshot FROM generations g ' +
+				'JOIN project_sessions ps ON ps.id = g.session_id ' +
+				'JOIN projects p ON p.id = ps.project_id ' +
+				'JOIN project_shares s ON s.project_id = p.id ' +
+				'WHERE g.id = ? AND s.token = ? AND s.revoked_at IS NULL ' +
+				'AND p.archived_at IS NULL AND ps.archived_at IS NULL'
+		)
+		.bind(generationId, token)
+		.first<ShareGenerationDetailRow>();
+	if (!row) return null;
+	const kind = generationKindForRow(row.id, row.kind);
+	if (kind === null) return null;
+	return {
+		id: row.id,
+		prompt: row.prompt,
+		kind,
+		createdAt: row.created_at,
+		formSnapshot: toPublicFormSnapshot(parseStoredFormSnapshot(row.id, row.form_snapshot))
+	};
 }
 
 // The IDOR guard every generation-writing route must call before attaching a

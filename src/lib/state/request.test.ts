@@ -51,6 +51,19 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
+// The to*Request() builders now attach formSnapshot (RequestState#captureFormSnapshot)
+// alongside the wire fields. Most tests assert both together; this is only for the
+// handful that specifically compare two payloads built from deliberately different
+// form histories, where the wire fields must match but formSnapshot isn't expected to.
+function stripFormSnapshot<T extends { formSnapshot?: unknown } | null | undefined>(
+	payload: T
+): Omit<NonNullable<T>, 'formSnapshot'> | null {
+	if (!payload) return null;
+	const rest = { ...payload };
+	delete (rest as { formSnapshot?: unknown }).formSnapshot;
+	return rest;
+}
+
 describe('prompt derivation', () => {
 	it('concatenates fragments by order without a separator', () => {
 		request.addFragment({ text: 'warm ', order: 1 });
@@ -530,7 +543,13 @@ describe('normalizeForComparison', () => {
 		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureReplacementSurface('sofa upholstery');
 		expect(request.normalizeForComparison()).toEqual(automaticNormalization);
-		expect(await request.toTextureReplacementRequest()).toEqual(automaticPayload);
+		// formSnapshot is excluded from this comparison: unlike the wire fields
+		// below, it deliberately mirrors whatever stray state (e.g. the mask
+		// image from a prior mode) happens to still be on the form — which is
+		// exactly the "prior mode history" this test leaves behind on purpose.
+		expect(stripFormSnapshot(await request.toTextureReplacementRequest())).toEqual(
+			stripFormSnapshot(automaticPayload)
+		);
 		expect(automaticNormalization.textureMaskImage).toBeUndefined();
 
 		request.setTextureReplacementMasked(true);
@@ -547,7 +566,9 @@ describe('normalizeForComparison', () => {
 		request.setTextureReplacementMasked(true);
 		request.setTextureMaskImage(textureMask);
 		expect(request.normalizeForComparison()).toEqual(maskedNormalization);
-		expect(await request.toTextureReplacementRequest()).toEqual(maskedPayload);
+		expect(stripFormSnapshot(await request.toTextureReplacementRequest())).toEqual(
+			stripFormSnapshot(maskedPayload)
+		);
 		expect(maskedNormalization.textureReplacementSurface).toBe('');
 	});
 });
@@ -561,7 +582,10 @@ describe('sceneType', () => {
 		applyAc9Fixture();
 		request.setSceneType('exterior');
 		expect(request.sceneType).toBe('exterior');
-		expect(await request.toRenderRequest()).toEqual(AC9_RENDER_REQUEST);
+		expect(await request.toRenderRequest()).toEqual({
+			...AC9_RENDER_REQUEST,
+			formSnapshot: request.captureFormSnapshot()
+		});
 	});
 
 	it('reset() reverts to interior', () => {
@@ -605,7 +629,10 @@ describe('textureReplacementResultReady (session UI state)', () => {
 describe('toRenderRequest', () => {
 	it('returns the wire body for a valid AC-9 fixture', async () => {
 		applyAc9Fixture();
-		expect(await request.toRenderRequest()).toEqual(AC9_RENDER_REQUEST);
+		expect(await request.toRenderRequest()).toEqual({
+			...AC9_RENDER_REQUEST,
+			formSnapshot: request.captureFormSnapshot()
+		});
 		expect(request.prompt).toBe(AC9_PROMPT);
 	});
 
@@ -621,7 +648,8 @@ describe('toRenderRequest', () => {
 
 		expect(await request.toRenderRequest()).toEqual({
 			...AC9_RENDER_REQUEST,
-			imageKey: '201'
+			imageKey: '201',
+			formSnapshot: request.captureFormSnapshot()
 		});
 	});
 
@@ -975,7 +1003,10 @@ describe('toStyleTransferRequest', () => {
 	it('builds the wire body from the room photo and reference image', async () => {
 		applyAc9Fixture();
 		request.setStyleSourceMode('room-photo');
-		expect(await request.toStyleTransferRequest()).toEqual(AC9_STYLE_TRANSFER_REQUEST);
+		expect(await request.toStyleTransferRequest()).toEqual({
+			...AC9_STYLE_TRANSFER_REQUEST,
+			formSnapshot: request.captureFormSnapshot()
+		});
 	});
 
 	it('uses the current result as the source when selected and available', async () => {
@@ -990,7 +1021,8 @@ describe('toStyleTransferRequest', () => {
 
 		expect(await request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
-			imageKey: '201'
+			imageKey: '201',
+			formSnapshot: request.captureFormSnapshot()
 		});
 	});
 
@@ -1010,7 +1042,8 @@ describe('toStyleTransferRequest', () => {
 			referenceImageKey: AC9_REFERENCE_IMAGE.mediaKey,
 			outputFormat: 'webp',
 			styleTransferStrength: 0.7,
-			sessionId: AC9_SESSION_ID
+			sessionId: AC9_SESSION_ID,
+			formSnapshot: request.captureFormSnapshot()
 		});
 	});
 
@@ -1020,7 +1053,8 @@ describe('toStyleTransferRequest', () => {
 
 		expect(await request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
-			negativePrompt: 'no people'
+			negativePrompt: 'no people',
+			formSnapshot: request.captureFormSnapshot()
 		});
 	});
 
@@ -1031,7 +1065,8 @@ describe('toStyleTransferRequest', () => {
 
 		expect(await request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
-			prompt: 'style transfer guidance'
+			prompt: 'style transfer guidance',
+			formSnapshot: request.captureFormSnapshot()
 		});
 	});
 
@@ -1057,7 +1092,8 @@ describe('toStyleTransferRequest', () => {
 			...AC9_STYLE_TRANSFER_REQUEST,
 			prompt: 'style guidance',
 			styleTransferStrength: 0.35,
-			negativePrompt: 'no people'
+			negativePrompt: 'no people',
+			formSnapshot: request.captureFormSnapshot()
 		});
 	});
 });
@@ -1086,7 +1122,8 @@ describe('toObjectReplacementRequest', () => {
 			imageKey: AC9_IMAGE.mediaKey,
 			referenceImageKey: objectReference.mediaKey,
 			replacementObject: 'gray sofa by the window',
-			sessionId: AC9_SESSION_ID
+			sessionId: AC9_SESSION_ID,
+			formSnapshot: request.captureFormSnapshot('replace-object')
 		});
 	});
 
@@ -1219,7 +1256,8 @@ describe('toTextureReplacementRequest', () => {
 			imageKey: AC9_IMAGE.mediaKey,
 			referenceImageKey: textureReference.mediaKey,
 			replacementSurface: 'sofa upholstery',
-			sessionId: AC9_SESSION_ID
+			sessionId: AC9_SESSION_ID,
+			formSnapshot: request.captureFormSnapshot('change-surface-color')
 		});
 	});
 
@@ -1244,7 +1282,8 @@ describe('toTextureReplacementRequest', () => {
 			imageKey: AC9_IMAGE.mediaKey,
 			referenceImageKey: textureReference.mediaKey,
 			maskImageKey: textureMask.mediaKey,
-			sessionId: AC9_SESSION_ID
+			sessionId: AC9_SESSION_ID,
+			formSnapshot: request.captureFormSnapshot('change-surface-color')
 		});
 	});
 
@@ -1370,7 +1409,8 @@ describe('toLightSettingsRequest', () => {
 		expect(await request.toLightSettingsRequest()).toEqual({
 			imageKey: AC9_IMAGE.mediaKey,
 			instruction: request.lightSettingsPrompt,
-			sessionId: AC9_SESSION_ID
+			sessionId: AC9_SESSION_ID,
+			formSnapshot: request.captureFormSnapshot('light-settings')
 		});
 	});
 
@@ -1911,5 +1951,46 @@ describe('the originally uploaded photo as the root history step (FR-К6)', () =
 		request.undoLastEdit();
 		expect(request.currentRender?.outputKey).toBe('101');
 		expect(request.canUndoEdit).toBe(false);
+	});
+});
+
+describe('restoreFormSnapshot (restoring a past generation from the server)', () => {
+	it('applies every field a snapshot carries onto the current form', () => {
+		request.addFragment({ text: 'a stale fragment', order: 0 });
+		request.setStyleTransferPrompt('stale style prompt');
+
+		applyAc9Fixture();
+		const snapshot = {
+			...request.captureFormSnapshot(),
+			styleTransferPrompt: 'restored style prompt',
+			styleTransferStrength: 0.42,
+			lightSettingsInstruction: 'restored light instruction'
+		};
+		request.reset();
+		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
+
+		request.restoreFormSnapshot(snapshot);
+
+		expect(request.captureFormSnapshot()).toEqual(snapshot);
+	});
+
+	it("doesn't touch image, session, or render-history identity — the caller owns those", () => {
+		applyAc9Fixture();
+		const snapshot = request.captureFormSnapshot();
+		request.reset();
+		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
+		request.setImage({ mediaKey: 'unrelated-image' });
+		request.setCurrentRender({
+			id: 'existing-render',
+			outputKey: '201',
+			cost: 1,
+			balance: 9,
+			ts: 0
+		});
+
+		request.restoreFormSnapshot(snapshot);
+
+		expect(request.image).toEqual({ mediaKey: 'unrelated-image' });
+		expect(request.currentRender?.id).toBe('existing-render');
 	});
 });

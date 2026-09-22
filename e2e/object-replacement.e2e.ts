@@ -154,7 +154,8 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 		imageKey: mediaKey(1),
 		referenceImageKey: mediaKey(2),
 		replacementObject: 'серый диван у окна',
-		sessionId: E2E_SESSION_ID
+		sessionId: E2E_SESSION_ID,
+		formSnapshot: expect.any(Object)
 	});
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();

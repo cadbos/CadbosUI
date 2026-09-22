@@ -13,7 +13,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { RequestState, type RenderResult } from '$lib/state/request.svelte';
+import {
+	RequestState,
+	type RenderResult,
+	type RequestFormSnapshot
+} from '$lib/state/request.svelte';
+import { STYLE_PRESETS } from '$lib/style-presets';
 import {
 	applyShareParams,
 	buildShareUrl,
@@ -31,6 +36,32 @@ const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
 
 function render(overrides: Partial<RenderResult> = {}): RenderResult {
 	return { id: 'r1', outputKey: 'a/b.webp', cost: 1, balance: 99, ts: 0, ...overrides };
+}
+
+function formSnapshot(overrides: Partial<RequestFormSnapshot> = {}): RequestFormSnapshot {
+	return {
+		promptFragments: [],
+		promptOverride: null,
+		editPrompt: '',
+		addObjectPresetId: null,
+		removeObjectText: '',
+		editOperationType: null,
+		outputFormat: 'webp',
+		sceneType: 'interior',
+		styleTransferPrompt: '',
+		styleTransferStrength: 0.7,
+		styleNegativePrompt: '',
+		styleSourceMode: 'current-result',
+		objectReplacementObject: '',
+		objectReplacementSourceMode: 'current-result',
+		objectReplacementScale: 1,
+		textureReplacementSurface: '',
+		textureReplacementSourceMode: 'current-result',
+		textureReplacementMasked: false,
+		lightSettingsPresetIds: [],
+		lightSettingsInstruction: '',
+		...overrides
+	};
 }
 
 describe('renderOrigin (keeps mode/tool in sync with undo/redo)', () => {
@@ -102,6 +133,77 @@ describe('generation history destinations', () => {
 		expect(destinationForGenerationKind('texture-replacement')).toEqual({
 			mode: 'edit',
 			subTab: { tool: 'texture-replacement' }
+		});
+	});
+
+	it('picks the edit-panel tool a snapshot names, for a kind shared by several tools', () => {
+		expect(
+			destinationForGenerationKind('edit', formSnapshot({ editOperationType: 'add-object' }))
+		).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'add-object' }
+		});
+		expect(
+			destinationForGenerationKind('edit', formSnapshot({ editOperationType: 'remove-object' }))
+		).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'remove-object' }
+		});
+		// null/undefined (no snapshot, or one recorded before this field
+		// existed) falls back to the same 'freeform' default as before.
+		expect(destinationForGenerationKind('edit', null)).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'freeform' }
+		});
+		expect(destinationForGenerationKind('edit', undefined)).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'freeform' }
+		});
+	});
+
+	it('picks the style-transfer reference tab the restored preset actually belongs to', () => {
+		expect(
+			destinationForGenerationKind(
+				'style-transfer',
+				formSnapshot({
+					styleReferenceImage: {
+						stylePresetId: 'interior-concrete-spa-bathroom',
+						url: 'https://style-presets.cadbos.com/interior/photorealistic/concrete-spa-bathroom.webp'
+					}
+				})
+			)
+		).toEqual({ mode: 'styleTransfer', subTab: { reference: 'photorealistic' } });
+
+		// A conceptual-category preset — the bug this guards against: without
+		// looking the preset up, restore always landed on the photorealistic
+		// tab, where this preset doesn't appear as an option at all.
+		const conceptualPreset = STYLE_PRESETS.find((preset) => preset.category === 'conceptual');
+		expect(conceptualPreset).toBeDefined();
+		expect(
+			destinationForGenerationKind(
+				'style-transfer',
+				formSnapshot({
+					styleReferenceImage: { stylePresetId: conceptualPreset!.id, url: conceptualPreset!.src }
+				})
+			)
+		).toEqual({ mode: 'styleTransfer', subTab: { reference: 'conceptual' } });
+
+		// An uploaded (non-preset) reference image always means the custom tab.
+		expect(
+			destinationForGenerationKind(
+				'style-transfer',
+				formSnapshot({ styleReferenceImage: { mediaKey: 'cadbos-uploads/reference.jpg' } })
+			)
+		).toEqual({ mode: 'styleTransfer', subTab: { reference: 'custom' } });
+
+		// No reference image at all, or no snapshot — the default tab.
+		expect(destinationForGenerationKind('style-transfer', formSnapshot())).toEqual({
+			mode: 'styleTransfer',
+			subTab: { reference: 'photorealistic' }
+		});
+		expect(destinationForGenerationKind('style-transfer')).toEqual({
+			mode: 'styleTransfer',
+			subTab: { reference: 'photorealistic' }
 		});
 	});
 });
