@@ -13,9 +13,9 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { untrack, type Snippet } from 'svelte';
+	import type { Snippet } from 'svelte';
+	import { innerHeight, innerWidth } from 'svelte/reactivity/window';
 	import { ChevronDown, ChevronUp, Move, SlidersHorizontal } from '@lucide/svelte';
-	import { browser } from '$app/environment';
 	import { t } from '$lib/i18n/index.svelte';
 	import {
 		clampToolsPanelPosition,
@@ -36,21 +36,40 @@ before the Change Date. See LICENSE for complete terms.
 	const uid = $props.id();
 	const bodyId = `${uid}-body`;
 
-	let panel = $state<HTMLDivElement | null>(null);
-	// Reactive mirrors of window.innerWidth / the panel's measured width, so
-	// the resize handle's aria-value* attributes below re-render on resize
-	// instead of reading the DOM directly inside the template.
-	let viewportWidth = $state(browser ? window.innerWidth : TOOLS_PANEL_WIDTH);
-	let measuredWidth = $state(TOOLS_PANEL_WIDTH);
-	// The actual reachable maximum (clamped, unlike viewportWidth itself) —
-	// shared by aria-valuemax and the End-key branch below so the announced
-	// max always matches what End actually produces.
-	let maxWidth = $derived(clampToolsPanelWidth(Number.MAX_SAFE_INTEGER, viewportWidth));
+	// The panel's rendered size, measured by Svelte's dimension bindings. A
+	// hidden instance (Workspace mounts one per mode, only the active one
+	// visible) measures 0×0 — harmless, since each instance only uses its own
+	// size to place itself.
+	let panelWidth = $state(TOOLS_PANEL_WIDTH);
+	let panelHeight = $state(0);
+	// The actual reachable maximum — shared by aria-valuemax and the End-key
+	// branch below so the announced max always matches what End produces.
+	let maxWidth = $derived(
+		clampToolsPanelWidth(Number.MAX_SAFE_INTEGER, innerWidth.current ?? TOOLS_PANEL_WIDTH)
+	);
 
-	function attachPanel(node: HTMLDivElement): void {
-		panel = node;
-		measuredWidth = node.getBoundingClientRect().width;
-	}
+	// Where the panel is actually drawn: the user's chosen position, kept
+	// inside the current viewport and below the app header. Derived rather
+	// than written back into the store, so the chosen position survives
+	// transient constraints — a panel pushed down by the health warning
+	// returns to where the user put it once the warning is gone — and a
+	// position persisted under the header by an earlier session is rendered
+	// correctly without rewriting it. null = CSS-anchored default corner.
+	let position = $derived.by(() => {
+		const chosen = toolsPanel.position;
+		if (chosen === null || innerWidth.current === undefined || innerHeight.current === undefined) {
+			return chosen;
+		}
+		return clampToolsPanelPosition(
+			chosen.x,
+			chosen.y,
+			panelWidth,
+			panelHeight,
+			innerWidth.current,
+			innerHeight.current,
+			topBoundary()
+		);
+	});
 
 	// A drag gesture and a click-to-toggle share the same bar: below the
 	// threshold it's a click, at/above it the panel follows the pointer. This
@@ -67,31 +86,32 @@ before the Change Date. See LICENSE for complete terms.
 	} | null = null;
 
 	function onBarPointerDown(event: PointerEvent): void {
-		if (!panel || event.button !== 0) return;
-		const bounds = panel.getBoundingClientRect();
+		if (event.button !== 0) return;
+		// The default corner is CSS-anchored, so its origin is only known from
+		// the rendered box — the bar's, which sits at the panel's top-left.
+		const origin = position ?? (event.currentTarget as HTMLElement).getBoundingClientRect();
 		drag = {
 			pointerId: event.pointerId,
 			startX: event.clientX,
 			startY: event.clientY,
-			originX: bounds.left,
-			originY: bounds.top,
+			originX: origin.x,
+			originY: origin.y,
 			moved: false
 		};
 		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
 	}
 
 	function onBarPointerMove(event: PointerEvent): void {
-		if (!panel || !drag || drag.pointerId !== event.pointerId) return;
+		if (!drag || drag.pointerId !== event.pointerId) return;
 		const dx = event.clientX - drag.startX;
 		const dy = event.clientY - drag.startY;
 		if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
 		drag.moved = true;
-		const bounds = panel.getBoundingClientRect();
 		const next = clampToolsPanelPosition(
 			drag.originX + dx,
 			drag.originY + dy,
-			bounds.width,
-			bounds.height,
+			panelWidth,
+			panelHeight,
 			window.innerWidth,
 			window.innerHeight,
 			topBoundary()
@@ -136,10 +156,8 @@ before the Change Date. See LICENSE for complete terms.
 	let resizeStartWidth = 0;
 
 	function onResizeHandlePointerDown(event: PointerEvent): void {
-		if (!panel) return;
 		resizeStartX = event.clientX;
-		resizeStartWidth = panel.getBoundingClientRect().width;
-		measuredWidth = resizeStartWidth;
+		resizeStartWidth = panelWidth;
 		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
 	}
 
@@ -153,9 +171,7 @@ before the Change Date. See LICENSE for complete terms.
 		// edge (`left: var(--tools-panel-x)`) and grows rightward instead, like
 		// ScenesDrawer's drawer — so the sign flips.
 		const delta = toolsPanel.position === null ? -dx : dx;
-		const next = clampWidth(resizeStartWidth + delta);
-		toolsPanel.updateWidth(next);
-		measuredWidth = next;
+		toolsPanel.updateWidth(clampWidth(resizeStartWidth + delta));
 	}
 
 	function onResizeHandlePointerUp(event: PointerEvent): void {
@@ -165,7 +181,10 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function onResizeHandleKeydown(event: KeyboardEvent): void {
-		const current = toolsPanel.width ?? measuredWidth;
+		// The stored width updates synchronously, unlike the measured one (a
+		// ResizeObserver lags a frame behind), so held-down arrow keys can't
+		// step from a stale value.
+		const current = toolsPanel.width ?? panelWidth;
 		let next: number;
 		if (event.key === 'ArrowLeft') next = current - RESIZE_STEP;
 		else if (event.key === 'ArrowRight') next = current + RESIZE_STEP;
@@ -173,72 +192,21 @@ before the Change Date. See LICENSE for complete terms.
 		else if (event.key === 'End') next = maxWidth;
 		else return;
 		event.preventDefault();
-		const clamped = clampWidth(next);
-		toolsPanel.setWidth(clamped);
-		measuredWidth = clamped;
-	}
-
-	// Re-clamps a previously dragged position/width after the viewport shrinks
-	// (e.g. rotating a tablet) so the panel can't end up stranded off-screen or
-	// wider than the viewport. Also runs whenever the app header's bottom edge
-	// (the top boundary) moves, and once right after hydration, so a position
-	// persisted under the header by an earlier session is pulled back out. It
-	// clamps the stored position rather than the rendered one, since right
-	// after hydration the DOM hasn't caught up with it yet. A position/width
-	// that's still null (never dragged/resized) is left alone — it's
-	// CSS-anchored and already tracks the viewport on its own.
-	//
-	// Workspace.svelte mounts one FloatingToolsPanel per mode (render/edit/
-	// styleTransfer) sharing this same `toolsPanel` singleton, with only the
-	// active mode's instance actually visible — the others sit behind
-	// `hidden` on an ancestor. A hidden element's getBoundingClientRect() is
-	// all zeros, so without this guard every window resize would have the
-	// *inactive* panels clamp the shared position/width against a 0×0 box and
-	// stomp on whatever the visible panel just computed.
-	function onViewportChange(): void {
-		viewportWidth = window.innerWidth;
-		if (!panel) return;
-		const bounds = panel.getBoundingClientRect();
-		if (bounds.width === 0 && bounds.height === 0) return;
-		measuredWidth = bounds.width;
-		if (toolsPanel.position) {
-			const next = clampToolsPanelPosition(
-				toolsPanel.position.x,
-				toolsPanel.position.y,
-				bounds.width,
-				bounds.height,
-				window.innerWidth,
-				window.innerHeight,
-				topBoundary()
-			);
-			if (next.x !== toolsPanel.position.x || next.y !== toolsPanel.position.y) {
-				toolsPanel.setPosition(next.x, next.y);
-			}
-		}
-		if (toolsPanel.width !== null) {
-			const clampedWidth = clampWidth(toolsPanel.width);
-			if (clampedWidth !== toolsPanel.width) toolsPanel.setWidth(clampedWidth);
-		}
+		toolsPanel.setWidth(clampWidth(next));
 	}
 
 	$effect(() => {
 		toolsPanel.hydrate();
-		window.addEventListener('resize', onViewportChange);
-		return () => window.removeEventListener('resize', onViewportChange);
-	});
-
-	$effect(() => {
-		topBoundary();
-		untrack(onViewportChange);
 	});
 </script>
 
 <div
-	{@attach attachPanel}
 	class="floating-tools-panel"
-	class:at-default-corner={toolsPanel.position === null}
-	style:--tools-panel-x={toolsPanel.position ? `${toolsPanel.position.x}px` : undefined}
-	style:--tools-panel-y={toolsPanel.position ? `${toolsPanel.position.y}px` : undefined}
+	class:at-default-corner={position === null}
+	style:--tools-panel-x={position ? `${position.x}px` : undefined}
+	style:--tools-panel-y={position ? `${position.y}px` : undefined}
+	bind:offsetWidth={panelWidth}
+	bind:offsetHeight={panelHeight}
 >
 	<div
 		class="panel-bar"
@@ -276,7 +244,7 @@ before the Change Date. See LICENSE for complete terms.
 		aria-label={t('toolsPanel.resizeHandle')}
 		aria-valuemin={MIN_TOOLS_PANEL_WIDTH}
 		aria-valuemax={maxWidth}
-		aria-valuenow={Math.round(toolsPanel.width ?? measuredWidth)}
+		aria-valuenow={Math.round(panelWidth)}
 		tabindex="0"
 		onpointerdown={onResizeHandlePointerDown}
 		onpointermove={onResizeHandlePointerMove}

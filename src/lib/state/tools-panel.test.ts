@@ -79,11 +79,6 @@ describe('toolsPanel store', () => {
 		expect(toolsPanel.open).toBe(true);
 	});
 
-	it('setPosition records the dragged position', () => {
-		toolsPanel.setPosition(120, 80);
-		expect(toolsPanel.position).toEqual({ x: 120, y: 80 });
-	});
-
 	it('updatePosition records the position without requiring a persist call', () => {
 		toolsPanel.updatePosition(200, 140);
 		expect(toolsPanel.position).toEqual({ x: 200, y: 140 });

@@ -116,7 +116,10 @@ function readStoredState(): StoredToolsPanel | null {
 
 class ToolsPanelState {
 	open = $state(true);
-	// null = not yet dragged, panel sits at its CSS-anchored default corner.
+	// Where the user put the panel; null = not yet dragged, panel sits at its
+	// CSS-anchored default corner. FloatingToolsPanel derives the drawn
+	// position from it by clamping to the current viewport and app header —
+	// that clamp is never written back here.
 	position = $state.raw<ToolsPanelPosition | null>(null);
 	// null = the CSS default (TOOLS_PANEL_WIDTH / --tools-panel-width), not yet
 	// resized by the user.
@@ -143,11 +146,6 @@ class ToolsPanelState {
 
 	setOpen(open: boolean): void {
 		this.open = open;
-		this.#persist();
-	}
-
-	setPosition(x: number, y: number): void {
-		this.position = { x, y };
 		this.#persist();
 	}
 

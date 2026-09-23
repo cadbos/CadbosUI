@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { ArrowUpRight } from '@lucide/svelte';
 	import { onMount, type Snippet } from 'svelte';
+	import { scrollY } from 'svelte/reactivity/window';
 	import '../app.css';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -48,35 +49,16 @@ before the Change Date. See LICENSE for complete terms.
 	);
 
 	// The header's viewport-relative bottom edge, published to the floating
-	// tools panel as its top boundary. It changes when the header resizes, when
-	// the page scrolls the (non-sticky) health warning away, and when that
-	// warning mounts/unmounts — the last one moves the header without resizing
-	// it, hence the effect below.
-	let appHeader: HTMLElement | null = null;
-	let appHeaderBottom = $state(0);
+	// tools panel as its top boundary. The header is sticky at `top: 0` and the
+	// health warning is the only thing rendered above it, so its bottom is its
+	// own height plus whatever part of the warning hasn't scrolled away yet.
+	let appHeaderHeight = $state(0);
+	let healthWarningHeight = $state(0);
+	const appHeaderBottom = $derived(
+		appHeaderHeight +
+			Math.max(0, (showHealthWarning ? healthWarningHeight : 0) - (scrollY.current ?? 0))
+	);
 	setToolsPanelTopBoundary(() => appHeaderBottom);
-
-	function measureAppHeader(): void {
-		appHeaderBottom = appHeader?.getBoundingClientRect().bottom ?? 0;
-	}
-
-	function trackAppHeader(node: HTMLElement): () => void {
-		appHeader = node;
-		measureAppHeader();
-		const observer = new ResizeObserver(measureAppHeader);
-		observer.observe(node);
-		window.addEventListener('scroll', measureAppHeader, { passive: true });
-		return () => {
-			observer.disconnect();
-			window.removeEventListener('scroll', measureAppHeader);
-			appHeader = null;
-		};
-	}
-
-	$effect(() => {
-		void showHealthWarning;
-		measureAppHeader();
-	});
 
 	onMount(() => {
 		auth.loadSession();
@@ -104,7 +86,7 @@ before the Change Date. See LICENSE for complete terms.
 </svelte:head>
 
 {#if showHealthWarning}
-	<div class="health-warning" role="alert">
+	<div class="health-warning" role="alert" bind:offsetHeight={healthWarningHeight}>
 		<p>
 			{t('health.warning')}
 			<a href={resolve('/status', {})} target="_blank" rel="noopener noreferrer">
@@ -115,7 +97,7 @@ before the Change Date. See LICENSE for complete terms.
 	</div>
 {/if}
 
-<header class="app-header" {@attach trackAppHeader}>
+<header class="app-header" bind:offsetHeight={appHeaderHeight}>
 	<a class="brand" href={resolve('/', {})}>
 		<img class="brand-mark" src={favicon} alt="" />
 		<div class="brand-copy">
