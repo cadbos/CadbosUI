@@ -25,7 +25,6 @@ import {
 	assertSessionOwnedByUser,
 	createProject,
 	createSession,
-	forkSession,
 	getProjectDetail,
 	getProjectDetailByShareToken,
 	getShareGenerationDetail,
@@ -178,26 +177,6 @@ describe('projects repository', () => {
 
 		const session = await createSession(db, 'user-2', project.id, 'Hijacked');
 		expect(session).toBeNull();
-	});
-
-	it('forks a new session with lineage, and rejects a generation that is not the parent’s own', async () => {
-		const project = await createProject(db, 'user-1', 'Living room');
-		const parent = await createSession(db, 'user-1', project.id, 'Main thread');
-		seedGeneration(db, 'gen-1', 'user-1', parent!.id, Date.now());
-
-		const forked = await forkSession(db, 'user-1', parent!.id, 'gen-1', 'Style B');
-		expect(forked?.parentSessionId).toBe(parent!.id);
-		expect(forked?.forkedFromGenerationId).toBe('gen-1');
-
-		const otherProject = await createProject(db, 'user-1', 'Bedroom');
-		const otherSession = await createSession(db, 'user-1', otherProject.id, 'Other thread');
-		seedGeneration(db, 'gen-2', 'user-1', otherSession!.id, Date.now());
-
-		const mismatched = await forkSession(db, 'user-1', parent!.id, 'gen-2', 'Bad fork');
-		expect(mismatched).toBeNull();
-
-		const notOwned = await forkSession(db, 'user-2', parent!.id, 'gen-1', 'Stolen fork');
-		expect(notOwned).toBeNull();
 	});
 
 	it('issues a share token, auto-revokes the prior one, and never distinguishes revoked from nonexistent', async () => {

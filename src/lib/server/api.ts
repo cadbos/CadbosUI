@@ -182,8 +182,8 @@ export const textureReplacementRequestSchema = z.union([
 
 // Module 11 — Projects. Same shape for a project title and an explicit session
 // rename (both required, non-empty); session *creation* leaves title optional
-// (defaults to '' — see createSession/forkSession), since the fork/new-session
-// flow never prompts for one up front.
+// (defaults to '' — see createSession), since the new-session flow never
+// prompts for one up front.
 const requiredTitle = z.string().trim().min(1).max(200);
 const sessionTitle = z.string().trim().max(200).optional();
 
@@ -194,11 +194,6 @@ export const renameProjectRequestSchema = z.strictObject({ title: requiredTitle 
 export const createSessionRequestSchema = z.strictObject({ title: sessionTitle });
 
 export const renameSessionRequestSchema = z.strictObject({ title: requiredTitle });
-
-export const forkSessionRequestSchema = z.strictObject({
-	forkedFromGenerationId: z.uuid(),
-	title: sessionTitle
-});
 
 // Nostr pubkey: 32-byte lowercase hex (x-only schnorr public key).
 export const challengeRequestSchema = z.object({

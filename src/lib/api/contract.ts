@@ -602,8 +602,8 @@ export interface MeResponse {
 }
 
 // Module 11 — Projects: a project groups a user's source photos/rooms; a
-// session is one generation thread within it (forked by style-transfer,
-// continued in place by every other generation kind). No userId/pubkey field
+// session is one generation thread within it, continued in place by every
+// generation kind. No userId/pubkey field
 // is ever included — ownership is enforced server-side, never shown.
 
 export interface ProjectRecord {
@@ -687,22 +687,6 @@ export interface RenameSessionRequest {
 export interface RenameSessionResponse {
 	id: string;
 	title: string;
-	createdAt: number;
-	updatedAt: number;
-}
-
-// POST /api/projects/[id]/sessions/[sessionId]/fork — the style-transfer fork
-// point: branches a new session off an existing one at a specific generation.
-export interface ForkSessionRequest {
-	forkedFromGenerationId: string;
-	title?: string;
-}
-
-export interface ForkSessionResponse {
-	id: string;
-	title: string;
-	parentSessionId: string;
-	forkedFromGenerationId: string;
 	createdAt: number;
 	updatedAt: number;
 }
