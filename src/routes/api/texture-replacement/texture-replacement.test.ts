@@ -203,7 +203,8 @@ describe('POST /api/texture-replacement', () => {
 		const response = await callPost(platform(db), 'pubkey-1', maskedRequest);
 
 		expect(response.status).toBe(200);
-		expect(await response.json()).toEqual({
+		const completed = (await response.json()) as { id: string };
+		expect(completed).toEqual({
 			id: expect.any(String),
 			status: 'completed',
 			output: {
@@ -225,10 +226,13 @@ describe('POST /api/texture-replacement', () => {
 		expect(integration.submit).not.toHaveBeenCalled();
 		expect(jobs.create).not.toHaveBeenCalled();
 		const generation = await db
-			.prepare('SELECT g.kind, g.source_media_id, g.amount FROM generations g WHERE g.user_id = ?')
+			.prepare(
+				'SELECT g.id, g.kind, g.source_media_id, g.amount FROM generations g WHERE g.user_id = ?'
+			)
 			.bind('user-1')
-			.first<{ kind: string; source_media_id: number; amount: number }>();
+			.first<{ id: string; kind: string; source_media_id: number; amount: number }>();
 		expect(generation).toEqual({
+			id: completed.id,
 			kind: 'texture-replacement',
 			source_media_id: 1,
 			amount: 1.5

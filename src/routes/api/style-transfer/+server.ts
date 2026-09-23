@@ -107,6 +107,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		return apiError(500, 'style_transfer_failed', 'Style transfer failed');
 	}
 
+	let generationId: string | undefined;
 	if (db && userId) {
 		const outputMedia = await getOrCreateMediaByKey(
 			db,
@@ -132,6 +133,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				archaiReuploadSec: result.reuploadSec,
 				formSnapshot: parsed.data.formSnapshot
 			});
+			generationId = credit.id;
 			result = { ...result, balance: credit.balance };
 		} catch (err) {
 			console.error('recordGeneration failed after a successful style transfer:', err);
@@ -153,6 +155,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		result.outputHash
 	);
 	return json({
+		...(generationId !== undefined ? { id: generationId } : {}),
 		output: await mediaAccess(platform, outputMedia),
 		cost: result.cost,
 		balance: result.balance

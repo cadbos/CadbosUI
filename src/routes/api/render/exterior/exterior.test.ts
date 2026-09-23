@@ -219,11 +219,14 @@ describe('POST /api/render/exterior — billing', () => {
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
-		const result = (await response.json()) as { output: { key: string; url: string } };
+		const result = (await response.json()) as {
+			id?: string;
+			output: { key: string; url: string };
+		};
 
 		const row = await db
 			.prepare(
-				"SELECT g.user_id, result_bucket.url || '/' || result_media.filename AS url, " +
+				"SELECT g.id, g.user_id, result_bucket.url || '/' || result_media.filename AS url, " +
 					"source_bucket.url || '/' || source_media.filename AS source_url, g.prompt, g.kind " +
 					'FROM generations g ' +
 					'JOIN media result_media ON result_media.id = g.result_media_id ' +
@@ -233,8 +236,16 @@ describe('POST /api/render/exterior — billing', () => {
 					'WHERE g.user_id = ?'
 			)
 			.bind('user-1')
-			.first<{ user_id: string; url: string; source_url: string; prompt: string; kind: string }>();
+			.first<{
+				id: string;
+				user_id: string;
+				url: string;
+				source_url: string;
+				prompt: string;
+				kind: string;
+			}>();
 		expect(row).toEqual({
+			id: result.id,
 			user_id: 'user-1',
 			url: expect.stringMatching(/^https:\/\/uploads\.cadbos\.example\//),
 			source_url: 'https://uploads.cadbos.example/test/source.webp',
@@ -262,6 +273,8 @@ describe('POST /api/render/exterior — billing', () => {
 			expect(response.status).toBe(200);
 			const result = (await response.json()) as { output: { url: string } };
 			expect(result.output.url).toMatch(/^https:\/\//);
+			// No generation row exists to refer to, so none is claimed.
+			expect(result).not.toHaveProperty('id');
 			expect(consoleError).toHaveBeenCalledWith(
 				'recordGeneration failed after a successful exterior render:',
 				expect.any(Error)

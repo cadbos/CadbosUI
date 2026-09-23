@@ -359,8 +359,11 @@ export type TextureReplacementJobResponse =
 // Normalized response for image-generation endpoints. Provider outputs are
 // mirrored to managed storage before temporary access is issued. `balance` is the caller's own
 // remaining approved-account balance after this call — never archAI's raw
-// (shared) account balance, which the client must never see.
+// (shared) account balance, which the client must never see. `id` is the
+// stored generation's id — absent only when the (already paid) result could
+// not be recorded, in which case no generation row exists to refer to.
 export interface RenderResponse {
+	id?: string;
 	output: MediaAccess;
 	cost: number;
 	balance: number;

@@ -31,6 +31,7 @@ import {
 	RequestImageUploadError,
 	RequestProjectSessionError,
 	RequestReorderError,
+	renderResultFromResponse,
 	request,
 	requestFormSnapshotSchema,
 	RequestState,
@@ -2041,5 +2042,27 @@ describe('working image', () => {
 		expect(request.activeFluxKontextEditJobId).toBeUndefined();
 		expect(request.status).toBe('idle');
 		expect(request.styleTransferPrompt).toBe(AC9_PROMPT);
+	});
+});
+
+describe('renderResultFromResponse', () => {
+	const output = {
+		key: mediaKey(TEST_S3_BUCKET.name, 'out.webp'),
+		url: 'https://cdn.example.test/out.webp'
+	};
+
+	it('keeps the stored generation id the server returned', () => {
+		const render = renderResultFromResponse({
+			id: '00000000-0000-4000-8000-000000000301',
+			output,
+			cost: 1,
+			balance: 9
+		});
+		expect(render.id).toBe('00000000-0000-4000-8000-000000000301');
+	});
+
+	it('falls back to a local id only when the server recorded no generation', () => {
+		const render = renderResultFromResponse({ output, cost: 1, balance: 9 });
+		expect(render.id).toEqual(expect.any(String));
 	});
 });

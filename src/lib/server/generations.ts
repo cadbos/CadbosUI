@@ -131,6 +131,13 @@ export interface RecordGenerationInput {
 	formSnapshot?: RequestFormSnapshot;
 }
 
+// The stored generation's id alongside the caller's resulting balance — the
+// id is what the client must use for this result, so anything that later
+// refers back to it (a session fork point, a restore) finds the real row.
+export interface RecordedGeneration extends Balance {
+	id: string;
+}
+
 // Deducts the real cost archAI charged (not a fixed fee) and records the
 // resulting image/prompt against it in one D1 batch (a single transaction),
 // so a failure between the two can never leave the ledger and the image
@@ -153,8 +160,9 @@ export async function recordGeneration(
 	db: D1Database,
 	userId: string,
 	input: RecordGenerationInput
-): Promise<Balance> {
+): Promise<RecordedGeneration> {
 	const now = Date.now();
+	const id = crypto.randomUUID();
 	const [updateResult] = await db.batch<BalanceRow>([
 		db
 			.prepare(
@@ -170,7 +178,7 @@ export async function recordGeneration(
 					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ?, ?, ?, ?, ?, ? FROM credits WHERE user_id = ?'
 			)
 			.bind(
-				crypto.randomUUID(),
+				id,
 				userId,
 				input.resultMediaId,
 				input.sourceMediaId,
@@ -189,7 +197,7 @@ export async function recordGeneration(
 	const row = updateResult.results[0];
 	if (!row) throw new Error('credit deduction failed: no credit row for user');
 
-	return toBalance(row);
+	return { id, ...toBalance(row) };
 }
 
 export async function getGeneratedImageForUser(

@@ -621,7 +621,10 @@ export function renderResultFromResponse(
 	opts?: RenderResultFromResponseOptions
 ): RenderResult {
 	return {
-		id: crypto.randomUUID(),
+		// The stored generation's id whenever the server recorded one, so this
+		// step can be referred back to server-side. Only an unrecorded result
+		// (see RenderResponse.id) gets a local id, used for history alone.
+		id: response.id ?? crypto.randomUUID(),
 		outputKey: mediaAccess.normalize(response.output).key,
 		cost: response.cost,
 		balance: response.balance,
