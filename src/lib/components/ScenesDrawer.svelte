@@ -41,6 +41,7 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/generation-restore';
 	import { request, RequestState, type RequestFormSnapshot } from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, destinationForGenerationKind } from '$lib/state/url-state';
+	import { workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError, openModal } from '$lib/utils';
 
 	const generationKindKeys: Record<GenerationKind, TranslationKey> = {
@@ -352,6 +353,20 @@ before the Change Date. See LICENSE for complete terms.
 		try {
 			const detail = await fetchGeneratedImageDetail(id);
 			if (!detail) throw new Error('restore_failed');
+
+			// Continue the session the generation belongs to, not whichever one
+			// happens to be open — otherwise the next generation would land in an
+			// unrelated session, or in a brand-new "Untitled" one from scratch.
+			const { session } = detail;
+			if (session) {
+				workspaceTabs.openProject({
+					projectId: session.projectId,
+					projectTitle: session.projectTitle,
+					sessionId: session.sessionId,
+					sessionTitle: session.sessionTitle.trim() === '' ? null : session.sessionTitle,
+					initialize: (state) => state.setProjectSession(session.projectId, session.sessionId)
+				});
+			}
 
 			// The generation's own result, not its source — restoring a scene
 			// should bring back what that scene actually looked like, the same

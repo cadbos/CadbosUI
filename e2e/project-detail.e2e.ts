@@ -353,6 +353,7 @@ test('continuing a session restores its latest generation’s exact settings, no
 					lightSettingsPresetIds: [],
 					lightSettingsInstruction: ''
 				},
+				session: null,
 				media: [
 					media(2, 'https://cdn.example.test/styled.webp'),
 					media(1, 'https://cdn.example.test/room.jpg')

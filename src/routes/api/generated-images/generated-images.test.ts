@@ -501,6 +501,7 @@ describe('GET /api/generated-images/[id]', () => {
 
 		expect(response.status).toBe(200);
 		expect(result.formSnapshot).toBeNull();
+		expect(result.session).toBeNull();
 		expect(result.image).toEqual({
 			key: mediaKey(TEST_S3_BUCKET.name, 'image-1.webp'),
 			url: expect.stringContaining('/image-1.webp?')

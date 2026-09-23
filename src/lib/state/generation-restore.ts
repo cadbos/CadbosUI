@@ -31,6 +31,14 @@ export const generatedImageDetailResponseSchema = z.object({
 	image: mediaAccessSchema,
 	source: mediaAccessSchema,
 	formSnapshot: requestFormSnapshotSchema.nullable(),
+	session: z
+		.object({
+			projectId: z.uuid(),
+			projectTitle: z.string(),
+			sessionId: z.uuid(),
+			sessionTitle: z.string()
+		})
+		.nullable(),
 	media: z.array(mediaAccessSchema)
 });
 

@@ -106,6 +106,7 @@ async function mockAddObjectScene(page: Page): Promise<void> {
 				image: media(2, 'https://cdn.example.test/added-plant.webp'),
 				source: media(1, 'https://cdn.example.test/scene.jpg'),
 				formSnapshot: ADD_OBJECT_FORM_SNAPSHOT,
+				session: null,
 				media: [
 					media(2, 'https://cdn.example.test/added-plant.webp'),
 					media(1, 'https://cdn.example.test/scene.jpg')
@@ -147,6 +148,7 @@ async function mockSingleStyleTransferScene(page: Page): Promise<void> {
 				image: media(2, 'https://cdn.example.test/result.webp'),
 				source: media(1, 'https://cdn.example.test/scene.jpg'),
 				formSnapshot: FORM_SNAPSHOT,
+				session: null,
 				media: [
 					media(2, 'https://cdn.example.test/result.webp'),
 					media(1, 'https://cdn.example.test/scene.jpg')
@@ -228,4 +230,95 @@ test('asks for confirmation before restoring over unsaved form changes', async (
 
 	await expect(page).toHaveURL(/\/style-transfer/);
 	await expect(page.getByLabel('Уточнение стиля')).toHaveValue('archived style note');
+});
+
+test('continues the restored generation’s own session instead of starting a new one', async ({
+	page
+}) => {
+	const projectId = '00000000-0000-4000-8000-000000000210';
+	const sessionId = '00000000-0000-4000-8000-000000000211';
+	const generationId = '00000000-0000-4000-8000-000000000212';
+	await authenticate(page);
+	await page.route('**/api/generated-images**', async (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				images: [
+					{
+						id: generationId,
+						image: media(2, 'https://cdn.example.test/render.webp'),
+						source: media(1, 'https://cdn.example.test/scene.jpg'),
+						kind: 'render',
+						createdAt: Date.UTC(2026, 0, 1)
+					}
+				],
+				pagination: { offset: 0, size: 100, hasMore: false }
+			})
+		});
+	});
+	await page.route(`**/api/generated-images/${generationId}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: generationId,
+				prompt: '',
+				kind: 'render',
+				createdAt: Date.UTC(2026, 0, 1),
+				image: media(2, 'https://cdn.example.test/render.webp'),
+				source: media(1, 'https://cdn.example.test/scene.jpg'),
+				formSnapshot: FORM_SNAPSHOT,
+				session: {
+					projectId,
+					projectTitle: 'Living room',
+					sessionId,
+					sessionTitle: 'Main thread'
+				},
+				media: [
+					media(2, 'https://cdn.example.test/render.webp'),
+					media(1, 'https://cdn.example.test/scene.jpg')
+				]
+			})
+		});
+	});
+	let projectCreated = false;
+	await page.route('**/api/projects', async (route) => {
+		if (route.request().method() !== 'POST') return route.fallback();
+		projectCreated = true;
+		await route.fulfill({ status: 500 });
+	});
+	let renderBody: unknown;
+	await page.route('**/api/render', async (route) => {
+		renderBody = route.request().postDataJSON();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				output: media(3, 'https://cdn.example.test/next-render.webp'),
+				cost: 5,
+				balance: 95
+			})
+		});
+	});
+
+	await page.goto('/create/interior?view=chat&format=webp');
+	await page.getByRole('button', { name: 'Сцены' }).click();
+	await page.locator('.image-frame.result-frame').hover();
+	await page.getByRole('button', { name: /Восстановить настройки сцены/ }).click();
+
+	await expect(page).toHaveURL(new RegExp(`project=${projectId}&session=${sessionId}`));
+	const renderPanel = page.locator('#mode-panel-render');
+	await expect(renderPanel.locator('.image-wrapper img')).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/render.webp'
+	);
+
+	await Promise.all([
+		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
+		renderPanel.getByRole('button', { name: 'Сгенерировать' }).click()
+	]);
+	expect(renderBody).toMatchObject({ sessionId });
+	expect(projectCreated).toBe(false);
 });

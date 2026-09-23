@@ -413,7 +413,17 @@ export interface GeneratedImagesResponse {
 // to (plus `image` and `source` themselves), for the client to register with
 // its media-access cache before applying the snapshot — restoring settings
 // whose reference image can no longer be resolved degrades to
-// `formSnapshot: null` rather than failing.
+// `formSnapshot: null` rather than failing. `session` is the project session
+// the generation belongs to, so a restore continues that session instead of
+// whichever one happens to be open — null once that session or its project
+// has been archived.
+export interface GenerationSessionRef {
+	projectId: string;
+	projectTitle: string;
+	sessionId: string;
+	sessionTitle: string;
+}
+
 export interface GeneratedImageDetailResponse {
 	id: string;
 	prompt: string;
@@ -422,6 +432,7 @@ export interface GeneratedImageDetailResponse {
 	image: MediaAccess;
 	source: MediaAccess;
 	formSnapshot: RequestFormSnapshot | null;
+	session: GenerationSessionRef | null;
 	media: MediaAccess[];
 }
 

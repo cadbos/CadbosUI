@@ -23,6 +23,7 @@ import {
 	type Balance,
 	type CreditTransaction,
 	type GenerationKind,
+	type GenerationSessionRef,
 	type RequestFormSnapshot,
 	type UserUsageRecord
 } from '$lib/api/contract';
@@ -220,6 +221,7 @@ export interface GenerationDetail {
 	kind: GenerationKind;
 	createdAt: number;
 	formSnapshot: RequestFormSnapshot | null;
+	session: GenerationSessionRef | null;
 }
 
 interface GenerationDetailRow {
@@ -230,6 +232,10 @@ interface GenerationDetailRow {
 	kind: string;
 	created_at: number;
 	form_snapshot: string | null;
+	session_id: string | null;
+	session_title: string | null;
+	project_id: string | null;
+	project_title: string | null;
 }
 
 // Re-validates the stored JSON against the same shape schema the write path
@@ -283,14 +289,34 @@ export async function getGenerationDetailForUser(
 ): Promise<GenerationDetail | null> {
 	const row = await db
 		.prepare(
-			'SELECT id, source_media_id, result_media_id, prompt, kind, created_at, form_snapshot ' +
-				'FROM generations WHERE id = ? AND user_id = ?'
+			'SELECT g.id, g.source_media_id, g.result_media_id, g.prompt, g.kind, g.created_at, ' +
+				'g.form_snapshot, ps.id AS session_id, ps.title AS session_title, ' +
+				'p.id AS project_id, p.title AS project_title ' +
+				'FROM generations g ' +
+				'LEFT JOIN project_sessions ps ON ps.id = g.session_id AND ps.archived_at IS NULL ' +
+				'LEFT JOIN projects p ON p.id = ps.project_id AND p.user_id = g.user_id ' +
+				'AND p.archived_at IS NULL ' +
+				'WHERE g.id = ? AND g.user_id = ?'
 		)
 		.bind(id, userId)
 		.first<GenerationDetailRow>();
 	if (!row) return null;
 	const kind = generationKindForRow(row.id, row.kind);
 	if (kind === null) return null;
+	// A generation whose session or project has since been archived (or one
+	// recorded before sessions existed) has no session left to continue.
+	const session =
+		row.session_id !== null &&
+		row.session_title !== null &&
+		row.project_id !== null &&
+		row.project_title !== null
+			? {
+					projectId: row.project_id,
+					projectTitle: row.project_title,
+					sessionId: row.session_id,
+					sessionTitle: row.session_title
+				}
+			: null;
 	return {
 		id: row.id,
 		sourceMediaId: row.source_media_id,
@@ -298,7 +324,8 @@ export async function getGenerationDetailForUser(
 		prompt: row.prompt,
 		kind,
 		createdAt: row.created_at,
-		formSnapshot: parseStoredFormSnapshot(row.id, row.form_snapshot)
+		formSnapshot: parseStoredFormSnapshot(row.id, row.form_snapshot),
+		session
 	};
 }
 

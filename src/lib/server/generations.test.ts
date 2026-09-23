@@ -265,8 +265,40 @@ describe('getGenerationDetailForUser', () => {
 			prompt: 'cozy',
 			kind: 'render',
 			createdAt: expect.any(Number),
-			formSnapshot: TEST_FORM_SNAPSHOT
+			formSnapshot: TEST_FORM_SNAPSHOT,
+			session: {
+				projectId: expect.any(String),
+				projectTitle: 'Test project',
+				sessionId,
+				sessionTitle: 'Test session'
+			}
 		});
+	});
+
+	it('returns no session once the generation’s session or project is archived', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const sessionId = seedSession(db, 'user-1');
+		seedGeneration(db, 'image-1', 'user-1', 1000);
+		db.prepare('UPDATE generations SET session_id = ? WHERE id = ?')
+			.bind(sessionId, 'image-1')
+			.run();
+
+		expect((await getGenerationDetailForUser(db, 'user-1', 'image-1'))?.session?.sessionId).toBe(
+			sessionId
+		);
+
+		db.prepare('UPDATE project_sessions SET archived_at = ? WHERE id = ?')
+			.bind(Date.now(), sessionId)
+			.run();
+		expect((await getGenerationDetailForUser(db, 'user-1', 'image-1'))?.session).toBeNull();
+
+		db.prepare('UPDATE project_sessions SET archived_at = NULL WHERE id = ?').bind(sessionId).run();
+		db.prepare(
+			'UPDATE projects SET archived_at = ? WHERE id = (SELECT project_id FROM project_sessions WHERE id = ?)'
+		)
+			.bind(Date.now(), sessionId)
+			.run();
+		expect((await getGenerationDetailForUser(db, 'user-1', 'image-1'))?.session).toBeNull();
 	});
 
 	it('returns null for another user’s generation', async () => {
