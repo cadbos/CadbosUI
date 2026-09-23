@@ -371,7 +371,13 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function onInput(event: Event): void {
-		const file = (event.currentTarget as HTMLInputElement).files?.[0];
+		const target = event.currentTarget as HTMLInputElement;
+		const file = target.files?.[0];
+		// Reset immediately (not just in clearUploadedImage()) so re-picking the
+		// exact same file next time still fires a change event — browsers skip
+		// the event when the input's value would otherwise be unchanged, which
+		// silently no-ops a retry after a failed upload or a same-file re-select.
+		target.value = '';
 		if (file) void handleFile(file);
 	}
 
