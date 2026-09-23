@@ -17,10 +17,8 @@ import { OUTPUT_FORMATS, type GenerationKind, type OutputFormat } from '$lib/api
 import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 import {
 	SCENE_TYPES,
-	IMAGE_SOURCE_MODES,
 	objectReplacementJobIdSchema,
 	type EditOperationType,
-	type ImageSourceMode,
 	type RenderResult,
 	type RequestFormSnapshot,
 	type RequestState,
@@ -343,14 +341,12 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 		const tool = subTab.tool ?? 'freeform';
 		params.set('tool', tool);
 		if (tool === 'object-replacement') {
-			params.set('source', request.objectReplacementSourceMode);
 			if (request.objectReplacementObject.trim() !== '') {
 				params.set('object', request.objectReplacementObject);
 			}
 			const job = subTab.job ?? request.activeObjectReplacementJobId;
 			if (isJobId(job)) params.set('job', job);
 		} else if (tool === 'texture-replacement') {
-			params.set('source', request.textureReplacementSourceMode);
 			if (request.textureReplacementMasked) {
 				params.set('masked', '1');
 			} else if (request.textureReplacementSurface.trim() !== '') {
@@ -387,7 +383,6 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 	if (mode === 'styleTransfer') {
 		params.set('reference', subTab.reference ?? 'photorealistic');
 		params.set('format', request.outputFormat);
-		params.set('source', request.styleSourceMode);
 		params.set('strength', String(request.styleTransferStrength));
 
 		// Only a known, safe preset id is shareable — it's just a lookup into our
@@ -537,22 +532,10 @@ export function applyShareParams(
 	} else if (mode === 'edit') {
 		const tool = slugToTool(searchParams.get('tool') ?? undefined);
 		if (tool === 'object-replacement') {
-			const source = searchParams.get('source');
-			request.setObjectReplacementSourceMode(
-				(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
-					? (source as ImageSourceMode)
-					: 'current-result'
-			);
 			request.setObjectReplacementObject((searchParams.get('object') ?? '').slice(0, 200));
 			const job = searchParams.get('job');
 			request.setActiveObjectReplacementJobId(isJobId(job) ? job : undefined);
 		} else if (tool === 'texture-replacement') {
-			const source = searchParams.get('source');
-			request.setTextureReplacementSourceMode(
-				(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
-					? (source as ImageSourceMode)
-					: 'current-result'
-			);
 			const masked = searchParams.get('masked') === '1';
 			request.setTextureReplacementMasked(masked);
 			request.setTextureReplacementSurface(
@@ -601,12 +584,6 @@ export function applyShareParams(
 			Number.isFinite(strength) && strength >= 0 && strength <= 1 ? strength : 0.7
 		);
 		request.setStyleNegativePrompt(searchParams.get('negative') ?? '');
-		const source = searchParams.get('source');
-		request.setStyleSourceMode(
-			(IMAGE_SOURCE_MODES as readonly string[]).includes(source ?? '')
-				? (source as ImageSourceMode)
-				: 'current-result'
-		);
 		request.setStyleTransferPrompt(searchParams.get('prompt') ?? '');
 	}
 }

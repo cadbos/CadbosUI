@@ -220,7 +220,8 @@ export const en = {
 		'Restore settings from scene {order}? Your current unsaved form changes will be replaced.',
 	'generatedImages.confirmRestoreCancel': 'Cancel',
 	'generatedImages.confirmRestoreConfirm': 'Restore',
-	'generatedImages.confirmRestoreRestoring': 'Restoring…',
+	'generatedImages.confirmRestoreDescriptionOtherSession':
+		'Restore settings from scene {order}? Unsaved changes in the open session {session} will be replaced.',
 	'usage.title': 'Usage',
 	'usage.subtitle': 'Account balances and generation spend across Cadbos users.',
 	'usage.signInRequired': 'Sign in with an account that has access to see this data.',
@@ -442,8 +443,6 @@ export const en = {
 	'styleTransfer.failed': 'Style transfer failed. Please try again.',
 	'styleTransfer.insufficientCredit': 'Test balance exhausted.',
 	'styleTransfer.generationRestricted': 'Generation is available to a limited set of accounts.',
-	'styleTransfer.forkFailed':
-		"Couldn't start a new session for this style transfer. Please try again.",
 	'objectReplacement.alpha': 'Alpha',
 	'objectReplacement.alphaNotice':
 		'Object replacement is an early feature. Processing can take several minutes and results may vary.',

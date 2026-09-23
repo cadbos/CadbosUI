@@ -143,8 +143,8 @@ before the Change Date. See LICENSE for complete terms.
 	// it falls back to the room photo uploaded on the Render tab (same underlying
 	// state — FR: editing works independent of having rendered first). A photo
 	// picked but not yet uploaded (request.pendingImageFile) already counts here —
-	// the actual upload is deferred, not skipped, see request.resolveEditSource().
-	const hasEditTarget = $derived(request.hasEditSource());
+	// the actual upload is deferred, not skipped, see request.resolveWorkingImageKey().
+	const hasEditTarget = $derived(request.hasWorkingImage());
 	const jobId = $derived(request.activeFluxKontextEditJobId ?? null);
 	// Unlike the other three job-backed tools, a completed edit here clears
 	// the job immediately (see applyCompletedJob) rather than staying set
@@ -360,7 +360,7 @@ before the Change Date. See LICENSE for complete terms.
 			// Captured before the async calls below so the settings attached to
 			// this request are what was actually submitted — see toRenderRequest().
 			const formSnapshot = request.captureFormSnapshot();
-			const source = await request.resolveEditSource();
+			const source = await request.resolveWorkingImageKey();
 			if (!source) return;
 			const { sessionId } = await request.ensureProjectSession();
 			const response = await fetch('/api/edit', {

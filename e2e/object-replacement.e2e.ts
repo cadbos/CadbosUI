@@ -215,7 +215,7 @@ test('resumes a stored completed job after reload without submitting again', asy
 		});
 	});
 
-	await page.goto(`/edit?tool=object-replacement&source=room-photo&object=sofa&job=${JOB_ID}`);
+	await page.goto(`/edit?tool=object-replacement&object=sofa&job=${JOB_ID}`);
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/recovered.webp'
@@ -229,7 +229,7 @@ test('resumes a stored completed job after reload without submitting again', asy
 	expect(postCount).toBe(0);
 });
 
-test('keeps the accepted current-result lineage when another render finishes first', async ({
+test('keeps the submitted result’s lineage when another render finishes first', async ({
 	page
 }) => {
 	await authenticate(page);
@@ -534,7 +534,7 @@ test('surfaces a terminal timeout and unlocks the retained form for retry', asyn
 		});
 	});
 
-	await page.goto(`/edit?tool=object-replacement&source=room-photo&object=sofa&job=${JOB_ID}`);
+	await page.goto(`/edit?tool=object-replacement&object=sofa&job=${JOB_ID}`);
 	const panel = page.locator('#edit-tool-panel-object-replacement');
 	await expect(panel.getByRole('alert')).toContainText('Время ожидания замены истекло');
 	await panel.getByRole('button', { name: 'Попробовать снова' }).click();

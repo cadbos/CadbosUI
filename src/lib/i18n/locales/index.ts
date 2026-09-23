@@ -215,7 +215,7 @@ export interface Dictionary {
 	'generatedImages.confirmRestoreDescription': string;
 	'generatedImages.confirmRestoreCancel': string;
 	'generatedImages.confirmRestoreConfirm': string;
-	'generatedImages.confirmRestoreRestoring': string;
+	'generatedImages.confirmRestoreDescriptionOtherSession': string;
 	'usage.title': string;
 	'usage.subtitle': string;
 	'usage.signInRequired': string;
@@ -422,7 +422,6 @@ export interface Dictionary {
 	'styleTransfer.failed': string;
 	'styleTransfer.insufficientCredit': string;
 	'styleTransfer.generationRestricted': string;
-	'styleTransfer.forkFailed': string;
 	'objectReplacement.alpha': string;
 	'objectReplacement.alphaNotice': string;
 	'objectReplacement.required': string;

@@ -23,6 +23,7 @@ import {
 	type Balance,
 	type CreditTransaction,
 	type GenerationKind,
+	type GenerationSessionRef,
 	type RequestFormSnapshot,
 	type UserUsageRecord
 } from '$lib/api/contract';
@@ -130,6 +131,13 @@ export interface RecordGenerationInput {
 	formSnapshot?: RequestFormSnapshot;
 }
 
+// The stored generation's id alongside the caller's resulting balance — the
+// id is what the client must use for this result, so anything that later
+// refers back to it (a session fork point, a restore) finds the real row.
+export interface RecordedGeneration extends Balance {
+	id: string;
+}
+
 // Deducts the real cost archAI charged (not a fixed fee) and records the
 // resulting image/prompt against it in one D1 batch (a single transaction),
 // so a failure between the two can never leave the ledger and the image
@@ -152,8 +160,9 @@ export async function recordGeneration(
 	db: D1Database,
 	userId: string,
 	input: RecordGenerationInput
-): Promise<Balance> {
+): Promise<RecordedGeneration> {
 	const now = Date.now();
+	const id = crypto.randomUUID();
 	const [updateResult] = await db.batch<BalanceRow>([
 		db
 			.prepare(
@@ -169,7 +178,7 @@ export async function recordGeneration(
 					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ?, ?, ?, ?, ?, ? FROM credits WHERE user_id = ?'
 			)
 			.bind(
-				crypto.randomUUID(),
+				id,
 				userId,
 				input.resultMediaId,
 				input.sourceMediaId,
@@ -188,7 +197,7 @@ export async function recordGeneration(
 	const row = updateResult.results[0];
 	if (!row) throw new Error('credit deduction failed: no credit row for user');
 
-	return toBalance(row);
+	return { id, ...toBalance(row) };
 }
 
 export async function getGeneratedImageForUser(
@@ -220,6 +229,7 @@ export interface GenerationDetail {
 	kind: GenerationKind;
 	createdAt: number;
 	formSnapshot: RequestFormSnapshot | null;
+	session: GenerationSessionRef | null;
 }
 
 interface GenerationDetailRow {
@@ -230,6 +240,10 @@ interface GenerationDetailRow {
 	kind: string;
 	created_at: number;
 	form_snapshot: string | null;
+	session_id: string | null;
+	session_title: string | null;
+	project_id: string | null;
+	project_title: string | null;
 }
 
 // Re-validates the stored JSON against the same shape schema the write path
@@ -283,14 +297,34 @@ export async function getGenerationDetailForUser(
 ): Promise<GenerationDetail | null> {
 	const row = await db
 		.prepare(
-			'SELECT id, source_media_id, result_media_id, prompt, kind, created_at, form_snapshot ' +
-				'FROM generations WHERE id = ? AND user_id = ?'
+			'SELECT g.id, g.source_media_id, g.result_media_id, g.prompt, g.kind, g.created_at, ' +
+				'g.form_snapshot, ps.id AS session_id, ps.title AS session_title, ' +
+				'p.id AS project_id, p.title AS project_title ' +
+				'FROM generations g ' +
+				'LEFT JOIN project_sessions ps ON ps.id = g.session_id AND ps.archived_at IS NULL ' +
+				'LEFT JOIN projects p ON p.id = ps.project_id AND p.user_id = g.user_id ' +
+				'AND p.archived_at IS NULL ' +
+				'WHERE g.id = ? AND g.user_id = ?'
 		)
 		.bind(id, userId)
 		.first<GenerationDetailRow>();
 	if (!row) return null;
 	const kind = generationKindForRow(row.id, row.kind);
 	if (kind === null) return null;
+	// A generation whose session or project has since been archived (or one
+	// recorded before sessions existed) has no session left to continue.
+	const session =
+		row.session_id !== null &&
+		row.session_title !== null &&
+		row.project_id !== null &&
+		row.project_title !== null
+			? {
+					projectId: row.project_id,
+					projectTitle: row.project_title,
+					sessionId: row.session_id,
+					sessionTitle: row.session_title
+				}
+			: null;
 	return {
 		id: row.id,
 		sourceMediaId: row.source_media_id,
@@ -298,7 +332,8 @@ export async function getGenerationDetailForUser(
 		prompt: row.prompt,
 		kind,
 		createdAt: row.created_at,
-		formSnapshot: parseStoredFormSnapshot(row.id, row.form_snapshot)
+		formSnapshot: parseStoredFormSnapshot(row.id, row.form_snapshot),
+		session
 	};
 }
 
@@ -431,7 +466,8 @@ interface ResourceImageRow {
 }
 
 // Gallery of source photos the user uploaded: non-empty checksums identify
-// uploads, while excluding generated outputs removes current-result sources.
+// uploads, while excluding generated outputs removes sources that were a
+// previous generation's own result.
 export async function listDistinctSourceImages(
 	db: D1Database,
 	userId: string,

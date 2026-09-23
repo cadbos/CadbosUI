@@ -16,7 +16,6 @@ import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import {
 	EDIT_OPERATION_TYPES,
-	IMAGE_SOURCE_MODES,
 	SCENE_TYPES,
 	type ApiError,
 	type RequestFormSnapshot
@@ -41,7 +40,6 @@ const mediaKey = z.string().refine((value) => parseMediaKey(value) !== null);
 // call, never trusted from the shape of the id alone.
 const sessionId = z.uuid();
 
-const imageSourceMode = z.enum(IMAGE_SOURCE_MODES);
 const sceneType = z.enum(SCENE_TYPES);
 
 const formSnapshotPromptFragment = z.object({
@@ -86,14 +84,11 @@ export const formSnapshotSchema = z.object({
 	styleTransferPrompt: z.string(),
 	styleTransferStrength: z.number().min(0).max(1),
 	styleNegativePrompt: z.string(),
-	styleSourceMode: imageSourceMode,
 	styleReferenceImage: formSnapshotImage.optional(),
 	objectReplacementObject: z.string().max(200),
-	objectReplacementSourceMode: imageSourceMode,
 	objectReplacementScale: z.number().min(0.5).max(2),
 	objectReferenceImage: formSnapshotImage.optional(),
 	textureReplacementSurface: z.string().max(200),
-	textureReplacementSourceMode: imageSourceMode,
 	textureReplacementMasked: z.boolean(),
 	textureReferenceImage: formSnapshotImage.optional(),
 	textureMaskImage: formSnapshotImage.optional(),
@@ -182,8 +177,8 @@ export const textureReplacementRequestSchema = z.union([
 
 // Module 11 — Projects. Same shape for a project title and an explicit session
 // rename (both required, non-empty); session *creation* leaves title optional
-// (defaults to '' — see createSession/forkSession), since the fork/new-session
-// flow never prompts for one up front.
+// (defaults to '' — see createSession), since the new-session flow never
+// prompts for one up front.
 const requiredTitle = z.string().trim().min(1).max(200);
 const sessionTitle = z.string().trim().max(200).optional();
 
@@ -194,11 +189,6 @@ export const renameProjectRequestSchema = z.strictObject({ title: requiredTitle 
 export const createSessionRequestSchema = z.strictObject({ title: sessionTitle });
 
 export const renameSessionRequestSchema = z.strictObject({ title: requiredTitle });
-
-export const forkSessionRequestSchema = z.strictObject({
-	forkedFromGenerationId: z.uuid(),
-	title: sessionTitle
-});
 
 // Nostr pubkey: 32-byte lowercase hex (x-only schnorr public key).
 export const challengeRequestSchema = z.object({

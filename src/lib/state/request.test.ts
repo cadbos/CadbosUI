@@ -31,7 +31,9 @@ import {
 	RequestImageUploadError,
 	RequestProjectSessionError,
 	RequestReorderError,
+	renderResultFromResponse,
 	request,
+	requestFormSnapshotSchema,
 	RequestState,
 	type RenderResult
 } from '$lib/state/request.svelte';
@@ -197,16 +199,13 @@ describe('serialization', () => {
 		delete snapshot.styleTransferPrompt;
 		delete snapshot.styleTransferStrength;
 		delete snapshot.styleNegativePrompt;
-		delete snapshot.styleSourceMode;
 		delete snapshot.objectReferenceImage;
 		delete snapshot.objectReplacementObject;
-		delete snapshot.objectReplacementSourceMode;
 		delete snapshot.objectReplacementScale;
 		delete snapshot.textureReferenceImage;
 		delete snapshot.textureMaskImage;
 		delete snapshot.textureMaskSourceKey;
 		delete snapshot.textureReplacementSurface;
-		delete snapshot.textureReplacementSourceMode;
 		delete snapshot.textureReplacementMasked;
 
 		request.fromJSON(snapshot);
@@ -224,12 +223,9 @@ describe('serialization', () => {
 			styleTransferPrompt: '',
 			styleTransferStrength: 0.7,
 			styleNegativePrompt: '',
-			styleSourceMode: 'current-result',
 			objectReplacementObject: '',
-			objectReplacementSourceMode: 'current-result',
 			objectReplacementScale: 1,
 			textureReplacementSurface: '',
-			textureReplacementSourceMode: 'current-result',
 			textureReplacementMasked: false,
 			lightSettingsPresetIds: [],
 			lightSettingsInstruction: '',
@@ -496,11 +492,11 @@ describe('normalizeForComparison', () => {
 		expect(request.normalizeForComparison()).toEqual(first);
 	});
 
-	it('distinguishes current-result source mode by the actual render selected', () => {
-		// objectReplacementSourceMode defaults to 'current-result', so the
-		// effective source is currentRender.outputKey, not `image` — two
-		// states with the same `image` but different current renders submit
-		// different request bodies and must not normalize as equal.
+	it('distinguishes the working image by the actual render selected', () => {
+		// Once a result exists it is the working image every tool submits, not
+		// `image` — two states with the same `image` but different current
+		// renders submit different request bodies and must not normalize as
+		// equal.
 		request.setCurrentRender({
 			id: 'gen-1',
 			outputKey: '201',
@@ -519,8 +515,8 @@ describe('normalizeForComparison', () => {
 		});
 		const second = request.normalizeForComparison();
 
-		expect(first.objectReplacementSourceKey).toBe('201');
-		expect(second.objectReplacementSourceKey).toBe('202');
+		expect(first.workingImageKey).toBe('201');
+		expect(second.workingImageKey).toBe('202');
 		expect(second).not.toEqual(first);
 	});
 
@@ -531,7 +527,6 @@ describe('normalizeForComparison', () => {
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
 		request.setTextureMaskImage(textureMask);
-		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureReplacementSurface('sofa upholstery');
 		const automaticNormalization = request.normalizeForComparison();
 		const automaticPayload = await request.toTextureReplacementRequest();
@@ -540,7 +535,6 @@ describe('normalizeForComparison', () => {
 		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
-		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureReplacementSurface('sofa upholstery');
 		expect(request.normalizeForComparison()).toEqual(automaticNormalization);
 		// formSnapshot is excluded from this comparison: unlike the wire fields
@@ -562,7 +556,6 @@ describe('normalizeForComparison', () => {
 		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
-		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureReplacementMasked(true);
 		request.setTextureMaskImage(textureMask);
 		expect(request.normalizeForComparison()).toEqual(maskedNormalization);
@@ -1002,14 +995,13 @@ describe('toStyleTransferRequest', () => {
 
 	it('builds the wire body from the room photo and reference image', async () => {
 		applyAc9Fixture();
-		request.setStyleSourceMode('room-photo');
 		expect(await request.toStyleTransferRequest()).toEqual({
 			...AC9_STYLE_TRANSFER_REQUEST,
 			formSnapshot: request.captureFormSnapshot()
 		});
 	});
 
-	it('uses the current result as the source when selected and available', async () => {
+	it('uses the latest result as the source once one exists', async () => {
 		applyAc9Fixture();
 		request.setCurrentRender({
 			id: 'render-1',
@@ -1026,7 +1018,7 @@ describe('toStyleTransferRequest', () => {
 		});
 	});
 
-	it('falls back to the room photo when current-result is selected before a result exists', async () => {
+	it('falls back to the room photo before a result exists', async () => {
 		applyAc9Fixture();
 		expect((await request.toStyleTransferRequest())?.imageKey).toBe(AC9_IMAGE.mediaKey);
 	});
@@ -1080,7 +1072,6 @@ describe('toStyleTransferRequest', () => {
 		request.setStyleTransferStrength(0.35);
 		request.setStyleTransferPrompt('style guidance');
 		request.setStyleNegativePrompt('no people');
-		request.setStyleSourceMode('room-photo');
 		const snapshot = request.toJSON();
 
 		request.reset();
@@ -1115,7 +1106,6 @@ describe('toObjectReplacementRequest', () => {
 	it('builds the exact request with trimmed scene-object text', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setObjectReferenceImage(objectReference);
-		request.setObjectReplacementSourceMode('room-photo');
 		request.setObjectReplacementObject('  gray sofa by the window  ');
 
 		expect(await request.toObjectReplacementRequest()).toEqual({
@@ -1127,7 +1117,7 @@ describe('toObjectReplacementRequest', () => {
 		});
 	});
 
-	it('uses the current result when selected and falls back to the room photo', async () => {
+	it('uses the latest result and falls back to the room photo', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setObjectReferenceImage(objectReference);
 		request.setObjectReplacementObject('sofa');
@@ -1156,7 +1146,6 @@ describe('toObjectReplacementRequest', () => {
 	it('sends the reference image unchanged and appends no size clause at the default scale', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setObjectReferenceImage(objectReference);
-		request.setObjectReplacementSourceMode('room-photo');
 		request.setObjectReplacementObject('sofa');
 
 		const body = await request.toObjectReplacementRequest();
@@ -1167,7 +1156,6 @@ describe('toObjectReplacementRequest', () => {
 	it('appends a translated size clause once the scale moves off 1', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setObjectReferenceImage(objectReference);
-		request.setObjectReplacementSourceMode('room-photo');
 		request.setObjectReplacementObject('sofa');
 
 		request.setObjectReplacementScale(0.5);
@@ -1249,7 +1237,6 @@ describe('toTextureReplacementRequest', () => {
 	it('builds the existing automatic replacement payload unchanged', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
-		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureReplacementSurface('  sofa upholstery  ');
 
 		expect(await request.toTextureReplacementRequest()).toEqual({
@@ -1273,7 +1260,6 @@ describe('toTextureReplacementRequest', () => {
 	it('builds a masked reference-image payload without the hidden surface', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
-		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureMaskImage(textureMask);
 		request.setTextureReplacementSurface('sofa upholstery');
 		request.setTextureReplacementMasked(true);
@@ -1289,7 +1275,6 @@ describe('toTextureReplacementRequest', () => {
 
 	it('round-trips and resets masked replacement state', () => {
 		request.setImage(AC9_IMAGE);
-		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureMaskImage(textureMask);
 		request.setTextureReplacementMasked(true);
 		const snapshot = request.toJSON();
@@ -1309,7 +1294,6 @@ describe('toTextureReplacementRequest', () => {
 	it('rejects a stale mask after the effective source changes', async () => {
 		request.setImage(AC9_IMAGE);
 		request.setTextureReferenceImage(textureReference);
-		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureReplacementMasked(true);
 		request.setTextureMaskImage(textureMask);
 
@@ -1322,7 +1306,6 @@ describe('toTextureReplacementRequest', () => {
 
 	it('ignores a mask upload that finishes after the source changes', () => {
 		request.setImage(AC9_IMAGE);
-		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureReplacementMasked(true);
 		const operation = request.beginTextureMaskUpload();
 		if (!operation) throw new Error('Expected a texture mask upload operation');
@@ -1336,7 +1319,6 @@ describe('toTextureReplacementRequest', () => {
 
 	it('allows only the latest mask upload to commit for the same source', () => {
 		request.setImage(AC9_IMAGE);
-		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureReplacementMasked(true);
 		const first = request.beginTextureMaskUpload();
 		const second = request.beginTextureMaskUpload();
@@ -1351,7 +1333,6 @@ describe('toTextureReplacementRequest', () => {
 
 	it('invalidates an upload when masked mode is toggled off', () => {
 		request.setImage(AC9_IMAGE);
-		request.setTextureReplacementSourceMode('room-photo');
 		request.setTextureReplacementMasked(true);
 		const operation = request.beginTextureMaskUpload();
 		if (!operation) throw new Error('Expected a texture mask upload operation');
@@ -1802,7 +1783,6 @@ describe('undo/redo restores the form settings used for each step (FR-К6)', () 
 		request.setStyleTransferPrompt('mid-century modern');
 		request.setStyleTransferStrength(0.9);
 		request.setStyleNegativePrompt('no clutter');
-		request.setStyleSourceMode('room-photo');
 		request.setCurrentRender(render('style-1'));
 
 		request.undoLastEdit();
@@ -1813,14 +1793,12 @@ describe('undo/redo restores the form settings used for each step (FR-К6)', () 
 		expect(request.styleTransferPrompt).toBe('');
 		expect(request.styleTransferStrength).toBe(0.7);
 		expect(request.styleNegativePrompt).toBe('');
-		expect(request.styleSourceMode).toBe('current-result');
 
 		request.redoEdit();
 		expect(request.currentRender?.id).toBe('style-1');
 		expect(request.styleTransferPrompt).toBe('mid-century modern');
 		expect(request.styleTransferStrength).toBe(0.9);
 		expect(request.styleNegativePrompt).toBe('no clutter');
-		expect(request.styleSourceMode).toBe('room-photo');
 	});
 
 	it('undo brings back the fragments/format used for the previous step, redo brings back the later ones', () => {
@@ -1992,5 +1970,99 @@ describe('restoreFormSnapshot (restoring a past generation from the server)', ()
 
 		expect(request.image).toEqual({ mediaKey: 'unrelated-image' });
 		expect(request.currentRender?.id).toBe('existing-render');
+	});
+});
+
+describe('working image', () => {
+	const objectReference = { mediaKey: '103' };
+	const textureReference = { mediaKey: '104' };
+
+	function result(id: string, outputKey: string): RenderResult {
+		return { id, outputKey, cost: 1, balance: 24, ts: 0 };
+	}
+
+	it('every tool continues from the latest result after an image is opened from a past scene', async () => {
+		applyAc9Fixture();
+		request.startFromImage(AC9_IMAGE);
+		request.setObjectReferenceImage(objectReference);
+		request.setObjectReplacementObject('armchair');
+		request.setTextureReferenceImage(textureReference);
+		request.setTextureReplacementSurface('sofa upholstery');
+		request.setLightSettingsInstruction('warm evening light');
+
+		request.applyEditResult({
+			...result('object-1', '201'),
+			editOp: { type: 'replace-object', instruction: 'armchair' }
+		});
+
+		expect(request.workingImageKey()).toBe('201');
+		expect((await request.toStyleTransferRequest())?.imageKey).toBe('201');
+		expect((await request.toObjectReplacementRequest())?.imageKey).toBe('201');
+		expect((await request.toTextureReplacementRequest())?.imageKey).toBe('201');
+		expect((await request.toLightSettingsRequest())?.imageKey).toBe('201');
+		expect((await request.toRenderRequest())?.imageKey).toBe('201');
+	});
+
+	it('ignores the retired per-tool source mode carried by snapshots saved before it was removed', async () => {
+		applyAc9Fixture();
+		request.setCurrentRender(result('render-1', '201'));
+		const legacySnapshot = requestFormSnapshotSchema.parse({
+			...request.captureFormSnapshot(),
+			styleSourceMode: 'room-photo',
+			objectReplacementSourceMode: 'room-photo',
+			textureReplacementSourceMode: 'room-photo'
+		});
+
+		request.restoreFormSnapshot(legacySnapshot);
+
+		expect(legacySnapshot).not.toHaveProperty('styleSourceMode');
+		expect((await request.toStyleTransferRequest())?.imageKey).toBe('201');
+	});
+
+	it('startFromImage drops everything attached to the previous canvas but keeps the form', () => {
+		applyAc9Fixture();
+		request.setCurrentRender(result('render-1', '201'));
+		request.setTextureReplacementMasked(true);
+		request.setTextureMaskImage({ mediaKey: '105' });
+		request.setActiveObjectReplacementJobId('00000000-0000-4000-8000-000000000001');
+		request.setActiveTextureReplacementJobId('00000000-0000-4000-8000-000000000002');
+		request.setActiveLightSettingsJobId('00000000-0000-4000-8000-000000000003');
+		request.setActiveFluxKontextEditJobId('00000000-0000-4000-8000-000000000004');
+		request.setStatus('error');
+
+		request.startFromImage({ mediaKey: '301' });
+
+		expect(request.image).toEqual({ mediaKey: '301' });
+		expect(request.currentRender).toBeUndefined();
+		expect(request.workingImageKey()).toBe('301');
+		expect(request.textureMaskImage).toBeUndefined();
+		expect(request.activeObjectReplacementJobId).toBeUndefined();
+		expect(request.activeTextureReplacementJobId).toBeUndefined();
+		expect(request.activeLightSettingsJobId).toBeUndefined();
+		expect(request.activeFluxKontextEditJobId).toBeUndefined();
+		expect(request.status).toBe('idle');
+		expect(request.styleTransferPrompt).toBe(AC9_PROMPT);
+	});
+});
+
+describe('renderResultFromResponse', () => {
+	const output = {
+		key: mediaKey(TEST_S3_BUCKET.name, 'out.webp'),
+		url: 'https://cdn.example.test/out.webp'
+	};
+
+	it('keeps the stored generation id the server returned', () => {
+		const render = renderResultFromResponse({
+			id: '00000000-0000-4000-8000-000000000301',
+			output,
+			cost: 1,
+			balance: 9
+		});
+		expect(render.id).toBe('00000000-0000-4000-8000-000000000301');
+	});
+
+	it('falls back to a local id only when the server recorded no generation', () => {
+		const render = renderResultFromResponse({ output, cost: 1, balance: 9 });
+		expect(render.id).toEqual(expect.any(String));
 	});
 });

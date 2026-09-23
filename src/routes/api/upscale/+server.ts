@@ -116,6 +116,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	// The upscale already succeeded and archAI already charged for it — a failure to
 	// cache the resulting balance/deduction is a bookkeeping gap, not a reason to
 	// make the user think a completed, paid upscale failed.
+	let generationId: string | undefined;
 	if (db && userId) {
 		const outputMedia = await getOrCreateMediaByKey(
 			db,
@@ -143,6 +144,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				archaiDownloadSec: result.downloadSec,
 				archaiReuploadSec: result.reuploadSec
 			});
+			generationId = credit.id;
 			result = { ...result, balance: credit.balance };
 		} catch (err) {
 			console.error('recordGeneration failed after a successful upscale:', err);
@@ -168,5 +170,10 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 					key: mediaKey(uploadsBucketName(platform), result.outputKey),
 					url: `/${result.outputKey}`
 				};
-	return json({ output, cost: result.cost, balance: result.balance } satisfies RenderResponse);
+	return json({
+		...(generationId !== undefined ? { id: generationId } : {}),
+		output,
+		cost: result.cost,
+		balance: result.balance
+	} satisfies RenderResponse);
 };

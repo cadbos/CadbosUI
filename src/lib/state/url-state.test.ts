@@ -51,12 +51,9 @@ function formSnapshot(overrides: Partial<RequestFormSnapshot> = {}): RequestForm
 		styleTransferPrompt: '',
 		styleTransferStrength: 0.7,
 		styleNegativePrompt: '',
-		styleSourceMode: 'current-result',
 		objectReplacementObject: '',
-		objectReplacementSourceMode: 'current-result',
 		objectReplacementScale: 1,
 		textureReplacementSurface: '',
-		textureReplacementSourceMode: 'current-result',
 		textureReplacementMasked: false,
 		lightSettingsPresetIds: [],
 		lightSettingsInstruction: '',
@@ -222,12 +219,11 @@ describe('object replacement edit URL state', () => {
 	it('serializes replacement fields under the edit tool without edit prompt leakage', () => {
 		const state = new RequestState();
 		state.setEditPrompt('brighten the room');
-		state.setObjectReplacementSourceMode('room-photo');
 		state.setObjectReplacementObject('gray sofa');
 		state.setActiveObjectReplacementJobId(JOB_ID);
 
 		expect(buildShareUrl('edit', state, { tool: 'object-replacement' })).toBe(
-			`/edit?tool=object-replacement&source=room-photo&object=gray+sofa&job=${JOB_ID}`
+			`/edit?tool=object-replacement&object=gray+sofa&job=${JOB_ID}`
 		);
 	});
 
@@ -235,6 +231,7 @@ describe('object replacement edit URL state', () => {
 		const state = new RequestState();
 		const params = new URLSearchParams({
 			tool: 'object-replacement',
+			// A link shared before the per-tool source mode was removed.
 			source: 'room-photo',
 			object: 'gray sofa',
 			job: JOB_ID,
@@ -244,7 +241,6 @@ describe('object replacement edit URL state', () => {
 
 		applyShareParams('edit', undefined, params, state);
 
-		expect(state.objectReplacementSourceMode).toBe('room-photo');
 		expect(state.objectReplacementObject).toBe('gray sofa');
 		expect(state.activeObjectReplacementJobId).toBe(JOB_ID);
 		expect(state.image).toBeUndefined();
@@ -270,12 +266,11 @@ describe('texture replacement edit URL state', () => {
 	it('serializes replacement fields under the edit tool without edit prompt leakage', () => {
 		const state = new RequestState();
 		state.setEditPrompt('brighten the room');
-		state.setTextureReplacementSourceMode('room-photo');
 		state.setTextureReplacementSurface('sofa upholstery');
 		state.setActiveTextureReplacementJobId(JOB_ID);
 
 		expect(buildShareUrl('edit', state, { tool: 'texture-replacement' })).toBe(
-			`/edit?tool=texture-replacement&source=room-photo&surface=sofa+upholstery&job=${JOB_ID}`
+			`/edit?tool=texture-replacement&surface=sofa+upholstery&job=${JOB_ID}`
 		);
 	});
 
@@ -283,6 +278,7 @@ describe('texture replacement edit URL state', () => {
 		const state = new RequestState();
 		const params = new URLSearchParams({
 			tool: 'texture-replacement',
+			// A link shared before the per-tool source mode was removed.
 			source: 'room-photo',
 			surface: 'sofa upholstery',
 			job: JOB_ID,
@@ -292,7 +288,6 @@ describe('texture replacement edit URL state', () => {
 
 		applyShareParams('edit', undefined, params, state);
 
-		expect(state.textureReplacementSourceMode).toBe('room-photo');
 		expect(state.textureReplacementSurface).toBe('sofa upholstery');
 		expect(state.activeTextureReplacementJobId).toBe(JOB_ID);
 		expect(state.image).toBeUndefined();
@@ -301,7 +296,6 @@ describe('texture replacement edit URL state', () => {
 
 	it('round-trips masked mode without image URLs or the hidden surface', () => {
 		const state = new RequestState();
-		state.setTextureReplacementSourceMode('room-photo');
 		state.setTextureReplacementSurface('sofa upholstery');
 		state.setTextureReplacementMasked(true);
 		state.setImage({ mediaKey: '1' });
@@ -309,7 +303,7 @@ describe('texture replacement edit URL state', () => {
 		state.setTextureMaskImage({ mediaKey: '3' });
 
 		const url = buildShareUrl('edit', state, { tool: 'texture-replacement' });
-		expect(url).toBe('/edit?tool=texture-replacement&source=room-photo&masked=1');
+		expect(url).toBe('/edit?tool=texture-replacement&masked=1');
 
 		const restored = new RequestState();
 		applyShareParams(

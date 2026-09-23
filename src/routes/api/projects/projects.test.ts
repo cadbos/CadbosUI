@@ -16,7 +16,6 @@ import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type {
 	CreateSessionResponse,
-	ForkSessionResponse,
 	ProjectDetailResponse,
 	ProjectRecord,
 	ProjectsResponse,
@@ -39,7 +38,6 @@ const {
 const { POST: createSession } = await import('./[id]/sessions/+server');
 const { PATCH: renameSession, DELETE: deleteSession } =
 	await import('./[id]/sessions/[sessionId]/+server');
-const { POST: forkSession } = await import('./[id]/sessions/[sessionId]/fork/+server');
 const {
 	GET: getShare,
 	POST: issueShare,
@@ -260,74 +258,6 @@ describe('POST /api/projects/[id]/sessions', () => {
 			locals: { user: intruder }
 		} as Parameters<typeof createSession>[0]);
 		expect(response.status).toBe(404);
-	});
-});
-
-describe('POST /api/projects/[id]/sessions/[sessionId]/fork', () => {
-	it('forks with lineage, rejects a generation that is not the parent’s own', async () => {
-		const db = makeD1();
-		seedUser(db, 'user-1', owner.pubkey);
-		const createResponse = await createProject({
-			request: new Request('https://cadbos.example/api/projects', {
-				method: 'POST',
-				body: JSON.stringify({ title: 'Living room' })
-			}),
-			platform: platform(db),
-			locals: { user: owner }
-		} as Parameters<typeof createProject>[0]);
-		const project = (await createResponse.json()) as ProjectRecord;
-
-		const sessionResponse = await createSession({
-			request: new Request('https://cadbos.example/api/projects/x/sessions', {
-				method: 'POST',
-				body: JSON.stringify({})
-			}),
-			params: { id: project.id },
-			platform: platform(db),
-			locals: { user: owner }
-		} as Parameters<typeof createSession>[0]);
-		const parentSession = (await sessionResponse.json()) as CreateSessionResponse;
-		seedGeneration(db, '00000000-0000-4000-8000-000000000101', parentSession.id, 'user-1');
-
-		const forkResponse = await forkSession({
-			request: new Request('https://cadbos.example/api/projects/x/sessions/y/fork', {
-				method: 'POST',
-				body: JSON.stringify({
-					forkedFromGenerationId: '00000000-0000-4000-8000-000000000101',
-					title: 'Style B'
-				})
-			}),
-			params: { id: project.id, sessionId: parentSession.id },
-			platform: platform(db),
-			locals: { user: owner }
-		} as Parameters<typeof forkSession>[0]);
-		expect(forkResponse.status).toBe(201);
-		const forked = (await forkResponse.json()) as ForkSessionResponse;
-		expect(forked.parentSessionId).toBe(parentSession.id);
-		expect(forked.forkedFromGenerationId).toBe('00000000-0000-4000-8000-000000000101');
-
-		const otherSessionResponse = await createSession({
-			request: new Request('https://cadbos.example/api/projects/x/sessions', {
-				method: 'POST',
-				body: JSON.stringify({})
-			}),
-			params: { id: project.id },
-			platform: platform(db),
-			locals: { user: owner }
-		} as Parameters<typeof createSession>[0]);
-		const otherSession = (await otherSessionResponse.json()) as CreateSessionResponse;
-		seedGeneration(db, '00000000-0000-4000-8000-000000000102', otherSession.id, 'user-1');
-
-		const mismatched = await forkSession({
-			request: new Request('https://cadbos.example/api/projects/x/sessions/y/fork', {
-				method: 'POST',
-				body: JSON.stringify({ forkedFromGenerationId: '00000000-0000-4000-8000-000000000102' })
-			}),
-			params: { id: project.id, sessionId: parentSession.id },
-			platform: platform(db),
-			locals: { user: owner }
-		} as Parameters<typeof forkSession>[0]);
-		expect(mismatched.status).toBe(404);
 	});
 });
 

@@ -221,7 +221,8 @@ export const ru = {
 		'Восстановить настройки из сцены {order}? Текущие несохранённые изменения формы будут заменены.',
 	'generatedImages.confirmRestoreCancel': 'Отмена',
 	'generatedImages.confirmRestoreConfirm': 'Восстановить',
-	'generatedImages.confirmRestoreRestoring': 'Восстановление…',
+	'generatedImages.confirmRestoreDescriptionOtherSession':
+		'Восстановить настройки из сцены {order}? Несохранённые изменения в открытой сессии «{session}» будут заменены.',
 	'usage.title': 'Использование',
 	'usage.subtitle': 'Балансы аккаунтов и траты на генерации по пользователям Cadbos.',
 	'usage.signInRequired':
@@ -444,8 +445,6 @@ export const ru = {
 	'styleTransfer.failed': 'Не удалось перенести стиль. Попробуйте ещё раз.',
 	'styleTransfer.insufficientCredit': 'Тестовый баланс исчерпан.',
 	'styleTransfer.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
-	'styleTransfer.forkFailed':
-		'Не удалось начать новую сессию для переноса стиля. Попробуйте ещё раз.',
 	'objectReplacement.alpha': 'Альфа',
 	'objectReplacement.alphaNotice':
 		'Замена объектов находится на раннем этапе. Обработка может занять несколько минут, а результат — отличаться от ожидаемого.',

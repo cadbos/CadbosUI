@@ -106,6 +106,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			image,
 			source,
 			formSnapshot,
+			session: detail.session,
 			media: [image, source, ...referencedAccess.values()]
 		} satisfies GeneratedImageDetailResponse,
 		{ headers: { 'cache-control': 'private, no-store' } }

@@ -166,13 +166,13 @@ before the Change Date. See LICENSE for complete terms.
 	});
 
 	// The mask editor needs a real, stable server URL (not a local blob:
-	// preview) to draw on — see ensureTextureReplacementSourceUploaded().
+	// preview) to draw on — see resolveWorkingImageKey().
 	// Entering masked mode resolves the deferred main-photo upload eagerly
 	// instead of waiting for the texture-replacement submit itself.
 	$effect(() => {
 		if (showMaskOnCanvas) {
 			request
-				.ensureTextureReplacementSourceUploaded()
+				.resolveWorkingImageKey()
 				.catch((error: unknown) => logBoundaryError('workspace.maskEditorSourceUpload', error));
 		}
 	});
@@ -693,8 +693,8 @@ before the Change Date. See LICENSE for complete terms.
 							onerror={(error: unknown) => logBoundaryError('workspace.maskEditor', error)}
 						>
 							<MaskEditor
-								sourceUrl={request.textureReplacementSourceUrl()}
-								sourceKey={request.textureReplacementSourceKey()}
+								sourceUrl={request.workingImageUrl()}
+								sourceKey={request.workingImageKey()}
 								disabled={maskEditorLocked}
 							/>
 							{#snippet failed(_error: unknown, reset: () => void)}

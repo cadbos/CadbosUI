@@ -14,7 +14,7 @@
 
 // Project -> ProjectSession -> Generation repository (migrations/0011): a project
 // groups a user's source photos/rooms, a session is one generation thread within a
-// project (forked by style-transfer, continued in place by everything else). The
+// project; every generation mode continues its session in place. The
 // table is named `project_sessions`, not `sessions` — that name is already taken by
 // the auth session table (migrations/0001_auth.sql).
 //
@@ -332,12 +332,9 @@ function toPublicFormSnapshot(
 		styleTransferPrompt: snapshot.styleTransferPrompt,
 		styleTransferStrength: snapshot.styleTransferStrength,
 		styleNegativePrompt: snapshot.styleNegativePrompt,
-		styleSourceMode: snapshot.styleSourceMode,
 		objectReplacementObject: snapshot.objectReplacementObject,
-		objectReplacementSourceMode: snapshot.objectReplacementSourceMode,
 		objectReplacementScale: snapshot.objectReplacementScale,
 		textureReplacementSurface: snapshot.textureReplacementSurface,
-		textureReplacementSourceMode: snapshot.textureReplacementSourceMode,
 		textureReplacementMasked: snapshot.textureReplacementMasked,
 		lightSettingsPresetIds: snapshot.lightSettingsPresetIds,
 		lightSettingsInstruction: snapshot.lightSettingsInstruction
@@ -487,57 +484,6 @@ export async function archiveSession(
 		.bind(Date.now(), sessionId, userId)
 		.run();
 	return result.meta.changes === 1;
-}
-
-// Style-transfer's fork: branches a new session off parentSessionId at the exact
-// point forkedFromGenerationId. Both the parent session and the forked-from
-// generation must belong to userId's project and to each other (the generation
-// must actually be a row of that session) — null on any mismatch, so a client can
-// never fork into someone else's project by guessing ids.
-export async function forkSession(
-	db: D1Database,
-	userId: string,
-	parentSessionId: string,
-	forkedFromGenerationId: string,
-	title: string
-): Promise<ProjectSession | null> {
-	const parent = await db
-		.prepare(
-			'SELECT ps.project_id AS project_id FROM project_sessions ps ' +
-				'JOIN projects p ON p.id = ps.project_id ' +
-				'WHERE ps.id = ? AND p.user_id = ? AND ps.archived_at IS NULL AND p.archived_at IS NULL'
-		)
-		.bind(parentSessionId, userId)
-		.first<{ project_id: string }>();
-	if (!parent) return null;
-
-	const generationBelongsToParent = await db
-		.prepare('SELECT 1 FROM generations WHERE id = ? AND session_id = ?')
-		.bind(forkedFromGenerationId, parentSessionId)
-		.first();
-	if (!generationBelongsToParent) return null;
-
-	const now = Date.now();
-	const id = crypto.randomUUID();
-	await db.batch([
-		db.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').bind(now, parent.project_id),
-		db
-			.prepare(
-				'INSERT INTO project_sessions ' +
-					'(id, project_id, title, parent_session_id, forked_from_generation_id, created_at, updated_at) ' +
-					'VALUES (?, ?, ?, ?, ?, ?, ?)'
-			)
-			.bind(id, parent.project_id, title, parentSessionId, forkedFromGenerationId, now, now)
-	]);
-	return {
-		id,
-		projectId: parent.project_id,
-		title,
-		parentSessionId,
-		forkedFromGenerationId,
-		createdAt: now,
-		updatedAt: now
-	};
 }
 
 // Issuing a new link auto-revokes the project's prior active one — one active

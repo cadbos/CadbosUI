@@ -31,6 +31,14 @@ export const generatedImageDetailResponseSchema = z.object({
 	image: mediaAccessSchema,
 	source: mediaAccessSchema,
 	formSnapshot: requestFormSnapshotSchema.nullable(),
+	session: z
+		.object({
+			projectId: z.uuid(),
+			projectTitle: z.string(),
+			sessionId: z.uuid(),
+			sessionTitle: z.string()
+		})
+		.nullable(),
 	media: z.array(mediaAccessSchema)
 });
 
@@ -46,19 +54,11 @@ export async function fetchGeneratedImageDetail(id: string): Promise<GeneratedIm
 
 // Registers a fetched detail's media with the client-side media-access cache
 // and, if it carries a snapshot, restores the exact form settings that
-// produced it — the settings-half of a restore. Callers set the base image
-// themselves first (ScenesDrawer.svelte's resetForNewScene(), or
-// initializeSessionState()'s own fallback), since that part differs by
-// context (a scene restore also clears render/job history a session
-// continuation must not touch).
+// produced it — the settings-half of a restore. Callers put the image on the
+// canvas themselves first (RequestState#startFromImage), since which image
+// that is differs by context.
 export function applyGeneratedImageFormSnapshot(detail: GeneratedImageDetail): void {
 	for (const access of detail.media) mediaAccess.normalize(access);
 	if (!detail.formSnapshot) return;
 	request.restoreFormSnapshot(detail.formSnapshot);
-	// The snapshot's own source-mode fields may point at a prior render's
-	// output ('current-result') — meaningless here, since restoring never
-	// reconstructs that render chain, only the single image the caller set.
-	request.setStyleSourceMode('room-photo');
-	request.setObjectReplacementSourceMode('room-photo');
-	request.setTextureReplacementSourceMode('room-photo');
 }

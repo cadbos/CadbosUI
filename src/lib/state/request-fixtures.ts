@@ -96,9 +96,7 @@ export function buildAc9RequestJSON(): RequestJSON {
 		styleTransferPrompt: AC9_PROMPT,
 		styleTransferStrength: 0.7,
 		styleNegativePrompt: '',
-		styleSourceMode: 'current-result',
 		objectReplacementObject: '',
-		objectReplacementSourceMode: 'current-result',
 		promptOverride: null,
 		status: 'idle'
 	};

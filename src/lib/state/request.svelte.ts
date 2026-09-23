@@ -15,12 +15,10 @@
 import { z } from 'zod';
 import {
 	EDIT_OPERATION_TYPES,
-	IMAGE_SOURCE_MODES,
 	OUTPUT_FORMATS,
 	SCENE_TYPES,
 	type EditOperationType,
 	type ImageInput,
-	type ImageSourceMode,
 	type LightSettingsRequest,
 	type ManagedImageInput,
 	type ObjectReplacementRequest,
@@ -42,11 +40,9 @@ import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export {
 	EDIT_OPERATION_TYPES,
-	IMAGE_SOURCE_MODES,
 	SCENE_TYPES,
 	type EditOperationType,
 	type ImageInput,
-	type ImageSourceMode,
 	type ManagedImageInput,
 	type OutputFormat,
 	type PromptFragment,
@@ -167,12 +163,9 @@ export interface RequestJSON {
 	styleTransferPrompt: string;
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
-	styleSourceMode: ImageSourceMode;
 	objectReplacementObject?: string;
-	objectReplacementSourceMode?: ImageSourceMode;
 	objectReplacementScale?: number;
 	textureReplacementSurface?: string;
-	textureReplacementSourceMode?: ImageSourceMode;
 	textureReplacementMasked?: boolean;
 	lightSettingsPresetIds?: string[];
 	lightSettingsInstruction?: string;
@@ -192,19 +185,14 @@ export interface NormalizedRequest {
 	sceneType: SceneType;
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
-	styleSourceMode: ImageSourceMode;
-	// The media identity request builders actually send. Comparing raw
-	// `image` alone can't tell two states with different current renders
-	// apart when both use current-result mode, even though they'd submit
+	// The media identity request builders actually send (see
+	// workingImageKey()). Comparing raw `image` alone can't tell two states
+	// with different current renders apart, even though they'd submit
 	// different request bodies.
-	styleTransferSourceKey: string | undefined;
+	workingImageKey: string | undefined;
 	objectReplacementObject: string;
-	objectReplacementSourceMode: ImageSourceMode;
-	objectReplacementSourceKey: string | undefined;
 	objectReplacementScale: number;
 	textureReplacementSurface: string;
-	textureReplacementSourceMode: ImageSourceMode;
-	textureReplacementSourceKey: string | undefined;
 	textureReplacementMasked: boolean;
 	lightSettingsPresetIds: string[];
 	lightSettingsInstruction: string;
@@ -218,7 +206,6 @@ export interface NormalizedRequest {
 
 const outputFormatSchema = z.enum(OUTPUT_FORMATS);
 const sceneTypeSchema = z.enum(SCENE_TYPES);
-const imageSourceModeSchema = z.enum(IMAGE_SOURCE_MODES);
 const styleTransferStrengthSchema = z.number().min(0).max(1);
 const objectReplacementScaleSchema = z.number().min(0.5).max(2);
 // Bucketed, not continuous — text is the only lever that actually moves the
@@ -313,14 +300,11 @@ export const requestFormSnapshotSchema = z.object({
 	styleTransferPrompt: z.string(),
 	styleTransferStrength: styleTransferStrengthSchema,
 	styleNegativePrompt: z.string(),
-	styleSourceMode: imageSourceModeSchema,
 	styleReferenceImage: optionalImageInputSchema,
 	objectReplacementObject: replacementObjectSchema,
-	objectReplacementSourceMode: imageSourceModeSchema,
 	objectReplacementScale: objectReplacementScaleSchema,
 	objectReferenceImage: optionalImageInputSchema,
 	textureReplacementSurface: replacementSurfaceSchema,
-	textureReplacementSourceMode: imageSourceModeSchema,
 	textureReplacementMasked: z.boolean(),
 	textureReferenceImage: optionalImageInputSchema,
 	textureMaskImage: optionalImageInputSchema,
@@ -360,12 +344,9 @@ const requestJsonSchema = z
 		styleTransferPrompt: z.string().default(''),
 		styleTransferStrength: styleTransferStrengthSchema.default(0.7),
 		styleNegativePrompt: z.string().default(''),
-		styleSourceMode: imageSourceModeSchema.default('current-result'),
 		objectReplacementObject: replacementObjectSchema.default(''),
-		objectReplacementSourceMode: imageSourceModeSchema.default('current-result'),
 		objectReplacementScale: objectReplacementScaleSchema.default(1),
 		textureReplacementSurface: replacementSurfaceSchema.default(''),
-		textureReplacementSourceMode: imageSourceModeSchema.default('current-result'),
 		textureReplacementMasked: z.boolean().default(false),
 		lightSettingsPresetIds: lightSettingsPresetIdsSchema.default([]),
 		lightSettingsInstruction: lightSettingsInstructionSchema.default(''),
@@ -520,18 +501,15 @@ function cloneFormSnapshot(
 		styleTransferPrompt: snapshot.styleTransferPrompt,
 		styleTransferStrength: snapshot.styleTransferStrength,
 		styleNegativePrompt: snapshot.styleNegativePrompt,
-		styleSourceMode: snapshot.styleSourceMode,
 		...(snapshot.styleReferenceImage
 			? { styleReferenceImage: cloneImage(snapshot.styleReferenceImage) }
 			: {}),
 		objectReplacementObject: snapshot.objectReplacementObject,
-		objectReplacementSourceMode: snapshot.objectReplacementSourceMode,
 		objectReplacementScale: snapshot.objectReplacementScale,
 		...(snapshot.objectReferenceImage
 			? { objectReferenceImage: cloneImage(snapshot.objectReferenceImage) }
 			: {}),
 		textureReplacementSurface: snapshot.textureReplacementSurface,
-		textureReplacementSourceMode: snapshot.textureReplacementSourceMode,
 		textureReplacementMasked: snapshot.textureReplacementMasked,
 		...(snapshot.textureReferenceImage
 			? { textureReferenceImage: cloneImage(snapshot.textureReferenceImage) }
@@ -643,7 +621,10 @@ export function renderResultFromResponse(
 	opts?: RenderResultFromResponseOptions
 ): RenderResult {
 	return {
-		id: crypto.randomUUID(),
+		// The stored generation's id whenever the server recorded one, so this
+		// step can be referred back to server-side. Only an unrecorded result
+		// (see RenderResponse.id) gets a local id, used for history alone.
+		id: response.id ?? crypto.randomUUID(),
 		outputKey: mediaAccess.normalize(response.output).key,
 		cost: response.cost,
 		balance: response.balance,
@@ -747,7 +728,7 @@ export class RequestState {
 	// Local (blob:) preview of pendingImageFile, kept here rather than as
 	// component-local state so it survives Render/Edit swapping between
 	// separate <ImageUpload target="room"> instances (Workspace.svelte
-	// mounts a fresh one per mode) and so #sourceUrlFor can offer it to
+	// mounts a fresh one per mode) and so workingImageUrl() can offer it to
 	// preview-only consumers (e.g. the mask editor) before the real upload
 	// happens. Session UI state only, same as pendingImageFile above.
 	pendingImagePreviewUrl = $state<string | undefined>(undefined);
@@ -770,13 +751,10 @@ export class RequestState {
 	styleTransferPrompt = $state('');
 	styleTransferStrength = $state(0.7);
 	styleNegativePrompt = $state('');
-	styleSourceMode = $state<ImageSourceMode>('current-result');
 	objectReplacementObject = $state('');
-	objectReplacementSourceMode = $state<ImageSourceMode>('current-result');
 	objectReplacementScale = $state(1);
 	activeObjectReplacementJob = $state<ActiveObjectReplacementJob | undefined>(undefined);
 	textureReplacementSurface = $state('');
-	textureReplacementSourceMode = $state<ImageSourceMode>('current-result');
 	textureReplacementMasked = $state(false);
 	textureMaskUploading = $state(false);
 	activeTextureReplacementJob = $state<ActiveTextureReplacementJob | undefined>(undefined);
@@ -952,6 +930,29 @@ export class RequestState {
 		this.#clearPendingImagePreview();
 	}
 
+	// Puts an existing image on the canvas as a fresh starting point: it
+	// becomes the working image (see workingImageUrl()) every tool continues
+	// from. The one entry point for every "open this image" action (scenes
+	// drawer, resources, continuing a session, previewing a past generation),
+	// so none of them can leave a stale piece of the previous image behind.
+	startFromImage(image: ImageInput): void {
+		this.setImage(image);
+		this.clearCanvasWork();
+	}
+
+	// Drops everything attached to what's currently on the canvas — render
+	// history, in-flight jobs, a mask drawn over the old image — while
+	// keeping the photo itself and the form settings.
+	clearCanvasWork(): void {
+		this.setCurrentRender(undefined);
+		this.setTextureMaskImage(undefined);
+		this.setActiveObjectReplacementJobId(undefined);
+		this.setActiveTextureReplacementJobId(undefined);
+		this.setActiveLightSettingsJobId(undefined);
+		this.setActiveFluxKontextEditJobId(undefined);
+		this.setStatus('idle');
+	}
+
 	setProjectSession(projectId: string, sessionId: string): void {
 		this.projectId = projectId;
 		this.sessionId = sessionId;
@@ -1002,14 +1003,14 @@ export class RequestState {
 			this.textureMaskSourceKey = undefined;
 			return;
 		}
-		const sourceKey = this.textureReplacementSourceKey();
+		const sourceKey = this.workingImageKey();
 		if (!sourceKey) return;
 		this.textureMaskImage = cloneImage(optionalImageInputSchema.parse(image));
 		this.textureMaskSourceKey = sourceKey;
 	}
 
 	beginTextureMaskUpload(): TextureMaskUploadOperation | null {
-		const sourceKey = this.textureReplacementSourceKey();
+		const sourceKey = this.workingImageKey();
 		if (!sourceKey || !this.textureReplacementMasked) return null;
 		this.#textureMaskUploadEpoch += 1;
 		this.textureMaskUploading = true;
@@ -1020,7 +1021,7 @@ export class RequestState {
 		if (
 			!this.textureReplacementMasked ||
 			operation.epoch !== this.#textureMaskUploadEpoch ||
-			operation.sourceKey !== this.textureReplacementSourceKey()
+			operation.sourceKey !== this.workingImageKey()
 		) {
 			return false;
 		}
@@ -1037,7 +1038,7 @@ export class RequestState {
 	textureMaskMatchesSource(): boolean {
 		return (
 			managedImageKey(this.textureMaskImage) !== undefined &&
-			this.textureMaskSourceKey === this.textureReplacementSourceKey()
+			this.textureMaskSourceKey === this.workingImageKey()
 		);
 	}
 
@@ -1061,16 +1062,8 @@ export class RequestState {
 		this.styleNegativePrompt = prompt;
 	}
 
-	setStyleSourceMode(mode: ImageSourceMode): void {
-		this.styleSourceMode = imageSourceModeSchema.parse(mode);
-	}
-
 	setObjectReplacementObject(object: string): void {
 		this.objectReplacementObject = replacementObjectSchema.parse(object);
-	}
-
-	setObjectReplacementSourceMode(mode: ImageSourceMode): void {
-		this.objectReplacementSourceMode = imageSourceModeSchema.parse(mode);
 	}
 
 	setObjectReplacementScale(scale: number): void {
@@ -1184,10 +1177,6 @@ export class RequestState {
 		this.textureReplacementSurface = replacementSurfaceSchema.parse(surface);
 	}
 
-	setTextureReplacementSourceMode(mode: ImageSourceMode): void {
-		this.textureReplacementSourceMode = imageSourceModeSchema.parse(mode);
-	}
-
 	setTextureReplacementMasked(masked: boolean): void {
 		const parsed = z.boolean().parse(masked);
 		if (parsed !== this.textureReplacementMasked) {
@@ -1289,18 +1278,15 @@ export class RequestState {
 			styleTransferPrompt: this.styleTransferPrompt,
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
-			styleSourceMode: this.styleSourceMode,
 			...(this.styleReferenceImage
 				? { styleReferenceImage: cloneImage(this.styleReferenceImage) }
 				: {}),
 			objectReplacementObject: this.objectReplacementObject,
-			objectReplacementSourceMode: this.objectReplacementSourceMode,
 			objectReplacementScale: this.objectReplacementScale,
 			...(this.objectReferenceImage
 				? { objectReferenceImage: cloneImage(this.objectReferenceImage) }
 				: {}),
 			textureReplacementSurface: this.textureReplacementSurface,
-			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			textureReplacementMasked: this.textureReplacementMasked,
 			...(this.textureReferenceImage
 				? { textureReferenceImage: cloneImage(this.textureReferenceImage) }
@@ -1330,14 +1316,11 @@ export class RequestState {
 		this.styleTransferPrompt = snapshot.styleTransferPrompt;
 		this.styleTransferStrength = snapshot.styleTransferStrength;
 		this.styleNegativePrompt = snapshot.styleNegativePrompt;
-		this.styleSourceMode = snapshot.styleSourceMode;
 		this.styleReferenceImage = cloneImage(snapshot.styleReferenceImage);
 		this.objectReplacementObject = snapshot.objectReplacementObject;
-		this.objectReplacementSourceMode = snapshot.objectReplacementSourceMode;
 		this.objectReplacementScale = snapshot.objectReplacementScale;
 		this.objectReferenceImage = cloneImage(snapshot.objectReferenceImage);
 		this.textureReplacementSurface = snapshot.textureReplacementSurface;
-		this.textureReplacementSourceMode = snapshot.textureReplacementSourceMode;
 		this.textureReplacementMasked = snapshot.textureReplacementMasked;
 		this.textureReferenceImage = cloneImage(snapshot.textureReferenceImage);
 		this.textureMaskImage = cloneImage(snapshot.textureMaskImage);
@@ -1433,14 +1416,14 @@ export class RequestState {
 
 	validateStyleTransfer(): ValidationResult {
 		const missing: ValidationField[] = [];
-		if (!this.hasStyleTransferSource()) missing.push('image');
+		if (!this.hasWorkingImage()) missing.push('image');
 		if (!this.styleReferenceImage) missing.push('referenceImage');
 		return { valid: missing.length === 0, missing };
 	}
 
 	validateObjectReplacement(): ValidationResult {
 		const missing: ValidationField[] = [];
-		if (!this.hasObjectReplacementSource()) missing.push('image');
+		if (!this.hasWorkingImage()) missing.push('image');
 		if (!managedImageKey(this.objectReferenceImage)) missing.push('referenceImage');
 		if (!this.objectReplacementObject.trim()) missing.push('replacementObject');
 		return { valid: missing.length === 0, missing };
@@ -1448,7 +1431,7 @@ export class RequestState {
 
 	validateTextureReplacement(): ValidationResult {
 		const missing: ValidationField[] = [];
-		if (!this.hasTextureReplacementSource()) missing.push('image');
+		if (!this.hasWorkingImage()) missing.push('image');
 		if (!managedImageKey(this.textureReferenceImage)) missing.push('referenceImage');
 		if (this.textureReplacementMasked) {
 			if (!this.textureMaskMatchesSource()) missing.push('mask');
@@ -1460,42 +1443,52 @@ export class RequestState {
 
 	validateLightSettings(): ValidationResult {
 		const missing: ValidationField[] = [];
-		if (!this.hasEditSource()) missing.push('image');
+		if (!this.hasWorkingImage()) missing.push('image');
 		if (!this.lightSettingsPrompt.trim()) missing.push('instruction');
 		return { valid: missing.length === 0, missing };
 	}
 
-	#sourceUrlFor(mode: ImageSourceMode): string | undefined {
-		if (mode === 'current-result') {
-			return this.currentRender
-				? mediaAccess.get(this.currentRender.outputKey)?.url
-				: (imageUrl(this.image) ?? this.pendingImagePreviewUrl);
-		}
-		return imageUrl(this.image) ?? this.pendingImagePreviewUrl;
+	// The single image every tool works on: the latest render/edit result
+	// once one exists, the room photo before that. There is deliberately no
+	// per-tool choice — each generation continues from whatever is currently
+	// on the canvas.
+	//
+	// Sync "best guess" URL for preview/display purposes only (e.g. the mask
+	// editor's canvas source) — falls back to the pending file's local blob:
+	// preview when nothing has actually been uploaded yet (same origin, so
+	// it's safe to draw into a canvas). Do not use this for building request
+	// bodies — that's what resolveWorkingImageKey() is for, since a blob: URL
+	// isn't accepted by the key-only server contract.
+	workingImageUrl(): string | undefined {
+		return this.currentRender
+			? mediaAccess.get(this.currentRender.outputKey)?.url
+			: (imageUrl(this.image) ?? this.pendingImagePreviewUrl);
+	}
+
+	workingImageKey(): string | undefined {
+		return this.currentRender ? this.currentRender.outputKey : managedImageKey(this.image);
 	}
 
 	// Sync "is there something to submit" check for button-enabled validation —
 	// a pending, not-yet-uploaded file already counts (the actual upload is
 	// deferred, not skipped: #ensureImageUploaded() guarantees it runs before
-	// the request is sent). Used by validateStyleTransfer()/etc.; do not use
-	// this for building request bodies — see #resolveSourceFor.
-	#hasSourceFor(mode: ImageSourceMode): boolean {
-		if (mode === 'current-result') {
-			return (
-				this.currentRender !== undefined ||
-				this.image !== undefined ||
-				this.pendingImageFile !== undefined
-			);
-		}
-		return this.image !== undefined || this.pendingImageFile !== undefined;
+	// the request is sent). Do not use this for building request bodies — see
+	// resolveWorkingImageKey().
+	hasWorkingImage(): boolean {
+		return (
+			this.currentRender !== undefined ||
+			this.image !== undefined ||
+			this.pendingImageFile !== undefined
+		);
 	}
 
-	// Resolves the managed media key for the outgoing request body. Triggers the deferred main-
-	// photo upload the first time it's needed — see #ensureImageUploaded().
-	async #resolveSourceFor(mode: ImageSourceMode): Promise<string | undefined> {
-		if (mode === 'current-result' && this.currentRender) {
-			return this.currentRender.outputKey;
-		}
+	// Resolves the managed media key for the outgoing request body. Triggers the
+	// deferred main-photo upload the first time it's needed — see
+	// #ensureImageUploaded(). The mask editor also calls this eagerly the moment
+	// masked texture mode is entered, so it can draw on (and later validate the
+	// finished mask against) a stable server URL instead of a blob: preview.
+	async resolveWorkingImageKey(): Promise<string | undefined> {
+		if (this.currentRender) return this.currentRender.outputKey;
 		const image = await this.#ensureImageUploaded();
 		return managedImageKey(image);
 	}
@@ -1622,75 +1615,6 @@ export class RequestState {
 		return { projectId, sessionId: parsedSession.data.id };
 	}
 
-	hasStyleTransferSource(): boolean {
-		return this.#hasSourceFor(this.styleSourceMode);
-	}
-
-	hasObjectReplacementSource(): boolean {
-		return this.#hasSourceFor(this.objectReplacementSourceMode);
-	}
-
-	hasTextureReplacementSource(): boolean {
-		return this.#hasSourceFor(this.textureReplacementSourceMode);
-	}
-
-	// The mask editor draws on, and later validates the finished mask against
-	// (textureMaskMatchesSource()), a stable server URL — a local blob:
-	// preview isn't enough for that. Workspace.svelte calls this eagerly the
-	// moment masked mode is entered, so the deferred main-photo upload
-	// resolves before the user starts drawing instead of waiting for submit.
-	async ensureTextureReplacementSourceUploaded(): Promise<void> {
-		await this.#resolveSourceFor(this.textureReplacementSourceMode);
-	}
-
-	// Sync "best guess" URL for preview/display purposes only (e.g. the mask
-	// editor's canvas source) — falls back to the pending file's local blob:
-	// preview when nothing has actually been uploaded yet (same origin, so
-	// it's safe to draw into a canvas). Do not use these for building request
-	// bodies — that's what #resolveSourceFor is for, since a blob: URL isn't
-	// accepted by the key-only server contract.
-	styleTransferSourceUrl(): string | undefined {
-		return this.#sourceUrlFor(this.styleSourceMode);
-	}
-
-	styleTransferSourceKey(): string | undefined {
-		return this.#sourceKeyFor(this.styleSourceMode);
-	}
-
-	objectReplacementSourceUrl(): string | undefined {
-		return this.#sourceUrlFor(this.objectReplacementSourceMode);
-	}
-
-	objectReplacementSourceKey(): string | undefined {
-		return this.#sourceKeyFor(this.objectReplacementSourceMode);
-	}
-
-	textureReplacementSourceUrl(): string | undefined {
-		return this.#sourceUrlFor(this.textureReplacementSourceMode);
-	}
-
-	textureReplacementSourceKey(): string | undefined {
-		return this.#sourceKeyFor(this.textureReplacementSourceMode);
-	}
-
-	#sourceKeyFor(mode: ImageSourceMode): string | undefined {
-		if (mode === 'current-result' && this.currentRender) return this.currentRender.outputKey;
-		return managedImageKey(this.image);
-	}
-
-	// Edit tools (EditPanel.svelte: freeform/add-object/remove-object/
-	// light-settings) target the latest render/edit result once one exists;
-	// before that, they fall back to the room photo — same 'current-result'
-	// semantics as the other tools' source mode, just without a toggle since
-	// Edit has no separate room-photo/current-result choice to make.
-	hasEditSource(): boolean {
-		return this.#hasSourceFor('current-result');
-	}
-
-	async resolveEditSource(): Promise<string | undefined> {
-		return this.#resolveSourceFor('current-result');
-	}
-
 	async toRenderRequest(): Promise<RenderRequest | null> {
 		const validation = this.validate();
 		if (!validation.valid) return null;
@@ -1700,7 +1624,7 @@ export class RequestState {
 		const formSnapshot = this.captureFormSnapshot();
 		const prompt = this.prompt;
 		const outputFormat = this.outputFormat;
-		const imageKey = await this.#resolveSourceFor('current-result');
+		const imageKey = await this.resolveWorkingImageKey();
 		if (!imageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
@@ -1721,7 +1645,7 @@ export class RequestState {
 		const prompt = this.styleTransferPrompt.trim();
 		const negativePrompt = this.styleNegativePrompt.trim();
 		const styleTransferStrength = this.styleTransferStrength;
-		const imageKey = await this.#resolveSourceFor(this.styleSourceMode);
+		const imageKey = await this.resolveWorkingImageKey();
 		if (!imageKey || !styleReferenceImage) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
@@ -1744,7 +1668,7 @@ export class RequestState {
 		const formSnapshot = this.captureFormSnapshot('replace-object');
 		const referenceImageKey = managedImageKey(this.objectReferenceImage);
 		const replacementObject = this.objectReplacementInstruction;
-		const imageKey = await this.#resolveSourceFor(this.objectReplacementSourceMode);
+		const imageKey = await this.resolveWorkingImageKey();
 		if (!imageKey || !referenceImageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
@@ -1765,7 +1689,7 @@ export class RequestState {
 		const maskImageKey = managedImageKey(this.textureMaskImage);
 		const maskMatchesSource = this.textureMaskMatchesSource();
 		const replacementSurface = this.textureReplacementSurface.trim();
-		const imageKey = await this.#resolveSourceFor(this.textureReplacementSourceMode);
+		const imageKey = await this.resolveWorkingImageKey();
 		if (!imageKey || !referenceImageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		if (masked) {
@@ -1792,7 +1716,7 @@ export class RequestState {
 		if (!validation.valid) return null;
 		const formSnapshot = this.captureFormSnapshot('light-settings');
 		const instruction = this.lightSettingsPrompt.trim();
-		const imageKey = await this.resolveEditSource();
+		const imageKey = await this.resolveWorkingImageKey();
 		if (!imageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
 		return {
@@ -1821,12 +1745,9 @@ export class RequestState {
 			styleTransferPrompt: this.styleTransferPrompt,
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
-			styleSourceMode: this.styleSourceMode,
 			objectReplacementObject: this.objectReplacementObject,
-			objectReplacementSourceMode: this.objectReplacementSourceMode,
 			objectReplacementScale: this.objectReplacementScale,
 			textureReplacementSurface: this.textureReplacementSurface,
-			textureReplacementSourceMode: this.textureReplacementSourceMode,
 			textureReplacementMasked: this.textureReplacementMasked,
 			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
 			lightSettingsInstruction: this.lightSettingsInstruction,
@@ -1859,13 +1780,10 @@ export class RequestState {
 		this.styleTransferPrompt = parsed.styleTransferPrompt;
 		this.styleTransferStrength = parsed.styleTransferStrength;
 		this.styleNegativePrompt = parsed.styleNegativePrompt;
-		this.styleSourceMode = parsed.styleSourceMode;
 		this.objectReplacementObject = parsed.objectReplacementObject;
-		this.objectReplacementSourceMode = parsed.objectReplacementSourceMode;
 		this.objectReplacementScale = parsed.objectReplacementScale;
 		this.activeObjectReplacementJob = undefined;
 		this.textureReplacementSurface = parsed.textureReplacementSurface;
-		this.textureReplacementSourceMode = parsed.textureReplacementSourceMode;
 		this.textureReplacementMasked = parsed.textureReplacementMasked;
 		this.activeTextureReplacementJob = undefined;
 		this.lightSettingsPresetIds = [...parsed.lightSettingsPresetIds];
@@ -1898,17 +1816,12 @@ export class RequestState {
 			sceneType: this.sceneType,
 			styleTransferStrength: this.styleTransferStrength,
 			styleNegativePrompt: this.styleNegativePrompt,
-			styleSourceMode: this.styleSourceMode,
-			styleTransferSourceKey: this.styleTransferSourceKey(),
+			workingImageKey: this.workingImageKey(),
 			objectReplacementObject: this.objectReplacementObject,
-			objectReplacementSourceMode: this.objectReplacementSourceMode,
-			objectReplacementSourceKey: this.objectReplacementSourceKey(),
 			objectReplacementScale: this.objectReplacementScale,
 			textureReplacementSurface: this.textureReplacementMasked
 				? ''
 				: this.textureReplacementSurface,
-			textureReplacementSourceMode: this.textureReplacementSourceMode,
-			textureReplacementSourceKey: this.textureReplacementSourceKey(),
 			textureReplacementMasked: this.textureReplacementMasked,
 			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
 			lightSettingsInstruction: this.lightSettingsInstruction,
@@ -1951,13 +1864,10 @@ export class RequestState {
 		this.styleTransferPrompt = '';
 		this.styleTransferStrength = 0.7;
 		this.styleNegativePrompt = '';
-		this.styleSourceMode = 'current-result';
 		this.objectReplacementObject = '';
-		this.objectReplacementSourceMode = 'current-result';
 		this.objectReplacementScale = 1;
 		this.activeObjectReplacementJob = undefined;
 		this.textureReplacementSurface = '';
-		this.textureReplacementSourceMode = 'current-result';
 		this.textureReplacementMasked = false;
 		this.activeTextureReplacementJob = undefined;
 		this.lightSettingsPresetIds = [];
@@ -2020,15 +1930,12 @@ export class RequestState {
 		this.styleTransferPrompt = source.styleTransferPrompt;
 		this.styleTransferStrength = source.styleTransferStrength;
 		this.styleNegativePrompt = source.styleNegativePrompt;
-		this.styleSourceMode = source.styleSourceMode;
 		this.objectReplacementObject = source.objectReplacementObject;
-		this.objectReplacementSourceMode = source.objectReplacementSourceMode;
 		this.objectReplacementScale = source.objectReplacementScale;
 		this.activeObjectReplacementJob = cloneActiveObjectReplacementJob(
 			source.activeObjectReplacementJob
 		);
 		this.textureReplacementSurface = source.textureReplacementSurface;
-		this.textureReplacementSourceMode = source.textureReplacementSourceMode;
 		this.textureReplacementMasked = source.textureReplacementMasked;
 		this.textureMaskUploading = source.textureMaskUploading;
 		this.activeTextureReplacementJob = cloneActiveTextureReplacementJob(

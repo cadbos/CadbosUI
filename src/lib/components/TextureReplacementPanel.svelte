@@ -140,11 +140,7 @@ before the Change Date. See LICENSE for complete terms.
 	// working (Workspace.svelte swaps to the mask editor, replacing the photo
 	// dropzone, once masked mode is on).
 	function forceMaskedModeEffect(): void {
-		if (
-			!SHOW_MASKED_TOGGLE &&
-			!request.textureReplacementMasked &&
-			request.hasTextureReplacementSource()
-		) {
+		if (!SHOW_MASKED_TOGGLE && !request.textureReplacementMasked && request.hasWorkingImage()) {
 			request.setTextureReplacementMasked(true);
 		}
 	}
@@ -365,12 +361,9 @@ before the Change Date. See LICENSE for complete terms.
 		pollFailure = null;
 		request.setTextureReplacementResultReady(false);
 		try {
+			const sourceRender = request.currentRender;
 			const body = await request.toTextureReplacementRequest();
 			if (!body) return;
-			const sourceRender =
-				request.textureReplacementSourceMode === 'current-result'
-					? request.currentRender
-					: undefined;
 			const instruction = 'replacementSurface' in body ? body.replacementSurface : '';
 			const response = await fetch('/api/texture-replacement', {
 				method: 'POST',
@@ -436,7 +429,7 @@ before the Change Date. See LICENSE for complete terms.
 	// Clears job tracking and the now-stale mask (its pixel coordinates were
 	// drawn against the *previous* result and don't line up with the new
 	// one) so the mask editor reopens for a fresh draw — but keeps every
-	// other setting (reference image, surface description, source mode) and
+	// other setting (reference image, surface description) and
 	// the current result exactly as they are, so the user can adjust and
 	// submit another replacement instead of starting over from a blank form.
 	async function clearJob(): Promise<void> {

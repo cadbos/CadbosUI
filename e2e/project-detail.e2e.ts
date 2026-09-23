@@ -339,20 +339,18 @@ test('continuing a session restores its latest generation’s exact settings, no
 					styleTransferPrompt: 'warm scandinavian wood tones',
 					styleTransferStrength: 0.6,
 					styleNegativePrompt: '',
-					styleSourceMode: 'room-photo',
 					styleReferenceImage: {
 						stylePresetId: 'interior-watercolor-v1',
 						url: 'https://style-presets.cadbos.com/interior/conceptual/watercolor-v1.jpg'
 					},
 					objectReplacementObject: '',
-					objectReplacementSourceMode: 'current-result',
 					objectReplacementScale: 1,
 					textureReplacementSurface: '',
-					textureReplacementSourceMode: 'current-result',
 					textureReplacementMasked: false,
 					lightSettingsPresetIds: [],
 					lightSettingsInstruction: ''
 				},
+				session: null,
 				media: [
 					media(2, 'https://cdn.example.test/styled.webp'),
 					media(1, 'https://cdn.example.test/room.jpg')

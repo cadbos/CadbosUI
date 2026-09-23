@@ -36,12 +36,9 @@ const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	styleTransferPrompt: '',
 	styleTransferStrength: 0.7,
 	styleNegativePrompt: '',
-	styleSourceMode: 'current-result',
 	objectReplacementObject: 'sofa',
-	objectReplacementSourceMode: 'room-photo',
 	objectReplacementScale: 1,
 	textureReplacementSurface: '',
-	textureReplacementSourceMode: 'current-result',
 	textureReplacementMasked: false,
 	lightSettingsPresetIds: [],
 	lightSettingsInstruction: ''

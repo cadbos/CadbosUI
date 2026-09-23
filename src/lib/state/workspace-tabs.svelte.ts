@@ -28,20 +28,16 @@ export function initializeSessionState(
 	projectId: string,
 	session: ProjectSessionRecord
 ): void {
-	state.setCurrentRender(undefined);
 	state.setProjectSession(projectId, session.id);
-	state.setStyleSourceMode('room-photo');
-	state.setObjectReplacementSourceMode('room-photo');
-	state.setTextureReplacementSourceMode('room-photo');
-	state.setTextureMaskImage(undefined);
-	state.setActiveObjectReplacementJobId(undefined);
-	state.setActiveTextureReplacementJobId(undefined);
-	state.setStatus('idle');
 	const latest = session.generations[0];
 	if (latest) {
 		mediaAccess.normalize(latest.image);
-		state.setImage({ mediaKey: latest.image.key });
+		state.startFromImage({ mediaKey: latest.image.key });
+		return;
 	}
+	// Nothing generated yet — keep whatever photo the session tab already
+	// holds, but drop any results and jobs a previous visit left behind.
+	state.clearCanvasWork();
 }
 
 // Seeds the workspace with one specific past generation's before/after —
@@ -59,18 +55,10 @@ export function initializeGenerationPreview(
 	session: ProjectSessionRecord,
 	generation: SessionGenerationRecord
 ): void {
-	state.setCurrentRender(undefined);
 	state.setProjectSession(projectId, session.id);
-	state.setStyleSourceMode('room-photo');
-	state.setObjectReplacementSourceMode('room-photo');
-	state.setTextureReplacementSourceMode('room-photo');
-	state.setTextureMaskImage(undefined);
-	state.setActiveObjectReplacementJobId(undefined);
-	state.setActiveTextureReplacementJobId(undefined);
-	state.setStatus('idle');
 	mediaAccess.normalize(generation.source);
 	mediaAccess.normalize(generation.image);
-	state.setImage({ mediaKey: generation.source.key });
+	state.startFromImage({ mediaKey: generation.source.key });
 	state.setCurrentRender({
 		id: generation.id,
 		outputKey: generation.image.key,
@@ -255,6 +243,14 @@ class WorkspaceTabsState {
 		}
 	}
 
+	// The state currently holding `sessionId`'s work: the live `request` when
+	// it's the active session, its frozen copy when it's open in a background
+	// tab, undefined when it isn't open at all (so there's nothing of it to
+	// lose).
+	sessionState(sessionId: string): RequestState | undefined {
+		return sessionId === this.#liveKey ? request : this.#frozen.get(sessionId);
+	}
+
 	activate(tabId: string): void {
 		if (tabId === this.activeTabId) return;
 		const tab = this.tabs.find((candidate) => candidate.id === tabId);
@@ -382,7 +378,7 @@ class WorkspaceTabsState {
 
 		// No local tab left to reflect the rename in (closed while the request
 		// was in flight) — the rename still succeeded server-side, so this
-		// no-ops rather than throwing, same as openProject/retargetSession do
+		// no-ops rather than throwing, same as openProject does
 		// for analogous races elsewhere in this file.
 		const index = this.tabs.findIndex((tab) => tab.id === projectId);
 		if (index === -1) return;
@@ -411,39 +407,6 @@ class WorkspaceTabsState {
 		});
 		this.tabs = this.tabs.with(tabIndex, { ...tab, sessionTabs });
 		this.#persist();
-	}
-
-	// A style-transfer fork (StyleTransferPanel.svelte) replaces the live
-	// session's id mid-flow via request.setProjectSession — called after that,
-	// to keep the open session tab (and any frozen state filed under the old
-	// id, in the unlikely case the fork wasn't live) pointing at the new one.
-	// The session tab keeps its existing title — a fork isn't a rename.
-	retargetSession(oldSessionId: string, newSessionId: string): void {
-		const tabIndex = this.tabs.findIndex((tab) =>
-			tab.sessionTabs.some((session) => session.id === oldSessionId)
-		);
-		if (tabIndex === -1) return;
-		const tab = this.tabs[tabIndex];
-		const sessionIndex = tab.sessionTabs.findIndex((session) => session.id === oldSessionId);
-
-		const sessionTabs = tab.sessionTabs.with(sessionIndex, {
-			id: newSessionId,
-			title: tab.sessionTabs[sessionIndex].title
-		});
-		const activeSessionTabId =
-			tab.activeSessionTabId === oldSessionId ? newSessionId : tab.activeSessionTabId;
-		this.tabs = this.tabs.with(tabIndex, { ...tab, sessionTabs, activeSessionTabId });
-		this.#persist();
-
-		if (this.#liveKey === oldSessionId) {
-			this.#liveKey = newSessionId;
-			return;
-		}
-		const frozen = this.#frozen.get(oldSessionId);
-		if (frozen) {
-			this.#frozen.delete(oldSessionId);
-			this.#frozen.set(newSessionId, frozen);
-		}
 	}
 
 	// Closes one session tab. A project tab with no sessions left doesn't fit

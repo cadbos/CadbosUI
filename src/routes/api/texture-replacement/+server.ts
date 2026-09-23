@@ -167,6 +167,11 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			} catch (error) {
 				console.error('recordBalance failed after masked texture replacement:', error);
 			}
+			// The stored generation's id, so the client refers to this result by
+			// the row that actually exists. Only when recording itself failed is
+			// there no row — a fresh id then just keeps the response's required
+			// shape, and nothing server-side will ever resolve it.
+			let generationId: string = crypto.randomUUID();
 			try {
 				const outputMedia = await getOrCreateMediaByKey(
 					db,
@@ -186,6 +191,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 					archaiReuploadSec: result.reuploadSec,
 					formSnapshot: maskedRequest.formSnapshot
 				});
+				generationId = credit.id;
 				result = { ...result, balance: credit.balance };
 			} catch (error) {
 				console.error('recordGeneration failed after masked texture replacement:', error);
@@ -197,7 +203,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			}
 
 			return json({
-				id: crypto.randomUUID(),
+				id: generationId,
 				status: 'completed',
 				output: await mediaAccess(
 					platform,

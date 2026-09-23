@@ -26,10 +26,6 @@ export const SCENE_TYPES = ['interior', 'exterior'] as const;
 
 export type SceneType = (typeof SCENE_TYPES)[number];
 
-export const IMAGE_SOURCE_MODES = ['room-photo', 'current-result'] as const;
-
-export type ImageSourceMode = (typeof IMAGE_SOURCE_MODES)[number];
-
 export interface ManagedImageInput {
 	mediaKey: string;
 	mime?: string;
@@ -94,14 +90,11 @@ export interface RequestFormSnapshot {
 	styleTransferPrompt: string;
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
-	styleSourceMode: ImageSourceMode;
 	styleReferenceImage?: ImageInput;
 	objectReplacementObject: string;
-	objectReplacementSourceMode: ImageSourceMode;
 	objectReplacementScale: number;
 	objectReferenceImage?: ImageInput;
 	textureReplacementSurface: string;
-	textureReplacementSourceMode: ImageSourceMode;
 	textureReplacementMasked: boolean;
 	textureReferenceImage?: ImageInput;
 	textureMaskImage?: ImageInput;
@@ -366,8 +359,11 @@ export type TextureReplacementJobResponse =
 // Normalized response for image-generation endpoints. Provider outputs are
 // mirrored to managed storage before temporary access is issued. `balance` is the caller's own
 // remaining approved-account balance after this call — never archAI's raw
-// (shared) account balance, which the client must never see.
+// (shared) account balance, which the client must never see. `id` is the
+// stored generation's id — absent only when the (already paid) result could
+// not be recorded, in which case no generation row exists to refer to.
 export interface RenderResponse {
+	id?: string;
 	output: MediaAccess;
 	cost: number;
 	balance: number;
@@ -413,7 +409,17 @@ export interface GeneratedImagesResponse {
 // to (plus `image` and `source` themselves), for the client to register with
 // its media-access cache before applying the snapshot — restoring settings
 // whose reference image can no longer be resolved degrades to
-// `formSnapshot: null` rather than failing.
+// `formSnapshot: null` rather than failing. `session` is the project session
+// the generation belongs to, so a restore continues that session instead of
+// whichever one happens to be open — null once that session or its project
+// has been archived.
+export interface GenerationSessionRef {
+	projectId: string;
+	projectTitle: string;
+	sessionId: string;
+	sessionTitle: string;
+}
+
 export interface GeneratedImageDetailResponse {
 	id: string;
 	prompt: string;
@@ -422,6 +428,7 @@ export interface GeneratedImageDetailResponse {
 	image: MediaAccess;
 	source: MediaAccess;
 	formSnapshot: RequestFormSnapshot | null;
+	session: GenerationSessionRef | null;
 	media: MediaAccess[];
 }
 
@@ -455,8 +462,8 @@ export interface ShareGenerationDetailResponse {
 
 // GET /api/resources — distinct source photos the user has actually
 // uploaded (one card per source media row). Rows whose source
-// was a previous generation's own result rather than a fresh upload (edit,
-// upscale, or any other call made with source mode 'current-result') are
+// was a previous generation's own result rather than a fresh upload (any
+// generation made on top of an earlier result) are
 // excluded, not shown as if they were uploads; see listDistinctSourceImages. Content-hash dedup still
 // applies at *upload* time (findGenerationSourceByHash) to avoid storing
 // duplicate objects. Read-only gallery: no delete in this iteration.
@@ -602,8 +609,8 @@ export interface MeResponse {
 }
 
 // Module 11 — Projects: a project groups a user's source photos/rooms; a
-// session is one generation thread within it (forked by style-transfer,
-// continued in place by every other generation kind). No userId/pubkey field
+// session is one generation thread within it, continued in place by every
+// generation kind. No userId/pubkey field
 // is ever included — ownership is enforced server-side, never shown.
 
 export interface ProjectRecord {
@@ -687,22 +694,6 @@ export interface RenameSessionRequest {
 export interface RenameSessionResponse {
 	id: string;
 	title: string;
-	createdAt: number;
-	updatedAt: number;
-}
-
-// POST /api/projects/[id]/sessions/[sessionId]/fork — the style-transfer fork
-// point: branches a new session off an existing one at a specific generation.
-export interface ForkSessionRequest {
-	forkedFromGenerationId: string;
-	title?: string;
-}
-
-export interface ForkSessionResponse {
-	id: string;
-	title: string;
-	parentSessionId: string;
-	forkedFromGenerationId: string;
 	createdAt: number;
 	updatedAt: number;
 }
