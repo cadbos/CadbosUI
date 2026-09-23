@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { ArrowUpRight } from '@lucide/svelte';
 	import { onMount, type Snippet } from 'svelte';
+	import { scrollY } from 'svelte/reactivity/window';
 	import '../app.css';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -27,6 +28,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { currency } from '$lib/state/currency.svelte';
 	import { status } from '$lib/state/status.svelte';
 	import { theme } from '$lib/state/theme.svelte';
+	import { setToolsPanelTopBoundary } from '$lib/state/tools-panel.svelte';
 	import { isWorkspaceRoute } from '$lib/state/url-state';
 	import { restorePersistedTabs } from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError } from '$lib/utils';
@@ -45,6 +47,18 @@ before the Change Date. See LICENSE for complete terms.
 	const showHealthWarning = $derived(
 		page.route.id !== '/status' && status.snapshot?.status === 'unhealthy'
 	);
+
+	// The header's viewport-relative bottom edge, published to the floating
+	// tools panel as its top boundary. The header is sticky at `top: 0` and the
+	// health warning is the only thing rendered above it, so its bottom is its
+	// own height plus whatever part of the warning hasn't scrolled away yet.
+	let appHeaderHeight = $state(0);
+	let healthWarningHeight = $state(0);
+	const appHeaderBottom = $derived(
+		appHeaderHeight +
+			Math.max(0, (showHealthWarning ? healthWarningHeight : 0) - (scrollY.current ?? 0))
+	);
+	setToolsPanelTopBoundary(() => appHeaderBottom);
 
 	onMount(() => {
 		auth.loadSession();
@@ -72,7 +86,7 @@ before the Change Date. See LICENSE for complete terms.
 </svelte:head>
 
 {#if showHealthWarning}
-	<div class="health-warning" role="alert">
+	<div class="health-warning" role="alert" bind:offsetHeight={healthWarningHeight}>
 		<p>
 			{t('health.warning')}
 			<a href={resolve('/status', {})} target="_blank" rel="noopener noreferrer">
@@ -83,7 +97,7 @@ before the Change Date. See LICENSE for complete terms.
 	</div>
 {/if}
 
-<header class="app-header">
+<header class="app-header" bind:offsetHeight={appHeaderHeight}>
 	<a class="brand" href={resolve('/', {})}>
 		<img class="brand-mark" src={favicon} alt="" />
 		<div class="brand-copy">

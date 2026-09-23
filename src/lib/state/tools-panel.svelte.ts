@@ -12,6 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { createContext } from 'svelte';
 import { browser } from '$app/environment';
 import { logBoundaryError } from '$lib/utils';
 
@@ -37,11 +38,17 @@ interface StoredToolsPanel {
 	width: number | null;
 }
 
+// The sticky app header (+layout.svelte) sits above the floating panel's
+// z-index, so a panel dragged under it would be unreachable. The layout
+// provides the header's current viewport-relative bottom edge through this
+// context; the panel treats it as its top boundary.
+export const [getToolsPanelTopBoundary, setToolsPanelTopBoundary] = createContext<() => number>();
+
 // Keeps the panel's top-left corner fully inside the viewport (minus a fixed
-// margin) no matter what drag delta or window resize produced the candidate
-// position. Pure so drag handling and the resize listener can both reuse it
-// without re-deriving the same bounds math, and so it's unit-testable without
-// a DOM.
+// margin) and below topBoundary (the app header's bottom edge) no matter what
+// drag delta or window resize produced the candidate position. Pure so drag
+// handling and the resize listener can both reuse it without re-deriving the
+// same bounds math, and so it's unit-testable without a DOM.
 export function clampToolsPanelPosition(
 	x: number,
 	y: number,
@@ -49,13 +56,15 @@ export function clampToolsPanelPosition(
 	panelHeight: number,
 	viewportWidth: number,
 	viewportHeight: number,
+	topBoundary: number,
 	margin: number = VIEWPORT_MARGIN
 ): ToolsPanelPosition {
+	const minY = Math.max(0, topBoundary) + margin;
 	const maxX = Math.max(margin, viewportWidth - panelWidth - margin);
-	const maxY = Math.max(margin, viewportHeight - panelHeight - margin);
+	const maxY = Math.max(minY, viewportHeight - panelHeight - margin);
 	return {
 		x: Math.min(Math.max(x, margin), maxX),
-		y: Math.min(Math.max(y, margin), maxY)
+		y: Math.min(Math.max(y, minY), maxY)
 	};
 }
 
@@ -107,7 +116,10 @@ function readStoredState(): StoredToolsPanel | null {
 
 class ToolsPanelState {
 	open = $state(true);
-	// null = not yet dragged, panel sits at its CSS-anchored default corner.
+	// Where the user put the panel; null = not yet dragged, panel sits at its
+	// CSS-anchored default corner. FloatingToolsPanel derives the drawn
+	// position from it by clamping to the current viewport and app header —
+	// that clamp is never written back here.
 	position = $state.raw<ToolsPanelPosition | null>(null);
 	// null = the CSS default (TOOLS_PANEL_WIDTH / --tools-panel-width), not yet
 	// resized by the user.
@@ -134,11 +146,6 @@ class ToolsPanelState {
 
 	setOpen(open: boolean): void {
 		this.open = open;
-		this.#persist();
-	}
-
-	setPosition(x: number, y: number): void {
-		this.position = { x, y };
 		this.#persist();
 	}
 
