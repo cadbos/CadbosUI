@@ -284,18 +284,6 @@ before the Change Date. See LICENSE for complete terms.
 		deleteCandidate = { id, order };
 	}
 
-	// The form fields any "switch to this scene's image" action needs reset
-	// regardless of whether it's also restoring the rest of the settings
-	// (image, session/history identity, in-flight async jobs).
-	function resetForNewScene(mediaKey: string): void {
-		request.setImage({ mediaKey });
-		request.setCurrentRender(undefined);
-		request.setActiveObjectReplacementJobId(undefined);
-		request.setActiveTextureReplacementJobId(undefined);
-		request.setActiveLightSettingsJobId(undefined);
-		request.setStatus('idle');
-	}
-
 	function navigateToDestination(
 		kind: GenerationKind,
 		boundary: string,
@@ -317,11 +305,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function useImage(mediaKey: string, kind: GenerationKind): void {
-		resetForNewScene(mediaKey);
-		request.setStyleSourceMode('room-photo');
-		request.setObjectReplacementSourceMode('room-photo');
-		request.setTextureReplacementSourceMode('room-photo');
-		request.setTextureMaskImage(undefined);
+		request.startFromImage({ mediaKey });
 		navigateToDestination(kind, 'scenesDrawer.imageNavigation');
 	}
 
@@ -371,7 +355,7 @@ before the Change Date. See LICENSE for complete terms.
 			// The generation's own result, not its source — restoring a scene
 			// should bring back what that scene actually looked like, the same
 			// image clicking its "Результат" thumbnail (useImage) would set.
-			resetForNewScene(detail.image.key);
+			request.startFromImage({ mediaKey: detail.image.key });
 			applyGeneratedImageFormSnapshot(detail);
 			navigateToDestination(kind, 'scenesDrawer.restoreNavigation', detail.formSnapshot);
 		} catch (error) {

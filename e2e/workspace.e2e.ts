@@ -174,7 +174,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	await expect(sourceDownloadLink).toHaveAttribute('title', 'Скачать исходник сцены 1');
 
 	await page.getByRole('button', { name: 'Обработать исходник сцены 1' }).click();
-	await expect(page).toHaveURL(/\/style-transfer\/interior\?.*source=room-photo/);
+	await expect(page).toHaveURL(/\/style-transfer\/interior\?/);
+	await expect(page).not.toHaveURL(/source=/);
 	await expect(page.getByRole('img', { name: 'Фото комнаты' })).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/newest-source.jpg'

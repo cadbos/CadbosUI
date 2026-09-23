@@ -26,10 +26,6 @@ export const SCENE_TYPES = ['interior', 'exterior'] as const;
 
 export type SceneType = (typeof SCENE_TYPES)[number];
 
-export const IMAGE_SOURCE_MODES = ['room-photo', 'current-result'] as const;
-
-export type ImageSourceMode = (typeof IMAGE_SOURCE_MODES)[number];
-
 export interface ManagedImageInput {
 	mediaKey: string;
 	mime?: string;
@@ -94,14 +90,11 @@ export interface RequestFormSnapshot {
 	styleTransferPrompt: string;
 	styleTransferStrength: number;
 	styleNegativePrompt: string;
-	styleSourceMode: ImageSourceMode;
 	styleReferenceImage?: ImageInput;
 	objectReplacementObject: string;
-	objectReplacementSourceMode: ImageSourceMode;
 	objectReplacementScale: number;
 	objectReferenceImage?: ImageInput;
 	textureReplacementSurface: string;
-	textureReplacementSourceMode: ImageSourceMode;
 	textureReplacementMasked: boolean;
 	textureReferenceImage?: ImageInput;
 	textureMaskImage?: ImageInput;
@@ -466,8 +459,8 @@ export interface ShareGenerationDetailResponse {
 
 // GET /api/resources — distinct source photos the user has actually
 // uploaded (one card per source media row). Rows whose source
-// was a previous generation's own result rather than a fresh upload (edit,
-// upscale, or any other call made with source mode 'current-result') are
+// was a previous generation's own result rather than a fresh upload (any
+// generation made on top of an earlier result) are
 // excluded, not shown as if they were uploads; see listDistinctSourceImages. Content-hash dedup still
 // applies at *upload* time (findGenerationSourceByHash) to avoid storing
 // duplicate objects. Read-only gallery: no delete in this iteration.

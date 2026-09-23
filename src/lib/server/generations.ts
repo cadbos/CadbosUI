@@ -458,7 +458,8 @@ interface ResourceImageRow {
 }
 
 // Gallery of source photos the user uploaded: non-empty checksums identify
-// uploads, while excluding generated outputs removes current-result sources.
+// uploads, while excluding generated outputs removes sources that were a
+// previous generation's own result.
 export async function listDistinctSourceImages(
 	db: D1Database,
 	userId: string,

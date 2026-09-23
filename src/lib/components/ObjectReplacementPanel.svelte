@@ -324,10 +324,7 @@ before the Change Date. See LICENSE for complete terms.
 		terminalError = null;
 		pollFailure = null;
 		try {
-			const sourceRender =
-				request.objectReplacementSourceMode === 'current-result'
-					? request.currentRender
-					: undefined;
+			const sourceRender = request.currentRender;
 			const body = await request.toObjectReplacementRequest();
 			if (!body) return;
 			const instruction = body.replacementObject;
@@ -385,7 +382,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	// Clears job tracking only — settings (reference image, description,
-	// source mode, scale) and the current result stay exactly as they are,
+	// scale) and the current result stay exactly as they are,
 	// so the user can tweak and submit another replacement instead of
 	// starting over from a blank form.
 	async function clearJob(): Promise<void> {

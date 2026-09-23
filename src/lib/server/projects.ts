@@ -332,12 +332,9 @@ function toPublicFormSnapshot(
 		styleTransferPrompt: snapshot.styleTransferPrompt,
 		styleTransferStrength: snapshot.styleTransferStrength,
 		styleNegativePrompt: snapshot.styleNegativePrompt,
-		styleSourceMode: snapshot.styleSourceMode,
 		objectReplacementObject: snapshot.objectReplacementObject,
-		objectReplacementSourceMode: snapshot.objectReplacementSourceMode,
 		objectReplacementScale: snapshot.objectReplacementScale,
 		textureReplacementSurface: snapshot.textureReplacementSurface,
-		textureReplacementSourceMode: snapshot.textureReplacementSourceMode,
 		textureReplacementMasked: snapshot.textureReplacementMasked,
 		lightSettingsPresetIds: snapshot.lightSettingsPresetIds,
 		lightSettingsInstruction: snapshot.lightSettingsInstruction

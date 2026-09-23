@@ -28,20 +28,16 @@ export function initializeSessionState(
 	projectId: string,
 	session: ProjectSessionRecord
 ): void {
-	state.setCurrentRender(undefined);
 	state.setProjectSession(projectId, session.id);
-	state.setStyleSourceMode('room-photo');
-	state.setObjectReplacementSourceMode('room-photo');
-	state.setTextureReplacementSourceMode('room-photo');
-	state.setTextureMaskImage(undefined);
-	state.setActiveObjectReplacementJobId(undefined);
-	state.setActiveTextureReplacementJobId(undefined);
-	state.setStatus('idle');
 	const latest = session.generations[0];
 	if (latest) {
 		mediaAccess.normalize(latest.image);
-		state.setImage({ mediaKey: latest.image.key });
+		state.startFromImage({ mediaKey: latest.image.key });
+		return;
 	}
+	// Nothing generated yet — keep whatever photo the session tab already
+	// holds, but drop any results and jobs a previous visit left behind.
+	state.clearCanvasWork();
 }
 
 // Seeds the workspace with one specific past generation's before/after —
@@ -59,18 +55,10 @@ export function initializeGenerationPreview(
 	session: ProjectSessionRecord,
 	generation: SessionGenerationRecord
 ): void {
-	state.setCurrentRender(undefined);
 	state.setProjectSession(projectId, session.id);
-	state.setStyleSourceMode('room-photo');
-	state.setObjectReplacementSourceMode('room-photo');
-	state.setTextureReplacementSourceMode('room-photo');
-	state.setTextureMaskImage(undefined);
-	state.setActiveObjectReplacementJobId(undefined);
-	state.setActiveTextureReplacementJobId(undefined);
-	state.setStatus('idle');
 	mediaAccess.normalize(generation.source);
 	mediaAccess.normalize(generation.image);
-	state.setImage({ mediaKey: generation.source.key });
+	state.startFromImage({ mediaKey: generation.source.key });
 	state.setCurrentRender({
 		id: generation.id,
 		outputKey: generation.image.key,

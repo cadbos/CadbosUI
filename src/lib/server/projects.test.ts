@@ -291,12 +291,9 @@ describe('projects repository', () => {
 					styleTransferPrompt: TEST_FORM_SNAPSHOT.styleTransferPrompt,
 					styleTransferStrength: TEST_FORM_SNAPSHOT.styleTransferStrength,
 					styleNegativePrompt: TEST_FORM_SNAPSHOT.styleNegativePrompt,
-					styleSourceMode: TEST_FORM_SNAPSHOT.styleSourceMode,
 					objectReplacementObject: TEST_FORM_SNAPSHOT.objectReplacementObject,
-					objectReplacementSourceMode: TEST_FORM_SNAPSHOT.objectReplacementSourceMode,
 					objectReplacementScale: TEST_FORM_SNAPSHOT.objectReplacementScale,
 					textureReplacementSurface: TEST_FORM_SNAPSHOT.textureReplacementSurface,
-					textureReplacementSourceMode: TEST_FORM_SNAPSHOT.textureReplacementSourceMode,
 					textureReplacementMasked: TEST_FORM_SNAPSHOT.textureReplacementMasked,
 					lightSettingsPresetIds: TEST_FORM_SNAPSHOT.lightSettingsPresetIds,
 					lightSettingsInstruction: TEST_FORM_SNAPSHOT.lightSettingsInstruction

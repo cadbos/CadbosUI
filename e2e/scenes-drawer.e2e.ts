@@ -15,7 +15,8 @@
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
-import { media } from './helpers/media';
+import { media, mediaKey } from './helpers/media';
+import { mockProjectSessionRoutes } from './helpers/project-session-routes';
 
 const GENERATION_ID = '00000000-0000-4000-8000-000000000200';
 
@@ -30,12 +31,9 @@ const FORM_SNAPSHOT = {
 	styleTransferPrompt: 'archived style note',
 	styleTransferStrength: 0.42,
 	styleNegativePrompt: '',
-	styleSourceMode: 'room-photo',
 	objectReplacementObject: '',
-	objectReplacementSourceMode: 'current-result',
 	objectReplacementScale: 1,
 	textureReplacementSurface: '',
-	textureReplacementSourceMode: 'current-result',
 	textureReplacementMasked: false,
 	lightSettingsPresetIds: [],
 	lightSettingsInstruction: ''
@@ -321,4 +319,49 @@ test('continues the restored generation’s own session instead of starting a ne
 	]);
 	expect(renderBody).toMatchObject({ sessionId });
 	expect(projectCreated).toBe(false);
+});
+
+test('after opening a scene’s source image, each next generation continues from the latest result', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockSingleStyleTransferScene(page);
+	await mockProjectSessionRoutes(page);
+	const submittedImageKeys: string[] = [];
+	await page.route('**/api/style-transfer', async (route) => {
+		submittedImageKeys.push((route.request().postDataJSON() as { imageKey: string }).imageKey);
+		const n = submittedImageKeys.length;
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				output: media(10 + n, `https://cdn.example.test/styled-${n}.webp`),
+				cost: 4,
+				balance: 96 - n
+			})
+		});
+	});
+
+	await page.goto('/create/interior?view=chat&format=webp');
+	await page.getByRole('button', { name: 'Сцены' }).click();
+	await page.getByRole('img', { name: /Исходное изображение сцены/ }).hover();
+	await page.getByRole('button', { name: 'Обработать исходник сцены 1' }).click();
+	await expect(page).toHaveURL(/\/style-transfer/);
+
+	const panel = page.locator('#mode-panel-styleTransfer');
+	await panel.getByRole('radio', { name: 'Спа-ванная из бетона' }).click();
+	const apply = panel.getByRole('button', { name: 'Перенести стиль' });
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		await Promise.all([
+			page.waitForResponse(
+				(response) => response.url().endsWith('/api/style-transfer') && response.ok()
+			),
+			apply.click()
+		]);
+		await expect(apply).toBeEnabled();
+	}
+
+	// The first run works on the opened source image; the second must build
+	// on the first run's result, not snap back to that source.
+	expect(submittedImageKeys).toEqual([mediaKey(1), mediaKey(11)]);
 });

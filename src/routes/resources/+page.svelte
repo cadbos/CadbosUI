@@ -67,16 +67,8 @@ before the Change Date. See LICENSE for complete terms.
 		// singleton while it's still standing in for that other tab, silently
 		// detaching *its* session and replacing its content with this image.
 		workspaceTabs.activate(SCRATCH_TAB_ID);
-		request.setImage({ mediaKey });
-		request.setCurrentRender(undefined);
+		request.startFromImage({ mediaKey });
 		request.clearProjectSession();
-		request.setStyleSourceMode('room-photo');
-		request.setObjectReplacementSourceMode('room-photo');
-		request.setTextureReplacementSourceMode('room-photo');
-		request.setTextureMaskImage(undefined);
-		request.setActiveObjectReplacementJobId(undefined);
-		request.setActiveTextureReplacementJobId(undefined);
-		request.setStatus('idle');
 		goto(buildShareUrl('render', request, { view: 'chat' }), { replaceState: false }).catch(
 			(error: unknown) => logBoundaryError('resourcesPage.imageNavigation', error)
 		);

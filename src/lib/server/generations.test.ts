@@ -655,10 +655,9 @@ describe('listDistinctSourceImages', () => {
 	});
 
 	// An empty checksum means this source isn't something the user uploaded:
-	// #resolveSourceFor never attaches a hash for the
-	// 'current-result' source mode (edit/upscale always use it; the other
-	// tools do whenever "use the current result" is picked over a fresh
-	// photo), so the source media there is a previous generation's own output.
+	// once a result exists, every tool submits it as the working image
+	// (RequestState#resolveWorkingImageKey) and no hash is attached, so the
+	// source media there is a previous generation's own output.
 	it('excludes rows whose source was a previous result, not an upload', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		// A real upload, mixed in so the exclusion isn't just "everything is empty".

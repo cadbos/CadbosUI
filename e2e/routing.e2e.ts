@@ -93,7 +93,7 @@ test('direct navigation to /style-transfer redirects to the interior scene with 
 }) => {
 	await page.goto('/style-transfer');
 	await expect(page).toHaveURL(
-		/\/style-transfer\/interior\?reference=photorealistic&format=webp&source=current-result&strength=0\.7$/
+		/\/style-transfer\/interior\?reference=photorealistic&format=webp&strength=0\.7$/
 	);
 	await expect(page.getByRole('tab', { name: 'Миграция стиля' })).toHaveAttribute(
 		'aria-selected',
@@ -105,7 +105,7 @@ test('direct navigation opens object replacement inside edit with explicit defau
 	page
 }) => {
 	await page.goto('/edit?tool=object-replacement');
-	await expect(page).toHaveURL(/\/edit\?tool=object-replacement&source=current-result$/);
+	await expect(page).toHaveURL(/\/edit\?tool=object-replacement$/);
 	await expect(page.getByRole('tab', { name: 'Редактирование' })).toHaveAttribute(
 		'aria-selected',
 		'true'
@@ -129,7 +129,7 @@ test('direct navigation opens texture replacement inside edit with explicit defa
 	page
 }) => {
 	await page.goto('/edit?tool=texture-replacement');
-	await expect(page).toHaveURL(/\/edit\?tool=texture-replacement&source=current-result$/);
+	await expect(page).toHaveURL(/\/edit\?tool=texture-replacement$/);
 	await expect(page.getByRole('tab', { name: 'Редактирование' })).toHaveAttribute(
 		'aria-selected',
 		'true'
@@ -177,18 +177,18 @@ test('switching mode tabs opens each mode default, carrying scene but not sub-ta
 	// Style transfer's scene toggle is bound to the same request.sceneType, so
 	// exterior carries over from before the excursion into edit.
 	await expect(page).toHaveURL(
-		/\/style-transfer\/exterior\?reference=photorealistic&format=webp&source=current-result&strength=0\.7$/
+		/\/style-transfer\/exterior\?reference=photorealistic&format=webp&strength=0\.7$/
 	);
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page.getByRole('tab', { name: /Замена объекта/ }).click();
-	await expect(page).toHaveURL(/\/edit\?tool=object-replacement&source=current-result$/);
+	await expect(page).toHaveURL(/\/edit\?tool=object-replacement$/);
 
 	await page.getByRole('tab', { name: 'Создание' }).click();
 	await expect(page).toHaveURL(/\/create\/exterior\?view=chat&format=webp$/);
 });
 
-test('object replacement source and scene-object text round-trip without image URLs', async ({
+test('object replacement scene-object text round-trips without image URLs or a legacy source mode', async ({
 	page
 }) => {
 	await page.goto(
@@ -196,16 +196,16 @@ test('object replacement source and scene-object text round-trip without image U
 	);
 
 	await expect(page.getByLabel(/Точно опишите существующий объект/)).toHaveValue('gray sofa');
-	await expect(page).toHaveURL(/source=room-photo/);
+	await expect(page).not.toHaveURL(/source=/);
 	await expect(page).toHaveURL(/object=gray(?:%20|\+)sofa/);
 	await expect(page).not.toHaveURL(/image=/);
 	await expect(page).not.toHaveURL(/referenceImage=/);
 
 	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
-	await expect(page).toHaveURL(/source=current-result/);
+	await expect(page).not.toHaveURL(/source=/);
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page.getByRole('tab', { name: /Замена объекта/ }).click();
-	await expect(page).toHaveURL(/source=room-photo/);
+	await expect(page).not.toHaveURL(/source=/);
 
 	const sharedUrl = page.url();
 	await page.goto(sharedUrl);
@@ -256,13 +256,13 @@ test('switching edit tool tabs updates only the tool query param', async ({ page
 	await expect(page).toHaveURL(/\/edit\?tool=light-settings$/);
 
 	await page.getByRole('tab', { name: /Замена объекта.*Альфа/ }).click();
-	await expect(page).toHaveURL(/\/edit\?tool=object-replacement&source=current-result$/);
+	await expect(page).toHaveURL(/\/edit\?tool=object-replacement$/);
 
 	await page.getByRole('tab', { name: /Замена текстуры.*Альфа/ }).click();
-	await expect(page).toHaveURL(/\/edit\?tool=texture-replacement&source=current-result$/);
+	await expect(page).toHaveURL(/\/edit\?tool=texture-replacement$/);
 });
 
-test('texture replacement source and surface text round-trip without image URLs', async ({
+test('texture replacement surface text round-trips without image URLs or a legacy source mode', async ({
 	page
 }) => {
 	await page.goto(
@@ -273,16 +273,16 @@ test('texture replacement source and surface text round-trip without image URLs'
 	// replacement is the only mode), so a legacy `surface=` link no longer
 	// populates a visible field — it just has to round-trip harmlessly
 	// through the URL below without ever restoring the image URLs.
-	await expect(page).toHaveURL(/source=room-photo/);
+	await expect(page).not.toHaveURL(/source=/);
 	await expect(page).toHaveURL(/surface=sofa(?:%20|\+)upholstery/);
 	await expect(page).not.toHaveURL(/image=/);
 	await expect(page).not.toHaveURL(/referenceImage=/);
 
 	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
-	await expect(page).toHaveURL(/source=current-result/);
+	await expect(page).not.toHaveURL(/source=/);
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page.getByRole('tab', { name: /Замена текстуры/ }).click();
-	await expect(page).toHaveURL(/source=room-photo/);
+	await expect(page).not.toHaveURL(/source=/);
 
 	const sharedUrl = page.url();
 	await page.goto(sharedUrl);
@@ -326,7 +326,7 @@ test('edit and style transfer prompts round-trip through their own query params'
 	await expect.poll(() => new URL(page.url()).searchParams.get('prompt')).toBe('replace the chair');
 
 	await page.goto(
-		'/style-transfer/interior?reference=custom&format=webp&source=current-result&strength=0.7&prompt=keep%20warm%20materials'
+		'/style-transfer/interior?reference=custom&format=webp&strength=0.7&prompt=keep%20warm%20materials'
 	);
 	await expect(page.getByLabel('Уточнение стиля')).toHaveValue('keep warm materials');
 
@@ -411,7 +411,7 @@ test('a crafted image/styleImage query param is ignored, not accepted as an unva
 	await expect(page.locator('.upload .preview')).toHaveCount(0);
 
 	await page.goto(
-		'/style-transfer/interior?reference=custom&format=webp&source=current-result&strength=0.7&styleImage=https://evil.example.com/x.jpg'
+		'/style-transfer/interior?reference=custom&format=webp&strength=0.7&styleImage=https://evil.example.com/x.jpg'
 	);
 	const styleTransferPanel = page.locator('#mode-panel-styleTransfer');
 	await expect(styleTransferPanel.locator('.upload .preview')).toHaveCount(0);
