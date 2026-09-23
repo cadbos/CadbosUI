@@ -1,7 +1,7 @@
 {
 	"1": {
 		"inputs": {
-			"image": "s1_dark_chandelier_001.jpg"
+			"image": "s4_twin_sconces_001.jpg"
 		},
 		"class_type": "LoadImage",
 		"_meta": {
@@ -94,7 +94,7 @@
 	},
 	"19": {
 		"inputs": {
-			"value": "зажги люстру"
+			"value": "выключи бра над кроватью"
 		},
 		"class_type": "PrimitiveString",
 		"_meta": {
@@ -224,6 +224,15 @@
 		"class_type": "ConditioningZeroOut",
 		"_meta": {
 			"title": "ConditioningZeroOut"
+		}
+	},
+	"51": {
+		"inputs": {
+			"value": 4242
+		},
+		"class_type": "PrimitiveInt",
+		"_meta": {
+			"title": "Int (add noise to image seed)"
 		}
 	},
 	"52": {
@@ -383,7 +392,7 @@
 	},
 	"83": {
 		"inputs": {
-			"text_0": "mode=lit on=1 off=0 peak=0.000 dim=0.00 start_at_step=5 0:on_addressing_only",
+			"text_0": "mode=off on=0 off=1 peak=0.000 dim=0.00 start_at_step=0 0:off_addressing_only",
 			"text": ["110", 4]
 		},
 		"class_type": "ShowText|pysssss",
@@ -412,7 +421,7 @@
 	},
 	"86": {
 		"inputs": {
-			"text_0": "[{\"state\": \"on\", \"kelvin\": 2700, \"intensity\": 0.85, \"cone\": 360, \"dir_deg\": 0, \"reach\": 0.35}]",
+			"text_0": "[{\"state\": \"off\", \"kelvin\": 2700, \"intensity\": 0.85, \"cone\": 360, \"dir_deg\": 0, \"reach\": 0.35}]",
 			"text": ["84", 0]
 		},
 		"class_type": "ShowText|pysssss",
@@ -485,7 +494,7 @@
 	},
 	"95": {
 		"inputs": {
-			"text_0": "detector:single_of_1",
+			"text_0": "detector:single_of_2",
 			"text": ["94", 1]
 		},
 		"class_type": "ShowText|pysssss",
@@ -517,7 +526,7 @@
 	},
 	"100": {
 		"inputs": {
-			"text_0": "lit_on",
+			"text_0": "off_off",
 			"text": ["102", 1]
 		},
 		"class_type": "ShowText|pysssss",
@@ -567,8 +576,8 @@
 			"start_at_step_off": 0,
 			"start_at_step_plain": 0,
 			"procedural_on": false,
-			"procedural_off": 0.75,
-			"off_cone": 1.7,
+			"procedural_off": false,
+			"off_cone": 0.75,
 			"off_reach_mul": 1.7,
 			"image": ["55", 0],
 			"spec": ["84", 0],
@@ -626,7 +635,7 @@
 			"start_at_step_plain": 0,
 			"procedural_on": true,
 			"procedural_off": true,
-			"off_cone": 1.7,
+			"off_cone": 0.75,
 			"off_reach_mul": 1.7,
 			"image": ["113", 0],
 			"spec": ["84", 0],
@@ -673,7 +682,7 @@
 	},
 	"118": {
 		"inputs": {
-			"text_0": "0:x=0.54,y=0.22,a=0.0162,ytop=0.00",
+			"text_0": "0:x=0.26,y=0.51,a=0.0105,ytop=0.46",
 			"text": ["117", 1]
 		},
 		"class_type": "ShowText|pysssss",
@@ -712,16 +721,6 @@
 			"title": "VAE Decode"
 		}
 	},
-	"121": {
-		"inputs": {
-			"text_0": "mode=lit on=1 off=0 peak=0.363 dim=0.00 start_at_step=5 0:on_2700K_360deg",
-			"text": ["114", 4]
-		},
-		"class_type": "ShowText|pysssss",
-		"_meta": {
-			"title": "Light Layer Build report"
-		}
-	},
 	"122": {
 		"inputs": {
 			"min_fraction": 0.0008,
@@ -737,6 +736,7 @@
 	"123": {
 		"inputs": {
 			"prefix_root": "lt",
+			"use_verify": true,
 			"parsed": ["69", 3],
 			"intent_status": ["69", 4],
 			"scope": ["69", 2],
@@ -744,7 +744,8 @@
 			"mask_status": ["122", 3],
 			"run_tag": ["80", 0],
 			"action": ["69", 1],
-			"fixture_state": ["122", 5]
+			"fixture_state": ["122", 5],
+			"verified": ["143", 0]
 		},
 		"class_type": "LightGate",
 		"_meta": {
@@ -810,7 +811,7 @@
 	"130": {
 		"inputs": {
 			"action": ["69", 1],
-			"mode": ["102", 1],
+			"mode": ["110", 6],
 			"tpl_lit": ["139", 0],
 			"tpl_off": ["129", 0],
 			"tpl_plain": ["129", 0],
@@ -885,7 +886,7 @@
 	},
 	"136": {
 		"inputs": {
-			"text_0": "merged 1 of 4",
+			"text_0": "merged 2 of 3",
 			"text": ["135", 1]
 		},
 		"class_type": "ShowText|pysssss",
@@ -924,6 +925,68 @@
 		"class_type": "PrimitiveStringMultiline",
 		"_meta": {
 			"title": "tpl_lit"
+		}
+	},
+	"140": {
+		"inputs": {
+			"model": "microsoft/Florence-2-base",
+			"precision": "fp16",
+			"convert_to_safetensors": false
+		},
+		"class_type": "DownloadAndLoadFlorence2Model",
+		"_meta": {
+			"title": "DownloadAndLoadFlorence2Model"
+		}
+	},
+	"141": {
+		"inputs": {
+			"padding": 0.35,
+			"isolate": false,
+			"image": ["55", 0],
+			"masks": ["94", 0]
+		},
+		"class_type": "MaskBBoxCrop",
+		"_meta": {
+			"title": "Mask Bounding Box Crop"
+		}
+	},
+	"142": {
+		"inputs": {
+			"text_input": "",
+			"task": "caption",
+			"fill_mask": false,
+			"keep_model_loaded": false,
+			"max_new_tokens": 64,
+			"num_beams": 3,
+			"do_sample": false,
+			"output_mask_select": "",
+			"seed": 42,
+			"image": ["141", 0],
+			"florence2_model": ["140", 0]
+		},
+		"class_type": "Florence2Run",
+		"_meta": {
+			"title": "Florence2Run"
+		}
+	},
+	"143": {
+		"inputs": {
+			"text": ["142", 2],
+			"object_en": ["69", 0]
+		},
+		"class_type": "CaptionMatch",
+		"_meta": {
+			"title": "Caption Match"
+		}
+	},
+	"144": {
+		"inputs": {
+			"text_0": "verify_no_fixture:a bedroom with a large bed and a large window.",
+			"text": ["143", 1]
+		},
+		"class_type": "ShowText|pysssss",
+		"_meta": {
+			"title": "Caption Match status"
 		}
 	}
 }
