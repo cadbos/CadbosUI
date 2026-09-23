@@ -287,34 +287,6 @@ describe('workspaceTabs.activateSession', () => {
 	});
 });
 
-describe('workspaceTabs.retargetSession', () => {
-	it('renames the live session tab in place, keeping its title', () => {
-		workspaceTabs.openProject({
-			projectId: PROJECT_A,
-			projectTitle: 'Living room',
-			sessionId: SESSION_A1,
-			sessionTitle: 'Main thread',
-			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
-		});
-
-		// Mirrors StyleTransferPanel's own call order: the live RequestState is
-		// retargeted first (its own responsibility), then the tab bookkeeping.
-		request.setProjectSession(PROJECT_A, SESSION_A2);
-		workspaceTabs.retargetSession(SESSION_A1, SESSION_A2);
-
-		const projectATab = workspaceTabs.tabs.find((tab) => tab.id === PROJECT_A);
-		expect(projectATab?.sessionTabs.map((session) => session.id)).toEqual([SESSION_A2]);
-		expect(projectATab?.sessionTabs[0]?.title).toBe('Main thread');
-		expect(projectATab?.activeSessionTabId).toBe(SESSION_A2);
-
-		// The tab bookkeeping must resolve to the new id going forward, even
-		// after switching away and back.
-		workspaceTabs.activate(SCRATCH_TAB_ID);
-		workspaceTabs.activateSession(PROJECT_A, SESSION_A2);
-		expect(request.sessionId).toBe(SESSION_A2);
-	});
-});
-
 describe('workspaceTabs.closeSession', () => {
 	it('closing a background session tab leaves the active session untouched', () => {
 		workspaceTabs.openProject({
@@ -651,7 +623,7 @@ describe('workspaceTabs persistence', () => {
 		expect(workspaceTabs.readPersisted()).toBeNull();
 	});
 
-	it('persists nested session tabs and survives a retarget', () => {
+	it('persists nested session tabs', () => {
 		workspaceTabs.openProject({
 			projectId: PROJECT_A,
 			projectTitle: 'Living room',
@@ -667,20 +639,12 @@ describe('workspaceTabs persistence', () => {
 			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A2)
 		});
 
-		let persisted = workspaceTabs.readPersisted();
+		const persisted = workspaceTabs.readPersisted();
 		expect(persisted?.tabs[0]?.sessionTabs.map((session) => session.id)).toEqual([
 			SESSION_A1,
 			SESSION_A2
 		]);
 		expect(persisted?.tabs[0]?.activeSessionTabId).toBe(SESSION_A2);
-
-		workspaceTabs.retargetSession(SESSION_A2, SESSION_B1);
-		persisted = workspaceTabs.readPersisted();
-		expect(persisted?.tabs[0]?.sessionTabs.map((session) => session.id)).toEqual([
-			SESSION_A1,
-			SESSION_B1
-		]);
-		expect(persisted?.tabs[0]?.activeSessionTabId).toBe(SESSION_B1);
 	});
 
 	it('returns null for missing, malformed, or invalid-shaped storage instead of throwing', () => {

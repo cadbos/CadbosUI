@@ -444,8 +444,6 @@ export const ru = {
 	'styleTransfer.failed': 'Не удалось перенести стиль. Попробуйте ещё раз.',
 	'styleTransfer.insufficientCredit': 'Тестовый баланс исчерпан.',
 	'styleTransfer.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
-	'styleTransfer.forkFailed':
-		'Не удалось начать новую сессию для переноса стиля. Попробуйте ещё раз.',
 	'objectReplacement.alpha': 'Альфа',
 	'objectReplacement.alphaNotice':
 		'Замена объектов находится на раннем этапе. Обработка может занять несколько минут, а результат — отличаться от ожидаемого.',

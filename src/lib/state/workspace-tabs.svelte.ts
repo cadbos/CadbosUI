@@ -382,7 +382,7 @@ class WorkspaceTabsState {
 
 		// No local tab left to reflect the rename in (closed while the request
 		// was in flight) — the rename still succeeded server-side, so this
-		// no-ops rather than throwing, same as openProject/retargetSession do
+		// no-ops rather than throwing, same as openProject does
 		// for analogous races elsewhere in this file.
 		const index = this.tabs.findIndex((tab) => tab.id === projectId);
 		if (index === -1) return;
@@ -411,39 +411,6 @@ class WorkspaceTabsState {
 		});
 		this.tabs = this.tabs.with(tabIndex, { ...tab, sessionTabs });
 		this.#persist();
-	}
-
-	// A style-transfer fork (StyleTransferPanel.svelte) replaces the live
-	// session's id mid-flow via request.setProjectSession — called after that,
-	// to keep the open session tab (and any frozen state filed under the old
-	// id, in the unlikely case the fork wasn't live) pointing at the new one.
-	// The session tab keeps its existing title — a fork isn't a rename.
-	retargetSession(oldSessionId: string, newSessionId: string): void {
-		const tabIndex = this.tabs.findIndex((tab) =>
-			tab.sessionTabs.some((session) => session.id === oldSessionId)
-		);
-		if (tabIndex === -1) return;
-		const tab = this.tabs[tabIndex];
-		const sessionIndex = tab.sessionTabs.findIndex((session) => session.id === oldSessionId);
-
-		const sessionTabs = tab.sessionTabs.with(sessionIndex, {
-			id: newSessionId,
-			title: tab.sessionTabs[sessionIndex].title
-		});
-		const activeSessionTabId =
-			tab.activeSessionTabId === oldSessionId ? newSessionId : tab.activeSessionTabId;
-		this.tabs = this.tabs.with(tabIndex, { ...tab, sessionTabs, activeSessionTabId });
-		this.#persist();
-
-		if (this.#liveKey === oldSessionId) {
-			this.#liveKey = newSessionId;
-			return;
-		}
-		const frozen = this.#frozen.get(oldSessionId);
-		if (frozen) {
-			this.#frozen.delete(oldSessionId);
-			this.#frozen.set(newSessionId, frozen);
-		}
 	}
 
 	// Closes one session tab. A project tab with no sessions left doesn't fit

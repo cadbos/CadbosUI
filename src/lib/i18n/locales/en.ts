@@ -442,8 +442,6 @@ export const en = {
 	'styleTransfer.failed': 'Style transfer failed. Please try again.',
 	'styleTransfer.insufficientCredit': 'Test balance exhausted.',
 	'styleTransfer.generationRestricted': 'Generation is available to a limited set of accounts.',
-	'styleTransfer.forkFailed':
-		"Couldn't start a new session for this style transfer. Please try again.",
 	'objectReplacement.alpha': 'Alpha',
 	'objectReplacement.alphaNotice':
 		'Object replacement is an early feature. Processing can take several minutes and results may vary.',

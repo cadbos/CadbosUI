@@ -422,7 +422,6 @@ export interface Dictionary {
 	'styleTransfer.failed': string;
 	'styleTransfer.insufficientCredit': string;
 	'styleTransfer.generationRestricted': string;
-	'styleTransfer.forkFailed': string;
 	'objectReplacement.alpha': string;
 	'objectReplacement.alphaNotice': string;
 	'objectReplacement.required': string;
