@@ -27,6 +27,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { currency } from '$lib/state/currency.svelte';
 	import { status } from '$lib/state/status.svelte';
 	import { theme } from '$lib/state/theme.svelte';
+	import { setToolsPanelTopBoundary } from '$lib/state/tools-panel.svelte';
 	import { isWorkspaceRoute } from '$lib/state/url-state';
 	import { restorePersistedTabs } from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError } from '$lib/utils';
@@ -45,6 +46,37 @@ before the Change Date. See LICENSE for complete terms.
 	const showHealthWarning = $derived(
 		page.route.id !== '/status' && status.snapshot?.status === 'unhealthy'
 	);
+
+	// The header's viewport-relative bottom edge, published to the floating
+	// tools panel as its top boundary. It changes when the header resizes, when
+	// the page scrolls the (non-sticky) health warning away, and when that
+	// warning mounts/unmounts — the last one moves the header without resizing
+	// it, hence the effect below.
+	let appHeader: HTMLElement | null = null;
+	let appHeaderBottom = $state(0);
+	setToolsPanelTopBoundary(() => appHeaderBottom);
+
+	function measureAppHeader(): void {
+		appHeaderBottom = appHeader?.getBoundingClientRect().bottom ?? 0;
+	}
+
+	function trackAppHeader(node: HTMLElement): () => void {
+		appHeader = node;
+		measureAppHeader();
+		const observer = new ResizeObserver(measureAppHeader);
+		observer.observe(node);
+		window.addEventListener('scroll', measureAppHeader, { passive: true });
+		return () => {
+			observer.disconnect();
+			window.removeEventListener('scroll', measureAppHeader);
+			appHeader = null;
+		};
+	}
+
+	$effect(() => {
+		void showHealthWarning;
+		measureAppHeader();
+	});
 
 	onMount(() => {
 		auth.loadSession();
@@ -83,7 +115,7 @@ before the Change Date. See LICENSE for complete terms.
 	</div>
 {/if}
 
-<header class="app-header">
+<header class="app-header" {@attach trackAppHeader}>
 	<a class="brand" href={resolve('/', {})}>
 		<img class="brand-mark" src={favicon} alt="" />
 		<div class="brand-copy">

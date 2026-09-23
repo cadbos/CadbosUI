@@ -13,13 +13,14 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import { ChevronDown, ChevronUp, Move, SlidersHorizontal } from '@lucide/svelte';
 	import { browser } from '$app/environment';
 	import { t } from '$lib/i18n/index.svelte';
 	import {
 		clampToolsPanelPosition,
 		clampToolsPanelWidth,
+		getToolsPanelTopBoundary,
 		MIN_TOOLS_PANEL_WIDTH,
 		toolsPanel,
 		TOOLS_PANEL_WIDTH
@@ -31,6 +32,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	let { children }: Props = $props();
 
+	const topBoundary = getToolsPanelTopBoundary();
 	const uid = $props.id();
 	const bodyId = `${uid}-body`;
 
@@ -91,7 +93,8 @@ before the Change Date. See LICENSE for complete terms.
 			bounds.width,
 			bounds.height,
 			window.innerWidth,
-			window.innerHeight
+			window.innerHeight,
+			topBoundary()
 		);
 		// Not persisted here — pointermove fires far too often to justify a
 		// localStorage write on every event. The final position is persisted
@@ -177,9 +180,13 @@ before the Change Date. See LICENSE for complete terms.
 
 	// Re-clamps a previously dragged position/width after the viewport shrinks
 	// (e.g. rotating a tablet) so the panel can't end up stranded off-screen or
-	// wider than the viewport. A position/width that's still null (never
-	// dragged/resized) is left alone — it's CSS-anchored and already tracks
-	// the viewport on its own.
+	// wider than the viewport. Also runs whenever the app header's bottom edge
+	// (the top boundary) moves, and once right after hydration, so a position
+	// persisted under the header by an earlier session is pulled back out. It
+	// clamps the stored position rather than the rendered one, since right
+	// after hydration the DOM hasn't caught up with it yet. A position/width
+	// that's still null (never dragged/resized) is left alone — it's
+	// CSS-anchored and already tracks the viewport on its own.
 	//
 	// Workspace.svelte mounts one FloatingToolsPanel per mode (render/edit/
 	// styleTransfer) sharing this same `toolsPanel` singleton, with only the
@@ -188,7 +195,7 @@ before the Change Date. See LICENSE for complete terms.
 	// all zeros, so without this guard every window resize would have the
 	// *inactive* panels clamp the shared position/width against a 0×0 box and
 	// stomp on whatever the visible panel just computed.
-	function onWindowResize(): void {
+	function onViewportChange(): void {
 		viewportWidth = window.innerWidth;
 		if (!panel) return;
 		const bounds = panel.getBoundingClientRect();
@@ -196,12 +203,13 @@ before the Change Date. See LICENSE for complete terms.
 		measuredWidth = bounds.width;
 		if (toolsPanel.position) {
 			const next = clampToolsPanelPosition(
-				bounds.left,
-				bounds.top,
+				toolsPanel.position.x,
+				toolsPanel.position.y,
 				bounds.width,
 				bounds.height,
 				window.innerWidth,
-				window.innerHeight
+				window.innerHeight,
+				topBoundary()
 			);
 			if (next.x !== toolsPanel.position.x || next.y !== toolsPanel.position.y) {
 				toolsPanel.setPosition(next.x, next.y);
@@ -215,8 +223,13 @@ before the Change Date. See LICENSE for complete terms.
 
 	$effect(() => {
 		toolsPanel.hydrate();
-		window.addEventListener('resize', onWindowResize);
-		return () => window.removeEventListener('resize', onWindowResize);
+		window.addEventListener('resize', onViewportChange);
+		return () => window.removeEventListener('resize', onViewportChange);
+	});
+
+	$effect(() => {
+		topBoundary();
+		untrack(onViewportChange);
 	});
 </script>
 
