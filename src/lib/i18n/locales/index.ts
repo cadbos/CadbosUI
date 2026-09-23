@@ -215,7 +215,7 @@ export interface Dictionary {
 	'generatedImages.confirmRestoreDescription': string;
 	'generatedImages.confirmRestoreCancel': string;
 	'generatedImages.confirmRestoreConfirm': string;
-	'generatedImages.confirmRestoreRestoring': string;
+	'generatedImages.confirmRestoreDescriptionOtherSession': string;
 	'usage.title': string;
 	'usage.subtitle': string;
 	'usage.signInRequired': string;

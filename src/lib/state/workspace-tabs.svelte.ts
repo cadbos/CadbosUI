@@ -243,6 +243,14 @@ class WorkspaceTabsState {
 		}
 	}
 
+	// The state currently holding `sessionId`'s work: the live `request` when
+	// it's the active session, its frozen copy when it's open in a background
+	// tab, undefined when it isn't open at all (so there's nothing of it to
+	// lose).
+	sessionState(sessionId: string): RequestState | undefined {
+		return sessionId === this.#liveKey ? request : this.#frozen.get(sessionId);
+	}
+
 	activate(tabId: string): void {
 		if (tabId === this.activeTabId) return;
 		const tab = this.tabs.find((candidate) => candidate.id === tabId);

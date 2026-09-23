@@ -221,7 +221,8 @@ export const ru = {
 		'Восстановить настройки из сцены {order}? Текущие несохранённые изменения формы будут заменены.',
 	'generatedImages.confirmRestoreCancel': 'Отмена',
 	'generatedImages.confirmRestoreConfirm': 'Восстановить',
-	'generatedImages.confirmRestoreRestoring': 'Восстановление…',
+	'generatedImages.confirmRestoreDescriptionOtherSession':
+		'Восстановить настройки из сцены {order}? Несохранённые изменения в открытой сессии «{session}» будут заменены.',
 	'usage.title': 'Использование',
 	'usage.subtitle': 'Балансы аккаунтов и траты на генерации по пользователям Cadbos.',
 	'usage.signInRequired':

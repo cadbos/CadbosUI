@@ -37,7 +37,8 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import {
 		applyGeneratedImageFormSnapshot,
-		fetchGeneratedImageDetail
+		fetchGeneratedImageDetail,
+		type GeneratedImageDetail
 	} from '$lib/state/generation-restore';
 	import { request, RequestState, type RequestFormSnapshot } from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, destinationForGenerationKind } from '$lib/state/url-state';
@@ -75,9 +76,12 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	interface RestoreCandidate {
-		id: string;
+		detail: GeneratedImageDetail;
 		kind: GenerationKind;
 		order: number;
+		// Whether the work being replaced belongs to a session open in a
+		// background tab rather than the one on screen.
+		targetsOtherSession: boolean;
 	}
 
 	interface GeneratedDate {
@@ -312,52 +316,76 @@ before the Change Date. See LICENSE for complete terms.
 	// True once there's something a restore would actually discard — an empty
 	// form has nothing to lose, and a form that already matches the last
 	// generation it produced (nothing typed since) is effectively saved.
-	function hasUnsavedFormChanges(): boolean {
-		const lastApplied = request.currentRender?.formSnapshot;
+	function hasUnsavedFormChanges(state: RequestState): boolean {
+		const lastApplied = state.currentRender?.formSnapshot;
 		if (lastApplied) {
-			return JSON.stringify(request.captureFormSnapshot()) !== JSON.stringify(lastApplied);
+			return JSON.stringify(state.captureFormSnapshot()) !== JSON.stringify(lastApplied);
 		}
 		// No render has happened yet this session, so there's nothing saved to
 		// diff against. A picked-but-not-yet-uploaded photo
-		// (request.pendingImageFile) is work the user would lose just as much
+		// (state.pendingImageFile) is work the user would lose just as much
 		// as an already-uploaded one — see ImageUpload.svelte's own comment on
 		// why it stays pending until submit — so either counts as unsaved on
 		// its own; otherwise fall back to comparing against a freshly created,
 		// untouched form so a truly empty one still counts as clean.
-		if (request.image || request.pendingImageFile) return true;
+		if (state.image || state.pendingImageFile) return true;
 		return (
-			JSON.stringify(request.captureFormSnapshot()) !==
+			JSON.stringify(state.captureFormSnapshot()) !==
 			JSON.stringify(new RequestState().captureFormSnapshot())
 		);
 	}
 
-	async function performRestore(id: string, kind: GenerationKind): Promise<void> {
+	// A restore continues the generation's own session (see applyRestore), so
+	// the work it would overwrite is that session's — whether it's the one on
+	// screen or open in a background tab — not necessarily what's on screen.
+	// Without a session to continue, it lands on whatever is open right now.
+	function restoreTarget(detail: GeneratedImageDetail): RequestState | undefined {
+		return detail.session ? workspaceTabs.sessionState(detail.session.sessionId) : request;
+	}
+
+	function applyRestore(detail: GeneratedImageDetail, kind: GenerationKind): void {
+		// Continue the session the generation belongs to, not whichever one
+		// happens to be open — otherwise the next generation would land in an
+		// unrelated session, or in a brand-new "Untitled" one from scratch.
+		const { session } = detail;
+		if (session) {
+			workspaceTabs.openProject({
+				projectId: session.projectId,
+				projectTitle: session.projectTitle,
+				sessionId: session.sessionId,
+				sessionTitle: session.sessionTitle.trim() === '' ? null : session.sessionTitle,
+				initialize: (state) => state.setProjectSession(session.projectId, session.sessionId)
+			});
+		}
+
+		// The generation's own result, not its source — restoring a scene
+		// should bring back what that scene actually looked like, the same
+		// image clicking its "Результат" thumbnail (useImage) would set.
+		request.startFromImage({ mediaKey: detail.image.key });
+		applyGeneratedImageFormSnapshot(detail);
+		navigateToDestination(kind, 'scenesDrawer.restoreNavigation', detail.formSnapshot);
+	}
+
+	// Fetches the generation first: only its session says which tab's work a
+	// restore would replace, and so whether that needs confirming.
+	async function requestRestore(id: string, kind: GenerationKind, order: number): Promise<void> {
+		if (restoringId) return;
 		restoringId = id;
 		restoreFailedId = null;
 		try {
 			const detail = await fetchGeneratedImageDetail(id);
 			if (!detail) throw new Error('restore_failed');
-
-			// Continue the session the generation belongs to, not whichever one
-			// happens to be open — otherwise the next generation would land in an
-			// unrelated session, or in a brand-new "Untitled" one from scratch.
-			const { session } = detail;
-			if (session) {
-				workspaceTabs.openProject({
-					projectId: session.projectId,
-					projectTitle: session.projectTitle,
-					sessionId: session.sessionId,
-					sessionTitle: session.sessionTitle.trim() === '' ? null : session.sessionTitle,
-					initialize: (state) => state.setProjectSession(session.projectId, session.sessionId)
-				});
+			const target = restoreTarget(detail);
+			if (target && hasUnsavedFormChanges(target)) {
+				restoreConfirmCandidate = {
+					detail,
+					kind,
+					order,
+					targetsOtherSession: target !== request
+				};
+				return;
 			}
-
-			// The generation's own result, not its source — restoring a scene
-			// should bring back what that scene actually looked like, the same
-			// image clicking its "Результат" thumbnail (useImage) would set.
-			request.startFromImage({ mediaKey: detail.image.key });
-			applyGeneratedImageFormSnapshot(detail);
-			navigateToDestination(kind, 'scenesDrawer.restoreNavigation', detail.formSnapshot);
+			applyRestore(detail, kind);
 		} catch (error) {
 			restoreFailedId = id;
 			logBoundaryError('scenesDrawer.restoreGeneration', error);
@@ -366,25 +394,15 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
-	function requestRestore(id: string, kind: GenerationKind, order: number): void {
-		if (restoringId) return;
-		if (hasUnsavedFormChanges()) {
-			restoreConfirmCandidate = { id, kind, order };
-			return;
-		}
-		void performRestore(id, kind);
-	}
-
 	function cancelRestore(): void {
-		if (restoringId) return;
 		restoreConfirmCandidate = null;
 	}
 
-	async function confirmRestore(): Promise<void> {
+	function confirmRestore(): void {
 		const candidate = restoreConfirmCandidate;
-		if (!candidate || restoringId) return;
+		if (!candidate) return;
 		restoreConfirmCandidate = null;
-		await performRestore(candidate.id, candidate.kind);
+		applyRestore(candidate.detail, candidate.kind);
 	}
 
 	function handleRestoreCancel(event: Event): void {
@@ -587,7 +605,7 @@ before the Change Date. See LICENSE for complete terms.
 													disabled={restoringId !== null}
 													aria-label={ti('generatedImages.restore', { order: index + 1 })}
 													title={ti('generatedImages.restore', { order: index + 1 })}
-													onclick={() => requestRestore(image.id, image.kind, index + 1)}
+													onclick={() => void requestRestore(image.id, image.kind, index + 1)}
 												>
 													{#if restoringId === image.id}
 														<span class="spinner" aria-hidden="true"></span>
@@ -685,26 +703,23 @@ before the Change Date. See LICENSE for complete terms.
 	>
 		<h3 id="generated-images-restore-title">{t('generatedImages.confirmRestoreTitle')}</h3>
 		<p id="generated-images-restore-description">
-			{ti('generatedImages.confirmRestoreDescription', { order: restoreConfirmCandidate.order })}
+			{#if restoreConfirmCandidate.targetsOtherSession}
+				{ti('generatedImages.confirmRestoreDescriptionOtherSession', {
+					order: restoreConfirmCandidate.order,
+					session:
+						restoreConfirmCandidate.detail.session?.sessionTitle.trim() ||
+						t('workspace.tabs.untitled')
+				})}
+			{:else}
+				{ti('generatedImages.confirmRestoreDescription', { order: restoreConfirmCandidate.order })}
+			{/if}
 		</p>
 		<div class="dialog-actions">
-			<button
-				type="button"
-				class="secondary-button"
-				disabled={restoringId !== null}
-				onclick={cancelRestore}
-			>
+			<button type="button" class="secondary-button" onclick={cancelRestore}>
 				{t('generatedImages.confirmRestoreCancel')}
 			</button>
-			<button
-				type="button"
-				class="primary-button"
-				disabled={restoringId !== null}
-				onclick={() => void confirmRestore()}
-			>
-				{restoringId !== null
-					? t('generatedImages.confirmRestoreRestoring')
-					: t('generatedImages.confirmRestoreConfirm')}
+			<button type="button" class="primary-button" onclick={confirmRestore}>
+				{t('generatedImages.confirmRestoreConfirm')}
 			</button>
 		</div>
 	</dialog>

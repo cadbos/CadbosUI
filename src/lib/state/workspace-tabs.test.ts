@@ -287,6 +287,34 @@ describe('workspaceTabs.activateSession', () => {
 	});
 });
 
+describe('workspaceTabs.sessionState', () => {
+	it('resolves the live session to request, a background one to its frozen copy, and an unopened one to nothing', () => {
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => {
+				state.setProjectSession(PROJECT_A, SESSION_A1);
+				state.setEditPrompt('session A1 prompt');
+			}
+		});
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A2,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A2)
+		});
+
+		expect(workspaceTabs.sessionState(SESSION_A2)).toBe(request);
+		const background = workspaceTabs.sessionState(SESSION_A1);
+		expect(background).not.toBe(request);
+		expect(background?.editPrompt).toBe('session A1 prompt');
+		expect(workspaceTabs.sessionState(SESSION_B1)).toBeUndefined();
+	});
+});
+
 describe('workspaceTabs.closeSession', () => {
 	it('closing a background session tab leaves the active session untouched', () => {
 		workspaceTabs.openProject({

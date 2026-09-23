@@ -220,7 +220,8 @@ export const en = {
 		'Restore settings from scene {order}? Your current unsaved form changes will be replaced.',
 	'generatedImages.confirmRestoreCancel': 'Cancel',
 	'generatedImages.confirmRestoreConfirm': 'Restore',
-	'generatedImages.confirmRestoreRestoring': 'Restoring…',
+	'generatedImages.confirmRestoreDescriptionOtherSession':
+		'Restore settings from scene {order}? Unsaved changes in the open session {session} will be replaced.',
 	'usage.title': 'Usage',
 	'usage.subtitle': 'Account balances and generation spend across Cadbos users.',
 	'usage.signInRequired': 'Sign in with an account that has access to see this data.',
