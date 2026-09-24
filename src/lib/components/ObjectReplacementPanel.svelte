@@ -23,6 +23,7 @@ before the Change Date. See LICENSE for complete terms.
 		ObjectReplacementJobResponse
 	} from '$lib/api/contract';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import ModeHint from '$lib/components/ModeHint.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
@@ -463,6 +464,8 @@ before the Change Date. See LICENSE for complete terms.
 			oninput={(event) => request.setObjectReplacementObject(objectValue(event))}
 		/>
 	</label>
+
+	<ModeHint field="objectReplacement" text={request.objectReplacementObject} />
 
 	{#if !isAuthenticated}
 		<p class="auth-hint">{t('objectReplacement.signInToApply')}</p>

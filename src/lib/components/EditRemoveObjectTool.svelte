@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { Eraser } from '@lucide/svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
+	import ModeHint from '$lib/components/ModeHint.svelte';
 	import { request } from '$lib/state/request.svelte';
 
 	interface Props {
@@ -44,6 +45,8 @@ before the Change Date. See LICENSE for complete terms.
 	</label>
 
 	<p class="hint">{t('edit.removeObject.hint')}</p>
+
+	<ModeHint field="removeObject" text={request.removeObjectText} />
 
 	<button
 		type="button"

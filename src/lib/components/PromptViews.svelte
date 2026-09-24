@@ -20,6 +20,7 @@ before the Change Date. See LICENSE for complete terms.
 	import ChatView from '$lib/components/ChatView.svelte';
 	import KeyValueView from '$lib/components/KeyValueView.svelte';
 	import GraphView from '$lib/components/GraphView.svelte';
+	import ModeHint from '$lib/components/ModeHint.svelte';
 	import { request } from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, slugToView, type ViewId } from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
@@ -119,6 +120,8 @@ before the Change Date. See LICENSE for complete terms.
 			</svelte:boundary>
 		</div>
 	{/each}
+
+	<ModeHint field="render" text={request.prompt} />
 </section>
 
 <style>

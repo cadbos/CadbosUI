@@ -24,6 +24,7 @@ before the Change Date. See LICENSE for complete terms.
 		TextureReplacementJobResponse
 	} from '$lib/api/contract';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import ModeHint from '$lib/components/ModeHint.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
@@ -507,6 +508,8 @@ before the Change Date. See LICENSE for complete terms.
 				oninput={(event) => request.setTextureReplacementSurface(surfaceValue(event))}
 			/>
 		</label>
+
+		<ModeHint field="textureReplacement" text={request.textureReplacementSurface} />
 	{:else}
 		<p class="canvas-hint">{t('textureReplacement.maskEditor.canvasHint')}</p>
 	{/if}
