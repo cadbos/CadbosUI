@@ -110,8 +110,8 @@ describe('runLightSettings', () => {
 		expectedWorkflow['1'].inputs.image = 'cadbos/jobs/scene (1).png';
 		expectedWorkflow['19'].inputs.value = 'зажги бра над кроватью';
 		expect(queuedWorkflow).toEqual(expectedWorkflow);
-		expect(workflowTemplate['1'].inputs.image).toBe('s4_twin_sconces_001.jpg');
-		expect(workflowTemplate['19'].inputs.value).toBe('выключи бра над кроватью');
+		expect(workflowTemplate['1'].inputs.image).toBe('FluxKontext_edit_00151_.png');
+		expect(workflowTemplate['19'].inputs.value).toBe('выключи люстру');
 		expect(queuedWorkflow?.['17'].class_type).toBe('SaveImage');
 		expect(client.waitForCompletion).toHaveBeenCalledWith('prompt-1', {
 			pollIntervalMs: 25,
