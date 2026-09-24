@@ -21,7 +21,6 @@ const HEALTHY_SNAPSHOT: HealthSnapshot = {
 	timestamp: '2026-08-12T10:00:00.000Z',
 	services: {
 		archai: { status: 'healthy', latencyMs: 12 },
-		assets: { status: 'healthy', latencyMs: 13 },
 		comfyui: { status: 'healthy', latencyMs: 14 },
 		d1: { status: 'healthy', latencyMs: 15 },
 		nostr: { status: 'healthy', latencyMs: 16, reachable: 4, total: 4 },

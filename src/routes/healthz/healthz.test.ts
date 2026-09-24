@@ -37,7 +37,6 @@ interface FakeCache {
 
 interface HealthyPlatform {
 	platform: App.Platform;
-	assetsFetch: ReturnType<typeof vi.fn>;
 	comfyuiFetch: ReturnType<typeof vi.fn>;
 	dbFirst: ReturnType<typeof vi.fn>;
 	s3BucketExists: ReturnType<typeof vi.fn>;
@@ -67,7 +66,6 @@ function snapshot(status: 'healthy' | 'unhealthy' = 'healthy') {
 		timestamp: NOW.toISOString(),
 		services: {
 			archai: service(),
-			assets: service(),
 			comfyui: service(),
 			d1: service(),
 			nostr: { ...service(), reachable: 4, total: 4 },
@@ -84,7 +82,6 @@ function cachedSnapshot(status: 'healthy' | 'unhealthy' = 'healthy'): Response {
 }
 
 function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
-	const assetsFetch = vi.fn(async () => new Response('<svg/>', { status: 200 }));
 	const comfyuiFetch = vi.fn(async () => Response.json({ system: {} }));
 	const dbFirst = vi.fn(async () => 1);
 	const s3BucketExists = vi.fn(async () => true);
@@ -100,13 +97,11 @@ function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 			env: {
 				ARCHAI_API_KEY: 'archai-key',
 				ARCHAI_API_URL: 'https://archai.example.test',
-				ASSETS: { fetch: assetsFetch } as unknown as Fetcher,
 				COMFYUI_BASE_URL: { fetch: comfyuiFetch } as unknown as Fetcher,
 				DB: { prepare } as unknown as D1Database,
 				...(ttl === undefined ? {} : { HEALTH_CACHE_TTL_SECONDS: ttl })
 			}
 		} as unknown as App.Platform,
-		assetsFetch,
 		comfyuiFetch,
 		dbFirst,
 		s3BucketExists
@@ -180,7 +175,6 @@ describe('GET /healthz', () => {
 		expect(cache.match).toHaveBeenCalledOnce();
 		expect(cache.put).not.toHaveBeenCalled();
 		expect(getWalletBalance).not.toHaveBeenCalled();
-		expect(healthy.assetsFetch).not.toHaveBeenCalled();
 		expect(healthy.comfyuiFetch).not.toHaveBeenCalled();
 		expect(healthy.dbFirst).not.toHaveBeenCalled();
 		expect(healthy.s3BucketExists).not.toHaveBeenCalled();
@@ -206,7 +200,6 @@ describe('GET /healthz', () => {
 			timestamp: NOW.toISOString(),
 			services: {
 				archai: { status: 'healthy', latencyMs: expect.any(Number) },
-				assets: { status: 'healthy', latencyMs: expect.any(Number) },
 				comfyui: { status: 'healthy', latencyMs: expect.any(Number) },
 				d1: { status: 'healthy', latencyMs: expect.any(Number) },
 				nostr: {
@@ -225,12 +218,11 @@ describe('GET /healthz', () => {
 		expect(getWalletBalance).toHaveBeenCalledWith(healthy.platform);
 		expect(healthy.dbFirst).toHaveBeenCalledWith('healthy');
 		expect(healthy.s3BucketExists).toHaveBeenCalledOnce();
-		expect(healthy.assetsFetch.mock.calls[0][0].url).toBe('https://assets.internal/favicon.svg');
 		expect(healthy.comfyuiFetch.mock.calls[0][0].url).toBe('http://localhost:8188/system_stats');
 		expect(fetcher).toHaveBeenCalledTimes(4);
 	});
 
-	it.each(['archai', 'assets', 'comfyui', 'd1', 'nostr', 's3'] as const)(
+	it.each(['archai', 'comfyui', 'd1', 'nostr', 's3'] as const)(
 		'caches an unhealthy response when %s fails',
 		async (failedService) => {
 			const cache = fakeCache();
@@ -239,9 +231,6 @@ describe('GET /healthz', () => {
 			switch (failedService) {
 				case 'archai':
 					getWalletBalance.mockRejectedValue(new Error('archAI unavailable'));
-					break;
-				case 'assets':
-					healthy.assetsFetch.mockRejectedValue(new Error('Assets unavailable'));
 					break;
 				case 'comfyui':
 					healthy.comfyuiFetch.mockRejectedValue(new Error('ComfyUI unavailable'));

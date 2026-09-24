@@ -21,7 +21,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	type ServiceKey = keyof HealthSnapshot['services'];
 
-	const serviceKeys: ServiceKey[] = ['archai', 'assets', 'comfyui', 'd1', 'nostr', 's3'];
+	const serviceKeys: ServiceKey[] = ['archai', 'comfyui', 'd1', 'nostr', 's3'];
 
 	onMount(() => {
 		status.startPolling();

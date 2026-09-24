@@ -30,7 +30,6 @@ function snapshot(
 		timestamp,
 		services: {
 			archai: { status: 'healthy', latencyMs: 12 },
-			assets: { status: 'healthy', latencyMs: 13 },
 			comfyui: { status: 'healthy', latencyMs: 14 },
 			d1: { status: 'healthy', latencyMs: 15 },
 			nostr: { status: 'healthy', latencyMs: 16, reachable: 3, total: 4 },

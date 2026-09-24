@@ -138,7 +138,6 @@ export const healthSnapshotSchema = z
 		services: z
 			.object({
 				archai: serviceHealthSchema,
-				assets: serviceHealthSchema,
 				comfyui: serviceHealthSchema,
 				d1: serviceHealthSchema,
 				nostr: nostrHealthSchema,

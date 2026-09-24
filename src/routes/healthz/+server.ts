@@ -23,7 +23,6 @@ import { getWalletBalance } from '$lib/server/wallet';
 const DEFAULT_HEALTH_CACHE_TTL_SECONDS = 30;
 const HEALTH_PROBE_TIMEOUT_MS = 10_000;
 const COMFYUI_SYSTEM_STATS_URL = 'http://localhost:8188/system_stats';
-const STATIC_ASSET_URL = 'https://assets.internal/favicon.svg';
 
 interface HealthCache {
 	match(request: Request): Promise<Response | undefined>;
@@ -96,21 +95,11 @@ async function collectHealthSnapshot(
 	fetcher: typeof fetch
 ): Promise<HealthSnapshot> {
 	const env = platform?.env;
-	const [archai, assets, comfyui, d1, nostr, s3] = await Promise.all([
+	const [archai, comfyui, d1, nostr, s3] = await Promise.all([
 		probe(async () => {
 			if (!env?.ARCHAI_API_KEY || !env.ARCHAI_API_URL) return false;
 			await getWalletBalance(platform);
 			return true;
-		}),
-		probe(async () => {
-			if (!env?.ASSETS) return false;
-			const fetchAsset = env.ASSETS.fetch.bind(env.ASSETS) as unknown as typeof fetch;
-			const response = await fetchAsset(
-				new Request(STATIC_ASSET_URL, {
-					signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS)
-				})
-			);
-			return response.ok;
 		}),
 		probe(async () => {
 			if (!env?.COMFYUI_BASE_URL) return false;
@@ -137,7 +126,7 @@ async function collectHealthSnapshot(
 			);
 		})
 	]);
-	const services = { archai, assets, comfyui, d1, nostr, s3 };
+	const services = { archai, comfyui, d1, nostr, s3 };
 	return {
 		status: Object.values(services).every((service) => service.status === 'healthy')
 			? 'healthy'

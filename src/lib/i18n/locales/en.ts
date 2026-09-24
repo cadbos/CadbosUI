@@ -286,14 +286,11 @@ export const en = {
 	'status.noDetails': '—',
 	'status.nostrAvailability': '{reachable} of {total} relays reachable',
 	'status.service.archai': 'archAI',
-	'status.service.assets': 'Static assets',
 	'status.service.comfyui': 'ComfyUI',
 	'status.service.d1': 'D1 database',
 	'status.service.nostr': 'Nostr relays',
 	'status.service.s3': 'S3 storage',
 	'status.hint.archai': 'Powers Create (Generate), Style transfer, and Upscale to 4K.',
-	'status.hint.assets':
-		"Serves the app's own interface files (JS, CSS, images). Unrelated to the S3 storage used for user-uploaded images.",
 	'status.hint.comfyui':
 		'Provides all editing instruments: Object replacement, Texture replacement, Edit (custom prompt), and Light.',
 	'status.hint.d1':

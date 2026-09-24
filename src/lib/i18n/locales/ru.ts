@@ -288,14 +288,11 @@ export const ru = {
 	'status.noDetails': '—',
 	'status.nostrAvailability': 'Доступно ретрансляторов: {reachable} из {total}',
 	'status.service.archai': 'archAI',
-	'status.service.assets': 'Статические ресурсы',
 	'status.service.comfyui': 'ComfyUI',
 	'status.service.d1': 'База данных D1',
 	'status.service.nostr': 'Ретрансляторы Nostr',
 	'status.service.s3': 'Хранилище S3',
 	'status.hint.archai': 'Обеспечивает «Создание» (генерацию), «Миграцию стиля» и «Улучшить до 4K».',
-	'status.hint.assets':
-		'Отдаёт статические файлы самого приложения (JS, CSS, изображения интерфейса). Не связано с хранилищем S3 для загруженных пользователями изображений.',
 	'status.hint.comfyui':
 		'Обеспечивает все инструменты редактирования: «Замену объекта», «Замену текстуры», «Редактирование» (свой промпт) и «Свет».',
 	'status.hint.d1':
