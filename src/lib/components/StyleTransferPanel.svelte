@@ -29,6 +29,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import ModeHint from '$lib/components/ModeHint.svelte';
 	import { stylePresetsFor, type StylePreset } from '$lib/style-presets';
 	import { buildWorkspaceUrl, slugToReference, type ReferenceTab } from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
@@ -284,6 +285,8 @@ before the Change Date. See LICENSE for complete terms.
 			disabled={applying}
 			placeholder={t('view.chat.placeholder')}></textarea>
 	</label>
+
+	<ModeHint field="styleTransfer" text={request.styleTransferPrompt} />
 
 	<label class="strength-label">
 		<span class="strength-top">

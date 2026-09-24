@@ -36,6 +36,7 @@ import {
 import { ADD_OBJECT_PRESETS } from '$lib/add-object-presets';
 import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 import { LIGHT_SETTINGS_FIXTURES, LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
+import type { ModeHintTarget } from '$lib/mode-hints';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export {
@@ -1119,6 +1120,22 @@ export class RequestState {
 
 	setLightSettingsInstruction(instruction: string): void {
 		this.lightSettingsInstruction = lightSettingsInstructionSchema.parse(instruction);
+	}
+
+	prefillFromModeHint(target: ModeHintTarget, text: string): void {
+		const trimmed = text.trim();
+		if (target.mode === 'styleTransfer') {
+			if (this.styleTransferPrompt.trim() === '') this.styleTransferPrompt = trimmed;
+		} else if (target.tool === 'add-object') {
+			this.setAddObjectPresetId(target.presetId);
+		} else if (target.tool === 'freeform') {
+			if (this.editPrompt.trim() === '') this.editPrompt = trimmed;
+		} else if (target.tool === 'light-settings') {
+			const instruction = lightSettingsInstructionSchema.safeParse(trimmed);
+			if (this.lightSettingsInstruction.trim() === '' && instruction.success) {
+				this.lightSettingsInstruction = instruction.data;
+			}
+		}
 	}
 
 	setActiveLightSettingsJobId(id: string | undefined): void {

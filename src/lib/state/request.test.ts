@@ -2066,3 +2066,34 @@ describe('renderResultFromResponse', () => {
 		expect(render.id).toEqual(expect.any(String));
 	});
 });
+
+describe('prefillFromModeHint', () => {
+	it('carries the text into an empty instruction field of the suggested tool', () => {
+		const state = new RequestState();
+		state.prefillFromModeHint({ mode: 'edit', tool: 'freeform' }, '  добавь стол у окна ');
+		state.prefillFromModeHint({ mode: 'edit', tool: 'light-settings' }, 'добавь тёплый свет');
+		state.prefillFromModeHint({ mode: 'styleTransfer' }, 'в стиле лофт');
+		expect(state.editPrompt).toBe('добавь стол у окна');
+		expect(state.lightSettingsInstruction).toBe('добавь тёплый свет');
+		expect(state.styleTransferPrompt).toBe('в стиле лофт');
+	});
+
+	it('never overwrites what the user already typed in the destination', () => {
+		const state = new RequestState();
+		state.setEditPrompt('убери блики');
+		state.prefillFromModeHint({ mode: 'edit', tool: 'freeform' }, 'добавь стол у окна');
+		expect(state.editPrompt).toBe('убери блики');
+	});
+
+	it('leaves the light instruction empty when the text exceeds its limit', () => {
+		const state = new RequestState();
+		state.prefillFromModeHint({ mode: 'edit', tool: 'light-settings' }, 'свет '.repeat(200));
+		expect(state.lightSettingsInstruction).toBe('');
+	});
+
+	it('does not prefill object-naming tools', () => {
+		const state = new RequestState();
+		state.prefillFromModeHint({ mode: 'edit', tool: 'remove-object' }, 'убери диван');
+		expect(state.removeObjectText).toBe('');
+	});
+});

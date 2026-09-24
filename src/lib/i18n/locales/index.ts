@@ -791,4 +791,15 @@ export interface Dictionary {
 	'lightSettings.preset.allLightsOn.phrase': string;
 	'lightSettings.preset.allLightsOff.label': string;
 	'lightSettings.preset.allLightsOff.phrase': string;
+	'modeHint.intent.add': string;
+	'modeHint.intent.remove': string;
+	'modeHint.intent.replace': string;
+	'modeHint.intent.recolor': string;
+	'modeHint.intent.light': string;
+	'modeHint.intent.style': string;
+	'modeHint.suggestion': string;
+	'modeHint.switch': string;
+	'modeHint.format.removeObject': string;
+	'modeHint.format.objectReplacement': string;
+	'modeHint.format.textureReplacement': string;
 }

@@ -36,6 +36,7 @@ before the Change Date. See LICENSE for complete terms.
 	import EditAddObjectTool from '$lib/components/EditAddObjectTool.svelte';
 	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
 	import LightSettingsPanel from '$lib/components/LightSettingsPanel.svelte';
+	import ModeHint from '$lib/components/ModeHint.svelte';
 	import ObjectReplacementPanel from '$lib/components/ObjectReplacementPanel.svelte';
 	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
 
@@ -462,6 +463,8 @@ before the Change Date. See LICENSE for complete terms.
 								disabled={formLocked}
 								placeholder={t('edit.templateReplaceFill')}></textarea>
 						</label>
+
+						<ModeHint field="freeform" text={request.editPrompt} />
 
 						<div class="actions">
 							<button

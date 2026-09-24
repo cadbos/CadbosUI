@@ -19,6 +19,7 @@ before the Change Date. See LICENSE for complete terms.
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { z } from 'zod';
 	import type { LightSettingsCompletedResponse, LightSettingsJobResponse } from '$lib/api/contract';
+	import ModeHint from '$lib/components/ModeHint.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { LIGHT_SETTINGS_FIXTURES, lightSettingsPresetsFor } from '$lib/light-settings-presets';
 	import { auth } from '$lib/state/auth.svelte';
@@ -455,6 +456,8 @@ before the Change Date. See LICENSE for complete terms.
 			disabled={formLocked}
 			placeholder={t('lightSettings.customPlaceholder')}></textarea>
 	</label>
+
+	<ModeHint field="lightSettings" text={request.lightSettingsInstruction} />
 
 	{#if request.lightSettingsPrompt.trim() !== ''}
 		<p class="preview">

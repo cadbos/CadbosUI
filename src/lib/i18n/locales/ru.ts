@@ -874,5 +874,19 @@ export const ru = {
 	'lightSettings.preset.allLightsOn.label': 'Включить все светильники',
 	'lightSettings.preset.allLightsOn.phrase': 'включи все светильники',
 	'lightSettings.preset.allLightsOff.label': 'Выключить все светильники',
-	'lightSettings.preset.allLightsOff.phrase': 'выключи все светильники'
+	'lightSettings.preset.allLightsOff.phrase': 'выключи все светильники',
+	'modeHint.intent.add': 'Похоже, вы хотите добавить новый предмет.',
+	'modeHint.intent.remove': 'Похоже, вы хотите убрать предмет.',
+	'modeHint.intent.replace': 'Похоже, вы хотите заменить один предмет другим.',
+	'modeHint.intent.recolor': 'Похоже, вы хотите изменить цвет или материал поверхности.',
+	'modeHint.intent.light': 'Похоже, вы хотите изменить освещение.',
+	'modeHint.intent.style': 'Похоже, вы хотите изменить стиль всего интерьера.',
+	'modeHint.suggestion': 'Для этого лучше подходит «{target}».',
+	'modeHint.switch': 'Перейти в «{target}»',
+	'modeHint.format.removeObject':
+		'Достаточно назвать предмет, например «старый диван», — действие «убрать» добавится само.',
+	'modeHint.format.objectReplacement':
+		'Опишите только предмет, который уже есть на фото, например «серый диван у окна». Новый предмет задаётся референсом.',
+	'modeHint.format.textureReplacement':
+		'Назовите только поверхность, например «обивка дивана». Новая текстура задаётся референсом, а сменить цвет по описанию можно в «Свой промпт».'
 } as const satisfies Dictionary;
