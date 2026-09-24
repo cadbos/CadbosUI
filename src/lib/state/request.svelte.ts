@@ -1126,6 +1126,8 @@ export class RequestState {
 		const trimmed = text.trim();
 		if (target.mode === 'styleTransfer') {
 			if (this.styleTransferPrompt.trim() === '') this.styleTransferPrompt = trimmed;
+		} else if (target.tool === 'add-object') {
+			this.setAddObjectPresetId(target.presetId);
 		} else if (target.tool === 'freeform') {
 			if (this.editPrompt.trim() === '') this.editPrompt = trimmed;
 		} else if (target.tool === 'light-settings') {

@@ -75,3 +75,17 @@ test('the create prompt suggests editing tools for targeted changes', async ({ p
 		'Замени кресло на пуф'
 	);
 });
+
+test('adding a preset object opens Add object with that preset selected', async ({ page }) => {
+	await page.goto('/edit?tool=object-replacement');
+	const panel = page.locator('#edit-tool-panel-object-replacement');
+
+	await panel.getByPlaceholder('например: серый диван у окна').fill('добавь растение в угол');
+	await panel.getByRole('button', { name: 'Перейти в «Добавить объект»' }).click();
+
+	await expect(page).toHaveURL(/tool=add-object/);
+	await expect(page.getByRole('radio', { name: 'Комнатное растение' })).toHaveAttribute(
+		'aria-checked',
+		'true'
+	);
+});

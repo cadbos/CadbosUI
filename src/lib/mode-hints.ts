@@ -12,6 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { ADD_OBJECT_PRESETS } from '$lib/add-object-presets';
 import type { TranslationKey } from '$lib/i18n/index.svelte';
 import type { ToolId } from '$lib/state/url-state';
 
@@ -26,7 +27,10 @@ export type ModeHintField =
 	| 'objectReplacement'
 	| 'textureReplacement';
 
-export type ModeHintTarget = { mode: 'edit'; tool: ToolId } | { mode: 'styleTransfer' };
+export type ModeHintTarget =
+	| { mode: 'edit'; tool: Exclude<ToolId, 'add-object'> }
+	| { mode: 'edit'; tool: 'add-object'; presetId: string }
+	| { mode: 'styleTransfer' };
 
 export type ModeHintFormatField = Extract<
 	ModeHintField,
@@ -51,22 +55,34 @@ function words(...alternatives: string[]): RegExp {
 	return new RegExp(`${WORD_START}(?:${alternatives.join('|')})${WORD_END}`, 'u');
 }
 
-const NEGATION = new RegExp(`${WORD_START}(?:не|don'?t|do not|never)\\s+[\\p{L}']+`, 'gu');
+const NEGATION = new RegExp(
+	`${WORD_START}(?:не|don'?t|do not|never|no need to)\\s+` +
+		`(?:(?:нужно|надо|стоит|хочу|need to|want to)\\s+)?` +
+		`(?:(?:ничего|никаких|anything)\\s+)?` +
+		`(?!(?:было|будет|стало)${WORD_END})[\\p{L}']+`,
+	'gu'
+);
 
 const ADD = words(
 	'добав\\p{L}*',
 	'постав\\p{L}*',
 	'повес\\p{L}*',
 	'повеш\\p{L}*',
+	'подвес\\p{L}*',
 	'полож\\p{L}*',
 	'размест\\p{L}*',
 	'встав\\p{L}*',
 	'дорису\\p{L}*',
+	'появ\\p{L}*',
+	'нуж(?:ен|на|ны)',
+	'пусть (?:будет|будут|стоит|стоят|висит|висят)',
+	'чтобы (?:здесь |тут |там )?(?:был|была|было|были|стоял\\p{L}*|висел\\p{L}*)',
 	'add\\p{L}*',
 	'place',
 	'put',
 	'insert',
-	'hang'
+	'hang',
+	'mount'
 );
 
 const REMOVE = words(
@@ -77,11 +93,21 @@ const REMOVE = words(
 	'сотри',
 	'стереть',
 	'избав\\p{L}*',
+	'вынес\\p{L}*',
+	'вынеси',
+	'выкин\\p{L}*',
+	'выброс\\p{L}*',
+	'спрячь',
+	'спрятать',
+	'очист\\p{L}*',
+	'не (?:было|будет|стало)',
 	'remov\\p{L}*',
 	'delet\\p{L}*',
 	'eras\\p{L}*',
 	'get rid of',
-	'take (?:out|away)'
+	'take (?:out|away)',
+	'declutter\\p{L}*',
+	'clear (?:out|away)'
 );
 
 const REPLACE = words(
@@ -89,6 +115,7 @@ const REPLACE = words(
 	'поменя\\p{L}*',
 	'смен\\p{L}*',
 	'вместо',
+	'на место',
 	'replac\\p{L}*',
 	'swap\\p{L}*',
 	'instead of',
@@ -101,8 +128,10 @@ const RECOLOR = words(
 	'покрас\\p{L}*',
 	'окрас\\p{L}*',
 	'раскрас\\p{L}*',
+	'перетян\\p{L}*',
 	'repaint\\p{L}*',
 	'recolou?r\\p{L}*',
+	'reupholster\\p{L}*',
 	'paint'
 );
 
@@ -114,22 +143,102 @@ const CHANGE_SURFACE = words(
 	`change\\s+(?:the\\s+)?${SURFACE_PROPERTY}`
 );
 
-const MAKE_SURFACE = new RegExp(
-	`${words('сдела\\p{L}*', 'make').source}.*${words('цвет(?:а|ом|е|у)?', 'оттенк\\p{L}*', 'colou?r').source}`,
-	'u'
+const MAKE = words('сдела\\p{L}*', 'make', 'turn');
+
+const SURFACE_LOOK = words(
+	'цвет(?:а|ом|е|у)?',
+	'оттенк\\p{L}*',
+	'(?:бел|черн|сер|син|голуб|зелен|красн|желт|оранжев|розов|фиолетов|бежев|коричнев|бирюзов|терракотов|графитов|молочн)(?:ый|ая|ое|ые|ым|ой|ую|ыми|ого)',
+	'(?:деревянн|мраморн|бетонн|кирпичн|кожан|бархатн|льнян|каменн|металлическ|глянцев|матов)\\p{L}*',
+	'под (?:дерев\\p{L}*|мрамор\\p{L}*|бетон\\p{L}*|кам\\p{L}*|кирпич\\p{L}*)',
+	'colou?r',
+	'white|black|gr[ae]y|blue|green|red|yellow|orange|pink|purple|beige|brown|teal|navy',
+	'wooden|marble|concrete|brick|leather|velvet|linen|stone|metallic|glossy|matte'
 );
 
 const LIGHT = words(
 	'освещ\\p{L}*',
+	'подсвет\\p{L}*',
 	'свет(?:а|у|ом|е)?',
 	'включи(?:ть|те)?',
 	'выключи(?:ть|те)?',
+	'зажги(?:те)?',
+	'зажечь',
+	'погас\\p{L}*',
+	'приглуш\\p{L}*',
+	'закат\\p{L}*',
+	'рассвет\\p{L}*',
+	'сумер\\p{L}*',
+	'полд(?:ень|ня|нем)',
+	'пасмурн\\p{L}*',
+	'ночн(?:ой|ая|ое|ые|ого|ую|ым|ом)',
+	'вечерн(?:ий|яя|ее|ие|его|юю|им|ем)',
+	'утренн(?:ий|яя|ее|ие|его|юю|им|ем)',
 	'light(?:s|ing)?(?!\\s+(?:gr[ae]y|blue|green|brown|beige|pink|yellow|wood|oak|colou?r))',
 	'illuminat\\p{L}*',
-	'(?:turn|switch) (?:on|off)'
+	'(?:turn|switch) (?:on|off)',
+	'dim(?:med|mer)?',
+	'brighten\\p{L}*',
+	'sunset|sunrise|dusk|twilight|daylight|overcast|candlelight',
+	'night(?:time)?',
+	'evening|morning'
 );
 
-const STYLE = words('стил(?:ь|я|е|ем|и|ю)', 'стилистик\\p{L}*', 'style\\p{L}*');
+const BRIGHTNESS = words('светлее', 'темнее', 'ярче', 'мрачнее', 'brighter', 'darker');
+
+const SCENE = words(
+	'комнат\\p{L}*',
+	'помещени\\p{L}*',
+	'сцен\\p{L}*',
+	'интерьер\\p{L}*',
+	'room',
+	'scene',
+	'space',
+	'interior',
+	'гостин\\p{L}*',
+	'спальн\\p{L}*',
+	'кухн\\p{L}*',
+	'ванн(?:ая|ой|ую|ые)',
+	'детск(?:ая|ой|ую)',
+	'кабинет\\p{L}*',
+	'офис\\p{L}*',
+	'living room',
+	'bedroom',
+	'kitchen',
+	'bathroom',
+	'office'
+);
+
+const STYLE = words(
+	'стил(?:ь|я|е|ем|и|ю)',
+	'стилистик\\p{L}*',
+	'лофт\\p{L}*',
+	'сканди\\p{L}*',
+	'минимализм\\p{L}*',
+	'прованс\\p{L}*',
+	'хай-?тек\\p{L}*',
+	'бохо',
+	'джапанди',
+	'неокласси\\p{L}*',
+	'ар-?деко',
+	'индустриальн\\p{L}*',
+	'средиземноморск\\p{L}*',
+	'марокканск\\p{L}*',
+	'шале',
+	'style\\p{L}*',
+	'loft',
+	'scandi(?:navian)?',
+	'minimalis\\p{L}*',
+	'provence',
+	'hi-?tech|high-?tech',
+	'boho',
+	'japandi',
+	'neoclassic\\p{L}*',
+	'art deco',
+	'mid-century',
+	'industrial',
+	'mediterranean'
+);
 
 const REFERENCE = words(
 	'референс\\p{L}*',
@@ -140,6 +249,18 @@ const REFERENCE = words(
 	'(?:like|as) (?:in|on) the (?:photo|image|picture)',
 	'from the (?:photo|image|picture)'
 );
+
+const ADDED_OBJECT_WORDS = 4;
+
+const PLACEMENT = new RegExp(
+	`[.,;!?\\n]|${WORD_START}(?:над|под|у|на|возле|рядом|около|за|между|перед|вдоль|above|over|on|near|by|next|under|behind|beside|along)${WORD_END}`,
+	'u'
+);
+
+const ADD_OBJECT_PRESET_PATTERNS = ADD_OBJECT_PRESETS.map((preset) => ({
+	id: preset.id,
+	patterns: preset.keywords.map((keyword) => words(keyword))
+}));
 
 const NOUN_FIELD_IGNORES: readonly EditIntent[] = ['light', 'style'];
 
@@ -191,31 +312,58 @@ function normalize(text: string): string {
 	return text.toLowerCase().replaceAll('ё', 'е').replace(NEGATION, ' ');
 }
 
-function detectIntents(text: string, ignores: readonly EditIntent[]): EditIntent[] {
+function matchAddObjectPreset(normalized: string): string | null {
+	const verb = ADD.exec(normalized);
+	if (verb === null) return null;
+	const added = normalized
+		.slice(verb.index + verb[0].length)
+		.split(PLACEMENT)[0]
+		.split(/\s+/u)
+		.filter(Boolean)
+		.slice(0, ADDED_OBJECT_WORDS)
+		.join(' ');
+	let best: { id: string; score: number } | null = null;
+	for (const preset of ADD_OBJECT_PRESET_PATTERNS) {
+		const score = preset.patterns.filter((pattern) => pattern.test(added)).length;
+		if (score > 0 && (best === null || score > best.score)) best = { id: preset.id, score };
+	}
+	return best?.id ?? null;
+}
+
+export function detectIntents(text: string, ignores: readonly EditIntent[] = []): EditIntent[] {
 	const normalized = normalize(text);
 	const has = (intent: EditIntent, pattern: RegExp): boolean =>
 		!ignores.includes(intent) && pattern.test(normalized);
 	const removes = has('remove', REMOVE);
 	const adds = has('add', ADD);
+	const replaces = has('replace', REPLACE);
 	const candidates: [EditIntent, boolean][] = [
 		['replace', removes && adds],
 		['remove', removes],
-		['light', has('light', LIGHT)],
+		['add', adds && !replaces && matchAddObjectPreset(normalized) !== null],
+		['light', has('light', LIGHT) || (has('light', BRIGHTNESS) && SCENE.test(normalized))],
 		[
 			'recolor',
-			has('recolor', CHANGE_SURFACE) || has('recolor', MAKE_SURFACE) || has('recolor', RECOLOR)
+			has('recolor', CHANGE_SURFACE) ||
+				has('recolor', RECOLOR) ||
+				(has('recolor', MAKE) && SURFACE_LOOK.test(normalized) && !SCENE.test(normalized))
 		],
-		['replace', has('replace', REPLACE)],
+		['replace', replaces],
 		['add', adds],
 		['style', has('style', STYLE)]
 	];
-	return candidates.filter(([, matched]) => matched).map(([intent]) => intent);
+	return [...new Set(candidates.filter(([, matched]) => matched).map(([intent]) => intent))];
 }
 
-function intentTarget(intent: EditIntent, withReference: boolean): ModeHintTarget {
+function intentTarget(intent: EditIntent, normalized: string): ModeHintTarget {
+	const withReference = REFERENCE.test(normalized);
 	switch (intent) {
-		case 'add':
-			return { mode: 'edit', tool: 'freeform' };
+		case 'add': {
+			const presetId = matchAddObjectPreset(normalized);
+			return presetId === null
+				? { mode: 'edit', tool: 'freeform' }
+				: { mode: 'edit', tool: 'add-object', presetId };
+		}
 		case 'remove':
 			return { mode: 'edit', tool: 'remove-object' };
 		case 'replace':
@@ -240,7 +388,7 @@ export function modeHintFor(field: ModeHintField, text: string): ModeHint | null
 	if (intents.length === 0 || intents.some((intent) => rule.accepts.includes(intent))) return null;
 	const intent = intents[0];
 	if (rule.format?.intents.includes(intent)) return { kind: 'format', field: rule.format.field };
-	const target = intentTarget(intent, REFERENCE.test(normalize(text)));
+	const target = intentTarget(intent, normalize(text));
 	if (sameTarget(rule.own, target)) return null;
 	return { kind: 'switch', intent, target };
 }

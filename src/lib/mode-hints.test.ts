@@ -14,7 +14,18 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { modeHintFor, targetLabel, type ModeHint, type ModeHintField } from '$lib/mode-hints';
+import { ADD_OBJECT_PRESETS } from '$lib/add-object-presets';
+import { en } from '$lib/i18n/locales/en';
+import { ru } from '$lib/i18n/locales/ru';
+import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
+import { INTENT_CORPUS } from '$lib/mode-hints-corpus';
+import {
+	detectIntents,
+	modeHintFor,
+	targetLabel,
+	type ModeHint,
+	type ModeHintField
+} from '$lib/mode-hints';
 
 const freeform = { mode: 'edit', tool: 'freeform' } as const;
 const removeObject = { mode: 'edit', tool: 'remove-object' } as const;
@@ -22,6 +33,7 @@ const lightSettings = { mode: 'edit', tool: 'light-settings' } as const;
 const objectReplacement = { mode: 'edit', tool: 'object-replacement' } as const;
 const textureReplacement = { mode: 'edit', tool: 'texture-replacement' } as const;
 const styleTransfer = { mode: 'styleTransfer' } as const;
+const addObject = { mode: 'edit', tool: 'add-object' } as const;
 
 const cases: [ModeHintField, string, ModeHint | null][] = [
 	['render', 'Современная гостиная, вечернее освещение', null],
@@ -35,8 +47,9 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 	[
 		'styleTransfer',
 		'Добавь картину над диваном',
-		{ kind: 'switch', intent: 'add', target: freeform }
+		{ kind: 'switch', intent: 'add', target: { ...addObject, presetId: 'wall-art' } }
 	],
+	['styleTransfer', 'Добавь пуф у дивана', { kind: 'switch', intent: 'add', target: freeform }],
 	['styleTransfer', 'Убери ковёр', { kind: 'switch', intent: 'remove', target: removeObject }],
 
 	['freeform', 'Замени диван на кожаное кресло', null],
@@ -80,7 +93,12 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 	['lightSettings', 'add a warm accent light above the painting', null],
 	['lightSettings', 'выключи все светильники', null],
 	['lightSettings', 'убери холодный свет', null],
-	['lightSettings', 'добавь растение в угол', { kind: 'switch', intent: 'add', target: freeform }],
+	[
+		'lightSettings',
+		'добавь растение в угол',
+		{ kind: 'switch', intent: 'add', target: { ...addObject, presetId: 'houseplant' } }
+	],
+	['lightSettings', 'добавь пуф в угол', { kind: 'switch', intent: 'add', target: freeform }],
 
 	['objectReplacement', 'серый диван у окна', null],
 	['objectReplacement', 'light gray sofa by the window', null],
@@ -127,10 +145,39 @@ describe('modeHintFor', () => {
 
 	it('does not treat words that merely contain a stem as an action', () => {
 		expect(modeHintFor('freeform', 'добавь стол, включая стулья')).toBeNull();
-		expect(modeHintFor('lightSettings', 'add a painting above the sofa')).toEqual({
+		expect(modeHintFor('lightSettings', 'add a bench above the painting')).toEqual({
 			kind: 'switch',
 			intent: 'add',
 			target: freeform
+		});
+	});
+});
+
+describe('intent corpus', () => {
+	it.each(INTENT_CORPUS)('%s → %s', (text, expected) => {
+		expect(detectIntents(text)[0] ?? null).toBe(expected);
+	});
+});
+
+describe('product phrases', () => {
+	it.each(LIGHT_SETTINGS_PRESETS.flatMap((preset) => [ru[preset.phrase], en[preset.phrase]]))(
+		'light preset phrase is a lighting request: %s',
+		(phrase) => {
+			expect(detectIntents(phrase)).toContain('light');
+			expect(modeHintFor('lightSettings', phrase)).toBeNull();
+		}
+	);
+
+	it.each(
+		ADD_OBJECT_PRESETS.flatMap((preset) => [
+			[preset.id, `добавь ${ru[preset.label].toLowerCase()}`],
+			[preset.id, `add ${en[preset.label].toLowerCase()}`]
+		])
+	)('add-object preset %s is suggested for "%s"', (presetId, text) => {
+		expect(modeHintFor('freeform', text)).toEqual({
+			kind: 'switch',
+			intent: 'add',
+			target: { ...addObject, presetId }
 		});
 	});
 });
@@ -140,5 +187,6 @@ describe('targetLabel', () => {
 		expect(targetLabel(freeform)).toBe('edit.tool.freeform');
 		expect(targetLabel(textureReplacement)).toBe('mode.textureReplacement');
 		expect(targetLabel(styleTransfer)).toBe('mode.styleTransfer');
+		expect(targetLabel({ ...addObject, presetId: 'mirror' })).toBe('edit.tool.addObject');
 	});
 });
