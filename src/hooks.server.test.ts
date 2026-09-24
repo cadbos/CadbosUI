@@ -80,8 +80,8 @@ it('renders the failed integrity state when the asset manifest fetch stalls', as
 	});
 	const event = {
 		cookies: { get: vi.fn(() => undefined) },
+		fetch: assetFetch,
 		locals: {},
-		platform: { env: { ASSETS: { fetch: assetFetch } } },
 		url: new URL('https://cadbos.example/create/interior')
 	} as unknown as RequestEvent;
 	const resolve = vi.fn(async (_event: RequestEvent, options?: ResolveOptions) => {
@@ -97,7 +97,7 @@ it('renders the failed integrity state when the asset manifest fetch stalls', as
 	const response = await responsePromise;
 
 	expect(assetFetch).toHaveBeenCalledWith(
-		'https://cadbos.example/_app/client-integrity.json',
+		'/_app/client-integrity.json',
 		expect.objectContaining({ signal: expect.any(AbortSignal) })
 	);
 	expect(receivedSignal?.aborted).toBe(true);

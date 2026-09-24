@@ -98,12 +98,7 @@ async function fetchClientIntegrityManifest(event: RequestEvent): Promise<Client
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), MANIFEST_FETCH_TIMEOUT_MS);
 	try {
-		const assetFetcher = event.platform?.env.ASSETS;
-		const fetcher = assetFetcher
-			? (assetFetcher.fetch.bind(assetFetcher) as unknown as typeof event.fetch)
-			: event.fetch;
-		const resource = assetFetcher ? new URL(MANIFEST_PATH, event.url).toString() : MANIFEST_PATH;
-		const response = await fetcher(resource, { signal: controller.signal });
+		const response = await event.fetch(MANIFEST_PATH, { signal: controller.signal });
 
 		if (!response.ok) {
 			throw new Error(`Client integrity manifest request failed with status ${response.status}`);

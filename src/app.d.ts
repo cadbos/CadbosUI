@@ -38,7 +38,6 @@ declare global {
 		interface Platform {
 			env: {
 				DB: D1Database;
-				ASSETS?: Fetcher;
 				ARCHAI_API_KEY: string;
 				ARCHAI_API_URL: string;
 				HEALTH_CACHE_TTL_SECONDS?: string;
