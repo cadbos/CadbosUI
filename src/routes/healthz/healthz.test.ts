@@ -176,6 +176,7 @@ describe('GET /healthz', () => {
 
 		expect(response.status).toBe(200);
 		expect(response.headers.get('cache-control')).toBe('public, max-age=30');
+		expect(response.headers.get('age')).toBe('0');
 		expect(await response.json()).toEqual(snapshot());
 		expect(cache.match).toHaveBeenCalledOnce();
 		expect(cache.put).not.toHaveBeenCalled();
@@ -185,6 +186,40 @@ describe('GET /healthz', () => {
 		expect(healthy.dbFirst).not.toHaveBeenCalled();
 		expect(healthy.s3BucketExists).not.toHaveBeenCalled();
 		expect(fetcher).not.toHaveBeenCalled();
+	});
+
+	it('reports how long a cache hit has been stored', async () => {
+		const cache = fakeCache(cachedSnapshot('unhealthy'));
+		const healthy = healthyPlatform(cache.storage);
+		vi.setSystemTime(NOW.getTime() + 25_900);
+
+		const response = await callGet(healthy.platform, relayFetch());
+
+		expect(response.status).toBe(503);
+		expect(response.headers.get('cache-control')).toBe('public, max-age=30');
+		expect(response.headers.get('age')).toBe('25');
+		expect(await response.json()).toEqual(snapshot('unhealthy'));
+	});
+
+	it('performs fresh checks when the cached snapshot is invalid', async () => {
+		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const cache = fakeCache(
+			Response.json(
+				{ status: 'healthy', timestamp: NOW.toISOString() },
+				{ headers: { 'cache-control': 'public, max-age=30' } }
+			)
+		);
+		const healthy = healthyPlatform(cache.storage);
+
+		const response = await callGet(healthy.platform, relayFetch());
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('age')).toBeNull();
+		expect(await response.json()).toMatchObject({ status: 'healthy' });
+		expect(getWalletBalance).toHaveBeenCalledOnce();
+		expect(cache.put).toHaveBeenCalledOnce();
+		expect(await cache.read()?.json()).toMatchObject({ status: 'healthy' });
+		expect(warning).toHaveBeenCalledWith(JSON.stringify({ event: 'health_cache_entry_invalid' }));
 	});
 
 	it('checks every service and caches a healthy response on a miss', async () => {
