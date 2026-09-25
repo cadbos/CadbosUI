@@ -19,6 +19,7 @@ import { expect, test } from './fixtures';
 
 const FIRST_TIMESTAMP = '2026-08-12T10:00:00.000Z';
 const SECOND_TIMESTAMP = '2026-08-12T10:00:02.000Z';
+const CLOCK_PAUSE_BUFFER_MS = 500;
 
 function snapshot(
 	status: HealthSnapshot['status'],
@@ -37,6 +38,11 @@ function snapshot(
 			s3: { status: s3Status, latencyMs: 17 }
 		}
 	};
+}
+
+async function pauseClockAfterLoad(page: Page): Promise<void> {
+	const now = await page.evaluate(() => Date.now());
+	await page.clock.pauseAt(now + CLOCK_PAUSE_BUFFER_MS);
 }
 
 async function mockHealth(
@@ -181,9 +187,11 @@ test('deduplicates the direct status load and preserves cache-driven polling', a
 	await expect(page.getByRole('row', { name: /Хранилище S3.*Работает 17 мс/s })).toBeVisible();
 	await expect.poll(() => requests).toBe(1);
 
-	await page.clock.fastForward(59_999);
+	await pauseClockAfterLoad(page);
+
+	await page.clock.fastForward(50_000);
 	expect(requests).toBe(1);
-	await page.clock.fastForward(1);
+	await page.clock.fastForward(10_000);
 
 	await expect.poll(() => requests).toBe(2);
 	const unavailableS3Row = page.getByRole('row', { name: /Хранилище S3.*Не работает —/s });
@@ -192,6 +200,76 @@ test('deduplicates the direct status load and preserves cache-driven polling', a
 	await expect(page.getByRole('link', { name: 'странице состояния' })).toHaveCount(0);
 	await expect(page.getByText('Проверено', { exact: false })).toBeVisible();
 	await expect(page.getByRole('tab')).toHaveCount(0);
+});
+
+test('polls when the cached snapshot expires rather than a full lifetime later', async ({
+	page
+}) => {
+	await page.clock.install({ time: new Date(FIRST_TIMESTAMP) });
+	let requests = 0;
+	await page.route('**/healthz', async (route) => {
+		requests += 1;
+		const body =
+			requests === 1
+				? snapshot('healthy', FIRST_TIMESTAMP)
+				: snapshot('unhealthy', SECOND_TIMESTAMP, 'unhealthy');
+		await route.fulfill({
+			status: body.status === 'healthy' ? 200 : 503,
+			contentType: 'application/json',
+			headers: {
+				'cache-control': 'public, max-age=30',
+				...(requests === 1 ? { age: '25' } : {})
+			},
+			body: JSON.stringify(body)
+		});
+	});
+
+	await page.goto('/status');
+	await expect(page.getByRole('row', { name: /Хранилище S3.*Работает 17 мс/s })).toBeVisible();
+
+	await pauseClockAfterLoad(page);
+
+	await page.clock.fastForward(3_000);
+	expect(requests).toBe(1);
+	await page.clock.fastForward(2_000);
+
+	await expect.poll(() => requests).toBe(2);
+	await expect(page.getByRole('row', { name: /Хранилище S3.*Не работает —/s })).toBeVisible();
+});
+
+test('refreshes an expired snapshot as soon as the status page is revisited', async ({ page }) => {
+	await page.clock.install({ time: new Date(FIRST_TIMESTAMP) });
+	let requests = 0;
+	await page.route('**/healthz', async (route) => {
+		requests += 1;
+		const body = snapshot('healthy', FIRST_TIMESTAMP);
+		body.services.archai.latencyMs = requests === 1 ? 12 : 42;
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			headers: { 'cache-control': 'public, max-age=30' },
+			body: JSON.stringify(body)
+		});
+	});
+
+	await page.goto('/status');
+	await expect(page.getByRole('row', { name: /archAI.*Работает 12 мс/s })).toBeVisible();
+
+	await page.getByRole('link', { name: /ИИ – дизайн/ }).click();
+	await expect(page).not.toHaveURL(/\/status$/);
+
+	await pauseClockAfterLoad(page);
+
+	await page.clock.fastForward(60_000);
+	expect(requests).toBe(1);
+
+	await page.clock.resume();
+
+	await page.goBack();
+	await expect(page).toHaveURL(/\/status$/);
+
+	await expect.poll(() => requests).toBe(2);
+	await expect(page.getByRole('row', { name: /archAI.*Работает 42 мс/s })).toBeVisible();
 });
 
 test('keeps the last snapshot through a refresh failure and recovers', async ({ page }) => {
@@ -217,6 +295,9 @@ test('keeps the last snapshot through a refresh failure and recovers', async ({ 
 
 	await page.goto('/status');
 	await expect(page.getByRole('row', { name: /archAI.*Работает 12 мс/s })).toBeVisible();
+
+	await pauseClockAfterLoad(page);
+
 	await page.clock.fastForward(1_000);
 
 	await expect(page.getByRole('alert')).toHaveText(

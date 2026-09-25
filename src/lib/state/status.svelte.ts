@@ -17,6 +17,8 @@ import { healthSnapshotSchema, type HealthSnapshot } from '$lib/api/contract';
 export type StatusLoadState = 'idle' | 'loading' | 'ready' | 'error';
 
 const DEFAULT_POLL_INTERVAL_MS = 30_000;
+const MIN_POLL_INTERVAL_MS = 1_000;
+const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_TIMER_INTERVAL_SECONDS = Math.floor(2_147_483_647 / 1_000);
 
 class StatusLoadError extends Error {
@@ -24,6 +26,11 @@ class StatusLoadError extends Error {
 		super(message);
 		this.name = 'StatusLoadError';
 	}
+}
+
+function ageSeconds(response: Response): number {
+	const age = response.headers.get('age')?.trim();
+	return age && /^\d+$/.test(age) ? Number(age) : 0;
 }
 
 function pollInterval(response: Response): number {
@@ -39,7 +46,7 @@ function pollInterval(response: Response): number {
 		return DEFAULT_POLL_INTERVAL_MS;
 	}
 
-	return seconds * 1_000;
+	return Math.max(MIN_POLL_INTERVAL_MS, (seconds - ageSeconds(response)) * 1_000);
 }
 
 class StatusState {
@@ -48,10 +55,9 @@ class StatusState {
 	error = $state<string | null>(null);
 	#checked = false;
 	#polling = false;
-	#abort: AbortController | null = null;
 	#refreshPromise: Promise<void> | null = null;
 	#timer: ReturnType<typeof setTimeout> | null = null;
-	#pollInterval = DEFAULT_POLL_INTERVAL_MS;
+	#staleAt = 0;
 
 	checkOnce(): void {
 		if (this.#checked) return;
@@ -84,26 +90,25 @@ class StatusState {
 	}
 
 	async #performRefresh(): Promise<void> {
-		const controller = new AbortController();
-		this.#abort = controller;
-		this.#pollInterval = DEFAULT_POLL_INTERVAL_MS;
+		let interval = DEFAULT_POLL_INTERVAL_MS;
 
 		try {
-			const response = await fetch('/healthz', { signal: controller.signal });
+			const response = await fetch('/healthz', {
+				cache: 'no-store',
+				signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+			});
 			if (response.status !== 200 && response.status !== 503) {
 				throw new StatusLoadError('health request failed');
 			}
 
 			const parsed = healthSnapshotSchema.safeParse(await response.json());
 			if (!parsed.success) throw new StatusLoadError('health response invalid');
-			if (this.#abort !== controller) return;
 
 			this.snapshot = parsed.data;
 			this.state = 'ready';
 			this.error = null;
-			this.#pollInterval = pollInterval(response);
+			interval = pollInterval(response);
 		} catch (error) {
-			if (controller.signal.aborted) return;
 			this.state = this.snapshot === null ? 'error' : 'ready';
 			this.error = error instanceof Error ? error.name : 'StatusLoadError';
 			console.error(
@@ -111,7 +116,7 @@ class StatusState {
 				error instanceof Error ? error.name : typeof error
 			);
 		} finally {
-			if (this.#abort === controller) this.#abort = null;
+			this.#staleAt = Date.now() + interval;
 			this.#refreshPromise = null;
 		}
 
@@ -120,10 +125,13 @@ class StatusState {
 
 	#schedulePoll(): void {
 		if (!this.#polling || this.#timer !== null) return;
-		this.#timer = setTimeout(() => {
-			this.#timer = null;
-			void this.#refresh();
-		}, this.#pollInterval);
+		this.#timer = setTimeout(
+			() => {
+				this.#timer = null;
+				void this.#refresh();
+			},
+			Math.max(0, this.#staleAt - Date.now())
+		);
 	}
 }
 

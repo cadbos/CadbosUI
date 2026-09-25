@@ -14,7 +14,12 @@
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { HealthSnapshot, NostrHealth, ServiceHealth } from '$lib/api/contract';
+import {
+	healthSnapshotSchema,
+	type HealthSnapshot,
+	type NostrHealth,
+	type ServiceHealth
+} from '$lib/api/contract';
 import { NOSTR_PROFILE_BOOTSTRAP_RELAYS } from '$lib/nostr/connect';
 import { getBucketByName, uploadsBucketName } from '$lib/server/media';
 import { isS3BucketAvailable } from '$lib/server/s3';
@@ -173,6 +178,18 @@ function healthResponse(snapshot: HealthSnapshot, ttlSeconds: number): Response 
 	});
 }
 
+async function cachedHealthResponse(cached: Response): Promise<Response | undefined> {
+	const parsed = healthSnapshotSchema.safeParse(await cached.clone().json());
+	if (!parsed.success) {
+		console.warn(JSON.stringify({ event: 'health_cache_entry_invalid' }));
+		return undefined;
+	}
+	const ageSeconds = Math.floor((Date.now() - Date.parse(parsed.data.timestamp)) / 1_000);
+	const response = new Response(cached.body, cached);
+	response.headers.set('age', String(Math.max(0, ageSeconds)));
+	return response;
+}
+
 function logCacheError(operation: 'read' | 'write', error: unknown): void {
 	console.error(
 		`Health cache ${operation} failed:`,
@@ -188,7 +205,8 @@ export const GET: RequestHandler = async ({ request, platform, fetch }) => {
 	if (cache) {
 		try {
 			const cached = await cache.match(key);
-			if (cached) return cached;
+			const response = cached && (await cachedHealthResponse(cached));
+			if (response) return response;
 		} catch (error) {
 			logCacheError('read', error);
 		}
