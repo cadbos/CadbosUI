@@ -22,10 +22,14 @@ test('object replacement suggests the custom prompt for adding an object and car
 	const objectField = panel.getByPlaceholder('например: серый диван у окна');
 
 	await objectField.fill('серый диван у окна');
-	await expect(panel.getByText('Похоже', { exact: false })).toHaveCount(0);
+	await expect(panel.getByText('похоже', { exact: false })).toHaveCount(0);
 
 	await objectField.fill('добавь стол у окна');
-	await expect(panel.getByText('Похоже, вы хотите добавить новый предмет.')).toBeVisible();
+	const hint = panel.getByRole('status').filter({ has: page.locator('q') });
+	await expect(
+		hint.getByText('похоже, вы хотите добавить новый предмет', { exact: false })
+	).toBeVisible();
+	await expect(hint.locator('q')).toHaveText(['добавь']);
 	await panel.getByRole('button', { name: 'Перейти в «Свой промпт»' }).click();
 
 	await expect(page).toHaveURL(/tool=freeform/);
@@ -44,10 +48,12 @@ test('object replacement explains the field format when the whole swap is typed 
 	await page.goto('/edit?tool=object-replacement');
 	const panel = page.locator('#edit-tool-panel-object-replacement');
 
-	await panel.getByPlaceholder('например: серый диван у окна').fill('замени диван на кресло');
+	await panel.getByPlaceholder('например: серый диван у окна').fill('Замени диван на кресло');
+	const hint = panel.getByRole('status').filter({ has: page.locator('q') });
 	await expect(
-		panel.getByText('Опишите только предмет, который уже есть на фото', { exact: false })
+		hint.getByText('опишите только предмет, который уже есть на фото', { exact: false })
 	).toBeVisible();
+	await expect(hint.locator('q')).toHaveText(['Замени']);
 	await expect(panel.getByRole('button', { name: /Перейти/ })).toHaveCount(0);
 });
 

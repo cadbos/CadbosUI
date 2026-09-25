@@ -13,11 +13,11 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Lightbulb } from '@lucide/svelte';
+	import { ArrowRight, Lightbulb } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { PathnameWithSearchOrHash } from '$app/types';
-	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import {
 		modeHintFor,
 		targetLabel,
@@ -53,6 +53,20 @@ before the Change Date. See LICENSE for complete terms.
 	};
 
 	const hint = $derived(modeHintFor(field, text));
+	const locale = $derived(getLocale());
+
+	function messageParts(
+		key: TranslationKey,
+		triggers: string[]
+	): { value: string; word: boolean }[] {
+		const [before, after] = t(key).split('{words}');
+		const words = new Intl.ListFormat(locale, { type: 'conjunction' }).formatToParts(triggers);
+		return [
+			{ value: before, word: false },
+			...words.map((part) => ({ value: part.value, word: part.type === 'element' })),
+			{ value: after, word: false }
+		];
+	}
 
 	function switchMode(target: ModeHintTarget): void {
 		request.prefillFromModeHint(target, text);
@@ -67,23 +81,33 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
-<div class="mode-hint-live" role="status" aria-live="polite" aria-atomic="true">
-	{#if hint?.kind === 'switch'}
-		{@const target = t(targetLabel(hint.target))}
-		<div class="mode-hint">
-			<Lightbulb size={16} strokeWidth={1.8} aria-hidden="true" />
-			<div class="mode-hint-body">
-				<p>{t(INTENT_MESSAGES[hint.intent])} {ti('modeHint.suggestion', { target })}</p>
-				<button type="button" class="mode-hint-switch" onclick={() => switchMode(hint.target)}>
-					{ti('modeHint.switch', { target })}
-				</button>
-			</div>
-		</div>
-	{:else if hint?.kind === 'format'}
-		<div class="mode-hint">
-			<Lightbulb size={16} strokeWidth={1.8} aria-hidden="true" />
-			<div class="mode-hint-body">
-				<p>{t(FORMAT_MESSAGES[hint.field])}</p>
+{#snippet message(key: TranslationKey, triggers: string[])}
+	<p>
+		{#each messageParts(key, triggers) as part, i (i)}
+			{#if part.word}<q class="mode-hint-word">{part.value}</q>{:else}{part.value}{/if}
+		{/each}
+	</p>
+{/snippet}
+
+<div class="mode-hint-live" role="status" aria-live="polite" aria-atomic="true" lang={locale}>
+	{#if hint}
+		<div class="mode-hint-reveal">
+			<div class="mode-hint">
+				<span class="mode-hint-icon">
+					<Lightbulb size={14} strokeWidth={2} aria-hidden="true" />
+				</span>
+				<div class="mode-hint-body">
+					{#if hint.kind === 'switch'}
+						{@const target = t(targetLabel(hint.target))}
+						{@render message(INTENT_MESSAGES[hint.intent], hint.triggers)}
+						<button type="button" class="mode-hint-switch" onclick={() => switchMode(hint.target)}>
+							{ti('modeHint.switch', { target })}
+							<ArrowRight size={14} strokeWidth={2.2} aria-hidden="true" />
+						</button>
+					{:else}
+						{@render message(FORMAT_MESSAGES[hint.field], hint.triggers)}
+					{/if}
+				</div>
 			</div>
 		</div>
 	{/if}
@@ -94,50 +118,109 @@ before the Change Date. See LICENSE for complete terms.
 		display: none;
 	}
 
-	.mode-hint {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.5rem;
-		padding: 0.625rem 0.75rem;
-		font-size: 0.8125rem;
-		color: var(--color-text);
-		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
-		border: 1.5px solid color-mix(in srgb, var(--color-accent) 25%, transparent);
-		border-radius: 10px;
+	.mode-hint-reveal {
+		display: grid;
+		grid-template-rows: 1fr;
+		overflow: hidden;
+		animation: mode-hint-reveal 0.2s ease-out 0.4s backwards;
 	}
 
-	.mode-hint :global(svg) {
+	.mode-hint {
+		display: flex;
+		min-height: 0;
+		align-items: flex-start;
+		gap: 0.625rem;
+		padding: 0.75rem 0.875rem;
+		font-size: 0.875rem;
+		color: var(--color-warning-text);
+		background: var(--color-warning-bg);
+		border: 1px solid color-mix(in srgb, var(--color-warning-text) 22%, transparent);
+		border-radius: var(--radius);
+		animation: mode-hint-enter 0.24s ease-out 0.5s backwards;
+	}
+
+	.mode-hint-icon {
+		display: grid;
 		flex-shrink: 0;
-		margin-top: 0.125rem;
-		color: var(--color-accent-text);
+		place-items: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		color: var(--color-warning-bg);
+		background: var(--color-warning-text);
+		border-radius: 50%;
 	}
 
 	.mode-hint-body {
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		gap: 0.5rem;
+		gap: 0.625rem;
 		min-width: 0;
+		padding-top: 0.125rem;
 	}
 
 	.mode-hint-body p {
 		margin: 0;
-		line-height: 1.4;
+		line-height: 1.45;
+	}
+
+	.mode-hint-word {
+		font-weight: 700;
+		text-decoration: underline;
+		text-decoration-thickness: 2px;
+		text-underline-offset: 3px;
 	}
 
 	.mode-hint-switch {
-		padding: 0.3rem 0.75rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.4rem 0.875rem;
 		font: inherit;
 		font-weight: 600;
-		color: var(--color-accent-text);
-		background: var(--color-surface);
-		border: 1.5px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
-		border-radius: 100px;
+		color: var(--color-warning-bg);
+		background: var(--color-warning-text);
+		text-align: start;
+		border: none;
+		border-radius: var(--radius-sm);
 		cursor: pointer;
-		transition: border-color 0.15s;
+		transition: opacity 0.15s;
 	}
 
 	.mode-hint-switch:hover {
-		border-color: var(--color-accent);
+		opacity: 0.88;
+	}
+
+	.mode-hint-switch :global(svg) {
+		transition: transform 0.15s;
+	}
+
+	.mode-hint-switch:hover :global(svg) {
+		transform: translateX(2px);
+	}
+
+	@keyframes mode-hint-reveal {
+		from {
+			grid-template-rows: 0fr;
+		}
+	}
+
+	@keyframes mode-hint-enter {
+		from {
+			opacity: 0;
+			transform: translateY(-4px);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.mode-hint-reveal,
+		.mode-hint {
+			animation: none;
+		}
+
+		.mode-hint-switch,
+		.mode-hint-switch :global(svg) {
+			transition: none;
+		}
 	}
 </style>
