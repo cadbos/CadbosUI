@@ -857,18 +857,19 @@ export const en = {
 	'lightSettings.preset.allLightsOn.phrase': 'turn on all the lights',
 	'lightSettings.preset.allLightsOff.label': 'All lights off',
 	'lightSettings.preset.allLightsOff.phrase': 'turn off all the lights',
-	'modeHint.intent.add': 'Looks like you want to add a new object.',
-	'modeHint.intent.remove': 'Looks like you want to remove an object.',
-	'modeHint.intent.replace': 'Looks like you want to swap one object for another.',
-	'modeHint.intent.recolor': 'Looks like you want to change the color or material of a surface.',
-	'modeHint.intent.light': 'Looks like you want to change the lighting.',
-	'modeHint.intent.style': 'Looks like you want to change the style of the whole interior.',
-	'modeHint.suggestion': 'The “{target}” tool fits this better.',
+	'modeHint.intent.add': '{words} — looks like you want to add a new object.',
+	'modeHint.intent.remove': '{words} — looks like you want to remove an object.',
+	'modeHint.intent.replace': '{words} — looks like you want to swap one object for another.',
+	'modeHint.intent.recolor':
+		'{words} — looks like you want to change the color or material of a surface.',
+	'modeHint.intent.light': '{words} — looks like you want to change the lighting.',
+	'modeHint.intent.style':
+		'{words} — looks like you want to change the style of the whole interior.',
 	'modeHint.switch': 'Switch to “{target}”',
 	'modeHint.format.removeObject':
-		'Just name the object, for example “old sofa” — the removal instruction is added for you.',
+		'You can leave out {words} — just name the object, for example “old sofa”.',
 	'modeHint.format.objectReplacement':
-		'Describe only the object that is already in the photo, for example “gray sofa by the window”. The new object comes from the reference image.',
+		'You can leave out {words} — describe only the object that is already in the photo, for example “gray sofa by the window”. The new object comes from the reference image.',
 	'modeHint.format.textureReplacement':
-		'Name only the surface, for example “sofa upholstery”. The new texture comes from the reference image; to change a color from a description, use “Custom prompt”.'
+		'You can leave out {words} — name only the surface, for example “sofa upholstery”. The new texture comes from the reference image; to change a color from a description, use “Custom prompt”.'
 } as const satisfies Dictionary;

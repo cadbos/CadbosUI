@@ -797,7 +797,6 @@ export interface Dictionary {
 	'modeHint.intent.recolor': string;
 	'modeHint.intent.light': string;
 	'modeHint.intent.style': string;
-	'modeHint.suggestion': string;
 	'modeHint.switch': string;
 	'modeHint.format.removeObject': string;
 	'modeHint.format.objectReplacement': string;
