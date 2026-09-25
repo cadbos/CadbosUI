@@ -20,22 +20,23 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import type { D1Database } from '@cloudflare/workers-types';
+import { createDb, type Database } from '$lib/server/db';
 import { TEST_S3_BUCKET } from './generation-fixtures';
 
-const MIGRATIONS_DIR = new URL('../../../../migrations/', import.meta.url);
-// Mirrors `wrangler d1 migrations apply`: every *.sql file in the migrations
-// dir, applied in filename order.
-const SCHEMA = readdirSync(MIGRATIONS_DIR)
-	.filter((file) => file.endsWith('.sql'))
+const MIGRATIONS_DIR = new URL('../../../../drizzle/', import.meta.url);
+const SCHEMA = readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
+	.filter((entry) => entry.isDirectory())
+	.map((entry) => entry.name)
 	.sort()
-	.map((file) => readFileSync(new URL(file, MIGRATIONS_DIR), 'utf8'))
+	.map((directory) => readFileSync(new URL(`${directory}/migration.sql`, MIGRATIONS_DIR), 'utf8'))
 	.join('\n');
 
 interface ShimStatement {
 	bind: (...next: SQLInputValue[]) => ShimStatement;
-	run: () => { success: true; meta: { changes: number } };
-	first: (col?: string) => unknown;
-	all: () => { results: Record<string, unknown>[] };
+	run: () => Promise<{ success: true; meta: { changes: number } }>;
+	first: (col?: string) => Promise<unknown>;
+	all: () => Promise<{ results: Record<string, unknown>[] }>;
+	raw: () => Promise<unknown[][]>;
 	sql: string;
 	args: SQLInputValue[];
 }
@@ -43,27 +44,35 @@ interface ShimStatement {
 export function makeD1(): D1Database {
 	const db = new DatabaseSync(':memory:');
 	db.exec('PRAGMA foreign_keys = ON');
-	db.exec(SCHEMA);
+	db.exec(SCHEMA.replaceAll('--> statement-breakpoint', ''));
 	db.prepare('INSERT INTO buckets (name, url) VALUES (?, ?)').run(
 		TEST_S3_BUCKET.name,
 		'https://uploads.cadbos.example'
 	);
 	const stmt = (sql: string, args: SQLInputValue[] = []): ShimStatement => ({
 		bind: (...next: SQLInputValue[]) => stmt(sql, next),
-		run: () => ({ success: true, meta: { changes: Number(db.prepare(sql).run(...args).changes) } }),
-		first: (col?: string) => {
+		run: async () => ({
+			success: true,
+			meta: { changes: Number(db.prepare(sql).run(...args).changes) }
+		}),
+		first: async (col?: string) => {
 			const row = db.prepare(sql).get(...args) as Record<string, unknown> | undefined;
 			if (row === undefined) return null;
 			return col ? row[col] : row;
 		},
-		all: () => ({ results: db.prepare(sql).all(...args) as Record<string, unknown>[] }),
+		all: async () => ({ results: db.prepare(sql).all(...args) as Record<string, unknown>[] }),
+		raw: async () => {
+			const raw = db.prepare(sql);
+			raw.setReturnArrays(true);
+			return raw.all(...args) as unknown as unknown[][];
+		},
 		sql,
 		args
 	});
 	return {
 		prepare: (sql: string) => stmt(sql),
 		// Mirrors D1's batch(): every statement commits or rolls back together.
-		batch: (statements: ShimStatement[]) => {
+		batch: async (statements: ShimStatement[]) => {
 			db.exec('BEGIN');
 			try {
 				const results = statements.map((statement) => ({
@@ -79,4 +88,8 @@ export function makeD1(): D1Database {
 			}
 		}
 	} as unknown as D1Database;
+}
+
+export function makeDb(): Database {
+	return createDb(makeD1());
 }

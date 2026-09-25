@@ -12,8 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
+import { sql } from 'drizzle-orm';
 import type { RequestFormSnapshot } from '$lib/api/contract';
+import type { Database } from '$lib/server/db';
 
 export type FluxKontextEditJobStatus = 'processing' | 'completed' | 'failed';
 
@@ -76,7 +77,7 @@ function toFluxKontextEditJob(row: FluxKontextEditJobRow): FluxKontextEditJob {
 }
 
 export async function createFluxKontextEditJob(
-	db: D1Database,
+	db: Database,
 	input: {
 		id: string;
 		userId: string;
@@ -90,51 +91,33 @@ export async function createFluxKontextEditJob(
 		formSnapshot?: RequestFormSnapshot;
 	}
 ): Promise<FluxKontextEditJob> {
-	await db
-		.prepare(
-			'INSERT INTO flux_kontext_edit_jobs ' +
-				'(id, user_id, comfy_prompt_id, scene_media_id, session_id, instruction, cost, status, created_at, updated_at, upload_queue_sec, form_snapshot) ' +
-				"VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?)"
-		)
-		.bind(
-			input.id,
-			input.userId,
-			input.comfyPromptId,
-			input.sceneMediaId,
-			input.sessionId,
-			input.instruction,
-			input.cost,
-			input.createdAt,
-			input.createdAt,
-			input.uploadQueueSec,
-			input.formSnapshot ? JSON.stringify(input.formSnapshot) : null
-		)
-		.run();
+	await db.run(
+		sql`INSERT INTO flux_kontext_edit_jobs
+			(id, user_id, comfy_prompt_id, scene_media_id, session_id, instruction, cost, status, created_at, updated_at, upload_queue_sec, form_snapshot)
+			VALUES (${input.id}, ${input.userId}, ${input.comfyPromptId}, ${input.sceneMediaId}, ${input.sessionId}, ${input.instruction}, ${input.cost}, 'processing', ${input.createdAt}, ${input.createdAt}, ${input.uploadQueueSec}, ${input.formSnapshot ? JSON.stringify(input.formSnapshot) : null})`
+	);
 	const job = await getFluxKontextEditJob(db, input.userId, input.id);
 	if (!job) throw new Error('flux kontext edit job insert failed');
 	return job;
 }
 
 export async function getFluxKontextEditJob(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	id: string
 ): Promise<FluxKontextEditJob | null> {
-	const row = await db
-		.prepare(
-			'SELECT j.id, j.user_id, j.comfy_prompt_id, j.scene_media_id, j.session_id, ' +
-				'j.instruction, j.cost, j.status, j.output_media_id, ' +
-				'j.error_code, j.balance_after, j.created_at, j.updated_at, j.completed_at ' +
-				'FROM flux_kontext_edit_jobs j ' +
-				'WHERE j.id = ? AND j.user_id = ?'
-		)
-		.bind(id, userId)
-		.first<FluxKontextEditJobRow>();
+	const row = await db.get<FluxKontextEditJobRow>(
+		sql`SELECT j.id, j.user_id, j.comfy_prompt_id, j.scene_media_id, j.session_id,
+			j.instruction, j.cost, j.status, j.output_media_id,
+			j.error_code, j.balance_after, j.created_at, j.updated_at, j.completed_at
+			FROM flux_kontext_edit_jobs j
+			WHERE j.id = ${id} AND j.user_id = ${userId}`
+	);
 	return row ? toFluxKontextEditJob(row) : null;
 }
 
 export async function failFluxKontextEditJob(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	id: string,
 	errorCode: string,
@@ -143,21 +126,18 @@ export async function failFluxKontextEditJob(
 	executionSec: number,
 	downloadSec = 0
 ): Promise<FluxKontextEditJob> {
-	await db
-		.prepare(
-			"UPDATE flux_kontext_edit_jobs SET status = 'failed', error_code = ?, updated_at = ?, " +
-				'completed_at = ?, queue_wait_sec = ?, execution_sec = ?, download_sec = ? ' +
-				"WHERE id = ? AND user_id = ? AND status = 'processing'"
-		)
-		.bind(errorCode, completedAt, completedAt, queueWaitSec, executionSec, downloadSec, id, userId)
-		.run();
+	await db.run(
+		sql`UPDATE flux_kontext_edit_jobs SET status = 'failed', error_code = ${errorCode}, updated_at = ${completedAt},
+			completed_at = ${completedAt}, queue_wait_sec = ${queueWaitSec}, execution_sec = ${executionSec}, download_sec = ${downloadSec}
+			WHERE id = ${id} AND user_id = ${userId} AND status = 'processing'`
+	);
 	const job = await getFluxKontextEditJob(db, userId, id);
 	if (!job) throw new Error('flux kontext edit job not found');
 	return job;
 }
 
 export async function completeFluxKontextEditJob(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	id: string,
 	outputMediaId: number,
@@ -167,66 +147,36 @@ export async function completeFluxKontextEditJob(
 	downloadSec: number,
 	reuploadSec: number
 ): Promise<FluxKontextEditJob> {
-	const results = await db.batch<FluxKontextEditDeductionSnapshotRow>([
-		db
-			.prepare(
-				'SELECT c.balance AS available_balance, j.cost FROM credits c ' +
-					'JOIN flux_kontext_edit_jobs j ON j.user_id = c.user_id ' +
-					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
-			)
-			.bind(id, userId),
-		db
-			.prepare(
-				'UPDATE credits SET balance = MAX(balance - ' +
-					"(SELECT cost FROM flux_kontext_edit_jobs WHERE id = ? AND user_id = ? AND status = 'processing'), " +
-					'0), ' +
-					'updated_at = ? WHERE user_id = ? AND EXISTS ' +
-					"(SELECT 1 FROM flux_kontext_edit_jobs WHERE id = ? AND user_id = ? AND status = 'processing')"
-			)
-			.bind(id, userId, completedAt, userId, id, userId),
-		db
-			.prepare(
-				'INSERT INTO generations ' +
-					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id, ' +
-					'comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot) ' +
-					"SELECT j.id, j.user_id, ?, j.scene_media_id, j.instruction, 'edit', j.cost, c.balance, ?, j.session_id, " +
-					'j.upload_queue_sec, ?, ?, ?, ?, j.form_snapshot ' +
-					'FROM flux_kontext_edit_jobs j JOIN credits c ON c.user_id = j.user_id ' +
-					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
-			)
-			.bind(
-				outputMediaId,
-				completedAt,
-				queueWaitSec,
-				executionSec,
-				downloadSec,
-				reuploadSec,
-				id,
-				userId
-			),
-		db
-			.prepare(
-				"UPDATE flux_kontext_edit_jobs SET status = 'completed', output_media_id = ?, " +
-					'balance_after = (SELECT balance FROM credits WHERE user_id = ?), updated_at = ?, completed_at = ?, ' +
-					'queue_wait_sec = ?, execution_sec = ?, download_sec = ?, reupload_sec = ? ' +
-					"WHERE id = ? AND user_id = ? AND status = 'processing' " +
-					'AND EXISTS (SELECT 1 FROM credits WHERE user_id = ?)'
-			)
-			.bind(
-				outputMediaId,
-				userId,
-				completedAt,
-				completedAt,
-				queueWaitSec,
-				executionSec,
-				downloadSec,
-				reuploadSec,
-				id,
-				userId,
-				userId
-			)
+	const [snapshotRows] = await db.batch([
+		db.all<FluxKontextEditDeductionSnapshotRow>(
+			sql`SELECT c.balance AS available_balance, j.cost FROM credits c
+				JOIN flux_kontext_edit_jobs j ON j.user_id = c.user_id
+				WHERE j.id = ${id} AND j.user_id = ${userId} AND j.status = 'processing'`
+		),
+		db.run(
+			sql`UPDATE credits SET balance = MAX(balance -
+				(SELECT cost FROM flux_kontext_edit_jobs WHERE id = ${id} AND user_id = ${userId} AND status = 'processing'), 0),
+				updated_at = ${completedAt} WHERE user_id = ${userId} AND EXISTS
+				(SELECT 1 FROM flux_kontext_edit_jobs WHERE id = ${id} AND user_id = ${userId} AND status = 'processing')`
+		),
+		db.run(
+			sql`INSERT INTO generations
+				(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id,
+				comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot)
+				SELECT j.id, j.user_id, ${outputMediaId}, j.scene_media_id, j.instruction, 'edit', j.cost, c.balance, ${completedAt}, j.session_id,
+				j.upload_queue_sec, ${queueWaitSec}, ${executionSec}, ${downloadSec}, ${reuploadSec}, j.form_snapshot
+				FROM flux_kontext_edit_jobs j JOIN credits c ON c.user_id = j.user_id
+				WHERE j.id = ${id} AND j.user_id = ${userId} AND j.status = 'processing'`
+		),
+		db.run(
+			sql`UPDATE flux_kontext_edit_jobs SET status = 'completed', output_media_id = ${outputMediaId},
+				balance_after = (SELECT balance FROM credits WHERE user_id = ${userId}), updated_at = ${completedAt}, completed_at = ${completedAt},
+				queue_wait_sec = ${queueWaitSec}, execution_sec = ${executionSec}, download_sec = ${downloadSec}, reupload_sec = ${reuploadSec}
+				WHERE id = ${id} AND user_id = ${userId} AND status = 'processing'
+				AND EXISTS (SELECT 1 FROM credits WHERE user_id = ${userId})`
+		)
 	]);
-	const snapshot = results[0]?.results[0];
+	const snapshot = snapshotRows[0];
 	if (snapshot && snapshot.available_balance < snapshot.cost) {
 		console.warn('Flux Kontext edit credit deduction exceeded available balance:', {
 			jobId: id
