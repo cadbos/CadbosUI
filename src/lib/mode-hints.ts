@@ -38,8 +38,13 @@ export type ModeHintFormatField = Extract<
 >;
 
 export type ModeHint =
-	| { kind: 'switch'; intent: EditIntent; target: ModeHintTarget }
-	| { kind: 'format'; field: ModeHintFormatField };
+	| { kind: 'switch'; intent: EditIntent; target: ModeHintTarget; triggers: string[] }
+	| { kind: 'format'; field: ModeHintFormatField; triggers: string[] };
+
+interface IntentMatch {
+	intent: EditIntent;
+	triggers: RegExpExecArray[];
+}
 
 interface FieldRule {
 	own: ModeHintTarget | null;
@@ -308,8 +313,17 @@ const TOOL_LABELS: Record<ToolId, TranslationKey> = {
 	'texture-replacement': 'mode.textureReplacement'
 };
 
+function lowerCaseKeepingLength(text: string): string {
+	return text.replace(/[\s\S]/g, (char) => {
+		const lower = char.toLowerCase();
+		return lower.length === 1 ? lower : char;
+	});
+}
+
 function normalize(text: string): string {
-	return text.toLowerCase().replaceAll('ё', 'е').replace(NEGATION, ' ');
+	return lowerCaseKeepingLength(text)
+		.replaceAll('ё', 'е')
+		.replace(NEGATION, (negated) => ' '.repeat(negated.length));
 }
 
 function matchAddObjectPreset(normalized: string): string | null {
@@ -330,29 +344,45 @@ function matchAddObjectPreset(normalized: string): string | null {
 	return best?.id ?? null;
 }
 
-export function detectIntents(text: string, ignores: readonly EditIntent[] = []): EditIntent[] {
-	const normalized = normalize(text);
-	const has = (intent: EditIntent, pattern: RegExp): boolean =>
-		!ignores.includes(intent) && pattern.test(normalized);
-	const removes = has('remove', REMOVE);
-	const adds = has('add', ADD);
-	const replaces = has('replace', REPLACE);
-	const candidates: [EditIntent, boolean][] = [
-		['replace', removes && adds],
-		['remove', removes],
-		['add', adds && !replaces && matchAddObjectPreset(normalized) !== null],
-		['light', has('light', LIGHT) || (has('light', BRIGHTNESS) && SCENE.test(normalized))],
-		[
-			'recolor',
-			has('recolor', CHANGE_SURFACE) ||
-				has('recolor', RECOLOR) ||
-				(has('recolor', MAKE) && SURFACE_LOOK.test(normalized) && !SCENE.test(normalized))
-		],
-		['replace', replaces],
-		['add', adds],
-		['style', has('style', STYLE)]
+function detectIntentMatches(normalized: string, ignores: readonly EditIntent[]): IntentMatch[] {
+	const find = (intent: EditIntent, pattern: RegExp): RegExpExecArray | null =>
+		ignores.includes(intent) ? null : pattern.exec(normalized);
+	const remove = find('remove', REMOVE);
+	const add = find('add', ADD);
+	const replace = find('replace', REPLACE);
+	const light = find('light', LIGHT) ?? (SCENE.test(normalized) ? find('light', BRIGHTNESS) : null);
+	const surfaceChange = find('recolor', CHANGE_SURFACE) ?? find('recolor', RECOLOR);
+	const make = SCENE.test(normalized) ? null : find('recolor', MAKE);
+	const look = make === null ? null : SURFACE_LOOK.exec(normalized);
+	const style = find('style', STYLE);
+	const candidates: [EditIntent, RegExpExecArray[] | null][] = [
+		['replace', remove && add && [remove, add]],
+		['remove', remove && [remove]],
+		['add', add && !replace && matchAddObjectPreset(normalized) !== null ? [add] : null],
+		['light', light && [light]],
+		['recolor', surfaceChange ? [surfaceChange] : make && look && [make, look]],
+		['replace', replace && [replace]],
+		['add', add && [add]],
+		['style', style && [style]]
 	];
-	return [...new Set(candidates.filter(([, matched]) => matched).map(([intent]) => intent))];
+	const matches: IntentMatch[] = [];
+	for (const [intent, triggers] of candidates) {
+		if (triggers !== null && !matches.some((match) => match.intent === intent)) {
+			matches.push({ intent, triggers });
+		}
+	}
+	return matches;
+}
+
+export function detectIntents(text: string, ignores: readonly EditIntent[] = []): EditIntent[] {
+	return detectIntentMatches(normalize(text), ignores).map((match) => match.intent);
+}
+
+function triggerWords(text: string, triggers: RegExpExecArray[]): string[] {
+	return triggers
+		.toSorted((a, b) => a.index - b.index)
+		.filter((trigger, i, sorted) => i === 0 || trigger.index !== sorted[i - 1].index)
+		.map((trigger) => text.slice(trigger.index, trigger.index + trigger[0].length));
 }
 
 function intentTarget(intent: EditIntent, normalized: string): ModeHintTarget {
@@ -384,13 +414,19 @@ function sameTarget(a: ModeHintTarget | null, b: ModeHintTarget): boolean {
 
 export function modeHintFor(field: ModeHintField, text: string): ModeHint | null {
 	const rule = FIELD_RULES[field];
-	const intents = detectIntents(text, rule.ignores);
-	if (intents.length === 0 || intents.some((intent) => rule.accepts.includes(intent))) return null;
-	const intent = intents[0];
-	if (rule.format?.intents.includes(intent)) return { kind: 'format', field: rule.format.field };
-	const target = intentTarget(intent, normalize(text));
+	const normalized = normalize(text);
+	const matches = detectIntentMatches(normalized, rule.ignores);
+	if (matches.length === 0 || matches.some((match) => rule.accepts.includes(match.intent))) {
+		return null;
+	}
+	const { intent, triggers: found } = matches[0];
+	const triggers = triggerWords(text, found);
+	if (rule.format?.intents.includes(intent)) {
+		return { kind: 'format', field: rule.format.field, triggers };
+	}
+	const target = intentTarget(intent, normalized);
 	if (sameTarget(rule.own, target)) return null;
-	return { kind: 'switch', intent, target };
+	return { kind: 'switch', intent, target, triggers };
 }
 
 export function targetLabel(target: ModeHintTarget): TranslationKey {
