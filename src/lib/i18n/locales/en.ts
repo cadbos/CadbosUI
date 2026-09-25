@@ -291,17 +291,16 @@ export const en = {
 	'status.service.d1': 'D1 database',
 	'status.service.nostr': 'Nostr relays',
 	'status.service.s3': 'S3 storage',
-	'status.hint.archai':
-		'Checks that the archAI API key and URL are configured and that a wallet balance request succeeds.',
+	'status.hint.archai': 'Powers Create (Generate), Style transfer, and Upscale to 4K.',
 	'status.hint.assets':
-		"Checks that the app's own static files (JS, CSS, interface images) are reachable. Unrelated to the S3 storage used for user-uploaded images.",
+		"Serves the app's own interface files (JS, CSS, images). Unrelated to the S3 storage used for user-uploaded images.",
 	'status.hint.comfyui':
-		'Checks that the ComfyUI image-generation backend is configured and responds to a stats request.',
+		'Provides all editing instruments: Object replacement, Texture replacement, Edit (custom prompt), and Light.',
 	'status.hint.d1':
-		'Checks that the D1 database (accounts, history, balance) is configured and responds to a query.',
+		'Stores accounts, Spending history, Balance, and Scenes (your generation history).',
 	'status.hint.nostr':
-		'Checks the reachability of a fixed set of 4 bootstrap relays that Cadbos uses by default. This is an internal infrastructure check — it is unrelated to the relay list in your profile (see "Relays" in the header), which can have a different count.',
-	'status.hint.s3': 'Checks that the S3 storage used for user-uploaded images is reachable.',
+		'Handles Sign in, via Nostr extension or Nostr Connect. Unrelated to the relay count shown in your profile (see "Relays" in the header).',
+	'status.hint.s3': 'Stores the room photo you upload and the images Cadbos generates.',
 	'version.title': 'Application version',
 	'version.subtitle': 'Release and build information for this Cadbos deployment.',
 	'version.current': 'Current version',
