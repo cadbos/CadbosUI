@@ -14,6 +14,7 @@
 
 import type { Page } from '@playwright/test';
 
+import { ru } from '$lib/i18n/locales/ru';
 import { expect, test } from './fixtures';
 
 async function authenticate(page: Page): Promise<void> {
@@ -430,3 +431,35 @@ test('direct navigation to /usage stays on /usage instead of bouncing to the ren
 	await expect(page).toHaveURL(/\/usage$/);
 	await expect(page.getByRole('tab', { name: 'Рендер' })).toHaveCount(0);
 });
+
+// Regression guard: a route's title must be part of the server-rendered HTML,
+// not assigned only after hydration via $effect (which never runs during SSR) —
+// otherwise view-source, share previews, and the pre-hydration paint all show
+// the generic app title instead of the page's own.
+test('the server-rendered HTML already has the route-specific title, before any client JS runs', async ({
+	request
+}) => {
+	const response = await request.get('/expenses');
+	const html = await response.text();
+	expect(html).toContain(`<title>${ru['expenses.title']}</title>`);
+});
+
+// Regression guard: each page's <svelte:head><title> compiles to an effect with
+// no cleanup, so leaving a titled page for a route with no title of its own (the
+// workspace routes the logo links to) used to leave the tab title stuck forever.
+// Every workspace leaf page now asserts the app title on mount for exactly this
+// reason (see src/routes/create/[scene=scene]/+page.svelte).
+for (const [path, title] of [
+	['/expenses', ru['expenses.title']],
+	['/resources', ru['resources.title']],
+	['/projects', ru['projects.title']]
+] as const) {
+	test(`clicking the logo restores the app title after leaving ${path}`, async ({ page }) => {
+		await page.goto(path);
+		await expect(page).toHaveTitle(title);
+
+		await page.locator('.brand').click();
+		await expect(page).toHaveURL(/\/create\/interior/);
+		await expect(page).toHaveTitle(ru['app.title']);
+	});
+}
