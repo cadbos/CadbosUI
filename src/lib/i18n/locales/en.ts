@@ -52,6 +52,11 @@ export const en = {
 	'workspace.sessionTabs.renameFailed': "Couldn't rename the session",
 	'workspace.shareButton': 'Share',
 	'workspace.sessionsButton': 'Sessions',
+	'workspace.urlTarget.loading': 'Opening the session…',
+	'workspace.urlTarget.failed':
+		"Couldn't open the session from this link. Check your connection and try again.",
+	'workspace.urlTarget.retry': 'Try again',
+	'workspace.urlTarget.dismiss': 'Continue without it',
 	'view.switcher.label': 'Input method',
 	'view.chat': 'Chat',
 	'view.keyValue': 'Key-value',

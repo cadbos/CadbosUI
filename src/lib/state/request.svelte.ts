@@ -76,8 +76,21 @@ export type RenderSourceMode = (typeof RENDER_SOURCE_MODES)[number];
 // shape reset()/copyFrom()/fromJSON() already assign field-by-field, minus
 // image/session identity, which undo/redo has no business touching.
 
+// `recorded` marks a step whose `id` is a generation row the server actually
+// stored — the only kind of step a `?generation=` URL anchor can point back
+// at (see RequestState#generationAnchor). Absent for the synthetic
+// original-photo step and for a paid-but-unrecorded result, whose ids exist
+// only in this tab's history.
+// What a `?generation=` URL anchor points at: that stored generation's own
+// result, or — `step: 'before'` — the image it was generated from.
+export interface GenerationAnchor {
+	generationId: string;
+	step: 'result' | 'before';
+}
+
 export interface RenderResult {
 	id: string;
+	recorded?: boolean;
 	outputKey: string;
 	cost: number;
 	balance: number;
@@ -316,6 +329,7 @@ export const requestFormSnapshotSchema = z.object({
 
 const renderResultSchema = z.object({
 	id: z.string().min(1),
+	recorded: z.boolean().optional(),
 	outputKey: z.string().min(1),
 	cost: z.number(),
 	balance: z.number(),
@@ -532,6 +546,7 @@ function cloneRenderResult(render: RenderResult | undefined): RenderResult | und
 	if (!render) return undefined;
 	return {
 		id: render.id,
+		...(render.recorded ? { recorded: true } : {}),
 		outputKey: render.outputKey,
 		cost: render.cost,
 		balance: render.balance,
@@ -626,6 +641,7 @@ export function renderResultFromResponse(
 		// step can be referred back to server-side. Only an unrecorded result
 		// (see RenderResponse.id) gets a local id, used for history alone.
 		id: response.id ?? crypto.randomUUID(),
+		...(response.id !== undefined ? { recorded: true } : {}),
 		outputKey: mediaAccess.normalize(response.output).key,
 		cost: response.cost,
 		balance: response.balance,
@@ -712,13 +728,6 @@ export class RequestState {
 	// project page.
 	projectId = $state<string | undefined>(undefined);
 	sessionId = $state<string | undefined>(undefined);
-	// The generation currently being previewed (see
-	// workspace-tabs.svelte.ts's initializeGenerationPreview) — url-state.ts's
-	// withProjectSession reads this to keep a `?generation=` URL anchor in
-	// sync. setCurrentRender() clears it on every *real* render/edit, since
-	// that means the on-screen result is no longer the one being anchored to;
-	// initializeGenerationPreview re-sets it right after seeding history.
-	viewingGenerationId = $state<string | undefined>(undefined);
 	image = $state<ImageInput | undefined>(undefined);
 	// The main photo, picked but not yet uploaded — set by ImageUpload.svelte
 	// (target 'room' only) instead of calling /api/uploads immediately, so a
@@ -807,6 +816,23 @@ export class RequestState {
 
 	get currentRender(): RenderResult | undefined {
 		return this.#historyIndex >= 0 ? this.#renderHistory[this.#historyIndex] : undefined;
+	}
+
+	// What's on screen right now, as a stored generation url-state.ts's
+	// withProjectSession can write into the address bar — so a reload or a
+	// duplicated browser tab reopens exactly this step (see Workspace.svelte's
+	// resolveUrlTarget). A stored generation is its own anchor. Any other
+	// step — the uploaded original photo, a result the server didn't record —
+	// is exactly the image the next step in history was generated from, so
+	// when that next step is stored, this one is its `before`. Derived from
+	// the render history rather than tracked separately, so every new
+	// generation, edit, undo and redo moves the anchor with it.
+	get generationAnchor(): GenerationAnchor | undefined {
+		const render = this.currentRender;
+		if (!render) return undefined;
+		if (render.recorded) return { generationId: render.id, step: 'result' };
+		const next = this.#renderHistory[this.#historyIndex + 1];
+		return next?.recorded ? { generationId: next.id, step: 'before' } : undefined;
 	}
 
 	// The step right before the current one, if any — the "before" side of the
@@ -962,10 +988,6 @@ export class RequestState {
 	clearProjectSession(): void {
 		this.projectId = undefined;
 		this.sessionId = undefined;
-	}
-
-	setViewingGenerationId(id: string | undefined): void {
-		this.viewingGenerationId = id;
 	}
 
 	// Called by ImageUpload.svelte (target 'room') when the user picks a
@@ -1380,7 +1402,6 @@ export class RequestState {
 	// `undefined` clears the whole history — switching to a different base
 	// photo, or an explicit reset (see reset()).
 	setCurrentRender(render: RenderResult | undefined): void {
-		this.viewingGenerationId = undefined;
 		if (render === undefined) {
 			this.#renderHistory = [];
 			this.#historyIndex = -1;
@@ -1397,7 +1418,6 @@ export class RequestState {
 		render: RenderResult,
 		sourceRender: RenderResult | undefined = this.currentRender
 	): void {
-		this.viewingGenerationId = undefined;
 		this.#pushRender(cloneRenderResult(render), cloneRenderResult(sourceRender));
 	}
 
@@ -1407,7 +1427,6 @@ export class RequestState {
 	// the first step.
 	undoLastEdit(): void {
 		if (this.#historyIndex <= 0) return;
-		this.viewingGenerationId = undefined;
 		this.#historyIndex -= 1;
 		this.#applyFormSnapshot(this.currentRender?.formSnapshot);
 	}
@@ -1858,7 +1877,6 @@ export class RequestState {
 		this.id = crypto.randomUUID();
 		this.projectId = undefined;
 		this.sessionId = undefined;
-		this.viewingGenerationId = undefined;
 		this.#pendingProjectId = undefined;
 		this.#pendingProjectSession = undefined;
 		this.#projectSessionEpoch += 1;
@@ -1917,7 +1935,6 @@ export class RequestState {
 		this.id = source.id;
 		this.projectId = source.projectId;
 		this.sessionId = source.sessionId;
-		this.viewingGenerationId = source.viewingGenerationId;
 		// image/pendingImageFile are mutually exclusive on any well-formed
 		// instance (setImage/setPendingImage each clear the other). Routing
 		// through setPendingImage() here — rather than copying

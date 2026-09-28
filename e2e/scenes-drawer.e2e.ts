@@ -101,6 +101,8 @@ async function mockAddObjectScene(page: Page): Promise<void> {
 				prompt: '',
 				kind: 'edit',
 				createdAt: Date.UTC(2026, 0, 1),
+				amount: 1.5,
+				balanceAfter: 8.5,
 				image: media(2, 'https://cdn.example.test/added-plant.webp'),
 				source: media(1, 'https://cdn.example.test/scene.jpg'),
 				formSnapshot: ADD_OBJECT_FORM_SNAPSHOT,
@@ -143,6 +145,8 @@ async function mockSingleStyleTransferScene(page: Page): Promise<void> {
 				prompt: '',
 				kind: 'style-transfer',
 				createdAt: Date.UTC(2026, 0, 1),
+				amount: 1.5,
+				balanceAfter: 8.5,
 				image: media(2, 'https://cdn.example.test/result.webp'),
 				source: media(1, 'https://cdn.example.test/scene.jpg'),
 				formSnapshot: FORM_SNAPSHOT,
@@ -168,13 +172,12 @@ test('restores a past generation’s exact settings from the scenes drawer', asy
 	await page.getByRole('button', { name: /Восстановить настройки сцены/ }).click();
 
 	// Navigated to the tool the restored generation was made with, showing
-	// that generation's own result — the same image its "Результат" thumbnail
-	// (useImage) would set — with the archived settings applied on top.
+	// that generation's own result on screen — as if it had just been
+	// generated — with the archived settings applied on top.
 	await expect(page).toHaveURL(/\/style-transfer/);
-	await expect(page.locator('.image-wrapper img').first()).toHaveAttribute(
-		'src',
-		'https://cdn.example.test/result.webp'
-	);
+	await expect(
+		page.locator('#mode-panel-styleTransfer').getByRole('img', { name: 'Сгенерировать' })
+	).toHaveAttribute('src', 'https://cdn.example.test/result.webp');
 	await expect(page.getByLabel('Уточнение стиля')).toHaveValue('archived style note');
 });
 
@@ -266,6 +269,8 @@ async function mockSessionScene(page: Page): Promise<void> {
 				prompt: '',
 				kind: 'render',
 				createdAt: Date.UTC(2026, 0, 1),
+				amount: 1.5,
+				balanceAfter: 8.5,
 				image: media(2, 'https://cdn.example.test/render.webp'),
 				source: media(1, 'https://cdn.example.test/scene.jpg'),
 				formSnapshot: FORM_SNAPSHOT,
@@ -328,7 +333,7 @@ test('continues the restored generation’s own session instead of starting a ne
 
 	await expect(page).toHaveURL(new RegExp(`project=${SESSION_PROJECT_ID}&session=${SESSION_ID}`));
 	const renderPanel = page.locator('#mode-panel-render');
-	await expect(renderPanel.locator('.image-wrapper img')).toHaveAttribute(
+	await expect(renderPanel.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/render.webp'
 	);

@@ -14,19 +14,17 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { ArrowDown, ArrowUp, Clock } from '@lucide/svelte';
 	import type { CreditTransaction } from '$lib/api/contract';
 	import HintIcon from '$lib/components/HintIcon.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
-	import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
+	import { fetchGeneratedImageDetail } from '$lib/state/generation-restore';
 	import { request } from '$lib/state/request.svelte';
-	import {
-		buildShareUrl,
-		destinationForGenerationKind,
-		withProjectSession
-	} from '$lib/state/url-state';
+	import { buildWorkspaceUrl, destinationForGenerationKind } from '$lib/state/url-state';
 	import { initializeGenerationPreview, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError } from '$lib/utils';
 
@@ -68,49 +66,45 @@ before the Change Date. See LICENSE for complete terms.
 	let openError = $state<string | null>(null);
 
 	// Opens the workspace on the exact project/session/generation this expense
-	// row paid for, seeded with its before/after (see
-	// workspace-tabs.svelte.ts's initializeGenerationPreview). A project,
-	// session, or generation that no longer resolves (e.g. an archived
-	// project) surfaces openError instead of silently doing nothing — the
-	// underlying record is still real billed history, so the row itself
-	// stays in the list; only the "open it" affordance can fail.
+	// row paid for, seeded with its before/after and the form it was
+	// submitted with (see workspace-tabs.svelte.ts's
+	// initializeGenerationPreview). A generation that no longer resolves, or
+	// whose session/project has since been archived, surfaces openError
+	// instead of silently doing nothing — the underlying record is still real
+	// billed history, so the row itself stays in the list; only the "open it"
+	// affordance can fail.
 	async function openGeneration(entry: CreditTransaction): Promise<void> {
 		if (!entry.projectId || !entry.sessionId) return;
 		openError = null;
 		try {
-			const project = await fetchProjectDetail(entry.projectId);
-			if (!project) {
-				openError = t('expenses.openFailed');
-				return;
-			}
-			const session = project.sessions.find((candidate) => candidate.id === entry.sessionId);
-			if (!session) {
-				openError = t('expenses.openFailed');
-				return;
-			}
-			const generation = session.generations.find((candidate) => candidate.id === entry.id);
-			if (!generation) {
+			const generation = await fetchGeneratedImageDetail(entry.id);
+			const session = generation?.session;
+			if (!generation || !session) {
 				openError = t('expenses.openFailed');
 				return;
 			}
 
 			workspaceTabs.openProject({
-				projectId: project.id,
-				projectTitle: project.title,
-				sessionId: session.id,
-				sessionTitle: session.title.trim() === '' ? null : session.title,
-				initialize: (state) => initializeGenerationPreview(state, project.id, session, generation)
+				projectId: session.projectId,
+				projectTitle: session.projectTitle,
+				sessionId: session.sessionId,
+				sessionTitle: session.sessionTitle.trim() === '' ? null : session.sessionTitle,
+				initialize: (state) => initializeGenerationPreview(state, generation)
 			});
 
-			const destination = destinationForGenerationKind(generation.kind);
+			const destination = destinationForGenerationKind(generation.kind, generation.formSnapshot);
 			await goto(
-				withProjectSession(
-					buildShareUrl(destination.mode, request, destination.subTab),
-					project.id,
-					session.id,
-					generation.id
+				resolve(
+					buildWorkspaceUrl(
+						destination.mode,
+						request,
+						destination.subTab
+					) as PathnameWithSearchOrHash,
+					{}
 				),
-				{ replaceState: false }
+				{
+					replaceState: false
+				}
 			);
 		} catch (error) {
 			openError = t('expenses.openFailed');

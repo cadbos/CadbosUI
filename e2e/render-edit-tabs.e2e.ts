@@ -153,6 +153,35 @@ async function mockProjectWithGeneration(page: Page): Promise<void> {
 			})
 		});
 	});
+	// A `?generation=` anchor reopens that generation from its own detail
+	// (Workspace.svelte's resolveUrlTarget), not the project's session list.
+	await page.route(`**/api/generated-images/${E2E_GENERATION_ID}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: E2E_GENERATION_ID,
+				prompt: '',
+				kind: 'render',
+				createdAt: Date.UTC(2026, 0, 1),
+				amount: 1.5,
+				balanceAfter: 8.5,
+				image: media(2, 'https://cdn.example.test/after.webp'),
+				source: media(1, 'https://cdn.example.test/before.webp'),
+				formSnapshot: null,
+				session: {
+					projectId: E2E_PROJECT_ID,
+					projectTitle: 'Living room',
+					sessionId: E2E_SESSION_ID,
+					sessionTitle: 'Main thread'
+				},
+				media: [
+					media(2, 'https://cdn.example.test/after.webp'),
+					media(1, 'https://cdn.example.test/before.webp')
+				]
+			})
+		});
+	});
 }
 
 test('the Edit tab lets you upload an image directly, without generating a render first', async ({

@@ -103,6 +103,8 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			prompt: detail.prompt,
 			kind: detail.kind,
 			createdAt: detail.createdAt,
+			amount: detail.amount,
+			balanceAfter: detail.balanceAfter,
 			image,
 			source,
 			formSnapshot,

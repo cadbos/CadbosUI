@@ -19,6 +19,7 @@ import {
 	SCENE_TYPES,
 	objectReplacementJobIdSchema,
 	type EditOperationType,
+	type GenerationAnchor,
 	type RenderResult,
 	type RequestFormSnapshot,
 	type RequestState,
@@ -416,10 +417,11 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 // URL-sync effect in Workspace.svelte to patch project/session/generation
 // back in a moment later — is exactly the bug this exists to prevent: the
 // address bar would go through a real, visible instant with none of them.
-// Not appropriate for a navigation that's meant to leave the current project
-// behind on purpose (e.g. picking a Resources photo opens a fresh scratch
-// tab) or the very first navigation into a just-opened project/session
-// (that one's project/session aren't in `workspaceTabs` yet at call time).
+// Also right for the first navigation into a project/session just opened
+// with workspaceTabs.openProject() (Continue, the Scenes drawer, /expenses),
+// since that call makes it the active tab synchronously. Not appropriate for
+// a navigation that's meant to leave the current project behind on purpose
+// (e.g. picking a Resources photo opens a fresh scratch tab).
 export function buildWorkspaceUrl(mode: Mode, request: RequestState, subTab: SubTab = {}): string {
 	const activeProjectId =
 		workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
@@ -428,7 +430,7 @@ export function buildWorkspaceUrl(mode: Mode, request: RequestState, subTab: Sub
 		buildShareUrl(mode, request, subTab),
 		activeProjectId,
 		activeSessionId,
-		request.viewingGenerationId
+		request.generationAnchor
 	);
 }
 
@@ -441,15 +443,17 @@ export function withProjectSession(
 	url: string,
 	projectId: string | undefined,
 	sessionId: string | undefined,
-	generationId?: string
+	anchor?: GenerationAnchor
 ): string {
 	if (!projectId || !sessionId) return url;
 	const [path, query = ''] = url.split('?');
 	const params = new URLSearchParams(query);
 	params.set('project', projectId);
 	params.set('session', sessionId);
-	if (generationId) params.set('generation', generationId);
+	if (anchor) params.set('generation', anchor.generationId);
 	else params.delete('generation');
+	if (anchor?.step === 'before') params.set('step', 'before');
+	else params.delete('step');
 	return `${path}?${params.toString()}`;
 }
 
@@ -476,16 +480,16 @@ export function projectSessionFromSearch(
 	return { projectId, sessionId };
 }
 
-// The generation-preview anchor (see workspace-tabs.svelte.ts's
-// initializeGenerationPreview) — only meaningful alongside a valid
+// Reverse of withProjectSession's generation anchor (see
+// RequestState#generationAnchor) — only meaningful alongside a valid
 // project/session pair, but read independently since a caller may want to
 // resolve it only once it already has both. Same "not a UUID → treat as
-// absent" rule as projectSessionFromSearch.
-export function generationIdFromSearch(searchParams: URLSearchParams): string | null {
+// absent" rule as projectSessionFromSearch; any `step` other than `before`
+// means the generation's own result.
+export function generationAnchorFromSearch(searchParams: URLSearchParams): GenerationAnchor | null {
 	const generationId = searchParams.get('generation');
-	return generationId && projectSessionIdSchema.safeParse(generationId).success
-		? generationId
-		: null;
+	if (!generationId || !projectSessionIdSchema.safeParse(generationId).success) return null;
+	return { generationId, step: searchParams.get('step') === 'before' ? 'before' : 'result' };
 }
 
 // Reverse of buildShareUrl: applies every field explicitly (falling back to

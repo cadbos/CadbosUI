@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { page } from '$app/state';
 	import type { ProjectSessionRecord } from '$lib/api/contract';
 	import ProjectSessionCard from '$lib/components/ProjectSessionCard.svelte';
@@ -22,12 +23,13 @@ before the Change Date. See LICENSE for complete terms.
 	import { projectDetail } from '$lib/state/project-detail.svelte';
 	import { projectShare } from '$lib/state/project-share.svelte';
 	import { request } from '$lib/state/request.svelte';
+	import { fetchGeneratedImageDetail } from '$lib/state/generation-restore';
+	import { buildWorkspaceUrl, destinationForGenerationKind } from '$lib/state/url-state';
 	import {
-		applyGeneratedImageFormSnapshot,
-		fetchGeneratedImageDetail
-	} from '$lib/state/generation-restore';
-	import { buildShareUrl, destinationForGenerationKind } from '$lib/state/url-state';
-	import { initializeSessionState, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+		initializeGenerationPreview,
+		initializeSessionState,
+		workspaceTabs
+	} from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError, openModal } from '$lib/utils';
 
 	const projectId = $derived(page.params.id);
@@ -83,34 +85,56 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
+	// Opens the session on its latest generation exactly as it looked right
+	// after it was made — result on screen, its source as the "before", and
+	// the form it was submitted with, on the mode/tool that produced it — the
+	// same view the Scenes drawer's restore, /expenses and a `?generation=`
+	// link give. A detail fetch that fails outright (not just a 404) still
+	// opens the session on that latest result, with the form left as is,
+	// rather than leaving the Continue click doing nothing.
 	async function continueSession(session: ProjectSessionRecord): Promise<void> {
 		const project = projectDetail.project;
 		if (!project) return;
+		const latest = session.generations[0];
+		const detail = latest
+			? await fetchGeneratedImageDetail(latest.id).catch((error: unknown) => {
+					logBoundaryError('projectDetailPage.continueSessionDetail', error);
+					return null;
+				})
+			: null;
+
 		workspaceTabs.openProject({
 			projectId: project.id,
 			projectTitle: project.title,
 			sessionId: session.id,
 			sessionTitle: session.title.trim() === '' ? null : session.title,
-			initialize: (state) => initializeSessionState(state, project.id, session)
+			initialize: (state) => {
+				if (detail) {
+					state.setProjectSession(project.id, session.id);
+					initializeGenerationPreview(state, detail);
+				} else {
+					initializeSessionState(state, project.id, session);
+				}
+			}
 		});
 
-		// initializeSessionState() above already set the base image from the
-		// session's latest generation; this layers its exact form settings on
-		// top (and picks the matching mode/tool below), the same restore a
-		// past scene gets from the Scenes drawer — a session someone continues
-		// days later should pick back up exactly where they left it, not just
-		// with the last photo and a blank form.
-		const latest = session.generations[0];
-		const detail = latest ? await fetchGeneratedImageDetail(latest.id) : null;
-		if (detail) applyGeneratedImageFormSnapshot(detail);
-		const destination =
-			latest && detail
-				? destinationForGenerationKind(latest.kind, detail.formSnapshot)
-				: { mode: 'render' as const, subTab: { view: 'chat' as const } };
+		const destination = latest
+			? destinationForGenerationKind(latest.kind, detail?.formSnapshot)
+			: { mode: 'render' as const, subTab: { view: 'chat' as const } };
 
-		goto(buildShareUrl(destination.mode, request, destination.subTab), {
-			replaceState: false
-		}).catch((error: unknown) => logBoundaryError('projectDetailPage.continueSession', error));
+		goto(
+			resolve(
+				buildWorkspaceUrl(
+					destination.mode,
+					request,
+					destination.subTab
+				) as PathnameWithSearchOrHash,
+				{}
+			),
+			{
+				replaceState: false
+			}
+		).catch((error: unknown) => logBoundaryError('projectDetailPage.continueSession', error));
 	}
 
 	function requestDeleteProject(): void {

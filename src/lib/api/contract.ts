@@ -412,7 +412,8 @@ export interface GeneratedImagesResponse {
 // `formSnapshot: null` rather than failing. `session` is the project session
 // the generation belongs to, so a restore continues that session instead of
 // whichever one happens to be open — null once that session or its project
-// has been archived.
+// has been archived. `amount`/`balanceAfter` are what the generation cost and
+// the balance it left, shown under the result when a restore reopens it.
 export interface GenerationSessionRef {
 	projectId: string;
 	projectTitle: string;
@@ -425,6 +426,8 @@ export interface GeneratedImageDetailResponse {
 	prompt: string;
 	kind: GenerationKind;
 	createdAt: number;
+	amount: number;
+	balanceAfter: number;
 	image: MediaAccess;
 	source: MediaAccess;
 	formSnapshot: RequestFormSnapshot | null;

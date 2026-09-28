@@ -399,79 +399,84 @@ describe('copyFrom', () => {
 	});
 });
 
-describe('viewingGenerationId', () => {
-	it('is undefined until explicitly set', () => {
-		expect(request.viewingGenerationId).toBeUndefined();
+describe('generationAnchor', () => {
+	const recordedA = {
+		id: '00000000-0000-4000-8000-000000000401',
+		recorded: true,
+		outputKey: '201',
+		cost: 1,
+		balance: 24,
+		ts: 0
+	};
+	const recordedB = {
+		id: '00000000-0000-4000-8000-000000000402',
+		recorded: true,
+		outputKey: '202',
+		cost: 1,
+		balance: 23,
+		ts: 1
+	};
+	const unrecorded = { id: 'local-only', outputKey: '203', cost: 1, balance: 22, ts: 2 };
+
+	it('is undefined while no render is on screen', () => {
+		expect(request.generationAnchor).toBeUndefined();
 	});
 
-	it('is cleared by any real setCurrentRender, but not by the seeded synthetic-original step it derives', () => {
-		request.setViewingGenerationId('gen-1');
-		request.setCurrentRender({
-			id: 'render-a',
-			outputKey: '201',
-			cost: 1,
-			balance: 24,
-			ts: 0
-		});
+	it('names the recorded generation on screen', () => {
+		request.setCurrentRender(recordedA);
 
-		expect(request.viewingGenerationId).toBeUndefined();
+		expect(request.generationAnchor).toEqual({ generationId: recordedA.id, step: 'result' });
+	});
+
+	it('stays undefined for a result the server never recorded with nothing stored after it', () => {
+		request.setCurrentRender(unrecorded);
+
+		expect(request.generationAnchor).toBeUndefined();
+	});
+
+	it('moves with every edit, undo and redo', () => {
+		request.setCurrentRender(recordedA);
+		request.applyEditResult(recordedB);
+		expect(request.generationAnchor).toEqual({ generationId: recordedB.id, step: 'result' });
+
+		request.undoLastEdit();
+		expect(request.generationAnchor).toEqual({ generationId: recordedA.id, step: 'result' });
+
+		request.redoEdit();
+		expect(request.generationAnchor).toEqual({ generationId: recordedB.id, step: 'result' });
+	});
+
+	it('names the original photo as the step before the generation made from it', () => {
+		request.startFromImage({ mediaKey: '100' });
+		request.setCurrentRender(recordedA);
+		request.undoLastEdit();
+
+		expect(request.currentRender?.outputKey).toBe('100');
+		expect(request.generationAnchor).toEqual({ generationId: recordedA.id, step: 'before' });
+	});
+
+	it('names an unrecorded result as the step before the stored edit made from it', () => {
+		request.setCurrentRender(unrecorded);
+		request.applyEditResult(recordedB);
+		request.undoLastEdit();
+
+		expect(request.generationAnchor).toEqual({ generationId: recordedB.id, step: 'before' });
 	});
 
 	it('survives copyFrom', () => {
-		request.setViewingGenerationId('gen-1');
+		request.setCurrentRender(recordedA);
 
 		const other = new RequestState();
 		other.copyFrom(request);
 
-		expect(other.viewingGenerationId).toBe('gen-1');
+		expect(other.generationAnchor).toEqual({ generationId: recordedA.id, step: 'result' });
 	});
 
 	it('is cleared by reset()', () => {
-		request.setViewingGenerationId('gen-1');
+		request.setCurrentRender(recordedA);
 		request.reset();
 
-		expect(request.viewingGenerationId).toBeUndefined();
-	});
-
-	it('is cleared by applyEditResult', () => {
-		request.setCurrentRender({
-			id: 'render-a',
-			outputKey: '201',
-			cost: 1,
-			balance: 24,
-			ts: 0
-		});
-		request.setViewingGenerationId('gen-1');
-		request.applyEditResult({
-			id: 'render-b',
-			outputKey: '202',
-			cost: 1,
-			balance: 23,
-			ts: 1
-		});
-
-		expect(request.viewingGenerationId).toBeUndefined();
-	});
-
-	it('is cleared by undoLastEdit', () => {
-		request.setCurrentRender({
-			id: 'render-a',
-			outputKey: '201',
-			cost: 1,
-			balance: 24,
-			ts: 0
-		});
-		request.applyEditResult({
-			id: 'render-b',
-			outputKey: '202',
-			cost: 1,
-			balance: 23,
-			ts: 1
-		});
-		request.setViewingGenerationId('gen-1');
-		request.undoLastEdit();
-
-		expect(request.viewingGenerationId).toBeUndefined();
+		expect(request.generationAnchor).toBeUndefined();
 	});
 });
 
@@ -2059,11 +2064,13 @@ describe('renderResultFromResponse', () => {
 			balance: 9
 		});
 		expect(render.id).toBe('00000000-0000-4000-8000-000000000301');
+		expect(render.recorded).toBe(true);
 	});
 
 	it('falls back to a local id only when the server recorded no generation', () => {
 		const render = renderResultFromResponse({ output, cost: 1, balance: 9 });
 		expect(render.id).toEqual(expect.any(String));
+		expect(render.recorded).toBeUndefined();
 	});
 });
 

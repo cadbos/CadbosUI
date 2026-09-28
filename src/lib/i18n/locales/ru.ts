@@ -53,6 +53,11 @@ export const ru = {
 	'workspace.sessionTabs.renameFailed': 'Не удалось переименовать сессию',
 	'workspace.shareButton': 'Поделиться',
 	'workspace.sessionsButton': 'Сессии',
+	'workspace.urlTarget.loading': 'Открываем сессию…',
+	'workspace.urlTarget.failed':
+		'Не удалось открыть сессию по этой ссылке. Проверьте соединение и попробуйте ещё раз.',
+	'workspace.urlTarget.retry': 'Повторить',
+	'workspace.urlTarget.dismiss': 'Продолжить без неё',
 	'view.switcher.label': 'Способ ввода',
 	'view.chat': 'Чат',
 	'view.keyValue': 'Ключ-значение',
