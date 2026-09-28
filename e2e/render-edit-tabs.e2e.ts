@@ -206,7 +206,7 @@ test('the Edit tab lets you upload an image directly, without generating a rende
 	await editPanel
 		.locator('input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
-	await expect(editPanel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await expect(editPanel.getByRole('button', { name: 'Выбрать фото' })).toBeVisible();
 	await page.getByLabel('Инструкция для правки').fill('Replace the sofa');
 	await expect(page.getByText('Войдите, чтобы применить правку')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Применить правку' })).toBeDisabled();
@@ -214,7 +214,7 @@ test('the Edit tab lets you upload an image directly, without generating a rende
 	// The uploaded photo is the same underlying image used by the Render tab.
 	await renderTab.click();
 	await expect(
-		page.locator('#mode-panel-render').getByRole('button', { name: 'Изменить фото' })
+		page.locator('#mode-panel-render').getByRole('button', { name: 'Выбрать фото' })
 	).toBeVisible();
 });
 
@@ -243,12 +243,15 @@ test('the shared image picker imports an HTTPS image URL through the upload endp
 		.fill('https://images.example.com/room.webp');
 	await renderPanel.getByRole('button', { name: 'Импортировать' }).click();
 
-	await expect(renderPanel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await expect(renderPanel.getByRole('button', { name: 'Выбрать фото' })).toBeVisible();
 	await expect(renderPanel.getByLabel('Ссылка на изображение')).toHaveCount(0);
 	expect(uploadBody).toEqual({ url: 'https://images.example.com/room.webp' });
 
-	await renderPanel.getByRole('button', { name: 'Убрать фото' }).click();
-	await expect(renderPanel.getByRole('button', { name: 'Выбрать файл' })).toBeVisible();
+	// A single "choose photo" action — no separate change/remove — drops the
+	// current photo and hands focus straight to the picker.
+	await expect(renderPanel.getByRole('button', { name: 'Убрать фото' })).toHaveCount(0);
+	await renderPanel.getByRole('button', { name: 'Выбрать фото' }).click();
+	await expect(renderPanel.getByRole('button', { name: 'Выбрать файл' })).toBeFocused();
 	await expect(renderPanel.getByLabel('Ссылка на изображение')).toBeVisible();
 	await renderPanel.getByLabel('Ссылка на изображение').fill('http://images.example.com/room.webp');
 	await renderPanel.getByRole('button', { name: 'Импортировать' }).click();
@@ -310,7 +313,7 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 		mimeType: 'image/png',
 		buffer: Buffer.from('room')
 	});
-	await expect(panel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await expect(panel.getByRole('button', { name: 'Выбрать фото' })).toBeVisible();
 
 	await panel.getByRole('tab', { name: 'Свои' }).click();
 	const referenceUpload = panel.getByRole('region', { name: 'Референс стиля' });
@@ -409,7 +412,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		mimeType: 'image/png',
 		buffer: Buffer.from('room')
 	});
-	await expect(renderPanel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await expect(renderPanel.getByRole('button', { name: 'Выбрать фото' })).toBeVisible();
 	await renderPanel
 		.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…')
 		.fill('render prompt for paid generation');
@@ -424,7 +427,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 		mimeType: 'image/png',
 		buffer: Buffer.from('reference')
 	});
-	await expect(referenceUpload.getByRole('button', { name: 'Изменить референс' })).toBeVisible();
+	await expect(referenceUpload.getByRole('button', { name: 'Выбрать референс' })).toBeVisible();
 	await stylePanel
 		.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…')
 		.fill('style transfer guidance only');
@@ -805,7 +808,7 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 		mimeType: 'image/png',
 		buffer: Buffer.from('fake-image')
 	});
-	await expect(renderPanel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await expect(renderPanel.getByRole('button', { name: 'Выбрать фото' })).toBeVisible();
 
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
@@ -1428,7 +1431,7 @@ test('undo restores the object-replacement tool tab and its settings after switc
 		mimeType: 'image/webp',
 		buffer: Buffer.from('scene')
 	});
-	await expect(page.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Выбрать фото' })).toBeVisible();
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
 		inputs.nth(1).setInputFiles({

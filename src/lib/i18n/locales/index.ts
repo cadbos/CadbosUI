@@ -144,8 +144,7 @@ export interface Dictionary {
 	'upload.errorUrl': string;
 	'upload.errorRemote': string;
 	'upload.errorUpload': string;
-	'upload.change': string;
-	'upload.remove': string;
+	'upload.pick': string;
 	'render.sceneType.label': string;
 	'render.sceneType.interior': string;
 	'render.sceneType.exterior': string;
@@ -400,7 +399,7 @@ export interface Dictionary {
 	'render.insufficientCredit': string;
 	'render.generationRestricted': string;
 	'styleTransfer.referenceImage': string;
-	'styleTransfer.referenceChange': string;
+	'styleTransfer.referencePick': string;
 	'styleTransfer.referenceDropTitle': string;
 	'styleTransfer.referenceDropSubtitle': string;
 	'styleTransfer.referenceTabsLabel': string;
@@ -431,7 +430,7 @@ export interface Dictionary {
 	'objectReplacement.required': string;
 	'objectReplacement.images': string;
 	'objectReplacement.referenceImage': string;
-	'objectReplacement.referenceChange': string;
+	'objectReplacement.referencePick': string;
 	'objectReplacement.referenceDropTitle': string;
 	'objectReplacement.referenceDropSubtitle': string;
 	'objectReplacement.objectLabel': string;
@@ -469,12 +468,12 @@ export interface Dictionary {
 	'textureReplacement.required': string;
 	'textureReplacement.images': string;
 	'textureReplacement.referenceImage': string;
-	'textureReplacement.referenceChange': string;
+	'textureReplacement.referencePick': string;
 	'textureReplacement.referenceDropTitle': string;
 	'textureReplacement.referenceDropSubtitle': string;
 	'textureReplacement.maskedLabel': string;
 	'textureReplacement.maskImage': string;
-	'textureReplacement.maskChange': string;
+	'textureReplacement.maskPick': string;
 	'textureReplacement.maskDropTitle': string;
 	'textureReplacement.maskDropSubtitle': string;
 	'textureReplacement.maskEditor.title': string;
