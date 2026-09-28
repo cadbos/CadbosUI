@@ -7,6 +7,9 @@
  * Access is limited to automated analysis tools for analysis of this repository.
  * This code is not open for contribution or usage except under a separate
  * written agreement with Cadbos company.
+ *
+ * Commercial use in Interior Design & AEC Generative AI Services is prohibited
+ * before the Change Date. See LICENSE for complete terms.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -165,33 +168,42 @@ describe('workspaceTabs.openProject', () => {
 });
 
 describe('initializeGenerationPreview', () => {
-	it('seeds the generation as the after step and its source as the synthetic before', () => {
-		const session = {
-			id: SESSION_A1,
-			title: 'Main thread',
-			parentSessionId: null,
-			forkedFromGenerationId: null,
-			createdAt: 0,
-			updatedAt: 0,
-			generations: []
-		};
-		const generation = {
-			id: 'gen-1',
-			image: {
+	const generation = {
+		id: '00000000-0000-4000-8000-000000000501',
+		prompt: 'warm light',
+		kind: 'edit' as const,
+		createdAt: 1000,
+		amount: 1.5,
+		balanceAfter: 8.5,
+		image: {
+			key: mediaKey(TEST_S3_BUCKET.name, 'after.webp'),
+			url: 'https://example.test/after.webp'
+		},
+		source: {
+			key: mediaKey(TEST_S3_BUCKET.name, 'before.webp'),
+			url: 'https://example.test/before.webp'
+		},
+		formSnapshot: null,
+		session: {
+			projectId: PROJECT_A,
+			projectTitle: 'Living room',
+			sessionId: SESSION_A1,
+			sessionTitle: 'Main thread'
+		},
+		media: [
+			{
 				key: mediaKey(TEST_S3_BUCKET.name, 'after.webp'),
 				url: 'https://example.test/after.webp'
 			},
-			source: {
+			{
 				key: mediaKey(TEST_S3_BUCKET.name, 'before.webp'),
 				url: 'https://example.test/before.webp'
-			},
-			kind: 'render' as const,
-			createdAt: 1000,
-			amount: 1.5,
-			balanceAfter: 8.5
-		};
+			}
+		]
+	};
 
-		initializeGenerationPreview(request, PROJECT_A, session, generation);
+	it('seeds the generation as the after step and its source as the synthetic before', () => {
+		initializeGenerationPreview(request, generation);
 
 		expect(request.projectId).toBe(PROJECT_A);
 		expect(request.sessionId).toBe(SESSION_A1);
@@ -201,7 +213,27 @@ describe('initializeGenerationPreview', () => {
 		expect(request.currentRender?.cost).toBe(1.5);
 		expect(request.currentRender?.balance).toBe(8.5);
 		expect(request.previousRender?.outputKey).toBe(generation.source.key);
-		expect(request.viewingGenerationId).toBe('gen-1');
+		expect(request.generationAnchor).toEqual({ generationId: generation.id, step: 'result' });
+	});
+
+	it('restores the form the generation was submitted with', () => {
+		request.setEditPrompt('typed since');
+		const formSnapshot = { ...request.captureFormSnapshot('freeform'), editPrompt: 'add a lamp' };
+
+		initializeGenerationPreview(request, { ...generation, formSnapshot });
+
+		expect(request.editPrompt).toBe('add a lamp');
+		expect(request.currentRender?.formSnapshot?.editPrompt).toBe('add a lamp');
+	});
+
+	it('keeps the current session when the generation no longer has one', () => {
+		request.setProjectSession(PROJECT_B, SESSION_B1);
+
+		initializeGenerationPreview(request, { ...generation, session: null });
+
+		expect(request.projectId).toBe(PROJECT_B);
+		expect(request.sessionId).toBe(SESSION_B1);
+		expect(request.generationAnchor).toEqual({ generationId: generation.id, step: 'result' });
 	});
 });
 
@@ -810,6 +842,109 @@ describe('restorePersistedTabs', () => {
 
 		expect(fresh.workspaceTabs.tabs.map((tab) => tab.id)).toEqual([SCRATCH_TAB_ID, PROJECT_B]);
 		expect(fresh.workspaceTabs.activeTabId).toBe(PROJECT_B);
+	});
+
+	it('logs a project that fails to load over the network and still restores the others', async () => {
+		vi.resetModules();
+		const fresh = await import('$lib/state/workspace-tabs.svelte');
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		localStorage.setItem(
+			'cadbos.workspace-tabs.v1',
+			JSON.stringify({
+				tabs: [
+					{
+						id: PROJECT_A,
+						title: 'Living room',
+						sessionTabs: [{ id: SESSION_A1, title: null }],
+						activeSessionTabId: SESSION_A1
+					},
+					{
+						id: PROJECT_B,
+						title: 'Kitchen',
+						sessionTabs: [{ id: SESSION_B1, title: null }],
+						activeSessionTabId: SESSION_B1
+					}
+				],
+				activeTabId: PROJECT_B
+			})
+		);
+
+		vi.stubGlobal(
+			'fetch',
+			vi.fn<typeof fetch>((input) => {
+				if (String(input).includes(PROJECT_A)) {
+					return Promise.reject(new TypeError('Failed to fetch'));
+				}
+				return Promise.resolve(
+					jsonResponse(projectDetailFixture(PROJECT_B, 'Kitchen', [{ id: SESSION_B1, title: '' }]))
+				);
+			})
+		);
+
+		await fresh.restorePersistedTabs();
+
+		expect(fresh.workspaceTabs.tabs.map((tab) => tab.id)).toEqual([SCRATCH_TAB_ID, PROJECT_B]);
+		expect(consoleError).toHaveBeenCalledWith(
+			'Component boundary failed:',
+			expect.objectContaining({ scope: 'workspaceTabs.restoreProject' })
+		);
+		consoleError.mockRestore();
+	});
+
+	it('keeps the persisted tab order when responses arrive out of order', async () => {
+		vi.resetModules();
+		const fresh = await import('$lib/state/workspace-tabs.svelte');
+
+		localStorage.setItem(
+			'cadbos.workspace-tabs.v1',
+			JSON.stringify({
+				tabs: [
+					{
+						id: PROJECT_A,
+						title: 'Living room',
+						sessionTabs: [{ id: SESSION_A1, title: null }],
+						activeSessionTabId: SESSION_A1
+					},
+					{
+						id: PROJECT_B,
+						title: 'Kitchen',
+						sessionTabs: [{ id: SESSION_B1, title: null }],
+						activeSessionTabId: SESSION_B1
+					}
+				],
+				activeTabId: PROJECT_A
+			})
+		);
+
+		let releaseA: () => void = () => {};
+		const aReleased = new Promise<void>((resolve) => {
+			releaseA = resolve;
+		});
+		vi.stubGlobal(
+			'fetch',
+			vi.fn<typeof fetch>(async (input) => {
+				if (String(input).includes(PROJECT_A)) {
+					await aReleased;
+					return jsonResponse(
+						projectDetailFixture(PROJECT_A, 'Living room', [{ id: SESSION_A1, title: '' }])
+					);
+				}
+				releaseA();
+				return jsonResponse(
+					projectDetailFixture(PROJECT_B, 'Kitchen', [{ id: SESSION_B1, title: '' }])
+				);
+			})
+		);
+
+		await fresh.restorePersistedTabs();
+
+		expect(fresh.workspaceTabs.tabs.map((tab) => tab.id)).toEqual([
+			SCRATCH_TAB_ID,
+			PROJECT_A,
+			PROJECT_B
+		]);
+		expect(fresh.workspaceTabs.activeTabId).toBe(PROJECT_A);
 	});
 
 	it('is a no-op with nothing persisted', async () => {

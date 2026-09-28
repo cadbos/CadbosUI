@@ -112,8 +112,9 @@ async function mockProjectDetail(
 	});
 }
 
+// Continuing a session shows its latest generation as the result on screen.
 function resultImage(page: Page) {
-	return page.locator('#mode-panel-render .image-wrapper img');
+	return page.locator('#mode-panel-render').getByRole('img', { name: 'Сгенерировать' });
 }
 
 test('opens a tab per project continued into the workspace and preserves each one across switches', async ({
@@ -145,7 +146,11 @@ test('opens a tab per project continued into the workspace and preserves each on
 	await expect(tabs).toHaveCount(0);
 
 	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
-	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
+	await expect(page).toHaveURL(
+		new RegExp(
+			`/create/interior\\?view=chat&format=webp&project=${PROJECT_A}&session=${SESSION_A}&generation=${GENERATION_A}$`
+		)
+	);
 	await expect(tabs.getByRole('tab', { name: 'Living room' })).toBeVisible();
 	await expect(resultImage(page)).toHaveAttribute(
 		'src',
@@ -167,8 +172,13 @@ test('opens a tab per project continued into the workspace and preserves each on
 		'src',
 		'https://cdn.example.test/living-room.webp'
 	);
-	// Switching tabs never navigates — still the same workspace route.
-	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
+	// Switching tabs stays on the same workspace route, re-anchored to the
+	// now-active project/session.
+	await expect(page).toHaveURL(
+		new RegExp(
+			`/create/interior\\?view=chat&format=webp&project=${PROJECT_A}&session=${SESSION_A}&generation=${GENERATION_A}$`
+		)
+	);
 
 	// The restored tab's request state must carry Living room's own session
 	// id, not Kitchen's — a generation submitted here has to attach to the

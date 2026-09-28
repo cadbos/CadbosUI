@@ -513,6 +513,27 @@ describe('GET /api/generated-images/[id]', () => {
 		expect(result.media).toEqual([result.image, result.source]);
 	});
 
+	it('returns what the generation cost and the balance it left', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
+		seedGenerationFixture(db, {
+			id: 'image-1',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/image-1.webp',
+			sourceUrl: 'https://cdn.example.test/source.jpg',
+			createdAt: 1000,
+			amount: 2.5,
+			balanceAfter: 7.5
+		});
+
+		const response = await callDetail({ pubkey: 'pubkey-1' }, platform(db), 'image-1');
+		const result = (await response.json()) as GeneratedImageDetailResponse;
+
+		expect(result.amount).toBe(2.5);
+		expect(result.balanceAfter).toBe(7.5);
+	});
+
 	it('resolves the snapshot and every media key its reference images point to', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');

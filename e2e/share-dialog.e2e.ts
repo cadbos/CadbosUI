@@ -78,7 +78,11 @@ async function mockProjectDetail(page: Page): Promise<void> {
 async function openProjectInWorkspace(page: Page): Promise<void> {
 	await page.goto(`/projects/${PROJECT_ID}`);
 	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
-	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
+	await expect(page).toHaveURL(
+		new RegExp(
+			`/create/interior\\?view=chat&format=webp&project=${PROJECT_ID}&session=${SESSION_ID}$`
+		)
+	);
 }
 
 test('opens the header share dialog, issues a link, copies it, then revokes it and closes', async ({

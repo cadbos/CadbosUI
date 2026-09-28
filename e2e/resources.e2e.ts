@@ -296,8 +296,7 @@ test('using a resource photo while a project tab is open starts project-less wor
 	);
 
 	await tabs.getByRole('tab', { name: 'Living room' }).click();
-	await expect(page.locator('#mode-panel-render .image-wrapper img')).toHaveAttribute(
-		'src',
-		'https://cdn.example.test/living-room.webp'
-	);
+	await expect(
+		page.locator('#mode-panel-render').getByRole('img', { name: 'Сгенерировать' })
+	).toHaveAttribute('src', 'https://cdn.example.test/living-room.webp');
 });

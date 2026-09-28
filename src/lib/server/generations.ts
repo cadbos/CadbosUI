@@ -228,6 +228,8 @@ export interface GenerationDetail {
 	prompt: string;
 	kind: GenerationKind;
 	createdAt: number;
+	amount: number;
+	balanceAfter: number;
 	formSnapshot: RequestFormSnapshot | null;
 	session: GenerationSessionRef | null;
 }
@@ -239,6 +241,8 @@ interface GenerationDetailRow {
 	prompt: string;
 	kind: string;
 	created_at: number;
+	amount: number;
+	balance_after: number;
 	form_snapshot: string | null;
 	session_id: string | null;
 	session_title: string | null;
@@ -298,7 +302,7 @@ export async function getGenerationDetailForUser(
 	const row = await db
 		.prepare(
 			'SELECT g.id, g.source_media_id, g.result_media_id, g.prompt, g.kind, g.created_at, ' +
-				'g.form_snapshot, ps.id AS session_id, ps.title AS session_title, ' +
+				'g.amount, g.balance_after, g.form_snapshot, ps.id AS session_id, ps.title AS session_title, ' +
 				'p.id AS project_id, p.title AS project_title ' +
 				'FROM generations g ' +
 				'LEFT JOIN project_sessions ps ON ps.id = g.session_id AND ps.archived_at IS NULL ' +
@@ -332,6 +336,8 @@ export async function getGenerationDetailForUser(
 		prompt: row.prompt,
 		kind,
 		createdAt: row.created_at,
+		amount: row.amount,
+		balanceAfter: row.balance_after,
 		formSnapshot: parseStoredFormSnapshot(row.id, row.form_snapshot),
 		session
 	};

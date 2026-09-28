@@ -234,7 +234,7 @@ test('deletes a session after confirming, keeping the project', async ({ page })
 	expect(deleteCalled).toBe(true);
 });
 
-test('continues a session into the render workspace with its latest render as the source', async ({
+test('continues a session into the render workspace showing its latest render as the result', async ({
 	page
 }) => {
 	await authenticate(page);
@@ -282,9 +282,15 @@ test('continues a session into the render workspace with its latest render as th
 	await page.goto(`/projects/${PROJECT_ID}`);
 	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
 
-	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
+	// The project/session land in the address bar with the navigation
+	// itself, not a debounce later — a tab duplicated right away keeps them.
+	await expect(page).toHaveURL(
+		new RegExp(
+			`/create/interior\\?view=chat&format=webp&project=${PROJECT_ID}&session=${SESSION_ID}&generation=00000000-0000-4000-8000-000000000100$`
+		)
+	);
 	const renderPanel = page.locator('#mode-panel-render');
-	await expect(renderPanel.locator('.image-wrapper img')).toHaveAttribute(
+	await expect(renderPanel.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/latest-render.webp'
 	);
@@ -325,6 +331,8 @@ test('continuing a session restores its latest generation’s exact settings, no
 				prompt: '',
 				kind: 'style-transfer',
 				createdAt: Date.UTC(2026, 0, 1),
+				amount: 4,
+				balanceAfter: 96,
 				image: media(2, 'https://cdn.example.test/styled.webp'),
 				source: media(1, 'https://cdn.example.test/room.jpg'),
 				formSnapshot: {

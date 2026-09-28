@@ -235,6 +235,7 @@ before the Change Date. See LICENSE for complete terms.
 			request.applyEditResult(
 				{
 					id: result.id,
+					recorded: true,
 					outputKey: mediaAccess.normalize(result.output).key,
 					cost: result.cost,
 					balance: result.balance,
@@ -256,6 +257,7 @@ before the Change Date. See LICENSE for complete terms.
 			// switch back to this tool on undo/redo.
 			request.applyEditResult({
 				id: result.id,
+				recorded: true,
 				outputKey: mediaAccess.normalize(result.output).key,
 				cost: result.cost,
 				balance: result.balance,

@@ -16,6 +16,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { FolderKanban, GalleryHorizontalEnd, Images, Layers, Share2 } from '@lucide/svelte';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import FloatingToolsPanel from '$lib/components/FloatingToolsPanel.svelte';
@@ -36,25 +37,29 @@ before the Change Date. See LICENSE for complete terms.
 		renderResultFromResponse,
 		request,
 		RequestImageUploadError,
+		type GenerationAnchor,
+		type RequestState,
 		type SceneType
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import type { OutputFormat } from '$lib/state/request.svelte';
+	import { fetchGeneratedImageDetail } from '$lib/state/generation-restore';
 	import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
 	import {
 		initializeGenerationPreview,
 		initializeSessionState,
 		restorePersistedTabs,
 		SCRATCH_TAB_ID,
-		workspaceTabs
+		workspaceTabs,
+		type OpenProjectParams
 	} from '$lib/state/workspace-tabs.svelte';
 	import {
 		applyShareParams,
 		buildShareUrl,
 		buildWorkspaceUrl,
-		generationIdFromSearch,
+		generationAnchorFromSearch,
 		projectSessionFromSearch,
 		renderOrigin,
 		routeIdToMode,
@@ -102,11 +107,14 @@ before the Change Date. See LICENSE for complete terms.
 			// (see its own doc comment) instead of navigating to the bare
 			// buildShareUrl() result first and letting the debounced URL-sync
 			// effect below patch them back in a moment later.
-			return goto(buildWorkspaceUrl(modes[index].id, request), {
-				replaceState: false,
-				keepFocus: true,
-				noScroll: true
-			}).catch((error: unknown) => logBoundaryError('workspace.modeNavigation', error));
+			return goto(
+				resolve(buildWorkspaceUrl(modes[index].id, request) as PathnameWithSearchOrHash, {}),
+				{
+					replaceState: false,
+					keepFocus: true,
+					noScroll: true
+				}
+			).catch((error: unknown) => logBoundaryError('workspace.modeNavigation', error));
 		},
 		focusTab: (index) => modeTabs[index]?.focus()
 	});
@@ -193,80 +201,168 @@ before the Change Date. See LICENSE for complete terms.
 	// initial hydration has run.
 	let hydrated = $state(false);
 
-	// Bumped at the start of every applyUrlTarget call so a slower-resolving
-	// openFromUrl from an earlier navigation can't clobber a faster-resolving
-	// later one — same guard shape as request.svelte.ts's #projectSessionEpoch.
+	// Where the address bar's own project/session/generation target stands:
+	// 'loading' while it's still being fetched, 'failed' when that fetch hit a
+	// connection problem rather than a dead link (see fetchProjectDetail). The
+	// URL-sync effect below stays paused in both: until the target is on
+	// screen, the workspace still holds whatever was open before — the blank
+	// scratch tab, on a reload or a duplicated browser tab — and syncing that
+	// would overwrite the very link that's still being opened.
+	let urlTargetStatus = $state<'idle' | 'loading' | 'failed'>('idle');
+	// What Retry re-runs after a 'failed' target.
+	let retryUrlTarget: (() => Promise<void>) | null = null;
+
+	// Bumped at the start of every URL-target resolution so a slower one from
+	// an earlier navigation can't clobber a faster later one — same guard
+	// shape as request.svelte.ts's #projectSessionEpoch.
 	let urlTargetEpoch = 0;
 
 	// Resolves a project/session pair carried in the URL (see url-state.ts's
-	// projectSessionFromSearch) into the matching open workspace tab — the
+	// projectSessionFromSearch) into the workspace tab to open for it — the
 	// same fetch-then-initialize continueSession (projects/[id]/+page.svelte)
-	// already does on a click, just triggered by a deep link instead. An id
-	// that's unowned, archived, or just wrong (fetchProjectDetail resolves to
-	// null on any failure) quietly leaves the workspace on whatever it
-	// already had open.
-	async function openFromUrl(
-		projectId: string,
-		sessionId: string,
-		generationId: string | null,
-		epoch: number
-	): Promise<void> {
-		const project = await fetchProjectDetail(projectId);
-		if (urlTargetEpoch !== epoch) return;
-		if (!project) return;
-		const session = project.sessions.find((candidate) => candidate.id === sessionId);
-		if (!session) return;
-		const sessionTitle = session.title.trim() === '' ? null : session.title;
-		// A generation id that's absent, stale, or from a different session
-		// than the one in the URL degrades to the normal "open at the
-		// session's latest state" behavior, same as an unresolvable
-		// project/session id already does above.
-		const generation = generationId
-			? session.generations.find((candidate) => candidate.id === generationId)
-			: undefined;
-		workspaceTabs.openProject({
+	// does on a click, just triggered by a deep link instead. A
+	// `?generation=` anchor reopens that exact result — or, with
+	// `step=before`, the image it was made from, one undo away — form
+	// included, rather than the session's latest state; one that's gone or belongs to another
+	// session degrades to the session itself, and an unowned, archived or
+	// just wrong project/session resolves to null, leaving the workspace on
+	// whatever it already had open. The URL's own form fields (prompt, tool
+	// settings, a still-polling job) are layered on last, so the opened tab
+	// shows exactly what the link describes.
+	async function resolveUrlTarget(
+		searchParams: URLSearchParams
+	): Promise<OpenProjectParams | null> {
+		const target = projectSessionFromSearch(searchParams);
+		if (!target) return null;
+		const urlMode = mode;
+		const sceneParam = page.params.scene;
+		const applyUrlFields = (state: RequestState): void =>
+			applyShareParams(urlMode, sceneParam, searchParams, state);
+
+		const anchor = generationAnchorFromSearch(searchParams);
+		const generation = anchor ? await fetchGeneratedImageDetail(anchor.generationId) : null;
+		if (
+			generation?.session?.projectId === target.projectId &&
+			generation.session.sessionId === target.sessionId
+		) {
+			const { session } = generation;
+			return {
+				projectId: session.projectId,
+				projectTitle: session.projectTitle,
+				sessionId: session.sessionId,
+				sessionTitle: session.sessionTitle.trim() === '' ? null : session.sessionTitle,
+				initialize: (state) => {
+					initializeGenerationPreview(state, generation);
+					// The image this generation was made from is the step right
+					// before it in the history just seeded — one undo away.
+					if (anchor?.step === 'before') state.undoLastEdit();
+					applyUrlFields(state);
+				}
+			};
+		}
+
+		const project = await fetchProjectDetail(target.projectId);
+		if (!project) return null;
+		const session = project.sessions.find((candidate) => candidate.id === target.sessionId);
+		if (!session) return null;
+		return {
 			projectId: project.id,
 			projectTitle: project.title,
 			sessionId: session.id,
-			sessionTitle,
-			initialize: (state) =>
-				generation
-					? initializeGenerationPreview(state, project.id, session, generation)
-					: initializeSessionState(state, project.id, session)
+			sessionTitle: session.title.trim() === '' ? null : session.title,
+			initialize: (state) => {
+				initializeSessionState(state, project.id, session);
+				applyUrlFields(state);
+			}
+		};
+	}
+
+	// Runs one URL-target resolution under urlTargetStatus, opening its result
+	// only if no later navigation has started a resolution of its own since.
+	async function trackUrlTarget(load: () => Promise<OpenProjectParams | null>): Promise<void> {
+		urlTargetEpoch += 1;
+		const epoch = urlTargetEpoch;
+		urlTargetStatus = 'loading';
+		retryUrlTarget = null;
+		try {
+			const params = await load();
+			if (epoch !== urlTargetEpoch) return;
+			if (params) workspaceTabs.openProject(params);
+			urlTargetStatus = 'idle';
+		} catch (error) {
+			logBoundaryError('workspace.urlTarget', error);
+			if (epoch !== urlTargetEpoch) return;
+			urlTargetStatus = 'failed';
+			retryUrlTarget = () => trackUrlTarget(load);
+		}
+	}
+
+	// Drops any in-flight or failed resolution — the URL no longer points at
+	// it, so neither its result nor its error belongs on screen any more.
+	function settleUrlTarget(): void {
+		urlTargetEpoch += 1;
+		urlTargetStatus = 'idle';
+		retryUrlTarget = null;
+	}
+
+	// Applies the URL's project/session (if present and not already what's on
+	// screen) on top of whatever's currently open — for every popstate/link
+	// navigation after the initial load, so a pasted/bookmarked link always
+	// wins over whatever was already open. Still re-applies when only the
+	// generation anchor changed (e.g. Back to an earlier result within the
+	// same project/session), not just when the project/session pair did.
+	function sameGenerationAnchor(
+		a: GenerationAnchor | null | undefined,
+		b: GenerationAnchor | null | undefined
+	): boolean {
+		return a?.generationId === b?.generationId && a?.step === b?.step;
+	}
+
+	function applyUrlTarget(searchParams: URLSearchParams): Promise<void> {
+		const target = projectSessionFromSearch(searchParams);
+		const alreadyShown =
+			target !== null &&
+			target.projectId === workspaceTabs.activeTabId &&
+			target.sessionId === workspaceTabs.activeTab.activeSessionTabId &&
+			sameGenerationAnchor(generationAnchorFromSearch(searchParams), request.generationAnchor);
+		if (!target || alreadyShown) {
+			settleUrlTarget();
+			return Promise.resolve();
+		}
+		return trackUrlTarget(() => resolveUrlTarget(searchParams));
+	}
+
+	// The initial hard load — a reload, an opened link, a duplicated browser
+	// tab. Restores every previously open tab (restorePersistedTabs is
+	// idempotent and already kicked off by the root layout's own onMount, so
+	// this just awaits that same result — see there for why restoration
+	// can't wait for Workspace.svelte specifically to mount) while fetching
+	// the URL's own target in parallel, then opens that target on top: a
+	// shared link wins over whatever was locally open before, while the rest
+	// of the restored tabs stay open in the background. Always re-opens the
+	// target even when the restored tabs already made it active — a restored
+	// tab only carries the session's latest state, not the exact result and
+	// form fields the URL describes.
+	function hydrateWorkspaceTabs(searchParams: URLSearchParams): Promise<void> {
+		if (!projectSessionFromSearch(searchParams)) return restorePersistedTabs();
+		return trackUrlTarget(async () => {
+			// Restoring the other tabs is a side job here: its failure is logged
+			// but must not discard (or, through its cached promise, keep failing
+			// every retry of) the target the address bar actually points at.
+			const [, params] = await Promise.all([
+				restorePersistedTabs().catch((error: unknown) =>
+					logBoundaryError('workspace.restorePersistedTabs', error)
+				),
+				resolveUrlTarget(searchParams)
+			]);
+			return params;
 		});
 	}
 
-	// Applies the URL's project/session (if present and different from what's
-	// already active) on top of whatever's currently open — shared by the
-	// initial hydration below (after restoring persisted tabs) and every
-	// later popstate/link navigation, so a pasted/bookmarked link always wins
-	// over whatever was already open.
-	async function applyUrlTarget(searchParams: URLSearchParams): Promise<void> {
-		urlTargetEpoch += 1;
-		const epoch = urlTargetEpoch;
-		const target = projectSessionFromSearch(searchParams);
-		if (!target) return;
-		const generationId = generationIdFromSearch(searchParams);
-		const alreadyActive =
-			target.projectId === workspaceTabs.activeTabId &&
-			target.sessionId === workspaceTabs.activeTab.activeSessionTabId;
-		// Still re-applies when only the generation anchor changed (e.g. the URL
-		// was hand-edited to a different `?generation=` within the same
-		// project/session) — not just when the project/session pair itself did.
-		if (alreadyActive && generationId === (request.viewingGenerationId ?? null)) return;
-		await openFromUrl(target.projectId, target.sessionId, generationId, epoch);
-	}
-
-	// Runs once on the initial hard load: restores every previously open tab
-	// (restorePersistedTabs is idempotent and already kicked off by the root
-	// layout's own onMount, so this just awaits that same result — see there
-	// for why restoration can't wait for Workspace.svelte specifically to
-	// mount), then layers the URL's own project/session (if any) on top — a
-	// shared link should win over whatever was locally open before, while
-	// the rest of the restored tabs stay open in the background.
-	async function hydrateWorkspaceTabs(searchParams: URLSearchParams): Promise<void> {
-		await restorePersistedTabs();
-		await applyUrlTarget(searchParams);
+	function retryOpeningUrlTarget(): void {
+		retryUrlTarget?.().catch((error: unknown) =>
+			logBoundaryError('workspace.retryUrlTarget', error)
+		);
 	}
 
 	// afterNavigate also runs once when this component mounts (type 'enter'), so
@@ -320,26 +416,33 @@ before the Change Date. See LICENSE for complete terms.
 	// switching workspace tabs is a workspaceTabs mutation that buildShareUrl
 	// itself never reads (see its own doc comment), so without reading them
 	// here directly, switching tabs wouldn't re-schedule this effect at all.
-	// viewingGenerationId rides along the same way, so the `?generation=`
-	// anchor (see request.svelte.ts) stays in the address bar for as long as
-	// what's on screen is still that generation's before/after, and drops out
-	// the moment it isn't (setCurrentRender clears the field on every real
-	// render/edit).
+	// generationAnchor rides along the same way, so the `?generation=`
+	// anchor (see request.svelte.ts) always names what's on screen — a stored
+	// generation, or with `step=before` the image one was made from — moving
+	// with every new generation, edit, undo and redo, so a reload or a
+	// duplicated browser tab reopens that exact step.
+	//
+	// Paused while the URL's own target is still loading or has failed (see
+	// urlTargetStatus): the workspace doesn't show that target yet, so
+	// syncing would replace the link being opened with whatever is on screen
+	// in the meantime.
 	$effect(() => {
-		if (!hydrated) return;
+		if (!hydrated || urlTargetStatus !== 'idle') return;
 		buildShareUrl(mode, request);
 		const activeProjectId =
 			workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
 		const activeSessionId = workspaceTabs.activeTab.activeSessionTabId ?? undefined;
-		const viewingGenerationId = request.viewingGenerationId;
+		const generationAnchor = request.generationAnchor;
 		const timer = setTimeout(() => {
 			const currentSearch = new URLSearchParams(window.location.search);
 			const base = buildShareUrl(mode, request, subTabFromSearch(mode, currentSearch));
-			const url = withProjectSession(base, activeProjectId, activeSessionId, viewingGenerationId);
+			const url = withProjectSession(base, activeProjectId, activeSessionId, generationAnchor);
 			if (`${window.location.pathname}${window.location.search}` !== url) {
-				goto(url, { replaceState: true, keepFocus: true, noScroll: true }).catch((error: unknown) =>
-					logBoundaryError('workspace.urlSync', error)
-				);
+				goto(resolve(url as PathnameWithSearchOrHash, {}), {
+					replaceState: true,
+					keepFocus: true,
+					noScroll: true
+				}).catch((error: unknown) => logBoundaryError('workspace.urlSync', error));
 			}
 		}, 400);
 		return () => clearTimeout(timer);
@@ -383,11 +486,21 @@ before the Change Date. See LICENSE for complete terms.
 		if (origin.mode === mode && (origin.mode !== 'edit' || origin.tool === activeEditTool)) {
 			return;
 		}
-		goto(buildWorkspaceUrl(origin.mode, request, origin.tool ? { tool: origin.tool } : {}), {
-			replaceState: true,
-			keepFocus: true,
-			noScroll: true
-		}).catch((error: unknown) => logBoundaryError('workspace.renderOriginSync', error));
+		goto(
+			resolve(
+				buildWorkspaceUrl(
+					origin.mode,
+					request,
+					origin.tool ? { tool: origin.tool } : {}
+				) as PathnameWithSearchOrHash,
+				{}
+			),
+			{
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true
+			}
+		).catch((error: unknown) => logBoundaryError('workspace.renderOriginSync', error));
 	});
 
 	async function generate(): Promise<void> {
@@ -567,6 +680,22 @@ before the Change Date. See LICENSE for complete terms.
 				</div>
 			</div>
 
+			{#if urlTargetStatus === 'loading'}
+				<p class="url-target-status" role="status">{t('workspace.urlTarget.loading')}</p>
+			{:else if urlTargetStatus === 'failed'}
+				<div class="url-target-status" role="alert">
+					<p>{t('workspace.urlTarget.failed')}</p>
+					<div class="url-target-actions">
+						<button type="button" class="boundary-retry" onclick={retryOpeningUrlTarget}>
+							{t('workspace.urlTarget.retry')}
+						</button>
+						<button type="button" class="boundary-retry" onclick={settleUrlTarget}>
+							{t('workspace.urlTarget.dismiss')}
+						</button>
+					</div>
+				</div>
+			{/if}
+
 			<!-- Each mode keeps its own persistent canvas-layout (hidden via CSS, not
 			     destroyed via {#if}) so that in-flight background work — the Object/
 			     Texture Replacement tools' async job polling in particular — survives
@@ -580,7 +709,7 @@ before the Change Date. See LICENSE for complete terms.
 				id="mode-panel-render"
 				aria-labelledby="mode-tab-render"
 				tabindex="0"
-				hidden={mode !== 'render'}
+				hidden={mode !== 'render' || urlTargetStatus !== 'idle'}
 			>
 				<div class="canvas-col">
 					{#if mode === 'render' && !request.currentRender}
@@ -685,7 +814,7 @@ before the Change Date. See LICENSE for complete terms.
 				id="mode-panel-edit"
 				aria-labelledby="mode-tab-edit"
 				tabindex="0"
-				hidden={mode !== 'edit'}
+				hidden={mode !== 'edit' || urlTargetStatus !== 'idle'}
 			>
 				<div class="canvas-col">
 					{#if showMaskOnCanvas}
@@ -745,7 +874,7 @@ before the Change Date. See LICENSE for complete terms.
 				id="mode-panel-styleTransfer"
 				aria-labelledby="mode-tab-styleTransfer"
 				tabindex="0"
-				hidden={mode !== 'styleTransfer'}
+				hidden={mode !== 'styleTransfer' || urlTargetStatus !== 'idle'}
 			>
 				<div class="canvas-col">
 					{#if mode === 'styleTransfer' && !request.currentRender}
@@ -1010,6 +1139,32 @@ before the Change Date. See LICENSE for complete terms.
 		.canvas-layout.reserve-panel-space {
 			padding-right: calc(var(--tools-panel-width) + 1.5rem);
 		}
+	}
+
+	.url-target-status {
+		margin: 0;
+		padding: 1.5rem;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+		color: var(--color-muted);
+		text-align: center;
+	}
+
+	.url-target-status p {
+		margin: 0;
+	}
+
+	.url-target-actions {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.5rem;
+	}
+
+	.url-target-actions .boundary-retry {
+		margin: 0;
 	}
 
 	.canvas-col {

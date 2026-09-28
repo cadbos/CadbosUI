@@ -14,7 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectDetailResponse } from '$lib/api/contract';
-import { projectDetail } from './project-detail.svelte';
+import { fetchProjectDetail, projectDetail, ProjectDetailLoadError } from './project-detail.svelte';
 import { projectShare } from './project-share.svelte';
 
 function detail(overrides: Partial<ProjectDetailResponse> = {}): ProjectDetailResponse {
@@ -45,6 +45,63 @@ afterEach(() => {
 	projectDetail.clear();
 	projectShare.clear();
 	vi.unstubAllGlobals();
+});
+
+describe('fetchProjectDetail', () => {
+	const id = '00000000-0000-4000-8000-000000000001';
+
+	it('resolves to null only for a 404', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 404 }))
+		);
+
+		await expect(fetchProjectDetail(id)).resolves.toBeNull();
+	});
+
+	it('keeps the browser network error as the cause of a failed request', async () => {
+		const networkError = new TypeError('Failed to fetch');
+		vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockRejectedValue(networkError));
+
+		const error = await fetchProjectDetail(id).catch((caught: unknown) => caught);
+
+		expect(error).toBeInstanceOf(ProjectDetailLoadError);
+		expect((error as Error).message).toBe(
+			'project detail request failed (network): TypeError: Failed to fetch'
+		);
+		expect((error as Error).cause).toBe(networkError);
+	});
+
+	it('names the HTTP status of a failed response', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 503 }))
+		);
+
+		await expect(fetchProjectDetail(id)).rejects.toThrow('project detail request failed: HTTP 503');
+	});
+
+	it('tells a non-JSON body apart from a schema mismatch', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn<typeof fetch>().mockResolvedValue(new Response('<html>blocked</html>', { status: 200 }))
+		);
+
+		await expect(fetchProjectDetail(id)).rejects.toThrow(
+			/^project detail response is not valid JSON: SyntaxError/
+		);
+	});
+
+	it('names the fields that failed validation, without their values', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ ...detail(), title: 42 }))
+		);
+
+		await expect(fetchProjectDetail(id)).rejects.toThrow(
+			'project detail response failed schema validation at title'
+		);
+	});
 });
 
 describe('projectDetail.load', () => {

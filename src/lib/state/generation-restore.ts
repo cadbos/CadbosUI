@@ -14,20 +14,21 @@
 
 import { z } from 'zod';
 import { generationKinds } from '$lib/api/contract';
-import { mediaAccess } from '$lib/state/media-access.svelte';
-import { request, requestFormSnapshotSchema } from '$lib/state/request.svelte';
+import { requestFormSnapshotSchema } from '$lib/state/request.svelte';
+import { describeCause, issuePaths } from '$lib/utils';
 
 const mediaAccessSchema = z.object({ key: z.string().min(1), url: z.url() });
 
 // GET /api/generated-images/[id]'s response shape — shared by every caller
-// that reopens a past generation's exact settings (the Scenes drawer's
-// per-scene restore, "Continue session" in projects/[id]), so the schema and
-// the apply logic below can't drift apart between them.
+// that reopens a past generation (workspace-tabs.svelte.ts's
+// initializeGenerationPreview), so they all validate it the same way.
 export const generatedImageDetailResponseSchema = z.object({
 	id: z.string().min(1),
 	prompt: z.string(),
 	kind: z.enum(generationKinds),
 	createdAt: z.number(),
+	amount: z.number(),
+	balanceAfter: z.number(),
 	image: mediaAccessSchema,
 	source: mediaAccessSchema,
 	formSnapshot: requestFormSnapshotSchema.nullable(),
@@ -44,21 +45,51 @@ export const generatedImageDetailResponseSchema = z.object({
 
 export type GeneratedImageDetail = z.infer<typeof generatedImageDetailResponseSchema>;
 
-export async function fetchGeneratedImageDetail(id: string): Promise<GeneratedImageDetail | null> {
-	const response = await fetch(`/api/generated-images/${encodeURIComponent(id)}`);
-	if (!response.ok) return null;
-	const body: unknown = await response.json().catch(() => null);
-	const parsed = generatedImageDetailResponseSchema.safeParse(body);
-	return parsed.success ? parsed.data : null;
+export class GeneratedImageDetailLoadError extends Error {
+	constructor(message: string, options?: ErrorOptions) {
+		super(message, options);
+		this.name = 'GeneratedImageDetailLoadError';
+	}
 }
 
-// Registers a fetched detail's media with the client-side media-access cache
-// and, if it carries a snapshot, restores the exact form settings that
-// produced it — the settings-half of a restore. Callers put the image on the
-// canvas themselves first (RequestState#startFromImage), since which image
-// that is differs by context.
-export function applyGeneratedImageFormSnapshot(detail: GeneratedImageDetail): void {
-	for (const access of detail.media) mediaAccess.normalize(access);
-	if (!detail.formSnapshot) return;
-	request.restoreFormSnapshot(detail.formSnapshot);
+// Null only on a 404 (deleted, or not the caller's); any other failure —
+// network, blocked request, 5xx, malformed body — throws, so a caller can
+// tell a dead link apart from a connection problem worth retrying (same
+// contract as project-detail.svelte.ts's fetchProjectDetail).
+export async function fetchGeneratedImageDetail(id: string): Promise<GeneratedImageDetail | null> {
+	let response: Response;
+	try {
+		response = await fetch(`/api/generated-images/${encodeURIComponent(id)}`);
+	} catch (error) {
+		throw new GeneratedImageDetailLoadError(
+			`generation detail request failed (network): ${describeCause(error)}`,
+			{
+				cause: error
+			}
+		);
+	}
+	if (response.status === 404) return null;
+	if (!response.ok) {
+		throw new GeneratedImageDetailLoadError(
+			`generation detail request failed: HTTP ${response.status}`
+		);
+	}
+	let body: unknown;
+	try {
+		body = await response.json();
+	} catch (error) {
+		throw new GeneratedImageDetailLoadError(
+			`generation detail response is not valid JSON: ${describeCause(error)}`,
+			{
+				cause: error
+			}
+		);
+	}
+	const parsed = generatedImageDetailResponseSchema.safeParse(body);
+	if (!parsed.success) {
+		throw new GeneratedImageDetailLoadError(
+			`generation detail response failed schema validation at ${issuePaths(parsed.error)}`
+		);
+	}
+	return parsed.data;
 }

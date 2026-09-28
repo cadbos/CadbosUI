@@ -36,13 +36,12 @@ before the Change Date. See LICENSE for complete terms.
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import {
-		applyGeneratedImageFormSnapshot,
 		fetchGeneratedImageDetail,
 		type GeneratedImageDetail
 	} from '$lib/state/generation-restore';
 	import { request, RequestState, type RequestFormSnapshot } from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, destinationForGenerationKind } from '$lib/state/url-state';
-	import { workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+	import { initializeGenerationPreview, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError, openModal } from '$lib/utils';
 
 	const generationKindKeys: Record<GenerationKind, TranslationKey> = {
@@ -343,10 +342,16 @@ before the Change Date. See LICENSE for complete terms.
 		return detail.session ? workspaceTabs.sessionState(detail.session.sessionId) : request;
 	}
 
+	// Reopens the scene exactly as it looked right after it was generated —
+	// its source as the "before", its result on screen with the result
+	// actions, and the form it was submitted with — the same state a fresh
+	// generation leaves behind. That also puts it in the address bar as
+	// `?generation=`, so a reload or a duplicated browser tab comes back to
+	// this scene rather than the session's latest one. Continues the session
+	// the generation belongs to, not whichever one happens to be open —
+	// otherwise the next generation would land in an unrelated session, or in
+	// a brand-new "Untitled" one from scratch.
 	function applyRestore(detail: GeneratedImageDetail, kind: GenerationKind): void {
-		// Continue the session the generation belongs to, not whichever one
-		// happens to be open — otherwise the next generation would land in an
-		// unrelated session, or in a brand-new "Untitled" one from scratch.
 		const { session } = detail;
 		if (session) {
 			workspaceTabs.openProject({
@@ -354,15 +359,11 @@ before the Change Date. See LICENSE for complete terms.
 				projectTitle: session.projectTitle,
 				sessionId: session.sessionId,
 				sessionTitle: session.sessionTitle.trim() === '' ? null : session.sessionTitle,
-				initialize: (state) => state.setProjectSession(session.projectId, session.sessionId)
+				initialize: (state) => initializeGenerationPreview(state, detail)
 			});
+		} else {
+			initializeGenerationPreview(request, detail);
 		}
-
-		// The generation's own result, not its source — restoring a scene
-		// should bring back what that scene actually looked like, the same
-		// image clicking its "Результат" thumbnail (useImage) would set.
-		request.startFromImage({ mediaKey: detail.image.key });
-		applyGeneratedImageFormSnapshot(detail);
 		navigateToDestination(kind, 'scenesDrawer.restoreNavigation', detail.formSnapshot);
 	}
 

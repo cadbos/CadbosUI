@@ -265,6 +265,8 @@ describe('getGenerationDetailForUser', () => {
 			prompt: 'cozy',
 			kind: 'render',
 			createdAt: expect.any(Number),
+			amount: 1,
+			balanceAfter: 4,
 			formSnapshot: TEST_FORM_SNAPSHOT,
 			session: {
 				projectId: expect.any(String),

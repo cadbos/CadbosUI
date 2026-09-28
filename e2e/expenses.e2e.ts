@@ -83,39 +83,28 @@ async function authenticateWithExpenseHistory(page: Page): Promise<void> {
 	});
 }
 
-async function mockProjectDetail(page: Page): Promise<void> {
-	await page.route(`**/api/projects/${PROJECT_ID}`, async (route) => {
-		if (route.request().method() !== 'GET') return route.fallback();
+async function mockGenerationDetail(page: Page): Promise<void> {
+	await page.route(`**/api/generated-images/${GENERATION_ID}`, async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				id: PROJECT_ID,
-				title: 'Living room',
+				id: GENERATION_ID,
+				prompt: '',
+				kind: 'render',
 				createdAt: Date.UTC(2026, 0, 1),
-				updatedAt: Date.UTC(2026, 0, 1),
-				shareActive: false,
-				sessions: [
-					{
-						id: SESSION_ID,
-						title: 'Main thread',
-						parentSessionId: null,
-						forkedFromGenerationId: null,
-						createdAt: Date.UTC(2026, 0, 1),
-						updatedAt: Date.UTC(2026, 0, 1),
-						generations: [
-							{
-								id: GENERATION_ID,
-								image: media(2, AFTER_URL),
-								source: media(1, BEFORE_URL),
-								kind: 'render',
-								createdAt: Date.UTC(2026, 0, 1),
-								amount: 1.5,
-								balanceAfter: 8.5
-							}
-						]
-					}
-				]
+				amount: 1.5,
+				balanceAfter: 8.5,
+				image: media(2, AFTER_URL),
+				source: media(1, BEFORE_URL),
+				formSnapshot: null,
+				session: {
+					projectId: PROJECT_ID,
+					projectTitle: 'Living room',
+					sessionId: SESSION_ID,
+					sessionTitle: 'Main thread'
+				},
+				media: [media(2, AFTER_URL), media(1, BEFORE_URL)]
 			})
 		});
 	});
@@ -185,7 +174,7 @@ test('clicking an expense row opens its generation before/after in the workspace
 	page
 }) => {
 	await authenticateWithExpenseHistory(page);
-	await mockProjectDetail(page);
+	await mockGenerationDetail(page);
 	await page.goto('/expenses');
 
 	await page.locator('button.history-entry').click();
@@ -201,10 +190,10 @@ test('clicking an expense row opens its generation before/after in the workspace
 	await expect(page.getByAltText('После', { exact: true })).toHaveAttribute('src', AFTER_URL);
 	await expect(page.getByAltText('До', { exact: true })).toHaveAttribute('src', BEFORE_URL);
 
-	// A genuinely new generation on top of the preview leaves the project and
-	// session anchored (still the same session), but the `generation=` anchor
-	// itself must drop — what's on screen is no longer that past generation's
-	// result (see request.svelte.ts's setCurrentRender clearing viewingGenerationId).
+	// A genuinely new generation on top of the preview stays in the same
+	// project/session, and the `generation=` anchor moves on to the new
+	// result — what's on screen is now that one (see request.svelte.ts's
+	// generationAnchor).
 	await page.route('**/api/render', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -224,14 +213,14 @@ test('clicking an expense row opens its generation before/after in the workspace
 
 	await expect(page).toHaveURL(new RegExp(`project=${PROJECT_ID}`));
 	await expect(page).toHaveURL(new RegExp(`session=${SESSION_ID}`));
-	await expect(page).not.toHaveURL(/generation=/);
+	await expect(page).toHaveURL(/generation=00000000-0000-4000-8000-000000000703/);
 });
 
 test('reloading a URL with a generation anchor reconstructs the same before/after view', async ({
 	page
 }) => {
 	await authenticateWithExpenseHistory(page);
-	await mockProjectDetail(page);
+	await mockGenerationDetail(page);
 
 	await page.goto(
 		`/create/interior?view=chat&format=webp&project=${PROJECT_ID}&session=${SESSION_ID}&generation=${GENERATION_ID}`
@@ -245,16 +234,17 @@ test('reloading a URL with a generation anchor reconstructs the same before/afte
 	await expect(page.getByAltText('До', { exact: true })).toHaveAttribute('src', BEFORE_URL);
 });
 
-test('surfaces an error and stays on the expenses page when the row’s project is gone', async ({
+test('surfaces an error and stays on the expenses page when the row’s generation is gone', async ({
 	page
 }) => {
 	await authenticateWithExpenseHistory(page);
-	await page.route(`**/api/projects/${PROJECT_ID}`, async (route) => {
-		if (route.request().method() !== 'GET') return route.fallback();
+	await page.route(`**/api/generated-images/${GENERATION_ID}`, async (route) => {
 		await route.fulfill({
 			status: 404,
 			contentType: 'application/json',
-			body: JSON.stringify({ error: { code: 'project_not_found', message: 'Project not found' } })
+			body: JSON.stringify({
+				error: { code: 'generation_not_found', message: 'Generation not found' }
+			})
 		});
 	});
 	await page.goto('/expenses');

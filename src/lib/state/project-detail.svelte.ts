@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { generationKinds } from '$lib/api/contract';
 import type { ProjectDetailResponse, ProjectSessionRecord } from '$lib/api/contract';
 import { projectShare } from './project-share.svelte';
-import { discardBody } from '$lib/utils';
+import { describeCause, discardBody, issuePaths } from '$lib/utils';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export type ProjectDetailStatus = 'idle' | 'loading' | 'ready' | 'error' | 'not-found';
@@ -83,8 +83,8 @@ const createSessionResponseSchema = z.object({
 });
 
 export class ProjectDetailLoadError extends Error {
-	constructor(message: string) {
-		super(message);
+	constructor(message: string, options?: ErrorOptions) {
+		super(message, options);
 		this.name = 'ProjectDetailLoadError';
 	}
 }
@@ -94,29 +94,47 @@ export class ProjectDetailLoadError extends Error {
 // again. Callers that need several projects' details back-to-back (or
 // alongside whatever the /projects/[id] page itself is loading), such as
 // workspace-tabs.svelte.ts's tab restore, would otherwise race that shared
-// in-flight slot. Null on any failure — 404, network error, malformed body —
-// since every caller's response is "skip this one", not an error to surface.
+// in-flight slot. Null only on a 404 (not found, or not owned by the caller)
+// — an expected "skip this one" outcome. Anything else (network failure, a
+// blocked request, a 5xx, a malformed body) throws ProjectDetailLoadError:
+// treating those as "no such project" would make a flaky connection
+// indistinguishable from a dead link, and callers such as Workspace.svelte's
+// URL hydration must be able to offer a retry instead of silently dropping
+// the project the address bar points at.
 export async function fetchProjectDetail(id: string): Promise<ProjectDetailResponse | null> {
+	let response: Response;
 	try {
-		const response = await fetch(`/api/projects/${id}`);
-		// A 404 (not found, or not owned by the caller) is an expected,
-		// unremarkable outcome here — every caller already treats it as
-		// "skip this one" — so only genuine failures are worth logging.
-		if (response.status === 404) return null;
-		if (!response.ok) {
-			console.error('fetchProjectDetail failed:', response.status);
-			return null;
-		}
-		const parsed = projectDetailSchema.safeParse(await response.json().catch(() => null));
-		if (!parsed.success) {
-			console.error('fetchProjectDetail: response failed schema validation');
-			return null;
-		}
-		return normalizeProject(parsed.data);
+		response = await fetch(`/api/projects/${id}`);
 	} catch (error) {
-		console.error('fetchProjectDetail failed:', error);
-		return null;
+		throw new ProjectDetailLoadError(
+			`project detail request failed (network): ${describeCause(error)}`,
+			{
+				cause: error
+			}
+		);
 	}
+	if (response.status === 404) return null;
+	if (!response.ok) {
+		throw new ProjectDetailLoadError(`project detail request failed: HTTP ${response.status}`);
+	}
+	let body: unknown;
+	try {
+		body = await response.json();
+	} catch (error) {
+		throw new ProjectDetailLoadError(
+			`project detail response is not valid JSON: ${describeCause(error)}`,
+			{
+				cause: error
+			}
+		);
+	}
+	const parsed = projectDetailSchema.safeParse(body);
+	if (!parsed.success) {
+		throw new ProjectDetailLoadError(
+			`project detail response failed schema validation at ${issuePaths(parsed.error)}`
+		);
+	}
+	return normalizeProject(parsed.data);
 }
 
 export class ProjectDetailActionError extends Error {

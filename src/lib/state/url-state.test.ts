@@ -23,7 +23,7 @@ import {
 	applyShareParams,
 	buildShareUrl,
 	destinationForGenerationKind,
-	generationIdFromSearch,
+	generationAnchorFromSearch,
 	isEditToolRoute,
 	isWorkspaceRoute,
 	renderOrigin,
@@ -441,43 +441,58 @@ describe('project/session are excluded from the shareable workspace URL', () => 
 
 const GENERATION_ID = '423e4567-e89b-42d3-a456-426614174003';
 
-describe('withProjectSession/generationIdFromSearch (the address-bar-only generation anchor)', () => {
+describe('withProjectSession/generationAnchorFromSearch (the address-bar-only generation anchor)', () => {
+	const RESULT = { generationId: GENERATION_ID, step: 'result' } as const;
+	const BEFORE = { generationId: GENERATION_ID, step: 'before' } as const;
+
 	it('appends project/session/generation on top of a share URL', () => {
-		const url = withProjectSession(
-			'/create/interior?view=chat',
-			PROJECT_ID,
-			SESSION_ID,
-			GENERATION_ID
-		);
+		const url = withProjectSession('/create/interior?view=chat', PROJECT_ID, SESSION_ID, RESULT);
 		const params = new URL(url, 'https://example.test').searchParams;
 		expect(params.get('project')).toBe(PROJECT_ID);
 		expect(params.get('session')).toBe(SESSION_ID);
 		expect(params.get('generation')).toBe(GENERATION_ID);
+		expect(params.has('step')).toBe(false);
 	});
 
-	it('omits generation when not given, and drops one already on the URL', () => {
-		const withGeneration = withProjectSession(
-			'/create/interior?view=chat&generation=stale',
+	it('marks an anchor on the image a generation was made from with step=before', () => {
+		const url = withProjectSession('/create/interior?view=chat', PROJECT_ID, SESSION_ID, BEFORE);
+		const params = new URL(url, 'https://example.test').searchParams;
+		expect(params.get('generation')).toBe(GENERATION_ID);
+		expect(params.get('step')).toBe('before');
+	});
+
+	it('omits generation and step when not given, and drops ones already on the URL', () => {
+		const url = withProjectSession(
+			'/create/interior?view=chat&generation=stale&step=before',
 			PROJECT_ID,
 			SESSION_ID
 		);
-		expect(withGeneration).not.toContain('generation=');
+		expect(url).not.toContain('generation=');
+		expect(url).not.toContain('step=');
 	});
 
 	it('no-ops (generation included) when project or session is missing', () => {
 		const url = '/create/interior?view=chat';
-		expect(withProjectSession(url, undefined, SESSION_ID, GENERATION_ID)).toBe(url);
-		expect(withProjectSession(url, PROJECT_ID, undefined, GENERATION_ID)).toBe(url);
+		expect(withProjectSession(url, undefined, SESSION_ID, RESULT)).toBe(url);
+		expect(withProjectSession(url, PROJECT_ID, undefined, RESULT)).toBe(url);
 	});
 
-	it('reads a valid generation id back off the query string', () => {
-		expect(generationIdFromSearch(new URLSearchParams({ generation: GENERATION_ID }))).toBe(
-			GENERATION_ID
+	it('reads an anchor back off the query string', () => {
+		expect(generationAnchorFromSearch(new URLSearchParams({ generation: GENERATION_ID }))).toEqual(
+			RESULT
 		);
+		expect(
+			generationAnchorFromSearch(new URLSearchParams({ generation: GENERATION_ID, step: 'before' }))
+		).toEqual(BEFORE);
+		expect(
+			generationAnchorFromSearch(new URLSearchParams({ generation: GENERATION_ID, step: 'junk' }))
+		).toEqual(RESULT);
 	});
 
 	it('treats a missing or non-UUID generation param as absent', () => {
-		expect(generationIdFromSearch(new URLSearchParams())).toBeNull();
-		expect(generationIdFromSearch(new URLSearchParams({ generation: 'not-a-uuid' }))).toBeNull();
+		expect(generationAnchorFromSearch(new URLSearchParams())).toBeNull();
+		expect(
+			generationAnchorFromSearch(new URLSearchParams({ generation: 'not-a-uuid' }))
+		).toBeNull();
 	});
 });

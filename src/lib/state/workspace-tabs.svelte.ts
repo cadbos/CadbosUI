@@ -13,16 +13,54 @@
  */
 
 import { z } from 'zod';
-import type { ProjectSessionRecord, SessionGenerationRecord } from '$lib/api/contract';
+import type { ProjectSessionRecord } from '$lib/api/contract';
+import type { GeneratedImageDetail } from '$lib/state/generation-restore';
 import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
-import { request, RequestState } from '$lib/state/request.svelte';
+import { request, RequestState, type RequestFormSnapshot } from '$lib/state/request.svelte';
 import { mediaAccess } from '$lib/state/media-access.svelte';
+import { logBoundaryError } from '$lib/utils';
 
-// Resets a RequestState to continue the given session — shared by the
-// "Continue" button (projects/[id]/+page.svelte) and Workspace.svelte's own
-// resolution of a project/session pair carried in the URL (see
-// url-state.ts's withProjectSession/projectSessionFromSearch). Callers pass
-// this as openProject()'s `initialize`.
+// The generation fields both openers below need to put a past generation
+// back on screen — satisfied by a session's own generation list
+// (ProjectSessionRecord) and by the full GeneratedImageDetail alike.
+type GenerationOnScreen = Pick<
+	GeneratedImageDetail,
+	'id' | 'image' | 'source' | 'createdAt' | 'amount' | 'balanceAfter'
+>;
+
+// Seeds `generation` as the "after" step: setCurrentRender() derives the
+// "before" step automatically from state.image (just set to the
+// generation's own source), the same synthetic-original-step mechanism a
+// real first generation gets — so RenderResult.svelte's Compare toggle and
+// the workspace's result actions work exactly as if this generation had
+// just happened, and the `?generation=` URL anchor names it.
+function showGeneration(
+	state: RequestState,
+	generation: GenerationOnScreen,
+	formSnapshot: RequestFormSnapshot | null
+): void {
+	mediaAccess.normalize(generation.source);
+	mediaAccess.normalize(generation.image);
+	state.startFromImage({ mediaKey: generation.source.key });
+	if (formSnapshot) state.restoreFormSnapshot(formSnapshot);
+	state.setCurrentRender({
+		id: generation.id,
+		recorded: true,
+		outputKey: generation.image.key,
+		cost: generation.amount,
+		balance: generation.balanceAfter,
+		...(formSnapshot ? { formSnapshot } : {}),
+		ts: generation.createdAt
+	});
+}
+
+// Opens a session on its latest generation, shown as its result — for a
+// session opened without a specific generation in hand (a restored tab after
+// a reload, a `?project=&session=` link without a generation anchor, the
+// "Continue" button when that generation's own detail can't be fetched).
+// Its form settings aren't part of the session list, so the form is left as
+// is; callers that have the generation's detail use
+// initializeGenerationPreview instead, which restores the form too.
 export function initializeSessionState(
 	state: RequestState,
 	projectId: string,
@@ -31,8 +69,13 @@ export function initializeSessionState(
 	state.setProjectSession(projectId, session.id);
 	const latest = session.generations[0];
 	if (latest) {
-		mediaAccess.normalize(latest.image);
-		state.startFromImage({ mediaKey: latest.image.key });
+		// amount/balanceAfter are only ever absent on the public
+		// /share/[token] viewer's response shape, which never reaches here.
+		showGeneration(
+			state,
+			{ ...latest, amount: latest.amount ?? 0, balanceAfter: latest.balanceAfter ?? 0 },
+			null
+		);
 		return;
 	}
 	// Nothing generated yet — keep whatever photo the session tab already
@@ -40,37 +83,22 @@ export function initializeSessionState(
 	state.clearCanvasWork();
 }
 
-// Seeds the workspace with one specific past generation's before/after —
-// shared by the /expenses row click and a `?generation=` URL anchor
-// (Workspace.svelte's openFromUrl). Unlike initializeSessionState (which
-// leaves history empty, ready for a fresh generation), this seeds it with the
-// clicked generation as the "after" step: setCurrentRender() derives the
-// "before" step automatically from state.image.url (just set to the
-// generation's own sourceUrl), the same synthetic-original-step mechanism a
-// real first generation gets — so RenderResult.svelte's Compare toggle works
-// exactly as if this generation had just happened.
+// Reopens one specific past generation exactly as it looked the moment it
+// was made, form included — shared by "Continue" on a project's page, the
+// Scenes drawer's restore, the /expenses row click and a `?generation=` URL
+// anchor (Workspace.svelte's resolveUrlTarget, which is what a reload or a
+// duplicated browser tab goes through). Attaches the generation's own
+// session when it still has one; otherwise `state` keeps whatever session it
+// was already on.
 export function initializeGenerationPreview(
 	state: RequestState,
-	projectId: string,
-	session: ProjectSessionRecord,
-	generation: SessionGenerationRecord
+	generation: GeneratedImageDetail
 ): void {
-	state.setProjectSession(projectId, session.id);
-	mediaAccess.normalize(generation.source);
-	mediaAccess.normalize(generation.image);
-	state.startFromImage({ mediaKey: generation.source.key });
-	state.setCurrentRender({
-		id: generation.id,
-		outputKey: generation.image.key,
-		// Only ever undefined for a generation resolved through the public
-		// /share/[token] viewer's response shape, which deliberately strips
-		// these — this function is never called on that path today, but stays
-		// defensive rather than asserting a value that type isn't guaranteed.
-		cost: generation.amount ?? 0,
-		balance: generation.balanceAfter ?? 0,
-		ts: generation.createdAt
-	});
-	state.setViewingGenerationId(generation.id);
+	if (generation.session) {
+		state.setProjectSession(generation.session.projectId, generation.session.sessionId);
+	}
+	for (const access of generation.media) mediaAccess.normalize(access);
+	showGeneration(state, generation, generation.formSnapshot);
 }
 
 export interface SessionTab {
@@ -509,13 +537,32 @@ export const workspaceTabs = new WorkspaceTabsState();
 // separate ones — the second caller just awaits the first's result.
 let restorePromise: Promise<void> | null = null;
 
+// A tab whose project can't be fetched right now (network failure, blocked
+// request) is logged and left out of this page's restored set rather than
+// failing the whole restore — every other tab, and the URL's own target
+// layered on top by Workspace.svelte, still comes back.
+async function fetchPersistedProject(
+	projectId: string
+): Promise<Awaited<ReturnType<typeof fetchProjectDetail>>> {
+	try {
+		return await fetchProjectDetail(projectId);
+	} catch (error) {
+		logBoundaryError('workspaceTabs.restoreProject', error);
+		return null;
+	}
+}
+
 async function performRestore(): Promise<void> {
 	const persisted = workspaceTabs.readPersisted();
 	if (!persisted) return;
 
-	for (const tab of persisted.tabs) {
-		const project = await fetchProjectDetail(tab.id);
-		if (!project) continue;
+	// Fetched in parallel (a slow connection would otherwise pay one full
+	// round trip per open tab before the workspace shows anything), then
+	// opened in the persisted order so the tab strip comes back unchanged.
+	const projects = await Promise.all(persisted.tabs.map((tab) => fetchPersistedProject(tab.id)));
+	persisted.tabs.forEach((tab, index) => {
+		const project = projects[index];
+		if (!project) return;
 		for (const sessionTab of tab.sessionTabs) {
 			const session = project.sessions.find((candidate) => candidate.id === sessionTab.id);
 			if (!session) continue;
@@ -527,7 +574,7 @@ async function performRestore(): Promise<void> {
 				initialize: (state) => initializeSessionState(state, project.id, session)
 			});
 		}
-	}
+	});
 
 	// openProject() above always activates whichever tab/session it just
 	// opened, so the one that was actually active before reload only ends up

@@ -50,6 +50,10 @@ export interface Dictionary {
 	'workspace.sessionTabs.renameFailed': string;
 	'workspace.shareButton': string;
 	'workspace.sessionsButton': string;
+	'workspace.urlTarget.loading': string;
+	'workspace.urlTarget.failed': string;
+	'workspace.urlTarget.retry': string;
+	'workspace.urlTarget.dismiss': string;
 	'view.switcher.label': string;
 	'view.chat': string;
 	'view.keyValue': string;
