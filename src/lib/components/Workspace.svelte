@@ -346,8 +346,13 @@ before the Change Date. See LICENSE for complete terms.
 	function hydrateWorkspaceTabs(searchParams: URLSearchParams): Promise<void> {
 		if (!projectSessionFromSearch(searchParams)) return restorePersistedTabs();
 		return trackUrlTarget(async () => {
+			// Restoring the other tabs is a side job here: its failure is logged
+			// but must not discard (or, through its cached promise, keep failing
+			// every retry of) the target the address bar actually points at.
 			const [, params] = await Promise.all([
-				restorePersistedTabs(),
+				restorePersistedTabs().catch((error: unknown) =>
+					logBoundaryError('workspace.restorePersistedTabs', error)
+				),
 				resolveUrlTarget(searchParams)
 			]);
 			return params;

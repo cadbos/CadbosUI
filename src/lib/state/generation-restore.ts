@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { generationKinds } from '$lib/api/contract';
 import { requestFormSnapshotSchema } from '$lib/state/request.svelte';
+import { describeCause, issuePaths } from '$lib/utils';
 
 const mediaAccessSchema = z.object({ key: z.string().min(1), url: z.url() });
 
@@ -45,8 +46,8 @@ export const generatedImageDetailResponseSchema = z.object({
 export type GeneratedImageDetail = z.infer<typeof generatedImageDetailResponseSchema>;
 
 export class GeneratedImageDetailLoadError extends Error {
-	constructor(message: string) {
-		super(message);
+	constructor(message: string, options?: ErrorOptions) {
+		super(message, options);
 		this.name = 'GeneratedImageDetailLoadError';
 	}
 }
@@ -61,17 +62,34 @@ export async function fetchGeneratedImageDetail(id: string): Promise<GeneratedIm
 		response = await fetch(`/api/generated-images/${encodeURIComponent(id)}`);
 	} catch (error) {
 		throw new GeneratedImageDetailLoadError(
-			`generation detail request failed: ${error instanceof Error ? error.name : 'unknown'}`
+			`generation detail request failed (network): ${describeCause(error)}`,
+			{
+				cause: error
+			}
 		);
 	}
 	if (response.status === 404) return null;
 	if (!response.ok) {
-		throw new GeneratedImageDetailLoadError(`generation detail request failed: ${response.status}`);
+		throw new GeneratedImageDetailLoadError(
+			`generation detail request failed: HTTP ${response.status}`
+		);
 	}
-	const body: unknown = await response.json().catch(() => null);
+	let body: unknown;
+	try {
+		body = await response.json();
+	} catch (error) {
+		throw new GeneratedImageDetailLoadError(
+			`generation detail response is not valid JSON: ${describeCause(error)}`,
+			{
+				cause: error
+			}
+		);
+	}
 	const parsed = generatedImageDetailResponseSchema.safeParse(body);
 	if (!parsed.success) {
-		throw new GeneratedImageDetailLoadError('generation detail response failed schema validation');
+		throw new GeneratedImageDetailLoadError(
+			`generation detail response failed schema validation at ${issuePaths(parsed.error)}`
+		);
 	}
 	return parsed.data;
 }

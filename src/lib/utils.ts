@@ -14,6 +14,7 @@
 
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import type { z } from 'zod';
 
 export function cn(...inputs: ClassValue[]): string {
 	return twMerge(clsx(inputs));
@@ -31,6 +32,22 @@ export interface BoundaryErrorLog {
 	name: string;
 	message: string;
 	stack?: string;
+	// The underlying failure an error wraps (Error's `cause`) — e.g. the
+	// browser's own network error behind a "request failed" — so a log says
+	// why, not just what. Only an Error cause is logged, never an arbitrary
+	// value that might carry private data.
+	cause?: string;
+}
+
+// `Name: message` of an error value, for building a wrapping error's message.
+export function describeCause(error: unknown): string {
+	return error instanceof Error ? `${error.name}: ${error.message}` : 'non-Error value';
+}
+
+// Where a zod validation failed — field paths only, never the offending
+// values, so a response carrying user data can't leak into logs.
+export function issuePaths(error: z.ZodError): string {
+	return error.issues.map((issue) => issue.path.join('.') || '(root)').join(', ');
 }
 
 export function toBoundaryErrorLog(scope: string, error: unknown): BoundaryErrorLog {
@@ -39,7 +56,8 @@ export function toBoundaryErrorLog(scope: string, error: unknown): BoundaryError
 			scope,
 			name: error.name || 'Error',
 			message: error.message || 'Component boundary failed',
-			stack: error.stack
+			stack: error.stack,
+			...(error.cause instanceof Error ? { cause: describeCause(error.cause) } : {})
 		};
 	}
 

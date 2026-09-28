@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { generationKinds } from '$lib/api/contract';
 import type { ProjectDetailResponse, ProjectSessionRecord } from '$lib/api/contract';
 import { projectShare } from './project-share.svelte';
-import { discardBody } from '$lib/utils';
+import { describeCause, discardBody, issuePaths } from '$lib/utils';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export type ProjectDetailStatus = 'idle' | 'loading' | 'ready' | 'error' | 'not-found';
@@ -83,8 +83,8 @@ const createSessionResponseSchema = z.object({
 });
 
 export class ProjectDetailLoadError extends Error {
-	constructor(message: string) {
-		super(message);
+	constructor(message: string, options?: ErrorOptions) {
+		super(message, options);
 		this.name = 'ProjectDetailLoadError';
 	}
 }
@@ -107,16 +107,32 @@ export async function fetchProjectDetail(id: string): Promise<ProjectDetailRespo
 		response = await fetch(`/api/projects/${id}`);
 	} catch (error) {
 		throw new ProjectDetailLoadError(
-			`project detail request failed: ${error instanceof Error ? error.name : 'unknown'}`
+			`project detail request failed (network): ${describeCause(error)}`,
+			{
+				cause: error
+			}
 		);
 	}
 	if (response.status === 404) return null;
 	if (!response.ok) {
-		throw new ProjectDetailLoadError(`project detail request failed: ${response.status}`);
+		throw new ProjectDetailLoadError(`project detail request failed: HTTP ${response.status}`);
 	}
-	const parsed = projectDetailSchema.safeParse(await response.json().catch(() => null));
+	let body: unknown;
+	try {
+		body = await response.json();
+	} catch (error) {
+		throw new ProjectDetailLoadError(
+			`project detail response is not valid JSON: ${describeCause(error)}`,
+			{
+				cause: error
+			}
+		);
+	}
+	const parsed = projectDetailSchema.safeParse(body);
 	if (!parsed.success) {
-		throw new ProjectDetailLoadError('project detail response failed schema validation');
+		throw new ProjectDetailLoadError(
+			`project detail response failed schema validation at ${issuePaths(parsed.error)}`
+		);
 	}
 	return normalizeProject(parsed.data);
 }
