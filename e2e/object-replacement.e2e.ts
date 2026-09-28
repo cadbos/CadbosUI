@@ -82,7 +82,7 @@ async function uploadInputs(page: Page): Promise<void> {
 		mimeType: 'image/webp',
 		buffer: Buffer.from('scene')
 	});
-	await expect(page.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Выбрать фото' })).toBeVisible();
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
 		inputs.nth(1).setInputFiles({
@@ -169,7 +169,7 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 	// control included) — the user should be free to tweak the reference or
 	// the description and submit another replacement right away instead of
 	// being forced through "Новая замена" first.
-	await expect(panel.getByRole('button', { name: 'Изменить референс объекта' })).toBeEnabled();
+	await expect(panel.getByRole('button', { name: 'Выбрать референс объекта' })).toBeEnabled();
 
 	await panel.getByRole('button', { name: 'Новая замена' }).click();
 	await expect(page).not.toHaveURL(/job=/);
@@ -179,7 +179,13 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 	await expect(panel.getByLabel(/Точно опишите существующий объект/)).toHaveValue(
 		'  серый диван у окна  '
 	);
-	await expect(panel.getByRole('button', { name: 'Изменить референс объекта' })).toBeEnabled();
+	await expect(panel.getByRole('button', { name: 'Выбрать референс объекта' })).toBeEnabled();
+
+	// Choosing another reference drops the current one and returns to the
+	// reference picker, focused, ready for a file, a drop or a link.
+	await panel.getByRole('button', { name: 'Выбрать референс объекта' }).click();
+	await expect(panel.getByRole('button', { name: 'Выбрать референс объекта' })).toHaveCount(0);
+	await expect(panel.getByRole('button', { name: /^Референс нового объекта/ })).toBeFocused();
 });
 
 test('resumes a stored completed job after reload without submitting again', async ({ page }) => {
@@ -308,7 +314,7 @@ test('keeps the submitted result’s lineage when another render finishes first'
 		mimeType: 'image/webp',
 		buffer: Buffer.from('room')
 	});
-	await expect(renderPanel.getByRole('button', { name: 'Изменить фото' })).toBeVisible();
+	await expect(renderPanel.getByRole('button', { name: 'Выбрать фото' })).toBeVisible();
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
 		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),

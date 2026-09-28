@@ -13,7 +13,8 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Import } from '@lucide/svelte';
+	import { ImagePlus, Import } from '@lucide/svelte';
+	import { tick } from 'svelte';
 	import { uploadResultSchema } from '$lib/api/contract';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { normalizeImageContentType } from '$lib/image-mime';
@@ -55,12 +56,20 @@ before the Change Date. See LICENSE for complete terms.
 	let uploading = $state(false);
 	let error = $state<string | null>(null);
 	let inputEl = $state<HTMLInputElement | null>(null);
+	let dropZoneEl = $state<HTMLButtonElement | null>(null);
 	let previewUrl = $state<string | null>(null);
 	let dragOver = $state(false);
 	let remoteUrl = $state('');
 
 	function attachInput(node: HTMLInputElement): void {
 		inputEl = node;
+	}
+
+	function attachDropZone(node: HTMLButtonElement): () => void {
+		dropZoneEl = node;
+		return () => {
+			dropZoneEl = null;
+		};
 	}
 
 	const image = $derived(
@@ -100,16 +109,16 @@ before the Change Date. See LICENSE for complete terms.
 							? 'textureReplacement.maskImage'
 							: 'upload.button')
 	);
-	const changeKey = $derived<TranslationKey>(
+	const pickKey = $derived<TranslationKey>(
 		target === 'styleReference'
-			? 'styleTransfer.referenceChange'
+			? 'styleTransfer.referencePick'
 			: target === 'objectReference'
-				? 'objectReplacement.referenceChange'
+				? 'objectReplacement.referencePick'
 				: target === 'textureReference'
-					? 'textureReplacement.referenceChange'
+					? 'textureReplacement.referencePick'
 					: target === 'textureMask'
-						? 'textureReplacement.maskChange'
-						: 'upload.change'
+						? 'textureReplacement.maskPick'
+						: 'upload.pick'
 	);
 	const dropTitleKey = $derived<TranslationKey>(
 		target === 'styleReference'
@@ -195,6 +204,17 @@ before the Change Date. See LICENSE for complete terms.
 		remoteUrl = '';
 		error = null;
 		dragOver = false;
+	}
+
+	// One way to swap the image for another: drop the current one and go back
+	// to the picker itself (file, drag-and-drop, or a link), rather than a
+	// separate "change" and "remove" that both lead there. The button that
+	// was clicked leaves the DOM with the image, so focus moves to the
+	// picker instead of being lost.
+	async function pickAnotherImage(): Promise<void> {
+		clearUploadedImage();
+		await tick();
+		dropZoneEl?.focus();
 	}
 
 	function setUploading(value: boolean): void {
@@ -413,39 +433,13 @@ before the Change Date. See LICENSE for complete terms.
 				<div class="image-actions">
 					<button
 						type="button"
-						class="image-action change-btn"
-						onclick={() => inputEl?.click()}
+						class="image-action"
+						onclick={pickAnotherImage}
 						disabled={uploading || disabled}
-						aria-label={t(changeKey)}
+						aria-label={t(pickKey)}
 					>
-						<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-							<path
-								d="M13.5 6.5L17.5 10.5M4 20L8.2 19.1L19.4 7.9C20.2 7.1 20.2 5.9 19.4 5.1L18.9 4.6C18.1 3.8 16.9 3.8 16.1 4.6L4.9 15.8L4 20Z"
-								stroke="currentColor"
-								stroke-width="1.5"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							/>
-						</svg>
-						<span class="action-label">{uploading ? t('upload.uploading') : t(changeKey)}</span>
-					</button>
-					<button
-						type="button"
-						class="image-action remove-btn"
-						onclick={clearUploadedImage}
-						disabled={uploading || disabled}
-						aria-label={t('upload.remove')}
-					>
-						<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-							<path
-								d="M8 9V18M12 9V18M16 9V18M5 6H19M9 6V4H15V6M7 6L8 21H16L17 6"
-								stroke="currentColor"
-								stroke-width="1.5"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							/>
-						</svg>
-						<span class="action-label">{t('upload.remove')}</span>
+						<ImagePlus size={16} aria-hidden="true" />
+						<span class="action-label">{uploading ? t('upload.uploading') : t(pickKey)}</span>
 					</button>
 				</div>
 			</div>
@@ -453,6 +447,7 @@ before the Change Date. See LICENSE for complete terms.
 	{:else}
 		<div class="empty-state">
 			<button
+				{@attach attachDropZone}
 				type="button"
 				class="drop-zone"
 				onclick={() => inputEl?.click()}
@@ -674,22 +669,8 @@ before the Change Date. See LICENSE for complete terms.
 			color 0.15s;
 	}
 
-	.image-action svg {
-		width: 1rem;
-		height: 1rem;
-		flex-shrink: 0;
-	}
-
 	.image-action:hover:not(:disabled) {
 		background: var(--color-surface);
-	}
-
-	.remove-btn {
-		color: var(--color-danger);
-	}
-
-	.remove-btn:hover:not(:disabled) {
-		background: var(--color-danger-bg);
 	}
 
 	.image-action:disabled {
