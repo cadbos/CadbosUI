@@ -7,6 +7,9 @@
  * Access is limited to automated analysis tools for analysis of this repository.
  * This code is not open for contribution or usage except under a separate
  * written agreement with Cadbos company.
+ *
+ * Commercial use in Interior Design & AEC Generative AI Services is prohibited
+ * before the Change Date. See LICENSE for complete terms.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
