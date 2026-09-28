@@ -243,8 +243,7 @@ export const ru = {
 	'usage.column.totalSpend': 'Всего потрачено',
 	'usage.column.latestSpendAt': 'Последняя трата',
 	'resources.title': 'Ресурсы',
-	'resources.subtitle':
-		'Ваши загруженные фото помещений — нажмите на фото, чтобы использовать его снова.',
+	'resources.subtitle': 'Ваши загруженные фото — нажмите на фото, чтобы использовать его снова.',
 	'resources.loading': 'Загрузка ресурсов…',
 	'resources.empty': 'Пока нет загруженных фото.',
 	'resources.failed': 'Не удалось загрузить ресурсы.',

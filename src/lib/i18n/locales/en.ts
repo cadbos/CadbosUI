@@ -241,7 +241,7 @@ export const en = {
 	'usage.column.totalSpend': 'Total spend',
 	'usage.column.latestSpendAt': 'Latest spend',
 	'resources.title': 'Resources',
-	'resources.subtitle': 'Your uploaded room photos — click a photo to use it again.',
+	'resources.subtitle': 'Your uploaded photos — click a photo to use it again.',
 	'resources.loading': 'Loading resources…',
 	'resources.empty': 'No uploaded photos yet.',
 	'resources.failed': 'Could not load resources.',
