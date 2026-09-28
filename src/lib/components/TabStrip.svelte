@@ -20,7 +20,6 @@ before the Change Date. See LICENSE for complete terms.
 	export interface TabStripItem {
 		id: string;
 		title: string | null;
-		renamable?: boolean; // defaults to true when omitted
 	}
 
 	interface Props {
@@ -70,6 +69,14 @@ before the Change Date. See LICENSE for complete terms.
 	let renameDraft = $state('');
 	let renameError = $state(false);
 	let renamePending = $state(false);
+
+	// The roving-tabindex stop: the active tab, or the first one when activeId
+	// isn't in `tabs` at all (the workspace's hidden scratch tab is live) —
+	// otherwise every tab would be tabindex="-1" and the strip unreachable by
+	// keyboard.
+	const focusableId = $derived(
+		tabs.some((tab) => tab.id === activeId) ? activeId : (tabs[0]?.id ?? null)
+	);
 
 	function tabTitle(tab: TabStripItem): string {
 		return tab.title ?? untitledLabel;
@@ -137,13 +144,13 @@ before the Change Date. See LICENSE for complete terms.
 			viewportEl.scrollWidth - SCROLL_EDGE_TOLERANCE_PX;
 
 		// A focused chevron that's about to be hidden would otherwise drop focus
-		// to <body> — move it to the active tab first, mirroring close()'s and
+		// to <body> — move it to the focusable tab first, mirroring close()'s and
 		// commitRename()'s own focus-recovery via tabRefs.
 		if (canScrollPrev && !nextCanScrollPrev && document.activeElement === scrollPrevEl) {
-			tabRefs.get(activeId)?.focus({ preventScroll: true });
+			if (focusableId) tabRefs.get(focusableId)?.focus({ preventScroll: true });
 		}
 		if (canScrollNext && !nextCanScrollNext && document.activeElement === scrollNextEl) {
-			tabRefs.get(activeId)?.focus({ preventScroll: true });
+			if (focusableId) tabRefs.get(focusableId)?.focus({ preventScroll: true });
 		}
 
 		canScrollPrev = nextCanScrollPrev;
@@ -216,7 +223,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	const tabController = createTabController({
 		itemCount: () => tabs.length,
-		getActiveIndex: () => tabs.findIndex((tab) => tab.id === activeId),
+		getActiveIndex: () => tabs.findIndex((tab) => tab.id === focusableId),
 		setActiveIndex: (index) => onActivate(tabs[index].id),
 		focusTab: (index) => tabRefs.get(tabs[index]?.id ?? '')?.focus({ preventScroll: true })
 	});
@@ -244,11 +251,10 @@ before the Change Date. See LICENSE for complete terms.
 		onClose(tab.id);
 		// The closed tab's own button (which had focus, since that's the only
 		// way to reach it via keyboard) is gone from the DOM after this — move
-		// focus to the newly active tab once the #each block has re-rendered,
+		// focus to the newly focusable tab once the #each block has re-rendered,
 		// rather than letting it silently fall back to <body>.
 		requestAnimationFrame(() => {
-			const next = tabs.find((candidate) => candidate.id === activeId);
-			if (next) tabRefs.get(next.id)?.focus({ preventScroll: true });
+			if (focusableId) tabRefs.get(focusableId)?.focus({ preventScroll: true });
 		});
 	}
 
@@ -259,7 +265,6 @@ before the Change Date. See LICENSE for complete terms.
 	let renameInputEl: HTMLInputElement | null = null;
 
 	function startRename(tab: TabStripItem): void {
-		if (tab.renamable === false) return;
 		editingId = tab.id;
 		renameDraft = tabTitle(tab);
 		renameError = false;
@@ -333,7 +338,6 @@ before the Change Date. See LICENSE for complete terms.
 	// Anything else delegates to the tablist's own arrow-key navigation.
 	function handleTabKeydown(event: KeyboardEvent, tab: TabStripItem): void {
 		if (event.key === 'F2') {
-			if (tab.renamable === false) return;
 			event.preventDefault();
 			startRename(tab);
 			return;
@@ -410,7 +414,7 @@ before the Change Date. See LICENSE for complete terms.
 							type="button"
 							role="tab"
 							aria-selected={active}
-							tabindex={active ? 0 : -1}
+							tabindex={tab.id === focusableId ? 0 : -1}
 							class="tab-select"
 							title={truncated[tab.id] ? tabTitle(tab) : undefined}
 							onclick={() => tabController.activate(index)}
@@ -423,7 +427,7 @@ before the Change Date. See LICENSE for complete terms.
 					<button
 						type="button"
 						class="tab-close"
-						tabindex={active ? 0 : -1}
+						tabindex={tab.id === focusableId ? 0 : -1}
 						aria-label={closeLabel(tabTitle(tab))}
 						onclick={() => close(tab)}
 					>

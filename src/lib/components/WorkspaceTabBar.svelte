@@ -17,15 +17,11 @@ before the Change Date. See LICENSE for complete terms.
 	import TabStrip from '$lib/components/TabStrip.svelte';
 	import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 
-	// `renamable` is presentation-only — not part of WorkspaceTab's domain
-	// shape — so it's mapped in here rather than stored on the tab itself.
-	const tabItems = $derived(
-		workspaceTabs.tabs.map((tab) => ({
-			id: tab.id,
-			title: tab.title,
-			renamable: tab.id !== SCRATCH_TAB_ID
-		}))
-	);
+	// The scratch tab is internal state for project-less work, never a tab the
+	// user sees: a first generation there promotes it into its own "Untitled"
+	// project tab (adoptScratchSession), so showing scratch too would put a
+	// second, unclosable "Untitled" tab next to it (issue #146).
+	const tabItems = $derived(workspaceTabs.tabs.filter((tab) => tab.id !== SCRATCH_TAB_ID));
 </script>
 
 <TabStrip

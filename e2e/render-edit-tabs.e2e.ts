@@ -841,6 +841,47 @@ test('generating from the scratch tab adds the lazily-created project/session to
 	await expect(page).toHaveURL(new RegExp(`session=${E2E_SESSION_ID}`));
 });
 
+// Regression test for issue #146: the scratch tab used to render next to the
+// project tab its first generation created — a second, unclosable "Untitled"
+// tab. Scratch is now never shown, so that project is the only tab, and
+// closing it leaves an empty workspace with no tab strip at all.
+test('a first generation from an empty workspace opens exactly one closable project tab', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockUpload(page);
+	await page.route('**/api/render', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: '00000000-0000-4000-8000-000000000109',
+				output: media(2, 'https://cdn.example.test/render.webp'),
+				cost: 5,
+				balance: 95
+			})
+		});
+	});
+
+	await openCreate(page);
+	const tabs = page.getByRole('navigation', { name: 'Открытые проекты' });
+	await expect(tabs).toHaveCount(0);
+
+	await page
+		.locator('#mode-panel-render input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+	await Promise.all([
+		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
+		page.getByRole('button', { name: 'Сгенерировать' }).click()
+	]);
+
+	await expect(tabs.getByRole('tab')).toHaveCount(1);
+	await expect(tabs.getByRole('tab', { name: 'Без названия', selected: true })).toBeVisible();
+
+	await tabs.getByRole('button', { name: 'Закрыть вкладку «Без названия»' }).click();
+	await expect(tabs).toHaveCount(0);
+});
+
 // Regression test: switching mode tabs used to navigate to the bare
 // buildShareUrl() result first (no project/session/generation at all), relying
 // on the debounced URL-sync effect to patch them back in ~400ms later — so

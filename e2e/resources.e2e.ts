@@ -204,7 +204,7 @@ test('uses a resource photo to start a new generation', async ({ page }) => {
 	);
 });
 
-test('using a resource photo while a project tab is open opens the scratch tab instead of hijacking it', async ({
+test('using a resource photo while a project tab is open starts project-less work instead of hijacking it', async ({
 	page
 }) => {
 	const projectId = '00000000-0000-4000-8000-000000000001';
@@ -285,10 +285,11 @@ test('using a resource photo while a project tab is open opens the scratch tab i
 	await page.getByRole('link', { name: 'Ресурсы', exact: true }).click();
 	await page.getByRole('button', { name: 'Использовать фото 1 для новой генерации' }).click();
 
-	// The picked photo lands on a fresh scratch tab — Living room's own tab
-	// (and the render it held) survives untouched.
-	await expect(tabs.getByRole('tab', { name: 'Без названия', selected: true })).toBeVisible();
-	await expect(tabs.getByRole('tab', { name: 'Living room' })).toBeVisible();
+	// The picked photo lands on the hidden scratch tab — no project tab is
+	// selected, and Living room's own tab (and the render it held) survives
+	// untouched.
+	await expect(tabs.getByRole('tab')).toHaveCount(1);
+	await expect(tabs.getByRole('tab', { name: 'Living room', selected: false })).toBeVisible();
 	await expect(page.locator('#mode-panel-render .image-wrapper img')).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/resource-photo.jpg'

@@ -398,12 +398,14 @@ test('restoring into another session keeps the open tab’s unsaved work without
 
 	await restoreFirstScene(page);
 
-	// The restore opens its own session's tab, so nothing on the scratch tab
-	// is replaced — no confirmation needed, and the draft is still there.
+	// The restore opens its own session's tab, so nothing on the (hidden)
+	// scratch tab is replaced — no confirmation needed, and closing that tab
+	// brings the draft back.
 	await expect(page.getByRole('dialog', { name: 'Восстановить настройки?' })).toHaveCount(0);
 	await expect(page).toHaveURL(new RegExp(`session=${SESSION_ID}`));
 	const tabs = page.getByRole('navigation', { name: 'Открытые проекты' });
-	await tabs.getByRole('tab', { name: 'Без названия' }).click();
+	await tabs.getByRole('button', { name: 'Закрыть вкладку «Living room»' }).click();
+	await expect(tabs).toHaveCount(0);
 	await expect(page.getByLabel('Промпт чата')).toHaveValue('unsaved scratch idea');
 });
 
@@ -412,14 +414,27 @@ test('asks before replacing unsaved work in the restored session’s background 
 }) => {
 	await authenticate(page);
 	await mockSessionScene(page);
+	await page.route('**/api/resources**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				images: [{ image: media(3, 'https://cdn.example.test/resource.jpg'), createdAt: 1 }],
+				pagination: { offset: 0, size: 30, hasMore: false }
+			})
+		});
+	});
 
 	await page.goto('/create/interior?view=chat&format=webp');
 	await restoreFirstScene(page);
 	await expect(page).toHaveURL(new RegExp(`session=${SESSION_ID}`));
-	// Unsaved work in that session, then leave it for a background tab.
+	// Unsaved work in that session, then leave it for a background tab by
+	// starting project-less work from a resource photo.
 	await page.getByLabel('Промпт чата').fill('unsaved living room idea');
+	await page.getByRole('link', { name: 'Ресурсы', exact: true }).click();
+	await page.getByRole('button', { name: 'Использовать фото 1 для новой генерации' }).click();
 	const tabs = page.getByRole('navigation', { name: 'Открытые проекты' });
-	await tabs.getByRole('tab', { name: 'Без названия' }).click();
+	await expect(tabs.getByRole('tab', { name: 'Living room', selected: false })).toBeVisible();
 
 	await restoreFirstScene(page);
 

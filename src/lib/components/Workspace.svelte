@@ -121,9 +121,9 @@ before the Change Date. See LICENSE for complete terms.
 	});
 
 	const isAuthenticated = $derived(auth.status === 'authenticated');
-	// Only shown once the user has actually opened a project — a lone,
-	// never-touched scratch tab would just be noise for anyone who hasn't
-	// visited /projects yet.
+	// Only shown once a real project tab is open — the scratch tab itself is
+	// never rendered (see WorkspaceTabBar.svelte), so without one the strip
+	// would be empty.
 	const showWorkspaceTabs = $derived(workspaceTabs.tabs.some((tab) => tab.id !== SCRATCH_TAB_ID));
 	// The scratch tab never has sessions (see workspace-tabs.svelte.ts), and a
 	// just-opened project tab always carries at least one — so this is really

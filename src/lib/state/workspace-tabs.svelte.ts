@@ -95,9 +95,13 @@ export interface WorkspaceTab {
 	activeSessionTabId: string | null;
 }
 
-// The always-present tab for work that isn't (yet) attached to a chosen
+// The always-present slot for work that isn't (yet) attached to a chosen
 // project — mirrors RequestState.ensureProjectSession()'s own "Untitled"
-// lazy-create convention. Its id is a fixed sentinel, never a real project id.
+// lazy-create convention. Kept in `tabs` so it freezes/thaws like any other
+// tab, but never rendered in the tab strip (WorkspaceTabBar.svelte): the user
+// just sees an empty workspace, and its first generation becomes a real
+// project tab via adoptScratchSession. Its id is a fixed sentinel, never a
+// real project id.
 export const SCRATCH_TAB_ID = 'scratch';
 
 function scratchTab(): WorkspaceTab {
