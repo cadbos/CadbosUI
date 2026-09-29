@@ -96,70 +96,72 @@ before the Change Date. See LICENSE for complete terms.
 		<header class="usage-header">
 			<h1 id="usage-title">{t('usage.title')}</h1>
 			<p>{t('usage.subtitle')}</p>
-			{#if usage.walletBalanceStatus === 'loading'}
-				<p class="wallet-balance status">{t('usage.walletBalanceLoading')}</p>
-			{:else if usage.walletBalanceStatus === 'error'}
-				<p class="wallet-balance status error" role="alert">{t('usage.walletBalanceFailed')}</p>
-			{:else if usage.walletBalanceStatus === 'ready' && usage.walletBalance !== null}
-				<p class="wallet-balance">
-					<strong
-						>{ti('usage.walletBalance', { balance: currency.format(usage.walletBalance) })}</strong
-					>
-				</p>
-			{/if}
 		</header>
 
-		{#if usage.totalsStatus === 'loading'}
-			<p class="status">{t('usage.totals.loading')}</p>
-		{:else if usage.totalsStatus === 'error'}
-			<p class="status error" role="alert">{t('usage.totals.failed')}</p>
-		{:else if usage.totalsStatus === 'ready' && usage.totals !== null}
+		{#if usage.totalsStatus !== 'idle' || usage.walletBalanceStatus !== 'idle'}
 			<section class="totals" aria-labelledby="usage-totals-title">
 				<h2 id="usage-totals-title">{t('usage.totals.title')}</h2>
 				<dl>
 					<div>
-						<dt>{t('usage.totals.deposits')}</dt>
-						<dd>{t('usage.emptyValue')}</dd>
+						<dt>{t('usage.totals.walletBalance')}</dt>
+						{#if usage.walletBalanceStatus === 'loading'}
+							<dd class="tile-status">{t('usage.walletBalanceLoading')}</dd>
+						{:else if usage.walletBalanceStatus === 'error'}
+							<dd class="tile-status error" role="alert">{t('usage.walletBalanceFailed')}</dd>
+						{:else if usage.walletBalanceStatus === 'ready' && usage.walletBalance !== null}
+							<dd>{currency.format(usage.walletBalance)}</dd>
+						{/if}
 					</div>
-					<div>
-						<dt>{t('usage.totals.spend')}</dt>
-						<dd>{currency.format(usage.totals.totalSpend)}</dd>
-					</div>
-					<div>
-						<dt>{t('usage.totals.users')}</dt>
-						<dd>{usage.totals.userCount}</dd>
-					</div>
-					<div>
-						<dt>{t('usage.totals.projects')}</dt>
-						<dd>{usage.totals.projectCount}</dd>
-					</div>
-					<div>
-						<dt>{t('usage.totals.sessions')}</dt>
-						<dd>{usage.totals.sessionCount}</dd>
-					</div>
-					<div>
-						<dt>{t('usage.totals.generations')}</dt>
-						<dd>{usage.totals.generationCount}</dd>
-					</div>
-					<div>
-						<dt>{t('usage.totals.sources')}</dt>
-						<dd>
-							{ti('usage.totals.countWithSize', {
-								count: usage.totals.sourceCount,
-								size: formatSize(usage.totals.sourceBytes)
-							})}
-						</dd>
-					</div>
-					<div>
-						<dt>{t('usage.totals.references')}</dt>
-						<dd>
-							{ti('usage.totals.countWithSize', {
-								count: usage.totals.referenceCount,
-								size: formatSize(usage.totals.referenceBytes)
-							})}
-						</dd>
-					</div>
+					{#if usage.totalsStatus === 'ready' && usage.totals !== null}
+						<div>
+							<dt>{t('usage.totals.deposits')}</dt>
+							<dd>{t('usage.emptyValue')}</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.spend')}</dt>
+							<dd>{currency.format(usage.totals.totalSpend)}</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.users')}</dt>
+							<dd>{usage.totals.userCount}</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.projects')}</dt>
+							<dd>{usage.totals.projectCount}</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.sessions')}</dt>
+							<dd>{usage.totals.sessionCount}</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.generations')}</dt>
+							<dd>{usage.totals.generationCount}</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.sources')}</dt>
+							<dd>
+								{ti('usage.totals.countWithSize', {
+									count: usage.totals.sourceCount,
+									size: formatSize(usage.totals.sourceBytes)
+								})}
+							</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.references')}</dt>
+							<dd>
+								{ti('usage.totals.countWithSize', {
+									count: usage.totals.referenceCount,
+									size: formatSize(usage.totals.referenceBytes)
+								})}
+							</dd>
+						</div>
+					{/if}
 				</dl>
+				{#if usage.totalsStatus === 'loading'}
+					<p class="status">{t('usage.totals.loading')}</p>
+				{:else if usage.totalsStatus === 'error'}
+					<p class="status error" role="alert">{t('usage.totals.failed')}</p>
+				{/if}
 			</section>
 		{/if}
 
@@ -298,11 +300,6 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-danger);
 	}
 
-	.wallet-balance strong {
-		color: var(--color-text);
-		font-weight: 700;
-	}
-
 	.totals {
 		display: flex;
 		flex-direction: column;
@@ -346,6 +343,11 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-text);
 		font-size: 1.125rem;
 		font-weight: 700;
+	}
+
+	.totals dd.tile-status {
+		font-size: 0.9375rem;
+		font-weight: 500;
 	}
 
 	.table-wrap {

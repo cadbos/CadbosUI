@@ -222,9 +222,9 @@ export interface Dictionary {
 	'usage.title': string;
 	'usage.subtitle': string;
 	'usage.signInRequired': string;
-	'usage.walletBalance': string;
 	'usage.walletBalanceLoading': string;
 	'usage.walletBalanceFailed': string;
+	'usage.totals.walletBalance': string;
 	'usage.totals.title': string;
 	'usage.totals.loading': string;
 	'usage.totals.failed': string;

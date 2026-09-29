@@ -231,9 +231,9 @@ export const ru = {
 	'usage.subtitle': 'Балансы аккаунтов и траты на генерации по пользователям Cadbos.',
 	'usage.signInRequired':
 		'Для доступа к данным вы должны быть авторизованы с аккаунтом, имеющим доступ.',
-	'usage.walletBalance': 'Баланс кошелька: {balance}',
 	'usage.walletBalanceLoading': 'Загрузка баланса кошелька…',
 	'usage.walletBalanceFailed': 'Не удалось загрузить баланс кошелька.',
+	'usage.totals.walletBalance': 'Баланс кошелька',
 	'usage.totals.title': 'Итого по платформе',
 	'usage.totals.loading': 'Загрузка итогов…',
 	'usage.totals.failed': 'Не удалось загрузить итоги.',
