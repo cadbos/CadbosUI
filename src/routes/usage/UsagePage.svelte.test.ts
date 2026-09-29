@@ -15,7 +15,12 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { npubEncode } from 'nostr-tools/nip19';
-import type { UsageProfilesResponse, UserUsageRecord, UserUsageResponse } from '$lib/api/contract';
+import type {
+	UsageProfilesResponse,
+	UsageTotals,
+	UserUsageRecord,
+	UserUsageResponse
+} from '$lib/api/contract';
 import { setLocale, type Locale } from '$lib/i18n/index.svelte';
 import { auth } from '$lib/state/auth.svelte';
 import { usage } from '$lib/state/usage.svelte';
@@ -47,6 +52,18 @@ function user(
 	};
 }
 
+const TOTALS: UsageTotals = {
+	userCount: 7,
+	projectCount: 11,
+	sessionCount: 23,
+	generationCount: 42,
+	sourceCount: 40,
+	sourceBytes: 3 * 1024 * 1024,
+	referenceCount: 6,
+	referenceBytes: null,
+	totalSpend: 99.5
+};
+
 function page(users: UserUsageRecord[], offset: number, hasMore: boolean): UserUsageResponse {
 	return {
 		users,
@@ -76,6 +93,7 @@ function mockUsageFetch(
 		if (url === '/api/usage/profiles' && init?.method === 'POST')
 			return Promise.resolve(Response.json({ profiles }));
 		if (url === '/api/usage/balance') return Promise.resolve(Response.json({ balance: 0 }));
+		if (url === '/api/usage/totals') return Promise.resolve(Response.json(TOTALS));
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
 }
@@ -254,6 +272,7 @@ it('renders an error state when usage cannot be loaded', async () => {
 	const fetchMock = vi.fn<typeof fetch>((input) => {
 		const url = String(input);
 		if (url === '/api/usage/balance') return Promise.resolve(Response.json({ balance: 0 }));
+		if (url === '/api/usage/totals') return Promise.resolve(Response.json(TOTALS));
 		return Promise.resolve(new Response(null, { status: 403 }));
 	});
 	vi.stubGlobal('fetch', fetchMock);
@@ -278,4 +297,55 @@ it('renders each pubkey as an npub explorer link that opens in a new tab', async
 	await expect.element(link).toHaveAttribute('href', `https://explorer.example/p/${npub}`);
 	await expect.element(link).toHaveAttribute('target', '_blank');
 	await expect.element(link).toHaveAttribute('rel', 'noopener noreferrer');
+});
+
+it.each(['ru', 'en'] as const)('renders the platform totals for %s', async (locale) => {
+	vi.stubGlobal('fetch', mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)]));
+	setLocale(locale);
+
+	const screen = render(UsagePage, pageProps());
+	const totals = screen.getByRole('region', {
+		name: locale === 'ru' ? 'Итого по платформе' : 'Platform totals'
+	});
+
+	await expect.element(totals).toBeVisible();
+	const labels =
+		locale === 'ru'
+			? [
+					'Всего пополнено —',
+					'Всего потрачено 99.50',
+					'Зарегистрировано пользователей 7',
+					'Проекты 11',
+					'Сессии 23',
+					'Генерации 42',
+					`Загруженные исходники 40 · ${localSizeLabel(locale, 'megabyte', 3)}`,
+					'Загруженные референсы 6 · —'
+				]
+			: [
+					'Total deposits —',
+					'Total spent 99.50',
+					'Registered users 7',
+					'Projects 11',
+					'Sessions 23',
+					'Generations 42',
+					`Uploaded sources 40 · ${localSizeLabel(locale, 'megabyte', 3)}`,
+					'Uploaded references 6 · —'
+				];
+	for (const label of labels) await expect.element(totals).toHaveTextContent(label);
+});
+
+it('renders a totals error without hiding the table', async () => {
+	const fetchMock = vi.fn<typeof fetch>((input, init) => {
+		if (String(input) === '/api/usage/totals')
+			return Promise.resolve(new Response(null, { status: 500 }));
+		return mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)])(input, init);
+	});
+	vi.stubGlobal('fetch', fetchMock);
+
+	const screen = render(UsagePage, pageProps());
+
+	await expect.element(screen.getByText('Could not load totals.')).toBeVisible();
+	await expect
+		.element(screen.getByRole('rowheader', { name: npubEncode(PUBKEY_ONE) }))
+		.toBeVisible();
 });
