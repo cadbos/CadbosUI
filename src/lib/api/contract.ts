@@ -552,6 +552,18 @@ export interface UserUsageResponse {
 	};
 }
 
+export interface UsageTotals {
+	userCount: number;
+	projectCount: number;
+	sessionCount: number;
+	generationCount: number;
+	sourceCount: number;
+	sourceBytes: number | null;
+	referenceCount: number;
+	referenceBytes: number | null;
+	totalSpend: number;
+}
+
 export interface UsageProfile {
 	name?: string;
 	picture?: string;

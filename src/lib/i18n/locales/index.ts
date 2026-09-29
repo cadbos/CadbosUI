@@ -225,6 +225,18 @@ export interface Dictionary {
 	'usage.walletBalance': string;
 	'usage.walletBalanceLoading': string;
 	'usage.walletBalanceFailed': string;
+	'usage.totals.title': string;
+	'usage.totals.loading': string;
+	'usage.totals.failed': string;
+	'usage.totals.deposits': string;
+	'usage.totals.spend': string;
+	'usage.totals.projects': string;
+	'usage.totals.sessions': string;
+	'usage.totals.generations': string;
+	'usage.totals.sources': string;
+	'usage.totals.references': string;
+	'usage.totals.countWithSize': string;
+	'usage.totals.users': string;
 	'usage.loading': string;
 	'usage.empty': string;
 	'usage.failed': string;

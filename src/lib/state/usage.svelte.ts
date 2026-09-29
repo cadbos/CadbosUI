@@ -13,7 +13,7 @@
  */
 
 import { z } from 'zod';
-import type { UsageProfile, UserUsageRecord } from '$lib/api/contract';
+import type { UsageProfile, UsageTotals, UserUsageRecord } from '$lib/api/contract';
 
 export type UsageStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -57,7 +57,20 @@ const walletBalanceResponseSchema = z.object({
 	balance: z.number()
 });
 
+const usageTotalsSchema = z.object({
+	userCount: z.number().int().min(0),
+	projectCount: z.number().int().min(0),
+	sessionCount: z.number().int().min(0),
+	generationCount: z.number().int().min(0),
+	sourceCount: z.number().int().min(0),
+	sourceBytes: z.number().int().min(0).nullable(),
+	referenceCount: z.number().int().min(0),
+	referenceBytes: z.number().int().min(0).nullable(),
+	totalSpend: z.number()
+});
+
 export type WalletBalanceStatus = 'idle' | 'loading' | 'ready' | 'error';
+export type UsageTotalsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 class UsageLoadError extends Error {
 	constructor(message: string) {
@@ -75,15 +88,19 @@ class UsageState {
 	loadingMore = $state(false);
 	walletBalance = $state<number | null>(null);
 	walletBalanceStatus = $state<WalletBalanceStatus>('idle');
+	totals = $state.raw<UsageTotals | null>(null);
+	totalsStatus = $state<UsageTotalsStatus>('idle');
 	#abort: AbortController | null = null;
 	#profileAborts = new Set<AbortController>();
 	#walletBalanceAbort: AbortController | null = null;
+	#totalsAbort: AbortController | null = null;
 	#nextOffset: number | null = null;
 
 	async load(): Promise<void> {
 		this.#abort?.abort();
 		this.#abortProfiles();
 		this.#walletBalanceAbort?.abort();
+		this.#totalsAbort?.abort();
 		const controller = new AbortController();
 		this.#abort = controller;
 		this.status = 'loading';
@@ -94,8 +111,11 @@ class UsageState {
 		this.profiles = {};
 		this.walletBalance = null;
 		this.walletBalanceStatus = 'idle';
+		this.totals = null;
+		this.totalsStatus = 'idle';
 
 		void this.#loadWalletBalance();
+		void this.#loadTotals();
 
 		try {
 			const page = await this.#fetchPage(0, controller.signal);
@@ -148,8 +168,10 @@ class UsageState {
 		this.#abort?.abort();
 		this.#abortProfiles();
 		this.#walletBalanceAbort?.abort();
+		this.#totalsAbort?.abort();
 		this.#abort = null;
 		this.#walletBalanceAbort = null;
+		this.#totalsAbort = null;
 		this.users = [];
 		this.profiles = {};
 		this.status = 'idle';
@@ -159,6 +181,8 @@ class UsageState {
 		this.#nextOffset = null;
 		this.walletBalance = null;
 		this.walletBalanceStatus = 'idle';
+		this.totals = null;
+		this.totalsStatus = 'idle';
 	}
 
 	async #fetchPage(
@@ -230,6 +254,31 @@ class UsageState {
 			console.error('Wallet balance load failed:', error);
 		} finally {
 			if (this.#walletBalanceAbort === controller) this.#walletBalanceAbort = null;
+		}
+	}
+
+	async #loadTotals(): Promise<void> {
+		const controller = new AbortController();
+		this.#totalsAbort = controller;
+		this.totalsStatus = 'loading';
+
+		try {
+			const response = await fetch('/api/usage/totals', { signal: controller.signal });
+			if (!response.ok) throw new UsageLoadError('usage totals request failed');
+
+			const parsed = usageTotalsSchema.safeParse(await response.json().catch(() => null));
+			if (!parsed.success) throw new UsageLoadError('usage totals response invalid');
+
+			if (this.#totalsAbort !== controller) return;
+			this.totals = parsed.data;
+			this.totalsStatus = 'ready';
+		} catch (error) {
+			if (controller.signal.aborted) return;
+			this.totals = null;
+			this.totalsStatus = 'error';
+			console.error('Usage totals load failed:', error);
+		} finally {
+			if (this.#totalsAbort === controller) this.#totalsAbort = null;
 		}
 	}
 

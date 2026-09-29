@@ -28,6 +28,7 @@ import {
 	type RequestFormSnapshot,
 	type ResourceFilter,
 	type ResourceRole,
+	type UsageTotals,
 	type UserUsageRecord
 } from '$lib/api/contract';
 import { formSnapshotSchema } from '$lib/server/api';
@@ -713,6 +714,11 @@ function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
 // once however often it is reused, and media whose size is unknown (NULL, rows
 // from before sizes were recorded) contribute nothing. A user with no known
 // size at all gets NULL rather than 0, so unknown is never shown as empty.
+const REFERENCE_PAIRS_SQL =
+	'SELECT user_id, reference_media_id FROM object_replacement_jobs ' +
+	'UNION SELECT user_id, reference_media_id FROM texture_replacement_jobs ' +
+	'UNION SELECT user_id, reference_media_id FROM generations WHERE reference_media_id IS NOT NULL';
+
 export async function listUserUsage(
 	db: D1Database,
 	offset: number,
@@ -741,9 +747,7 @@ export async function listUserUsage(
 				'(SELECT DISTINCT user_id, source_media_id FROM generations) s ' +
 				'JOIN media m ON m.id = s.source_media_id GROUP BY s.user_id) sb ON sb.user_id = u.id ' +
 				'LEFT JOIN (SELECT r.user_id, COUNT(*) AS reference_count, SUM(m.size) AS reference_bytes FROM (' +
-				'SELECT user_id, reference_media_id FROM object_replacement_jobs ' +
-				'UNION SELECT user_id, reference_media_id FROM texture_replacement_jobs ' +
-				'UNION SELECT user_id, reference_media_id FROM generations WHERE reference_media_id IS NOT NULL' +
+				REFERENCE_PAIRS_SQL +
 				') r JOIN media m ON m.id = r.reference_media_id GROUP BY r.user_id) refs ' +
 				'ON refs.user_id = u.id ' +
 				'ORDER BY u.created_at DESC, u.id DESC LIMIT ? OFFSET ?'
@@ -754,6 +758,54 @@ export async function listUserUsage(
 	return {
 		users: rows.slice(0, size).map(toUserUsageRecord),
 		hasMore: rows.length > size
+	};
+}
+
+interface UsageTotalsRow {
+	user_count: number;
+	project_count: number;
+	session_count: number;
+	generation_count: number;
+	source_count: number;
+	source_bytes: number | null;
+	reference_count: number;
+	reference_bytes: number | null;
+	total_spend: number;
+}
+
+// Platform-wide counterpart of listUserUsage: every figure follows the same
+// per-user rules, so each total equals the sum of its column in the table.
+export async function getUsageTotals(db: D1Database): Promise<UsageTotals> {
+	const row = await db
+		.prepare(
+			'SELECT (SELECT COUNT(*) FROM users) AS user_count, ' +
+				'(SELECT COUNT(*) FROM projects) AS project_count, ' +
+				'(SELECT COUNT(*) FROM project_sessions) AS session_count, ' +
+				'(SELECT COUNT(*) FROM generations) AS generation_count, ' +
+				'(SELECT COUNT(*) FROM (SELECT DISTINCT user_id, source_media_id FROM generations ' +
+				'WHERE user_id IS NOT NULL AND source_media_id IS NOT NULL)) AS source_count, ' +
+				'(SELECT SUM(m.size) FROM (SELECT DISTINCT user_id, source_media_id FROM generations) s ' +
+				'JOIN media m ON m.id = s.source_media_id) AS source_bytes, ' +
+				'(SELECT COUNT(*) FROM (' +
+				REFERENCE_PAIRS_SQL +
+				') r JOIN media m ON m.id = r.reference_media_id) AS reference_count, ' +
+				'(SELECT SUM(m.size) FROM (' +
+				REFERENCE_PAIRS_SQL +
+				') r JOIN media m ON m.id = r.reference_media_id) AS reference_bytes, ' +
+				'(SELECT COALESCE(SUM(amount), 0) FROM generations) AS total_spend'
+		)
+		.first<UsageTotalsRow>();
+	if (!row) throw new Error('usage totals query returned no row');
+	return {
+		userCount: row.user_count,
+		projectCount: row.project_count,
+		sessionCount: row.session_count,
+		generationCount: row.generation_count,
+		sourceCount: row.source_count,
+		sourceBytes: row.source_bytes,
+		referenceCount: row.reference_count,
+		referenceBytes: row.reference_bytes,
+		totalSpend: row.total_spend
 	};
 }
 

@@ -27,6 +27,7 @@ import {
 	listResourceGenerations,
 	listResourceImages,
 	listGeneratedImages,
+	getUsageTotals,
 	listUserUsage,
 	recordGeneration
 } from './generations';
@@ -1058,67 +1059,67 @@ describe('resource page queries', () => {
 	});
 });
 
+function seedProject(db: D1Database, userId: string, archivedAt: number | null = null): string {
+	const now = Date.now();
+	const id = crypto.randomUUID();
+	db.prepare(
+		'INSERT INTO projects (id, user_id, title, created_at, updated_at, archived_at) ' +
+			'VALUES (?, ?, ?, ?, ?, ?)'
+	)
+		.bind(id, userId, 'Project', now, now, archivedAt)
+		.run();
+	return id;
+}
+
+function seedProjectSession(
+	db: D1Database,
+	projectId: string,
+	archivedAt: number | null = null
+): void {
+	const now = Date.now();
+	db.prepare(
+		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at, archived_at) ' +
+			'VALUES (?, ?, ?, ?, ?, ?)'
+	)
+		.bind(crypto.randomUUID(), projectId, 'Session', now, now, archivedAt)
+		.run();
+}
+
+// 'processing' is the only status whose CHECK constraint allows leaving
+// output_media_id/error_code/balance_after/completed_at all null — the
+// job's outcome is irrelevant to a reference-image count.
+function seedReplacementJob(
+	db: D1Database,
+	table: 'object_replacement_jobs' | 'texture_replacement_jobs',
+	userId: string,
+	referenceMediaId: number
+): void {
+	const now = Date.now();
+	const sceneMediaId = seedMedia(
+		db,
+		`https://cdn.example.test/scene-${crypto.randomUUID()}.jpg`,
+		''
+	);
+	const descriptionColumn =
+		table === 'object_replacement_jobs' ? 'replacement_object' : 'replacement_surface';
+	db.prepare(
+		`INSERT INTO ${table} ` +
+			`(id, user_id, comfy_prompt_id, scene_media_id, reference_media_id, ${descriptionColumn}, ` +
+			"cost, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'x', 1, 'processing', ?, ?)"
+	)
+		.bind(
+			crypto.randomUUID(),
+			userId,
+			crypto.randomUUID(),
+			sceneMediaId,
+			referenceMediaId,
+			now,
+			now
+		)
+		.run();
+}
+
 describe('listUserUsage', () => {
-	function seedProject(db: D1Database, userId: string, archivedAt: number | null = null): string {
-		const now = Date.now();
-		const id = crypto.randomUUID();
-		db.prepare(
-			'INSERT INTO projects (id, user_id, title, created_at, updated_at, archived_at) ' +
-				'VALUES (?, ?, ?, ?, ?, ?)'
-		)
-			.bind(id, userId, 'Project', now, now, archivedAt)
-			.run();
-		return id;
-	}
-
-	function seedProjectSession(
-		db: D1Database,
-		projectId: string,
-		archivedAt: number | null = null
-	): void {
-		const now = Date.now();
-		db.prepare(
-			'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at, archived_at) ' +
-				'VALUES (?, ?, ?, ?, ?, ?)'
-		)
-			.bind(crypto.randomUUID(), projectId, 'Session', now, now, archivedAt)
-			.run();
-	}
-
-	// 'processing' is the only status whose CHECK constraint allows leaving
-	// output_media_id/error_code/balance_after/completed_at all null — the
-	// job's outcome is irrelevant to a reference-image count.
-	function seedReplacementJob(
-		db: D1Database,
-		table: 'object_replacement_jobs' | 'texture_replacement_jobs',
-		userId: string,
-		referenceMediaId: number
-	): void {
-		const now = Date.now();
-		const sceneMediaId = seedMedia(
-			db,
-			`https://cdn.example.test/scene-${crypto.randomUUID()}.jpg`,
-			''
-		);
-		const descriptionColumn =
-			table === 'object_replacement_jobs' ? 'replacement_object' : 'replacement_surface';
-		db.prepare(
-			`INSERT INTO ${table} ` +
-				`(id, user_id, comfy_prompt_id, scene_media_id, reference_media_id, ${descriptionColumn}, ` +
-				"cost, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'x', 1, 'processing', ?, ?)"
-		)
-			.bind(
-				crypto.randomUUID(),
-				userId,
-				crypto.randomUUID(),
-				sceneMediaId,
-				referenceMediaId,
-				now,
-				now
-			)
-			.run();
-	}
-
 	it('returns zero counts for a fresh user with no data', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 
@@ -1220,35 +1221,27 @@ describe('listUserUsage', () => {
 		expect(page.users).toEqual([expect.objectContaining({ sourceCount: 1, sourceBytes: null })]);
 	});
 
-	it('totals reference bytes over distinct object/texture references, ignoring style-transfer snapshots', async () => {
+	it('totals reference bytes over distinct references, including style-transfer', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 10);
-		const sessionId = seedSession(db, 'user-1');
 		const sharedReferenceId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '', 700);
 		const textureReferenceId = seedMedia(db, 'https://cdn.example.test/texture.jpg', '', 300);
+		seedMedia(db, 'https://cdn.example.test/style-ref.jpg', HASH_2, 200);
 		seedReplacementJob(db, 'object_replacement_jobs', 'user-1', sharedReferenceId);
 		seedReplacementJob(db, 'texture_replacement_jobs', 'user-1', sharedReferenceId);
 		seedReplacementJob(db, 'texture_replacement_jobs', 'user-1', textureReferenceId);
-
-		const styleResultId = seedMedia(db, 'https://cdn.example.test/style-out.webp', '', 9_000);
-		const styleSourceId = seedMedia(db, 'https://cdn.example.test/style-source.jpg', HASH_2, 9_000);
-		await recordGeneration(db, 'user-1', {
-			resultMediaId: styleResultId,
-			sourceMediaId: styleSourceId,
-			sessionId,
-			prompt: '',
-			kind: 'style-transfer',
-			amount: 1,
-			archaiRenderSec: 0,
-			archaiDownloadSec: 0,
-			archaiReuploadSec: 0,
-			formSnapshot: TEST_FORM_SNAPSHOT
-		});
+		seedGenerationWithReference(
+			db,
+			'style',
+			'user-1',
+			'style-transfer',
+			'https://cdn.example.test/style-ref.jpg',
+			1000
+		);
 
 		const page = await listUserUsage(db, 0, 10);
 
 		expect(page.users).toEqual([
-			expect.objectContaining({ referenceCount: 2, referenceBytes: 1000 })
+			expect.objectContaining({ referenceCount: 3, referenceBytes: 1200 })
 		]);
 	});
 
@@ -1280,5 +1273,121 @@ describe('listUserUsage', () => {
 		expect(byPubkey['pubkey-2']).toEqual(
 			expect.objectContaining({ projectCount: 0, generationCount: 1 })
 		);
+	});
+});
+
+describe('getUsageTotals', () => {
+	it('returns zeros and null sizes on an empty database', async () => {
+		expect(await getUsageTotals(db)).toEqual({
+			userCount: 0,
+			projectCount: 0,
+			sessionCount: 0,
+			generationCount: 0,
+			sourceCount: 0,
+			sourceBytes: null,
+			referenceCount: 0,
+			referenceBytes: null,
+			totalSpend: 0
+		});
+	});
+
+	it('totals users, projects, sessions and spend across all users, archived included', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		seedUser(db, 'user-3', 'pubkey-3');
+		const active = seedProject(db, 'user-1');
+		seedProjectSession(db, active);
+		const archived = seedProject(db, 'user-2', Date.now());
+		seedProjectSession(db, archived, Date.now());
+		seedGeneration(db, 'a', 'user-1', 1000);
+		seedGeneration(db, 'b', 'user-2', 2000);
+
+		expect(await getUsageTotals(db)).toEqual(
+			expect.objectContaining({
+				userCount: 3,
+				projectCount: 2,
+				sessionCount: 2,
+				generationCount: 2,
+				totalSpend: 2
+			})
+		);
+	});
+
+	it('counts sources and sizes per distinct (user, media), skipping unknown sizes', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedMedia(db, 'https://cdn.example.test/legacy.jpg', RESULT_HASH, null);
+		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
+		seedGenerationWithSource(db, 'c', 'user-2', 'https://cdn.example.test/room.jpg', HASH_1, 3000);
+		seedGenerationWithSource(
+			db,
+			'd',
+			'user-2',
+			'https://cdn.example.test/legacy.jpg',
+			RESULT_HASH,
+			4000
+		);
+
+		expect(await getUsageTotals(db)).toEqual(
+			expect.objectContaining({ sourceCount: 3, sourceBytes: 2000, referenceBytes: null })
+		);
+	});
+
+	it('counts references from replacement jobs and style-transfer, once per user and media', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		const sharedId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '', 700);
+		seedMedia(db, 'https://cdn.example.test/style-ref.jpg', HASH_2, 200);
+		seedReplacementJob(db, 'object_replacement_jobs', 'user-1', sharedId);
+		seedReplacementJob(db, 'texture_replacement_jobs', 'user-1', sharedId);
+		seedReplacementJob(db, 'object_replacement_jobs', 'user-2', sharedId);
+		seedGenerationWithReference(
+			db,
+			'style',
+			'user-1',
+			'style-transfer',
+			'https://cdn.example.test/style-ref.jpg',
+			1000
+		);
+
+		expect(await getUsageTotals(db)).toEqual(
+			expect.objectContaining({ referenceCount: 3, referenceBytes: 1600 })
+		);
+	});
+
+	it('equals the sum of the per-user usage rows', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		seedProjectSession(db, seedProject(db, 'user-1'));
+		seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedGenerationWithSource(db, 'b', 'user-2', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
+		seedGenerationWithReference(
+			db,
+			'style',
+			'user-2',
+			'style-transfer',
+			'https://cdn.example.test/style-ref.jpg',
+			3000
+		);
+
+		const { users } = await listUserUsage(db, 0, 10);
+		const totals = await getUsageTotals(db);
+
+		const sum = (pick: (user: (typeof users)[number]) => number | null): number =>
+			users.reduce((total, user) => total + (pick(user) ?? 0), 0);
+		expect(totals).toEqual({
+			userCount: users.length,
+			projectCount: sum((user) => user.projectCount),
+			sessionCount: sum((user) => user.sessionCount),
+			generationCount: sum((user) => user.generationCount),
+			sourceCount: sum((user) => user.sourceCount),
+			sourceBytes: sum((user) => user.sourceBytes),
+			referenceCount: sum((user) => user.referenceCount),
+			referenceBytes: null,
+			totalSpend: sum((user) => user.totalSpend)
+		});
 	});
 });

@@ -70,6 +70,25 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 			return;
 		}
 
+		if (new URL(route.request().url()).pathname === '/api/usage/totals') {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					userCount: 2,
+					projectCount: 2,
+					sessionCount: 2,
+					generationCount: 0,
+					sourceCount: 2,
+					sourceBytes: 3 * 1024 * 1024,
+					referenceCount: 0,
+					referenceBytes: null,
+					totalSpend: 12.5
+				})
+			});
+			return;
+		}
+
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -129,6 +148,12 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	await expect(page.getByRole('columnheader', { name: 'Размер референсов' })).toBeVisible();
 	await expect(page.getByRole('cell', { name: /^3\s*МБ$/ })).toBeVisible();
 	await expect(page.getByText('Баланс кошелька: 250.00 $')).toBeVisible();
+	const totals = page.getByRole('region', { name: 'Итого по платформе' });
+	await expect(totals).toContainText('Всего пополнено —');
+	await expect(totals).toContainText('Всего потрачено 12.50 $');
+	await expect(totals).toContainText('Зарегистрировано пользователей 2');
+	await expect(totals).toContainText(/Загруженные исходники 2 · 3\s*МБ/);
+	await expect(totals).toContainText('Загруженные референсы 0 · —');
 	await expect(user.locator('img')).toHaveAttribute('src', 'https://avatar.example/alice.svg');
 	await expect(userWithoutPicture.locator('.avatar')).toHaveText('B');
 	await expect(link).toHaveAttribute('href', `https://primal.net/profile/${npub}`);
@@ -143,6 +168,11 @@ test('shows an error message when the wallet balance cannot be loaded', async ({
 
 		if (pathname === '/api/usage/balance') {
 			await route.fulfill({ status: 502 });
+			return;
+		}
+
+		if (pathname === '/api/usage/totals') {
+			await route.fulfill({ status: 500 });
 			return;
 		}
 
