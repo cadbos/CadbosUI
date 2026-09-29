@@ -142,8 +142,13 @@ class ResourceDetailState {
 			this.status = 'error';
 			console.error('Resource detail load more failed:', error);
 		} finally {
-			if (this.#abort === controller) this.#abort = null;
-			this.loadingMore = false;
+			// A request that load()/clear() already superseded must not touch
+			// loadingMore — they reset it themselves, and by the time this one
+			// settles it may belong to a newer loadMore() still in flight.
+			if (this.#abort === controller) {
+				this.#abort = null;
+				this.loadingMore = false;
+			}
 		}
 	}
 

@@ -110,4 +110,38 @@ describe('resourceDetail', () => {
 		expect(resourceDetail.status).toBe('error');
 		consoleError.mockRestore();
 	});
+
+	it('keeps a newer loadMore busy when an older, superseded one settles late', async () => {
+		let settleStale: (response: Response) => void = () => {};
+		let settleCurrent: (response: Response) => void = () => {};
+		const stale = new Promise<Response>((resolve) => (settleStale = resolve));
+		const current = new Promise<Response>((resolve) => (settleCurrent = resolve));
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn<typeof fetch>()
+				.mockResolvedValueOnce(jsonResponse(detailPage([generation('a')], 0, true)))
+				.mockReturnValueOnce(stale)
+				.mockResolvedValueOnce(jsonResponse(detailPage([generation('c')], 0, true)))
+				.mockReturnValueOnce(current)
+		);
+
+		await resourceDetail.load(KEY);
+		const superseded = resourceDetail.loadMore();
+		await resourceDetail.load('test-media/other.jpg');
+		const active = resourceDetail.loadMore();
+		expect(resourceDetail.loadingMore).toBe(true);
+
+		// The first resource's page arrives only now — after the user has moved
+		// on and the next page of the second resource is already loading.
+		settleStale(jsonResponse(detailPage([generation('b')], 1, false)));
+		await superseded;
+		expect(resourceDetail.loadingMore).toBe(true);
+		expect(resourceDetail.generations.map((item) => item.id)).toEqual(['c']);
+
+		settleCurrent(jsonResponse(detailPage([generation('d')], 1, false)));
+		await active;
+		expect(resourceDetail.loadingMore).toBe(false);
+		expect(resourceDetail.generations.map((item) => item.id)).toEqual(['c', 'd']);
+	});
 });
