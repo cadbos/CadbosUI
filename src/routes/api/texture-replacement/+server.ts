@@ -177,7 +177,8 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 					db,
 					uploadsBucket,
 					result.outputKey,
-					result.outputHash
+					result.outputHash,
+					result.outputSize
 				);
 				const credit = await recordGeneration(db, userId, {
 					resultMediaId: outputMedia.id,
@@ -207,7 +208,13 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				status: 'completed',
 				output: await mediaAccess(
 					platform,
-					await getOrCreateMediaByKey(db, uploadsBucket, result.outputKey, result.outputHash)
+					await getOrCreateMediaByKey(
+						db,
+						uploadsBucket,
+						result.outputKey,
+						result.outputHash,
+						result.outputSize
+					)
 				),
 				cost: result.cost,
 				balance: result.balance

@@ -35,6 +35,7 @@ export interface Media {
 	filename: string;
 	bucket: Bucket;
 	checksum: string;
+	size: number | null;
 }
 
 interface MediaRow {
@@ -42,6 +43,7 @@ interface MediaRow {
 	filename: string;
 	bucket: number;
 	checksum: string;
+	size: number | null;
 }
 
 interface JoinedMediaRow extends MediaRow {
@@ -94,7 +96,8 @@ function toMedia(row: JoinedMediaRow): Media {
 			url: row.bucket_url,
 			region: row.bucket_region
 		},
-		checksum: row.checksum
+		checksum: row.checksum,
+		size: row.size
 	};
 }
 
@@ -102,18 +105,26 @@ async function getOrCreateMediaInBucket(
 	db: D1Database,
 	bucket: Bucket,
 	filename: string,
-	checksum: string
+	checksum: string,
+	size: number | null
 ): Promise<Media> {
 	if (!filename) throw new Error('media key is empty');
 	const normalizedChecksum = normalizeChecksum(checksum);
 	const existing = await db
-		.prepare('SELECT id, filename, bucket, checksum FROM media WHERE bucket = ? AND filename = ?')
+		.prepare(
+			'SELECT id, filename, bucket, checksum, size FROM media WHERE bucket = ? AND filename = ?'
+		)
 		.bind(bucket.id, filename)
 		.first<MediaRow>();
 	if (existing) {
+		let media: Media = { ...existing, bucket };
+		if (existing.size === null && size !== null) {
+			await db.prepare('UPDATE media SET size = ? WHERE id = ?').bind(size, existing.id).run();
+			media = { ...media, size };
+		}
 		if (existing.checksum && normalizedChecksum && existing.checksum !== normalizedChecksum) {
 			await db.prepare("UPDATE media SET checksum = '' WHERE id = ?").bind(existing.id).run();
-			return { ...existing, bucket, checksum: '' };
+			return { ...media, checksum: '' };
 		}
 		if (!existing.checksum && normalizedChecksum) {
 			await db
@@ -121,33 +132,34 @@ async function getOrCreateMediaInBucket(
 				.bind(normalizedChecksum, existing.id)
 				.run();
 		}
-		return { ...existing, bucket, checksum: existing.checksum || normalizedChecksum };
+		return { ...media, checksum: existing.checksum || normalizedChecksum };
 	}
 
 	const row = await db
 		.prepare(
-			'INSERT INTO media (filename, bucket, checksum) VALUES (?, ?, ?) ' +
-				'ON CONFLICT (bucket, filename) DO NOTHING RETURNING id, filename, bucket, checksum'
+			'INSERT INTO media (filename, bucket, checksum, size) VALUES (?, ?, ?, ?) ' +
+				'ON CONFLICT (bucket, filename) DO NOTHING RETURNING id, filename, bucket, checksum, size'
 		)
-		.bind(filename, bucket.id, normalizedChecksum)
+		.bind(filename, bucket.id, normalizedChecksum, size)
 		.first<MediaRow>();
 	if (row) return { ...row, bucket };
-	return getOrCreateMediaInBucket(db, bucket, filename, normalizedChecksum);
+	return getOrCreateMediaInBucket(db, bucket, filename, normalizedChecksum, size);
 }
 
 export async function getOrCreateMediaByKey(
 	db: D1Database,
 	bucket: Bucket,
 	key: string,
-	checksum: string
+	checksum: string,
+	size: number | null
 ): Promise<Media> {
-	return getOrCreateMediaInBucket(db, bucket, key, checksum);
+	return getOrCreateMediaInBucket(db, bucket, key, checksum, size);
 }
 
 export async function getMedia(db: D1Database, mediaId: number): Promise<Media | null> {
 	const row = await db
 		.prepare(
-			'SELECT media.id, media.filename, media.bucket, media.checksum, ' +
+			'SELECT media.id, media.filename, media.bucket, media.checksum, media.size, ' +
 				'buckets.name AS bucket_name, buckets.url AS bucket_url, ' +
 				'buckets.region AS bucket_region FROM media ' +
 				'JOIN buckets ON buckets.id = media.bucket ' +
@@ -167,7 +179,7 @@ export async function getMediaBatch(db: D1Database, mediaIds: number[]): Promise
 		const placeholders = chunk.map(() => '?').join(', ');
 		const { results } = await db
 			.prepare(
-				'SELECT media.id, media.filename, media.bucket, media.checksum, ' +
+				'SELECT media.id, media.filename, media.bucket, media.checksum, media.size, ' +
 					'buckets.name AS bucket_name, buckets.url AS bucket_url, ' +
 					'buckets.region AS bucket_region FROM media ' +
 					'JOIN buckets ON buckets.id = media.bucket ' +
@@ -187,7 +199,7 @@ export async function getMediaByBucketKey(
 ): Promise<Media | null> {
 	const row = await db
 		.prepare(
-			'SELECT media.id, media.filename, media.bucket, media.checksum, ' +
+			'SELECT media.id, media.filename, media.bucket, media.checksum, media.size, ' +
 				'buckets.name AS bucket_name, buckets.url AS bucket_url, ' +
 				'buckets.region AS bucket_region FROM media ' +
 				'JOIN buckets ON buckets.id = media.bucket ' +

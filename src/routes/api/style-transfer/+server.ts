@@ -113,7 +113,8 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			db,
 			uploadsBucket,
 			result.outputKey,
-			result.outputHash
+			result.outputHash,
+			result.outputSize
 		);
 		try {
 			await recordBalance(db, userId, result.balance);
@@ -154,7 +155,8 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		db,
 		uploadsBucket,
 		result.outputKey,
-		result.outputHash
+		result.outputHash,
+		result.outputSize
 	);
 	return json({
 		...(generationId !== undefined ? { id: generationId } : {}),

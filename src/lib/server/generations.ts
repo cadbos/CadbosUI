@@ -699,11 +699,10 @@ function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
 // Each count is pre-aggregated per user in its own subquery, then LEFT JOINed
 // onto `users` one-row-per-user — never a single flat multi-table LEFT JOIN,
 // which would fan out across projects/sessions/generations/reference jobs and
-// corrupt every COUNT/SUM here. `sourceCount` is deliberately the raw
-// (non-distinct) count of generations.source_media_id, same as
-// generationCount, since that column is NOT NULL on every row — it is kept as
-// its own field rather than merged with generationCount. `referenceCount`
-// counts each distinct (user, media) pair of reference_media_id across
+// corrupt every COUNT/SUM here. `sourceCount` counts each distinct
+// generations.source_media_id once per user, however many generations reused
+// it. `referenceCount` counts each distinct (user, media) pair of
+// reference_media_id across
 // object_replacement_jobs, texture_replacement_jobs and generations
 // (style-transfer references, migration 0019).
 export async function listUserUsage(
@@ -727,7 +726,7 @@ export async function listUserUsage(
 				'LEFT JOIN (SELECT p.user_id, COUNT(*) AS session_count FROM project_sessions s ' +
 				'JOIN projects p ON p.id = s.project_id GROUP BY p.user_id) ps ON ps.user_id = u.id ' +
 				'LEFT JOIN (SELECT user_id, COUNT(*) AS generation_count, ' +
-				'COUNT(source_media_id) AS source_count, COALESCE(SUM(amount), 0) AS total_spend, ' +
+				'COUNT(DISTINCT source_media_id) AS source_count, COALESCE(SUM(amount), 0) AS total_spend, ' +
 				'MAX(created_at) AS latest_spend_at FROM generations GROUP BY user_id) g ' +
 				'ON g.user_id = u.id ' +
 				'LEFT JOIN (SELECT user_id, COUNT(DISTINCT reference_media_id) AS reference_count FROM (' +

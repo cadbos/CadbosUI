@@ -57,7 +57,7 @@ describe('GET /api/download/<bucket>/<filename>', () => {
 	it('streams registered media without authentication', async () => {
 		const db = makeD1();
 		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
-		await getOrCreateMediaByKey(db, bucket, 'rooms/result.webp', '');
+		await getOrCreateMediaByKey(db, bucket, 'rooms/result.webp', '', null);
 		const fetch = vi.fn(
 			async () =>
 				new Response('image-bytes', {
@@ -98,7 +98,7 @@ describe('GET /api/download/<bucket>/<filename>', () => {
 	it('returns a sanitized 502 when S3 access fails', async () => {
 		const db = makeD1();
 		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
-		await getOrCreateMediaByKey(db, bucket, 'result.webp', '');
+		await getOrCreateMediaByKey(db, bucket, 'result.webp', '', null);
 		presignS3Object.mockRejectedValue(new Error('private provider detail'));
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -123,7 +123,7 @@ describe('GET /api/download/<bucket>/<filename>', () => {
 	])('rejects an upstream response with %s', async (_case, upstream) => {
 		const db = makeD1();
 		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
-		await getOrCreateMediaByKey(db, bucket, 'result.webp', '');
+		await getOrCreateMediaByKey(db, bucket, 'result.webp', '', null);
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
 		const response = await call(

@@ -173,7 +173,13 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			`light-settings/${job.id}.${extension}`
 		);
 		const reuploadSec = Math.round((Date.now() - reuploadStartedAt) / 1000);
-		const output = await getOrCreateMediaByKey(db, uploadsBucket, stored.key, stored.hash);
+		const output = await getOrCreateMediaByKey(
+			db,
+			uploadsBucket,
+			stored.key,
+			stored.hash,
+			stored.size
+		);
 		job = await completeLightSettingsJob(
 			db,
 			userId,

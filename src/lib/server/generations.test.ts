@@ -1143,14 +1143,14 @@ describe('listUserUsage', () => {
 		expect(page.users).toEqual([expect.objectContaining({ projectCount: 2, sessionCount: 2 })]);
 	});
 
-	it('counts sources as a raw per-generation total, not de-duplicated', async () => {
+	it('counts each distinct source media once per user', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
 		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
 
 		const page = await listUserUsage(db, 0, 10);
 
-		expect(page.users).toEqual([expect.objectContaining({ generationCount: 2, sourceCount: 2 })]);
+		expect(page.users).toEqual([expect.objectContaining({ generationCount: 2, sourceCount: 1 })]);
 	});
 
 	it('counts references from replacement jobs and style-transfer generations, de-duplicated', async () => {
