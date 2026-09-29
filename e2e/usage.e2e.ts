@@ -147,8 +147,8 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	await expect(page.getByRole('columnheader', { name: 'Размер исходников' })).toBeVisible();
 	await expect(page.getByRole('columnheader', { name: 'Размер референсов' })).toBeVisible();
 	await expect(page.getByRole('cell', { name: /^3\s*МБ$/ })).toBeVisible();
-	await expect(page.getByText('Баланс кошелька: 250.00 $')).toBeVisible();
 	const totals = page.getByRole('region', { name: 'Итого по платформе' });
+	await expect(totals).toContainText('Баланс кошелька 250.00 $');
 	await expect(totals).toContainText('Всего пополнено —');
 	await expect(totals).toContainText('Всего потрачено 12.50 $');
 	await expect(totals).toContainText('Зарегистрировано пользователей 2');

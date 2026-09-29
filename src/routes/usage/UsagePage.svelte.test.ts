@@ -349,3 +349,35 @@ it('renders a totals error without hiding the table', async () => {
 		.element(screen.getByRole('rowheader', { name: npubEncode(PUBKEY_ONE) }))
 		.toBeVisible();
 });
+
+it('shows the wallet balance as the first tile of the platform totals', async () => {
+	const fetchMock = vi.fn<typeof fetch>((input, init) => {
+		if (String(input) === '/api/usage/balance')
+			return Promise.resolve(Response.json({ balance: 250 }));
+		return mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)])(input, init);
+	});
+	vi.stubGlobal('fetch', fetchMock);
+
+	const screen = render(UsagePage, pageProps());
+
+	const totals = screen.getByRole('region', { name: 'Platform totals' });
+	await expect.element(totals.getByText('Wallet balance')).toBeVisible();
+	await expect.element(totals.getByText('250.00')).toBeVisible();
+	await expect.element(totals.getByRole('term').first()).toHaveTextContent('Wallet balance');
+});
+
+it('shows a wallet balance error inside the totals even when totals fail', async () => {
+	const fetchMock = vi.fn<typeof fetch>((input, init) => {
+		const url = String(input);
+		if (url === '/api/usage/balance') return Promise.resolve(new Response(null, { status: 502 }));
+		if (url === '/api/usage/totals') return Promise.resolve(new Response(null, { status: 500 }));
+		return mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)])(input, init);
+	});
+	vi.stubGlobal('fetch', fetchMock);
+
+	const screen = render(UsagePage, pageProps());
+
+	const totals = screen.getByRole('region', { name: 'Platform totals' });
+	await expect.element(totals.getByText('Could not load wallet balance.')).toBeVisible();
+	await expect.element(totals.getByText('Could not load totals.')).toBeVisible();
+});
