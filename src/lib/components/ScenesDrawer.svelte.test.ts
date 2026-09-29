@@ -195,7 +195,7 @@ it('shows each scene’s session and opens its prompt in a dialog', async () => 
 	await expect.element(dialog.getByText('светлая кухня в скандинавском стиле')).toBeVisible();
 	expect(fetchMock).toHaveBeenCalledWith('/api/generated-images/sample');
 
-	await dialog.getByRole('button', { name: 'Закрыть' }).click();
+	await dialog.getByRole('button', { name: 'Закрыть промпт' }).click();
 	await expect.element(dialog).not.toBeInTheDocument();
 });
 

@@ -554,10 +554,10 @@ test('narrows scenes to a project’s session results and shows a step’s promp
 	await drawer.getByRole('button', { name: 'Показать промпт сцены 1' }).click();
 	const promptDialog = page.getByRole('dialog', { name: 'Промпт сцены 1' });
 	await expect(promptDialog).toContainText('светлая кухня, дерево и лён');
-	await promptDialog.getByRole('button', { name: 'Закрыть' }).click();
+	await promptDialog.getByRole('button', { name: 'Закрыть промпт' }).click();
 
-	await drawer.getByLabel('Проект').selectOption({ label: 'Квартира' });
-	await drawer.getByLabel('Сессия').selectOption({ label: 'Кухня' });
+	await drawer.getByLabel('Проект').selectOption({ label: 'Квартира — проект' });
+	await drawer.getByLabel('Сессия').selectOption({ label: 'Кухня — сессия' });
 	await drawer.getByRole('button', { name: 'Итоги сессий' }).click();
 
 	const results = drawer.getByRole('list', { name: 'Итоги сессий, сначала новые' });

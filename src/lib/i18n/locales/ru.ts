@@ -234,6 +234,8 @@ export const ru = {
 	'generatedImages.filter.allProjects': 'Все проекты',
 	'generatedImages.filter.session': 'Сессия',
 	'generatedImages.filter.allSessions': 'Все сессии',
+	'generatedImages.filter.projectOption': '{title} — проект',
+	'generatedImages.filter.sessionOption': '{title} — сессия',
 	'generatedImages.filter.optionsFailed': 'Не удалось загрузить список проектов и сессий.',
 	'generatedImages.emptyFiltered': 'Нет сцен по выбранному фильтру.',
 	'generatedImages.milestonesListLabel': 'Итоги сессий, сначала новые',
@@ -246,7 +248,7 @@ export const ru = {
 	'generatedImages.promptLoading': 'Загрузка промпта…',
 	'generatedImages.promptFailed': 'Не удалось загрузить промпт.',
 	'generatedImages.promptEmpty': 'Для этой генерации промпт не задавался.',
-	'generatedImages.promptClose': 'Закрыть',
+	'generatedImages.promptClose': 'Закрыть промпт',
 	'usage.title': 'Использование',
 	'usage.subtitle': 'Балансы аккаунтов и траты на генерации по пользователям Cadbos.',
 	'usage.signInRequired':

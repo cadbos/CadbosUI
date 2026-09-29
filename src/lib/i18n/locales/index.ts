@@ -226,6 +226,8 @@ export interface Dictionary {
 	'generatedImages.filter.allProjects': string;
 	'generatedImages.filter.session': string;
 	'generatedImages.filter.allSessions': string;
+	'generatedImages.filter.projectOption': string;
+	'generatedImages.filter.sessionOption': string;
 	'generatedImages.filter.optionsFailed': string;
 	'generatedImages.emptyFiltered': string;
 	'generatedImages.milestonesListLabel': string;

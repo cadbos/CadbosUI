@@ -588,28 +588,37 @@ before the Change Date. See LICENSE for complete terms.
 					</button>
 				{/each}
 			</div>
-			<label class="filter-field">
-				<span>{t('generatedImages.filter.project')}</span>
-				<select value={filter.projectId ?? ''} onchange={selectProject}>
-					<option value="">{t('generatedImages.filter.allProjects')}</option>
-					{#each generatedImages.filterProjects as project (project.projectId)}
-						<option value={project.projectId}>{titleOrUntitled(project.projectTitle)}</option>
-					{/each}
-				</select>
-			</label>
-			<label class="filter-field">
-				<span>{t('generatedImages.filter.session')}</span>
-				<select
-					value={filter.sessionId ?? ''}
-					disabled={filter.projectId === null}
-					onchange={selectSession}
-				>
-					<option value="">{t('generatedImages.filter.allSessions')}</option>
-					{#each filterSessions as session (session.sessionId)}
-						<option value={session.sessionId}>{titleOrUntitled(session.sessionTitle)}</option>
-					{/each}
-				</select>
-			</label>
+			<select
+				class="filter-select"
+				aria-label={t('generatedImages.filter.project')}
+				value={filter.projectId ?? ''}
+				onchange={selectProject}
+			>
+				<option value="">{t('generatedImages.filter.allProjects')}</option>
+				{#each generatedImages.filterProjects as project (project.projectId)}
+					<option value={project.projectId}>
+						{ti('generatedImages.filter.projectOption', {
+							title: titleOrUntitled(project.projectTitle)
+						})}
+					</option>
+				{/each}
+			</select>
+			<select
+				class="filter-select"
+				aria-label={t('generatedImages.filter.session')}
+				value={filter.sessionId ?? ''}
+				disabled={filter.projectId === null}
+				onchange={selectSession}
+			>
+				<option value="">{t('generatedImages.filter.allSessions')}</option>
+				{#each filterSessions as session (session.sessionId)}
+					<option value={session.sessionId}>
+						{ti('generatedImages.filter.sessionOption', {
+							title: titleOrUntitled(session.sessionTitle)
+						})}
+					</option>
+				{/each}
+			</select>
 			{#if generatedImages.filterOptionsStatus === 'error'}
 				<p class="status error filter-error" role="alert">
 					{t('generatedImages.filter.optionsFailed')}
@@ -657,17 +666,6 @@ before the Change Date. See LICENSE for complete terms.
 								</time>
 								{#if image.session}
 									<span class="session-label">{sessionLabel(image.session)}</span>
-								{/if}
-								{#if !milestones}
-									<button
-										type="button"
-										class="prompt-button"
-										aria-label={ti('generatedImages.showPromptLabel', { order: index + 1 })}
-										onclick={() => void showPrompt(image.id, index + 1)}
-									>
-										<MessageSquareText size={14} strokeWidth={1.8} aria-hidden="true" />
-										{t('generatedImages.showPrompt')}
-									</button>
 								{/if}
 							</div>
 							{#if !milestones}
@@ -717,25 +715,36 @@ before the Change Date. See LICENSE for complete terms.
 									</div>
 								</div>
 
-								{#if milestones}
-									<div
-										class="flow-kind"
-										role="img"
-										aria-label={t('generatedImages.milestone')}
-										data-tooltip={t('generatedImages.milestone')}
-									>
-										<Flag size={18} strokeWidth={1.8} aria-hidden="true" />
-									</div>
-								{:else}
-									<div
-										class="flow-kind"
-										role="img"
-										aria-label={t(generationKindKeys[image.kind])}
-										data-tooltip={t(generationKindKeys[image.kind])}
-									>
-										<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-									</div>
-								{/if}
+								<div class="flow-middle">
+									{#if milestones}
+										<div
+											class="flow-kind"
+											role="img"
+											aria-label={t('generatedImages.milestone')}
+											data-tooltip={t('generatedImages.milestone')}
+										>
+											<Flag size={18} strokeWidth={1.8} aria-hidden="true" />
+										</div>
+									{:else}
+										<div
+											class="flow-kind"
+											role="img"
+											aria-label={t(generationKindKeys[image.kind])}
+											data-tooltip={t(generationKindKeys[image.kind])}
+										>
+											<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
+										</div>
+										<button
+											type="button"
+											class="prompt-button"
+											aria-label={ti('generatedImages.showPromptLabel', { order: index + 1 })}
+											onclick={() => void showPrompt(image.id, index + 1)}
+										>
+											<MessageSquareText size={14} strokeWidth={1.8} aria-hidden="true" />
+											{t('generatedImages.showPrompt')}
+										</button>
+									{/if}
+								</div>
 
 								<div class="image-column">
 									<div class="image-frame result-frame">
@@ -860,9 +869,20 @@ before the Change Date. See LICENSE for complete terms.
 		aria-labelledby="generated-images-prompt-title"
 		oncancel={handlePromptCancel}
 	>
-		<h3 id="generated-images-prompt-title">
-			{ti('generatedImages.promptTitle', { order: promptCandidate.order })}
-		</h3>
+		<header class="prompt-dialog-header">
+			<h3 id="generated-images-prompt-title">
+				{ti('generatedImages.promptTitle', { order: promptCandidate.order })}
+			</h3>
+			<button
+				type="button"
+				class="close-button"
+				aria-label={t('generatedImages.promptClose')}
+				title={t('generatedImages.promptClose')}
+				onclick={closePrompt}
+			>
+				<X size={20} strokeWidth={1.8} aria-hidden="true" />
+			</button>
+		</header>
 		{#if promptCandidate.status === 'loading'}
 			<p aria-live="polite">{t('generatedImages.promptLoading')}</p>
 		{:else if promptCandidate.status === 'error'}
@@ -872,9 +892,6 @@ before the Change Date. See LICENSE for complete terms.
 		{:else}
 			<p class="prompt-text">{promptCandidate.prompt}</p>
 		{/if}
-		<button type="button" class="secondary-button" onclick={closePrompt}>
-			{t('generatedImages.promptClose')}
-		</button>
 	</dialog>
 {/if}
 
@@ -1045,8 +1062,8 @@ before the Change Date. See LICENSE for complete terms.
 		flex: 0 0 auto;
 		display: flex;
 		flex-wrap: wrap;
-		align-items: flex-end;
-		gap: 0.75rem;
+		align-items: center;
+		gap: 0.5rem;
 		padding: 0.75rem 1.5rem;
 		border-bottom: 1px solid var(--color-border);
 	}
@@ -1083,20 +1100,8 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-accent-text);
 	}
 
-	.filter-field {
-		display: flex;
-		flex: 1 1 9rem;
-		flex-direction: column;
-		gap: 0.25rem;
-		min-width: 0;
-		color: var(--color-muted);
-		font-size: 0.6875rem;
-		font-weight: 650;
-		letter-spacing: 0.045em;
-		text-transform: uppercase;
-	}
-
-	.filter-field select {
+	.filter-select {
+		flex: 1 1 0;
 		min-width: 0;
 		min-height: 2.125rem;
 		padding: 0.3rem 0.5rem;
@@ -1106,12 +1111,10 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-text);
 		font: inherit;
 		font-size: 0.8125rem;
-		font-weight: 400;
-		letter-spacing: normal;
-		text-transform: none;
+		text-overflow: ellipsis;
 	}
 
-	.filter-field select:disabled {
+	.filter-select:disabled {
 		opacity: 0.55;
 	}
 
@@ -1192,6 +1195,13 @@ before the Change Date. See LICENSE for complete terms.
 		padding-right: 2.5rem;
 	}
 
+	.flow-middle {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
 	.session-label {
 		min-width: 0;
 		overflow: hidden;
@@ -1207,7 +1217,6 @@ before the Change Date. See LICENSE for complete terms.
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
-		margin-left: auto;
 		padding: 0.25rem 0.5rem;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-sm);
@@ -1484,6 +1493,17 @@ before the Change Date. See LICENSE for complete terms.
 		width: min(100% - 2rem, 36rem);
 	}
 
+	.prompt-dialog-header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.prompt-dialog-header h3 {
+		padding-top: 0.5rem;
+	}
+
 	.prompt-dialog .prompt-text {
 		max-height: 50vh;
 		overflow-y: auto;
@@ -1604,6 +1624,14 @@ before the Change Date. See LICENSE for complete terms.
 		.scene-columns-header {
 			grid-template-columns: minmax(0, 1fr) 7rem minmax(0, 1fr);
 			gap: 0.375rem;
+		}
+	}
+
+	/* Too narrow for the toggle and both selects side by side — the selects
+	   move to a row of their own rather than shrinking to unreadable. */
+	@media (max-width: 540px) {
+		.filter-select {
+			flex-basis: 8rem;
 		}
 	}
 
