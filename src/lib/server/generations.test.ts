@@ -85,10 +85,15 @@ function seedGeneration(
 		.run();
 }
 
-function seedMedia(db: D1Database, url: string, checksum: string): number {
+function seedMedia(
+	db: D1Database,
+	url: string,
+	checksum: string,
+	size: number | null = null
+): number {
 	const filename = new URL(url).pathname.slice(1);
-	db.prepare('INSERT OR IGNORE INTO media (filename, bucket, checksum) VALUES (?, 1, ?)')
-		.bind(filename, checksum)
+	db.prepare('INSERT OR IGNORE INTO media (filename, bucket, checksum, size) VALUES (?, 1, ?, ?)')
+		.bind(filename, checksum, size)
 		.run();
 	const row = db
 		.prepare('SELECT id FROM media WHERE bucket = 1 AND filename = ?')
@@ -1126,7 +1131,9 @@ describe('listUserUsage', () => {
 				sessionCount: 0,
 				generationCount: 0,
 				sourceCount: 0,
-				referenceCount: 0
+				sourceBytes: null,
+				referenceCount: 0,
+				referenceBytes: null
 			})
 		]);
 	});
@@ -1178,6 +1185,84 @@ describe('listUserUsage', () => {
 		const page = await listUserUsage(db, 0, 10);
 
 		expect(page.users).toEqual([expect.objectContaining({ referenceCount: 2 })]);
+	});
+
+	it('totals source bytes over distinct media, skipping unknown sizes', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedMedia(db, 'https://cdn.example.test/hall.jpg', HASH_2, 500);
+		seedMedia(db, 'https://cdn.example.test/legacy.jpg', RESULT_HASH, null);
+		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
+		seedGenerationWithSource(db, 'c', 'user-1', 'https://cdn.example.test/hall.jpg', HASH_2, 3000);
+		seedGenerationWithSource(
+			db,
+			'd',
+			'user-1',
+			'https://cdn.example.test/legacy.jpg',
+			RESULT_HASH,
+			4000
+		);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([
+			expect.objectContaining({ sourceCount: 3, sourceBytes: 1500, referenceBytes: null })
+		]);
+	});
+
+	it('reports null source bytes when no source size is known', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([expect.objectContaining({ sourceCount: 1, sourceBytes: null })]);
+	});
+
+	it('totals reference bytes over distinct object/texture references, ignoring style-transfer snapshots', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 10);
+		const sessionId = seedSession(db, 'user-1');
+		const sharedReferenceId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '', 700);
+		const textureReferenceId = seedMedia(db, 'https://cdn.example.test/texture.jpg', '', 300);
+		seedReplacementJob(db, 'object_replacement_jobs', 'user-1', sharedReferenceId);
+		seedReplacementJob(db, 'texture_replacement_jobs', 'user-1', sharedReferenceId);
+		seedReplacementJob(db, 'texture_replacement_jobs', 'user-1', textureReferenceId);
+
+		const styleResultId = seedMedia(db, 'https://cdn.example.test/style-out.webp', '', 9_000);
+		const styleSourceId = seedMedia(db, 'https://cdn.example.test/style-source.jpg', HASH_2, 9_000);
+		await recordGeneration(db, 'user-1', {
+			resultMediaId: styleResultId,
+			sourceMediaId: styleSourceId,
+			sessionId,
+			prompt: '',
+			kind: 'style-transfer',
+			amount: 1,
+			archaiRenderSec: 0,
+			archaiDownloadSec: 0,
+			archaiReuploadSec: 0,
+			formSnapshot: TEST_FORM_SNAPSHOT
+		});
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([
+			expect.objectContaining({ referenceCount: 2, referenceBytes: 1000 })
+		]);
+	});
+
+	it("does not count another user's size for a media both users reference", async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		const sharedReferenceId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '', 700);
+		seedReplacementJob(db, 'object_replacement_jobs', 'user-1', sharedReferenceId);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		const byPubkey = Object.fromEntries(page.users.map((user) => [user.pubkey, user]));
+		expect(byPubkey['pubkey-1']).toEqual(expect.objectContaining({ referenceBytes: 700 }));
+		expect(byPubkey['pubkey-2']).toEqual(expect.objectContaining({ referenceBytes: null }));
 	});
 
 	it('isolates counts per user', async () => {

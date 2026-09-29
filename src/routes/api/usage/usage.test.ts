@@ -170,7 +170,9 @@ describe('GET /api/usage', () => {
 				sessionCount: 0,
 				generationCount: 0,
 				sourceCount: 0,
+				sourceBytes: null,
 				referenceCount: 0,
+				referenceBytes: null,
 				totalSpend: 0,
 				latestSpendAt: null
 			},
@@ -183,7 +185,9 @@ describe('GET /api/usage', () => {
 				sessionCount: 0,
 				generationCount: 2,
 				sourceCount: 1,
+				sourceBytes: null,
 				referenceCount: 0,
+				referenceBytes: null,
 				totalSpend: 4,
 				latestSpendAt: 6000
 			},
@@ -196,7 +200,9 @@ describe('GET /api/usage', () => {
 				sessionCount: 0,
 				generationCount: 0,
 				sourceCount: 0,
+				sourceBytes: null,
 				referenceCount: 0,
+				referenceBytes: null,
 				totalSpend: 0,
 				latestSpendAt: null
 			}

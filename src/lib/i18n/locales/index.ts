@@ -238,7 +238,9 @@ export interface Dictionary {
 	'usage.column.sessionCount': string;
 	'usage.column.generationCount': string;
 	'usage.column.sourceCount': string;
+	'usage.column.sourceBytes': string;
 	'usage.column.referenceCount': string;
+	'usage.column.referenceBytes': string;
 	'usage.column.totalSpend': string;
 	'usage.column.latestSpendAt': string;
 	'resources.title': string;

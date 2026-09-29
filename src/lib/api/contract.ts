@@ -536,7 +536,9 @@ export interface UserUsageRecord {
 	sessionCount: number;
 	generationCount: number;
 	sourceCount: number;
+	sourceBytes: number | null;
 	referenceCount: number;
+	referenceBytes: number | null;
 	totalSpend: number;
 	latestSpendAt: number | null;
 }

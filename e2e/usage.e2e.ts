@@ -80,7 +80,13 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 						balance: 0,
 						totalDeposit: 0,
 						lastDepositAt: null,
+						projectCount: 1,
+						sessionCount: 1,
 						generationCount: 0,
+						sourceCount: 2,
+						sourceBytes: 3 * 1024 * 1024,
+						referenceCount: 0,
+						referenceBytes: null,
 						totalSpend: 0,
 						latestSpendAt: null
 					},
@@ -89,7 +95,13 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 						balance: 0,
 						totalDeposit: 0,
 						lastDepositAt: null,
+						projectCount: 1,
+						sessionCount: 1,
 						generationCount: 0,
+						sourceCount: 0,
+						sourceBytes: null,
+						referenceCount: 0,
+						referenceBytes: null,
 						totalSpend: 0,
 						latestSpendAt: null
 					}
@@ -113,6 +125,9 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	const userWithoutPicture = page.getByRole('rowheader', { name: npubWithoutPicture });
 
 	await expect(page.getByRole('columnheader', { name: 'Пользователь' })).toBeVisible();
+	await expect(page.getByRole('columnheader', { name: 'Размер исходников' })).toBeVisible();
+	await expect(page.getByRole('columnheader', { name: 'Размер референсов' })).toBeVisible();
+	await expect(page.getByRole('cell', { name: /^3\s*МБ$/ })).toBeVisible();
 	await expect(page.getByText('Баланс кошелька: 250.00 $')).toBeVisible();
 	await expect(user.locator('img')).toHaveAttribute('src', 'https://avatar.example/alice.svg');
 	await expect(userWithoutPicture.locator('.avatar')).toHaveText('B');
