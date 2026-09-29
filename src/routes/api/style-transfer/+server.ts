@@ -131,7 +131,9 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				archaiRenderSec: result.renderSec,
 				archaiDownloadSec: result.downloadSec,
 				archaiReuploadSec: result.reuploadSec,
-				formSnapshot: parsed.data.formSnapshot
+				formSnapshot: parsed.data.formSnapshot,
+				referenceMediaId:
+					referenceImageKey !== undefined ? media.get(referenceImageKey)?.media.id : undefined
 			});
 			generationId = credit.id;
 			result = { ...result, balance: credit.balance };

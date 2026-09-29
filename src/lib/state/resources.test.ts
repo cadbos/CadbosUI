@@ -18,7 +18,7 @@ import { mediaAccess } from './media-access.svelte';
 import { resources } from './resources.svelte';
 
 function image(url: string, createdAt: number): ResourceImageRecord {
-	return { image: { key: new URL(url).pathname, url }, createdAt };
+	return { image: { key: new URL(url).pathname, url }, createdAt, roles: ['source'] };
 }
 
 function page(images: ResourceImageRecord[], offset: number, hasMore: boolean): ResourcesResponse {
@@ -71,10 +71,10 @@ describe('resources pagination', () => {
 		]);
 		vi.stubGlobal('fetch', fetchMock);
 
-		await resources.load();
+		await resources.load('all');
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
-		expect(fetchMock).toHaveBeenCalledWith('/api/resources?offset=0&size=30', {
+		expect(fetchMock).toHaveBeenCalledWith('/api/resources?filter=all&offset=0&size=30', {
 			signal: expect.any(AbortSignal)
 		});
 		expect(resources.status).toBe('ready');
@@ -91,11 +91,11 @@ describe('resources pagination', () => {
 		]);
 		vi.stubGlobal('fetch', fetchMock);
 
-		await resources.load();
+		await resources.load('all');
 		await resources.loadMore();
 
 		expect(fetchMock).toHaveBeenCalledTimes(2);
-		expect(fetchMock).toHaveBeenCalledWith('/api/resources?offset=1&size=30', {
+		expect(fetchMock).toHaveBeenCalledWith('/api/resources?filter=all&offset=1&size=30', {
 			signal: expect.any(AbortSignal)
 		});
 		expect(resources.status).toBe('ready');
@@ -118,7 +118,7 @@ describe('resources pagination', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		await resources.load();
+		await resources.load('all');
 
 		expect(resources.status).toBe('error');
 		expect(resources.images).toEqual([]);
@@ -131,10 +131,36 @@ describe('resources pagination', () => {
 		);
 		vi.stubGlobal('fetch', fetchMock);
 
-		await resources.load();
+		await resources.load('all');
 
 		expect(resources.status).toBe('error');
 		expect(resources.images).toEqual([]);
 		expect(resources.error).toBe('ResourcesLoadError');
+	});
+
+	it('asks for the chosen filter and keeps paging through it', async () => {
+		const fetchMock = mockResourcesFetch([
+			page([image('https://cdn.example/one.jpg', Date.UTC(2026, 0, 1))], 0, true),
+			page([image('https://cdn.example/two.jpg', Date.UTC(2026, 0, 2))], 1, false)
+		]);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await resources.load('references');
+		await resources.loadMore();
+
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			1,
+			'/api/resources?filter=references&offset=0&size=30',
+			{
+				signal: expect.any(AbortSignal)
+			}
+		);
+		expect(fetchMock).toHaveBeenNthCalledWith(
+			2,
+			'/api/resources?filter=references&offset=1&size=30',
+			{
+				signal: expect.any(AbortSignal)
+			}
+		);
 	});
 });

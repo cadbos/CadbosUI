@@ -123,6 +123,16 @@ describe('texture replacement jobs', () => {
 			download_sec: 2,
 			reupload_sec: 1
 		});
+		// The reference the job ran with lands on its generation too, so
+		// Resources can list it (migrations/0019).
+		const reference = await db
+			.prepare(
+				'SELECT g.reference_media_id AS generation_reference, j.reference_media_id AS job_reference ' +
+					'FROM generations g JOIN texture_replacement_jobs j ON j.id = g.id WHERE g.id = ?'
+			)
+			.bind('job-1')
+			.first<{ generation_reference: number | null; job_reference: number }>();
+		expect(reference!.generation_reference).toBe(reference!.job_reference);
 		expect(warning).toHaveBeenCalledOnce();
 		expect(warning).toHaveBeenCalledWith(
 			'Texture replacement credit deduction exceeded available balance:',

@@ -192,9 +192,9 @@ export async function completeObjectReplacementJob(
 			.prepare(
 				'INSERT INTO generations ' +
 					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id, ' +
-					'comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot) ' +
+					'comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot, reference_media_id) ' +
 					"SELECT j.id, j.user_id, ?, j.scene_media_id, j.replacement_object, 'object-replacement', j.cost, c.balance, ?, j.session_id, " +
-					'j.upload_queue_sec, ?, ?, ?, ?, j.form_snapshot ' +
+					'j.upload_queue_sec, ?, ?, ?, ?, j.form_snapshot, j.reference_media_id ' +
 					'FROM object_replacement_jobs j JOIN credits c ON c.user_id = j.user_id ' +
 					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
 			)
