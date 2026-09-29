@@ -182,7 +182,7 @@ describe('GET /api/usage', () => {
 				projectCount: 0,
 				sessionCount: 0,
 				generationCount: 2,
-				sourceCount: 2,
+				sourceCount: 1,
 				referenceCount: 0,
 				totalSpend: 4,
 				latestSpendAt: 6000

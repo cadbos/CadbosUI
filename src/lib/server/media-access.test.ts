@@ -39,7 +39,8 @@ it('returns an encoded bucket-qualified key for any stored bucket', async () => 
 			id: 1,
 			filename: 'shared/name.webp',
 			bucket,
-			checksum: ''
+			checksum: '',
+			size: null
 		})
 	).resolves.toEqual({
 		key: 'external%3Ahttps%3A%2F%2Fimages.example.test/shared/name.webp',
@@ -56,8 +57,8 @@ it('resolves identical object names against their qualified buckets', async () =
 	const uploads = await getBucketByName(db, TEST_S3_BUCKET.name);
 	const archive = await getBucketByName(db, 'archive');
 	const filename = 'shared/name.webp';
-	const uploadsMedia = await getOrCreateMediaByKey(db, uploads, filename, '');
-	const archiveMedia = await getOrCreateMediaByKey(db, archive, filename, '');
+	const uploadsMedia = await getOrCreateMediaByKey(db, uploads, filename, '', null);
+	const archiveMedia = await getOrCreateMediaByKey(db, archive, filename, '', null);
 	const uploadsKey = mediaKey(uploads.name, filename);
 	const archiveKey = mediaKey(archive.name, filename);
 

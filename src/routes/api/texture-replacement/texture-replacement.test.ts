@@ -150,6 +150,7 @@ beforeEach(() => {
 	archai.replaceTexturesWithMask.mockReset().mockResolvedValue({
 		outputKey: 'masked-result.webp',
 		outputHash: 'a'.repeat(64),
+		outputSize: 4096,
 		cost: 1.5,
 		balance: 100,
 		renderSec: 4,
@@ -237,6 +238,11 @@ describe('POST /api/texture-replacement', () => {
 			source_media_id: 1,
 			amount: 1.5
 		});
+		const output = await db
+			.prepare('SELECT size FROM media WHERE filename = ?')
+			.bind('masked-result.webp')
+			.first<{ size: number | null }>();
+		expect(output).toEqual({ size: 4096 });
 	});
 
 	it('returns a sanitized upstream error when masked replacement fails', async () => {

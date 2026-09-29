@@ -106,7 +106,8 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 			db,
 			uploadsBucket!,
 			result.outputKey,
-			result.outputHash
+			result.outputHash,
+			result.outputSize
 		);
 		// recordBalance mirrors archAI's own (shared) account balance for ops
 		// visibility only — it must never reach the client, so read it before
@@ -149,7 +150,13 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 		db && userId
 			? await mediaAccess(
 					platform,
-					await getOrCreateMediaByKey(db, uploadsBucket!, result.outputKey, result.outputHash)
+					await getOrCreateMediaByKey(
+						db,
+						uploadsBucket!,
+						result.outputKey,
+						result.outputHash,
+						result.outputSize
+					)
 				)
 			: {
 					key: mediaKey(uploadsBucketName(platform), result.outputKey),
