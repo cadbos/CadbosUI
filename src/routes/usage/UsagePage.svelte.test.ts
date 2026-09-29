@@ -35,7 +35,11 @@ function user(
 		balance: 12.345,
 		totalDeposit: 20,
 		lastDepositAt: null,
+		projectCount: 2,
+		sessionCount: 5,
 		generationCount: 4,
+		sourceCount: 4,
+		referenceCount: 1,
 		totalSpend: 7.5,
 		latestSpendAt
 	};

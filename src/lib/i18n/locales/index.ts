@@ -234,7 +234,11 @@ export interface Dictionary {
 	'usage.column.balance': string;
 	'usage.column.totalDeposit': string;
 	'usage.column.lastDepositAt': string;
+	'usage.column.projectCount': string;
+	'usage.column.sessionCount': string;
 	'usage.column.generationCount': string;
+	'usage.column.sourceCount': string;
+	'usage.column.referenceCount': string;
 	'usage.column.totalSpend': string;
 	'usage.column.latestSpendAt': string;
 	'resources.title': string;

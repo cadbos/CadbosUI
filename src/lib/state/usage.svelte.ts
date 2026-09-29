@@ -24,7 +24,11 @@ const userUsageRecordSchema = z.object({
 	balance: z.number(),
 	totalDeposit: z.number(),
 	lastDepositAt: z.number().int().min(0).nullable(),
+	projectCount: z.number().int().min(0),
+	sessionCount: z.number().int().min(0),
 	generationCount: z.number().int().min(0),
+	sourceCount: z.number().int().min(0),
+	referenceCount: z.number().int().min(0),
 	totalSpend: z.number(),
 	latestSpendAt: z.number().int().min(0).nullable()
 });

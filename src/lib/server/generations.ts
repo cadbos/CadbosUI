@@ -671,7 +671,11 @@ export async function listResourceGenerations(
 interface UserUsageRow {
 	pubkey: string;
 	balance: number;
+	project_count: number;
+	session_count: number;
 	generation_count: number;
+	source_count: number;
+	reference_count: number;
 	total_spend: number;
 	latest_spend_at: number | null;
 }
@@ -682,12 +686,26 @@ function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
 		balance: row.balance,
 		totalDeposit: 0,
 		lastDepositAt: null,
+		projectCount: row.project_count,
+		sessionCount: row.session_count,
 		generationCount: row.generation_count,
+		sourceCount: row.source_count,
+		referenceCount: row.reference_count,
 		totalSpend: row.total_spend,
 		latestSpendAt: row.latest_spend_at
 	};
 }
 
+// Each count is pre-aggregated per user in its own subquery, then LEFT JOINed
+// onto `users` one-row-per-user — never a single flat multi-table LEFT JOIN,
+// which would fan out across projects/sessions/generations/reference jobs and
+// corrupt every COUNT/SUM here. `sourceCount` is deliberately the raw
+// (non-distinct) count of generations.source_media_id, same as
+// generationCount, since that column is NOT NULL on every row — it is kept as
+// its own field rather than merged with generationCount. `referenceCount`
+// counts each distinct (user, media) pair of reference_media_id across
+// object_replacement_jobs, texture_replacement_jobs and generations
+// (style-transfer references, migration 0019).
 export async function listUserUsage(
 	db: D1Database,
 	offset: number,
@@ -696,11 +714,27 @@ export async function listUserUsage(
 	const result = await db
 		.prepare(
 			'SELECT u.pubkey, COALESCE(c.balance, 0) AS balance, ' +
-				'COUNT(g.id) AS generation_count, COALESCE(SUM(g.amount), 0) AS total_spend, ' +
-				'MAX(g.created_at) AS latest_spend_at FROM users u ' +
+				'COALESCE(pr.project_count, 0) AS project_count, ' +
+				'COALESCE(ps.session_count, 0) AS session_count, ' +
+				'COALESCE(g.generation_count, 0) AS generation_count, ' +
+				'COALESCE(g.source_count, 0) AS source_count, ' +
+				'COALESCE(refs.reference_count, 0) AS reference_count, ' +
+				'COALESCE(g.total_spend, 0) AS total_spend, g.latest_spend_at ' +
+				'FROM users u ' +
 				'LEFT JOIN credits c ON c.user_id = u.id ' +
-				'LEFT JOIN generations g ON g.user_id = u.id ' +
-				'GROUP BY u.id, u.pubkey, u.created_at, c.balance ' +
+				'LEFT JOIN (SELECT user_id, COUNT(*) AS project_count FROM projects GROUP BY user_id) pr ' +
+				'ON pr.user_id = u.id ' +
+				'LEFT JOIN (SELECT p.user_id, COUNT(*) AS session_count FROM project_sessions s ' +
+				'JOIN projects p ON p.id = s.project_id GROUP BY p.user_id) ps ON ps.user_id = u.id ' +
+				'LEFT JOIN (SELECT user_id, COUNT(*) AS generation_count, ' +
+				'COUNT(source_media_id) AS source_count, COALESCE(SUM(amount), 0) AS total_spend, ' +
+				'MAX(created_at) AS latest_spend_at FROM generations GROUP BY user_id) g ' +
+				'ON g.user_id = u.id ' +
+				'LEFT JOIN (SELECT user_id, COUNT(DISTINCT reference_media_id) AS reference_count FROM (' +
+				'SELECT user_id, reference_media_id FROM object_replacement_jobs ' +
+				'UNION ALL SELECT user_id, reference_media_id FROM texture_replacement_jobs ' +
+				'UNION ALL SELECT user_id, reference_media_id FROM generations WHERE reference_media_id IS NOT NULL' +
+				') r GROUP BY user_id) refs ON refs.user_id = u.id ' +
 				'ORDER BY u.created_at DESC, u.id DESC LIMIT ? OFFSET ?'
 		)
 		.bind(size + 1, offset)
