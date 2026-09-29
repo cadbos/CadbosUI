@@ -470,9 +470,52 @@ export interface ShareGenerationDetailResponse {
 // excluded, not shown as if they were uploads; see listDistinctSourceImages. Content-hash dedup still
 // applies at *upload* time (findGenerationSourceByHash) to avoid storing
 // duplicate objects. Read-only gallery: no delete in this iteration.
+// What a Resources image was used as — a generation's uploaded source
+// photo, or one of the reference kinds a generation can take. One image can
+// have several (the same upload used as a source and as a texture, say).
+export const resourceRoles = [
+	'source',
+	'style-reference',
+	'object-reference',
+	'texture-reference'
+] as const;
+export type ResourceRole = (typeof resourceRoles)[number];
+
+// GET /api/resources?filter= — which roles to list.
+export const resourceFilters = ['all', 'sources', 'references'] as const;
+export type ResourceFilter = (typeof resourceFilters)[number];
+
 export interface ResourceImageRecord {
 	image: MediaAccess;
 	createdAt: number;
+	roles: ResourceRole[];
+}
+
+// GET /api/resources/[key] — one resource (its media key, URI-encoded as a
+// single path segment) and the user's generations it took part in, newest
+// first. `session` is null once that generation's session or project has
+// been archived — nothing left to open it into. `settingsSaved` is false for
+// generations recorded before their form settings were stored
+// (migrations/0018): reopening one couldn't bring those settings back.
+export interface ResourceGenerationRecord {
+	id: string;
+	kind: GenerationKind;
+	createdAt: number;
+	image: MediaAccess;
+	roles: ResourceRole[];
+	session: GenerationSessionRef | null;
+	settingsSaved: boolean;
+}
+
+export interface ResourceDetailResponse {
+	image: MediaAccess;
+	roles: ResourceRole[];
+	generations: ResourceGenerationRecord[];
+	pagination: {
+		offset: number;
+		size: number;
+		hasMore: boolean;
+	};
 }
 
 export interface ResourcesResponse {

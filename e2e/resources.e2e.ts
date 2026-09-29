@@ -16,10 +16,16 @@ import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
 import { media } from './helpers/media';
+import { mockResourceDetail } from './helpers/resource-routes';
+
+const resourcePhoto = media(1, 'https://cdn.example.test/resource-photo.jpg');
 
 interface ResourceImage {
 	image: ReturnType<typeof media>;
 	createdAt: number;
+	// Defaults to a plain source photo — what every test here except the
+	// filter ones deals with.
+	roles?: string[];
 }
 
 async function authenticate(page: Page): Promise<void> {
@@ -47,7 +53,7 @@ async function mockResourcesPages(
 	page: Page,
 	pages: Record<number, { images: ResourceImage[]; hasMore: boolean }>
 ): Promise<void> {
-	await page.route('**/api/resources**', async (route) => {
+	await page.route('**/api/resources?**', async (route) => {
 		const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
 		const found = pages[offset];
 		if (!found) throw new Error(`No mocked resources page for offset ${offset}`);
@@ -55,7 +61,7 @@ async function mockResourcesPages(
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				images: found.images,
+				images: found.images.map((image) => ({ roles: ['source'], ...image })),
 				pagination: { offset, size: 30, hasMore: found.hasMore }
 			})
 		});
@@ -111,9 +117,9 @@ test('lists uploaded photos newest first with their dates', async ({ page }) => 
 
 	await page.goto('/resources');
 
-	const list = page.getByRole('list', { name: 'Загруженные фото, сначала новые' });
+	const list = page.getByRole('list', { name: 'Ресурсы, сначала недавно использованные' });
 	await expect(list).toBeVisible();
-	const images = page.getByRole('img', { name: /Загруженное фото/ });
+	const images = page.getByRole('img', { name: /^Ресурс \d+$/ });
 	await expect(images).toHaveCount(2);
 	await expect(images.nth(0)).toHaveAttribute('src', 'https://cdn.example.test/newest.jpg');
 	await expect(images.nth(1)).toHaveAttribute('src', 'https://cdn.example.test/oldest.jpg');
@@ -123,9 +129,10 @@ test('lists uploaded photos newest first with their dates', async ({ page }) => 
 	await expect(times.nth(0)).toHaveAttribute('datetime', new Date(newest).toISOString());
 	await expect(times.nth(1).locator('span')).toHaveText([dateLabel(oldest), timeLabel(oldest)]);
 
-	await expect(
-		page.getByRole('button', { name: 'Использовать фото 1 для новой генерации' })
-	).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Открыть ресурс 1' })).toHaveAttribute(
+		'href',
+		`/resources/${encodeURIComponent(media(2, 'https://cdn.example.test/newest.jpg').key)}`
+	);
 });
 
 test('loads more photos when scrolling near the end of the list', async ({ page }) => {
@@ -143,7 +150,7 @@ test('loads more photos when scrolling near the end of the list', async ({ page 
 
 	await page.goto('/resources');
 
-	const images = page.getByRole('img', { name: /Загруженное фото/ });
+	const images = page.getByRole('img', { name: /^Ресурс \d+$/ });
 	// The sentinel starts within the viewport on this short a page, so the
 	// IntersectionObserver fires — and loadMore() resolves — without any
 	// explicit scroll; expect()'s built-in retry covers the async gap. An
@@ -163,13 +170,89 @@ test('shows an empty state when there are no uploaded photos', async ({ page }) 
 
 	await page.goto('/resources');
 
-	await expect(page.getByText('Пока нет загруженных фото.')).toBeVisible();
-	await expect(page.getByRole('list', { name: 'Загруженные фото, сначала новые' })).toHaveCount(0);
+	await expect(page.getByText('Пока нет ресурсов.')).toBeVisible();
+	await expect(
+		page.getByRole('list', { name: 'Ресурсы, сначала недавно использованные' })
+	).toHaveCount(0);
+});
+
+test('filters sources and references, marks each card and keeps the filter across a reload', async ({
+	page
+}) => {
+	await authenticate(page);
+	const room = {
+		image: media(1, 'https://cdn.example.test/room.jpg'),
+		createdAt: Date.UTC(2026, 0, 1),
+		roles: ['source']
+	};
+	const chair = {
+		image: media(2, 'https://cdn.example.test/chair.png'),
+		createdAt: Date.UTC(2026, 0, 2),
+		roles: ['object-reference']
+	};
+	const requestedFilters: string[] = [];
+	await page.route('**/api/resources?**', async (route) => {
+		const filter = new URL(route.request().url()).searchParams.get('filter') ?? '';
+		requestedFilters.push(filter);
+		const images =
+			filter === 'sources' ? [room] : filter === 'references' ? [chair] : [chair, room];
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ images, pagination: { offset: 0, size: 30, hasMore: false } })
+		});
+	});
+
+	await page.goto('/resources');
+
+	const filters = page.getByRole('tablist', { name: 'Тип ресурсов' });
+	await expect(filters.getByRole('tab', { name: 'Все' })).toHaveAttribute('aria-selected', 'true');
+	const cards = page.locator('.card');
+	await expect(cards).toHaveCount(2);
+	await expect(cards.nth(0).locator('.role')).toHaveText(['Референс объекта']);
+	await expect(cards.nth(1).locator('.role')).toHaveText(['Исходник']);
+	// Every card — source or reference — opens that resource's page.
+	await expect(cards.nth(0).getByRole('link', { name: 'Открыть ресурс 1' })).toBeVisible();
+	await expect(cards.nth(1).getByRole('link', { name: 'Открыть ресурс 2' })).toBeVisible();
+
+	await filters.getByRole('tab', { name: 'Референсы' }).click();
+	await expect(page).toHaveURL(/\/resources\?filter=references$/);
+	await expect(cards).toHaveCount(1);
+	await expect(page.getByRole('img', { name: /^Ресурс \d+$/ })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/chair.png'
+	);
+
+	await page.reload();
+	await expect(filters.getByRole('tab', { name: 'Референсы' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await expect(cards).toHaveCount(1);
+
+	await filters.getByRole('tab', { name: 'Референсы' }).press('ArrowLeft');
+	await expect(filters.getByRole('tab', { name: 'Исходники' })).toBeFocused();
+	await expect(page).toHaveURL(/\/resources\?filter=sources$/);
+	await expect(page.getByRole('img', { name: /^Ресурс \d+$/ })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/room.jpg'
+	);
+
+	expect(requestedFilters).toEqual(['all', 'references', 'references', 'sources']);
+});
+
+test('shows an empty state specific to the chosen filter', async ({ page }) => {
+	await authenticate(page);
+	await mockResourcesPages(page, { 0: { images: [], hasMore: false } });
+
+	await page.goto('/resources?filter=references');
+
+	await expect(page.getByText('Пока нет референсов.')).toBeVisible();
 });
 
 test('shows an error message when resources fail to load', async ({ page }) => {
 	await authenticate(page);
-	await page.route('**/api/resources**', async (route) => {
+	await page.route('**/api/resources?**', async (route) => {
 		await route.fulfill({ status: 500 });
 	});
 
@@ -189,13 +272,21 @@ test('uses a resource photo to start a new generation', async ({ page }) => {
 	});
 	await mockResourcesPages(page, {
 		0: {
-			images: [{ image: media(1, 'https://cdn.example.test/resource-photo.jpg'), createdAt: 1 }],
+			images: [{ image: resourcePhoto, createdAt: 1 }],
 			hasMore: false
 		}
 	});
 
+	await mockResourceDetail(page, {
+		image: resourcePhoto,
+		roles: ['source'],
+		generations: []
+	});
+
 	await page.goto('/resources');
-	await page.getByRole('button', { name: 'Использовать фото 1 для новой генерации' }).click();
+	await page.getByRole('link', { name: 'Открыть ресурс 1' }).click();
+	await expect(page).toHaveURL(`/resources/${encodeURIComponent(resourcePhoto.key)}`);
+	await page.getByRole('button', { name: 'Начать новую генерацию с этим фото' }).click();
 
 	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
 	await expect(page.locator('#mode-panel-render .image-wrapper img')).toHaveAttribute(
@@ -271,10 +362,11 @@ test('using a resource photo while a project tab is open starts project-less wor
 	});
 	await mockResourcesPages(page, {
 		0: {
-			images: [{ image: media(1, 'https://cdn.example.test/resource-photo.jpg'), createdAt: 1 }],
+			images: [{ image: resourcePhoto, createdAt: 1 }],
 			hasMore: false
 		}
 	});
+	await mockResourceDetail(page, { image: resourcePhoto, roles: ['source'], generations: [] });
 
 	await page.goto(`/projects/${projectId}`);
 	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
@@ -283,7 +375,8 @@ test('using a resource photo while a project tab is open starts project-less wor
 	await expect(tabs.getByRole('tab', { name: 'Living room' })).toBeVisible();
 
 	await page.getByRole('link', { name: 'Ресурсы', exact: true }).click();
-	await page.getByRole('button', { name: 'Использовать фото 1 для новой генерации' }).click();
+	await page.getByRole('link', { name: 'Открыть ресурс 1' }).click();
+	await page.getByRole('button', { name: 'Начать новую генерацию с этим фото' }).click();
 
 	// The picked photo lands on the hidden scratch tab — no project tab is
 	// selected, and Living room's own tab (and the render it held) survives

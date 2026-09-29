@@ -20,11 +20,14 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import {
 	generationKinds,
+	resourceRoles,
 	type Balance,
 	type CreditTransaction,
 	type GenerationKind,
 	type GenerationSessionRef,
 	type RequestFormSnapshot,
+	type ResourceFilter,
+	type ResourceRole,
 	type UserUsageRecord
 } from '$lib/api/contract';
 import { formSnapshotSchema } from '$lib/server/api';
@@ -61,6 +64,7 @@ export interface GeneratedImage {
 export interface ResourceImage {
 	mediaId: number;
 	createdAt: number;
+	roles: ResourceRole[];
 }
 
 export interface ResourceImagesPage {
@@ -129,6 +133,10 @@ export interface RecordGenerationInput {
 	// so the generation can later be reopened with them restored — undefined
 	// for kinds with nothing to restore (e.g. upscale).
 	formSnapshot?: RequestFormSnapshot;
+	// The uploaded reference image the call used (migrations/0019) — a custom
+	// style reference; undefined for a built-in preset and for kinds that
+	// take no reference.
+	referenceMediaId?: number;
 }
 
 // The stored generation's id alongside the caller's resulting balance — the
@@ -174,8 +182,8 @@ export async function recordGeneration(
 			.prepare(
 				'INSERT INTO generations ' +
 					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id, ' +
-					'archai_render_sec, archai_download_sec, archai_reupload_sec, form_snapshot) ' +
-					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ?, ?, ?, ?, ?, ? FROM credits WHERE user_id = ?'
+					'archai_render_sec, archai_download_sec, archai_reupload_sec, form_snapshot, reference_media_id) ' +
+					'SELECT ?, ?, ?, ?, ?, ?, ?, balance, ?, ?, ?, ?, ?, ?, ? FROM credits WHERE user_id = ?'
 			)
 			.bind(
 				id,
@@ -191,6 +199,7 @@ export async function recordGeneration(
 				input.archaiDownloadSec,
 				input.archaiReuploadSec,
 				input.formSnapshot ? JSON.stringify(input.formSnapshot) : null,
+				input.referenceMediaId ?? null,
 				userId
 			)
 	]);
@@ -358,13 +367,14 @@ export async function deleteGeneratedImage(
 		db
 			.prepare(
 				'DELETE FROM media WHERE id = ? AND changes() = 1 AND NOT EXISTS (' +
-					'SELECT 1 FROM generations WHERE result_media_id = ? OR source_media_id = ? ' +
+					'SELECT 1 FROM generations WHERE result_media_id = ? OR source_media_id = ? OR reference_media_id = ? ' +
 					'UNION ALL SELECT 1 FROM object_replacement_jobs WHERE scene_media_id = ? OR reference_media_id = ? OR output_media_id = ? ' +
 					'UNION ALL SELECT 1 FROM texture_replacement_jobs WHERE scene_media_id = ? OR reference_media_id = ? OR output_media_id = ? ' +
 					'UNION ALL SELECT 1 FROM light_settings_jobs WHERE scene_media_id = ? OR output_media_id = ?' +
 					') RETURNING 1 AS deleted'
 			)
 			.bind(
+				mediaId,
 				mediaId,
 				mediaId,
 				mediaId,
@@ -469,38 +479,192 @@ export async function findGenerationSourceByHash(
 interface ResourceImageRow {
 	media_id: number;
 	created_at: number;
+	roles: string;
 }
 
-// Gallery of source photos the user uploaded: non-empty checksums identify
-// uploads, while excluding generated outputs removes sources that were a
+// Source photos the user uploaded: a non-empty checksum identifies an
+// upload, and excluding generated outputs drops sources that were a
 // previous generation's own result.
-export async function listDistinctSourceImages(
+const SOURCE_USES =
+	"SELECT g.source_media_id AS media_id, g.created_at, 'source' AS role FROM generations g " +
+	'JOIN media source_media ON source_media.id = g.source_media_id ' +
+	"WHERE g.user_id = ? AND source_media.checksum != '' " +
+	'AND NOT EXISTS (SELECT 1 FROM generations produced ' +
+	'WHERE produced.result_media_id = g.source_media_id)';
+
+// Reference images a generation was made with (migrations/0019), labelled
+// by the tool that took them.
+const REFERENCE_USES =
+	'SELECT g.reference_media_id AS media_id, g.created_at, ' +
+	"CASE g.kind WHEN 'style-transfer' THEN 'style-reference' " +
+	"WHEN 'object-replacement' THEN 'object-reference' " +
+	"ELSE 'texture-reference' END AS role FROM generations g " +
+	'WHERE g.user_id = ? AND g.reference_media_id IS NOT NULL ' +
+	"AND g.kind IN ('style-transfer', 'object-replacement', 'texture-replacement')";
+
+function isResourceRole(role: string): role is ResourceRole {
+	return (resourceRoles as readonly string[]).includes(role);
+}
+
+// The Resources gallery: every image the user uploaded and generated with,
+// newest use first. An image used several times — or in several roles —
+// is one card, dated by its latest use and carrying every role it had, so
+// it shows up under each filter it belongs to.
+export async function listResourceImages(
 	db: D1Database,
 	userId: string,
+	filter: ResourceFilter,
 	offset: number,
 	size: number
 ): Promise<ResourceImagesPage> {
+	const uses =
+		filter === 'sources'
+			? [SOURCE_USES]
+			: filter === 'references'
+				? [REFERENCE_USES]
+				: [SOURCE_USES, REFERENCE_USES];
 	const result = await db
 		.prepare(
-			'SELECT g.source_media_id AS media_id, ' +
-				'MAX(g.created_at) AS created_at FROM generations g ' +
-				'JOIN media source_media ON source_media.id = g.source_media_id ' +
-				'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
-				"WHERE g.user_id = ? AND source_media.checksum != '' " +
-				'AND NOT EXISTS (SELECT 1 FROM generations produced ' +
-				'WHERE produced.result_media_id = g.source_media_id) ' +
-				'GROUP BY g.source_media_id ' +
-				'ORDER BY created_at DESC, g.source_media_id DESC LIMIT ? OFFSET ?'
+			'SELECT media_id, MAX(created_at) AS created_at, group_concat(DISTINCT role) AS roles ' +
+				`FROM (${uses.join(' UNION ALL ')}) ` +
+				'GROUP BY media_id ORDER BY created_at DESC, media_id DESC LIMIT ? OFFSET ?'
 		)
-		.bind(userId, size + 1, offset)
+		.bind(...uses.map(() => userId), size + 1, offset)
 		.all<ResourceImageRow>();
 	const rows = result.results ?? [];
 	return {
 		images: rows.slice(0, size).map((row) => ({
 			mediaId: row.media_id,
-			createdAt: row.created_at
+			createdAt: row.created_at,
+			roles: row.roles.split(',').filter(isResourceRole)
 		})),
 		hasMore: rows.length > size
+	};
+}
+
+// Every role an image has among the user's resources — empty when it isn't
+// one of theirs at all, which the resource page treats as "not found" rather
+// than revealing whether the image exists.
+export async function getResourceRoles(
+	db: D1Database,
+	userId: string,
+	mediaId: number
+): Promise<ResourceRole[]> {
+	const row = await db
+		.prepare(
+			'SELECT group_concat(DISTINCT role) AS roles ' +
+				`FROM (${SOURCE_USES} UNION ALL ${REFERENCE_USES}) WHERE media_id = ?`
+		)
+		.bind(userId, userId, mediaId)
+		.first<{ roles: string | null }>();
+	return row?.roles ? row.roles.split(',').filter(isResourceRole) : [];
+}
+
+export interface ResourceGeneration {
+	id: string;
+	kind: GenerationKind;
+	createdAt: number;
+	resultMediaId: number;
+	// How this generation used the image — as its source, as its reference,
+	// or (rarely) both.
+	roles: ResourceRole[];
+	session: GenerationSessionRef | null;
+	// Whether restoring it can bring back the form it was submitted with:
+	// false for generations recorded before form_snapshot existed
+	// (migrations/0018) — reopening those would show the result but none of
+	// the settings, references included, that produced it. An upscale has no
+	// settings to begin with, so it always counts as saved.
+	settingsSaved: boolean;
+}
+
+interface ResourceGenerationRow {
+	id: string;
+	kind: string;
+	created_at: number;
+	result_media_id: number;
+	as_source: number;
+	as_reference: number;
+	has_snapshot: number;
+	session_id: string | null;
+	session_title: string | null;
+	project_id: string | null;
+	project_title: string | null;
+}
+
+const REFERENCE_ROLE_BY_KIND: Partial<Record<GenerationKind, ResourceRole>> = {
+	'style-transfer': 'style-reference',
+	'object-replacement': 'object-reference',
+	'texture-replacement': 'texture-reference'
+};
+
+function toResourceGeneration(row: ResourceGenerationRow): ResourceGeneration | null {
+	const kind = generationKindForRow(row.id, row.kind);
+	if (kind === null) return null;
+	const referenceRole = REFERENCE_ROLE_BY_KIND[kind];
+	const roles: ResourceRole[] = [
+		...(row.as_source ? (['source'] as const) : []),
+		...(row.as_reference && referenceRole ? [referenceRole] : [])
+	];
+	return {
+		id: row.id,
+		kind,
+		createdAt: row.created_at,
+		resultMediaId: row.result_media_id,
+		roles,
+		settingsSaved: row.has_snapshot === 1 || kind === 'upscale',
+		// Same rule as getGenerationDetailForUser: an archived session or
+		// project leaves nothing to continue.
+		session:
+			row.session_id !== null &&
+			row.session_title !== null &&
+			row.project_id !== null &&
+			row.project_title !== null
+				? {
+						projectId: row.project_id,
+						projectTitle: row.project_title,
+						sessionId: row.session_id,
+						sessionTitle: row.session_title
+					}
+				: null
+	};
+}
+
+// The user's generations an image took part in — as the photo they started
+// from or as a reference — newest first, for the resource page.
+export async function listResourceGenerations(
+	db: D1Database,
+	userId: string,
+	mediaId: number,
+	offset: number,
+	size: number
+): Promise<{ generations: ResourceGeneration[]; hasMore: boolean }> {
+	const { items } = await collectValidRows(
+		async (limit, rawOffset) => {
+			const result = await db
+				.prepare(
+					'SELECT g.id, g.kind, g.created_at, g.result_media_id, ' +
+						'g.source_media_id = ? AS as_source, ' +
+						'COALESCE(g.reference_media_id = ?, 0) AS as_reference, ' +
+						'g.form_snapshot IS NOT NULL AS has_snapshot, ' +
+						'ps.id AS session_id, ps.title AS session_title, ' +
+						'p.id AS project_id, p.title AS project_title ' +
+						'FROM generations g ' +
+						'LEFT JOIN project_sessions ps ON ps.id = g.session_id AND ps.archived_at IS NULL ' +
+						'LEFT JOIN projects p ON p.id = ps.project_id AND p.user_id = g.user_id ' +
+						'AND p.archived_at IS NULL ' +
+						'WHERE g.user_id = ? AND (g.source_media_id = ? OR g.reference_media_id = ?) ' +
+						'ORDER BY g.created_at DESC, g.id DESC LIMIT ? OFFSET ?'
+				)
+				.bind(mediaId, mediaId, userId, mediaId, mediaId, limit, rawOffset)
+				.all<ResourceGenerationRow>();
+			return result.results ?? [];
+		},
+		toResourceGeneration,
+		offset + size + 1
+	);
+	return {
+		generations: items.slice(offset, offset + size),
+		hasMore: items.length > offset + size
 	};
 }
 

@@ -13,19 +13,13 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
-	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { ArrowDown, ArrowUp, Clock } from '@lucide/svelte';
 	import type { CreditTransaction } from '$lib/api/contract';
 	import HintIcon from '$lib/components/HintIcon.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
-	import { fetchGeneratedImageDetail } from '$lib/state/generation-restore';
-	import { request } from '$lib/state/request.svelte';
-	import { buildWorkspaceUrl, destinationForGenerationKind } from '$lib/state/url-state';
-	import { initializeGenerationPreview, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+	import { openGenerationInWorkspace } from '$lib/state/open-generation';
 	import { logBoundaryError } from '$lib/utils';
 
 	const generationKindKeys: Record<CreditTransaction['kind'], TranslationKey> = {
@@ -65,47 +59,17 @@ before the Change Date. See LICENSE for complete terms.
 
 	let openError = $state<string | null>(null);
 
-	// Opens the workspace on the exact project/session/generation this expense
-	// row paid for, seeded with its before/after and the form it was
-	// submitted with (see workspace-tabs.svelte.ts's
-	// initializeGenerationPreview). A generation that no longer resolves, or
-	// whose session/project has since been archived, surfaces openError
-	// instead of silently doing nothing — the underlying record is still real
-	// billed history, so the row itself stays in the list; only the "open it"
+	// Opens the workspace on the exact generation this expense row paid for
+	// (see open-generation.ts). One that no longer resolves, or whose
+	// session/project has since been archived, surfaces openError instead of
+	// silently doing nothing — the underlying record is still real billed
+	// history, so the row itself stays in the list; only the "open it"
 	// affordance can fail.
 	async function openGeneration(entry: CreditTransaction): Promise<void> {
 		if (!entry.projectId || !entry.sessionId) return;
 		openError = null;
 		try {
-			const generation = await fetchGeneratedImageDetail(entry.id);
-			const session = generation?.session;
-			if (!generation || !session) {
-				openError = t('expenses.openFailed');
-				return;
-			}
-
-			workspaceTabs.openProject({
-				projectId: session.projectId,
-				projectTitle: session.projectTitle,
-				sessionId: session.sessionId,
-				sessionTitle: session.sessionTitle.trim() === '' ? null : session.sessionTitle,
-				initialize: (state) => initializeGenerationPreview(state, generation)
-			});
-
-			const destination = destinationForGenerationKind(generation.kind, generation.formSnapshot);
-			await goto(
-				resolve(
-					buildWorkspaceUrl(
-						destination.mode,
-						request,
-						destination.subTab
-					) as PathnameWithSearchOrHash,
-					{}
-				),
-				{
-					replaceState: false
-				}
-			);
+			if (!(await openGenerationInWorkspace(entry.id))) openError = t('expenses.openFailed');
 		} catch (error) {
 			openError = t('expenses.openFailed');
 			logBoundaryError('expensesPage.openGeneration', error);

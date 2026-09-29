@@ -14,17 +14,59 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import type { PathnameWithSearchOrHash } from '$app/types';
+	import {
+		resourceFilters,
+		type ResourceFilter,
+		type ResourceImageRecord
+	} from '$lib/api/contract';
+	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { resourceRoleLabels } from '$lib/resource-roles';
 	import { resources } from '$lib/state/resources.svelte';
-	import { request } from '$lib/state/request.svelte';
-	import { buildShareUrl } from '$lib/state/url-state';
-	import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
-	import { logBoundaryError } from '$lib/utils';
+	import { createTabController, logBoundaryError } from '$lib/utils';
 
+	const filterLabels: Record<ResourceFilter, TranslationKey> = {
+		all: 'resources.filter.all',
+		sources: 'resources.filter.sources',
+		references: 'resources.filter.references'
+	};
+
+	const emptyLabels: Record<ResourceFilter, TranslationKey> = {
+		all: 'resources.empty',
+		sources: 'resources.emptySources',
+		references: 'resources.emptyReferences'
+	};
+
+	// The URL is the source of truth for the active filter, so a reload, a
+	// duplicated tab or a shared link opens on the same one; anything
+	// unrecognized falls back to showing everything.
+	const filter = $derived.by((): ResourceFilter => {
+		const value = page.url.searchParams.get('filter');
+		return resourceFilters.find((candidate) => candidate === value) ?? 'all';
+	});
+
+	let filterTabs = $state<HTMLElement[]>([]);
 	let loadMoreSentinel = $state<HTMLElement | null>(null);
 
+	const filterTabController = createTabController({
+		itemCount: () => resourceFilters.length,
+		getActiveIndex: () => resourceFilters.indexOf(filter),
+		setActiveIndex: (index) => {
+			const next = resourceFilters[index];
+			const url = next === 'all' ? '/resources' : `/resources?filter=${next}`;
+			return goto(resolve(url as PathnameWithSearchOrHash, {}), {
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true
+			}).catch((error: unknown) => logBoundaryError('resourcesPage.filterNavigation', error));
+		},
+		focusTab: (index) => filterTabs[index]?.focus()
+	});
+
 	$effect(() => {
-		void resources.load();
+		void resources.load(filter);
 		return () => resources.clear();
 	});
 
@@ -59,21 +101,34 @@ before the Change Date. See LICENSE for complete terms.
 			hourCycle: 'h23'
 		}).format(new Date(createdAt));
 	}
-
-	function useImage(mediaKey: string): void {
-		// A resource picked here is fresh, project-less work — it belongs on
-		// the scratch tab, not whatever project tab happened to be active.
-		// Without this, the mutations below would land on the shared `request`
-		// singleton while it's still standing in for that other tab, silently
-		// detaching *its* session and replacing its content with this image.
-		workspaceTabs.activate(SCRATCH_TAB_ID);
-		request.startFromImage({ mediaKey });
-		request.clearProjectSession();
-		goto(buildShareUrl('render', request, { view: 'chat' }), { replaceState: false }).catch(
-			(error: unknown) => logBoundaryError('resourcesPage.imageNavigation', error)
-		);
-	}
 </script>
+
+{#snippet cardContent(image: ResourceImageRecord, index: number)}
+	<span class="image-frame">
+		<img
+			src={image.image.url}
+			alt={ti('resources.imageAlt', { order: index + 1 })}
+			loading="lazy"
+		/>
+	</span>
+	<span class="card-footer">
+		<span class="roles" id={`resource-roles-${index}`}>
+			{#each image.roles as role (role)}
+				<span class="role">{t(resourceRoleLabels[role])}</span>
+			{/each}
+		</span>
+		<time
+			datetime={new Date(image.createdAt).toISOString()}
+			aria-label={ti('resources.createdAt', {
+				date: formatCreatedAt(image.createdAt),
+				time: formatCreatedAtTime(image.createdAt)
+			})}
+		>
+			<span>{formatCreatedAt(image.createdAt)}</span>
+			<span>{formatCreatedAtTime(image.createdAt)}</span>
+		</time>
+	</span>
+{/snippet}
 
 <svelte:head>
 	<title>{t('resources.title')}</title>
@@ -86,57 +141,67 @@ before the Change Date. See LICENSE for complete terms.
 			<p>{t('resources.subtitle')}</p>
 		</header>
 
-		{#if resources.status === 'loading'}
-			<p class="status">{t('resources.loading')}</p>
-		{:else if resources.status === 'error' && resources.images.length === 0}
-			<p class="status error" role="alert">{t('resources.failed')}</p>
-		{:else if resources.images.length === 0}
-			<p class="status">{t('resources.empty')}</p>
-		{:else}
-			<ul class="grid" aria-label={t('resources.listLabel')}>
-				{#each resources.images as image, index (image.image.key)}
-					<li class="card">
-						<button
-							type="button"
-							class="card-button"
-							aria-label={ti('resources.useImageAria', { order: index + 1 })}
-							onclick={() => useImage(image.image.key)}
-						>
-							<span class="image-frame">
-								<img
-									src={image.image.url}
-									alt={ti('resources.imageAlt', { order: index + 1 })}
-									loading="lazy"
-								/>
-							</span>
-							<span class="card-footer">
-								<time
-									datetime={new Date(image.createdAt).toISOString()}
-									aria-label={ti('resources.createdAt', {
-										date: formatCreatedAt(image.createdAt),
-										time: formatCreatedAtTime(image.createdAt)
-									})}
-								>
-									<span>{formatCreatedAt(image.createdAt)}</span>
-									<span>{formatCreatedAtTime(image.createdAt)}</span>
-								</time>
-							</span>
-						</button>
-					</li>
-				{/each}
-			</ul>
+		<div class="filter-toggle" role="tablist" aria-label={t('resources.filter.label')}>
+			{#each resourceFilters as option, index (option)}
+				<button
+					{@attach (node) => {
+						filterTabs[index] = node as HTMLElement;
+					}}
+					type="button"
+					role="tab"
+					id={`resources-filter-${option}`}
+					aria-selected={filter === option}
+					aria-controls="resources-panel"
+					tabindex={filter === option ? 0 : -1}
+					class:active={filter === option}
+					onclick={() => filterTabController.activate(index)}
+					onkeydown={filterTabController.onKeydown}
+				>
+					{t(filterLabels[option])}
+				</button>
+			{/each}
+		</div>
 
-			{#if resources.hasMore}
-				<div bind:this={loadMoreSentinel} class="load-more-sentinel">
-					{#if resources.loadingMore}
-						<p class="status" aria-live="polite">{t('resources.loadingMore')}</p>
-					{/if}
-				</div>
-			{/if}
-			{#if resources.status === 'error'}
+		<div
+			class="resources-panel"
+			role="tabpanel"
+			id="resources-panel"
+			aria-labelledby={`resources-filter-${filter}`}
+		>
+			{#if resources.status === 'loading'}
+				<p class="status">{t('resources.loading')}</p>
+			{:else if resources.status === 'error' && resources.images.length === 0}
 				<p class="status error" role="alert">{t('resources.failed')}</p>
+			{:else if resources.images.length === 0}
+				<p class="status">{t(emptyLabels[filter])}</p>
+			{:else}
+				<ul class="grid" aria-label={t('resources.listLabel')}>
+					{#each resources.images as image, index (image.image.key)}
+						<li class="card">
+							<a
+								class="card-body card-link"
+								href={resolve('/resources/[key]', { key: encodeURIComponent(image.image.key) })}
+								aria-label={ti('resources.openAria', { order: index + 1 })}
+								aria-describedby={`resource-roles-${index}`}
+							>
+								{@render cardContent(image, index)}
+							</a>
+						</li>
+					{/each}
+				</ul>
+
+				{#if resources.hasMore}
+					<div bind:this={loadMoreSentinel} class="load-more-sentinel">
+						{#if resources.loadingMore}
+							<p class="status" aria-live="polite">{t('resources.loadingMore')}</p>
+						{/if}
+					</div>
+				{/if}
+				{#if resources.status === 'error'}
+					<p class="status error" role="alert">{t('resources.failed')}</p>
+				{/if}
 			{/if}
-		{/if}
+		</div>
 	</section>
 </main>
 
@@ -202,7 +267,48 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 	}
 
-	.card-button {
+	.filter-toggle {
+		display: flex;
+		align-self: flex-start;
+		gap: 0.5rem;
+		padding: 0.25rem;
+		background: var(--color-background);
+		border-radius: 12px;
+	}
+
+	.filter-toggle button {
+		padding: 0.5rem 1.25rem;
+		font: inherit;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--color-muted);
+		background: transparent;
+		border: none;
+		border-radius: 9px;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			color 0.15s;
+	}
+
+	.filter-toggle button:hover:not(.active) {
+		background: var(--color-surface-hover);
+		color: var(--color-text);
+	}
+
+	.filter-toggle button.active {
+		background: var(--color-surface);
+		color: var(--color-text);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1);
+	}
+
+	.resources-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.card-body {
 		display: flex;
 		flex-direction: column;
 		width: 100%;
@@ -211,17 +317,20 @@ before the Change Date. See LICENSE for complete terms.
 		border-radius: var(--radius);
 		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
 		overflow: hidden;
-		cursor: pointer;
 		font: inherit;
 		text-align: left;
+	}
+
+	.card-link {
+		cursor: pointer;
 		transition:
 			border-color 0.15s,
 			box-shadow 0.15s,
 			transform 0.15s;
 	}
 
-	.card-button:hover,
-	.card-button:focus-visible {
+	.card-link:hover,
+	.card-link:focus-visible {
 		border-color: var(--color-accent);
 		box-shadow: var(--shadow-md);
 		transform: translateY(-2px);
@@ -243,9 +352,27 @@ before the Change Date. See LICENSE for complete terms.
 
 	.card-footer {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
 		padding: 0.625rem 0.75rem;
 		border-top: 1px solid var(--color-border);
+	}
+
+	.roles {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem;
+	}
+
+	.role {
+		padding: 0.125rem 0.5rem;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+		color: var(--color-accent-text);
+		font-size: 0.6875rem;
+		font-weight: 600;
 	}
 
 	.card-footer time {

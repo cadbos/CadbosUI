@@ -13,7 +13,7 @@
  */
 
 import { z } from 'zod';
-import type { ResourceImageRecord } from '$lib/api/contract';
+import { resourceRoles, type ResourceFilter, type ResourceImageRecord } from '$lib/api/contract';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export type ResourcesStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -25,7 +25,8 @@ const resourceImageRecordSchema = z.object({
 		key: z.string().min(1),
 		url: z.url()
 	}),
-	createdAt: z.number().int().min(0)
+	createdAt: z.number().int().min(0),
+	roles: z.array(z.enum(resourceRoles)).min(1)
 });
 
 const resourcesResponseSchema = z.object({
@@ -52,8 +53,11 @@ class ResourcesState {
 	loadingMore = $state(false);
 	#abort: AbortController | null = null;
 	#nextOffset: number | null = null;
+	// What load() last asked for — loadMore() pages through the same list.
+	#filter: ResourceFilter = 'all';
 
-	async load(): Promise<void> {
+	async load(filter: ResourceFilter): Promise<void> {
+		this.#filter = filter;
 		this.#abort?.abort();
 		const controller = new AbortController();
 		this.#abort = controller;
@@ -103,8 +107,13 @@ class ResourcesState {
 			this.error = error instanceof Error ? error.name : 'ResourcesLoadError';
 			console.error('Resources load more failed:', error);
 		} finally {
-			if (this.#abort === controller) this.#abort = null;
-			this.loadingMore = false;
+			// A request that load()/clear() already superseded must not touch
+			// loadingMore — they reset it themselves, and by the time this one
+			// settles it may belong to a newer loadMore() still in flight.
+			if (this.#abort === controller) {
+				this.#abort = null;
+				this.loadingMore = false;
+			}
 		}
 	}
 
@@ -123,7 +132,10 @@ class ResourcesState {
 		offset: number,
 		signal: AbortSignal
 	): Promise<z.infer<typeof resourcesResponseSchema>> {
-		const response = await fetch(`/api/resources?offset=${offset}&size=${PAGE_SIZE}`, { signal });
+		const response = await fetch(
+			`/api/resources?filter=${this.#filter}&offset=${offset}&size=${PAGE_SIZE}`,
+			{ signal }
+		);
 		if (!response.ok) throw new ResourcesLoadError('resources request failed');
 
 		const parsed = resourcesResponseSchema.safeParse(await response.json().catch(() => null));

@@ -16,13 +16,13 @@ import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
-import type { ResourcesResponse } from '$lib/api/contract';
+import { resourceFilters, type ResourcesResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { listDistinctSourceImages } from '$lib/server/generations';
+import { listResourceImages } from '$lib/server/generations';
 import { mediaAccessBatch } from '$lib/server/media-access';
 
 const DEFAULT_RESOURCES_PAGE_OFFSET = 0;
@@ -30,6 +30,7 @@ const DEFAULT_RESOURCES_PAGE_SIZE = 30;
 const MAX_RESOURCES_PAGE_SIZE = 100;
 
 const resourcesSearchParamsSchema = z.strictObject({
+	filter: z.enum(resourceFilters).default('all'),
 	offset: z.coerce.number().int().min(0).default(DEFAULT_RESOURCES_PAGE_OFFSET),
 	size: z.coerce
 		.number()
@@ -58,7 +59,13 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	const userId = await getUserIdByPubkey(db, locals.user.pubkey);
 	if (!userId) return apiError(500, 'account_error', 'Account record not found');
 
-	const page = await listDistinctSourceImages(db, userId, parsed.data.offset, parsed.data.size);
+	const page = await listResourceImages(
+		db,
+		userId,
+		parsed.data.filter,
+		parsed.data.offset,
+		parsed.data.size
+	);
 	const access = await mediaAccessBatch(
 		db,
 		platform,
@@ -69,7 +76,8 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 		{
 			images: page.images.map((image) => ({
 				image: access.get(image.mediaId)!,
-				createdAt: image.createdAt
+				createdAt: image.createdAt,
+				roles: image.roles
 			})),
 			pagination: {
 				offset: parsed.data.offset,

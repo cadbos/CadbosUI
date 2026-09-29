@@ -17,6 +17,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { media, mediaKey } from './helpers/media';
 import { mockProjectSessionRoutes } from './helpers/project-session-routes';
+import { mockResourceDetail } from './helpers/resource-routes';
 
 const GENERATION_ID = '00000000-0000-4000-8000-000000000200';
 
@@ -419,16 +420,18 @@ test('asks before replacing unsaved work in the restored session’s background 
 }) => {
 	await authenticate(page);
 	await mockSessionScene(page);
-	await page.route('**/api/resources**', async (route) => {
+	const resourcePhoto = media(3, 'https://cdn.example.test/resource.jpg');
+	await page.route('**/api/resources?**', async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				images: [{ image: media(3, 'https://cdn.example.test/resource.jpg'), createdAt: 1 }],
+				images: [{ image: resourcePhoto, createdAt: 1, roles: ['source'] }],
 				pagination: { offset: 0, size: 30, hasMore: false }
 			})
 		});
 	});
+	await mockResourceDetail(page, { image: resourcePhoto, roles: ['source'], generations: [] });
 
 	await page.goto('/create/interior?view=chat&format=webp');
 	await restoreFirstScene(page);
@@ -437,7 +440,8 @@ test('asks before replacing unsaved work in the restored session’s background 
 	// starting project-less work from a resource photo.
 	await page.getByLabel('Промпт чата').fill('unsaved living room idea');
 	await page.getByRole('link', { name: 'Ресурсы', exact: true }).click();
-	await page.getByRole('button', { name: 'Использовать фото 1 для новой генерации' }).click();
+	await page.getByRole('link', { name: 'Открыть ресурс 1' }).click();
+	await page.getByRole('button', { name: 'Начать новую генерацию с этим фото' }).click();
 	const tabs = page.getByRole('navigation', { name: 'Открытые проекты' });
 	await expect(tabs.getByRole('tab', { name: 'Living room', selected: false })).toBeVisible();
 

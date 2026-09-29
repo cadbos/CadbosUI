@@ -23,7 +23,9 @@ import {
 	getGeneratedImageForUser,
 	getGenerationDetailForUser,
 	listCreditHistory,
-	listDistinctSourceImages,
+	getResourceRoles,
+	listResourceGenerations,
+	listResourceImages,
 	listGeneratedImages,
 	recordGeneration
 } from './generations';
@@ -116,6 +118,28 @@ function seedGenerationWithSource(
 	return sourceMediaId;
 }
 
+// A generation that took an uploaded reference image (migrations/0019).
+function seedGenerationWithReference(
+	db: D1Database,
+	id: string,
+	userId: string,
+	kind: 'style-transfer' | 'object-replacement' | 'texture-replacement',
+	referenceUrl: string,
+	createdAt: number
+): number {
+	const resultMediaId = seedMedia(db, `https://cdn.example.test/${id}.webp`, '');
+	const sourceMediaId = seedMedia(db, 'https://cdn.example.test/prior-render.webp', '');
+	const referenceMediaId = seedMedia(db, referenceUrl, HASH_2);
+	db.prepare(
+		'INSERT INTO generations ' +
+			'(id, user_id, result_media_id, source_media_id, reference_media_id, prompt, kind, amount, balance_after, created_at) ' +
+			"VALUES (?, ?, ?, ?, ?, '', ?, 1, 10, ?)"
+	)
+		.bind(id, userId, resultMediaId, sourceMediaId, referenceMediaId, kind, createdAt)
+		.run();
+	return referenceMediaId;
+}
+
 let db: D1Database;
 
 beforeEach(() => {
@@ -158,6 +182,33 @@ describe('recordGeneration', () => {
 		const images = await listGeneratedImages(db, 'user-1', 0, 10);
 		expect(images.images).toEqual([
 			expect.objectContaining({ mediaId: resultMediaId, sourceMediaId })
+		]);
+	});
+
+	it('keeps the uploaded style reference a style transfer used, for Resources', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		grantAccess(db, 'user-1', 5);
+		const sessionId = seedSession(db, 'user-1');
+		const resultMediaId = seedMedia(db, 'https://cdn.example.test/out.webp', RESULT_HASH);
+		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		const referenceMediaId = seedMedia(db, 'https://cdn.example.test/style.jpg', HASH_2);
+
+		await recordGeneration(db, 'user-1', {
+			resultMediaId,
+			sourceMediaId,
+			sessionId,
+			prompt: '',
+			kind: 'style-transfer',
+			amount: 1,
+			archaiRenderSec: 0,
+			archaiDownloadSec: 0,
+			archaiReuploadSec: 0,
+			referenceMediaId
+		});
+
+		const page = await listResourceImages(db, 'user-1', 'references', 0, 10);
+		expect(page.images).toEqual([
+			expect.objectContaining({ mediaId: referenceMediaId, roles: ['style-reference'] })
 		]);
 	});
 
@@ -635,7 +686,7 @@ describe('findGenerationSourceByHash', () => {
 	});
 });
 
-describe('listDistinctSourceImages', () => {
+describe('listResourceImages', () => {
 	it('collapses repeat uploads of the same hash into one card', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		const mediaId = seedGenerationWithSource(
@@ -648,10 +699,10 @@ describe('listDistinctSourceImages', () => {
 		);
 		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
 
-		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
+		const page = await listResourceImages(db, 'user-1', 'sources', 0, 10);
 
 		expect(page).toEqual({
-			images: [{ mediaId, createdAt: 2000 }],
+			images: [{ mediaId, createdAt: 2000, roles: ['source'] }],
 			hasMore: false
 		});
 	});
@@ -692,10 +743,10 @@ describe('listDistinctSourceImages', () => {
 			1000
 		);
 
-		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
+		const page = await listResourceImages(db, 'user-1', 'sources', 0, 10);
 
 		expect(page).toEqual({
-			images: [{ mediaId: uploadMediaId, createdAt: 500 }],
+			images: [{ mediaId: uploadMediaId, createdAt: 500, roles: ['source'] }],
 			hasMore: false
 		});
 	});
@@ -720,8 +771,283 @@ describe('listDistinctSourceImages', () => {
 			2000
 		);
 
-		const page = await listDistinctSourceImages(db, 'user-1', 0, 10);
+		seedGenerationWithReference(
+			db,
+			'c',
+			'user-2',
+			'object-replacement',
+			'https://cdn.example.test/their-chair.png',
+			3000
+		);
 
-		expect(page.images).toEqual([{ mediaId, createdAt: 1000 }]);
+		const page = await listResourceImages(db, 'user-1', 'all', 0, 10);
+
+		expect(page.images).toEqual([{ mediaId, createdAt: 1000, roles: ['source'] }]);
+	});
+
+	it('lists each reference under the tool that took it', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const style = seedGenerationWithReference(
+			db,
+			'style',
+			'user-1',
+			'style-transfer',
+			'https://cdn.example.test/style.jpg',
+			3000
+		);
+		const chair = seedGenerationWithReference(
+			db,
+			'object',
+			'user-1',
+			'object-replacement',
+			'https://cdn.example.test/chair.png',
+			2000
+		);
+		const wood = seedGenerationWithReference(
+			db,
+			'texture',
+			'user-1',
+			'texture-replacement',
+			'https://cdn.example.test/wood.png',
+			1000
+		);
+		seedGenerationWithSource(
+			db,
+			'render',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			4000
+		);
+
+		const page = await listResourceImages(db, 'user-1', 'references', 0, 10);
+
+		expect(page.images).toEqual([
+			{ mediaId: style, createdAt: 3000, roles: ['style-reference'] },
+			{ mediaId: chair, createdAt: 2000, roles: ['object-reference'] },
+			{ mediaId: wood, createdAt: 1000, roles: ['texture-reference'] }
+		]);
+	});
+
+	it('shows an image used both as a source and a reference once, with both roles', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const room = seedGenerationWithSource(
+			db,
+			'render',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			1000
+		);
+		const reference = seedGenerationWithReference(
+			db,
+			'texture',
+			'user-1',
+			'texture-replacement',
+			'https://cdn.example.test/room.jpg',
+			2000
+		);
+		expect(reference).toBe(room);
+
+		const all = await listResourceImages(db, 'user-1', 'all', 0, 10);
+		const sources = await listResourceImages(db, 'user-1', 'sources', 0, 10);
+		const references = await listResourceImages(db, 'user-1', 'references', 0, 10);
+
+		expect(all.images).toHaveLength(1);
+		expect(all.images[0]).toMatchObject({ mediaId: room, createdAt: 2000 });
+		expect([...all.images[0].roles].sort()).toEqual(['source', 'texture-reference']);
+		expect(sources.images).toEqual([{ mediaId: room, createdAt: 1000, roles: ['source'] }]);
+		expect(references.images).toEqual([
+			{ mediaId: room, createdAt: 2000, roles: ['texture-reference'] }
+		]);
+	});
+
+	it('pages across sources and references together', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGenerationWithSource(
+			db,
+			'render',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			1000
+		);
+		const chair = seedGenerationWithReference(
+			db,
+			'object',
+			'user-1',
+			'object-replacement',
+			'https://cdn.example.test/chair.png',
+			2000
+		);
+
+		const first = await listResourceImages(db, 'user-1', 'all', 0, 1);
+
+		expect(first).toEqual({
+			images: [{ mediaId: chair, createdAt: 2000, roles: ['object-reference'] }],
+			hasMore: true
+		});
+	});
+});
+
+describe('resource page queries', () => {
+	// A render from `sourceUrl` that then fed a texture replacement using the
+	// same image as its reference, in a real session — the shape a resource
+	// page has to untangle.
+	function seedSessionGeneration(
+		id: string,
+		userId: string,
+		sessionId: string | null,
+		columns: { source: number; reference?: number; kind: string; createdAt: number }
+	): void {
+		const resultMediaId = seedMedia(db, `https://cdn.example.test/${id}.webp`, '');
+		db.prepare(
+			'INSERT INTO generations ' +
+				'(id, user_id, result_media_id, source_media_id, reference_media_id, prompt, kind, amount, balance_after, created_at, session_id) ' +
+				"VALUES (?, ?, ?, ?, ?, '', ?, 1, 10, ?, ?)"
+		)
+			.bind(
+				id,
+				userId,
+				resultMediaId,
+				columns.source,
+				columns.reference ?? null,
+				columns.kind,
+				columns.createdAt,
+				sessionId
+			)
+			.run();
+	}
+
+	it('lists every generation an image took part in, with how it was used and where', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const sessionId = seedSession(db, 'user-1');
+		const room = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		const prior = seedMedia(db, 'https://cdn.example.test/prior.webp', '');
+		seedSessionGeneration('render', 'user-1', sessionId, {
+			source: room,
+			kind: 'render',
+			createdAt: 1000
+		});
+		seedSessionGeneration('texture', 'user-1', sessionId, {
+			source: prior,
+			reference: room,
+			kind: 'texture-replacement',
+			createdAt: 2000
+		});
+		seedSessionGeneration('unrelated', 'user-1', sessionId, {
+			source: prior,
+			kind: 'render',
+			createdAt: 3000
+		});
+
+		expect([...(await getResourceRoles(db, 'user-1', room))].sort()).toEqual([
+			'source',
+			'texture-reference'
+		]);
+		const page = await listResourceGenerations(db, 'user-1', room, 0, 10);
+
+		expect(page.hasMore).toBe(false);
+		expect(page.generations).toEqual([
+			expect.objectContaining({
+				id: 'texture',
+				kind: 'texture-replacement',
+				createdAt: 2000,
+				roles: ['texture-reference'],
+				session: {
+					projectId: expect.any(String),
+					projectTitle: 'Test project',
+					sessionId,
+					sessionTitle: 'Test session'
+				}
+			}),
+			expect.objectContaining({ id: 'render', kind: 'render', roles: ['source'] })
+		]);
+	});
+
+	it('tells generations whose settings were saved apart from older ones', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const sessionId = seedSession(db, 'user-1');
+		const room = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		seedSessionGeneration('legacy', 'user-1', sessionId, {
+			source: room,
+			kind: 'render',
+			createdAt: 1000
+		});
+		seedSessionGeneration('upscaled', 'user-1', sessionId, {
+			source: room,
+			kind: 'upscale',
+			createdAt: 2000
+		});
+		seedSessionGeneration('recent', 'user-1', sessionId, {
+			source: room,
+			kind: 'render',
+			createdAt: 3000
+		});
+		db.prepare('UPDATE generations SET form_snapshot = ? WHERE id = ?')
+			.bind(JSON.stringify(TEST_FORM_SNAPSHOT), 'recent')
+			.run();
+
+		const page = await listResourceGenerations(db, 'user-1', room, 0, 10);
+
+		expect(page.generations.map(({ id, settingsSaved }) => ({ id, settingsSaved }))).toEqual([
+			{ id: 'recent', settingsSaved: true },
+			// An upscale has no settings to lose.
+			{ id: 'upscaled', settingsSaved: true },
+			{ id: 'legacy', settingsSaved: false }
+		]);
+	});
+
+	it('leaves nothing to open once the generation’s session is archived', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const sessionId = seedSession(db, 'user-1');
+		const room = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		seedSessionGeneration('render', 'user-1', sessionId, {
+			source: room,
+			kind: 'render',
+			createdAt: 1000
+		});
+		db.prepare('UPDATE project_sessions SET archived_at = 1 WHERE id = ?').bind(sessionId).run();
+
+		const page = await listResourceGenerations(db, 'user-1', room, 0, 10);
+
+		expect(page.generations).toEqual([expect.objectContaining({ id: 'render', session: null })]);
+	});
+
+	it('treats another user’s image as not a resource at all', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		const theirs = seedGenerationWithSource(
+			db,
+			'theirs',
+			'user-2',
+			'https://cdn.example.test/theirs.jpg',
+			HASH_2,
+			1000
+		);
+
+		expect(await getResourceRoles(db, 'user-1', theirs)).toEqual([]);
+		expect((await listResourceGenerations(db, 'user-1', theirs, 0, 10)).generations).toEqual([]);
+	});
+
+	it('pages through the generations newest first', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const sessionId = seedSession(db, 'user-1');
+		const room = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		for (const [id, createdAt] of [
+			['a', 1000],
+			['b', 2000],
+			['c', 3000]
+		] as const) {
+			seedSessionGeneration(id, 'user-1', sessionId, { source: room, kind: 'render', createdAt });
+		}
+
+		const first = await listResourceGenerations(db, 'user-1', room, 0, 2);
+		const second = await listResourceGenerations(db, 'user-1', room, 2, 2);
+
+		expect(first.generations.map((generation) => generation.id)).toEqual(['c', 'b']);
+		expect(first.hasMore).toBe(true);
+		expect(second.generations.map((generation) => generation.id)).toEqual(['a']);
+		expect(second.hasMore).toBe(false);
 	});
 });
