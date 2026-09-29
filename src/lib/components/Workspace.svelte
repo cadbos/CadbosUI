@@ -925,7 +925,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <style>
 	.page {
-		min-height: 100dvh;
+		min-height: calc(100dvh - var(--app-chrome-height, 0px));
 		padding: 2rem 1rem 4rem;
 		display: flex;
 		flex-direction: column;

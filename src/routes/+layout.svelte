@@ -60,6 +60,19 @@ before the Change Date. See LICENSE for complete terms.
 	);
 	setToolsPanelTopBoundary(() => appHeaderBottom);
 
+	// Page content fills the viewport *below* the header and health warning
+	// (both sit in normal flow), so pages size their min-height against
+	// `100dvh - var(--app-chrome-height)`; a bare 100dvh would always overflow
+	// the viewport by the chrome's height and force a pointless scrollbar.
+	$effect(() => {
+		const root = document.documentElement;
+		root.style.setProperty(
+			'--app-chrome-height',
+			`${appHeaderHeight + (showHealthWarning ? healthWarningHeight : 0)}px`
+		);
+		return () => root.style.removeProperty('--app-chrome-height');
+	});
+
 	onMount(() => {
 		auth.loadSession();
 		void status.checkOnce();
