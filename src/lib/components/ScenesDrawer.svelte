@@ -15,8 +15,10 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import {
 		Download,
+		Flag,
 		History,
 		Lightbulb,
+		MessageSquareText,
 		Palette,
 		PaintRoller,
 		Pencil,
@@ -32,7 +34,12 @@ before the Change Date. See LICENSE for complete terms.
 	import { resolve } from '$app/paths';
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import type { Component, ComponentProps } from 'svelte';
-	import type { GenerationKind } from '$lib/api/contract';
+	import {
+		sceneViews,
+		type GenerationKind,
+		type GenerationSessionRef,
+		type SceneView
+	} from '$lib/api/contract';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import {
@@ -52,6 +59,11 @@ before the Change Date. See LICENSE for complete terms.
 		'object-replacement': 'generatedImages.kind.objectReplacement',
 		'texture-replacement': 'generatedImages.kind.textureReplacement',
 		'light-settings': 'generatedImages.kind.lightSettings'
+	};
+
+	const sceneViewKeys: Record<SceneView, TranslationKey> = {
+		all: 'generatedImages.view.all',
+		milestones: 'generatedImages.view.milestones'
 	};
 
 	const generationKindIcons: Record<GenerationKind, Component<ComponentProps<typeof Sparkles>>> = {
@@ -83,6 +95,13 @@ before the Change Date. See LICENSE for complete terms.
 		targetsOtherSession: boolean;
 	}
 
+	interface PromptCandidate {
+		id: string;
+		order: number;
+		status: 'loading' | 'ready' | 'error';
+		prompt: string;
+	}
+
 	interface GeneratedDate {
 		datetime: string;
 		dateLabel: string;
@@ -99,7 +118,17 @@ before the Change Date. See LICENSE for complete terms.
 	let restoreConfirmCandidate = $state<RestoreCandidate | null>(null);
 	let restoringId = $state<string | null>(null);
 	let restoreFailedId = $state<string | null>(null);
-	const anyModalOpen = $derived(deleteCandidate !== null || restoreConfirmCandidate !== null);
+	let promptCandidate = $state<PromptCandidate | null>(null);
+	const anyModalOpen = $derived(
+		deleteCandidate !== null || restoreConfirmCandidate !== null || promptCandidate !== null
+	);
+
+	const filter = $derived(generatedImages.filter);
+	const milestones = $derived(filter.view === 'milestones');
+	const filterSessions = $derived(
+		generatedImages.filterProjects.find((project) => project.projectId === filter.projectId)
+			?.sessions ?? []
+	);
 
 	const MIN_DRAWER_WIDTH = 320;
 	const RESIZE_STEP = 24;
@@ -280,6 +309,52 @@ before the Change Date. See LICENSE for complete terms.
 	function downloadFilename(url: string, id: string): string {
 		const extension = imageExtension(url);
 		return extension ? `generated-image-${id}.${extension}` : `generated-image-${id}`;
+	}
+
+	function selectView(view: SceneView): void {
+		if (view === filter.view) return;
+		generatedImages.setFilter({ ...filter, view });
+	}
+
+	function selectProject(event: Event & { currentTarget: HTMLSelectElement }): void {
+		const projectId = event.currentTarget.value || null;
+		generatedImages.setFilter({ ...filter, projectId, sessionId: null });
+	}
+
+	function selectSession(event: Event & { currentTarget: HTMLSelectElement }): void {
+		generatedImages.setFilter({ ...filter, sessionId: event.currentTarget.value || null });
+	}
+
+	function titleOrUntitled(title: string): string {
+		return title.trim() || t('workspace.tabs.untitled');
+	}
+
+	function sessionLabel(session: GenerationSessionRef): string {
+		return `${titleOrUntitled(session.projectTitle)} · ${titleOrUntitled(session.sessionTitle)}`;
+	}
+
+	// The prompt isn't part of the list payload — it's read from the same
+	// per-generation detail a restore uses, only when asked for.
+	async function showPrompt(id: string, order: number): Promise<void> {
+		promptCandidate = { id, order, status: 'loading', prompt: '' };
+		try {
+			const detail = await fetchGeneratedImageDetail(id);
+			if (!detail) throw new Error('generation not found');
+			if (promptCandidate?.id !== id) return;
+			promptCandidate = { id, order, status: 'ready', prompt: detail.prompt.trim() };
+		} catch (error) {
+			logBoundaryError('scenesDrawer.showPrompt', error);
+			if (promptCandidate?.id === id) promptCandidate = { id, order, status: 'error', prompt: '' };
+		}
+	}
+
+	function closePrompt(): void {
+		promptCandidate = null;
+	}
+
+	function handlePromptCancel(event: Event): void {
+		event.preventDefault();
+		closePrompt();
 	}
 
 	function requestDelete(id: string, order: number): void {
@@ -499,21 +574,78 @@ before the Change Date. See LICENSE for complete terms.
 			</button>
 		</header>
 
+		<div class="scene-filters">
+			<div class="segmented" role="group" aria-label={t('generatedImages.view.label')}>
+				{#each sceneViews as view (view)}
+					<button
+						type="button"
+						class="segment"
+						class:active={filter.view === view}
+						aria-pressed={filter.view === view}
+						onclick={() => selectView(view)}
+					>
+						{t(sceneViewKeys[view])}
+					</button>
+				{/each}
+			</div>
+			<label class="filter-field">
+				<span>{t('generatedImages.filter.project')}</span>
+				<select value={filter.projectId ?? ''} onchange={selectProject}>
+					<option value="">{t('generatedImages.filter.allProjects')}</option>
+					{#each generatedImages.filterProjects as project (project.projectId)}
+						<option value={project.projectId}>{titleOrUntitled(project.projectTitle)}</option>
+					{/each}
+				</select>
+			</label>
+			<label class="filter-field">
+				<span>{t('generatedImages.filter.session')}</span>
+				<select
+					value={filter.sessionId ?? ''}
+					disabled={filter.projectId === null}
+					onchange={selectSession}
+				>
+					<option value="">{t('generatedImages.filter.allSessions')}</option>
+					{#each filterSessions as session (session.sessionId)}
+						<option value={session.sessionId}>{titleOrUntitled(session.sessionTitle)}</option>
+					{/each}
+				</select>
+			</label>
+			{#if generatedImages.filterOptionsStatus === 'error'}
+				<p class="status error filter-error" role="alert">
+					{t('generatedImages.filter.optionsFailed')}
+				</p>
+			{/if}
+		</div>
+
 		<div class="drawer-content">
 			{#if generatedImages.status === 'loading'}
 				<p class="status">{t('generatedImages.loading')}</p>
 			{:else if generatedImages.status === 'error' && generatedImages.images.length === 0}
 				<p class="status error" role="alert">{t('generatedImages.failed')}</p>
 			{:else if generatedImages.images.length === 0}
-				<p class="status">{t('generatedImages.empty')}</p>
+				<p class="status">
+					{filter.projectId === null
+						? t('generatedImages.empty')
+						: t('generatedImages.emptyFiltered')}
+				</p>
 			{:else}
 				<div class="scene-columns-header">
-					<span>{t('generatedImages.source')}</span>
-					<span>{t('generatedImages.kindColumn')}</span>
+					{#if milestones}
+						<span>{t('generatedImages.firstSource')}</span>
+						<span>{t('generatedImages.milestoneColumn')}</span>
+					{:else}
+						<span>{t('generatedImages.source')}</span>
+						<span>{t('generatedImages.kindColumn')}</span>
+					{/if}
 					<span>{t('generatedImages.result')}</span>
 				</div>
 
-				<ul class="list" aria-label={t('generatedImages.listLabel')}>
+				<ul
+					class="list"
+					aria-label={milestones
+						? t('generatedImages.milestonesListLabel')
+						: t('generatedImages.listLabel')}
+				>
 					{#each generatedImages.images as image, index (image.id)}
 						{const date = generatedDate(image.createdAt)}
 						{const Icon = generationKindIcons[image.kind]}
@@ -523,17 +655,33 @@ before the Change Date. See LICENSE for complete terms.
 									<span>{date.dateLabel}</span>
 									<span>{date.timeLabel}</span>
 								</time>
+								{#if image.session}
+									<span class="session-label">{sessionLabel(image.session)}</span>
+								{/if}
+								{#if !milestones}
+									<button
+										type="button"
+										class="prompt-button"
+										aria-label={ti('generatedImages.showPromptLabel', { order: index + 1 })}
+										onclick={() => void showPrompt(image.id, index + 1)}
+									>
+										<MessageSquareText size={14} strokeWidth={1.8} aria-hidden="true" />
+										{t('generatedImages.showPrompt')}
+									</button>
+								{/if}
 							</div>
-							<button
-								type="button"
-								class="record-delete-button"
-								disabled={generatedImages.deletingIds.has(image.id)}
-								aria-label={ti('generatedImages.delete', { order: index + 1 })}
-								title={ti('generatedImages.delete', { order: index + 1 })}
-								onclick={() => requestDelete(image.id, index + 1)}
-							>
-								<Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
-							</button>
+							{#if !milestones}
+								<button
+									type="button"
+									class="record-delete-button"
+									disabled={generatedImages.deletingIds.has(image.id)}
+									aria-label={ti('generatedImages.delete', { order: index + 1 })}
+									title={ti('generatedImages.delete', { order: index + 1 })}
+									onclick={() => requestDelete(image.id, index + 1)}
+								>
+									<Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
+								</button>
+							{/if}
 
 							<div class="scene-flow">
 								<div class="image-column">
@@ -569,14 +717,25 @@ before the Change Date. See LICENSE for complete terms.
 									</div>
 								</div>
 
-								<div
-									class="flow-kind"
-									role="img"
-									aria-label={t(generationKindKeys[image.kind])}
-									data-tooltip={t(generationKindKeys[image.kind])}
-								>
-									<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-								</div>
+								{#if milestones}
+									<div
+										class="flow-kind"
+										role="img"
+										aria-label={t('generatedImages.milestone')}
+										data-tooltip={t('generatedImages.milestone')}
+									>
+										<Flag size={18} strokeWidth={1.8} aria-hidden="true" />
+									</div>
+								{:else}
+									<div
+										class="flow-kind"
+										role="img"
+										aria-label={t(generationKindKeys[image.kind])}
+										data-tooltip={t(generationKindKeys[image.kind])}
+									>
+										<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
+									</div>
+								{/if}
 
 								<div class="image-column">
 									<div class="image-frame result-frame">
@@ -691,6 +850,31 @@ before the Change Date. See LICENSE for complete terms.
 					: t('generatedImages.confirmDeleteConfirm')}
 			</button>
 		</div>
+	</dialog>
+{/if}
+
+{#if promptCandidate}
+	<dialog
+		class="delete-dialog prompt-dialog"
+		{@attach openModal}
+		aria-labelledby="generated-images-prompt-title"
+		oncancel={handlePromptCancel}
+	>
+		<h3 id="generated-images-prompt-title">
+			{ti('generatedImages.promptTitle', { order: promptCandidate.order })}
+		</h3>
+		{#if promptCandidate.status === 'loading'}
+			<p aria-live="polite">{t('generatedImages.promptLoading')}</p>
+		{:else if promptCandidate.status === 'error'}
+			<p class="warning" role="alert">{t('generatedImages.promptFailed')}</p>
+		{:else if promptCandidate.prompt === ''}
+			<p>{t('generatedImages.promptEmpty')}</p>
+		{:else}
+			<p class="prompt-text">{promptCandidate.prompt}</p>
+		{/if}
+		<button type="button" class="secondary-button" onclick={closePrompt}>
+			{t('generatedImages.promptClose')}
+		</button>
 	</dialog>
 {/if}
 
@@ -857,6 +1041,84 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-accent-text);
 	}
 
+	.scene-filters {
+		flex: 0 0 auto;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: 0.75rem;
+		padding: 0.75rem 1.5rem;
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.segmented {
+		display: flex;
+		flex: 0 0 auto;
+		padding: 0.125rem;
+		border-radius: 8px;
+		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
+	}
+
+	.segment {
+		padding: 0.4rem 0.75rem;
+		border: none;
+		border-radius: 6px;
+		background: transparent;
+		color: var(--color-muted);
+		font: inherit;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			color 0.15s;
+	}
+
+	.segment:hover:not(.active) {
+		color: var(--color-text);
+	}
+
+	.segment.active {
+		background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+		color: var(--color-accent-text);
+	}
+
+	.filter-field {
+		display: flex;
+		flex: 1 1 9rem;
+		flex-direction: column;
+		gap: 0.25rem;
+		min-width: 0;
+		color: var(--color-muted);
+		font-size: 0.6875rem;
+		font-weight: 650;
+		letter-spacing: 0.045em;
+		text-transform: uppercase;
+	}
+
+	.filter-field select {
+		min-width: 0;
+		min-height: 2.125rem;
+		padding: 0.3rem 0.5rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font: inherit;
+		font-size: 0.8125rem;
+		font-weight: 400;
+		letter-spacing: normal;
+		text-transform: none;
+	}
+
+	.filter-field select:disabled {
+		opacity: 0.55;
+	}
+
+	.filter-error {
+		flex-basis: 100%;
+	}
+
 	.drawer-content {
 		flex: 1 1 auto;
 		min-height: 0;
@@ -926,7 +1188,43 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		align-items: center;
 		min-height: 2rem;
-		gap: 0.5rem;
+		gap: 0.75rem;
+		padding-right: 2.5rem;
+	}
+
+	.session-label {
+		min-width: 0;
+		overflow: hidden;
+		color: var(--color-text);
+		font-size: 0.75rem;
+		font-weight: 600;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.prompt-button {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin-left: auto;
+		padding: 0.25rem 0.5rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-surface);
+		color: var(--color-muted);
+		font: inherit;
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition:
+			border-color 0.15s,
+			color 0.15s;
+	}
+
+	.prompt-button:hover {
+		border-color: var(--color-accent);
+		color: var(--color-accent-text);
 	}
 
 	.date {
@@ -1182,6 +1480,18 @@ before the Change Date. See LICENSE for complete terms.
 		line-height: 1.4;
 	}
 
+	.prompt-dialog {
+		width: min(100% - 2rem, 36rem);
+	}
+
+	.prompt-dialog .prompt-text {
+		max-height: 50vh;
+		overflow-y: auto;
+		color: var(--color-text);
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+
 	.delete-dialog .warning {
 		color: var(--color-danger);
 		font-weight: 600;
@@ -1276,6 +1586,10 @@ before the Change Date. See LICENSE for complete terms.
 
 		.drawer-content {
 			padding: 0.875rem 1rem 1rem;
+		}
+
+		.scene-filters {
+			padding: 0.75rem 1rem;
 		}
 
 		.scene-card {

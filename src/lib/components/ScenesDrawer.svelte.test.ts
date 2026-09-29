@@ -14,13 +14,13 @@
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
-import type { GeneratedImageRecord, GeneratedImagesResponse } from '$lib/api/contract';
+import type { GeneratedImagesResponse, SceneRecord } from '$lib/api/contract';
 import { setLocale, type Locale } from '$lib/i18n/index.svelte';
 import { generatedImages } from '$lib/state/generated-images.svelte';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 import ScenesDrawer from './ScenesDrawer.svelte';
 
-function image(id: string, createdAt: number): GeneratedImageRecord {
+function image(id: string, createdAt: number): SceneRecord {
 	return {
 		id,
 		image: {
@@ -32,15 +32,12 @@ function image(id: string, createdAt: number): GeneratedImageRecord {
 			url: `https://cdn.example.test/${id}-source.jpg`
 		},
 		kind: 'render',
-		createdAt
+		createdAt,
+		session: null
 	};
 }
 
-function page(
-	images: GeneratedImageRecord[],
-	offset: number,
-	hasMore: boolean
-): GeneratedImagesResponse {
+function page(images: SceneRecord[], offset: number, hasMore: boolean): GeneratedImagesResponse {
 	return {
 		images,
 		pagination: {
@@ -156,4 +153,87 @@ it('loads the next generated-images page when the infinite-scroll sentinel inter
 	expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/generated-images?offset=1&size=100', {
 		signal: expect.any(AbortSignal)
 	});
+});
+
+const SESSION = {
+	projectId: '00000000-0000-4000-8000-000000000001',
+	projectTitle: 'Квартира',
+	sessionId: '00000000-0000-4000-8000-000000000011',
+	sessionTitle: ''
+};
+
+it('shows each scene’s session and opens its prompt in a dialog', async () => {
+	const fetchMock = vi.fn<typeof fetch>();
+	vi.stubGlobal('fetch', fetchMock);
+	fetchMock.mockResolvedValueOnce(
+		new Response(
+			JSON.stringify({
+				id: 'sample',
+				prompt: 'светлая кухня в скандинавском стиле',
+				kind: 'render',
+				createdAt: 1000,
+				amount: 1,
+				balanceAfter: 9,
+				image: { key: 'sample.webp', url: 'https://cdn.example.test/sample.webp' },
+				source: { key: 'source.jpg', url: 'https://cdn.example.test/source.jpg' },
+				formSnapshot: null,
+				session: SESSION,
+				media: []
+			}),
+			{ status: 200, headers: { 'content-type': 'application/json' } }
+		)
+	);
+	generatedImages.status = 'ready';
+	generatedImages.images = [{ ...image('sample', 1000), session: SESSION }];
+
+	const screen = render(ScenesDrawer, { open: true, onClose: vi.fn() });
+
+	await expect.element(screen.getByText('Квартира · Без названия')).toBeVisible();
+	await screen.getByRole('button', { name: 'Показать промпт сцены 1' }).click();
+
+	const dialog = screen.getByRole('dialog', { name: 'Промпт сцены 1' });
+	await expect.element(dialog.getByText('светлая кухня в скандинавском стиле')).toBeVisible();
+	expect(fetchMock).toHaveBeenCalledWith('/api/generated-images/sample');
+
+	await dialog.getByRole('button', { name: 'Закрыть' }).click();
+	await expect.element(dialog).not.toBeInTheDocument();
+});
+
+it('switches to session results, which have no prompt or delete buttons', async () => {
+	const fetchMock = vi.fn<typeof fetch>();
+	vi.stubGlobal('fetch', fetchMock);
+	fetchMock.mockResolvedValue(
+		jsonResponse(page([{ ...image('milestone', 1000), session: SESSION }], 0, false))
+	);
+	generatedImages.status = 'ready';
+	generatedImages.images = [image('step', 1000)];
+
+	const screen = render(ScenesDrawer, { open: true, onClose: vi.fn() });
+	await expect
+		.element(screen.getByRole('button', { name: 'Показать промпт сцены 1' }))
+		.toBeVisible();
+
+	// The drawer slides in from off-screen; clicking mid-transition misses.
+	await vi.waitFor(() =>
+		expect(document.querySelector('#scenes-drawer')?.getBoundingClientRect().left).toBe(0)
+	);
+	await screen.getByRole('button', { name: 'Итоги сессий' }).click();
+
+	await expect
+		.element(screen.getByRole('list', { name: 'Итоги сессий, сначала новые' }))
+		.toBeVisible();
+	await expect
+		.element(screen.getByRole('button', { name: 'Итоги сессий' }))
+		.toHaveAttribute('aria-pressed', 'true');
+	await expect.element(screen.getByText('Первый исходник')).toBeVisible();
+	expect(fetchMock).toHaveBeenCalledWith(
+		'/api/generated-images?offset=0&size=100&view=milestones',
+		{ signal: expect.any(AbortSignal) }
+	);
+	await expect
+		.element(screen.getByRole('button', { name: 'Показать промпт сцены 1' }))
+		.not.toBeInTheDocument();
+	await expect
+		.element(screen.getByRole('button', { name: 'Удалить сцену 1' }))
+		.not.toBeInTheDocument();
 });

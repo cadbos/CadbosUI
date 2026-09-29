@@ -23,6 +23,7 @@ import {
 	E2E_SESSION_ID,
 	mockProjectSessionRoutes
 } from './helpers/project-session-routes';
+import { mockSceneFilterOptions } from './helpers/scene-routes';
 
 const BEFORE_URL = 'https://cdn.example.test/room.webp';
 const AFTER_URL = 'https://cdn.example.test/render.webp';
@@ -146,13 +147,15 @@ async function mockSessionData(page: Page, options: SessionMockOptions = {}): Pr
 						image: media(2, AFTER_URL),
 						source: media(1, BEFORE_URL),
 						kind: 'render',
-						createdAt: Date.UTC(2026, 0, 1)
+						createdAt: Date.UTC(2026, 0, 1),
+						session: null
 					}
 				],
 				pagination: { offset: 0, size: 100, hasMore: false }
 			})
 		});
 	});
+	await mockSceneFilterOptions(page);
 	await page.route(`**/api/projects/${E2E_PROJECT_ID}`, async (route) => {
 		if (route.request().method() !== 'GET') return route.fallback();
 		await respond(route, PROJECT_DETAIL);

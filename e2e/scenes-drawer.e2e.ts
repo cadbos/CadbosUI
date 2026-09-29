@@ -18,6 +18,7 @@ import { expect, test } from './fixtures';
 import { media, mediaKey } from './helpers/media';
 import { mockProjectSessionRoutes } from './helpers/project-session-routes';
 import { mockResourceDetail } from './helpers/resource-routes';
+import { mockSceneFilterOptions } from './helpers/scene-routes';
 
 const GENERATION_ID = '00000000-0000-4000-8000-000000000200';
 
@@ -86,13 +87,15 @@ async function mockAddObjectScene(page: Page): Promise<void> {
 						image: media(2, 'https://cdn.example.test/added-plant.webp'),
 						source: media(1, 'https://cdn.example.test/scene.jpg'),
 						kind: 'edit',
-						createdAt: Date.UTC(2026, 0, 1)
+						createdAt: Date.UTC(2026, 0, 1),
+						session: null
 					}
 				],
 				pagination: { offset: 0, size: 100, hasMore: false }
 			})
 		});
 	});
+	await mockSceneFilterOptions(page);
 	await page.route(`**/api/generated-images/${ADD_OBJECT_GENERATION_ID}`, async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -130,13 +133,15 @@ async function mockSingleStyleTransferScene(page: Page): Promise<void> {
 						image: media(2, 'https://cdn.example.test/result.webp'),
 						source: media(1, 'https://cdn.example.test/scene.jpg'),
 						kind: 'style-transfer',
-						createdAt: Date.UTC(2026, 0, 1)
+						createdAt: Date.UTC(2026, 0, 1),
+						session: null
 					}
 				],
 				pagination: { offset: 0, size: 100, hasMore: false }
 			})
 		});
 	});
+	await mockSceneFilterOptions(page);
 	await page.route(`**/api/generated-images/${GENERATION_ID}`, async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -254,13 +259,15 @@ async function mockSessionScene(page: Page): Promise<void> {
 						image: media(2, 'https://cdn.example.test/render.webp'),
 						source: media(1, 'https://cdn.example.test/scene.jpg'),
 						kind: 'render',
-						createdAt: Date.UTC(2026, 0, 1)
+						createdAt: Date.UTC(2026, 0, 1),
+						session: null
 					}
 				],
 				pagination: { offset: 0, size: 100, hasMore: false }
 			})
 		});
 	});
+	await mockSceneFilterOptions(page);
 	await page.route(`**/api/generated-images/${SESSION_GENERATION_ID}`, async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -453,4 +460,123 @@ test('asks before replacing unsaved work in the restored session’s background 
 	await page.getByRole('button', { name: 'Закрыть сцены' }).click();
 	await tabs.getByRole('tab', { name: 'Living room' }).click();
 	await expect(page.getByLabel('Промпт чата')).toHaveValue('unsaved living room idea');
+});
+
+test('narrows scenes to a project’s session results and shows a step’s prompt', async ({
+	page
+}) => {
+	const projectId = '00000000-0000-4000-8000-000000000301';
+	const kitchenSessionId = '00000000-0000-4000-8000-000000000311';
+	const kitchen = {
+		projectId,
+		projectTitle: 'Квартира',
+		sessionId: kitchenSessionId,
+		sessionTitle: 'Кухня'
+	};
+	const requests: URLSearchParams[] = [];
+	await authenticate(page);
+	await page.route('**/api/generated-images**', async (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		const url = new URL(route.request().url());
+		if (url.pathname.endsWith(`/api/generated-images/${GENERATION_ID}`)) {
+			return route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					id: GENERATION_ID,
+					prompt: 'светлая кухня, дерево и лён',
+					kind: 'render',
+					createdAt: Date.UTC(2026, 0, 2),
+					amount: 1,
+					balanceAfter: 9,
+					image: media(3, 'https://cdn.example.test/kitchen-2.webp'),
+					source: media(2, 'https://cdn.example.test/kitchen-1.webp'),
+					formSnapshot: null,
+					session: kitchen,
+					media: []
+				})
+			});
+		}
+		requests.push(url.searchParams);
+		const milestones = url.searchParams.get('view') === 'milestones';
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				images: milestones
+					? [
+							{
+								id: GENERATION_ID,
+								image: media(3, 'https://cdn.example.test/kitchen-2.webp'),
+								source: media(1, 'https://cdn.example.test/kitchen-source.jpg'),
+								kind: 'render',
+								createdAt: Date.UTC(2026, 0, 2),
+								session: kitchen
+							}
+						]
+					: [
+							{
+								id: GENERATION_ID,
+								image: media(3, 'https://cdn.example.test/kitchen-2.webp'),
+								source: media(2, 'https://cdn.example.test/kitchen-1.webp'),
+								kind: 'render',
+								createdAt: Date.UTC(2026, 0, 2),
+								session: kitchen
+							},
+							{
+								id: ADD_OBJECT_GENERATION_ID,
+								image: media(2, 'https://cdn.example.test/kitchen-1.webp'),
+								source: media(1, 'https://cdn.example.test/kitchen-source.jpg'),
+								kind: 'edit',
+								createdAt: Date.UTC(2026, 0, 1),
+								session: kitchen
+							}
+						],
+				pagination: { offset: 0, size: 100, hasMore: false }
+			})
+		});
+	});
+	await mockSceneFilterOptions(page, [
+		{
+			projectId,
+			projectTitle: 'Квартира',
+			sessions: [{ sessionId: kitchenSessionId, sessionTitle: 'Кухня' }]
+		}
+	]);
+
+	await page.goto('/create/interior?view=chat&format=webp');
+	await page.getByRole('button', { name: 'Сцены' }).click();
+	const drawer = page.getByRole('dialog', { name: 'Сцены' });
+	const steps = drawer.getByRole('list', { name: 'Сцены, сначала новые' });
+	await expect(steps.getByRole('listitem')).toHaveCount(2);
+	await expect(steps.getByRole('listitem').first()).toContainText('Квартира · Кухня');
+
+	await drawer.getByRole('button', { name: 'Показать промпт сцены 1' }).click();
+	const promptDialog = page.getByRole('dialog', { name: 'Промпт сцены 1' });
+	await expect(promptDialog).toContainText('светлая кухня, дерево и лён');
+	await promptDialog.getByRole('button', { name: 'Закрыть' }).click();
+
+	await drawer.getByLabel('Проект').selectOption({ label: 'Квартира' });
+	await drawer.getByLabel('Сессия').selectOption({ label: 'Кухня' });
+	await drawer.getByRole('button', { name: 'Итоги сессий' }).click();
+
+	const results = drawer.getByRole('list', { name: 'Итоги сессий, сначала новые' });
+	await expect(results.getByRole('listitem')).toHaveCount(1);
+	await expect(results.getByRole('img', { name: 'Исходное изображение сцены 1' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/kitchen-source.jpg'
+	);
+	await expect(results.getByRole('img', { name: 'Результат сцены 1' })).toHaveAttribute(
+		'src',
+		'https://cdn.example.test/kitchen-2.webp'
+	);
+	await expect(drawer.getByRole('button', { name: /Показать промпт/ })).toHaveCount(0);
+	await expect(drawer.getByRole('button', { name: /Удалить сцену/ })).toHaveCount(0);
+	expect(Object.fromEntries(requests.at(-1) ?? [])).toEqual({
+		offset: '0',
+		size: '100',
+		view: 'milestones',
+		projectId,
+		sessionId: kitchenSessionId
+	});
 });
