@@ -532,7 +532,11 @@ export interface UserUsageRecord {
 	balance: number;
 	totalDeposit: number;
 	lastDepositAt: number | null;
+	projectCount: number;
+	sessionCount: number;
 	generationCount: number;
+	sourceCount: number;
+	referenceCount: number;
 	totalSpend: number;
 	latestSpendAt: number | null;
 }

@@ -27,6 +27,7 @@ import {
 	listResourceGenerations,
 	listResourceImages,
 	listGeneratedImages,
+	listUserUsage,
 	recordGeneration
 } from './generations';
 
@@ -1049,5 +1050,150 @@ describe('resource page queries', () => {
 		expect(first.hasMore).toBe(true);
 		expect(second.generations.map((generation) => generation.id)).toEqual(['a']);
 		expect(second.hasMore).toBe(false);
+	});
+});
+
+describe('listUserUsage', () => {
+	function seedProject(db: D1Database, userId: string, archivedAt: number | null = null): string {
+		const now = Date.now();
+		const id = crypto.randomUUID();
+		db.prepare(
+			'INSERT INTO projects (id, user_id, title, created_at, updated_at, archived_at) ' +
+				'VALUES (?, ?, ?, ?, ?, ?)'
+		)
+			.bind(id, userId, 'Project', now, now, archivedAt)
+			.run();
+		return id;
+	}
+
+	function seedProjectSession(
+		db: D1Database,
+		projectId: string,
+		archivedAt: number | null = null
+	): void {
+		const now = Date.now();
+		db.prepare(
+			'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at, archived_at) ' +
+				'VALUES (?, ?, ?, ?, ?, ?)'
+		)
+			.bind(crypto.randomUUID(), projectId, 'Session', now, now, archivedAt)
+			.run();
+	}
+
+	// 'processing' is the only status whose CHECK constraint allows leaving
+	// output_media_id/error_code/balance_after/completed_at all null — the
+	// job's outcome is irrelevant to a reference-image count.
+	function seedReplacementJob(
+		db: D1Database,
+		table: 'object_replacement_jobs' | 'texture_replacement_jobs',
+		userId: string,
+		referenceMediaId: number
+	): void {
+		const now = Date.now();
+		const sceneMediaId = seedMedia(
+			db,
+			`https://cdn.example.test/scene-${crypto.randomUUID()}.jpg`,
+			''
+		);
+		const descriptionColumn =
+			table === 'object_replacement_jobs' ? 'replacement_object' : 'replacement_surface';
+		db.prepare(
+			`INSERT INTO ${table} ` +
+				`(id, user_id, comfy_prompt_id, scene_media_id, reference_media_id, ${descriptionColumn}, ` +
+				"cost, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'x', 1, 'processing', ?, ?)"
+		)
+			.bind(
+				crypto.randomUUID(),
+				userId,
+				crypto.randomUUID(),
+				sceneMediaId,
+				referenceMediaId,
+				now,
+				now
+			)
+			.run();
+	}
+
+	it('returns zero counts for a fresh user with no data', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([
+			expect.objectContaining({
+				pubkey: 'pubkey-1',
+				projectCount: 0,
+				sessionCount: 0,
+				generationCount: 0,
+				sourceCount: 0,
+				referenceCount: 0
+			})
+		]);
+	});
+
+	it('counts projects and sessions including archived ones', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const activeProject = seedProject(db, 'user-1');
+		seedProjectSession(db, activeProject);
+		const archivedProject = seedProject(db, 'user-1', Date.now());
+		seedProjectSession(db, archivedProject, Date.now());
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([expect.objectContaining({ projectCount: 2, sessionCount: 2 })]);
+	});
+
+	it('counts sources as a raw per-generation total, not de-duplicated', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([expect.objectContaining({ generationCount: 2, sourceCount: 2 })]);
+	});
+
+	it('counts references from replacement jobs and style-transfer generations, de-duplicated', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const referenceMediaId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '');
+		seedReplacementJob(db, 'object_replacement_jobs', 'user-1', referenceMediaId);
+		seedReplacementJob(db, 'texture_replacement_jobs', 'user-1', referenceMediaId);
+		seedGenerationWithReference(
+			db,
+			'reused',
+			'user-1',
+			'object-replacement',
+			'https://cdn.example.test/ref.jpg',
+			1000
+		);
+		seedGenerationWithReference(
+			db,
+			'style',
+			'user-1',
+			'style-transfer',
+			'https://cdn.example.test/style-ref.jpg',
+			2000
+		);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([expect.objectContaining({ referenceCount: 2 })]);
+	});
+
+	it('isolates counts per user', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		seedProject(db, 'user-1');
+		seedGeneration(db, 'a', 'user-2', 1000);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		const byPubkey = Object.fromEntries(page.users.map((user) => [user.pubkey, user]));
+		expect(byPubkey['pubkey-1']).toEqual(
+			expect.objectContaining({ projectCount: 1, generationCount: 0 })
+		);
+		expect(byPubkey['pubkey-2']).toEqual(
+			expect.objectContaining({ projectCount: 0, generationCount: 1 })
+		);
 	});
 });

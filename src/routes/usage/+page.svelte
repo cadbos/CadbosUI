@@ -120,7 +120,11 @@ before the Change Date. See LICENSE for complete terms.
 							<th scope="col">{t('usage.column.balance')}</th>
 							<th scope="col">{t('usage.column.totalDeposit')}</th>
 							<th scope="col">{t('usage.column.lastDepositAt')}</th>
+							<th scope="col">{t('usage.column.projectCount')}</th>
+							<th scope="col">{t('usage.column.sessionCount')}</th>
 							<th scope="col">{t('usage.column.generationCount')}</th>
+							<th scope="col">{t('usage.column.sourceCount')}</th>
+							<th scope="col">{t('usage.column.referenceCount')}</th>
 							<th scope="col">{t('usage.column.totalSpend')}</th>
 							<th scope="col" title={timeZoneFullName}
 								>{t('usage.column.latestSpendAt')}, {timeZoneAbbreviation}</th
@@ -155,7 +159,11 @@ before the Change Date. See LICENSE for complete terms.
 								<td>{currency.format(user.balance)}</td>
 								<td>{currency.format(user.totalDeposit)}</td>
 								<td>{formatTimestamp(user.lastDepositAt)}</td>
+								<td>{user.projectCount}</td>
+								<td>{user.sessionCount}</td>
 								<td>{user.generationCount}</td>
+								<td>{user.sourceCount}</td>
+								<td>{user.referenceCount}</td>
 								<td>{currency.format(user.totalSpend)}</td>
 								<td>{formatTimestamp(user.latestSpendAt)}</td>
 							</tr>

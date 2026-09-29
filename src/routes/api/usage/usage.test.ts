@@ -166,7 +166,11 @@ describe('GET /api/usage', () => {
 				balance: 0,
 				totalDeposit: 0,
 				lastDepositAt: null,
+				projectCount: 0,
+				sessionCount: 0,
 				generationCount: 0,
+				sourceCount: 0,
+				referenceCount: 0,
 				totalSpend: 0,
 				latestSpendAt: null
 			},
@@ -175,7 +179,11 @@ describe('GET /api/usage', () => {
 				balance: 7.5,
 				totalDeposit: 0,
 				lastDepositAt: null,
+				projectCount: 0,
+				sessionCount: 0,
 				generationCount: 2,
+				sourceCount: 2,
+				referenceCount: 0,
 				totalSpend: 4,
 				latestSpendAt: 6000
 			},
@@ -184,7 +192,11 @@ describe('GET /api/usage', () => {
 				balance: 0,
 				totalDeposit: 0,
 				lastDepositAt: null,
+				projectCount: 0,
+				sessionCount: 0,
 				generationCount: 0,
+				sourceCount: 0,
+				referenceCount: 0,
 				totalSpend: 0,
 				latestSpendAt: null
 			}
