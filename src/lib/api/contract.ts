@@ -389,8 +389,22 @@ export interface GeneratedImageRecord {
 	createdAt: number;
 }
 
+// GET /api/generated-images?view= — `all` lists every generation (A → An);
+// `milestones` collapses each live session to one row: its first source on
+// the left, its latest result (the session's milestone) on the right.
+export const sceneViews = ['all', 'milestones'] as const;
+export type SceneView = (typeof sceneViews)[number];
+
+// A Scenes row — a generation (or, in the milestones view, a session's
+// first-source → milestone pair, keyed by the milestone generation) plus the
+// live session it belongs to; null once that session or its project is
+// archived, or for a generation recorded before sessions existed.
+export interface SceneRecord extends GeneratedImageRecord {
+	session: GenerationSessionRef | null;
+}
+
 export interface GeneratedImagesResponse {
-	images: GeneratedImageRecord[];
+	images: SceneRecord[];
 	pagination: {
 		offset: number;
 		size: number;
@@ -419,6 +433,19 @@ export interface GenerationSessionRef {
 	projectTitle: string;
 	sessionId: string;
 	sessionTitle: string;
+}
+
+// GET /api/generated-images/sessions — the Scenes project/session filter's
+// options: only live projects and sessions that have at least one generation,
+// most recently generated-in first.
+export interface SceneFilterProject {
+	projectId: string;
+	projectTitle: string;
+	sessions: { sessionId: string; sessionTitle: string }[];
+}
+
+export interface SceneFilterOptionsResponse {
+	projects: SceneFilterProject[];
 }
 
 export interface GeneratedImageDetailResponse {

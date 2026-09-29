@@ -28,6 +28,8 @@ import {
 	type RequestFormSnapshot,
 	type ResourceFilter,
 	type ResourceRole,
+	type SceneFilterProject,
+	type SceneView,
 	type UserUsageRecord
 } from '$lib/api/contract';
 import { formSnapshotSchema } from '$lib/server/api';
@@ -72,8 +74,12 @@ export interface ResourceImagesPage {
 	hasMore: boolean;
 }
 
+export interface Scene extends GeneratedImage {
+	session: GenerationSessionRef | null;
+}
+
 export interface GeneratedImagesPage {
-	images: GeneratedImage[];
+	images: Scene[];
 	hasMore: boolean;
 }
 
@@ -243,7 +249,30 @@ export interface GenerationDetail {
 	session: GenerationSessionRef | null;
 }
 
-interface GenerationDetailRow {
+interface SessionRefColumns {
+	session_id: string | null;
+	session_title: string | null;
+	project_id: string | null;
+	project_title: string | null;
+}
+
+// A generation whose session or project has since been archived (or one
+// recorded before sessions existed) has no session left to continue.
+function sessionRefForRow(row: SessionRefColumns): GenerationSessionRef | null {
+	return row.session_id !== null &&
+		row.session_title !== null &&
+		row.project_id !== null &&
+		row.project_title !== null
+		? {
+				projectId: row.project_id,
+				projectTitle: row.project_title,
+				sessionId: row.session_id,
+				sessionTitle: row.session_title
+			}
+		: null;
+}
+
+interface GenerationDetailRow extends SessionRefColumns {
 	id: string;
 	source_media_id: number;
 	result_media_id: number;
@@ -253,10 +282,6 @@ interface GenerationDetailRow {
 	amount: number;
 	balance_after: number;
 	form_snapshot: string | null;
-	session_id: string | null;
-	session_title: string | null;
-	project_id: string | null;
-	project_title: string | null;
 }
 
 // Re-validates the stored JSON against the same shape schema the write path
@@ -324,20 +349,6 @@ export async function getGenerationDetailForUser(
 	if (!row) return null;
 	const kind = generationKindForRow(row.id, row.kind);
 	if (kind === null) return null;
-	// A generation whose session or project has since been archived (or one
-	// recorded before sessions existed) has no session left to continue.
-	const session =
-		row.session_id !== null &&
-		row.session_title !== null &&
-		row.project_id !== null &&
-		row.project_title !== null
-			? {
-					projectId: row.project_id,
-					projectTitle: row.project_title,
-					sessionId: row.session_id,
-					sessionTitle: row.session_title
-				}
-			: null;
 	return {
 		id: row.id,
 		sourceMediaId: row.source_media_id,
@@ -348,7 +359,7 @@ export async function getGenerationDetailForUser(
 		amount: row.amount,
 		balanceAfter: row.balance_after,
 		formSnapshot: parseStoredFormSnapshot(row.id, row.form_snapshot),
-		session
+		session: sessionRefForRow(row)
 	};
 }
 
@@ -422,36 +433,133 @@ async function collectValidRows<Row, T>(
 	}
 }
 
+export interface SceneFilter {
+	view: SceneView;
+	projectId: string | null;
+	sessionId: string | null;
+}
+
+interface SceneRow extends GenerationRow, SessionRefColumns {}
+
+function toScene(row: SceneRow): Scene | null {
+	const image = toGeneratedImage(row);
+	return image ? { ...image, session: sessionRefForRow(row) } : null;
+}
+
+// The live session/project a generation belongs to — the same archived-out
+// joins getGenerationDetailForUser uses, so filtering by project or session
+// only ever matches live ones.
+const LIVE_SESSION_JOINS =
+	'LEFT JOIN project_sessions ps ON ps.id = g.session_id AND ps.archived_at IS NULL ' +
+	'LEFT JOIN projects p ON p.id = ps.project_id AND p.user_id = g.user_id AND p.archived_at IS NULL ';
+
+const SCENE_FILTER_CONDITIONS =
+	'g.user_id = ? AND (? IS NULL OR p.id = ?) AND (? IS NULL OR ps.id = ?)';
+
+function sceneFilterBindings(userId: string, filter: SceneFilter): (string | null)[] {
+	return [userId, filter.projectId, filter.projectId, filter.sessionId, filter.sessionId];
+}
+
+// `milestones` ranks each live session's generations to pick its latest one
+// (the milestone) and pairs it with the source of its earliest one. Only
+// recognized kinds take part, so one unreadable row can't hide its session.
+function sceneQuery(filter: SceneFilter): string {
+	const media =
+		'JOIN media result_media ON result_media.id = s.result_media_id ' +
+		'JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ' +
+		'JOIN media source_media ON source_media.id = s.source_media_id ' +
+		'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ';
+	const columns =
+		's.id, s.user_id, s.result_media_id, s.source_media_id, result_media.filename AS result_filename, ' +
+		'result_bucket.name AS result_bucket_name, s.kind, s.created_at, ' +
+		's.session_id, s.session_title, s.project_id, s.project_title ';
+	const sessionColumns =
+		'ps.id AS session_id, ps.title AS session_title, p.id AS project_id, p.title AS project_title';
+	if (filter.view === 'all') {
+		return (
+			'WITH s AS (SELECT g.id, g.user_id, g.result_media_id, g.source_media_id, g.kind, g.created_at, ' +
+			`${sessionColumns} FROM generations g ${LIVE_SESSION_JOINS}WHERE ${SCENE_FILTER_CONDITIONS}) ` +
+			`SELECT ${columns}FROM s ${media}ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`
+		);
+	}
+	return (
+		'WITH ranked AS (SELECT g.id, g.user_id, g.result_media_id, g.kind, g.created_at, ' +
+		`${sessionColumns}, ` +
+		'ROW_NUMBER() OVER (PARTITION BY g.session_id ORDER BY g.created_at DESC, g.id DESC) AS latest_rank, ' +
+		'FIRST_VALUE(g.source_media_id) OVER (PARTITION BY g.session_id ORDER BY g.created_at, g.id) ' +
+		`AS source_media_id FROM generations g ${LIVE_SESSION_JOINS}` +
+		`WHERE ${SCENE_FILTER_CONDITIONS} AND p.id IS NOT NULL ` +
+		`AND g.kind IN (${generationKinds.map(() => '?').join(', ')})), ` +
+		's AS (SELECT * FROM ranked WHERE latest_rank = 1) ' +
+		`SELECT ${columns}FROM s ${media}ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`
+	);
+}
+
 export async function listGeneratedImages(
 	db: D1Database,
 	userId: string,
+	filter: SceneFilter,
 	offset: number,
 	size: number
 ): Promise<GeneratedImagesPage> {
+	const bindings =
+		filter.view === 'all'
+			? sceneFilterBindings(userId, filter)
+			: [...sceneFilterBindings(userId, filter), ...generationKinds];
+	const query = sceneQuery(filter);
 	const { items } = await collectValidRows(
 		async (limit, rawOffset) => {
 			const result = await db
-				.prepare(
-					'SELECT g.id, g.user_id, g.result_media_id, g.source_media_id, result_media.filename AS result_filename, ' +
-						'result_bucket.name AS result_bucket_name, ' +
-						'g.kind, g.created_at FROM generations g ' +
-						'JOIN media result_media ON result_media.id = g.result_media_id ' +
-						'JOIN buckets result_bucket ON result_bucket.id = result_media.bucket ' +
-						'JOIN media source_media ON source_media.id = g.source_media_id ' +
-						'JOIN buckets source_bucket ON source_bucket.id = source_media.bucket ' +
-						'WHERE g.user_id = ? ORDER BY g.created_at DESC, g.id DESC LIMIT ? OFFSET ?'
-				)
-				.bind(userId, limit, rawOffset)
-				.all<GenerationRow>();
+				.prepare(query)
+				.bind(...bindings, limit, rawOffset)
+				.all<SceneRow>();
 			return result.results ?? [];
 		},
-		toGeneratedImage,
+		toScene,
 		offset + size + 1
 	);
 	return {
 		images: items.slice(offset, offset + size),
 		hasMore: items.length > offset + size
 	};
+}
+
+interface SceneFilterSessionRow {
+	project_id: string;
+	project_title: string;
+	session_id: string;
+	session_title: string;
+}
+
+// Grouped by project in the order each project was last generated in, and
+// each project's sessions likewise.
+export async function listSceneFilterProjects(
+	db: D1Database,
+	userId: string
+): Promise<SceneFilterProject[]> {
+	const result = await db
+		.prepare(
+			'SELECT p.id AS project_id, p.title AS project_title, ps.id AS session_id, ' +
+				'ps.title AS session_title, MAX(g.created_at) AS last_generated_at, ' +
+				'MAX(MAX(g.created_at)) OVER (PARTITION BY p.id) AS project_last_generated_at ' +
+				'FROM generations g ' +
+				'JOIN project_sessions ps ON ps.id = g.session_id AND ps.archived_at IS NULL ' +
+				'JOIN projects p ON p.id = ps.project_id AND p.user_id = g.user_id AND p.archived_at IS NULL ' +
+				'WHERE g.user_id = ? GROUP BY ps.id ' +
+				'ORDER BY project_last_generated_at DESC, p.id, last_generated_at DESC, ps.id'
+		)
+		.bind(userId)
+		.all<SceneFilterSessionRow>();
+	const projects: SceneFilterProject[] = [];
+	for (const row of result.results ?? []) {
+		let project = projects.at(-1);
+		if (project?.projectId !== row.project_id) {
+			project = { projectId: row.project_id, projectTitle: row.project_title, sessions: [] };
+			projects.push(project);
+		}
+		project.sessions.push({ sessionId: row.session_id, sessionTitle: row.session_title });
+	}
+	return projects;
 }
 
 // Dedup lookup for /api/uploads: reuse an already-stored object when this user

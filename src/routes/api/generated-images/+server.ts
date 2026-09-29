@@ -16,7 +16,7 @@ import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
-import type { GeneratedImagesResponse } from '$lib/api/contract';
+import { sceneViews, type GeneratedImagesResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
@@ -37,7 +37,10 @@ const MAX_IMAGE_PAGE_SIZE = 100;
 
 const generatedImagesSearchParamsSchema = z.strictObject({
 	offset: z.coerce.number().int().min(0).default(DEFAULT_IMAGE_PAGE_OFFSET),
-	size: z.coerce.number().int().min(1).max(MAX_IMAGE_PAGE_SIZE).default(DEFAULT_IMAGE_PAGE_SIZE)
+	size: z.coerce.number().int().min(1).max(MAX_IMAGE_PAGE_SIZE).default(DEFAULT_IMAGE_PAGE_SIZE),
+	view: z.enum(sceneViews).default('all'),
+	projectId: z.uuid().nullable().default(null),
+	sessionId: z.uuid().nullable().default(null)
 });
 
 const generatedImageDeleteSchema = z.strictObject({
@@ -60,7 +63,8 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	const userId = await getUserIdByPubkey(db, locals.user.pubkey);
 	if (!userId) return apiError(500, 'account_error', 'Account record not found');
 
-	const page = await listGeneratedImages(db, userId, parsed.data.offset, parsed.data.size);
+	const { offset, size, view, projectId, sessionId } = parsed.data;
+	const page = await listGeneratedImages(db, userId, { view, projectId, sessionId }, offset, size);
 	const access = await mediaAccessBatch(
 		db,
 		platform,
@@ -74,11 +78,12 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 				image: access.get(image.mediaId)!,
 				source: access.get(image.sourceMediaId)!,
 				kind: image.kind,
-				createdAt: image.createdAt
+				createdAt: image.createdAt,
+				session: image.session
 			})),
 			pagination: {
-				offset: parsed.data.offset,
-				size: parsed.data.size,
+				offset,
+				size,
 				hasMore: page.hasMore
 			}
 		} satisfies GeneratedImagesResponse,
