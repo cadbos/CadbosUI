@@ -675,7 +675,9 @@ interface UserUsageRow {
 	session_count: number;
 	generation_count: number;
 	source_count: number;
+	source_bytes: number | null;
 	reference_count: number;
+	reference_bytes: number | null;
 	total_spend: number;
 	latest_spend_at: number | null;
 }
@@ -690,7 +692,9 @@ function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
 		sessionCount: row.session_count,
 		generationCount: row.generation_count,
 		sourceCount: row.source_count,
+		sourceBytes: row.source_bytes,
 		referenceCount: row.reference_count,
+		referenceBytes: row.reference_bytes,
 		totalSpend: row.total_spend,
 		latestSpendAt: row.latest_spend_at
 	};
@@ -705,6 +709,10 @@ function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
 // reference_media_id across
 // object_replacement_jobs, texture_replacement_jobs and generations
 // (style-transfer references, migration 0019).
+// `sourceBytes`/`referenceBytes` are storage totals: each distinct media counts
+// once however often it is reused, and media whose size is unknown (NULL, rows
+// from before sizes were recorded) contribute nothing. A user with no known
+// size at all gets NULL rather than 0, so unknown is never shown as empty.
 export async function listUserUsage(
 	db: D1Database,
 	offset: number,
@@ -716,8 +724,8 @@ export async function listUserUsage(
 				'COALESCE(pr.project_count, 0) AS project_count, ' +
 				'COALESCE(ps.session_count, 0) AS session_count, ' +
 				'COALESCE(g.generation_count, 0) AS generation_count, ' +
-				'COALESCE(g.source_count, 0) AS source_count, ' +
-				'COALESCE(refs.reference_count, 0) AS reference_count, ' +
+				'COALESCE(g.source_count, 0) AS source_count, sb.source_bytes, ' +
+				'COALESCE(refs.reference_count, 0) AS reference_count, refs.reference_bytes, ' +
 				'COALESCE(g.total_spend, 0) AS total_spend, g.latest_spend_at ' +
 				'FROM users u ' +
 				'LEFT JOIN credits c ON c.user_id = u.id ' +
@@ -729,11 +737,15 @@ export async function listUserUsage(
 				'COUNT(DISTINCT source_media_id) AS source_count, COALESCE(SUM(amount), 0) AS total_spend, ' +
 				'MAX(created_at) AS latest_spend_at FROM generations GROUP BY user_id) g ' +
 				'ON g.user_id = u.id ' +
-				'LEFT JOIN (SELECT user_id, COUNT(DISTINCT reference_media_id) AS reference_count FROM (' +
+				'LEFT JOIN (SELECT s.user_id, SUM(m.size) AS source_bytes FROM ' +
+				'(SELECT DISTINCT user_id, source_media_id FROM generations) s ' +
+				'JOIN media m ON m.id = s.source_media_id GROUP BY s.user_id) sb ON sb.user_id = u.id ' +
+				'LEFT JOIN (SELECT r.user_id, COUNT(*) AS reference_count, SUM(m.size) AS reference_bytes FROM (' +
 				'SELECT user_id, reference_media_id FROM object_replacement_jobs ' +
-				'UNION ALL SELECT user_id, reference_media_id FROM texture_replacement_jobs ' +
-				'UNION ALL SELECT user_id, reference_media_id FROM generations WHERE reference_media_id IS NOT NULL' +
-				') r GROUP BY user_id) refs ON refs.user_id = u.id ' +
+				'UNION SELECT user_id, reference_media_id FROM texture_replacement_jobs ' +
+				'UNION SELECT user_id, reference_media_id FROM generations WHERE reference_media_id IS NOT NULL' +
+				') r JOIN media m ON m.id = r.reference_media_id GROUP BY r.user_id) refs ' +
+				'ON refs.user_id = u.id ' +
 				'ORDER BY u.created_at DESC, u.id DESC LIMIT ? OFFSET ?'
 		)
 		.bind(size + 1, offset)

@@ -19,6 +19,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { usage } from '$lib/state/usage.svelte';
+	import { formatBytes } from '$lib/utils';
 
 	let { data }: PageProps = $props();
 
@@ -65,6 +66,11 @@ before the Change Date. See LICENSE for complete terms.
 			minute: '2-digit',
 			hourCycle: 'h23'
 		}).format(new Date(timestamp));
+	}
+
+	function formatSize(bytes: number | null): string {
+		if (bytes === null) return t('usage.emptyValue');
+		return formatBytes(bytes, getLocale());
 	}
 
 	function formatTimeZoneName(timeZoneName: Intl.DateTimeFormatOptions['timeZoneName']): string {
@@ -124,7 +130,9 @@ before the Change Date. See LICENSE for complete terms.
 							<th scope="col">{t('usage.column.sessionCount')}</th>
 							<th scope="col">{t('usage.column.generationCount')}</th>
 							<th scope="col">{t('usage.column.sourceCount')}</th>
+							<th scope="col">{t('usage.column.sourceBytes')}</th>
 							<th scope="col">{t('usage.column.referenceCount')}</th>
+							<th scope="col">{t('usage.column.referenceBytes')}</th>
 							<th scope="col">{t('usage.column.totalSpend')}</th>
 							<th scope="col" title={timeZoneFullName}
 								>{t('usage.column.latestSpendAt')}, {timeZoneAbbreviation}</th
@@ -163,7 +171,9 @@ before the Change Date. See LICENSE for complete terms.
 								<td>{user.sessionCount}</td>
 								<td>{user.generationCount}</td>
 								<td>{user.sourceCount}</td>
+								<td>{formatSize(user.sourceBytes)}</td>
 								<td>{user.referenceCount}</td>
+								<td>{formatSize(user.referenceBytes)}</td>
 								<td>{currency.format(user.totalSpend)}</td>
 								<td>{formatTimestamp(user.latestSpendAt)}</td>
 							</tr>

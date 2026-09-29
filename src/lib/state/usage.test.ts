@@ -29,7 +29,9 @@ function user(pubkey: string): UserUsageRecord {
 		sessionCount: 3,
 		generationCount: 2,
 		sourceCount: 2,
+		sourceBytes: 2048,
 		referenceCount: 0,
+		referenceBytes: null,
 		totalSpend: 3.5,
 		latestSpendAt: Date.UTC(2026, 0, 2)
 	};

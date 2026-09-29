@@ -28,7 +28,9 @@ const userUsageRecordSchema = z.object({
 	sessionCount: z.number().int().min(0),
 	generationCount: z.number().int().min(0),
 	sourceCount: z.number().int().min(0),
+	sourceBytes: z.number().int().min(0).nullable(),
 	referenceCount: z.number().int().min(0),
+	referenceBytes: z.number().int().min(0).nullable(),
 	totalSpend: z.number(),
 	latestSpendAt: z.number().int().min(0).nullable()
 });

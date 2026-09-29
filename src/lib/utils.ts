@@ -27,6 +27,25 @@ export function formatCredit(amount: number): string {
 	return amount.toFixed(2);
 }
 
+const BYTE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const;
+
+// File sizes for display, in binary steps (1 KB = 1024 bytes) to match the
+// upload limit, which is expressed as 8 * 1024 * 1024 bytes.
+export function formatBytes(bytes: number, locale: string): string {
+	let value = bytes;
+	let unit = 0;
+	while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
+		value /= 1024;
+		unit += 1;
+	}
+	return new Intl.NumberFormat(locale, {
+		style: 'unit',
+		unit: BYTE_UNITS[unit],
+		unitDisplay: 'short',
+		maximumFractionDigits: unit === 0 ? 0 : 1
+	}).format(value);
+}
+
 export interface BoundaryErrorLog {
 	scope: string;
 	name: string;

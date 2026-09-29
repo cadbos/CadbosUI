@@ -39,7 +39,9 @@ function user(
 		sessionCount: 5,
 		generationCount: 4,
 		sourceCount: 4,
+		sourceBytes: 3 * 1024 * 1024,
 		referenceCount: 1,
+		referenceBytes: 512 * 1024,
 		totalSpend: 7.5,
 		latestSpendAt
 	};
@@ -93,6 +95,10 @@ function localDateTimeLabel(locale: Locale, timestamp: number): string {
 	}).format(new Date(timestamp));
 }
 
+function localSizeLabel(locale: Locale, unit: 'kilobyte' | 'megabyte', value: number): string {
+	return new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'short' }).format(value);
+}
+
 function localTimeZoneName(
 	locale: Locale,
 	timeZoneName: Intl.DateTimeFormatOptions['timeZoneName']
@@ -137,6 +143,26 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	await expect
 		.element(screen.getByRole('columnheader', { name: locale === 'ru' ? 'Пользователь' : 'User' }))
 		.toBeVisible();
+	await expect
+		.element(
+			screen.getByRole('columnheader', {
+				name: locale === 'ru' ? 'Размер исходников' : 'Sources size'
+			})
+		)
+		.toBeVisible();
+	await expect
+		.element(
+			screen.getByRole('columnheader', {
+				name: locale === 'ru' ? 'Размер референсов' : 'References size'
+			})
+		)
+		.toBeVisible();
+	await expect
+		.element(screen.getByRole('cell', { name: localSizeLabel(locale, 'megabyte', 3) }))
+		.toBeVisible();
+	await expect
+		.element(screen.getByRole('cell', { name: localSizeLabel(locale, 'kilobyte', 512) }))
+		.toBeVisible();
 	const latestSpendHeader = screen.getByRole('columnheader', {
 		name: `${locale === 'ru' ? 'Последняя трата' : 'Latest spend'}, ${localTimeZoneName(locale, 'short')}`
 	});
@@ -144,6 +170,21 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	await expect
 		.element(latestSpendHeader)
 		.toHaveAttribute('title', localTimeZoneName(locale, 'long'));
+});
+
+it('shows an em dash instead of a size when no upload size is known', async () => {
+	const fetchMock = mockUsageFetch([
+		page([{ ...user(PUBKEY_ONE), sourceBytes: null, referenceBytes: null }], 0, false)
+	]);
+	vi.stubGlobal('fetch', fetchMock);
+
+	const screen = render(UsagePage, pageProps());
+
+	await expect
+		.element(screen.getByRole('rowheader', { name: npubEncode(PUBKEY_ONE) }))
+		.toBeVisible();
+	expect(screen.getByRole('cell', { name: '—' }).elements()).toHaveLength(3);
+	expect(screen.getByRole('cell', { name: /MB|kB/ }).elements()).toHaveLength(0);
 });
 
 it('loads the next usage page when the infinite-scroll sentinel intersects', async () => {
