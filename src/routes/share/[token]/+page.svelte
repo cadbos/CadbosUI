@@ -293,7 +293,7 @@ before the Change Date. See LICENSE for complete terms.
 <style>
 	.share-page {
 		width: 100%;
-		min-height: 100dvh;
+		min-height: calc(100dvh - var(--app-chrome-height, 0px));
 		padding: clamp(1rem, 2vw, 2rem);
 	}
 
