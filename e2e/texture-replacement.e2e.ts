@@ -78,17 +78,17 @@ function textureUploadFixture(route: Route): { key: string; url: string; mime: s
 	if (pngFromMultipart(body) !== undefined) {
 		return {
 			key: '3',
-			url: 'https://cdn.example.test/texture-mask.png',
+			url: '/api/media/test-media/texture-mask.png',
 			mime: 'image/png'
 		};
 	}
 	if (body.includes(Buffer.from('scene'))) {
-		return { key: '1', url: 'https://cdn.example.test/scene.webp', mime: 'image/webp' };
+		return { key: '1', url: '/api/media/test-media/scene.webp', mime: 'image/webp' };
 	}
 	if (body.includes(Buffer.from('fabric'))) {
 		return {
 			key: '2',
-			url: 'https://cdn.example.test/reference-fabric.webp',
+			url: '/api/media/test-media/reference-fabric.webp',
 			mime: 'image/webp'
 		};
 	}
@@ -97,7 +97,7 @@ function textureUploadFixture(route: Route): { key: string; url: string; mime: s
 
 async function uploadInputs(page: Page): Promise<UploadCapture> {
 	let maskPng: Buffer | undefined;
-	await page.route('https://cdn.example.test/scene.webp', async (route) => {
+	await page.route('**/api/media/test-media/scene.webp', async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'image/svg+xml',
@@ -302,7 +302,7 @@ test('draws a mask and applies the synchronous result without polling', async ({
 			body: JSON.stringify({
 				id: JOB_ID,
 				status: 'completed',
-				output: media(4, 'https://cdn.example.test/masked-result.webp'),
+				output: media(4, '/api/media/test-media/masked-result.webp'),
 				cost: 1.5,
 				balance: 18.5
 			})
@@ -313,7 +313,7 @@ test('draws a mask and applies the synchronous result without polling', async ({
 
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/masked-result.webp'
+		'/api/media/test-media/masked-result.webp'
 	);
 	await expect(panel.locator('.job-success')).toHaveText('Замена текстуры завершена.');
 	expect(submittedBody).toEqual({
@@ -341,7 +341,7 @@ test('draws a mask and applies the synchronous result without polling', async ({
 			body: JSON.stringify({
 				id: editJobId,
 				status: 'completed',
-				output: media(5, 'https://cdn.example.test/follow-up-edit.webp'),
+				output: media(5, '/api/media/test-media/follow-up-edit.webp'),
 				cost: 1,
 				balance: 17.5
 			})
@@ -352,7 +352,7 @@ test('draws a mask and applies the synchronous result without polling', async ({
 	await page.getByRole('button', { name: 'Применить правку' }).click();
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/follow-up-edit.webp',
+		'/api/media/test-media/follow-up-edit.webp',
 		{ timeout: 10_000 }
 	);
 

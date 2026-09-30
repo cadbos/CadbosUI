@@ -22,50 +22,46 @@ import {
 	parseMediaKey,
 	type Media
 } from '$lib/server/media';
-import { presignS3Object, type S3PresignPurpose } from '$lib/server/s3';
+import { renderMediaTtl } from '$lib/server/media-ttl';
+import { presignS3Object } from '$lib/server/s3';
 
-export async function mediaAccess(
-	platform: App.Platform | undefined,
-	media: Media,
-	purpose: S3PresignPurpose = 'ui'
-): Promise<MediaAccess> {
+// Not `resolve()`: on the server it returns paths relative to the current request
+// (`../api/media/…`), but these links must be identical, root-absolute URLs.
+export function mediaLink(bucketName: string, filename: string): MediaAccess {
 	return {
-		key: mediaKey(media.bucket.name, media.filename),
-		url: await presignS3Object(platform, media.bucket, media.filename, purpose)
+		key: mediaKey(bucketName, filename),
+		url: `/api/media/${encodeURIComponent(bucketName)}/${filename}`
 	};
+}
+
+export function mediaAccess(media: Media): MediaAccess {
+	return mediaLink(media.bucket.name, media.filename);
 }
 
 export async function mediaAccessById(
 	db: D1Database,
-	platform: App.Platform | undefined,
-	mediaId: number,
-	purpose: S3PresignPurpose = 'ui'
+	mediaId: number
 ): Promise<MediaAccess | null> {
 	const media = await getMedia(db, mediaId);
-	return media ? mediaAccess(platform, media, purpose) : null;
+	return media ? mediaAccess(media) : null;
 }
 
 export async function mediaAccessBatch(
 	db: D1Database,
-	platform: App.Platform | undefined,
 	mediaIds: number[]
 ): Promise<Map<number, MediaAccess> | null> {
 	const uniqueIds = [...new Set(mediaIds)];
 	const media = await getMediaBatch(db, uniqueIds);
 	if (media.length !== uniqueIds.length) return null;
-	const access = await Promise.all(media.map((item) => mediaAccess(platform, item)));
-	return new Map(media.map((item, index) => [item.id, access[index]]));
+	return new Map(media.map((item) => [item.id, mediaAccess(item)]));
 }
 
-// UI-purpose counterpart to providerMediaBatch (which resolves short-lived
-// provider URLs) — used to resolve the media keys a restored form snapshot's
-// reference/mask images point to, for the client's media-access cache. Keys
-// that no longer resolve (e.g. a since-deleted reference image) are simply
-// omitted rather than failing the whole batch — the caller degrades that one
-// field instead of discarding every other restored setting.
+// Resolves the media keys a restored form snapshot's reference/mask images point
+// to, for the client. Keys that no longer resolve (e.g. a since-deleted reference
+// image) are simply omitted rather than failing the whole batch — the caller
+// degrades that one field instead of discarding every other restored setting.
 export async function mediaAccessByKeyBatch(
 	db: D1Database,
-	platform: App.Platform | undefined,
 	keys: string[]
 ): Promise<Map<string, MediaAccess>> {
 	const uniqueKeys = [...new Set(keys)];
@@ -75,24 +71,30 @@ export async function mediaAccessByKeyBatch(
 		if (!parsed) continue;
 		const media = await getMediaByBucketKey(db, parsed.bucketName, parsed.filename);
 		if (!media) continue;
-		result.set(key, await mediaAccess(platform, media));
+		result.set(key, mediaAccess(media));
 	}
 	return result;
 }
 
+// Render services fetch input images after the request returns, so they get
+// presigned URLs instead of the app's own /api/media links.
 export async function providerMediaBatch(
 	db: D1Database,
 	platform: App.Platform | undefined,
 	keys: string[]
 ): Promise<Map<string, { media: Media; url: string }> | null> {
 	const uniqueKeys = [...new Set(keys)];
+	const expiresIn = renderMediaTtl(platform);
 	const result = new Map<string, { media: Media; url: string }>();
 	for (const key of uniqueKeys) {
 		const parsed = parseMediaKey(key);
 		if (!parsed) return null;
 		const media = await getMediaByBucketKey(db, parsed.bucketName, parsed.filename);
 		if (!media) return null;
-		result.set(key, { media, url: (await mediaAccess(platform, media, 'provider')).url });
+		result.set(key, {
+			media,
+			url: await presignS3Object(platform, media.bucket, media.filename, expiresIn)
+		});
 	}
 	return result;
 }

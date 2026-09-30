@@ -12,7 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { expect, test } from './fixtures';
 import { media } from './helpers/media';
 
 const TOKEN = 'b'.repeat(64);
@@ -73,15 +75,15 @@ test('shows a shared project read-only, without auth, with no editing controls',
 				generations: [
 					{
 						id: '00000000-0000-4000-8000-000000000100',
-						image: media(3, 'https://cdn.example.test/render-2.webp'),
-						source: media(1, 'https://cdn.example.test/room.jpg'),
+						image: media(3, '/api/media/test-media/render-2.webp'),
+						source: media(1, '/api/media/test-media/room.jpg'),
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 2)
 					},
 					{
 						id: '00000000-0000-4000-8000-000000000101',
-						image: media(2, 'https://cdn.example.test/render-1.webp'),
-						source: media(1, 'https://cdn.example.test/room.jpg'),
+						image: media(2, '/api/media/test-media/render-1.webp'),
+						source: media(1, '/api/media/test-media/room.jpg'),
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 1)
 					}
@@ -106,11 +108,11 @@ test('shows a shared project read-only, without auth, with no editing controls',
 	await expect(secondThumb).toBeVisible();
 	await expect(firstThumb.locator('img')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/render-2.webp'
+		'/api/media/test-media/render-2.webp'
 	);
 	await expect(secondThumb.locator('img')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/render-1.webp'
+		'/api/media/test-media/render-1.webp'
 	);
 
 	// Read-only: no rename form, no delete/share management controls exist on
@@ -135,7 +137,7 @@ test('shows a shared project read-only, without auth, with no editing controls',
 	const lightbox = page.getByRole('dialog');
 	await expect(lightbox.getByRole('img')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/render-2.webp'
+		'/api/media/test-media/render-2.webp'
 	);
 	await expect(lightbox.getByRole('heading', { name: 'Настройки генерации' })).toBeVisible();
 	await expect(lightbox.getByText('cozy scandinavian living room')).toBeVisible();
@@ -169,8 +171,8 @@ test('shows a per-kind settings summary for the generation being previewed', asy
 				generations: [
 					{
 						id: generationId,
-						image: media(2, 'https://cdn.example.test/styled.webp'),
-						source: media(1, 'https://cdn.example.test/room.jpg'),
+						image: media(2, '/api/media/test-media/styled.webp'),
+						source: media(1, '/api/media/test-media/room.jpg'),
 						kind: 'style-transfer',
 						createdAt: Date.UTC(2026, 0, 1)
 					}
@@ -221,8 +223,8 @@ test('shows an error message when a generation preview fails to load its setting
 				generations: [
 					{
 						id: generationId,
-						image: media(2, 'https://cdn.example.test/render.webp'),
-						source: media(1, 'https://cdn.example.test/room.jpg'),
+						image: media(2, '/api/media/test-media/render.webp'),
+						source: media(1, '/api/media/test-media/room.jpg'),
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 1)
 					}

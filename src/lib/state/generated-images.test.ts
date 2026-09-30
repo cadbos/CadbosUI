@@ -26,11 +26,11 @@ function image(id: string, createdAt: number): SceneRecord {
 		id,
 		image: {
 			key: `${id}.webp`,
-			url: `https://cdn.example.test/${id}.webp`
+			url: `/api/media/test-media/${id}.webp`
 		},
 		source: {
 			key: `${id}-source.jpg`,
-			url: `https://cdn.example.test/${id}-source.jpg`
+			url: `/api/media/test-media/${id}-source.jpg`
 		},
 		kind: 'render',
 		createdAt,

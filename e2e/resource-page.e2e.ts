@@ -24,11 +24,11 @@ const OPENABLE_ID = '00000000-0000-4000-8000-000000000a02';
 const ARCHIVED_ID = '00000000-0000-4000-8000-000000000a03';
 const LEGACY_ID = '00000000-0000-4000-8000-000000000a04';
 
-const chair = media(1, 'https://cdn.example.test/chair.png');
-const room = media(2, 'https://cdn.example.test/room.jpg');
-const replaced = media(3, 'https://cdn.example.test/replaced.webp');
-const archivedResult = media(4, 'https://cdn.example.test/archived.webp');
-const legacyResult = media(5, 'https://cdn.example.test/legacy.webp');
+const chair = media(1, '/api/media/test-media/chair.png');
+const room = media(2, '/api/media/test-media/room.jpg');
+const replaced = media(3, '/api/media/test-media/replaced.webp');
+const archivedResult = media(4, '/api/media/test-media/archived.webp');
+const legacyResult = media(5, '/api/media/test-media/legacy.webp');
 
 const SESSION = {
 	projectId: PROJECT_ID,

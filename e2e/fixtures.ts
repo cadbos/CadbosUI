@@ -40,6 +40,16 @@ export const test = base.extend({
 			});
 		});
 
+		// Mocked API payloads reference /api/media links that have no stored media
+		// behind them; serve a placeholder so images resolve instead of hitting the server.
+		await page.route('**/api/media/**', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'image/svg+xml',
+				body: '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#d9d1c7"/></svg>'
+			});
+		});
+
 		await use(page);
 	}
 });

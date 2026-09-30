@@ -103,10 +103,13 @@ export interface RequestFormSnapshot {
 	lightSettingsInstruction: string;
 }
 
-export interface MediaAccess {
-	key: string;
-	url: string;
-}
+// Managed image identity plus its stable, cacheable /api/media link.
+export const mediaAccessSchema = z.object({
+	key: z.string().min(1),
+	url: z.string().startsWith('/api/media/')
+});
+
+export type MediaAccess = z.infer<typeof mediaAccessSchema>;
 
 export const DEFAULT_UPLOADS_BUCKET_NAME = 'cadbos-uploads';
 
@@ -153,15 +156,10 @@ export type ServiceHealth = z.infer<typeof serviceHealthSchema>;
 export type NostrHealth = z.infer<typeof nostrHealthSchema>;
 export type HealthSnapshot = z.infer<typeof healthSnapshotSchema>;
 
-// POST /api/uploads → managed image identity plus temporary read access.
+// POST /api/uploads → managed image identity plus its /api/media link.
 export const uploadResultSchema = z
 	.object({
-		image: z
-			.object({
-				key: z.string().min(1),
-				url: z.url()
-			})
-			.strict(),
+		image: mediaAccessSchema.strict(),
 		mime: z.string().min(1),
 		size: z.number().nonnegative(),
 		dimensions: z.tuple([z.number().positive(), z.number().positive()]).optional()

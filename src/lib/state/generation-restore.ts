@@ -13,11 +13,9 @@
  */
 
 import { z } from 'zod';
-import { generationKinds } from '$lib/api/contract';
+import { generationKinds, mediaAccessSchema } from '$lib/api/contract';
 import { requestFormSnapshotSchema } from '$lib/state/request.svelte';
 import { describeCause, issuePaths } from '$lib/utils';
-
-const mediaAccessSchema = z.object({ key: z.string().min(1), url: z.url() });
 
 // GET /api/generated-images/[id]'s response shape — shared by every caller
 // that reopens a past generation (workspace-tabs.svelte.ts's

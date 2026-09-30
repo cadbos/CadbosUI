@@ -84,14 +84,14 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (!detail) return apiError(404, 'generation_not_found', 'Generation not found');
 
 	const [image, source] = await Promise.all([
-		mediaAccessById(db, platform, detail.resultMediaId),
-		mediaAccessById(db, platform, detail.sourceMediaId)
+		mediaAccessById(db, detail.resultMediaId),
+		mediaAccessById(db, detail.sourceMediaId)
 	]);
 	if (!image || !source) return apiError(404, 'image_not_found', 'Image not found');
 
 	const referencedKeys = detail.formSnapshot ? referencedMediaKeys(detail.formSnapshot) : [];
 	const referencedAccess = referencedKeys.length
-		? await mediaAccessByKeyBatch(db, platform, referencedKeys)
+		? await mediaAccessByKeyBatch(db, referencedKeys)
 		: new Map<string, MediaAccess>();
 	const formSnapshot = detail.formSnapshot
 		? withAvailableReferenceImages(detail.formSnapshot, referencedAccess)

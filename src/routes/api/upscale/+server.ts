@@ -29,8 +29,8 @@ import {
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { upscale4k, type StoredRenderResponse } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
-import { getOrCreateMediaByKey, mediaKey, uploadsBucketName } from '$lib/server/media';
-import { mediaAccess, providerMediaBatch } from '$lib/server/media-access';
+import { getOrCreateMediaByKey, uploadsBucketName } from '$lib/server/media';
+import { mediaAccess, mediaLink, providerMediaBatch } from '$lib/server/media-access';
 import { assertSessionOwnedByUser } from '$lib/server/projects';
 
 // Anti-cost-abuse: each upscale is its own paid call, mirroring /api/edit — its
@@ -163,8 +163,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 
 	const output =
 		db && userId
-			? await mediaAccess(
-					platform,
+			? mediaAccess(
 					await getOrCreateMediaByKey(
 						db,
 						uploadsBucket!,
@@ -173,10 +172,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 						result.outputSize
 					)
 				)
-			: {
-					key: mediaKey(uploadsBucketName(platform), result.outputKey),
-					url: `/${result.outputKey}`
-				};
+			: mediaLink(uploadsBucketName(platform), result.outputKey);
 	return json({
 		...(generationId !== undefined ? { id: generationId } : {}),
 		output,

@@ -169,7 +169,7 @@ describe('POST /api/upscale — billing', () => {
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { output: { url: string } };
-		expect(result.output.url).toMatch(/^https:\/\//);
+		expect(result.output.url).toMatch(/^\/api\/media\//);
 	});
 
 	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
@@ -224,7 +224,7 @@ describe('POST /api/upscale — billing', () => {
 			kind: 'upscale'
 		});
 		expect(result.output.key).toBeTruthy();
-		expect(result.output.url).toContain('X-Amz-Expires=43200');
+		expect(result.output.url).toBe(`/api/media/${result.output.key}`);
 	});
 
 	it('still returns the completed, already-charged upscale if recordGeneration fails', async () => {
@@ -243,7 +243,7 @@ describe('POST /api/upscale — billing', () => {
 
 			expect(response.status).toBe(200);
 			const result = (await response.json()) as { output: { url: string } };
-			expect(result.output.url).toMatch(/^https:\/\//);
+			expect(result.output.url).toMatch(/^\/api\/media\//);
 			// No generation row exists to refer to, so none is claimed.
 			expect(result).not.toHaveProperty('id');
 			expect(consoleError).toHaveBeenCalledWith(
@@ -265,7 +265,7 @@ describe('POST /api/upscale — billing', () => {
 
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { output: { url: string } };
-		expect(result.output.url).toMatch(/^https:\/\//);
+		expect(result.output.url).toMatch(/^\/api\/media\//);
 	});
 
 	it('rate-limits repeated upscales from the same account (anti-cost-abuse)', async () => {

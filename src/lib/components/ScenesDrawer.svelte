@@ -301,8 +301,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function imageExtension(url: string): string | null {
-		const pathname = new URL(url).pathname;
-		const match = /\.([a-z0-9]+)$/i.exec(pathname);
+		const match = /\.([a-z0-9]+)$/i.exec(url);
 		return match ? match[1].toLowerCase() : null;
 	}
 

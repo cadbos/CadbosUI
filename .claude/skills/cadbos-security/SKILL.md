@@ -47,8 +47,9 @@ the diff, run the automated checks, then walk the Do/Avoid lists.
   (DOMPurify) or avoid entirely.
 - **SSRF**: don't fetch user-supplied URLs server-side without validating scheme
   (https only) and blocking private/internal IP ranges. Note: uploaded images are
-  `public-read` with hard-to-guess URLs — keep that trade-off explicit and consider
-  signed URLs if privacy needs grow.
+  private in S3 and served through the unauthenticated `/api/media` route under
+  UUID filenames — keep that trade-off explicit; only render services receive
+  presigned URLs.
 - **Leaking internals** — no stack traces, server paths, or internal IDs in client
   error responses; return generic messages, log detail server-side.
 - **Bypassing CSRF** — SvelteKit checks `Origin` for form actions; keep

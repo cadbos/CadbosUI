@@ -68,7 +68,6 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	);
 	const access = await mediaAccessBatch(
 		db,
-		platform,
 		page.images.map((image) => image.mediaId)
 	);
 	if (!access) return apiError(404, 'image_not_found', 'Image not found');

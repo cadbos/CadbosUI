@@ -69,7 +69,7 @@ export const GET: RequestHandler = async ({ params, url, platform, locals }) => 
 		parsed.data.offset,
 		parsed.data.size
 	);
-	const access = await mediaAccessBatch(db, platform, [
+	const access = await mediaAccessBatch(db, [
 		media.id,
 		...page.generations.map((generation) => generation.resultMediaId)
 	]);

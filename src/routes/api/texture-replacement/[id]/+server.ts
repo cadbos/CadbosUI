@@ -39,8 +39,7 @@ import { uploadGeneratedImageBytes } from '$lib/server/uploads';
 
 async function responseForJob(
 	job: TextureReplacementJob,
-	db: ReturnType<typeof getDb>,
-	platform: App.Platform | undefined
+	db: ReturnType<typeof getDb>
 ): Promise<Response> {
 	const headers = { 'cache-control': 'no-store' };
 	if (job.status === 'processing') {
@@ -49,7 +48,7 @@ async function responseForJob(
 		});
 	}
 	if (job.status === 'completed' && job.outputMediaId !== null && job.balanceAfter !== null) {
-		const output = await mediaAccessById(db, platform, job.outputMediaId);
+		const output = await mediaAccessById(db, job.outputMediaId);
 		if (!output)
 			return apiError(404, 'texture_replacement_not_found', 'Texture replacement not found');
 		return json(
@@ -90,7 +89,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (!userId) return apiError(500, 'account_error', 'Account record not found');
 	let job = await getTextureReplacementJob(db, userId, params.id);
 	if (!job) return apiError(404, 'texture_replacement_not_found', 'Texture replacement not found');
-	if (job.status !== 'processing') return responseForJob(job, db, platform);
+	if (job.status !== 'processing') return responseForJob(job, db);
 
 	let result;
 	try {
@@ -110,7 +109,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 				0,
 				Math.round((now - job.createdAt) / 1000)
 			);
-			return responseForJob(job, db, platform);
+			return responseForJob(job, db);
 		}
 		if (error instanceof ComfyUiError) {
 			console.error('ComfyUI texture replacement poll failed:', {
@@ -144,7 +143,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 				Math.round((now - job.createdAt) / 1000)
 			);
 		}
-		return responseForJob(job, db, platform);
+		return responseForJob(job, db);
 	}
 
 	const queueWaitSec =
@@ -167,7 +166,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			executionSec,
 			result.downloadSec
 		);
-		return responseForJob(job, db, platform);
+		return responseForJob(job, db);
 	}
 
 	try {
@@ -199,7 +198,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			result.downloadSec,
 			reuploadSec
 		);
-		return responseForJob(job, db, platform);
+		return responseForJob(job, db);
 	} catch (error) {
 		console.error('Texture replacement finalization failed:', error);
 		return apiError(500, 'texture_replacement_finalize_failed', 'Texture replacement failed');

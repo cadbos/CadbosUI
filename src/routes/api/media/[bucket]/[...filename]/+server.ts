@@ -17,7 +17,11 @@ import { normalizeImageContentType } from '$lib/image-mime';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { getMediaByBucketKey } from '$lib/server/media';
+import { mediaCacheTtl } from '$lib/server/media-ttl';
 import { presignS3Object } from '$lib/server/s3';
+
+// Presigned only to be fetched immediately by this route; never leaves the server.
+const PRESIGN_SECONDS = 60;
 
 function downloadFailed(): Response {
 	return apiError(502, 'download_failed', 'Image download failed');
@@ -32,8 +36,10 @@ export const GET: RequestHandler = async ({ fetch, params, platform }) => {
 	if (!media) return apiError(404, 'image_not_found', 'Image not found');
 
 	let upstream: Response;
+	let cacheTtl: number;
 	try {
-		const url = await presignS3Object(platform, media.bucket, media.filename, 'ui');
+		cacheTtl = mediaCacheTtl(platform);
+		const url = await presignS3Object(platform, media.bucket, media.filename, PRESIGN_SECONDS);
 		upstream = await fetch(url);
 	} catch (error) {
 		console.error('Media download failed:', error instanceof Error ? error.name : typeof error);
@@ -48,7 +54,7 @@ export const GET: RequestHandler = async ({ fetch, params, platform }) => {
 
 	return new Response(upstream.body, {
 		headers: {
-			'cache-control': 'private, max-age=31536000, immutable',
+			'cache-control': `private, max-age=${cacheTtl}, immutable`,
 			'content-type': contentType
 		}
 	});

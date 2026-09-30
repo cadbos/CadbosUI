@@ -79,9 +79,11 @@ environment variables. Their authoritative definitions are in
 
 - `DB` — D1 database for users, sessions, credits, and generation records
 - `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` — private S3-compatible image storage
-- `S3_PRESIGNED_UI_TTL_SECONDS` and `S3_PRESIGNED_PROVIDER_TTL_SECONDS` — optional
-  presigned URL lifetimes in seconds; defaults are 43200 and 10800, and valid values
-  range from 1 through 604800
+- `MEDIA_CACHE_TTL_SECONDS` — optional browser cache lifetime of `/api/media` images in
+  seconds; the default is 31536000, and valid values range from 1 through 31536000
+- `RENDER_MEDIA_TTL_SECONDS` — optional lifetime in seconds of the presigned image URLs
+  handed to render services; the default is 10800, and valid values range from 1
+  through 604800
 - `ARCHAI_API_URL` and the `ARCHAI_API_KEY` secret — archAI server integration
 - `COMFYUI_BASE_URL` — private VPC service binding for ComfyUI
 - `ADMIN_PUBKEYS`, `METERED_DESIGNER_PUBKEYS`, and `PUBKEY_VIEWER` — access and usage
@@ -103,8 +105,8 @@ configured remote database.
 
 Before serving application traffic, provision the uploads bucket in `buckets` under the name
 `cadbos-uploads`. Set `url` to the full bucket-scoped S3 API endpoint and `region` to its
-signing region. Existing object keys remain in `media`; application reads use presigned S3
-URLs.
+signing region. Existing object keys remain in `media`; the UI reads images through the
+cacheable `/api/media` route, and only render services receive presigned S3 URLs.
 
 ## Deployment
 

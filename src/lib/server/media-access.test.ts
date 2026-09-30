@@ -20,6 +20,8 @@ import { TEST_S3_BUCKET } from '$lib/server/testing/generation-fixtures';
 const presignS3Object = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/server/s3', () => ({ presignS3Object }));
+// Server-side `resolve()` yields request-relative paths inside a request.
+vi.mock('$app/paths', () => ({ resolve: (id: string) => `../${id.slice(1)}` }));
 
 import { mediaAccess, providerMediaBatch } from '$lib/server/media-access';
 
@@ -27,26 +29,20 @@ beforeEach(() => {
 	presignS3Object.mockReset().mockResolvedValue('https://signed.example.test/object');
 });
 
-it('returns an encoded bucket-qualified key for any stored bucket', async () => {
+it('returns an encoded bucket-qualified key and its stable /api/media link', () => {
 	const bucket = {
 		id: 2,
 		name: 'external:https://images.example.test',
 		url: 'https://images.example.test',
 		region: 'auto'
 	};
-	await expect(
-		mediaAccess(undefined, {
-			id: 1,
-			filename: 'shared/name.webp',
-			bucket,
-			checksum: '',
-			size: null
-		})
-	).resolves.toEqual({
+	expect(
+		mediaAccess({ id: 1, filename: 'shared/name.webp', bucket, checksum: '', size: null })
+	).toEqual({
 		key: 'external%3Ahttps%3A%2F%2Fimages.example.test/shared/name.webp',
-		url: 'https://signed.example.test/object'
+		url: '/api/media/external%3Ahttps%3A%2F%2Fimages.example.test/shared/name.webp'
 	});
-	expect(presignS3Object).toHaveBeenCalledWith(undefined, bucket, 'shared/name.webp', 'ui');
+	expect(presignS3Object).not.toHaveBeenCalled();
 });
 
 it('resolves identical object names against their qualified buckets', async () => {
@@ -67,10 +63,29 @@ it('resolves identical object names against their qualified buckets', async () =
 	expect(result?.get(uploadsKey)?.media).toEqual(uploadsMedia);
 	expect(result?.get(archiveKey)?.media).toEqual(archiveMedia);
 	expect(presignS3Object).toHaveBeenCalledTimes(2);
+	expect(presignS3Object).toHaveBeenCalledWith(undefined, uploads, filename, 10_800);
 	await expect(
 		providerMediaBatch(db, undefined, ['missing-bucket/shared/name.webp'])
 	).resolves.toBeNull();
 	await expect(
 		providerMediaBatch(db, undefined, [mediaKey(TEST_S3_BUCKET.name, 'missing/name.webp')])
 	).resolves.toBeNull();
+});
+
+it('presigns render-service URLs for RENDER_MEDIA_TTL_SECONDS', async () => {
+	const db = makeD1();
+	const uploads = await getBucketByName(db, TEST_S3_BUCKET.name);
+	await getOrCreateMediaByKey(db, uploads, 'a.webp', '', null);
+	const platform = { env: { RENDER_MEDIA_TTL_SECONDS: '1200' } } as unknown as App.Platform;
+
+	await providerMediaBatch(db, platform, [mediaKey(uploads.name, 'a.webp')]);
+
+	expect(presignS3Object).toHaveBeenCalledWith(platform, uploads, 'a.webp', 1200);
+	await expect(
+		providerMediaBatch(
+			db,
+			{ env: { RENDER_MEDIA_TTL_SECONDS: '604801' } } as unknown as App.Platform,
+			[mediaKey(uploads.name, 'a.webp')]
+		)
+	).rejects.toThrow('RENDER_MEDIA_TTL_SECONDS is invalid');
 });

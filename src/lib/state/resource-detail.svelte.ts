@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import {
 	generationKinds,
+	mediaAccessSchema,
 	resourceRoles,
 	type MediaAccess,
 	type ResourceGenerationRecord,
@@ -27,8 +28,6 @@ import { mediaAccess } from '$lib/state/media-access.svelte';
 export type ResourceDetailStatus = 'idle' | 'loading' | 'ready' | 'not-found' | 'error';
 
 const PAGE_SIZE = 30;
-
-const mediaAccessSchema = z.object({ key: z.string().min(1), url: z.url() });
 
 const resourceDetailResponseSchema = z.object({
 	image: mediaAccessSchema,

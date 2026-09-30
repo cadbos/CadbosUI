@@ -19,9 +19,10 @@ before the Change Date. See LICENSE for complete terms.
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { tick } from 'svelte';
 	import { z } from 'zod';
-	import type {
-		TextureReplacementCompletedResponse,
-		TextureReplacementJobResponse
+	import {
+		mediaAccessSchema,
+		type TextureReplacementCompletedResponse,
+		type TextureReplacementJobResponse
 	} from '$lib/api/contract';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import ModeHint from '$lib/components/ModeHint.svelte';
@@ -60,10 +61,7 @@ before the Change Date. See LICENSE for complete terms.
 			.object({
 				id: z.string().uuid(),
 				status: z.literal('completed'),
-				output: z.object({
-					key: z.string().min(1),
-					url: z.url()
-				}),
+				output: mediaAccessSchema,
 				cost: z.number().nonnegative(),
 				balance: z.number()
 			})

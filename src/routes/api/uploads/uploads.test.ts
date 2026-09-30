@@ -170,7 +170,7 @@ describe('POST /api/uploads remote import', () => {
 		expect(result).toMatchObject({
 			image: {
 				key: expect.any(String),
-				url: expect.stringContaining('?')
+				url: expect.stringMatching(/^\/api\/media\//)
 			},
 			mime: 'image/webp',
 			size: 11
@@ -285,7 +285,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 		expect(await response.json()).toMatchObject({
 			image: {
 				key: mediaKey(TEST_S3_BUCKET.name, 'existing.webp'),
-				url: expect.stringContaining('/existing.webp?')
+				url: `/api/media/${TEST_S3_BUCKET.name}/existing.webp`
 			}
 		});
 		expect(bucket.put).not.toHaveBeenCalled();
@@ -341,7 +341,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 		expect(await response.json()).toMatchObject({
 			image: {
 				key: expect.any(String),
-				url: expect.stringContaining('?')
+				url: expect.stringMatching(/^\/api\/media\//)
 			}
 		});
 		expect(bucket.put).toHaveBeenCalledTimes(1);

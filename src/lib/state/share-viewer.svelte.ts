@@ -13,7 +13,7 @@
  */
 
 import { z } from 'zod';
-import { generationKinds } from '$lib/api/contract';
+import { generationKinds, mediaAccessSchema } from '$lib/api/contract';
 import type { ProjectDetailResponse, ShareGenerationDetailResponse } from '$lib/api/contract';
 import { requestFormSnapshotSchema } from '$lib/state/request.svelte';
 
@@ -41,14 +41,8 @@ const shareGenerationDetailSchema = z.object({
 
 const sessionGenerationSchema = z.object({
 	id: z.uuid(),
-	image: z.object({
-		key: z.string().min(1),
-		url: z.url()
-	}),
-	source: z.object({
-		key: z.string().min(1),
-		url: z.url()
-	}),
+	image: mediaAccessSchema,
+	source: mediaAccessSchema,
 	kind: z.enum(generationKinds),
 	createdAt: z.number().int().min(0)
 });

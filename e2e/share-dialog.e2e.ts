@@ -12,7 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { expect, test } from './fixtures';
 
 const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
 const SESSION_ID = '00000000-0000-4000-8000-000000000010';

@@ -98,7 +98,7 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 				result.size
 			);
 			return json({
-				image: await mediaAccess(platform, media),
+				image: mediaAccess(media),
 				mime: result.mime,
 				size: result.size,
 				...(result.dimensions ? { dimensions: result.dimensions } : {})
@@ -147,7 +147,7 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 			result.size
 		);
 		return json({
-			image: await mediaAccess(platform, media),
+			image: mediaAccess(media),
 			mime: result.mime,
 			size: result.size
 		});

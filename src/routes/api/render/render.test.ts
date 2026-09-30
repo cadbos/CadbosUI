@@ -218,7 +218,7 @@ describe('POST /api/render — billing', () => {
 			kind: 'render'
 		});
 		expect(result.output.key).toBeTruthy();
-		expect(result.output.url).toContain('X-Amz-Expires=43200');
+		expect(result.output.url).toBe(`/api/media/${result.output.key}`);
 	});
 
 	it('overwrites the mirrored archAI balance rather than accumulating it across calls', async () => {
@@ -252,7 +252,7 @@ describe('POST /api/render — billing', () => {
 
 			expect(response.status).toBe(200);
 			const result = (await response.json()) as { output: { url: string } };
-			expect(result.output.url).toMatch(/^https:\/\//);
+			expect(result.output.url).toMatch(/^\/api\/media\//);
 			// No generation row exists to refer to, so none is claimed.
 			expect(result).not.toHaveProperty('id');
 			expect(consoleError).toHaveBeenCalledWith(
@@ -280,7 +280,7 @@ describe('POST /api/render — billing', () => {
 
 			expect(response.status).toBe(200);
 			const result = (await response.json()) as { output: { url: string } };
-			expect(result.output.url).toMatch(/^https:\/\//);
+			expect(result.output.url).toMatch(/^\/api\/media\//);
 			expect(consoleError).toHaveBeenCalledWith(
 				'recordBalance failed after a successful render:',
 				expect.any(Error)

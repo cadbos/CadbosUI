@@ -19,7 +19,11 @@ before the Change Date. See LICENSE for complete terms.
 	import { page } from '$app/state';
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { z } from 'zod';
-	import type { EditCompletedResponse, EditJobResponse } from '$lib/api/contract';
+	import {
+		mediaAccessSchema,
+		type EditCompletedResponse,
+		type EditJobResponse
+	} from '$lib/api/contract';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import {
 		extractApiErrorCode,
@@ -54,10 +58,7 @@ before the Change Date. See LICENSE for complete terms.
 			.object({
 				id: z.uuid(),
 				status: z.literal('completed'),
-				output: z.object({
-					key: z.string().min(1),
-					url: z.url()
-				}),
+				output: mediaAccessSchema,
 				cost: z.number().nonnegative(),
 				balance: z.number()
 			})

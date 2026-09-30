@@ -160,7 +160,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	);
 	return json({
 		...(generationId !== undefined ? { id: generationId } : {}),
-		output: await mediaAccess(platform, outputMedia),
+		output: mediaAccess(outputMedia),
 		cost: result.cost,
 		balance: result.balance
 	} satisfies RenderResponse);

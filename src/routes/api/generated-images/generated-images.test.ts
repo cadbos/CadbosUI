@@ -205,11 +205,11 @@ describe('GET /api/generated-images', () => {
 			id: 'user-1-image-20',
 			image: {
 				key: mediaKey(TEST_S3_BUCKET.name, 'user-1-image-20.webp'),
-				url: expect.stringContaining('/user-1-image-20.webp?')
+				url: `/api/media/${TEST_S3_BUCKET.name}/user-1-image-20.webp`
 			},
 			source: {
 				key: mediaKey(TEST_S3_BUCKET.name, 'source.jpg'),
-				url: expect.stringContaining('/source.jpg?')
+				url: `/api/media/${TEST_S3_BUCKET.name}/source.jpg`
 			},
 			kind: 'render',
 			createdAt: 10020,
@@ -586,11 +586,11 @@ describe('GET /api/generated-images/[id]', () => {
 		expect(result.session).toBeNull();
 		expect(result.image).toEqual({
 			key: mediaKey(TEST_S3_BUCKET.name, 'image-1.webp'),
-			url: expect.stringContaining('/image-1.webp?')
+			url: `/api/media/${TEST_S3_BUCKET.name}/image-1.webp`
 		});
 		expect(result.source).toEqual({
 			key: mediaKey(TEST_S3_BUCKET.name, 'source.jpg'),
-			url: expect.stringContaining('/source.jpg?')
+			url: `/api/media/${TEST_S3_BUCKET.name}/source.jpg`
 		});
 		expect(result.media).toEqual([result.image, result.source]);
 	});

@@ -12,7 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { expect, test } from './fixtures';
 import { ru } from '$lib/i18n/locales/ru';
 import { media } from './helpers/media';
 
@@ -21,8 +23,8 @@ const PROJECT_ID = '00000000-0000-4000-8000-000000000700';
 const SESSION_ID = '00000000-0000-4000-8000-000000000701';
 const GENERATION_ID = '00000000-0000-4000-8000-000000000702';
 const COMFY_GENERATION_ID = '00000000-0000-4000-8000-000000000704';
-const BEFORE_URL = 'https://cdn.example.test/before.webp';
-const AFTER_URL = 'https://cdn.example.test/after.webp';
+const BEFORE_URL = '/api/media/test-media/before.webp';
+const AFTER_URL = '/api/media/test-media/after.webp';
 
 async function authenticateWithExpenseHistory(page: Page): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
@@ -200,7 +202,7 @@ test('clicking an expense row opens its generation before/after in the workspace
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000703',
-				output: media(3, 'https://cdn.example.test/new-render.webp'),
+				output: media(3, '/api/media/test-media/new-render.webp'),
 				cost: 1,
 				balance: 7.5
 			})

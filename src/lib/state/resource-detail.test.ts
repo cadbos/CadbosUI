@@ -24,7 +24,7 @@ function generation(id: string): ResourceGenerationRecord {
 		id,
 		kind: 'render',
 		createdAt: 1000,
-		image: { key: `test-media/${id}.webp`, url: `https://cdn.example.test/${id}.webp` },
+		image: { key: `test-media/${id}.webp`, url: `/api/media/test-media/${id}.webp` },
 		roles: ['source'],
 		session: null,
 		settingsSaved: true
@@ -37,7 +37,7 @@ function detailPage(
 	hasMore: boolean
 ): ResourceDetailResponse {
 	return {
-		image: { key: KEY, url: 'https://cdn.example.test/room.jpg' },
+		image: { key: KEY, url: '/api/media/test-media/room.jpg' },
 		roles: ['source'],
 		generations,
 		pagination: { offset, size: 30, hasMore }

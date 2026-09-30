@@ -13,7 +13,12 @@
  */
 
 import { z } from 'zod';
-import { resourceRoles, type ResourceFilter, type ResourceImageRecord } from '$lib/api/contract';
+import {
+	mediaAccessSchema,
+	resourceRoles,
+	type ResourceFilter,
+	type ResourceImageRecord
+} from '$lib/api/contract';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export type ResourcesStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -21,10 +26,7 @@ export type ResourcesStatus = 'idle' | 'loading' | 'ready' | 'error';
 const PAGE_SIZE = 30;
 
 const resourceImageRecordSchema = z.object({
-	image: z.object({
-		key: z.string().min(1),
-		url: z.url()
-	}),
+	image: mediaAccessSchema,
 	createdAt: z.number().int().min(0),
 	roles: z.array(z.enum(resourceRoles)).min(1)
 });

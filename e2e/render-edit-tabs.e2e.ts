@@ -60,7 +60,7 @@ async function mockUpload(page: Page): Promise<void> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				image: media(1, 'https://cdn.example.test/uploaded.webp'),
+				image: media(1, '/api/media/test-media/uploaded.webp'),
 				mime: 'image/webp',
 				size: 1024,
 				dimensions: [800, 600]
@@ -83,8 +83,8 @@ async function uploadImageFile(
 function styleTransferUploadUrl(route: Route): string {
 	const body = route.request().postDataBuffer();
 	if (body === null) throw new Error('Upload request body is missing');
-	if (body.includes(Buffer.from('room'))) return 'https://cdn.example.test/source.webp';
-	if (body.includes(Buffer.from('reference'))) return 'https://cdn.example.test/reference.webp';
+	if (body.includes(Buffer.from('room'))) return '/api/media/test-media/source.webp';
+	if (body.includes(Buffer.from('reference'))) return '/api/media/test-media/reference.webp';
 	throw new Error('Upload request body does not match the style transfer fixtures');
 }
 
@@ -140,8 +140,8 @@ async function mockProjectWithGeneration(page: Page): Promise<void> {
 						generations: [
 							{
 								id: E2E_GENERATION_ID,
-								image: media(2, 'https://cdn.example.test/after.webp'),
-								source: media(1, 'https://cdn.example.test/before.webp'),
+								image: media(2, '/api/media/test-media/after.webp'),
+								source: media(1, '/api/media/test-media/before.webp'),
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 1),
 								amount: 1.5,
@@ -166,8 +166,8 @@ async function mockProjectWithGeneration(page: Page): Promise<void> {
 				createdAt: Date.UTC(2026, 0, 1),
 				amount: 1.5,
 				balanceAfter: 8.5,
-				image: media(2, 'https://cdn.example.test/after.webp'),
-				source: media(1, 'https://cdn.example.test/before.webp'),
+				image: media(2, '/api/media/test-media/after.webp'),
+				source: media(1, '/api/media/test-media/before.webp'),
 				formSnapshot: null,
 				session: {
 					projectId: E2E_PROJECT_ID,
@@ -176,8 +176,8 @@ async function mockProjectWithGeneration(page: Page): Promise<void> {
 					sessionTitle: 'Main thread'
 				},
 				media: [
-					media(2, 'https://cdn.example.test/after.webp'),
-					media(1, 'https://cdn.example.test/before.webp')
+					media(2, '/api/media/test-media/after.webp'),
+					media(1, '/api/media/test-media/before.webp')
 				]
 			})
 		});
@@ -228,7 +228,7 @@ test('the shared image picker imports an HTTPS image URL through the upload endp
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				image: media(1, 'https://cdn.example.test/imported.webp'),
+				image: media(1, '/api/media/test-media/imported.webp'),
 				mime: 'image/webp',
 				size: 1024,
 				dimensions: [800, 600]
@@ -288,7 +288,7 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000101',
-				output: media(3, 'https://cdn.example.test/styled.webp'),
+				output: media(3, '/api/media/test-media/styled.webp'),
 				cost: 4,
 				balance: 96
 			})
@@ -350,7 +350,7 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 	});
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/styled.webp'
+		'/api/media/test-media/styled.webp'
 	);
 });
 
@@ -382,7 +382,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000102',
-				output: media(3, 'https://cdn.example.test/render.webp'),
+				output: media(3, '/api/media/test-media/render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -395,7 +395,7 @@ test('render prompt and style transfer guidance stay isolated across tab switche
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000103',
-				output: media(4, 'https://cdn.example.test/styled.webp'),
+				output: media(4, '/api/media/test-media/styled.webp'),
 				cost: 4,
 				balance: 91
 			})
@@ -476,7 +476,7 @@ test('the Style transfer tab lets you pick a ready-made photorealistic preset as
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000104',
-				output: media(3, 'https://cdn.example.test/styled.webp'),
+				output: media(3, '/api/media/test-media/styled.webp'),
 				cost: 4,
 				balance: 96
 			})
@@ -575,7 +575,7 @@ test('switching from a custom reference upload back to a preset tab clears the u
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000105',
-				output: media(3, 'https://cdn.example.test/styled.webp'),
+				output: media(3, '/api/media/test-media/styled.webp'),
 				cost: 4,
 				balance: 96
 			})
@@ -647,7 +647,7 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 			body: JSON.stringify({
 				id: jobId,
 				status: 'completed',
-				output: media(2, 'https://cdn.example.test/edited.webp'),
+				output: media(2, '/api/media/test-media/edited.webp'),
 				cost: 3,
 				balance: 97
 			})
@@ -666,7 +666,7 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/edited.webp',
+		'/api/media/test-media/edited.webp',
 		{ timeout: 10_000 }
 	);
 	expect(editBody).toMatchObject({ imageKey: mediaKey(1) });
@@ -700,7 +700,7 @@ test('a completed freeform edit unlocks the form for the next edit on the same r
 			body: JSON.stringify({
 				id: firstJobId,
 				status: 'completed',
-				output: media(2, 'https://cdn.example.test/edited.webp'),
+				output: media(2, '/api/media/test-media/edited.webp'),
 				cost: 3,
 				balance: 97
 			})
@@ -713,7 +713,7 @@ test('a completed freeform edit unlocks the form for the next edit on the same r
 			body: JSON.stringify({
 				id: secondJobId,
 				status: 'completed',
-				output: media(3, 'https://cdn.example.test/re-edited.webp'),
+				output: media(3, '/api/media/test-media/re-edited.webp'),
 				cost: 2,
 				balance: 95
 			})
@@ -732,7 +732,7 @@ test('a completed freeform edit unlocks the form for the next edit on the same r
 	await applyButton.click();
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/edited.webp',
+		'/api/media/test-media/edited.webp',
 		{ timeout: 10_000 }
 	);
 
@@ -744,7 +744,7 @@ test('a completed freeform edit unlocks the form for the next edit on the same r
 	await applyButton.click();
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/re-edited.webp',
+		'/api/media/test-media/re-edited.webp',
 		{ timeout: 10_000 }
 	);
 });
@@ -789,7 +789,7 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000107',
-				output: media(2, 'https://cdn.example.test/render.webp'),
+				output: media(2, '/api/media/test-media/render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -848,7 +848,7 @@ test('generating from the scratch tab adds the lazily-created project/session to
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000108',
-				output: media(2, 'https://cdn.example.test/render.webp'),
+				output: media(2, '/api/media/test-media/render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -888,7 +888,7 @@ test('a first generation from an empty workspace opens exactly one closable proj
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000109',
-				output: media(2, 'https://cdn.example.test/render.webp'),
+				output: media(2, '/api/media/test-media/render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -994,7 +994,7 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000109',
-				output: media(2, 'https://cdn.example.test/render.webp'),
+				output: media(2, '/api/media/test-media/render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -1015,7 +1015,7 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000110',
 				status: 'completed',
-				output: media(3, 'https://cdn.example.test/edited.webp'),
+				output: media(3, '/api/media/test-media/edited.webp'),
 				cost: 3,
 				balance: 92
 			})
@@ -1027,7 +1027,7 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000111',
-				output: media(4, 'https://cdn.example.test/edited-4k.webp'),
+				output: media(4, '/api/media/test-media/edited-4k.webp'),
 				cost: 4,
 				balance: 88
 			})
@@ -1051,7 +1051,7 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	]);
 
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/render.webp');
 
 	// The result replaces the upload step on the canvas — there's only ever
 	// one current image, and it's now the just-generated render.
@@ -1072,18 +1072,18 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	await compareButton.click();
 	await expect(page.getByAltText('До', { exact: true })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/uploaded.webp'
+		'/api/media/test-media/uploaded.webp'
 	);
 	await expect(page.getByAltText('После', { exact: true })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/render.webp'
+		'/api/media/test-media/render.webp'
 	);
 	await compareButton.click();
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	await page.getByLabel('Инструкция для правки').fill('Replace the sofa with an armchair');
 	await page.getByRole('button', { name: 'Применить правку' }).click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/edited.webp', {
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/edited.webp', {
 		timeout: 10_000
 	});
 
@@ -1093,23 +1093,23 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	await compareButton.click();
 	await expect(page.getByAltText('До', { exact: true })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/render.webp'
+		'/api/media/test-media/render.webp'
 	);
 	await expect(page.getByAltText('После', { exact: true })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/edited.webp'
+		'/api/media/test-media/edited.webp'
 	);
 	await compareButton.click();
 
 	// Undo walks back through every step, not just the last one: the edit,
 	// then the generation, then the root (the originally uploaded photo).
 	await undoButton.click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/render.webp');
 	await expect(undoButton).toBeEnabled();
 	await expect(redoButton).toBeEnabled();
 
 	await undoButton.click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/uploaded.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/uploaded.webp');
 	await expect(undoButton).toBeDisabled();
 	await expect(redoButton).toBeEnabled();
 	// Nothing precedes the uploaded photo, so there's nothing left to compare
@@ -1117,13 +1117,13 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	await expect(compareButton).toBeDisabled();
 
 	await redoButton.click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/render.webp');
 	await redoButton.click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/edited.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/edited.webp');
 	await expect(redoButton).toBeDisabled();
 
 	await upscaleButton.click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/edited-4k.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/edited-4k.webp');
 });
 
 test('undo/redo navigate back and forth across multiple plain generations, not just edits', async ({
@@ -1143,7 +1143,7 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: `00000000-0000-4000-8000-00000000011${renders}`,
-				output: media(1 + renders, `https://cdn.example.test/render-${renders}.webp`),
+				output: media(1 + renders, `/api/media/test-media/render-${renders}.webp`),
 				cost: renderCost,
 				balance: startingBalance - renderCost * renders
 			})
@@ -1163,7 +1163,7 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 	]);
 
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-1.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/render-1.webp');
 	expect(renderBodies.map(({ imageKey }) => imageKey)).toEqual([mediaKey(1)]);
 
 	const undoButton = page.getByRole('button', { name: 'Предыдущая генерация' });
@@ -1180,26 +1180,26 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
 		page.getByRole('button', { name: 'Сгенерировать' }).click()
 	]);
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-2.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/render-2.webp');
 	expect(renderBodies.map(({ imageKey }) => imageKey)).toEqual([mediaKey(1), mediaKey(2)]);
 	await expect(undoButton).toBeEnabled();
 	await expect(redoButton).toBeDisabled();
 
 	// Undo walks back through both generations, not just the last one.
 	await undoButton.click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-1.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/render-1.webp');
 	await expect(undoButton).toBeEnabled();
 	await expect(redoButton).toBeEnabled();
 
 	await undoButton.click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/uploaded.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/uploaded.webp');
 	await expect(undoButton).toBeDisabled();
 	await expect(redoButton).toBeEnabled();
 
 	await redoButton.click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-1.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/render-1.webp');
 	await redoButton.click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-2.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/render-2.webp');
 	await expect(redoButton).toBeDisabled();
 });
 
@@ -1224,7 +1224,7 @@ test('the Add Object tool applies a selected preset to the current image', async
 			body: JSON.stringify({
 				id: jobId,
 				status: 'completed',
-				output: media(2, 'https://cdn.example.test/added-mirror.webp'),
+				output: media(2, '/api/media/test-media/added-mirror.webp'),
 				cost: 2,
 				balance: 90
 			})
@@ -1246,7 +1246,7 @@ test('the Add Object tool applies a selected preset to the current image', async
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/added-mirror.webp',
+		'/api/media/test-media/added-mirror.webp',
 		{ timeout: 10_000 }
 	);
 	expect(capturedPrompt).toBe(
@@ -1280,7 +1280,7 @@ test('undo/redo across different edit tools restores both the settings and the a
 			body: JSON.stringify({
 				id: freeformJobId,
 				status: 'completed',
-				output: media(2, 'https://cdn.example.test/freeform-a.webp'),
+				output: media(2, '/api/media/test-media/freeform-a.webp'),
 				cost: 2,
 				balance: 90
 			})
@@ -1293,7 +1293,7 @@ test('undo/redo across different edit tools restores both the settings and the a
 			body: JSON.stringify({
 				id: addObjectJobId,
 				status: 'completed',
-				output: media(3, 'https://cdn.example.test/added-plant.webp'),
+				output: media(3, '/api/media/test-media/added-plant.webp'),
 				cost: 2,
 				balance: 88
 			})
@@ -1315,7 +1315,7 @@ test('undo/redo across different edit tools restores both the settings and the a
 
 	await instructionField.fill('сделай стены голубыми');
 	await page.getByRole('button', { name: 'Применить правку' }).click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/freeform-a.webp', {
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/freeform-a.webp', {
 		timeout: 10_000
 	});
 
@@ -1326,7 +1326,7 @@ test('undo/redo across different edit tools restores both the settings and the a
 	await addObjectTab.click();
 	await page.getByRole('radio', { name: 'Комнатное растение' }).click();
 	await page.getByRole('button', { name: 'Добавить объект' }).click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/added-plant.webp', {
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/added-plant.webp', {
 		timeout: 10_000
 	});
 
@@ -1337,12 +1337,12 @@ test('undo/redo across different edit tools restores both the settings and the a
 	// switches the active tab to match it, instead of leaving the freeform tab
 	// merely showing a leftover value that happens to look unchanged.
 	await undoButton.click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/freeform-a.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/freeform-a.webp');
 	await expect(freeformTab).toHaveAttribute('aria-selected', 'true');
 	await expect(instructionField).toHaveValue('сделай стены голубыми');
 
 	await redoButton.click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/added-plant.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/added-plant.webp');
 	await expect(addObjectTab).toHaveAttribute('aria-selected', 'true');
 	await expect(page.getByRole('radio', { name: 'Комнатное растение' })).toHaveAttribute(
 		'aria-checked',
@@ -1372,8 +1372,8 @@ test('undo restores the object-replacement tool tab and its settings after switc
 			contentType: 'application/json',
 			body: JSON.stringify({
 				image: isReference
-					? media(2, 'https://cdn.example.test/reference-chair.webp')
-					: media(1, 'https://cdn.example.test/room.webp'),
+					? media(2, '/api/media/test-media/reference-chair.webp')
+					: media(1, '/api/media/test-media/room.webp'),
 				mime: 'image/webp',
 				size: 1024,
 				dimensions: [800, 600]
@@ -1395,7 +1395,7 @@ test('undo restores the object-replacement tool tab and its settings after switc
 			body: JSON.stringify({
 				id: objectReplacementJobId,
 				status: 'completed',
-				output: media(3, 'https://cdn.example.test/replaced-sofa.webp'),
+				output: media(3, '/api/media/test-media/replaced-sofa.webp'),
 				cost: 2,
 				balance: 18
 			})
@@ -1417,7 +1417,7 @@ test('undo restores the object-replacement tool tab and its settings after switc
 			body: JSON.stringify({
 				id: freeformJobId,
 				status: 'completed',
-				output: media(4, 'https://cdn.example.test/brighter.webp'),
+				output: media(4, '/api/media/test-media/brighter.webp'),
 				cost: 1,
 				balance: 17
 			})
@@ -1452,7 +1452,7 @@ test('undo restores the object-replacement tool tab and its settings after switc
 
 	await objectField.fill('серый диван у окна');
 	await page.getByRole('button', { name: 'Заменить объект' }).click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/replaced-sofa.webp', {
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/replaced-sofa.webp', {
 		timeout: 10_000
 	});
 
@@ -1461,7 +1461,7 @@ test('undo restores the object-replacement tool tab and its settings after switc
 	await freeformTab.click();
 	await instructionField.fill('сделать светлее');
 	await page.getByRole('button', { name: 'Применить правку' }).click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/brighter.webp', {
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/brighter.webp', {
 		timeout: 10_000
 	});
 
@@ -1469,7 +1469,7 @@ test('undo restores the object-replacement tool tab and its settings after switc
 	// to match it and restores its settings, instead of leaving the freeform
 	// tab active over an image that tab had nothing to do with.
 	await undoButton.click();
-	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/replaced-sofa.webp');
+	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/replaced-sofa.webp');
 	await expect(objectReplacementTab).toHaveAttribute('aria-selected', 'true');
 	await expect(objectField).toHaveValue('серый диван у окна');
 });
@@ -1497,7 +1497,7 @@ test('the Remove Object tool builds a removal prompt from the described object',
 			body: JSON.stringify({
 				id: jobId,
 				status: 'completed',
-				output: media(2, 'https://cdn.example.test/removed-sofa.webp'),
+				output: media(2, '/api/media/test-media/removed-sofa.webp'),
 				cost: 2,
 				balance: 90
 			})
@@ -1516,7 +1516,7 @@ test('the Remove Object tool builds a removal prompt from the described object',
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/removed-sofa.webp',
+		'/api/media/test-media/removed-sofa.webp',
 		{ timeout: 10_000 }
 	);
 	expect(capturedPrompt).toBe(
@@ -1547,7 +1547,7 @@ test('the Light settings tool composes an instruction from selected presets and 
 			body: JSON.stringify({
 				id: jobId,
 				status: 'completed',
-				output: media(2, 'https://cdn.example.test/golden-hour.webp'),
+				output: media(2, '/api/media/test-media/golden-hour.webp'),
 				cost: 2,
 				balance: 90
 			})
@@ -1572,7 +1572,7 @@ test('the Light settings tool composes an instruction from selected presets and 
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/golden-hour.webp',
+		'/api/media/test-media/golden-hour.webp',
 		{ timeout: 10_000 }
 	);
 	expect(submittedBody).toEqual({

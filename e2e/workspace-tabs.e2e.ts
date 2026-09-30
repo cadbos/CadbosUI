@@ -12,7 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { expect, test } from './fixtures';
 import { media } from './helpers/media';
 
 const PROJECT_A = '00000000-0000-4000-8000-000000000001';
@@ -98,7 +100,7 @@ async function mockProjectDetail(
 							{
 								id: generationId,
 								image: media(projectId === PROJECT_A ? 2 : 4, renderUrl),
-								source: media(projectId === PROJECT_A ? 1 : 3, 'https://cdn.example.test/room.jpg'),
+								source: media(projectId === PROJECT_A ? 1 : 3, '/api/media/test-media/room.jpg'),
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 1),
 								amount: 5,
@@ -128,7 +130,7 @@ test('opens a tab per project continued into the workspace and preserves each on
 		SESSION_A,
 		GENERATION_A,
 		'Living room',
-		'https://cdn.example.test/living-room.webp'
+		'/api/media/test-media/living-room.webp'
 	);
 	await mockProjectDetail(
 		page,
@@ -136,7 +138,7 @@ test('opens a tab per project continued into the workspace and preserves each on
 		SESSION_B,
 		GENERATION_B,
 		'Kitchen',
-		'https://cdn.example.test/kitchen.webp'
+		'/api/media/test-media/kitchen.webp'
 	);
 
 	const tabs = page.getByRole('navigation', { name: 'Открытые проекты' });
@@ -152,10 +154,7 @@ test('opens a tab per project continued into the workspace and preserves each on
 		)
 	);
 	await expect(tabs.getByRole('tab', { name: 'Living room' })).toBeVisible();
-	await expect(resultImage(page)).toHaveAttribute(
-		'src',
-		'https://cdn.example.test/living-room.webp'
-	);
+	await expect(resultImage(page)).toHaveAttribute('src', '/api/media/test-media/living-room.webp');
 
 	await page.getByRole('link', { name: 'Проекты', exact: true }).click();
 	await page.getByRole('link', { name: 'Открыть проект Kitchen', exact: false }).click();
@@ -163,15 +162,12 @@ test('opens a tab per project continued into the workspace and preserves each on
 
 	await expect(tabs.getByRole('tab', { name: 'Living room' })).toBeVisible();
 	await expect(tabs.getByRole('tab', { name: 'Kitchen', selected: true })).toBeVisible();
-	await expect(resultImage(page)).toHaveAttribute('src', 'https://cdn.example.test/kitchen.webp');
+	await expect(resultImage(page)).toHaveAttribute('src', '/api/media/test-media/kitchen.webp');
 
 	await tabs.getByRole('tab', { name: 'Living room' }).click();
 
 	await expect(tabs.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
-	await expect(resultImage(page)).toHaveAttribute(
-		'src',
-		'https://cdn.example.test/living-room.webp'
-	);
+	await expect(resultImage(page)).toHaveAttribute('src', '/api/media/test-media/living-room.webp');
 	// Switching tabs stays on the same workspace route, re-anchored to the
 	// now-active project/session.
 	await expect(page).toHaveURL(
@@ -191,7 +187,7 @@ test('opens a tab per project continued into the workspace and preserves each on
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000102',
-				output: media(5, 'https://cdn.example.test/render.webp'),
+				output: media(5, '/api/media/test-media/render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -213,7 +209,7 @@ test('closing a tab removes it and falls back to a neighboring project', async (
 		SESSION_A,
 		GENERATION_A,
 		'Living room',
-		'https://cdn.example.test/living-room.webp'
+		'/api/media/test-media/living-room.webp'
 	);
 	await mockProjectDetail(
 		page,
@@ -221,7 +217,7 @@ test('closing a tab removes it and falls back to a neighboring project', async (
 		SESSION_B,
 		GENERATION_B,
 		'Kitchen',
-		'https://cdn.example.test/kitchen.webp'
+		'/api/media/test-media/kitchen.webp'
 	);
 
 	await page.goto(`/projects/${PROJECT_A}`);
@@ -235,8 +231,5 @@ test('closing a tab removes it and falls back to a neighboring project', async (
 
 	await expect(tabs.getByRole('tab', { name: 'Kitchen' })).toHaveCount(0);
 	await expect(tabs.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
-	await expect(resultImage(page)).toHaveAttribute(
-		'src',
-		'https://cdn.example.test/living-room.webp'
-	);
+	await expect(resultImage(page)).toHaveAttribute('src', '/api/media/test-media/living-room.webp');
 });

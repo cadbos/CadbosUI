@@ -25,8 +25,8 @@ import {
 } from './helpers/project-session-routes';
 import { mockSceneFilterOptions } from './helpers/scene-routes';
 
-const BEFORE_URL = 'https://cdn.example.test/room.webp';
-const AFTER_URL = 'https://cdn.example.test/render.webp';
+const BEFORE_URL = '/api/media/test-media/room.webp';
+const AFTER_URL = '/api/media/test-media/render.webp';
 
 const FORM_SNAPSHOT = {
 	promptFragments: [],

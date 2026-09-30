@@ -26,21 +26,22 @@ import { GET } from './+server';
 
 type MediaEvent = Parameters<typeof GET>[0];
 
-function platform(db: D1Database): App.Platform {
-	return { env: { DB: db } } as unknown as App.Platform;
+function platform(db: D1Database, env: Partial<App.Platform['env']> = {}): App.Platform {
+	return { env: { DB: db, ...env } } as unknown as App.Platform;
 }
 
 function call(
 	db: D1Database,
 	bucket: string,
 	filename: string,
-	fetch: typeof globalThis.fetch
+	fetch: typeof globalThis.fetch,
+	env: Partial<App.Platform['env']> = {}
 ): ReturnType<typeof GET> {
 	return GET({
 		fetch,
 		locals: { sessionLookupUnavailable: false, user: null },
 		params: { bucket, filename },
-		platform: platform(db),
+		platform: platform(db, env),
 		url: new URL(`https://cadbos.example/api/media/${bucket}/${filename}`)
 	} as MediaEvent);
 }
@@ -71,7 +72,7 @@ describe('GET /api/media/<bucket>/<filename>', () => {
 			expect.objectContaining({ env: expect.objectContaining({ DB: db }) }),
 			bucket,
 			'rooms/result.webp',
-			'ui'
+			60
 		);
 		expect(fetch).toHaveBeenCalledWith('https://signed.example.test/image');
 		expect(response.status).toBe(200);
@@ -80,6 +81,40 @@ describe('GET /api/media/<bucket>/<filename>', () => {
 		expect(response.headers.get('content-type')).toBe('image/webp');
 		expect(await response.text()).toBe('image-bytes');
 	});
+
+	it('takes the cache lifetime from MEDIA_CACHE_TTL_SECONDS', async () => {
+		const db = makeD1();
+		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
+		await getOrCreateMediaByKey(db, bucket, 'rooms/result.webp', '', null);
+		const fetch = vi.fn(
+			async () => new Response('image-bytes', { headers: { 'content-type': 'image/webp' } })
+		);
+
+		const response = await call(db, bucket.name, 'rooms/result.webp', fetch, {
+			MEDIA_CACHE_TTL_SECONDS: '3600'
+		});
+
+		expect(response.headers.get('cache-control')).toBe('private, max-age=3600, immutable');
+	});
+
+	it.each(['0', '-1', '1.5', ' 300', '31536001'])(
+		'fails without caching when MEDIA_CACHE_TTL_SECONDS is %s',
+		async (value) => {
+			const db = makeD1();
+			const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
+			await getOrCreateMediaByKey(db, bucket, 'rooms/result.webp', '', null);
+			const fetch = vi.fn();
+			vi.spyOn(console, 'error').mockImplementation(() => {});
+
+			const response = await call(db, bucket.name, 'rooms/result.webp', fetch, {
+				MEDIA_CACHE_TTL_SECONDS: value
+			});
+
+			expect(response.status).toBe(502);
+			expect(response.headers.get('cache-control')).toBeNull();
+			expect(fetch).not.toHaveBeenCalled();
+		}
+	);
 
 	it.each([
 		['', 'result.webp'],
