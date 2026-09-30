@@ -149,7 +149,8 @@ async function mockSessionData(page: Page, options: SessionMockOptions = {}): Pr
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 1),
 						session: null,
-						iteration: null
+						iteration: null,
+						number: 1
 					}
 				],
 				pagination: { offset: 0, size: 100, hasMore: false }
