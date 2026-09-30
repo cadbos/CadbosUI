@@ -17,6 +17,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type {
 	GeneratedImageDetailResponse,
 	GeneratedImagesResponse,
+	SceneFilterOptionsResponse,
 	SessionUser
 } from '$lib/api/contract';
 import { mediaKey, type Bucket } from '$lib/server/media';
@@ -43,6 +44,7 @@ vi.mock('$lib/server/s3', async (importOriginal) => ({
 
 import { DELETE, GET } from './+server';
 import { GET as GET_DETAIL } from './[id]/+server';
+import { GET as GET_SESSIONS } from './sessions/+server';
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
@@ -64,6 +66,41 @@ function seedGeneratedImage(db: D1Database, id: string, userId: string, createdA
 type GeneratedImagesEvent = Parameters<typeof GET>[0];
 type DeleteGeneratedImageEvent = Parameters<typeof DELETE>[0];
 type GeneratedImageDetailEvent = Parameters<typeof GET_DETAIL>[0];
+type SceneFilterOptionsEvent = Parameters<typeof GET_SESSIONS>[0];
+
+function seedSessionGeneration(
+	db: D1Database,
+	id: string,
+	sessionId: string,
+	createdAt: number
+): void {
+	setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
+	seedGenerationFixture(db, {
+		id,
+		userId: 'user-1',
+		url: `https://cdn.example.test/${id}.webp`,
+		sourceUrl: `https://cdn.example.test/${id}-source.jpg`,
+		createdAt,
+		sessionId
+	});
+}
+
+function seedSession(db: D1Database, projectId: string, sessionId: string, title: string): void {
+	db.prepare(
+		'INSERT OR IGNORE INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, 1, 1)'
+	)
+		.bind(projectId, 'user-1', 'Flat')
+		.run();
+	db.prepare(
+		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, 1, 1)'
+	)
+		.bind(sessionId, projectId, title)
+		.run();
+}
+
+const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
+const KITCHEN_SESSION_ID = '00000000-0000-4000-8000-000000000011';
+const HALL_SESSION_ID = '00000000-0000-4000-8000-000000000012';
 
 function call(
 	user: SessionUser | null,
@@ -175,7 +212,9 @@ describe('GET /api/generated-images', () => {
 				url: expect.stringContaining('/source.jpg?')
 			},
 			kind: 'render',
-			createdAt: 10020
+			createdAt: 10020,
+			session: null,
+			iteration: null
 		});
 		expect(result.pagination).toEqual({ offset: 0, size: 20, hasMore: true });
 	});
@@ -202,6 +241,47 @@ describe('GET /api/generated-images', () => {
 		expect(response.status).toBe(200);
 		expect(result.images.map((image) => image.id)).toEqual(['second', 'third']);
 		expect(result.pagination).toEqual({ offset: 1, size: 2, hasMore: false });
+	});
+
+	it('lists one row per session in the milestones view, filtered to a project', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedSession(db, PROJECT_ID, KITCHEN_SESSION_ID, 'Kitchen');
+		seedSession(db, PROJECT_ID, HALL_SESSION_ID, 'Hall');
+		seedSessionGeneration(db, 'kitchen-1', KITCHEN_SESSION_ID, 1000);
+		seedSessionGeneration(db, 'kitchen-2', KITCHEN_SESSION_ID, 3000);
+		seedSessionGeneration(db, 'hall-1', HALL_SESSION_ID, 2000);
+
+		const response = await call(
+			{ pubkey: 'pubkey-1' },
+			platform(db),
+			`?view=milestones&projectId=${PROJECT_ID}`
+		);
+		const result = (await response.json()) as GeneratedImagesResponse;
+
+		expect(response.status).toBe(200);
+		expect(result.images.map((image) => image.id)).toEqual(['kitchen-2', 'hall-1']);
+		expect(result.images[0]).toMatchObject({
+			image: { key: mediaKey(TEST_S3_BUCKET.name, 'kitchen-2.webp') },
+			source: { key: mediaKey(TEST_S3_BUCKET.name, 'kitchen-1-source.jpg') },
+			session: {
+				projectId: PROJECT_ID,
+				projectTitle: 'Flat',
+				sessionId: KITCHEN_SESSION_ID,
+				sessionTitle: 'Kitchen'
+			},
+			iteration: 2
+		});
+	});
+
+	it('rejects an unknown view or a malformed project/session id', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+
+		for (const search of ['?view=best', '?projectId=not-a-uuid', '?sessionId=1']) {
+			const response = await call({ pubkey: 'pubkey-1' }, platform(db), search);
+			expect(response.status).toBe(400);
+		}
 	});
 
 	it('rejects invalid pagination params', async () => {
@@ -598,6 +678,52 @@ describe('GET /api/generated-images/[id]', () => {
 			{ env: {} } as App.Platform,
 			'image-1'
 		);
+
+		expect(response.status).toBe(500);
+	});
+});
+
+describe('GET /api/generated-images/sessions', () => {
+	function callSessions(
+		user: SessionUser | null,
+		platform: App.Platform
+	): ReturnType<typeof GET_SESSIONS> {
+		return GET_SESSIONS({
+			platform,
+			locals: { sessionLookupUnavailable: false, user }
+		} as SceneFilterOptionsEvent);
+	}
+
+	it('returns 401 for non-authenticated users', async () => {
+		const response = await callSessions(null, { env: { DB: makeD1() } } as App.Platform);
+
+		expect(response.status).toBe(401);
+	});
+
+	it('lists the projects and sessions that have scenes', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedSession(db, PROJECT_ID, KITCHEN_SESSION_ID, 'Kitchen');
+		seedSession(db, PROJECT_ID, HALL_SESSION_ID, 'Hall');
+		seedSessionGeneration(db, 'kitchen-1', KITCHEN_SESSION_ID, 1000);
+
+		const response = await callSessions({ pubkey: 'pubkey-1' }, platform(db));
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get('cache-control')).toBe('private, no-store');
+		expect(await response.json()).toEqual({
+			projects: [
+				{
+					projectId: PROJECT_ID,
+					projectTitle: 'Flat',
+					sessions: [{ sessionId: KITCHEN_SESSION_ID, sessionTitle: 'Kitchen' }]
+				}
+			]
+		} satisfies SceneFilterOptionsResponse);
+	});
+
+	it('fails closed for the dev-only demo session without touching D1', async () => {
+		const response = await callSessions({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform);
 
 		expect(response.status).toBe(500);
 	});

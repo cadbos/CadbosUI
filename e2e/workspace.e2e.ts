@@ -17,6 +17,7 @@ import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { media, mediaKey } from './helpers/media';
 import { mockProjectSessionRoutes } from './helpers/project-session-routes';
+import { mockSceneFilterOptions } from './helpers/scene-routes';
 
 function promptPreview(page: Page): Locator {
 	return page.getByLabel('Итоговый промпт').filter({ visible: true });
@@ -101,14 +102,18 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 							image: media(2, 'https://cdn.example.test/oldest.webp'),
 							source: media(1, 'https://cdn.example.test/oldest-source.jpg'),
 							kind: 'render',
-							createdAt: oldestCreatedAt
+							createdAt: oldestCreatedAt,
+							session: null,
+							iteration: null
 						},
 						{
 							id: 'newest',
 							image: media(6, 'https://cdn.example.test/newest.webp'),
 							source: media(5, 'https://cdn.example.test/newest-source.jpg'),
 							kind: 'style-transfer',
-							createdAt: newestCreatedAt
+							createdAt: newestCreatedAt,
+							session: null,
+							iteration: null
 						}
 					]
 				: [
@@ -117,7 +122,9 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 							image: media(4, 'https://cdn.example.test/middle.webp'),
 							source: media(3, 'https://cdn.example.test/middle-source.jpg'),
 							kind: 'edit',
-							createdAt: middleCreatedAt
+							createdAt: middleCreatedAt,
+							session: null,
+							iteration: null
 						}
 					];
 
@@ -130,6 +137,7 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 			})
 		});
 	});
+	await mockSceneFilterOptions(page);
 	await openCreate(page);
 
 	const scenesButton = page.getByRole('button', { name: 'Сцены', exact: true });
@@ -367,6 +375,7 @@ test('generating with the exterior scene type calls the exterior render route', 
 			body: JSON.stringify({ images: [], pagination: { offset: 0, size: 100, hasMore: false } })
 		});
 	});
+	await mockSceneFilterOptions(page);
 	await page.route('**/api/uploads', async (route) => {
 		await route.fulfill({
 			status: 200,

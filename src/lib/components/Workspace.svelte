@@ -185,6 +185,11 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	});
 
+	function openScenes(): void {
+		scenesOpen = true;
+		void generatedImages.loadFilterOptions();
+	}
+
 	function closeScenes(): void {
 		scenesOpen = false;
 		requestAnimationFrame(() => scenesTrigger?.focus());
@@ -631,7 +636,7 @@ before the Change Date. See LICENSE for complete terms.
 							class="scenes-button"
 							aria-expanded={scenesOpen}
 							aria-controls="scenes-drawer"
-							onclick={() => (scenesOpen = true)}
+							onclick={openScenes}
 						>
 							<Images size={18} strokeWidth={1.8} aria-hidden="true" />
 							<span>{t('generatedImages.title')}</span>

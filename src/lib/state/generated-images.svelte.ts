@@ -14,10 +14,23 @@
 
 import { SvelteSet } from 'svelte/reactivity';
 import { z } from 'zod';
-import { generationKinds, type GeneratedImageRecord } from '$lib/api/contract';
+import {
+	generationKinds,
+	type SceneFilterProject,
+	type SceneRecord,
+	type SceneView
+} from '$lib/api/contract';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export type GeneratedImagesStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+export interface SceneFilterState {
+	view: SceneView;
+	projectId: string | null;
+	sessionId: string | null;
+}
+
+const DEFAULT_FILTER: SceneFilterState = { view: 'iterations', projectId: null, sessionId: null };
 
 const PAGE_SIZE = 100;
 
@@ -32,7 +45,16 @@ const generatedImageRecordSchema = z.object({
 		url: z.url()
 	}),
 	kind: z.enum(generationKinds),
-	createdAt: z.number().int().min(0)
+	createdAt: z.number().int().min(0),
+	session: z
+		.object({
+			projectId: z.uuid(),
+			projectTitle: z.string(),
+			sessionId: z.uuid(),
+			sessionTitle: z.string()
+		})
+		.nullable(),
+	iteration: z.number().int().min(1).nullable()
 });
 
 const generatedImagesResponseSchema = z.object({
@@ -42,6 +64,16 @@ const generatedImagesResponseSchema = z.object({
 		size: z.number().int().min(1),
 		hasMore: z.boolean()
 	})
+});
+
+const sceneFilterOptionsResponseSchema = z.object({
+	projects: z.array(
+		z.object({
+			projectId: z.uuid(),
+			projectTitle: z.string(),
+			sessions: z.array(z.object({ sessionId: z.uuid(), sessionTitle: z.string() })).min(1)
+		})
+	)
 });
 
 class GeneratedImagesLoadError extends Error {
@@ -58,7 +90,14 @@ class GeneratedImagesDeleteError extends Error {
 	}
 }
 
-function sortLatestFirst(images: GeneratedImageRecord[]): GeneratedImageRecord[] {
+class SceneFilterOptionsLoadError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = 'SceneFilterOptionsLoadError';
+	}
+}
+
+function sortLatestFirst(images: SceneRecord[]): SceneRecord[] {
 	return [...images].sort((left, right) => {
 		const createdAtOrder = right.createdAt - left.createdAt;
 		return createdAtOrder === 0 ? right.id.localeCompare(left.id) : createdAtOrder;
@@ -66,7 +105,12 @@ function sortLatestFirst(images: GeneratedImageRecord[]): GeneratedImageRecord[]
 }
 
 class GeneratedImagesState {
-	images = $state.raw<GeneratedImageRecord[]>([]);
+	images = $state.raw<SceneRecord[]>([]);
+	// Every load()/loadMore() — including the reloads after each generation —
+	// pages through whatever the Scenes filter currently selects.
+	filter = $state.raw<SceneFilterState>(DEFAULT_FILTER);
+	filterProjects = $state.raw<SceneFilterProject[]>([]);
+	filterOptionsStatus = $state<GeneratedImagesStatus>('idle');
 	status = $state<GeneratedImagesStatus>('idle');
 	error = $state<string | null>(null);
 	deleteFailed = $state(false);
@@ -74,7 +118,59 @@ class GeneratedImagesState {
 	loadingMore = $state(false);
 	deletingIds = new SvelteSet<string>();
 	#abort: AbortController | null = null;
+	#filterOptionsAbort: AbortController | null = null;
 	#nextOffset: number | null = null;
+
+	setFilter(filter: SceneFilterState): void {
+		this.filter = filter;
+		void this.load();
+	}
+
+	// Options only change when a generation lands or a project/session is
+	// archived, so they're refreshed whenever Scenes opens. A selection whose
+	// project or session is no longer offered falls back to everything.
+	async loadFilterOptions(): Promise<void> {
+		this.#filterOptionsAbort?.abort();
+		const controller = new AbortController();
+		this.#filterOptionsAbort = controller;
+		this.filterOptionsStatus = 'loading';
+
+		try {
+			const response = await fetch('/api/generated-images/sessions', {
+				signal: controller.signal
+			});
+			if (!response.ok)
+				throw new SceneFilterOptionsLoadError('scene filter options request failed');
+			const parsed = sceneFilterOptionsResponseSchema.safeParse(
+				await response.json().catch(() => null)
+			);
+			if (!parsed.success) {
+				throw new SceneFilterOptionsLoadError('scene filter options response invalid');
+			}
+			if (this.#filterOptionsAbort !== controller) return;
+			this.filterProjects = parsed.data.projects;
+			this.filterOptionsStatus = 'ready';
+
+			const { projectId, sessionId } = this.filter;
+			const project = parsed.data.projects.find((candidate) => candidate.projectId === projectId);
+			const staleProject = projectId !== null && !project;
+			const staleSession =
+				sessionId !== null && !project?.sessions.some((session) => session.sessionId === sessionId);
+			if (staleProject || staleSession) {
+				this.setFilter({
+					...this.filter,
+					projectId: staleProject ? null : projectId,
+					sessionId: null
+				});
+			}
+		} catch (error) {
+			if (controller.signal.aborted) return;
+			this.filterOptionsStatus = 'error';
+			console.error('Scene filter options load failed:', error);
+		} finally {
+			if (this.#filterOptionsAbort === controller) this.#filterOptionsAbort = null;
+		}
+	}
 
 	async load(): Promise<void> {
 		this.#abort?.abort();
@@ -135,7 +231,12 @@ class GeneratedImagesState {
 	clear(): void {
 		this.#abort?.abort();
 		this.#abort = null;
+		this.#filterOptionsAbort?.abort();
+		this.#filterOptionsAbort = null;
 		this.images = [];
+		this.filter = DEFAULT_FILTER;
+		this.filterProjects = [];
+		this.filterOptionsStatus = 'idle';
 		this.status = 'idle';
 		this.error = null;
 		this.deleteFailed = false;
@@ -178,9 +279,15 @@ class GeneratedImagesState {
 		offset: number,
 		signal: AbortSignal
 	): Promise<z.infer<typeof generatedImagesResponseSchema>> {
-		const response = await fetch(`/api/generated-images?offset=${offset}&size=${PAGE_SIZE}`, {
-			signal
+		const { view, projectId, sessionId } = this.filter;
+		const params = new URLSearchParams({
+			offset: String(offset),
+			size: String(PAGE_SIZE),
+			...(view === 'iterations' ? {} : { view }),
+			...(projectId ? { projectId } : {}),
+			...(sessionId ? { sessionId } : {})
 		});
+		const response = await fetch(`/api/generated-images?${params}`, { signal });
 		if (!response.ok) throw new GeneratedImagesLoadError('generated images request failed');
 
 		const parsed = generatedImagesResponseSchema.safeParse(await response.json().catch(() => null));

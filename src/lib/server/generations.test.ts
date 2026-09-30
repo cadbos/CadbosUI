@@ -15,7 +15,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import { makeD1 } from './testing/d1-shim';
-import { TEST_FORM_SNAPSHOT, TEST_S3_BUCKET } from './testing/generation-fixtures';
+import {
+	seedGeneration as seedGenerationFixture,
+	TEST_FORM_SNAPSHOT,
+	TEST_S3_BUCKET
+} from './testing/generation-fixtures';
 import { getCredit } from './billing';
 import {
 	deleteGeneratedImage,
@@ -27,10 +31,13 @@ import {
 	listResourceGenerations,
 	listResourceImages,
 	listGeneratedImages,
+	listSceneFilterProjects,
 	getUsageTotals,
 	listUserUsage,
 	recordGeneration
 } from './generations';
+
+const ALL_SCENES = { view: 'iterations', projectId: null, sessionId: null } as const;
 
 const HASH_1 = '1'.repeat(64);
 const HASH_2 = '2'.repeat(64);
@@ -186,7 +193,7 @@ describe('recordGeneration', () => {
 			expect.objectContaining({ amount: 1.5, balanceAfter: 3.5, kind: 'render' })
 		]);
 
-		const images = await listGeneratedImages(db, 'user-1', 0, 10);
+		const images = await listGeneratedImages(db, 'user-1', ALL_SCENES, 0, 10);
 		expect(images.images).toEqual([
 			expect.objectContaining({ mediaId: resultMediaId, sourceMediaId })
 		]);
@@ -312,7 +319,7 @@ describe('getGenerationDetailForUser', () => {
 			archaiReuploadSec: 0,
 			formSnapshot: TEST_FORM_SNAPSHOT
 		});
-		const [{ id }] = (await listGeneratedImages(db, 'user-1', 0, 1)).images;
+		const [{ id }] = (await listGeneratedImages(db, 'user-1', ALL_SCENES, 0, 1)).images;
 
 		const detail = await getGenerationDetailForUser(db, 'user-1', id);
 
@@ -570,7 +577,7 @@ describe('listGeneratedImages', () => {
 		seedGeneration(db, 'middle', 'user-1', 2000);
 		seedGeneration(db, 'other-user-image', 'user-2', 4000);
 
-		const page = await listGeneratedImages(db, 'user-1', 0, 2);
+		const page = await listGeneratedImages(db, 'user-1', ALL_SCENES, 0, 2);
 
 		expect(page).toEqual({
 			images: [
@@ -582,7 +589,9 @@ describe('listGeneratedImages', () => {
 					filename: 'newest.webp',
 					bucketName: TEST_S3_BUCKET.name,
 					kind: 'render',
-					createdAt: 3000
+					createdAt: 3000,
+					session: null,
+					iteration: null
 				},
 				{
 					id: 'middle',
@@ -592,7 +601,9 @@ describe('listGeneratedImages', () => {
 					filename: 'middle.webp',
 					bucketName: TEST_S3_BUCKET.name,
 					kind: 'render',
-					createdAt: 2000
+					createdAt: 2000,
+					session: null,
+					iteration: null
 				}
 			],
 			hasMore: true
@@ -605,7 +616,7 @@ describe('listGeneratedImages', () => {
 		seedGeneration(db, 'second', 'user-1', 2000);
 		seedGeneration(db, 'third', 'user-1', 1000);
 
-		const page = await listGeneratedImages(db, 'user-1', 1, 2);
+		const page = await listGeneratedImages(db, 'user-1', ALL_SCENES, 1, 2);
 
 		expect(page.images.map((image) => image.id)).toEqual(['second', 'third']);
 		expect(page.hasMore).toBe(false);
@@ -616,7 +627,7 @@ describe('listGeneratedImages', () => {
 		seedGeneration(db, 'invalid-kind', 'user-1', 1000, 'unknown');
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-		const page = await listGeneratedImages(db, 'user-1', 0, 10);
+		const page = await listGeneratedImages(db, 'user-1', ALL_SCENES, 0, 10);
 
 		expect(page.images).toEqual([]);
 		expect(page.hasMore).toBe(false);
@@ -641,10 +652,221 @@ describe('listGeneratedImages', () => {
 		seedGeneration(db, 'valid-3', 'user-1', 1000);
 		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-		const page = await listGeneratedImages(db, 'user-1', 0, 2);
+		const page = await listGeneratedImages(db, 'user-1', ALL_SCENES, 0, 2);
 
 		expect(page.images.map((image) => image.id)).toEqual(['valid-1', 'valid-2']);
 		expect(page.hasMore).toBe(true);
+	});
+});
+
+interface SeededSession {
+	projectId: string;
+	sessionId: string;
+}
+
+function seedTitledSession(
+	db: D1Database,
+	userId: string,
+	projectTitle: string,
+	sessionTitle: string,
+	projectId: string = crypto.randomUUID()
+): SeededSession {
+	const now = Date.now();
+	const sessionId = crypto.randomUUID();
+	db.prepare(
+		'INSERT OR IGNORE INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind(projectId, userId, projectTitle, now, now)
+		.run();
+	db.prepare(
+		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind(sessionId, projectId, sessionTitle, now, now)
+		.run();
+	return { projectId, sessionId };
+}
+
+function seedSceneGeneration(
+	db: D1Database,
+	id: string,
+	sessionId: string | null,
+	createdAt: number,
+	kind = 'render'
+): void {
+	seedGenerationFixture(db, {
+		id,
+		userId: 'user-1',
+		url: `https://cdn.example.test/${id}.webp`,
+		sourceUrl: `https://cdn.example.test/${id}-source.jpg`,
+		createdAt,
+		sessionId,
+		kind
+	});
+}
+
+describe('listGeneratedImages filtering', () => {
+	let kitchen: SeededSession;
+	let kitchenRedo: SeededSession;
+	let bedroom: SeededSession;
+
+	beforeEach(() => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		kitchen = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen');
+		kitchenRedo = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen redo', kitchen.projectId);
+		bedroom = seedTitledSession(db, 'user-1', 'House', 'Bedroom');
+		seedSceneGeneration(db, 'kitchen-1', kitchen.sessionId, 1000);
+		seedSceneGeneration(db, 'kitchen-2', kitchen.sessionId, 2000);
+		seedSceneGeneration(db, 'kitchen-3', kitchen.sessionId, 3000);
+		seedSceneGeneration(db, 'redo-1', kitchenRedo.sessionId, 1500);
+		seedSceneGeneration(db, 'bedroom-1', bedroom.sessionId, 2500);
+		seedSceneGeneration(db, 'no-session', null, 4000);
+	});
+
+	it("carries each scene's live session", async () => {
+		const page = await listGeneratedImages(db, 'user-1', ALL_SCENES, 0, 10);
+
+		expect(page.images.map((image) => [image.id, image.session?.sessionTitle ?? null])).toEqual([
+			['no-session', null],
+			['kitchen-3', 'Kitchen'],
+			['bedroom-1', 'Bedroom'],
+			['kitchen-2', 'Kitchen'],
+			['redo-1', 'Kitchen redo'],
+			['kitchen-1', 'Kitchen']
+		]);
+		expect(page.images.map((image) => image.iteration)).toEqual([null, 3, 1, 2, 1, 1]);
+		expect(page.images[1].session).toEqual({
+			projectId: kitchen.projectId,
+			projectTitle: 'Flat',
+			sessionId: kitchen.sessionId,
+			sessionTitle: 'Kitchen'
+		});
+	});
+
+	it('narrows every step to a project, then to one of its sessions', async () => {
+		const project = await listGeneratedImages(
+			db,
+			'user-1',
+			{ view: 'iterations', projectId: kitchen.projectId, sessionId: null },
+			0,
+			10
+		);
+		const session = await listGeneratedImages(
+			db,
+			'user-1',
+			{ view: 'iterations', projectId: kitchen.projectId, sessionId: kitchenRedo.sessionId },
+			0,
+			10
+		);
+
+		expect(project.images.map((image) => image.id)).toEqual([
+			'kitchen-3',
+			'kitchen-2',
+			'redo-1',
+			'kitchen-1'
+		]);
+		expect(session.images.map((image) => image.id)).toEqual(['redo-1']);
+	});
+
+	it('collapses each live session to its first source and latest result', async () => {
+		const page = await listGeneratedImages(
+			db,
+			'user-1',
+			{ view: 'milestones', projectId: null, sessionId: null },
+			0,
+			10
+		);
+		const firstKitchen = await getGeneratedImageForUser(db, 'user-1', 'kitchen-1');
+
+		expect(page.images.map((image) => image.id)).toEqual(['kitchen-3', 'bedroom-1', 'redo-1']);
+		expect(page.images[0]).toMatchObject({
+			filename: 'kitchen-3.webp',
+			sourceMediaId: firstKitchen?.sourceMediaId,
+			iteration: 3,
+			session: { sessionId: kitchen.sessionId }
+		});
+	});
+
+	it('picks the latest recognized kind as a session milestone and pages sessions', async () => {
+		seedSceneGeneration(db, 'kitchen-unknown', kitchen.sessionId, 5000, 'unknown');
+
+		const first = await listGeneratedImages(
+			db,
+			'user-1',
+			{ view: 'milestones', projectId: kitchen.projectId, sessionId: null },
+			0,
+			1
+		);
+		const second = await listGeneratedImages(
+			db,
+			'user-1',
+			{ view: 'milestones', projectId: kitchen.projectId, sessionId: null },
+			1,
+			1
+		);
+
+		expect(first).toMatchObject({ images: [{ id: 'kitchen-3' }], hasMore: true });
+		expect(second).toMatchObject({ images: [{ id: 'redo-1' }], hasMore: false });
+	});
+
+	it('leaves archived sessions and projects out of filters and milestones', async () => {
+		db.prepare('UPDATE project_sessions SET archived_at = 1 WHERE id = ?')
+			.bind(kitchenRedo.sessionId)
+			.run();
+		db.prepare('UPDATE projects SET archived_at = 1 WHERE id = ?').bind(bedroom.projectId).run();
+
+		const milestones = await listGeneratedImages(
+			db,
+			'user-1',
+			{ view: 'milestones', projectId: null, sessionId: null },
+			0,
+			10
+		);
+		const archivedSession = await listGeneratedImages(
+			db,
+			'user-1',
+			{ view: 'iterations', projectId: kitchen.projectId, sessionId: kitchenRedo.sessionId },
+			0,
+			10
+		);
+
+		expect(milestones.images.map((image) => image.id)).toEqual(['kitchen-3']);
+		expect(archivedSession.images).toEqual([]);
+	});
+});
+
+describe('listSceneFilterProjects', () => {
+	it('lists live projects and sessions with generations, most recently generated first', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		const kitchen = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen');
+		const hall = seedTitledSession(db, 'user-1', 'Flat', 'Hall', kitchen.projectId);
+		const bedroom = seedTitledSession(db, 'user-1', 'House', 'Bedroom');
+		const archived = seedTitledSession(db, 'user-1', 'House', 'Attic', bedroom.projectId);
+		seedTitledSession(db, 'user-1', 'Empty', 'Nothing yet');
+		seedSceneGeneration(db, 'kitchen-1', kitchen.sessionId, 1000);
+		seedSceneGeneration(db, 'hall-1', hall.sessionId, 3000);
+		seedSceneGeneration(db, 'bedroom-1', bedroom.sessionId, 2000);
+		seedSceneGeneration(db, 'attic-1', archived.sessionId, 4000);
+		db.prepare('UPDATE project_sessions SET archived_at = 1 WHERE id = ?')
+			.bind(archived.sessionId)
+			.run();
+
+		await expect(listSceneFilterProjects(db, 'user-1')).resolves.toEqual([
+			{
+				projectId: kitchen.projectId,
+				projectTitle: 'Flat',
+				sessions: [
+					{ sessionId: hall.sessionId, sessionTitle: 'Hall' },
+					{ sessionId: kitchen.sessionId, sessionTitle: 'Kitchen' }
+				]
+			},
+			{
+				projectId: bedroom.projectId,
+				projectTitle: 'House',
+				sessions: [{ sessionId: bedroom.sessionId, sessionTitle: 'Bedroom' }]
+			}
+		]);
+		await expect(listSceneFilterProjects(db, 'user-2')).resolves.toEqual([]);
 	});
 });
 
