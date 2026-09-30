@@ -605,13 +605,17 @@ interface ResourceImageRow {
 
 // Source photos the user uploaded: a non-empty checksum identifies an
 // upload, and excluding generated outputs drops sources that were a
-// previous generation's own result.
+// previous generation's own result. Both tests depend only on the media, so
+// the generations are collapsed to one row per source first and each image is
+// checked once, however many generations reused it.
 const SOURCE_USES =
-	"SELECT g.source_media_id AS media_id, g.created_at, 'source' AS role FROM generations g " +
-	'JOIN media source_media ON source_media.id = g.source_media_id ' +
-	"WHERE g.user_id = ? AND source_media.checksum != '' " +
+	"SELECT used.media_id, used.created_at, 'source' AS role FROM (" +
+	'SELECT g.source_media_id AS media_id, MAX(g.created_at) AS created_at FROM generations g ' +
+	'WHERE g.user_id = ? GROUP BY g.source_media_id) used ' +
+	'JOIN media source_media ON source_media.id = used.media_id ' +
+	"WHERE source_media.checksum != '' " +
 	'AND NOT EXISTS (SELECT 1 FROM generations produced ' +
-	'WHERE produced.result_media_id = g.source_media_id)';
+	'WHERE produced.result_media_id = used.media_id)';
 
 // Reference images a generation was made with (migrations/0019), labelled
 // by the tool that took them.
