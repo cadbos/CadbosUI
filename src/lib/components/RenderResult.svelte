@@ -13,7 +13,14 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Download, ImagePlus, Redo, Sparkles, SquareSplitHorizontal, Undo } from '@lucide/svelte';
+	import {
+		ArrowLeft,
+		ArrowRight,
+		Download,
+		ImagePlus,
+		Sparkles,
+		SquareSplitHorizontal
+	} from '@lucide/svelte';
 	import { resolve } from '$app/paths';
 	import CompareSlider from '$lib/components/CompareSlider.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
@@ -121,21 +128,21 @@ before the Change Date. See LICENSE for complete terms.
 					type="button"
 					class="icon-btn"
 					disabled={!request.canUndoEdit}
-					aria-label={t('toolbar.undo')}
-					title={t('toolbar.undo')}
+					aria-label={t('toolbar.previousGeneration')}
+					title={t('toolbar.previousGeneration')}
 					onclick={() => request.undoLastEdit()}
 				>
-					<Undo size={16} strokeWidth={1.8} aria-hidden="true" />
+					<ArrowLeft size={16} strokeWidth={1.8} aria-hidden="true" />
 				</button>
 				<button
 					type="button"
 					class="icon-btn"
 					disabled={!request.canRedoEdit}
-					aria-label={t('toolbar.redo')}
-					title={t('toolbar.redo')}
+					aria-label={t('toolbar.nextGeneration')}
+					title={t('toolbar.nextGeneration')}
 					onclick={() => request.redoEdit()}
 				>
-					<Redo size={16} strokeWidth={1.8} aria-hidden="true" />
+					<ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />
 				</button>
 
 				<span class="toolbar-sep" aria-hidden="true"></span>

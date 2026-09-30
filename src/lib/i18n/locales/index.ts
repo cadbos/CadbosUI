@@ -164,8 +164,8 @@ export interface Dictionary {
 	'toolsPanel.collapse': string;
 	'toolsPanel.expand': string;
 	'toolsPanel.resizeHandle': string;
-	'toolbar.undo': string;
-	'toolbar.redo': string;
+	'toolbar.previousGeneration': string;
+	'toolbar.nextGeneration': string;
 	'toolbar.compare': string;
 	'toolbar.before': string;
 	'toolbar.after': string;

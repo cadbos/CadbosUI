@@ -357,7 +357,7 @@ test('keeps the submitted result’s lineage when another render finishes first'
 		'https://cdn.example.test/replaced.webp',
 		{ timeout: 10_000 }
 	);
-	await page.getByRole('button', { name: 'Отменить' }).click();
+	await page.getByRole('button', { name: 'Предыдущая генерация' }).click();
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/original-result.webp'
