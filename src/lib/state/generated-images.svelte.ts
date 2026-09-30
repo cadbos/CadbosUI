@@ -54,7 +54,8 @@ const generatedImageRecordSchema = z.object({
 			sessionTitle: z.string()
 		})
 		.nullable(),
-	iteration: z.number().int().min(1).nullable()
+	iteration: z.number().int().min(1).nullable(),
+	number: z.number().int().min(1)
 });
 
 const generatedImagesResponseSchema = z.object({

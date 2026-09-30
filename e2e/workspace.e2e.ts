@@ -104,7 +104,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 							kind: 'render',
 							createdAt: oldestCreatedAt,
 							session: null,
-							iteration: null
+							iteration: null,
+							number: 1
 						},
 						{
 							id: 'newest',
@@ -113,7 +114,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 							kind: 'style-transfer',
 							createdAt: newestCreatedAt,
 							session: null,
-							iteration: null
+							iteration: null,
+							number: 3
 						}
 					]
 				: [
@@ -124,7 +126,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 							kind: 'edit',
 							createdAt: middleCreatedAt,
 							session: null,
-							iteration: null
+							iteration: null,
+							number: 2
 						}
 					];
 
@@ -175,13 +178,13 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 
 	const sourceImages = page.getByRole('img', { name: /Исходное изображение сцены/ });
 	await sourceImages.nth(0).hover();
-	const sourceDownloadLink = page.getByRole('link', { name: 'Скачать исходник сцены 1' });
+	const sourceDownloadLink = page.getByRole('link', { name: 'Скачать исходник сцены 3' });
 	await expect(sourceDownloadLink).toHaveAttribute('href', `/api/download/${mediaKey(5)}`);
 	await expect(sourceDownloadLink).toHaveAttribute('download', 'generated-image-newest-source.jpg');
 	await expect(sourceDownloadLink).toHaveClass(/\bicon-button\b/);
-	await expect(sourceDownloadLink).toHaveAttribute('title', 'Скачать исходник сцены 1');
+	await expect(sourceDownloadLink).toHaveAttribute('title', 'Скачать исходник сцены 3');
 
-	await page.getByRole('button', { name: 'Обработать исходник сцены 1' }).click();
+	await page.getByRole('button', { name: 'Обработать исходник сцены 3' }).click();
 	await expect(page).toHaveURL(/\/style-transfer\/interior\?/);
 	await expect(page).not.toHaveURL(/source=/);
 	await expect(page.getByRole('img', { name: 'Фото комнаты' })).toHaveAttribute(
@@ -198,12 +201,12 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	await expect(page.getByRole('button', { name: 'Восстановить настройки сцены 2' })).toBeVisible();
 
 	const downloadLink = page.getByRole('link', {
-		name: 'Скачать результат сцены 1'
+		name: 'Скачать результат сцены 3'
 	});
 	await expect(downloadLink).toHaveAttribute('href', `/api/download/${mediaKey(6)}`);
 	await expect(downloadLink).toHaveAttribute('download', 'generated-image-newest.webp');
 	await expect(downloadLink).toHaveClass(/\bicon-button\b/);
-	await expect(downloadLink).toHaveAttribute('title', 'Скачать результат сцены 1');
+	await expect(downloadLink).toHaveAttribute('title', 'Скачать результат сцены 3');
 	await downloadLink.focus();
 	await expect(downloadLink).toBeFocused();
 

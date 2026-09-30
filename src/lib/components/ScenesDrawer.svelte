@@ -677,7 +677,7 @@ before the Change Date. See LICENSE for complete terms.
 						? t('generatedImages.milestonesListLabel')
 						: t('generatedImages.listLabel')}
 				>
-					{#each generatedImages.images as image, index (image.id)}
+					{#each generatedImages.images as image (image.id)}
 						{const date = generatedDate(image.createdAt)}
 						{const Icon = generationKindIcons[image.kind]}
 						<li class="scene-card">
@@ -695,9 +695,9 @@ before the Change Date. See LICENSE for complete terms.
 									type="button"
 									class="record-delete-button"
 									disabled={generatedImages.deletingIds.has(image.id)}
-									aria-label={ti('generatedImages.delete', { order: index + 1 })}
-									title={ti('generatedImages.delete', { order: index + 1 })}
-									onclick={() => requestDelete(image.id, index + 1)}
+									aria-label={ti('generatedImages.delete', { order: image.number })}
+									title={ti('generatedImages.delete', { order: image.number })}
+									onclick={() => requestDelete(image.id, image.number)}
 								>
 									<Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
 								</button>
@@ -708,7 +708,7 @@ before the Change Date. See LICENSE for complete terms.
 									<div class="image-frame">
 										<img
 											src={image.source.url}
-											alt={ti('generatedImages.sourceImageAlt', { order: index + 1 })}
+											alt={ti('generatedImages.sourceImageAlt', { order: image.number })}
 											loading="lazy"
 										/>
 										{#if !milestones && image.iteration === 1}
@@ -718,8 +718,8 @@ before the Change Date. See LICENSE for complete terms.
 											<button
 												type="button"
 												class="icon-button"
-												aria-label={ti('generatedImages.useSource', { order: index + 1 })}
-												title={ti('generatedImages.useSource', { order: index + 1 })}
+												aria-label={ti('generatedImages.useSource', { order: image.number })}
+												title={ti('generatedImages.useSource', { order: image.number })}
 												onclick={() => useImage(image.source.key, image.kind)}
 											>
 												<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
@@ -731,8 +731,8 @@ before the Change Date. See LICENSE for complete terms.
 												})}
 												download={downloadFilename(image.source.url, `${image.id}-source`)}
 												class="icon-button"
-												aria-label={ti('generatedImages.downloadSource', { order: index + 1 })}
-												title={ti('generatedImages.downloadSource', { order: index + 1 })}
+												aria-label={ti('generatedImages.downloadSource', { order: image.number })}
+												title={ti('generatedImages.downloadSource', { order: image.number })}
 											>
 												<Download size={17} strokeWidth={1.8} aria-hidden="true" />
 											</a>
@@ -768,8 +768,8 @@ before the Change Date. See LICENSE for complete terms.
 										<button
 											type="button"
 											class="prompt-button"
-											aria-label={ti('generatedImages.showPromptLabel', { order: index + 1 })}
-											onclick={() => void showPrompt(image.id, index + 1)}
+											aria-label={ti('generatedImages.showPromptLabel', { order: image.number })}
+											onclick={() => void showPrompt(image.id, image.number)}
 										>
 											<MessageSquareText size={14} strokeWidth={1.8} aria-hidden="true" />
 											{t('generatedImages.showPrompt')}
@@ -781,7 +781,7 @@ before the Change Date. See LICENSE for complete terms.
 									<div class="image-frame result-frame">
 										<img
 											src={image.image.url}
-											alt={ti('generatedImages.resultImageAlt', { order: index + 1 })}
+											alt={ti('generatedImages.resultImageAlt', { order: image.number })}
 											loading="lazy"
 										/>
 										<div class="actions">
@@ -792,8 +792,8 @@ before the Change Date. See LICENSE for complete terms.
 												<button
 													type="button"
 													class="icon-button"
-													aria-label={ti('generatedImages.useResult', { order: index + 1 })}
-													title={ti('generatedImages.useResult', { order: index + 1 })}
+													aria-label={ti('generatedImages.useResult', { order: image.number })}
+													title={ti('generatedImages.useResult', { order: image.number })}
 													onclick={() => useImage(image.image.key, image.kind)}
 												>
 													<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
@@ -803,9 +803,9 @@ before the Change Date. See LICENSE for complete terms.
 													type="button"
 													class="icon-button"
 													disabled={restoringId !== null}
-													aria-label={ti('generatedImages.restore', { order: index + 1 })}
-													title={ti('generatedImages.restore', { order: index + 1 })}
-													onclick={() => void requestRestore(image.id, image.kind, index + 1)}
+													aria-label={ti('generatedImages.restore', { order: image.number })}
+													title={ti('generatedImages.restore', { order: image.number })}
+													onclick={() => void requestRestore(image.id, image.kind, image.number)}
 												>
 													{#if restoringId === image.id}
 														<span class="spinner" aria-hidden="true"></span>
@@ -821,8 +821,8 @@ before the Change Date. See LICENSE for complete terms.
 												})}
 												download={downloadFilename(image.image.url, image.id)}
 												class="icon-button"
-												aria-label={ti('generatedImages.download', { order: index + 1 })}
-												title={ti('generatedImages.download', { order: index + 1 })}
+												aria-label={ti('generatedImages.download', { order: image.number })}
+												title={ti('generatedImages.download', { order: image.number })}
 											>
 												<Download size={17} strokeWidth={1.8} aria-hidden="true" />
 											</a>
