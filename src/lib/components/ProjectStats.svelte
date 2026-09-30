@@ -16,8 +16,10 @@ before the Change Date. See LICENSE for complete terms.
 	import { Images, Layers } from '@lucide/svelte';
 	import { ti } from '$lib/i18n/index.svelte';
 
+	// A session card passes only its own generation count — sessionCount is
+	// left out there, not zero.
 	interface Props {
-		sessionCount: number;
+		sessionCount?: number;
 		generationCount: number;
 	}
 
@@ -25,10 +27,12 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <span class="project-stats">
-	<span class="stat">
-		<Layers size={14} strokeWidth={1.8} aria-hidden="true" />
-		{ti('projects.stats.sessions', { count: sessionCount })}
-	</span>
+	{#if sessionCount !== undefined}
+		<span class="stat">
+			<Layers size={14} strokeWidth={1.8} aria-hidden="true" />
+			{ti('projects.stats.sessions', { count: sessionCount })}
+		</span>
+	{/if}
 	<span class="stat">
 		<Images size={14} strokeWidth={1.8} aria-hidden="true" />
 		{ti('projects.stats.generations', { count: generationCount })}
@@ -41,7 +45,7 @@ before the Change Date. See LICENSE for complete terms.
 		flex-wrap: wrap;
 		gap: 0.25rem 0.875rem;
 		color: var(--color-muted);
-		font-size: 0.8125rem;
+		font-size: var(--project-stats-font-size, 0.8125rem);
 		font-variant-numeric: tabular-nums;
 	}
 

@@ -419,7 +419,6 @@ export interface Dictionary {
 	'projects.detail.newSessionFailed': string;
 	'projects.detail.sessionUntitled': string;
 	'projects.detail.sessionUpdatedAt': string;
-	'projects.detail.sessionGenerationCount': string;
 	'projects.detail.sessionForkedFrom': string;
 	'projects.detail.sessionThumbnailAlt': string;
 	'projects.detail.sessionContinue': string;
@@ -463,7 +462,6 @@ export interface Dictionary {
 	'share.sessionsEmpty': string;
 	'share.sessionUntitled': string;
 	'share.sessionUpdatedAt': string;
-	'share.sessionGenerationCount': string;
 	'share.sessionForkedFrom': string;
 	'share.generationsLabel': string;
 	'share.generationAlt': string;

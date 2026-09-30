@@ -479,7 +479,7 @@ before the Change Date. See LICENSE for complete terms.
 	.project-header {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: 1.5rem;
 	}
 
 	.header-row {

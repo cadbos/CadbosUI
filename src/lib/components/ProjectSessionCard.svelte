@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { Trash2 } from '@lucide/svelte';
 	import type { ProjectSessionRecord } from '$lib/api/contract';
+	import ProjectStats from '$lib/components/ProjectStats.svelte';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 
 	interface Props {
@@ -131,9 +132,10 @@ before the Change Date. See LICENSE for complete terms.
 				>{ti('projects.detail.sessionForkedFrom', { title: forkedFromTitle })}</span
 			>
 		{/if}
-		<span class="session-generations"
-			>{ti('projects.detail.sessionGenerationCount', { count: session.generations.length })}</span
-		>
+		<ProjectStats
+			generationCount={session.generations.length}
+			--project-stats-font-size="0.75rem"
+		/>
 		<span class="session-updated"
 			>{ti('projects.detail.sessionUpdatedAt', { date: formatDate(session.updatedAt) })}</span
 		>
@@ -285,7 +287,6 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.session-forked,
-	.session-generations,
 	.session-updated {
 		color: var(--color-muted);
 		font-size: 0.75rem;

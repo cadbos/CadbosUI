@@ -215,9 +215,10 @@ before the Change Date. See LICENSE for complete terms.
 										>{ti('share.sessionForkedFrom', { title: forkedFrom })}</span
 									>
 								{/if}
-								<span class="session-generations"
-									>{ti('share.sessionGenerationCount', { count: session.generations.length })}</span
-								>
+								<ProjectStats
+									generationCount={session.generations.length}
+									--project-stats-font-size="0.75rem"
+								/>
 								<span class="session-updated"
 									>{ti('share.sessionUpdatedAt', { date: formatDate(session.updatedAt) })}</span
 								>
@@ -374,7 +375,6 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.session-forked,
-	.session-generations,
 	.session-updated {
 		color: var(--color-muted);
 		font-size: 0.75rem;
