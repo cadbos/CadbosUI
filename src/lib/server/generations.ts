@@ -76,6 +76,7 @@ export interface ResourceImagesPage {
 
 export interface Scene extends GeneratedImage {
 	session: GenerationSessionRef | null;
+	iteration: number | null;
 }
 
 export interface GeneratedImagesPage {
@@ -439,11 +440,13 @@ export interface SceneFilter {
 	sessionId: string | null;
 }
 
-interface SceneRow extends GenerationRow, SessionRefColumns {}
+interface SceneRow extends GenerationRow, SessionRefColumns {
+	iteration: number | null;
+}
 
 function toScene(row: SceneRow): Scene | null {
 	const image = toGeneratedImage(row);
-	return image ? { ...image, session: sessionRefForRow(row) } : null;
+	return image ? { ...image, session: sessionRefForRow(row), iteration: row.iteration } : null;
 }
 
 // The live session/project a generation belongs to — the same archived-out
@@ -472,13 +475,15 @@ function sceneQuery(filter: SceneFilter): string {
 	const columns =
 		's.id, s.user_id, s.result_media_id, s.source_media_id, result_media.filename AS result_filename, ' +
 		'result_bucket.name AS result_bucket_name, s.kind, s.created_at, ' +
-		's.session_id, s.session_title, s.project_id, s.project_title ';
+		's.session_id, s.session_title, s.project_id, s.project_title, s.iteration ';
 	const sessionColumns =
 		'ps.id AS session_id, ps.title AS session_title, p.id AS project_id, p.title AS project_title';
-	if (filter.view === 'all') {
+	if (filter.view === 'iterations') {
 		return (
 			'WITH s AS (SELECT g.id, g.user_id, g.result_media_id, g.source_media_id, g.kind, g.created_at, ' +
-			`${sessionColumns} FROM generations g ${LIVE_SESSION_JOINS}WHERE ${SCENE_FILTER_CONDITIONS}) ` +
+			`${sessionColumns}, CASE WHEN p.id IS NULL THEN NULL ELSE ` +
+			'ROW_NUMBER() OVER (PARTITION BY g.session_id ORDER BY g.created_at, g.id) END AS iteration ' +
+			`FROM generations g ${LIVE_SESSION_JOINS}WHERE ${SCENE_FILTER_CONDITIONS}) ` +
 			`SELECT ${columns}FROM s ${media}ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`
 		);
 	}
@@ -486,6 +491,7 @@ function sceneQuery(filter: SceneFilter): string {
 		'WITH ranked AS (SELECT g.id, g.user_id, g.result_media_id, g.kind, g.created_at, ' +
 		`${sessionColumns}, ` +
 		'ROW_NUMBER() OVER (PARTITION BY g.session_id ORDER BY g.created_at DESC, g.id DESC) AS latest_rank, ' +
+		'COUNT(*) OVER (PARTITION BY g.session_id) AS iteration, ' +
 		'FIRST_VALUE(g.source_media_id) OVER (PARTITION BY g.session_id ORDER BY g.created_at, g.id) ' +
 		`AS source_media_id FROM generations g ${LIVE_SESSION_JOINS}` +
 		`WHERE ${SCENE_FILTER_CONDITIONS} AND p.id IS NOT NULL ` +
@@ -503,7 +509,7 @@ export async function listGeneratedImages(
 	size: number
 ): Promise<GeneratedImagesPage> {
 	const bindings =
-		filter.view === 'all'
+		filter.view === 'iterations'
 			? sceneFilterBindings(userId, filter)
 			: [...sceneFilterBindings(userId, filter), ...generationKinds];
 	const query = sceneQuery(filter);

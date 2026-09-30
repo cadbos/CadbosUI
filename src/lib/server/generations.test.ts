@@ -35,7 +35,7 @@ import {
 	recordGeneration
 } from './generations';
 
-const ALL_SCENES = { view: 'all', projectId: null, sessionId: null } as const;
+const ALL_SCENES = { view: 'iterations', projectId: null, sessionId: null } as const;
 
 const HASH_1 = '1'.repeat(64);
 const HASH_2 = '2'.repeat(64);
@@ -583,7 +583,8 @@ describe('listGeneratedImages', () => {
 					bucketName: TEST_S3_BUCKET.name,
 					kind: 'render',
 					createdAt: 3000,
-					session: null
+					session: null,
+					iteration: null
 				},
 				{
 					id: 'middle',
@@ -594,7 +595,8 @@ describe('listGeneratedImages', () => {
 					bucketName: TEST_S3_BUCKET.name,
 					kind: 'render',
 					createdAt: 2000,
-					session: null
+					session: null,
+					iteration: null
 				}
 			],
 			hasMore: true
@@ -724,6 +726,7 @@ describe('listGeneratedImages filtering', () => {
 			['redo-1', 'Kitchen redo'],
 			['kitchen-1', 'Kitchen']
 		]);
+		expect(page.images.map((image) => image.iteration)).toEqual([null, 3, 1, 2, 1, 1]);
 		expect(page.images[1].session).toEqual({
 			projectId: kitchen.projectId,
 			projectTitle: 'Flat',
@@ -736,14 +739,14 @@ describe('listGeneratedImages filtering', () => {
 		const project = await listGeneratedImages(
 			db,
 			'user-1',
-			{ view: 'all', projectId: kitchen.projectId, sessionId: null },
+			{ view: 'iterations', projectId: kitchen.projectId, sessionId: null },
 			0,
 			10
 		);
 		const session = await listGeneratedImages(
 			db,
 			'user-1',
-			{ view: 'all', projectId: kitchen.projectId, sessionId: kitchenRedo.sessionId },
+			{ view: 'iterations', projectId: kitchen.projectId, sessionId: kitchenRedo.sessionId },
 			0,
 			10
 		);
@@ -771,6 +774,7 @@ describe('listGeneratedImages filtering', () => {
 		expect(page.images[0]).toMatchObject({
 			filename: 'kitchen-3.webp',
 			sourceMediaId: firstKitchen?.sourceMediaId,
+			iteration: 3,
 			session: { sessionId: kitchen.sessionId }
 		});
 	});
@@ -813,7 +817,7 @@ describe('listGeneratedImages filtering', () => {
 		const archivedSession = await listGeneratedImages(
 			db,
 			'user-1',
-			{ view: 'all', projectId: kitchen.projectId, sessionId: kitchenRedo.sessionId },
+			{ view: 'iterations', projectId: kitchen.projectId, sessionId: kitchenRedo.sessionId },
 			0,
 			10
 		);

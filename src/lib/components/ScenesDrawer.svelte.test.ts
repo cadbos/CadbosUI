@@ -33,7 +33,8 @@ function image(id: string, createdAt: number): SceneRecord {
 		},
 		kind: 'render',
 		createdAt,
-		session: null
+		session: null,
+		iteration: null
 	};
 }
 
@@ -162,7 +163,7 @@ const SESSION = {
 	sessionTitle: ''
 };
 
-it('shows each scene’s session and opens its prompt in a dialog', async () => {
+it('shows each iteration’s session, marks the first one’s Base as the Source and opens its prompt', async () => {
 	const fetchMock = vi.fn<typeof fetch>();
 	vi.stubGlobal('fetch', fetchMock);
 	fetchMock.mockResolvedValueOnce(
@@ -184,11 +185,21 @@ it('shows each scene’s session and opens its prompt in a dialog', async () => 
 		)
 	);
 	generatedImages.status = 'ready';
-	generatedImages.images = [{ ...image('sample', 1000), session: SESSION }];
+	generatedImages.images = [
+		{ ...image('sample', 2000), session: SESSION, iteration: 2 },
+		{ ...image('first', 1000), session: SESSION, iteration: 1 }
+	];
 
 	const screen = render(ScenesDrawer, { open: true, onClose: vi.fn() });
 
-	await expect.element(screen.getByText('Квартира · Без названия')).toBeVisible();
+	await expect.element(screen.getByText('Квартира · Без названия').first()).toBeVisible();
+	// Only the session's first iteration marks its Base as the Source.
+	await expect
+		.element(screen.getByRole('listitem').nth(1).getByText('Исходник', { exact: true }))
+		.toBeVisible();
+	await expect
+		.element(screen.getByRole('listitem').first().getByText('Исходник', { exact: true }))
+		.not.toBeInTheDocument();
 	await screen.getByRole('button', { name: 'Показать промпт сцены 1' }).click();
 
 	const dialog = screen.getByRole('dialog', { name: 'Промпт сцены 1' });
@@ -199,11 +210,11 @@ it('shows each scene’s session and opens its prompt in a dialog', async () => 
 	await expect.element(dialog).not.toBeInTheDocument();
 });
 
-it('switches to session results, which have no prompt or delete buttons', async () => {
+it('switches to milestones, showing the iteration count and no prompt or delete buttons', async () => {
 	const fetchMock = vi.fn<typeof fetch>();
 	vi.stubGlobal('fetch', fetchMock);
 	fetchMock.mockResolvedValue(
-		jsonResponse(page([{ ...image('milestone', 1000), session: SESSION }], 0, false))
+		jsonResponse(page([{ ...image('milestone', 1000), session: SESSION, iteration: 7 }], 0, false))
 	);
 	generatedImages.status = 'ready';
 	generatedImages.images = [image('step', 1000)];
@@ -217,15 +228,14 @@ it('switches to session results, which have no prompt or delete buttons', async 
 	await vi.waitFor(() =>
 		expect(document.querySelector('#scenes-drawer')?.getBoundingClientRect().left).toBe(0)
 	);
-	await screen.getByRole('button', { name: 'Итоги сессий' }).click();
+	await screen.getByRole('button', { name: 'Вехи' }).click();
 
+	await expect.element(screen.getByRole('list', { name: 'Вехи, сначала новые' })).toBeVisible();
 	await expect
-		.element(screen.getByRole('list', { name: 'Итоги сессий, сначала новые' }))
-		.toBeVisible();
-	await expect
-		.element(screen.getByRole('button', { name: 'Итоги сессий' }))
+		.element(screen.getByRole('button', { name: 'Вехи' }))
 		.toHaveAttribute('aria-pressed', 'true');
-	await expect.element(screen.getByText('Первый исходник')).toBeVisible();
+	await expect.element(screen.getByText('Первичная')).toBeVisible();
+	await expect.element(screen.getByRole('img', { name: 'Итераций: 7' })).toHaveTextContent('7');
 	expect(fetchMock).toHaveBeenCalledWith(
 		'/api/generated-images?offset=0&size=100&view=milestones',
 		{ signal: expect.any(AbortSignal) }

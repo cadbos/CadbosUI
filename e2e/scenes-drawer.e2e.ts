@@ -88,7 +88,8 @@ async function mockAddObjectScene(page: Page): Promise<void> {
 						source: media(1, 'https://cdn.example.test/scene.jpg'),
 						kind: 'edit',
 						createdAt: Date.UTC(2026, 0, 1),
-						session: null
+						session: null,
+						iteration: null
 					}
 				],
 				pagination: { offset: 0, size: 100, hasMore: false }
@@ -134,7 +135,8 @@ async function mockSingleStyleTransferScene(page: Page): Promise<void> {
 						source: media(1, 'https://cdn.example.test/scene.jpg'),
 						kind: 'style-transfer',
 						createdAt: Date.UTC(2026, 0, 1),
-						session: null
+						session: null,
+						iteration: null
 					}
 				],
 				pagination: { offset: 0, size: 100, hasMore: false }
@@ -260,7 +262,8 @@ async function mockSessionScene(page: Page): Promise<void> {
 						source: media(1, 'https://cdn.example.test/scene.jpg'),
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 1),
-						session: null
+						session: null,
+						iteration: null
 					}
 				],
 				pagination: { offset: 0, size: 100, hasMore: false }
@@ -462,7 +465,7 @@ test('asks before replacing unsaved work in the restored session’s background 
 	await expect(page.getByLabel('Промпт чата')).toHaveValue('unsaved living room idea');
 });
 
-test('narrows scenes to a project’s session results and shows a step’s prompt', async ({
+test('narrows scenes to a project’s milestones and shows an iteration’s prompt', async ({
 	page
 }) => {
 	const projectId = '00000000-0000-4000-8000-000000000301';
@@ -511,7 +514,8 @@ test('narrows scenes to a project’s session results and shows a step’s promp
 								source: media(1, 'https://cdn.example.test/kitchen-source.jpg'),
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 2),
-								session: kitchen
+								session: kitchen,
+								iteration: 2
 							}
 						]
 					: [
@@ -521,7 +525,8 @@ test('narrows scenes to a project’s session results and shows a step’s promp
 								source: media(2, 'https://cdn.example.test/kitchen-1.webp'),
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 2),
-								session: kitchen
+								session: kitchen,
+								iteration: 2
 							},
 							{
 								id: ADD_OBJECT_GENERATION_ID,
@@ -529,7 +534,8 @@ test('narrows scenes to a project’s session results and shows a step’s promp
 								source: media(1, 'https://cdn.example.test/kitchen-source.jpg'),
 								kind: 'edit',
 								createdAt: Date.UTC(2026, 0, 1),
-								session: kitchen
+								session: kitchen,
+								iteration: 1
 							}
 						],
 				pagination: { offset: 0, size: 100, hasMore: false }
@@ -547,9 +553,16 @@ test('narrows scenes to a project’s session results and shows a step’s promp
 	await page.goto('/create/interior?view=chat&format=webp');
 	await page.getByRole('button', { name: 'Сцены' }).click();
 	const drawer = page.getByRole('dialog', { name: 'Сцены' });
-	const steps = drawer.getByRole('list', { name: 'Сцены, сначала новые' });
+	const steps = drawer.getByRole('list', { name: 'Итерации, сначала новые' });
 	await expect(steps.getByRole('listitem')).toHaveCount(2);
 	await expect(steps.getByRole('listitem').first()).toContainText('Квартира · Кухня');
+	// The session's first iteration marks its Base as the Source.
+	await expect(
+		steps.getByRole('listitem').nth(1).getByText('Исходник', { exact: true })
+	).toBeVisible();
+	await expect(
+		steps.getByRole('listitem').first().getByText('Исходник', { exact: true })
+	).toHaveCount(0);
 
 	await drawer.getByRole('button', { name: 'Показать промпт сцены 1' }).click();
 	const promptDialog = page.getByRole('dialog', { name: 'Промпт сцены 1' });
@@ -558,10 +571,11 @@ test('narrows scenes to a project’s session results and shows a step’s promp
 
 	await drawer.getByLabel('Проект').selectOption({ label: 'Квартира — проект' });
 	await drawer.getByLabel('Сессия').selectOption({ label: 'Кухня — сессия' });
-	await drawer.getByRole('button', { name: 'Итоги сессий' }).click();
+	await drawer.getByRole('button', { name: 'Вехи' }).click();
 
-	const results = drawer.getByRole('list', { name: 'Итоги сессий, сначала новые' });
+	const results = drawer.getByRole('list', { name: 'Вехи, сначала новые' });
 	await expect(results.getByRole('listitem')).toHaveCount(1);
+	await expect(results.getByRole('img', { name: 'Итераций: 2' })).toHaveText('2');
 	await expect(results.getByRole('img', { name: 'Исходное изображение сцены 1' })).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/kitchen-source.jpg'

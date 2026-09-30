@@ -30,7 +30,7 @@ export interface SceneFilterState {
 	sessionId: string | null;
 }
 
-const DEFAULT_FILTER: SceneFilterState = { view: 'all', projectId: null, sessionId: null };
+const DEFAULT_FILTER: SceneFilterState = { view: 'iterations', projectId: null, sessionId: null };
 
 const PAGE_SIZE = 100;
 
@@ -53,7 +53,8 @@ const generatedImageRecordSchema = z.object({
 			sessionId: z.uuid(),
 			sessionTitle: z.string()
 		})
-		.nullable()
+		.nullable(),
+	iteration: z.number().int().min(1).nullable()
 });
 
 const generatedImagesResponseSchema = z.object({
@@ -282,7 +283,7 @@ class GeneratedImagesState {
 		const params = new URLSearchParams({
 			offset: String(offset),
 			size: String(PAGE_SIZE),
-			...(view === 'all' ? {} : { view }),
+			...(view === 'iterations' ? {} : { view }),
 			...(projectId ? { projectId } : {}),
 			...(sessionId ? { sessionId } : {})
 		});

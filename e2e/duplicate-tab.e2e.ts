@@ -148,7 +148,8 @@ async function mockSessionData(page: Page, options: SessionMockOptions = {}): Pr
 						source: media(1, BEFORE_URL),
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 1),
-						session: null
+						session: null,
+						iteration: null
 					}
 				],
 				pagination: { offset: 0, size: 100, hasMore: false }

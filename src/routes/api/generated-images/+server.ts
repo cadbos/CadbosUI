@@ -38,7 +38,7 @@ const MAX_IMAGE_PAGE_SIZE = 100;
 const generatedImagesSearchParamsSchema = z.strictObject({
 	offset: z.coerce.number().int().min(0).default(DEFAULT_IMAGE_PAGE_OFFSET),
 	size: z.coerce.number().int().min(1).max(MAX_IMAGE_PAGE_SIZE).default(DEFAULT_IMAGE_PAGE_SIZE),
-	view: z.enum(sceneViews).default('all'),
+	view: z.enum(sceneViews).default('iterations'),
 	projectId: z.uuid().nullable().default(null),
 	sessionId: z.uuid().nullable().default(null)
 });
@@ -79,7 +79,8 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 				source: access.get(image.sourceMediaId)!,
 				kind: image.kind,
 				createdAt: image.createdAt,
-				session: image.session
+				session: image.session,
+				iteration: image.iteration
 			})),
 			pagination: {
 				offset,

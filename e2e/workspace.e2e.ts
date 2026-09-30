@@ -103,7 +103,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 							source: media(1, 'https://cdn.example.test/oldest-source.jpg'),
 							kind: 'render',
 							createdAt: oldestCreatedAt,
-							session: null
+							session: null,
+							iteration: null
 						},
 						{
 							id: 'newest',
@@ -111,7 +112,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 							source: media(5, 'https://cdn.example.test/newest-source.jpg'),
 							kind: 'style-transfer',
 							createdAt: newestCreatedAt,
-							session: null
+							session: null,
+							iteration: null
 						}
 					]
 				: [
@@ -121,7 +123,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 							source: media(3, 'https://cdn.example.test/middle-source.jpg'),
 							kind: 'edit',
 							createdAt: middleCreatedAt,
-							session: null
+							session: null,
+							iteration: null
 						}
 					];
 

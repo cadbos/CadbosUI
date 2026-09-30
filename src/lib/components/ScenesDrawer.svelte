@@ -15,7 +15,6 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import {
 		Download,
-		Flag,
 		History,
 		Lightbulb,
 		MessageSquareText,
@@ -40,6 +39,7 @@ before the Change Date. See LICENSE for complete terms.
 		type GenerationSessionRef,
 		type SceneView
 	} from '$lib/api/contract';
+	import HintIcon from '$lib/components/HintIcon.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import {
@@ -62,7 +62,7 @@ before the Change Date. See LICENSE for complete terms.
 	};
 
 	const sceneViewKeys: Record<SceneView, TranslationKey> = {
-		all: 'generatedImages.view.all',
+		iterations: 'generatedImages.view.iterations',
 		milestones: 'generatedImages.view.milestones'
 	};
 
@@ -531,6 +531,13 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
+{#snippet columnHeader(label: TranslationKey, hint: TranslationKey)}
+	<span class="column-title">
+		<span class="column-label">{t(label)}</span>
+		<HintIcon label={t(hint)} />
+	</span>
+{/snippet}
+
 <dialog
 	id="scenes-drawer"
 	class="drawer"
@@ -640,13 +647,29 @@ before the Change Date. See LICENSE for complete terms.
 			{:else}
 				<div class="scene-columns-header">
 					{#if milestones}
-						<span>{t('generatedImages.firstSource')}</span>
-						<span>{t('generatedImages.milestoneColumn')}</span>
+						{@render columnHeader(
+							'generatedImages.column.initial',
+							'generatedImages.column.initialHint'
+						)}
+						{@render columnHeader(
+							'generatedImages.column.iterations',
+							'generatedImages.column.iterationsHint'
+						)}
+						{@render columnHeader(
+							'generatedImages.column.final',
+							'generatedImages.column.finalHint'
+						)}
 					{:else}
-						<span>{t('generatedImages.source')}</span>
-						<span>{t('generatedImages.kindColumn')}</span>
+						{@render columnHeader('generatedImages.column.base', 'generatedImages.column.baseHint')}
+						{@render columnHeader(
+							'generatedImages.column.action',
+							'generatedImages.column.actionHint'
+						)}
+						{@render columnHeader(
+							'generatedImages.column.result',
+							'generatedImages.column.resultHint'
+						)}
 					{/if}
-					<span>{t('generatedImages.result')}</span>
 				</div>
 
 				<ul
@@ -689,6 +712,9 @@ before the Change Date. See LICENSE for complete terms.
 											alt={ti('generatedImages.sourceImageAlt', { order: index + 1 })}
 											loading="lazy"
 										/>
+										{#if !milestones && image.iteration === 1}
+											<span class="source-badge">{t('generatedImages.sourceBadge')}</span>
+										{/if}
 										<div class="actions">
 											<button
 												type="button"
@@ -717,14 +743,20 @@ before the Change Date. See LICENSE for complete terms.
 
 								<div class="flow-middle">
 									{#if milestones}
-										<div
-											class="flow-kind"
-											role="img"
-											aria-label={t('generatedImages.milestone')}
-											data-tooltip={t('generatedImages.milestone')}
-										>
-											<Flag size={18} strokeWidth={1.8} aria-hidden="true" />
-										</div>
+										{#if image.iteration !== null}
+											<div
+												class="flow-kind"
+												role="img"
+												aria-label={ti('generatedImages.iterationCount', {
+													count: image.iteration
+												})}
+												data-tooltip={ti('generatedImages.iterationCount', {
+													count: image.iteration
+												})}
+											>
+												<span class="iteration-count" aria-hidden="true">{image.iteration}</span>
+											</div>
+										{/if}
 									{:else}
 										<div
 											class="flow-kind"
@@ -1157,13 +1189,22 @@ before the Change Date. See LICENSE for complete terms.
 		border-bottom: 1px solid var(--color-border);
 	}
 
-	.scene-columns-header span {
+	.column-title {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		justify-self: center;
+		gap: 0.25rem;
 		color: var(--color-muted);
+	}
+
+	/* On the label alone, not .column-title — HintIcon's bubble renders inside
+	   it and would inherit the uppercase and letter spacing. */
+	.column-label {
 		font-size: 0.6875rem;
 		font-weight: 650;
 		letter-spacing: 0.045em;
 		white-space: nowrap;
-		text-align: center;
 		text-transform: uppercase;
 	}
 
@@ -1193,6 +1234,38 @@ before the Change Date. See LICENSE for complete terms.
 		min-height: 2rem;
 		gap: 0.75rem;
 		padding-right: 2.5rem;
+	}
+
+	.source-badge {
+		position: absolute;
+		bottom: 0.5rem;
+		left: 0.5rem;
+		padding: 0.15rem 0.45rem;
+		border-radius: var(--radius-sm);
+		background: rgb(255 255 255 / 0.92);
+		/* Fixed colors, like .icon-button: this chip floats over an arbitrary
+		   photo in both themes. */
+		color: #1d1d1f;
+		font-size: 0.6875rem;
+		font-weight: 650;
+		box-shadow: 0 2px 8px rgb(29 29 31 / 0.18);
+		pointer-events: none;
+	}
+
+	.iteration-count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 2.25rem;
+		height: 2.25rem;
+		padding: 0 0.5rem;
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: 0.9375rem;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.flow-middle {
