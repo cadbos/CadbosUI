@@ -16,7 +16,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { ChevronDown, Monitor, Moon, Sun } from '@lucide/svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { theme, type ThemeMode } from '$lib/state/theme.svelte';
-	import { dismissable } from '$lib/utils';
+	import { dismissable, focusTrigger } from '$lib/utils';
 
 	const modes: readonly ThemeMode[] = ['light', 'system', 'dark'];
 	const labelKeys: Record<ThemeMode, TranslationKey> = {
@@ -28,12 +28,11 @@ before the Change Date. See LICENSE for complete terms.
 
 	let open = $state(false);
 	let CurrentIcon = $derived(icons[theme.mode]);
-	let triggerEl: HTMLButtonElement | undefined;
 
-	function choose(mode: ThemeMode): void {
+	function choose(mode: ThemeMode, item: HTMLElement): void {
 		theme.setMode(mode);
 		open = false;
-		triggerEl?.focus();
+		focusTrigger(item, '.theme-trigger');
 	}
 </script>
 
@@ -48,7 +47,6 @@ before the Change Date. See LICENSE for complete terms.
 	)}
 >
 	<button
-		bind:this={triggerEl}
 		type="button"
 		class="theme-trigger"
 		aria-expanded={open}
@@ -66,7 +64,7 @@ before the Change Date. See LICENSE for complete terms.
 				type="button"
 				class:active={theme.mode === mode}
 				aria-current={theme.mode === mode}
-				onclick={() => choose(mode)}
+				onclick={(event) => choose(mode, event.currentTarget)}
 			>
 				<Icon size={16} strokeWidth={1.8} aria-hidden="true" />
 				<span>{t(labelKeys[mode])}</span>

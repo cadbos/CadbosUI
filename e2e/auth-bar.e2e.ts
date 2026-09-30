@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
 import type { CreditInfo } from '$lib/api/contract';
@@ -210,4 +210,102 @@ test('shows sign-in only after session restoration receives an unauthorized resp
 
 	await expect.poll(() => attempts).toBe(2);
 	await expect(page.getByRole('button', { name: 'Расширение Nostr' })).toBeVisible();
+});
+
+async function openProfilePanel(page: Page): Promise<Locator> {
+	await page.locator('.auth-trigger').click();
+	return page.locator('#auth-panel');
+}
+
+test('applies the chosen language and returns focus to its trigger', async ({ page }) => {
+	await restoreApprovedSession(page);
+	await page.goto('/');
+
+	const profile = await openProfilePanel(page);
+	const trigger = profile.locator('.language-trigger');
+
+	await trigger.click();
+	await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+	await profile.getByRole('button', { name: 'English' }).click();
+
+	await expect(profile.getByRole('link', { name: /Balance: 0\.00/ })).toBeVisible();
+	await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+	await expect(trigger).toBeFocused();
+});
+
+test('applies the chosen currency and returns focus to its trigger', async ({ page }) => {
+	await page.route('**/api/exchange-rate', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ rubPerUsd: 100, asOf: '2026-08-12T10:00:00.000Z' })
+		});
+	});
+	await restoreApprovedSession(page, { balance: 4.94, updatedAt: 1, history: [] });
+	await page.goto('/');
+
+	const profile = await openProfilePanel(page);
+	const trigger = profile.locator('.currency-trigger');
+
+	await expect(profile.getByRole('link', { name: /Баланс: 4\.94 \$/ })).toBeVisible();
+	await trigger.click();
+	await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+	await profile.getByRole('button', { name: '₽ RUB' }).click();
+
+	await expect(profile.getByRole('link', { name: /Баланс: 494\.00 ₽/ })).toBeVisible();
+	await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+	await expect(trigger).toBeFocused();
+});
+
+test('applies the chosen theme and returns focus to its trigger', async ({ page }) => {
+	await restoreApprovedSession(page);
+	await page.goto('/');
+
+	const profile = await openProfilePanel(page);
+	const trigger = profile.getByRole('button', { name: 'Тема оформления' });
+
+	await trigger.click();
+	await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+	await profile.getByRole('button', { name: 'Тёмная' }).click();
+
+	await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+	await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+	await expect(trigger).toBeFocused();
+});
+
+test('shows the relay-count hint above its icon on hover and hides it on leave', async ({
+	page
+}) => {
+	await restoreApprovedSession(page);
+	await page.goto('/');
+
+	const profile = await openProfilePanel(page);
+	const icon = profile.locator('.relay-count').getByRole('button');
+	const bubble = page.locator('.hint-bubble');
+
+	await icon.hover();
+	await expect(bubble).toBeVisible();
+	await expect(bubble).toContainText('Количество релеев из вашего личного списка');
+
+	const iconBox = await icon.boundingBox();
+	const bubbleBox = await bubble.boundingBox();
+	expect(bubbleBox!.y + bubbleBox!.height).toBeLessThanOrEqual(iconBox!.y);
+
+	await page.mouse.move(0, 0);
+	await expect(bubble).toHaveCount(0);
+});
+
+test('shows the relay-count hint on keyboard focus and hides it on blur', async ({ page }) => {
+	await restoreApprovedSession(page);
+	await page.goto('/');
+
+	const profile = await openProfilePanel(page);
+	const icon = profile.locator('.relay-count').getByRole('button');
+	const bubble = page.locator('.hint-bubble');
+
+	await icon.focus();
+	await expect(bubble).toBeVisible();
+
+	await icon.blur();
+	await expect(bubble).toHaveCount(0);
 });

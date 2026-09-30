@@ -15,17 +15,16 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { ChevronDown } from '@lucide/svelte';
 	import { getLocale, locales, setLocale, t } from '$lib/i18n/index.svelte';
-	import { dismissable } from '$lib/utils';
+	import { dismissable, focusTrigger } from '$lib/utils';
 
 	const labelKeys = { ru: 'language.ru', en: 'language.en' } as const;
 
 	let open = $state(false);
-	let triggerEl: HTMLButtonElement | undefined;
 
-	function choose(code: (typeof locales)[number]): void {
+	function choose(code: (typeof locales)[number], item: HTMLElement): void {
 		setLocale(code);
 		open = false;
-		triggerEl?.focus();
+		focusTrigger(item, '.language-trigger');
 	}
 </script>
 
@@ -40,7 +39,6 @@ before the Change Date. See LICENSE for complete terms.
 	)}
 >
 	<button
-		bind:this={triggerEl}
 		type="button"
 		class="language-trigger"
 		aria-expanded={open}
@@ -56,7 +54,7 @@ before the Change Date. See LICENSE for complete terms.
 				type="button"
 				class:active={getLocale() === code}
 				aria-current={getLocale() === code}
-				onclick={() => choose(code)}
+				onclick={(event) => choose(code, event.currentTarget)}
 			>
 				{t(labelKeys[code])}
 			</button>
