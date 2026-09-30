@@ -725,7 +725,7 @@ before the Change Date. See LICENSE for complete terms.
 												<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
 											</button>
 											<a
-												href={resolve('/api/download/[bucket]/[...filename]', {
+												href={resolve('/api/media/[bucket]/[...filename]', {
 													bucket: image.source.key.slice(0, image.source.key.indexOf('/')),
 													filename: image.source.key.slice(image.source.key.indexOf('/') + 1)
 												})}
@@ -815,7 +815,7 @@ before the Change Date. See LICENSE for complete terms.
 												</button>
 											{/if}
 											<a
-												href={resolve('/api/download/[bucket]/[...filename]', {
+												href={resolve('/api/media/[bucket]/[...filename]', {
 													bucket: image.image.key.slice(0, image.image.key.indexOf('/')),
 													filename: image.image.key.slice(image.image.key.indexOf('/') + 1)
 												})}
