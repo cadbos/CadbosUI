@@ -29,14 +29,12 @@ before the Change Date. See LICENSE for complete terms.
 	// within the viewport, so a mismatch would silently miscentre or clip it.
 	const TOOLTIP_MAX_WIDTH = 224;
 
-	let triggerEl: HTMLButtonElement | undefined = $state();
 	let visible = $state(false);
 	let top = $state(0);
 	let left = $state(0);
 
-	function show(): void {
-		if (!triggerEl) return;
-		const rect = triggerEl.getBoundingClientRect();
+	function show(trigger: HTMLElement): void {
+		const rect = trigger.getBoundingClientRect();
 		const halfWidth = TOOLTIP_MAX_WIDTH / 2;
 		const center = rect.left + rect.width / 2;
 		top = rect.top - GAP;
@@ -56,10 +54,9 @@ before the Change Date. See LICENSE for complete terms.
 	type="button"
 	class="hint-icon"
 	aria-label={label}
-	bind:this={triggerEl}
-	onmouseenter={show}
+	onmouseenter={(event) => show(event.currentTarget)}
 	onmouseleave={hide}
-	onfocus={show}
+	onfocus={(event) => show(event.currentTarget)}
 	onblur={hide}
 >
 	<Icon size={15} strokeWidth={1.8} aria-hidden="true" />
