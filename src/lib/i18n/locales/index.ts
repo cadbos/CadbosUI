@@ -228,12 +228,12 @@ export interface Dictionary {
 	'generatedImages.column.resultHint': string;
 	'generatedImages.column.initial': string;
 	'generatedImages.column.initialHint': string;
-	'generatedImages.column.iterations': string;
-	'generatedImages.column.iterationsHint': string;
+	'generatedImages.column.generations': string;
+	'generatedImages.column.generationsHint': string;
 	'generatedImages.column.final': string;
 	'generatedImages.column.finalHint': string;
 	'generatedImages.sourceBadge': string;
-	'generatedImages.iterationCount': string;
+	'generatedImages.generationCount': string;
 	'generatedImages.filter.project': string;
 	'generatedImages.filter.allProjects': string;
 	'generatedImages.filter.session': string;

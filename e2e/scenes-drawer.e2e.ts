@@ -575,7 +575,7 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 
 	const results = drawer.getByRole('list', { name: 'Вехи, сначала новые' });
 	await expect(results.getByRole('listitem')).toHaveCount(1);
-	await expect(results.getByRole('img', { name: 'Итераций: 2' })).toHaveText('2');
+	await expect(results.getByRole('img', { name: 'Генераций: 2' })).toHaveText('2');
 	await expect(results.getByRole('img', { name: 'Исходное изображение сцены 1' })).toHaveAttribute(
 		'src',
 		'https://cdn.example.test/kitchen-source.jpg'

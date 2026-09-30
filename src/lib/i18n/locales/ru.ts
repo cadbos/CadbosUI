@@ -238,13 +238,13 @@ export const ru = {
 		'Выходное изображение итерации. Его можно взять Основой для следующих итераций.',
 	'generatedImages.column.initial': 'Первичная',
 	'generatedImages.column.initialHint': 'Основа первой итерации сессии — её Исходник.',
-	'generatedImages.column.iterations': 'Итерации',
-	'generatedImages.column.iterationsHint':
-		'Сколько итераций понадобилось, чтобы из Первичной получить Итоговую.',
+	'generatedImages.column.generations': 'Количество генераций',
+	'generatedImages.column.generationsHint':
+		'Сколько генераций понадобилось, чтобы из Первичной получить Итоговую.',
 	'generatedImages.column.final': 'Итоговая',
 	'generatedImages.column.finalHint': 'Результат последней итерации сессии.',
 	'generatedImages.sourceBadge': 'Исходник',
-	'generatedImages.iterationCount': 'Итераций: {count}',
+	'generatedImages.generationCount': 'Генераций: {count}',
 	'generatedImages.filter.project': 'Проект',
 	'generatedImages.filter.allProjects': 'Все проекты',
 	'generatedImages.filter.session': 'Сессия',

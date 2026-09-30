@@ -39,7 +39,7 @@ before the Change Date. See LICENSE for complete terms.
 		type GenerationSessionRef,
 		type SceneView
 	} from '$lib/api/contract';
-	import HintIcon from '$lib/components/HintIcon.svelte';
+	import HintLabel from '$lib/components/HintLabel.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import {
@@ -533,8 +533,7 @@ before the Change Date. See LICENSE for complete terms.
 
 {#snippet columnHeader(label: TranslationKey, hint: TranslationKey)}
 	<span class="column-title">
-		<span class="column-label">{t(label)}</span>
-		<HintIcon label={t(hint)} />
+		<HintLabel text={t(label)} hint={t(hint)} />
 	</span>
 {/snippet}
 
@@ -652,8 +651,8 @@ before the Change Date. See LICENSE for complete terms.
 							'generatedImages.column.initialHint'
 						)}
 						{@render columnHeader(
-							'generatedImages.column.iterations',
-							'generatedImages.column.iterationsHint'
+							'generatedImages.column.generations',
+							'generatedImages.column.generationsHint'
 						)}
 						{@render columnHeader(
 							'generatedImages.column.final',
@@ -747,10 +746,10 @@ before the Change Date. See LICENSE for complete terms.
 											<div
 												class="flow-kind"
 												role="img"
-												aria-label={ti('generatedImages.iterationCount', {
+												aria-label={ti('generatedImages.generationCount', {
 													count: image.iteration
 												})}
-												data-tooltip={ti('generatedImages.iterationCount', {
+												data-tooltip={ti('generatedImages.generationCount', {
 													count: image.iteration
 												})}
 											>
@@ -1177,6 +1176,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.scene-columns-header {
+		container: scene-columns / inline-size;
 		position: sticky;
 		top: -1rem;
 		z-index: 2;
@@ -1194,18 +1194,23 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		justify-content: center;
 		justify-self: center;
-		gap: 0.25rem;
 		color: var(--color-muted);
-	}
-
-	/* On the label alone, not .column-title — HintIcon's bubble renders inside
-	   it and would inherit the uppercase and letter spacing. */
-	.column-label {
 		font-size: 0.6875rem;
 		font-weight: 650;
 		letter-spacing: 0.045em;
-		white-space: nowrap;
+		line-height: 1.3;
+		text-align: center;
 		text-transform: uppercase;
+	}
+
+	/* A long title (the Russian "Количество генераций") overflows its narrow
+	   middle column onto the free space around its neighbours' titles; it only
+	   wraps once the header is too narrow for that — at under ~26rem the
+	   one-line titles would touch. */
+	@container scene-columns (min-width: 29rem) {
+		.column-title {
+			white-space: nowrap;
+		}
 	}
 
 	.list {

@@ -235,7 +235,7 @@ it('switches to milestones, showing the iteration count and no prompt or delete 
 		.element(screen.getByRole('button', { name: 'Вехи' }))
 		.toHaveAttribute('aria-pressed', 'true');
 	await expect.element(screen.getByText('Первичная')).toBeVisible();
-	await expect.element(screen.getByRole('img', { name: 'Итераций: 7' })).toHaveTextContent('7');
+	await expect.element(screen.getByRole('img', { name: 'Генераций: 7' })).toHaveTextContent('7');
 	expect(fetchMock).toHaveBeenCalledWith(
 		'/api/generated-images?offset=0&size=100&view=milestones',
 		{ signal: expect.any(AbortSignal) }

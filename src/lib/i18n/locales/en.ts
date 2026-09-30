@@ -238,13 +238,13 @@ export const en = {
 		'The iteration’s output image. It can be taken as the Base for further iterations.',
 	'generatedImages.column.initial': 'Initial',
 	'generatedImages.column.initialHint': 'The Base of the session’s first iteration — its Source.',
-	'generatedImages.column.iterations': 'Iterations',
-	'generatedImages.column.iterationsHint':
-		'How many iterations it took to get from the Initial to the Final.',
+	'generatedImages.column.generations': 'Generation count',
+	'generatedImages.column.generationsHint':
+		'How many generations it took to get from the Initial to the Final.',
 	'generatedImages.column.final': 'Final',
 	'generatedImages.column.finalHint': 'The Result of the session’s latest iteration.',
 	'generatedImages.sourceBadge': 'Source',
-	'generatedImages.iterationCount': 'Iterations: {count}',
+	'generatedImages.generationCount': 'Generations: {count}',
 	'generatedImages.filter.project': 'Project',
 	'generatedImages.filter.allProjects': 'All projects',
 	'generatedImages.filter.session': 'Session',
