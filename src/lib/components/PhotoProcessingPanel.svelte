@@ -255,7 +255,7 @@ before the Change Date. See LICENSE for complete terms.
 		<p class="notice" role="status">{photoProcessing.notice}</p>
 	{/if}
 	{#if photoProcessing.completedResultUrl}
-		<a class="result-download" href={photoProcessing.completedResultUrl} download>
+		<a class="result-download" href={photoProcessing.completedResultUrl} rel="external" download>
 			{t('photoProcessing.downloadResult')}
 		</a>
 	{/if}
