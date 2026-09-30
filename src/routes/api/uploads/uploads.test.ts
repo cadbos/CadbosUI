@@ -15,7 +15,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SessionUser } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { mediaKey, type Bucket } from '$lib/server/media';
+import { mediaKey, parseMediaKey, type Bucket } from '$lib/server/media';
 import { MAX_IMAGE_UPLOAD_SIZE } from '$lib/server/remote-image';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
@@ -85,6 +85,34 @@ function call(
 	} as UploadEvent);
 }
 
+function callMultipart(
+	file: File,
+	uploadPlatform = platform(),
+	user: SessionUser | null = { pubkey: DEMO_PUBKEY }
+): ReturnType<typeof POST> {
+	const body = new FormData();
+	body.set('file', file);
+	return POST({
+		request: new Request('https://cadbos.example/api/uploads', { method: 'POST', body }),
+		platform: uploadPlatform,
+		url: new URL('https://cadbos.example/api/uploads'),
+		locals: { sessionLookupUnavailable: false, user }
+	} as UploadEvent);
+}
+
+async function storedSize(
+	db: ReturnType<typeof makeD1>,
+	key: string
+): Promise<number | null | undefined> {
+	const parsed = parseMediaKey(key);
+	if (!parsed) throw new Error(`invalid media key ${key}`);
+	const row = await db
+		.prepare('SELECT size FROM media WHERE filename = ?')
+		.bind(parsed.filename)
+		.first<{ size: number | null }>();
+	return row?.size;
+}
+
 function seedUser(db: ReturnType<typeof makeD1>, id: string, pubkey: string): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
@@ -138,7 +166,8 @@ describe('POST /api/uploads remote import', () => {
 		);
 
 		expect(response.status).toBe(200);
-		expect(await response.json()).toMatchObject({
+		const result = await response.json();
+		expect(result).toMatchObject({
 			image: {
 				key: expect.any(String),
 				url: expect.stringContaining('?')
@@ -146,6 +175,7 @@ describe('POST /api/uploads remote import', () => {
 			mime: 'image/webp',
 			size: 11
 		});
+		await expect(storedSize(db, result.image.key)).resolves.toBe(11);
 	});
 
 	it('rejects a non-HTTPS URL without fetching it', async () => {
@@ -261,6 +291,27 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 		expect(bucket.put).not.toHaveBeenCalled();
 	});
 
+	it('fills the size of a reused upload that predates size tracking', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		const hash = await sha256Hex('image-bytes');
+		seedGenerationWithSource(db, 'a', 'user-1', `${UPLOADS_URL}/existing.webp`, hash);
+		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+			new Response('image-bytes', { headers: { 'content-type': 'image/webp' } })
+		);
+		const key = mediaKey(TEST_S3_BUCKET.name, 'existing.webp');
+		await expect(storedSize(db, key)).resolves.toBeNull();
+
+		const response = await call(
+			{ url: 'https://images.example.com/room.webp' },
+			platform(undefined, db),
+			{ pubkey: 'pubkey-1' }
+		);
+
+		expect(response.status).toBe(200);
+		await expect(storedSize(db, key)).resolves.toBe(11);
+	});
+
 	it('does not reuse a matching-hash source_url that points outside the uploads bucket', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
@@ -294,5 +345,53 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 			}
 		});
 		expect(bucket.put).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('POST /api/uploads multipart file', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('stores the uploaded file and persists its byte size', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		const bucket = { put: vi.fn(async () => undefined) };
+
+		const response = await callMultipart(
+			new File(['image-bytes'], 'room.webp', { type: 'image/webp' }),
+			platform(bucket, db),
+			{ pubkey: 'pubkey-1' }
+		);
+
+		expect(response.status).toBe(200);
+		const result = await response.json();
+		expect(result).toMatchObject({ mime: 'image/webp', size: 11 });
+		expect(bucket.put).toHaveBeenCalledTimes(1);
+		await expect(storedSize(db, result.image.key)).resolves.toBe(11);
+	});
+
+	it('returns 415 for an unsupported file type without storing it', async () => {
+		const bucket = { put: vi.fn(async () => undefined) };
+
+		const response = await callMultipart(
+			new File(['<html></html>'], 'room.html', { type: 'text/html' }),
+			platform(bucket)
+		);
+
+		expect(response.status).toBe(415);
+		expect(bucket.put).not.toHaveBeenCalled();
+	});
+
+	it('returns 413 for an oversized file without storing it', async () => {
+		const bucket = { put: vi.fn(async () => undefined) };
+
+		const response = await callMultipart(
+			new File([new Uint8Array(MAX_IMAGE_UPLOAD_SIZE + 1)], 'room.jpg', { type: 'image/jpeg' }),
+			platform(bucket)
+		);
+
+		expect(response.status).toBe(413);
+		expect(bucket.put).not.toHaveBeenCalled();
 	});
 });

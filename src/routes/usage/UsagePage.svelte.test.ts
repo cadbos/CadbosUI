@@ -15,7 +15,12 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { npubEncode } from 'nostr-tools/nip19';
-import type { UsageProfilesResponse, UserUsageRecord, UserUsageResponse } from '$lib/api/contract';
+import type {
+	UsageProfilesResponse,
+	UsageTotals,
+	UserUsageRecord,
+	UserUsageResponse
+} from '$lib/api/contract';
 import { setLocale, type Locale } from '$lib/i18n/index.svelte';
 import { auth } from '$lib/state/auth.svelte';
 import { usage } from '$lib/state/usage.svelte';
@@ -35,11 +40,29 @@ function user(
 		balance: 12.345,
 		totalDeposit: 20,
 		lastDepositAt: null,
+		projectCount: 2,
+		sessionCount: 5,
 		generationCount: 4,
+		sourceCount: 4,
+		sourceBytes: 3 * 1024 * 1024,
+		referenceCount: 1,
+		referenceBytes: 512 * 1024,
 		totalSpend: 7.5,
 		latestSpendAt
 	};
 }
+
+const TOTALS: UsageTotals = {
+	userCount: 7,
+	projectCount: 11,
+	sessionCount: 23,
+	generationCount: 42,
+	sourceCount: 40,
+	sourceBytes: 3 * 1024 * 1024,
+	referenceCount: 6,
+	referenceBytes: null,
+	totalSpend: 99.5
+};
 
 function page(users: UserUsageRecord[], offset: number, hasMore: boolean): UserUsageResponse {
 	return {
@@ -70,6 +93,7 @@ function mockUsageFetch(
 		if (url === '/api/usage/profiles' && init?.method === 'POST')
 			return Promise.resolve(Response.json({ profiles }));
 		if (url === '/api/usage/balance') return Promise.resolve(Response.json({ balance: 0 }));
+		if (url === '/api/usage/totals') return Promise.resolve(Response.json(TOTALS));
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
 }
@@ -87,6 +111,10 @@ function localDateTimeLabel(locale: Locale, timestamp: number): string {
 		minute: '2-digit',
 		hourCycle: 'h23'
 	}).format(new Date(timestamp));
+}
+
+function localSizeLabel(locale: Locale, unit: 'kilobyte' | 'megabyte', value: number): string {
+	return new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'short' }).format(value);
 }
 
 function localTimeZoneName(
@@ -133,6 +161,26 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	await expect
 		.element(screen.getByRole('columnheader', { name: locale === 'ru' ? 'Пользователь' : 'User' }))
 		.toBeVisible();
+	await expect
+		.element(
+			screen.getByRole('columnheader', {
+				name: locale === 'ru' ? 'Размер исходников' : 'Sources size'
+			})
+		)
+		.toBeVisible();
+	await expect
+		.element(
+			screen.getByRole('columnheader', {
+				name: locale === 'ru' ? 'Размер референсов' : 'References size'
+			})
+		)
+		.toBeVisible();
+	await expect
+		.element(screen.getByRole('cell', { name: localSizeLabel(locale, 'megabyte', 3) }))
+		.toBeVisible();
+	await expect
+		.element(screen.getByRole('cell', { name: localSizeLabel(locale, 'kilobyte', 512) }))
+		.toBeVisible();
 	const latestSpendHeader = screen.getByRole('columnheader', {
 		name: `${locale === 'ru' ? 'Последняя трата' : 'Latest spend'}, ${localTimeZoneName(locale, 'short')}`
 	});
@@ -140,6 +188,21 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	await expect
 		.element(latestSpendHeader)
 		.toHaveAttribute('title', localTimeZoneName(locale, 'long'));
+});
+
+it('shows an em dash instead of a size when no upload size is known', async () => {
+	const fetchMock = mockUsageFetch([
+		page([{ ...user(PUBKEY_ONE), sourceBytes: null, referenceBytes: null }], 0, false)
+	]);
+	vi.stubGlobal('fetch', fetchMock);
+
+	const screen = render(UsagePage, pageProps());
+
+	await expect
+		.element(screen.getByRole('rowheader', { name: npubEncode(PUBKEY_ONE) }))
+		.toBeVisible();
+	expect(screen.getByRole('cell', { name: '—' }).elements()).toHaveLength(3);
+	expect(screen.getByRole('cell', { name: /MB|kB/ }).elements()).toHaveLength(0);
 });
 
 it('loads the next usage page when the infinite-scroll sentinel intersects', async () => {
@@ -209,6 +272,7 @@ it('renders an error state when usage cannot be loaded', async () => {
 	const fetchMock = vi.fn<typeof fetch>((input) => {
 		const url = String(input);
 		if (url === '/api/usage/balance') return Promise.resolve(Response.json({ balance: 0 }));
+		if (url === '/api/usage/totals') return Promise.resolve(Response.json(TOTALS));
 		return Promise.resolve(new Response(null, { status: 403 }));
 	});
 	vi.stubGlobal('fetch', fetchMock);
@@ -233,4 +297,87 @@ it('renders each pubkey as an npub explorer link that opens in a new tab', async
 	await expect.element(link).toHaveAttribute('href', `https://explorer.example/p/${npub}`);
 	await expect.element(link).toHaveAttribute('target', '_blank');
 	await expect.element(link).toHaveAttribute('rel', 'noopener noreferrer');
+});
+
+it.each(['ru', 'en'] as const)('renders the platform totals for %s', async (locale) => {
+	vi.stubGlobal('fetch', mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)]));
+	setLocale(locale);
+
+	const screen = render(UsagePage, pageProps());
+	const totals = screen.getByRole('region', {
+		name: locale === 'ru' ? 'Итого по платформе' : 'Platform totals'
+	});
+
+	await expect.element(totals).toBeVisible();
+	const labels =
+		locale === 'ru'
+			? [
+					'Всего пополнено —',
+					'Всего потрачено 99.50',
+					'Зарегистрировано пользователей 7',
+					'Проекты 11',
+					'Сессии 23',
+					'Генерации 42',
+					`Загруженные исходники 40 · ${localSizeLabel(locale, 'megabyte', 3)}`,
+					'Загруженные референсы 6 · —'
+				]
+			: [
+					'Total deposits —',
+					'Total spent 99.50',
+					'Registered users 7',
+					'Projects 11',
+					'Sessions 23',
+					'Generations 42',
+					`Uploaded sources 40 · ${localSizeLabel(locale, 'megabyte', 3)}`,
+					'Uploaded references 6 · —'
+				];
+	for (const label of labels) await expect.element(totals).toHaveTextContent(label);
+});
+
+it('renders a totals error without hiding the table', async () => {
+	const fetchMock = vi.fn<typeof fetch>((input, init) => {
+		if (String(input) === '/api/usage/totals')
+			return Promise.resolve(new Response(null, { status: 500 }));
+		return mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)])(input, init);
+	});
+	vi.stubGlobal('fetch', fetchMock);
+
+	const screen = render(UsagePage, pageProps());
+
+	await expect.element(screen.getByText('Could not load totals.')).toBeVisible();
+	await expect
+		.element(screen.getByRole('rowheader', { name: npubEncode(PUBKEY_ONE) }))
+		.toBeVisible();
+});
+
+it('shows the wallet balance as the first tile of the platform totals', async () => {
+	const fetchMock = vi.fn<typeof fetch>((input, init) => {
+		if (String(input) === '/api/usage/balance')
+			return Promise.resolve(Response.json({ balance: 250 }));
+		return mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)])(input, init);
+	});
+	vi.stubGlobal('fetch', fetchMock);
+
+	const screen = render(UsagePage, pageProps());
+
+	const totals = screen.getByRole('region', { name: 'Platform totals' });
+	await expect.element(totals.getByText('Wallet balance')).toBeVisible();
+	await expect.element(totals.getByText('250.00')).toBeVisible();
+	await expect.element(totals.getByRole('term').first()).toHaveTextContent('Wallet balance');
+});
+
+it('shows a wallet balance error inside the totals even when totals fail', async () => {
+	const fetchMock = vi.fn<typeof fetch>((input, init) => {
+		const url = String(input);
+		if (url === '/api/usage/balance') return Promise.resolve(new Response(null, { status: 502 }));
+		if (url === '/api/usage/totals') return Promise.resolve(new Response(null, { status: 500 }));
+		return mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)])(input, init);
+	});
+	vi.stubGlobal('fetch', fetchMock);
+
+	const screen = render(UsagePage, pageProps());
+
+	const totals = screen.getByRole('region', { name: 'Platform totals' });
+	await expect.element(totals.getByText('Could not load wallet balance.')).toBeVisible();
+	await expect.element(totals.getByText('Could not load totals.')).toBeVisible();
 });

@@ -34,9 +34,16 @@ describe('media repository', () => {
 			db,
 			bucket,
 			'rooms/with space.webp',
-			'A'.repeat(64)
+			'A'.repeat(64),
+			null
 		);
-		const reused = await getOrCreateMediaByKey(db, bucket, 'rooms/with space.webp', 'a'.repeat(64));
+		const reused = await getOrCreateMediaByKey(
+			db,
+			bucket,
+			'rooms/with space.webp',
+			'a'.repeat(64),
+			null
+		);
 
 		expect(reused.id).toBe(created.id);
 		expect(created).toMatchObject({ filename: 'rooms/with space.webp', checksum: 'a'.repeat(64) });
@@ -59,8 +66,8 @@ describe('media repository', () => {
 		const uploads = await getBucketByName(db, TEST_S3_BUCKET.name);
 		const external = await getBucketByName(db, 'external:https://images.example.test');
 		const filename = 'rooms/shared/name.webp';
-		const uploadsMedia = await getOrCreateMediaByKey(db, uploads, filename, '');
-		const externalMedia = await getOrCreateMediaByKey(db, external, filename, '');
+		const uploadsMedia = await getOrCreateMediaByKey(db, uploads, filename, '', null);
+		const externalMedia = await getOrCreateMediaByKey(db, external, filename, '', null);
 		const uploadsKey = mediaKey(uploads.name, filename);
 		const externalKey = mediaKey(external.name, filename);
 
@@ -87,7 +94,7 @@ describe('media repository', () => {
 		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
 		const media = await Promise.all(
 			Array.from({ length: 100 }, (_, index) =>
-				getOrCreateMediaByKey(db, bucket, `batch/${index}.webp`, '')
+				getOrCreateMediaByKey(db, bucket, `batch/${index}.webp`, '', null)
 			)
 		);
 
@@ -97,5 +104,52 @@ describe('media repository', () => {
 		expect(result.map((item) => item.id)).toEqual(
 			media.map((item) => item.id).sort((left, right) => left - right)
 		);
+	});
+
+	it('stores the byte size and returns it from every reader', async () => {
+		const db = makeD1();
+		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
+
+		const created = await getOrCreateMediaByKey(db, bucket, 'sized.webp', '', 342_000);
+
+		expect(created.size).toBe(342_000);
+		await expect(getMedia(db, created.id)).resolves.toMatchObject({ size: 342_000 });
+		await expect(getMediaBatch(db, [created.id])).resolves.toMatchObject([{ size: 342_000 }]);
+		await expect(getMediaByBucketKey(db, bucket.name, 'sized.webp')).resolves.toMatchObject({
+			size: 342_000
+		});
+	});
+
+	it('keeps an unknown size as null rather than zero', async () => {
+		const db = makeD1();
+		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
+
+		const created = await getOrCreateMediaByKey(db, bucket, 'unknown.webp', '', null);
+
+		expect(created.size).toBeNull();
+		await expect(getMedia(db, created.id)).resolves.toMatchObject({ size: null });
+	});
+
+	it('fills a missing size on reuse but never overwrites a known one', async () => {
+		const db = makeD1();
+		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
+		const legacy = await getOrCreateMediaByKey(db, bucket, 'legacy.webp', '', null);
+
+		const filled = await getOrCreateMediaByKey(db, bucket, 'legacy.webp', '', 1_024);
+		const kept = await getOrCreateMediaByKey(db, bucket, 'legacy.webp', '', 2_048);
+		const unchanged = await getOrCreateMediaByKey(db, bucket, 'legacy.webp', '', null);
+
+		expect([filled.id, kept.id, unchanged.id]).toEqual([legacy.id, legacy.id, legacy.id]);
+		expect(filled.size).toBe(1_024);
+		expect(kept.size).toBe(1_024);
+		expect(unchanged.size).toBe(1_024);
+		await expect(getMedia(db, legacy.id)).resolves.toMatchObject({ size: 1_024 });
+	});
+
+	it('rejects a negative size', async () => {
+		const db = makeD1();
+		const bucket = await getBucketByName(db, TEST_S3_BUCKET.name);
+
+		await expect(getOrCreateMediaByKey(db, bucket, 'negative.webp', '', -1)).rejects.toThrow();
 	});
 });

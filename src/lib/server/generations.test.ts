@@ -32,6 +32,8 @@ import {
 	listResourceImages,
 	listGeneratedImages,
 	listSceneFilterProjects,
+	getUsageTotals,
+	listUserUsage,
 	recordGeneration
 } from './generations';
 
@@ -91,10 +93,15 @@ function seedGeneration(
 		.run();
 }
 
-function seedMedia(db: D1Database, url: string, checksum: string): number {
+function seedMedia(
+	db: D1Database,
+	url: string,
+	checksum: string,
+	size: number | null = null
+): number {
 	const filename = new URL(url).pathname.slice(1);
-	db.prepare('INSERT OR IGNORE INTO media (filename, bucket, checksum) VALUES (?, 1, ?)')
-		.bind(filename, checksum)
+	db.prepare('INSERT OR IGNORE INTO media (filename, bucket, checksum, size) VALUES (?, 1, ?, ?)')
+		.bind(filename, checksum, size)
 		.run();
 	const row = db
 		.prepare('SELECT id FROM media WHERE bucket = 1 AND filename = ?')
@@ -657,7 +664,7 @@ interface SeededSession {
 	sessionId: string;
 }
 
-function seedProjectSession(
+function seedTitledSession(
 	db: D1Database,
 	userId: string,
 	projectTitle: string,
@@ -704,9 +711,9 @@ describe('listGeneratedImages filtering', () => {
 
 	beforeEach(() => {
 		seedUser(db, 'user-1', 'pubkey-1');
-		kitchen = seedProjectSession(db, 'user-1', 'Flat', 'Kitchen');
-		kitchenRedo = seedProjectSession(db, 'user-1', 'Flat', 'Kitchen redo', kitchen.projectId);
-		bedroom = seedProjectSession(db, 'user-1', 'House', 'Bedroom');
+		kitchen = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen');
+		kitchenRedo = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen redo', kitchen.projectId);
+		bedroom = seedTitledSession(db, 'user-1', 'House', 'Bedroom');
 		seedSceneGeneration(db, 'kitchen-1', kitchen.sessionId, 1000);
 		seedSceneGeneration(db, 'kitchen-2', kitchen.sessionId, 2000);
 		seedSceneGeneration(db, 'kitchen-3', kitchen.sessionId, 3000);
@@ -831,11 +838,11 @@ describe('listSceneFilterProjects', () => {
 	it('lists live projects and sessions with generations, most recently generated first', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
-		const kitchen = seedProjectSession(db, 'user-1', 'Flat', 'Kitchen');
-		const hall = seedProjectSession(db, 'user-1', 'Flat', 'Hall', kitchen.projectId);
-		const bedroom = seedProjectSession(db, 'user-1', 'House', 'Bedroom');
-		const archived = seedProjectSession(db, 'user-1', 'House', 'Attic', bedroom.projectId);
-		seedProjectSession(db, 'user-1', 'Empty', 'Nothing yet');
+		const kitchen = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen');
+		const hall = seedTitledSession(db, 'user-1', 'Flat', 'Hall', kitchen.projectId);
+		const bedroom = seedTitledSession(db, 'user-1', 'House', 'Bedroom');
+		const archived = seedTitledSession(db, 'user-1', 'House', 'Attic', bedroom.projectId);
+		seedTitledSession(db, 'user-1', 'Empty', 'Nothing yet');
 		seedSceneGeneration(db, 'kitchen-1', kitchen.sessionId, 1000);
 		seedSceneGeneration(db, 'hall-1', hall.sessionId, 3000);
 		seedSceneGeneration(db, 'bedroom-1', bedroom.sessionId, 2000);
@@ -1271,5 +1278,338 @@ describe('resource page queries', () => {
 		expect(first.hasMore).toBe(true);
 		expect(second.generations.map((generation) => generation.id)).toEqual(['a']);
 		expect(second.hasMore).toBe(false);
+	});
+});
+
+function seedProject(db: D1Database, userId: string, archivedAt: number | null = null): string {
+	const now = Date.now();
+	const id = crypto.randomUUID();
+	db.prepare(
+		'INSERT INTO projects (id, user_id, title, created_at, updated_at, archived_at) ' +
+			'VALUES (?, ?, ?, ?, ?, ?)'
+	)
+		.bind(id, userId, 'Project', now, now, archivedAt)
+		.run();
+	return id;
+}
+
+function seedProjectSession(
+	db: D1Database,
+	projectId: string,
+	archivedAt: number | null = null
+): void {
+	const now = Date.now();
+	db.prepare(
+		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at, archived_at) ' +
+			'VALUES (?, ?, ?, ?, ?, ?)'
+	)
+		.bind(crypto.randomUUID(), projectId, 'Session', now, now, archivedAt)
+		.run();
+}
+
+// 'processing' is the only status whose CHECK constraint allows leaving
+// output_media_id/error_code/balance_after/completed_at all null — the
+// job's outcome is irrelevant to a reference-image count.
+function seedReplacementJob(
+	db: D1Database,
+	table: 'object_replacement_jobs' | 'texture_replacement_jobs',
+	userId: string,
+	referenceMediaId: number
+): void {
+	const now = Date.now();
+	const sceneMediaId = seedMedia(
+		db,
+		`https://cdn.example.test/scene-${crypto.randomUUID()}.jpg`,
+		''
+	);
+	const descriptionColumn =
+		table === 'object_replacement_jobs' ? 'replacement_object' : 'replacement_surface';
+	db.prepare(
+		`INSERT INTO ${table} ` +
+			`(id, user_id, comfy_prompt_id, scene_media_id, reference_media_id, ${descriptionColumn}, ` +
+			"cost, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'x', 1, 'processing', ?, ?)"
+	)
+		.bind(
+			crypto.randomUUID(),
+			userId,
+			crypto.randomUUID(),
+			sceneMediaId,
+			referenceMediaId,
+			now,
+			now
+		)
+		.run();
+}
+
+describe('listUserUsage', () => {
+	it('returns zero counts for a fresh user with no data', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([
+			expect.objectContaining({
+				pubkey: 'pubkey-1',
+				projectCount: 0,
+				sessionCount: 0,
+				generationCount: 0,
+				sourceCount: 0,
+				sourceBytes: null,
+				referenceCount: 0,
+				referenceBytes: null
+			})
+		]);
+	});
+
+	it('counts projects and sessions including archived ones', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const activeProject = seedProject(db, 'user-1');
+		seedProjectSession(db, activeProject);
+		const archivedProject = seedProject(db, 'user-1', Date.now());
+		seedProjectSession(db, archivedProject, Date.now());
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([expect.objectContaining({ projectCount: 2, sessionCount: 2 })]);
+	});
+
+	it('counts each distinct source media once per user', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([expect.objectContaining({ generationCount: 2, sourceCount: 1 })]);
+	});
+
+	it('counts references from replacement jobs and style-transfer generations, de-duplicated', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const referenceMediaId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '');
+		seedReplacementJob(db, 'object_replacement_jobs', 'user-1', referenceMediaId);
+		seedReplacementJob(db, 'texture_replacement_jobs', 'user-1', referenceMediaId);
+		seedGenerationWithReference(
+			db,
+			'reused',
+			'user-1',
+			'object-replacement',
+			'https://cdn.example.test/ref.jpg',
+			1000
+		);
+		seedGenerationWithReference(
+			db,
+			'style',
+			'user-1',
+			'style-transfer',
+			'https://cdn.example.test/style-ref.jpg',
+			2000
+		);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([expect.objectContaining({ referenceCount: 2 })]);
+	});
+
+	it('totals source bytes over distinct media, skipping unknown sizes', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedMedia(db, 'https://cdn.example.test/hall.jpg', HASH_2, 500);
+		seedMedia(db, 'https://cdn.example.test/legacy.jpg', RESULT_HASH, null);
+		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
+		seedGenerationWithSource(db, 'c', 'user-1', 'https://cdn.example.test/hall.jpg', HASH_2, 3000);
+		seedGenerationWithSource(
+			db,
+			'd',
+			'user-1',
+			'https://cdn.example.test/legacy.jpg',
+			RESULT_HASH,
+			4000
+		);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([
+			expect.objectContaining({ sourceCount: 3, sourceBytes: 1500, referenceBytes: null })
+		]);
+	});
+
+	it('reports null source bytes when no source size is known', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([expect.objectContaining({ sourceCount: 1, sourceBytes: null })]);
+	});
+
+	it('totals reference bytes over distinct references, including style-transfer', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const sharedReferenceId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '', 700);
+		const textureReferenceId = seedMedia(db, 'https://cdn.example.test/texture.jpg', '', 300);
+		seedMedia(db, 'https://cdn.example.test/style-ref.jpg', HASH_2, 200);
+		seedReplacementJob(db, 'object_replacement_jobs', 'user-1', sharedReferenceId);
+		seedReplacementJob(db, 'texture_replacement_jobs', 'user-1', sharedReferenceId);
+		seedReplacementJob(db, 'texture_replacement_jobs', 'user-1', textureReferenceId);
+		seedGenerationWithReference(
+			db,
+			'style',
+			'user-1',
+			'style-transfer',
+			'https://cdn.example.test/style-ref.jpg',
+			1000
+		);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		expect(page.users).toEqual([
+			expect.objectContaining({ referenceCount: 3, referenceBytes: 1200 })
+		]);
+	});
+
+	it("does not count another user's size for a media both users reference", async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		const sharedReferenceId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '', 700);
+		seedReplacementJob(db, 'object_replacement_jobs', 'user-1', sharedReferenceId);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		const byPubkey = Object.fromEntries(page.users.map((user) => [user.pubkey, user]));
+		expect(byPubkey['pubkey-1']).toEqual(expect.objectContaining({ referenceBytes: 700 }));
+		expect(byPubkey['pubkey-2']).toEqual(expect.objectContaining({ referenceBytes: null }));
+	});
+
+	it('isolates counts per user', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		seedProject(db, 'user-1');
+		seedGeneration(db, 'a', 'user-2', 1000);
+
+		const page = await listUserUsage(db, 0, 10);
+
+		const byPubkey = Object.fromEntries(page.users.map((user) => [user.pubkey, user]));
+		expect(byPubkey['pubkey-1']).toEqual(
+			expect.objectContaining({ projectCount: 1, generationCount: 0 })
+		);
+		expect(byPubkey['pubkey-2']).toEqual(
+			expect.objectContaining({ projectCount: 0, generationCount: 1 })
+		);
+	});
+});
+
+describe('getUsageTotals', () => {
+	it('returns zeros and null sizes on an empty database', async () => {
+		expect(await getUsageTotals(db)).toEqual({
+			userCount: 0,
+			projectCount: 0,
+			sessionCount: 0,
+			generationCount: 0,
+			sourceCount: 0,
+			sourceBytes: null,
+			referenceCount: 0,
+			referenceBytes: null,
+			totalSpend: 0
+		});
+	});
+
+	it('totals users, projects, sessions and spend across all users, archived included', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		seedUser(db, 'user-3', 'pubkey-3');
+		const active = seedProject(db, 'user-1');
+		seedProjectSession(db, active);
+		const archived = seedProject(db, 'user-2', Date.now());
+		seedProjectSession(db, archived, Date.now());
+		seedGeneration(db, 'a', 'user-1', 1000);
+		seedGeneration(db, 'b', 'user-2', 2000);
+
+		expect(await getUsageTotals(db)).toEqual(
+			expect.objectContaining({
+				userCount: 3,
+				projectCount: 2,
+				sessionCount: 2,
+				generationCount: 2,
+				totalSpend: 2
+			})
+		);
+	});
+
+	it('counts sources and sizes per distinct (user, media), skipping unknown sizes', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedMedia(db, 'https://cdn.example.test/legacy.jpg', RESULT_HASH, null);
+		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedGenerationWithSource(db, 'b', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
+		seedGenerationWithSource(db, 'c', 'user-2', 'https://cdn.example.test/room.jpg', HASH_1, 3000);
+		seedGenerationWithSource(
+			db,
+			'd',
+			'user-2',
+			'https://cdn.example.test/legacy.jpg',
+			RESULT_HASH,
+			4000
+		);
+
+		expect(await getUsageTotals(db)).toEqual(
+			expect.objectContaining({ sourceCount: 3, sourceBytes: 2000, referenceBytes: null })
+		);
+	});
+
+	it('counts references from replacement jobs and style-transfer, once per user and media', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		const sharedId = seedMedia(db, 'https://cdn.example.test/ref.jpg', '', 700);
+		seedMedia(db, 'https://cdn.example.test/style-ref.jpg', HASH_2, 200);
+		seedReplacementJob(db, 'object_replacement_jobs', 'user-1', sharedId);
+		seedReplacementJob(db, 'texture_replacement_jobs', 'user-1', sharedId);
+		seedReplacementJob(db, 'object_replacement_jobs', 'user-2', sharedId);
+		seedGenerationWithReference(
+			db,
+			'style',
+			'user-1',
+			'style-transfer',
+			'https://cdn.example.test/style-ref.jpg',
+			1000
+		);
+
+		expect(await getUsageTotals(db)).toEqual(
+			expect.objectContaining({ referenceCount: 3, referenceBytes: 1600 })
+		);
+	});
+
+	it('equals the sum of the per-user usage rows', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedUser(db, 'user-2', 'pubkey-2');
+		seedProjectSession(db, seedProject(db, 'user-1'));
+		seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedGenerationWithSource(db, 'a', 'user-1', 'https://cdn.example.test/room.jpg', HASH_1, 1000);
+		seedGenerationWithSource(db, 'b', 'user-2', 'https://cdn.example.test/room.jpg', HASH_1, 2000);
+		seedGenerationWithReference(
+			db,
+			'style',
+			'user-2',
+			'style-transfer',
+			'https://cdn.example.test/style-ref.jpg',
+			3000
+		);
+
+		const { users } = await listUserUsage(db, 0, 10);
+		const totals = await getUsageTotals(db);
+
+		const sum = (pick: (user: (typeof users)[number]) => number | null): number =>
+			users.reduce((total, user) => total + (pick(user) ?? 0), 0);
+		expect(totals).toEqual({
+			userCount: users.length,
+			projectCount: sum((user) => user.projectCount),
+			sessionCount: sum((user) => user.sessionCount),
+			generationCount: sum((user) => user.generationCount),
+			sourceCount: sum((user) => user.sourceCount),
+			sourceBytes: sum((user) => user.sourceBytes),
+			referenceCount: sum((user) => user.referenceCount),
+			referenceBytes: null,
+			totalSpend: sum((user) => user.totalSpend)
+		});
 	});
 });

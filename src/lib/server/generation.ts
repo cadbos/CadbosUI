@@ -43,6 +43,7 @@ const RETRY_DELAYS_MS = [0, 250, 1_000] as const;
 export interface StoredRenderResponse {
 	outputKey: string;
 	outputHash: string;
+	outputSize: number | null;
 	cost: number;
 	balance: number;
 	renderSec: number;
@@ -92,7 +93,7 @@ async function storeGeneratedImage(
 	bucket: Bucket,
 	imageUrl: string,
 	operation: string
-): Promise<{ key: string; hash: string; downloadSec: number; reuploadSec: number }> {
+): Promise<{ key: string; hash: string; size: number; downloadSec: number; reuploadSec: number }> {
 	try {
 		const downloadStartedAt = Date.now();
 		const downloaded = await retry('download', async () => {
@@ -117,7 +118,7 @@ async function storeGeneratedImage(
 			key
 		);
 		const reuploadSec = Math.round((Date.now() - reuploadStartedAt) / 1000);
-		return { key: stored.key, hash: stored.hash, downloadSec, reuploadSec };
+		return { key: stored.key, hash: stored.hash, size: stored.size, downloadSec, reuploadSec };
 	} catch (err) {
 		console.error(
 			`archAI ${operation} image mirror failed after successful generation:`,
@@ -169,6 +170,7 @@ async function processRenderResult(
 	return {
 		outputKey: output.key,
 		outputHash: output.hash,
+		outputSize: output.size,
 		cost: data.cost,
 		balance: data.balance,
 		renderSec,
@@ -192,6 +194,7 @@ export async function renderInterior(
 				...mock,
 				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
 				outputHash: '',
+				outputSize: null,
 				renderSec: 0,
 				downloadSec: 0,
 				reuploadSec: 0
@@ -234,6 +237,7 @@ export async function renderExterior(
 				...mock,
 				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
 				outputHash: '',
+				outputSize: null,
 				renderSec: 0,
 				downloadSec: 0,
 				reuploadSec: 0
@@ -282,6 +286,7 @@ export async function styleTransferInterior(
 				...mock,
 				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
 				outputHash: '',
+				outputSize: null,
 				renderSec: 0,
 				downloadSec: 0,
 				reuploadSec: 0
@@ -341,6 +346,7 @@ export async function styleTransferInterior(
 	return {
 		outputKey: output.key,
 		outputHash: output.hash,
+		outputSize: output.size,
 		cost: data.cost,
 		balance: data.balance,
 		renderSec,
@@ -364,6 +370,7 @@ export async function replaceTexturesWithMask(
 				...mock,
 				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
 				outputHash: '',
+				outputSize: null,
 				renderSec: 0,
 				downloadSec: 0,
 				reuploadSec: 0
@@ -410,6 +417,7 @@ export async function upscale4k(
 				...mock,
 				outputKey: new URL(mock.outputUrl).pathname.replace(/^\//, ''),
 				outputHash: '',
+				outputSize: null,
 				renderSec: 0,
 				downloadSec: 0,
 				reuploadSec: 0

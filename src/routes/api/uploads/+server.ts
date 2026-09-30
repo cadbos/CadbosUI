@@ -90,7 +90,13 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 				findExisting
 			);
 			if (!userId) return apiError(500, 'account_error', 'Account record not found');
-			const media = await getOrCreateMediaByKey(db, uploadsBucket, result.key, result.hash);
+			const media = await getOrCreateMediaByKey(
+				db,
+				uploadsBucket,
+				result.key,
+				result.hash,
+				result.size
+			);
 			return json({
 				image: await mediaAccess(platform, media),
 				mime: result.mime,
@@ -133,7 +139,13 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 			? { key: existingKey, mime: normalizedMime, size: bytes.byteLength, hash }
 			: await uploadImageBytes(platform, uploadsBucket, bytes, file.type, undefined, hash);
 		if (!userId) return apiError(500, 'account_error', 'Account record not found');
-		const media = await getOrCreateMediaByKey(db, uploadsBucket, result.key, result.hash);
+		const media = await getOrCreateMediaByKey(
+			db,
+			uploadsBucket,
+			result.key,
+			result.hash,
+			result.size
+		);
 		return json({
 			image: await mediaAccess(platform, media),
 			mime: result.mime,

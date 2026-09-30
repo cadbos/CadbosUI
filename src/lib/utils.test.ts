@@ -16,6 +16,7 @@ import { expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
 	describeCause,
+	formatBytes,
 	formatCredit,
 	issuePaths,
 	logBoundaryError,
@@ -32,6 +33,19 @@ it('pads whole numbers to two decimals', () => {
 
 it('keeps exact two-decimal values unchanged', () => {
 	expect(formatCredit(2.5)).toBe('2.50');
+});
+
+it('formats byte sizes in binary steps with a localized unit', () => {
+	expect(formatBytes(0, 'en')).toBe('0 byte');
+	expect(formatBytes(512, 'en')).toBe('512 byte');
+	expect(formatBytes(1024, 'en')).toBe('1 kB');
+	expect(formatBytes(342_000, 'en')).toBe('334 kB');
+	expect(formatBytes(8 * 1024 * 1024, 'en')).toBe('8 MB');
+	expect(formatBytes(1.5 * 1024 * 1024 * 1024, 'en')).toBe('1.5 GB');
+});
+
+it('formats byte sizes with the locale unit names', () => {
+	expect(formatBytes(2048, 'ru')).toMatch(/^2\s?кБ$/);
 });
 
 it('normalizes Error values for component boundary logs', () => {

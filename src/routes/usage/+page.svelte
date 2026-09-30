@@ -19,6 +19,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { usage } from '$lib/state/usage.svelte';
+	import { formatBytes } from '$lib/utils';
 
 	let { data }: PageProps = $props();
 
@@ -67,6 +68,11 @@ before the Change Date. See LICENSE for complete terms.
 		}).format(new Date(timestamp));
 	}
 
+	function formatSize(bytes: number | null): string {
+		if (bytes === null) return t('usage.emptyValue');
+		return formatBytes(bytes, getLocale());
+	}
+
 	function formatTimeZoneName(timeZoneName: Intl.DateTimeFormatOptions['timeZoneName']): string {
 		const formatter = new Intl.DateTimeFormat(getLocale(), { timeZone, timeZoneName });
 		return (
@@ -90,18 +96,74 @@ before the Change Date. See LICENSE for complete terms.
 		<header class="usage-header">
 			<h1 id="usage-title">{t('usage.title')}</h1>
 			<p>{t('usage.subtitle')}</p>
-			{#if usage.walletBalanceStatus === 'loading'}
-				<p class="wallet-balance status">{t('usage.walletBalanceLoading')}</p>
-			{:else if usage.walletBalanceStatus === 'error'}
-				<p class="wallet-balance status error" role="alert">{t('usage.walletBalanceFailed')}</p>
-			{:else if usage.walletBalanceStatus === 'ready' && usage.walletBalance !== null}
-				<p class="wallet-balance">
-					<strong
-						>{ti('usage.walletBalance', { balance: currency.format(usage.walletBalance) })}</strong
-					>
-				</p>
-			{/if}
 		</header>
+
+		{#if usage.totalsStatus !== 'idle' || usage.walletBalanceStatus !== 'idle'}
+			<section class="totals" aria-labelledby="usage-totals-title">
+				<h2 id="usage-totals-title">{t('usage.totals.title')}</h2>
+				<dl>
+					<div>
+						<dt>{t('usage.totals.walletBalance')}</dt>
+						{#if usage.walletBalanceStatus === 'loading'}
+							<dd class="tile-status">{t('usage.walletBalanceLoading')}</dd>
+						{:else if usage.walletBalanceStatus === 'error'}
+							<dd class="tile-status error" role="alert">{t('usage.walletBalanceFailed')}</dd>
+						{:else if usage.walletBalanceStatus === 'ready' && usage.walletBalance !== null}
+							<dd>{currency.format(usage.walletBalance)}</dd>
+						{/if}
+					</div>
+					{#if usage.totalsStatus === 'ready' && usage.totals !== null}
+						<div>
+							<dt>{t('usage.totals.deposits')}</dt>
+							<dd>{t('usage.emptyValue')}</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.spend')}</dt>
+							<dd>{currency.format(usage.totals.totalSpend)}</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.users')}</dt>
+							<dd>{usage.totals.userCount}</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.projects')}</dt>
+							<dd>{usage.totals.projectCount}</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.sessions')}</dt>
+							<dd>{usage.totals.sessionCount}</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.generations')}</dt>
+							<dd>{usage.totals.generationCount}</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.sources')}</dt>
+							<dd>
+								{ti('usage.totals.countWithSize', {
+									count: usage.totals.sourceCount,
+									size: formatSize(usage.totals.sourceBytes)
+								})}
+							</dd>
+						</div>
+						<div>
+							<dt>{t('usage.totals.references')}</dt>
+							<dd>
+								{ti('usage.totals.countWithSize', {
+									count: usage.totals.referenceCount,
+									size: formatSize(usage.totals.referenceBytes)
+								})}
+							</dd>
+						</div>
+					{/if}
+				</dl>
+				{#if usage.totalsStatus === 'loading'}
+					<p class="status">{t('usage.totals.loading')}</p>
+				{:else if usage.totalsStatus === 'error'}
+					<p class="status error" role="alert">{t('usage.totals.failed')}</p>
+				{/if}
+			</section>
+		{/if}
 
 		{#if auth.status !== 'authenticated'}
 			<p class="status">{t('usage.signInRequired')}</p>
@@ -120,7 +182,13 @@ before the Change Date. See LICENSE for complete terms.
 							<th scope="col">{t('usage.column.balance')}</th>
 							<th scope="col">{t('usage.column.totalDeposit')}</th>
 							<th scope="col">{t('usage.column.lastDepositAt')}</th>
+							<th scope="col">{t('usage.column.projectCount')}</th>
+							<th scope="col">{t('usage.column.sessionCount')}</th>
 							<th scope="col">{t('usage.column.generationCount')}</th>
+							<th scope="col">{t('usage.column.sourceCount')}</th>
+							<th scope="col">{t('usage.column.sourceBytes')}</th>
+							<th scope="col">{t('usage.column.referenceCount')}</th>
+							<th scope="col">{t('usage.column.referenceBytes')}</th>
 							<th scope="col">{t('usage.column.totalSpend')}</th>
 							<th scope="col" title={timeZoneFullName}
 								>{t('usage.column.latestSpendAt')}, {timeZoneAbbreviation}</th
@@ -155,7 +223,13 @@ before the Change Date. See LICENSE for complete terms.
 								<td>{currency.format(user.balance)}</td>
 								<td>{currency.format(user.totalDeposit)}</td>
 								<td>{formatTimestamp(user.lastDepositAt)}</td>
+								<td>{user.projectCount}</td>
+								<td>{user.sessionCount}</td>
 								<td>{user.generationCount}</td>
+								<td>{user.sourceCount}</td>
+								<td>{formatSize(user.sourceBytes)}</td>
+								<td>{user.referenceCount}</td>
+								<td>{formatSize(user.referenceBytes)}</td>
 								<td>{currency.format(user.totalSpend)}</td>
 								<td>{formatTimestamp(user.latestSpendAt)}</td>
 							</tr>
@@ -226,9 +300,54 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-danger);
 	}
 
-	.wallet-balance strong {
+	.totals {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.totals h2 {
+		margin: 0;
 		color: var(--color-text);
+		font-size: 1rem;
 		font-weight: 700;
+	}
+
+	.totals dl {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+		gap: 0.75rem;
+		margin: 0;
+	}
+
+	.totals dl > div {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding: 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-background);
+	}
+
+	.totals dt {
+		min-height: 2lh;
+		color: var(--color-muted);
+		font-size: 0.75rem;
+		font-weight: 700;
+		text-transform: uppercase;
+	}
+
+	.totals dd {
+		margin: auto 0 0;
+		color: var(--color-text);
+		font-size: 1.125rem;
+		font-weight: 700;
+	}
+
+	.totals dd.tile-status {
+		font-size: 0.9375rem;
+		font-weight: 500;
 	}
 
 	.table-wrap {

@@ -564,7 +564,13 @@ export interface UserUsageRecord {
 	balance: number;
 	totalDeposit: number;
 	lastDepositAt: number | null;
+	projectCount: number;
+	sessionCount: number;
 	generationCount: number;
+	sourceCount: number;
+	sourceBytes: number | null;
+	referenceCount: number;
+	referenceBytes: number | null;
 	totalSpend: number;
 	latestSpendAt: number | null;
 }
@@ -576,6 +582,18 @@ export interface UserUsageResponse {
 		size: number;
 		hasMore: boolean;
 	};
+}
+
+export interface UsageTotals {
+	userCount: number;
+	projectCount: number;
+	sessionCount: number;
+	generationCount: number;
+	sourceCount: number;
+	sourceBytes: number | null;
+	referenceCount: number;
+	referenceBytes: number | null;
+	totalSpend: number;
 }
 
 export interface UsageProfile {

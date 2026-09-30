@@ -13,7 +13,12 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { UsageProfilesResponse, UserUsageRecord, UserUsageResponse } from '$lib/api/contract';
+import type {
+	UsageProfilesResponse,
+	UsageTotals,
+	UserUsageRecord,
+	UserUsageResponse
+} from '$lib/api/contract';
 import { usage } from './usage.svelte';
 
 const PUBKEY_ONE = '1'.repeat(64);
@@ -25,7 +30,13 @@ function user(pubkey: string): UserUsageRecord {
 		balance: 10,
 		totalDeposit: 20,
 		lastDepositAt: Date.UTC(2026, 0, 1),
+		projectCount: 1,
+		sessionCount: 3,
 		generationCount: 2,
+		sourceCount: 2,
+		sourceBytes: 2048,
+		referenceCount: 0,
+		referenceBytes: null,
 		totalSpend: 3.5,
 		latestSpendAt: Date.UTC(2026, 0, 2)
 	};
@@ -63,6 +74,25 @@ function walletBalanceResponse(balance = 0): Response {
 	});
 }
 
+const TOTALS: UsageTotals = {
+	userCount: 5,
+	projectCount: 4,
+	sessionCount: 9,
+	generationCount: 12,
+	sourceCount: 12,
+	sourceBytes: 4096,
+	referenceCount: 3,
+	referenceBytes: null,
+	totalSpend: 42.5
+};
+
+function totalsResponse(totals: UsageTotals = TOTALS): Response {
+	return new Response(JSON.stringify(totals), {
+		status: 200,
+		headers: { 'content-type': 'application/json' }
+	});
+}
+
 function mockUsageFetch(
 	pages: UserUsageResponse[],
 	profiles: UsageProfilesResponse['profiles'] = {}
@@ -73,6 +103,7 @@ function mockUsageFetch(
 		if (url.startsWith('/api/usage?')) return Promise.resolve(jsonResponse(pages[pageIndex++]!));
 		if (url === '/api/usage/profiles') return Promise.resolve(profilesResponse(profiles));
 		if (url === '/api/usage/balance') return Promise.resolve(walletBalanceResponse());
+		if (url === '/api/usage/totals') return Promise.resolve(totalsResponse());
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
 }
@@ -95,7 +126,7 @@ describe('usage pagination', () => {
 
 		await usage.load();
 
-		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(fetchMock).toHaveBeenCalledTimes(4);
 		expect(fetchMock).toHaveBeenCalledWith('/api/usage?offset=0&size=20', {
 			signal: expect.any(AbortSignal)
 		});
@@ -117,6 +148,9 @@ describe('usage pagination', () => {
 			});
 		});
 		expect(usage.hasMore).toBe(true);
+		expect(fetchMock).toHaveBeenCalledWith('/api/usage/totals', {
+			signal: expect.any(AbortSignal)
+		});
 		await vi.waitFor(() => expect(usage.walletBalanceStatus).toBe('ready'));
 	});
 
@@ -130,7 +164,7 @@ describe('usage pagination', () => {
 		await usage.load();
 		await usage.loadMore();
 
-		expect(fetchMock).toHaveBeenCalledTimes(5);
+		expect(fetchMock).toHaveBeenCalledTimes(6);
 		expect(fetchMock).toHaveBeenCalledWith('/api/usage?offset=1&size=20', {
 			signal: expect.any(AbortSignal)
 		});
@@ -186,5 +220,66 @@ describe('usage pagination', () => {
 		expect(usage.status).toBe('ready');
 		expect(usage.walletBalanceStatus).toBe('error');
 		expect(usage.walletBalance).toBeNull();
+	});
+});
+
+describe('usage totals', () => {
+	it('loads the platform-wide totals alongside the table', async () => {
+		vi.stubGlobal('fetch', mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)]));
+
+		await usage.load();
+
+		await vi.waitFor(() => expect(usage.totalsStatus).toBe('ready'));
+		expect(usage.totals).toEqual(TOTALS);
+	});
+
+	it('surfaces a totals load failure independently of the table load', async () => {
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const fetchMock = vi.fn<typeof fetch>((input) => {
+			const url = String(input);
+			if (url === '/api/usage/totals') return Promise.resolve(new Response(null, { status: 500 }));
+			if (url === '/api/usage/balance') return Promise.resolve(walletBalanceResponse());
+			if (url === '/api/usage/profiles') return Promise.resolve(profilesResponse());
+			return Promise.resolve(jsonResponse(page([user(PUBKEY_ONE)], 0, false)));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await usage.load();
+
+		await vi.waitFor(() => expect(usage.totalsStatus).toBe('error'));
+		expect(usage.status).toBe('ready');
+		expect(usage.totals).toBeNull();
+		expect(consoleError).toHaveBeenCalledWith('Usage totals load failed:', expect.any(Error));
+		consoleError.mockRestore();
+	});
+
+	it('rejects totals with negative or non-integer counts', async () => {
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const fetchMock = vi.fn<typeof fetch>((input) => {
+			const url = String(input);
+			if (url === '/api/usage/totals')
+				return Promise.resolve(totalsResponse({ ...TOTALS, userCount: -1 }));
+			if (url === '/api/usage/balance') return Promise.resolve(walletBalanceResponse());
+			if (url === '/api/usage/profiles') return Promise.resolve(profilesResponse());
+			return Promise.resolve(jsonResponse(page([user(PUBKEY_ONE)], 0, false)));
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await usage.load();
+
+		await vi.waitFor(() => expect(usage.totalsStatus).toBe('error'));
+		expect(usage.totals).toBeNull();
+		consoleError.mockRestore();
+	});
+
+	it('resets totals on clear', async () => {
+		vi.stubGlobal('fetch', mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)]));
+		await usage.load();
+		await vi.waitFor(() => expect(usage.totalsStatus).toBe('ready'));
+
+		usage.clear();
+
+		expect(usage.totals).toBeNull();
+		expect(usage.totalsStatus).toBe('idle');
 	});
 });
