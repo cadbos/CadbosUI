@@ -13,14 +13,28 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProjectRecord, ProjectsResponse } from '$lib/api/contract';
+import type { ProjectRecord, ProjectSummaryRecord, ProjectsResponse } from '$lib/api/contract';
 import { projects } from './projects.svelte';
 
 function project(id: string, title: string, updatedAt: number): ProjectRecord {
 	return { id, title, createdAt: updatedAt, updatedAt };
 }
 
-function page(projectsPage: ProjectRecord[], offset: number, hasMore: boolean): ProjectsResponse {
+function summary(
+	id: string,
+	title: string,
+	updatedAt: number,
+	sessionCount = 0,
+	generationCount = 0
+): ProjectSummaryRecord {
+	return { ...project(id, title, updatedAt), sessionCount, generationCount };
+}
+
+function page(
+	projectsPage: ProjectSummaryRecord[],
+	offset: number,
+	hasMore: boolean
+): ProjectsResponse {
 	return {
 		projects: projectsPage,
 		pagination: { offset, size: 20, hasMore }
@@ -63,7 +77,7 @@ afterEach(() => {
 describe('projects pagination', () => {
 	it('loads the first projects page and exposes remaining records for loadMore', async () => {
 		const fetchMock = mockProjectsFetch([
-			page([project(uuid1, 'Living room', Date.UTC(2026, 0, 1))], 0, true)
+			page([summary(uuid1, 'Living room', Date.UTC(2026, 0, 1), 2, 7)], 0, true)
 		]);
 		vi.stubGlobal('fetch', fetchMock);
 
@@ -73,14 +87,14 @@ describe('projects pagination', () => {
 			signal: expect.any(AbortSignal)
 		});
 		expect(projects.status).toBe('ready');
-		expect(projects.projects.map((record) => record.id)).toEqual([uuid1]);
+		expect(projects.projects).toEqual([summary(uuid1, 'Living room', Date.UTC(2026, 0, 1), 2, 7)]);
 		expect(projects.hasMore).toBe(true);
 	});
 
 	it('loads the next projects page on demand, requesting the next offset', async () => {
 		const fetchMock = mockProjectsFetch([
-			page([project(uuid1, 'Living room', Date.UTC(2026, 0, 1))], 0, true),
-			page([project(uuid2, 'Kitchen', Date.UTC(2026, 0, 2))], 1, false)
+			page([summary(uuid1, 'Living room', Date.UTC(2026, 0, 1))], 0, true),
+			page([summary(uuid2, 'Kitchen', Date.UTC(2026, 0, 2))], 1, false)
 		]);
 		vi.stubGlobal('fetch', fetchMock);
 
@@ -96,7 +110,7 @@ describe('projects pagination', () => {
 
 	it('fails loudly instead of looping forever when a page reports hasMore but returns nothing', async () => {
 		const fetchMock = mockProjectsFetch([
-			page([project(uuid1, 'Living room', Date.UTC(2026, 0, 1))], 0, true),
+			page([summary(uuid1, 'Living room', Date.UTC(2026, 0, 1))], 0, true),
 			page([], 1, true)
 		]);
 		vi.stubGlobal('fetch', fetchMock);
@@ -141,14 +155,14 @@ describe('projects pagination', () => {
 		const second = projects.load();
 
 		// The second, newer call settles first...
-		resolveSecond(jsonResponse(page([project(uuid2, 'Kitchen', Date.UTC(2026, 0, 2))], 0, false)));
+		resolveSecond(jsonResponse(page([summary(uuid2, 'Kitchen', Date.UTC(2026, 0, 2))], 0, false)));
 		await second;
 		expect(projects.projects.map((record) => record.id)).toEqual([uuid2]);
 
 		// ...and the first, now-stale call resolving afterward must not
 		// overwrite it (its own AbortController was already superseded).
 		resolveFirst(
-			jsonResponse(page([project(uuid1, 'Living room', Date.UTC(2026, 0, 1))], 0, false))
+			jsonResponse(page([summary(uuid1, 'Living room', Date.UTC(2026, 0, 1))], 0, false))
 		);
 		await first;
 		expect(projects.projects.map((record) => record.id)).toEqual([uuid2]);
@@ -171,7 +185,7 @@ describe('projects.create', () => {
 		const created = await projects.create('Living room');
 
 		expect(created.id).toBe(uuid1);
-		expect(projects.projects.map((record) => record.id)).toEqual([uuid1]);
+		expect(projects.projects).toEqual([summary(uuid1, 'Living room', Date.UTC(2026, 0, 1))]);
 		expect(projects.creating).toBe(false);
 	});
 
@@ -217,8 +231,8 @@ describe('projects.archive', () => {
 					jsonResponse(
 						page(
 							[
-								project(uuid1, 'Living room', Date.UTC(2026, 0, 1)),
-								project(uuid2, 'Kitchen', Date.UTC(2026, 0, 2))
+								summary(uuid1, 'Living room', Date.UTC(2026, 0, 1)),
+								summary(uuid2, 'Kitchen', Date.UTC(2026, 0, 2))
 							],
 							0,
 							false
@@ -259,8 +273,8 @@ describe('projects.archive', () => {
 				jsonResponse(
 					page(
 						[
-							project(uuid1, 'Living room', Date.UTC(2026, 0, 1)),
-							project(uuid2, 'Kitchen', Date.UTC(2026, 0, 2))
+							summary(uuid1, 'Living room', Date.UTC(2026, 0, 1)),
+							summary(uuid2, 'Kitchen', Date.UTC(2026, 0, 2))
 						],
 						0,
 						false

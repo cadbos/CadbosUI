@@ -145,6 +145,42 @@ describe('GET /api/projects', () => {
 		expect(result.projects).toHaveLength(2);
 		expect(result.pagination).toEqual({ offset: 0, size: 2, hasMore: true });
 	});
+
+	it('includes each project’s session and generation counts', async () => {
+		const db = makeD1();
+		await seedTwoUsers(db);
+		const createResponse = await createProject({
+			request: new Request('https://cadbos.example/api/projects', {
+				method: 'POST',
+				body: JSON.stringify({ title: 'Living room' })
+			}),
+			platform: platform(db),
+			locals: { user: owner }
+		} as Parameters<typeof createProject>[0]);
+		const project = (await createResponse.json()) as ProjectRecord;
+		const sessionResponse = await createSession({
+			request: new Request('https://cadbos.example/api/projects/x/sessions', {
+				method: 'POST',
+				body: JSON.stringify({ title: 'Main thread' })
+			}),
+			params: { id: project.id },
+			platform: platform(db),
+			locals: { user: owner }
+		} as Parameters<typeof createSession>[0]);
+		const session = (await sessionResponse.json()) as CreateSessionResponse;
+		seedGeneration(db, '00000000-0000-4000-8000-000000000101', session.id, 'user-1');
+
+		const response = await listProjects({
+			url: new URL('https://cadbos.example/api/projects'),
+			platform: platform(db),
+			locals: { user: owner }
+		} as Parameters<typeof listProjects>[0]);
+
+		const result = (await response.json()) as ProjectsResponse;
+		expect(result.projects).toEqual([
+			expect.objectContaining({ id: project.id, sessionCount: 1, generationCount: 1 })
+		]);
+	});
 });
 
 describe('GET /api/projects/[id]', () => {

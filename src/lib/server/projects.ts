@@ -24,7 +24,7 @@
 // layer, not the route.
 
 import type { D1Database } from '@cloudflare/workers-types';
-import type { GenerationKind, PublicFormSnapshot } from '$lib/api/contract';
+import { generationKinds, type GenerationKind, type PublicFormSnapshot } from '$lib/api/contract';
 import { randomToken } from './auth/session';
 import { generationKindForRow, parseStoredFormSnapshot } from './generations';
 
@@ -36,8 +36,13 @@ export interface Project {
 	updatedAt: number;
 }
 
+export interface ProjectSummary extends Project {
+	sessionCount: number;
+	generationCount: number;
+}
+
 export interface ProjectsPage {
-	projects: Project[];
+	projects: ProjectSummary[];
 	hasMore: boolean;
 }
 
@@ -154,6 +159,16 @@ export async function createProject(
 	return { id, userId, title, createdAt: now, updatedAt: now };
 }
 
+interface ProjectSummaryRow extends ProjectRow {
+	session_count: number;
+	generation_count: number;
+}
+
+// Counts match what the project page itself shows (loadProjectDetail):
+// archived sessions and their generations are left out, and so are
+// generations whose kind the app no longer recognizes. Each count is
+// pre-aggregated per project in its own subquery — a flat
+// projects/sessions/generations LEFT JOIN would fan out and inflate both.
 export async function listProjects(
 	db: D1Database,
 	userId: string,
@@ -162,14 +177,28 @@ export async function listProjects(
 ): Promise<ProjectsPage> {
 	const result = await db
 		.prepare(
-			'SELECT id, user_id, title, created_at, updated_at FROM projects ' +
-				'WHERE user_id = ? AND archived_at IS NULL ORDER BY updated_at ASC, id ASC LIMIT ? OFFSET ?'
+			'SELECT p.id, p.user_id, p.title, p.created_at, p.updated_at, ' +
+				'COALESCE(s.session_count, 0) AS session_count, ' +
+				'COALESCE(g.generation_count, 0) AS generation_count ' +
+				'FROM projects p ' +
+				'LEFT JOIN (SELECT project_id, COUNT(*) AS session_count FROM project_sessions ' +
+				'WHERE archived_at IS NULL GROUP BY project_id) s ON s.project_id = p.id ' +
+				'LEFT JOIN (SELECT ps.project_id, COUNT(*) AS generation_count FROM generations gen ' +
+				'JOIN project_sessions ps ON ps.id = gen.session_id ' +
+				`WHERE ps.archived_at IS NULL AND gen.kind IN (${generationKinds.map(() => '?').join(', ')}) ` +
+				'GROUP BY ps.project_id) g ON g.project_id = p.id ' +
+				'WHERE p.user_id = ? AND p.archived_at IS NULL ' +
+				'ORDER BY p.updated_at ASC, p.id ASC LIMIT ? OFFSET ?'
 		)
-		.bind(userId, size + 1, offset)
-		.all<ProjectRow>();
+		.bind(...generationKinds, userId, size + 1, offset)
+		.all<ProjectSummaryRow>();
 	const rows = result.results ?? [];
 	return {
-		projects: rows.slice(0, size).map(toProject),
+		projects: rows.slice(0, size).map((row) => ({
+			...toProject(row),
+			sessionCount: row.session_count,
+			generationCount: row.generation_count
+		})),
 		hasMore: rows.length > size
 	};
 }
