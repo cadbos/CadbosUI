@@ -987,6 +987,56 @@ describe('listResourceImages', () => {
 		});
 	});
 
+	it('excludes a hashed source that is another generation’s result', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		const uploadMediaId = seedGenerationWithSource(
+			db,
+			'upload',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			1000
+		);
+		const producedMediaId = seedMedia(db, 'https://cdn.example.test/produced.webp', HASH_2);
+		seedGenerationWithSource(
+			db,
+			'produced',
+			'user-1',
+			'https://cdn.example.test/room.jpg',
+			HASH_1,
+			2000
+		);
+		seedGenerationWithSource(
+			db,
+			'next',
+			'user-1',
+			'https://cdn.example.test/produced.webp',
+			HASH_2,
+			3000
+		);
+
+		const page = await listResourceImages(db, 'user-1', 'sources', 0, 10);
+
+		expect(producedMediaId).not.toBe(uploadMediaId);
+		expect(page).toEqual({
+			images: [{ mediaId: uploadMediaId, createdAt: 2000, roles: ['source'] }],
+			hasMore: false
+		});
+	});
+
+	it('probes generation results through an index, not a table scan', async () => {
+		const { results } = await db
+			.prepare(
+				'EXPLAIN QUERY PLAN SELECT 1 FROM generations g WHERE NOT EXISTS ' +
+					'(SELECT 1 FROM generations produced WHERE produced.result_media_id = g.source_media_id)'
+			)
+			.all<{ detail: string }>();
+
+		expect(results.map((step) => step.detail)).toContain(
+			'SEARCH produced USING COVERING INDEX generations_result_media (result_media_id=?)'
+		);
+	});
+
 	it('never mixes another user’s photos into the page', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
