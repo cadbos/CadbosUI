@@ -158,7 +158,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	await expect(userWithoutPicture.locator('.avatar')).toHaveText('B');
 	await expect(link).toHaveAttribute('href', `https://primal.net/profile/${npub}`);
 	await expect(link).toHaveAttribute('target', '_blank');
-	await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+	await expect(link).toHaveAttribute('rel', 'external noopener noreferrer');
 });
 
 test('shows an error message when the wallet balance cannot be loaded', async ({ page }) => {

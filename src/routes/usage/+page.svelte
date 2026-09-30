@@ -216,7 +216,7 @@ before the Change Date. See LICENSE for complete terms.
 										<a
 											href={data.pubkeyViewer.replaceAll('{}', npub)}
 											target="_blank"
-											rel="noopener noreferrer">{npub}</a
+											rel="external noopener noreferrer">{npub}</a
 										>
 									</span>
 								</th>
