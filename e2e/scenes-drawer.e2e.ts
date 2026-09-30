@@ -89,7 +89,8 @@ async function mockAddObjectScene(page: Page): Promise<void> {
 						kind: 'edit',
 						createdAt: Date.UTC(2026, 0, 1),
 						session: null,
-						iteration: null
+						iteration: null,
+						number: 1
 					}
 				],
 				pagination: { offset: 0, size: 100, hasMore: false }
@@ -136,7 +137,8 @@ async function mockSingleStyleTransferScene(page: Page): Promise<void> {
 						kind: 'style-transfer',
 						createdAt: Date.UTC(2026, 0, 1),
 						session: null,
-						iteration: null
+						iteration: null,
+						number: 1
 					}
 				],
 				pagination: { offset: 0, size: 100, hasMore: false }
@@ -263,7 +265,8 @@ async function mockSessionScene(page: Page): Promise<void> {
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 1),
 						session: null,
-						iteration: null
+						iteration: null,
+						number: 1
 					}
 				],
 				pagination: { offset: 0, size: 100, hasMore: false }
@@ -515,7 +518,8 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 2),
 								session: kitchen,
-								iteration: 2
+								iteration: 2,
+								number: 1
 							}
 						]
 					: [
@@ -526,7 +530,8 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 2),
 								session: kitchen,
-								iteration: 2
+								iteration: 2,
+								number: 2
 							},
 							{
 								id: ADD_OBJECT_GENERATION_ID,
@@ -535,7 +540,8 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 								kind: 'edit',
 								createdAt: Date.UTC(2026, 0, 1),
 								session: kitchen,
-								iteration: 1
+								iteration: 1,
+								number: 1
 							}
 						],
 				pagination: { offset: 0, size: 100, hasMore: false }
@@ -564,8 +570,8 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 		steps.getByRole('listitem').first().getByText('Исходник', { exact: true })
 	).toHaveCount(0);
 
-	await drawer.getByRole('button', { name: 'Показать промпт сцены 1' }).click();
-	const promptDialog = page.getByRole('dialog', { name: 'Промпт сцены 1' });
+	await drawer.getByRole('button', { name: 'Показать промпт сцены 2' }).click();
+	const promptDialog = page.getByRole('dialog', { name: 'Промпт сцены 2' });
 	await expect(promptDialog).toContainText('светлая кухня, дерево и лён');
 	await promptDialog.getByRole('button', { name: 'Закрыть промпт' }).click();
 

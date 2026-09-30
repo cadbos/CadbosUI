@@ -214,7 +214,8 @@ describe('GET /api/generated-images', () => {
 			kind: 'render',
 			createdAt: 10020,
 			session: null,
-			iteration: null
+			iteration: null,
+			number: 21
 		});
 		expect(result.pagination).toEqual({ offset: 0, size: 20, hasMore: true });
 	});
@@ -270,7 +271,8 @@ describe('GET /api/generated-images', () => {
 				sessionId: KITCHEN_SESSION_ID,
 				sessionTitle: 'Kitchen'
 			},
-			iteration: 2
+			iteration: 2,
+			number: 2
 		});
 	});
 

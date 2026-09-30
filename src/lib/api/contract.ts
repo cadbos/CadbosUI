@@ -402,10 +402,13 @@ export type SceneView = (typeof sceneViews)[number];
 // archived, or for a generation recorded before sessions existed.
 // `iteration` is the generation's 1-based position in that session, so a
 // milestones row's is the session's iteration count; null without a live
-// session.
+// session. `number` is the row's 1-based chronological position in the whole
+// filtered list (oldest is 1), so it stays put as pages load and new scenes
+// arrive.
 export interface SceneRecord extends GeneratedImageRecord {
 	session: GenerationSessionRef | null;
 	iteration: number | null;
+	number: number;
 }
 
 export interface GeneratedImagesResponse {

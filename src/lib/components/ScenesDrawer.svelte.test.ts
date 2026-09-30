@@ -20,7 +20,7 @@ import { generatedImages } from '$lib/state/generated-images.svelte';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 import ScenesDrawer from './ScenesDrawer.svelte';
 
-function image(id: string, createdAt: number): SceneRecord {
+function image(id: string, createdAt: number, number = 1): SceneRecord {
 	return {
 		id,
 		image: {
@@ -34,7 +34,8 @@ function image(id: string, createdAt: number): SceneRecord {
 		kind: 'render',
 		createdAt,
 		session: null,
-		iteration: null
+		iteration: null,
+		number
 	};
 }
 
@@ -135,13 +136,13 @@ it('loads the next generated-images page when the infinite-scroll sentinel inter
 	vi.stubGlobal('IntersectionObserver', IntersectionObserverMock);
 	vi.stubGlobal('fetch', fetchMock);
 	fetchMock
-		.mockResolvedValueOnce(jsonResponse(page([image('first', 2000)], 0, true)))
+		.mockResolvedValueOnce(jsonResponse(page([image('first', 2000, 2)], 0, true)))
 		.mockResolvedValueOnce(jsonResponse(page([image('second', 1000)], 1, false)));
 
 	await generatedImages.load();
 	const screen = render(ScenesDrawer, { open: true, onClose: vi.fn() });
 
-	await expect.element(screen.getByRole('img', { name: 'Результат сцены 1' })).toBeVisible();
+	await expect.element(screen.getByRole('img', { name: 'Результат сцены 2' })).toBeVisible();
 	await vi.waitFor(() => expect(observe).toHaveBeenCalled());
 
 	observerCallbacks[0]?.(
@@ -149,7 +150,7 @@ it('loads the next generated-images page when the infinite-scroll sentinel inter
 		{} as IntersectionObserver
 	);
 
-	await expect.element(screen.getByRole('img', { name: 'Результат сцены 2' })).toBeVisible();
+	await expect.element(screen.getByRole('img', { name: 'Результат сцены 1' })).toBeVisible();
 	expect(observerOptions?.root).toBeInstanceOf(HTMLElement);
 	expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/generated-images?offset=1&size=100', {
 		signal: expect.any(AbortSignal)
@@ -186,7 +187,7 @@ it('shows each iteration’s session, marks the first one’s Base as the Source
 	);
 	generatedImages.status = 'ready';
 	generatedImages.images = [
-		{ ...image('sample', 2000), session: SESSION, iteration: 2 },
+		{ ...image('sample', 2000, 2), session: SESSION, iteration: 2 },
 		{ ...image('first', 1000), session: SESSION, iteration: 1 }
 	];
 
@@ -200,9 +201,9 @@ it('shows each iteration’s session, marks the first one’s Base as the Source
 	await expect
 		.element(screen.getByRole('listitem').first().getByText('Исходник', { exact: true }))
 		.not.toBeInTheDocument();
-	await screen.getByRole('button', { name: 'Показать промпт сцены 1' }).click();
+	await screen.getByRole('button', { name: 'Показать промпт сцены 2' }).click();
 
-	const dialog = screen.getByRole('dialog', { name: 'Промпт сцены 1' });
+	const dialog = screen.getByRole('dialog', { name: 'Промпт сцены 2' });
 	await expect.element(dialog.getByText('светлая кухня в скандинавском стиле')).toBeVisible();
 	expect(fetchMock).toHaveBeenCalledWith('/api/generated-images/sample');
 

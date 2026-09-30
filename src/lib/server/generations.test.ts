@@ -591,7 +591,8 @@ describe('listGeneratedImages', () => {
 					kind: 'render',
 					createdAt: 3000,
 					session: null,
-					iteration: null
+					iteration: null,
+					number: 3
 				},
 				{
 					id: 'middle',
@@ -603,7 +604,8 @@ describe('listGeneratedImages', () => {
 					kind: 'render',
 					createdAt: 2000,
 					session: null,
-					iteration: null
+					iteration: null,
+					number: 2
 				}
 			],
 			hasMore: true
@@ -734,6 +736,7 @@ describe('listGeneratedImages filtering', () => {
 			['kitchen-1', 'Kitchen']
 		]);
 		expect(page.images.map((image) => image.iteration)).toEqual([null, 3, 1, 2, 1, 1]);
+		expect(page.images.map((image) => image.number)).toEqual([6, 5, 4, 3, 2, 1]);
 		expect(page.images[1].session).toEqual({
 			projectId: kitchen.projectId,
 			projectTitle: 'Flat',
@@ -765,6 +768,8 @@ describe('listGeneratedImages filtering', () => {
 			'kitchen-1'
 		]);
 		expect(session.images.map((image) => image.id)).toEqual(['redo-1']);
+		expect(project.images.map((image) => image.number)).toEqual([4, 3, 2, 1]);
+		expect(session.images.map((image) => image.number)).toEqual([1]);
 	});
 
 	it('collapses each live session to its first source and latest result', async () => {
@@ -778,6 +783,7 @@ describe('listGeneratedImages filtering', () => {
 		const firstKitchen = await getGeneratedImageForUser(db, 'user-1', 'kitchen-1');
 
 		expect(page.images.map((image) => image.id)).toEqual(['kitchen-3', 'bedroom-1', 'redo-1']);
+		expect(page.images.map((image) => image.number)).toEqual([3, 2, 1]);
 		expect(page.images[0]).toMatchObject({
 			filename: 'kitchen-3.webp',
 			sourceMediaId: firstKitchen?.sourceMediaId,
@@ -806,6 +812,7 @@ describe('listGeneratedImages filtering', () => {
 
 		expect(first).toMatchObject({ images: [{ id: 'kitchen-3' }], hasMore: true });
 		expect(second).toMatchObject({ images: [{ id: 'redo-1' }], hasMore: false });
+		expect([first.images[0].number, second.images[0].number]).toEqual([2, 1]);
 	});
 
 	it('leaves archived sessions and projects out of filters and milestones', async () => {
