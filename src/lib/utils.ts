@@ -133,6 +133,13 @@ export function dismissable(
 	};
 }
 
+// Return focus to a menu's trigger after choosing an item hides the menu, so
+// keyboard users aren't dropped to <body>. `item` is any element inside the
+// menu's `role="group"` container.
+export function focusTrigger(item: HTMLElement, triggerSelector: string): void {
+	item.closest('[role="group"]')?.querySelector<HTMLButtonElement>(triggerSelector)?.focus();
+}
+
 export interface TabController {
 	activate: (index: number) => void;
 	onKeydown: (event: KeyboardEvent) => void;

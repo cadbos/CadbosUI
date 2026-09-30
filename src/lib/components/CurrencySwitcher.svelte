@@ -16,18 +16,17 @@ before the Change Date. See LICENSE for complete terms.
 	import { ChevronDown } from '@lucide/svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { currency, type CurrencyCode } from '$lib/state/currency.svelte';
-	import { dismissable } from '$lib/utils';
+	import { dismissable, focusTrigger } from '$lib/utils';
 
 	const codes: readonly CurrencyCode[] = ['usd', 'rub'];
 	const labelKeys = { usd: 'currency.usd', rub: 'currency.rub' } as const;
 
 	let open = $state(false);
-	let triggerEl: HTMLButtonElement | undefined;
 
-	function choose(code: CurrencyCode): void {
+	function choose(code: CurrencyCode, item: HTMLElement): void {
 		currency.setCode(code);
 		open = false;
-		triggerEl?.focus();
+		focusTrigger(item, '.currency-trigger');
 	}
 </script>
 
@@ -42,7 +41,6 @@ before the Change Date. See LICENSE for complete terms.
 	)}
 >
 	<button
-		bind:this={triggerEl}
 		type="button"
 		class="currency-trigger"
 		aria-expanded={open}
@@ -58,7 +56,7 @@ before the Change Date. See LICENSE for complete terms.
 				type="button"
 				class:active={currency.code === code}
 				aria-current={currency.code === code}
-				onclick={() => choose(code)}
+				onclick={(event) => choose(code, event.currentTarget)}
 			>
 				{t(labelKeys[code])}
 			</button>

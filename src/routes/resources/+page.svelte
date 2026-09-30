@@ -51,13 +51,14 @@ before the Change Date. See LICENSE for complete terms.
 	});
 
 	let filterTabs = $state<HTMLElement[]>([]);
-	let loadMoreSentinel = $state<HTMLElement | null>(null);
 	let settledImageKeys = $state<string[]>([]);
 	const revealTimers = createRevealTimers();
 
-	$effect(() => {
+	function clearRevealTimers(): () => void {
 		return () => revealTimers.clear();
-	});
+	}
+
+	$effect(clearRevealTimers);
 
 	const filterTabController = createTabController({
 		itemCount: () => resourceFilters.length,
@@ -74,15 +75,14 @@ before the Change Date. See LICENSE for complete terms.
 		focusTab: (index) => filterTabs[index]?.focus()
 	});
 
-	$effect(() => {
+	function loadResources(): () => void {
 		void resources.load(filter);
 		return () => resources.clear();
-	});
+	}
 
-	$effect(() => {
-		const sentinel = loadMoreSentinel;
-		if (!sentinel || !resources.hasMore) return;
+	$effect(loadResources);
 
+	function loadMoreWhenVisible(sentinel: HTMLElement): () => void {
 		const observer = new IntersectionObserver(
 			(entries) => {
 				if (entries.some((entry) => entry.isIntersecting)) void resources.loadMore();
@@ -92,19 +92,21 @@ before the Change Date. See LICENSE for complete terms.
 		observer.observe(sentinel);
 
 		return () => observer.disconnect();
-	});
+	}
 
 	function settleImage(key: string): void {
 		if (settledImageKeys.includes(key)) return;
 		settledImageKeys = [...settledImageKeys, key];
 	}
 
-	$effect(() => {
+	function revealPendingImages(): void {
 		const pending = resources.images
 			.map((image) => image.image.key)
 			.filter((key) => !settledImageKeys.includes(key));
 		revealTimers.retain(pending, settleImage);
-	});
+	}
+
+	$effect(revealPendingImages);
 
 	function formatCreatedAt(createdAt: number): string {
 		return new Intl.DateTimeFormat(getLocale(), {
@@ -243,7 +245,7 @@ before the Change Date. See LICENSE for complete terms.
 				</ul>
 
 				{#if resources.hasMore}
-					<div bind:this={loadMoreSentinel} class="load-more-sentinel">
+					<div {@attach loadMoreWhenVisible} class="load-more-sentinel">
 						{#if resources.loadingMore}
 							<p class="visually-hidden" aria-live="polite">{t('resources.loadingMore')}</p>
 						{/if}
