@@ -184,6 +184,7 @@ before the Change Date. See LICENSE for complete terms.
 	{#if downloadUrl}
 		<a
 			href={downloadUrl}
+			rel="external"
 			download={downloadName}
 			class="icon-btn"
 			aria-label={t('render.download')}
