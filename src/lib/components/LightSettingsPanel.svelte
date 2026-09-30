@@ -18,7 +18,11 @@ before the Change Date. See LICENSE for complete terms.
 	import { page } from '$app/state';
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { z } from 'zod';
-	import type { LightSettingsCompletedResponse, LightSettingsJobResponse } from '$lib/api/contract';
+	import {
+		mediaAccessSchema,
+		type LightSettingsCompletedResponse,
+		type LightSettingsJobResponse
+	} from '$lib/api/contract';
 	import ModeHint from '$lib/components/ModeHint.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { LIGHT_SETTINGS_FIXTURES, lightSettingsPresetsFor } from '$lib/light-settings-presets';
@@ -44,10 +48,7 @@ before the Change Date. See LICENSE for complete terms.
 			.object({
 				id: z.uuid(),
 				status: z.literal('completed'),
-				output: z.object({
-					key: z.string().min(1),
-					url: z.url()
-				}),
+				output: mediaAccessSchema,
 				cost: z.number().nonnegative(),
 				balance: z.number()
 			})

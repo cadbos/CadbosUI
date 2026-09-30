@@ -104,43 +104,12 @@ describe('S3 storage', () => {
 		);
 	});
 
-	it('presigns reads with purpose defaults and configured lifetimes', async () => {
-		const requestPlatform = platform();
-		const ui = await presignS3Object(requestPlatform, bucket(), 'rooms/a b/рисунок.webp', 'ui');
-		const provider = await presignS3Object(
-			requestPlatform,
-			bucket(),
-			'rooms/a b/рисунок.webp',
-			'provider'
-		);
+	it('presigns reads for the requested lifetime', async () => {
+		const url = await presignS3Object(platform(), bucket(), 'rooms/a b/рисунок.webp', 1200);
 
-		expect(new URL(ui).searchParams.get('X-Amz-Expires')).toBe('43200');
-		expect(new URL(provider).searchParams.get('X-Amz-Expires')).toBe('10800');
-		const configured = await presignS3Object(
-			platform({ S3_PRESIGNED_PROVIDER_TTL_SECONDS: '1200' }),
-			bucket(),
-			'rooms/a b/рисунок.webp',
-			'provider'
-		);
-		expect(new URL(configured).searchParams.get('X-Amz-Expires')).toBe('1200');
-		expect(new URL(ui).pathname).toBe(
+		expect(new URL(url).searchParams.get('X-Amz-Expires')).toBe('1200');
+		expect(new URL(url).pathname).toBe(
 			'/cadbos/rooms/a%20b/%D1%80%D0%B8%D1%81%D1%83%D0%BD%D0%BE%D0%BA.webp'
 		);
 	});
-
-	it.each(['0', '-1', '1.5', ' 300', '604801', '9007199254740992'])(
-		'rejects invalid presigned TTL %s and fails the health check closed',
-		async (value) => {
-			const requestPlatform = platform({
-				S3_PRESIGNED_UI_TTL_SECONDS: value
-			});
-
-			await expect(presignS3Object(requestPlatform, bucket(), 'image.png', 'ui')).rejects.toThrow(
-				'S3_PRESIGNED_UI_TTL_SECONDS is invalid'
-			);
-			await expect(isS3BucketAvailable(requestPlatform, bucket())).rejects.toThrow(
-				'S3_PRESIGNED_UI_TTL_SECONDS is invalid'
-			);
-		}
-	);
 });

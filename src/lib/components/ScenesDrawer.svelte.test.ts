@@ -25,11 +25,11 @@ function image(id: string, createdAt: number, number = 1): SceneRecord {
 		id,
 		image: {
 			key: `${id}.webp`,
-			url: `https://cdn.example.test/${id}.webp`
+			url: `/api/media/test-media/${id}.webp`
 		},
 		source: {
 			key: `${id}-source.jpg`,
-			url: `https://cdn.example.test/${id}-source.jpg`
+			url: `/api/media/test-media/${id}-source.jpg`
 		},
 		kind: 'render',
 		createdAt,
@@ -176,8 +176,8 @@ it('shows each iteration’s session, marks the first one’s Base as the Source
 				createdAt: 1000,
 				amount: 1,
 				balanceAfter: 9,
-				image: { key: 'sample.webp', url: 'https://cdn.example.test/sample.webp' },
-				source: { key: 'source.jpg', url: 'https://cdn.example.test/source.jpg' },
+				image: { key: 'sample.webp', url: '/api/media/test-media/sample.webp' },
+				source: { key: 'source.jpg', url: '/api/media/test-media/source.jpg' },
 				formSnapshot: null,
 				session: SESSION,
 				media: []

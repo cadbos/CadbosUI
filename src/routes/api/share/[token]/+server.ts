@@ -29,7 +29,6 @@ export const GET: RequestHandler = async ({ params, platform }) => {
 	if (!project) return apiError(404, 'share_not_found', 'Share link not found');
 	const access = await mediaAccessBatch(
 		db,
-		platform,
 		project.sessions.flatMap((session) =>
 			session.generations.flatMap((generation) => [generation.mediaId, generation.sourceMediaId])
 		)

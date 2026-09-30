@@ -16,6 +16,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import { z } from 'zod';
 import {
 	generationKinds,
+	mediaAccessSchema,
 	type SceneFilterProject,
 	type SceneRecord,
 	type SceneView
@@ -36,14 +37,8 @@ const PAGE_SIZE = 100;
 
 const generatedImageRecordSchema = z.object({
 	id: z.string().min(1),
-	image: z.object({
-		key: z.string().min(1),
-		url: z.url()
-	}),
-	source: z.object({
-		key: z.string().min(1),
-		url: z.url()
-	}),
+	image: mediaAccessSchema,
+	source: mediaAccessSchema,
 	kind: z.enum(generationKinds),
 	createdAt: z.number().int().min(0),
 	session: z

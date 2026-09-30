@@ -207,7 +207,7 @@ describe('POST /api/style-transfer — billing', () => {
 			kind: 'style-transfer'
 		});
 		expect(result.output.key).toBeTruthy();
-		expect(result.output.url).toContain('X-Amz-Expires=43200');
+		expect(result.output.url).toBe(`/api/media/${result.output.key}`);
 	});
 
 	it('rate-limits repeated style transfers from the same account', async () => {

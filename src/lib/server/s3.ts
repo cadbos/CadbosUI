@@ -15,14 +15,6 @@
 import { S3mini } from 's3mini';
 import type { Bucket } from '$lib/server/media';
 
-const MAX_PRESIGNED_TTL_SECONDS = 604_800;
-const PRESIGNED_TTLS = {
-	ui: ['S3_PRESIGNED_UI_TTL_SECONDS', 43_200],
-	provider: ['S3_PRESIGNED_PROVIDER_TTL_SECONDS', 10_800]
-} as const;
-
-export type S3PresignPurpose = keyof typeof PRESIGNED_TTLS;
-
 function endpointUrl(bucket: Bucket): URL {
 	let url: URL;
 	try {
@@ -36,23 +28,7 @@ function endpointUrl(bucket: Bucket): URL {
 	return url;
 }
 
-function ttl(value: string | undefined, name: string, fallback: number): number {
-	if (value === undefined) return fallback;
-	if (!/^[1-9]\d*$/.test(value)) throw new Error(`${name} is invalid`);
-	const parsed = Number(value);
-	if (!Number.isSafeInteger(parsed) || parsed > MAX_PRESIGNED_TTL_SECONDS) {
-		throw new Error(`${name} is invalid`);
-	}
-	return parsed;
-}
-
-function configuration(
-	platform: App.Platform | undefined,
-	bucket: Bucket
-): {
-	s3: S3mini;
-	ttls: Record<S3PresignPurpose, number>;
-} {
+function s3Client(platform: App.Platform | undefined, bucket: Bucket): S3mini {
 	const env = platform?.env;
 	if (!env?.S3_ACCESS_KEY_ID) throw new Error('S3_ACCESS_KEY_ID not configured');
 	if (!env.S3_SECRET_ACCESS_KEY) throw new Error('S3_SECRET_ACCESS_KEY not configured');
@@ -60,20 +36,12 @@ function configuration(
 		throw new Error(`bucket ${bucket.name} region is invalid`);
 	}
 
-	return {
-		s3: new S3mini({
-			accessKeyId: env.S3_ACCESS_KEY_ID,
-			secretAccessKey: env.S3_SECRET_ACCESS_KEY,
-			endpoint: endpointUrl(bucket).toString(),
-			region: bucket.region
-		}),
-		ttls: Object.fromEntries(
-			Object.entries(PRESIGNED_TTLS).map(([purpose, [name, fallback]]) => [
-				purpose,
-				ttl(env[name], name, fallback)
-			])
-		) as Record<S3PresignPurpose, number>
-	};
+	return new S3mini({
+		accessKeyId: env.S3_ACCESS_KEY_ID,
+		secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+		endpoint: endpointUrl(bucket).toString(),
+		region: bucket.region
+	});
 }
 
 function operationError(operation: string, error: unknown): Error {
@@ -95,7 +63,7 @@ export async function putS3Object(
 	bytes: ArrayBuffer,
 	mime: string
 ): Promise<void> {
-	const { s3 } = configuration(platform, bucket);
+	const s3 = s3Client(platform, bucket);
 	try {
 		await s3.putObject(key, new Uint8Array(bytes), mime);
 	} catch (error) {
@@ -108,7 +76,7 @@ export async function deleteS3Object(
 	bucket: Bucket,
 	key: string
 ): Promise<void> {
-	const { s3 } = configuration(platform, bucket);
+	const s3 = s3Client(platform, bucket);
 	try {
 		if (!(await s3.deleteObject(key))) throw new Error('Delete rejected');
 	} catch (error) {
@@ -120,7 +88,7 @@ export async function isS3BucketAvailable(
 	platform: App.Platform | undefined,
 	bucket: Bucket
 ): Promise<boolean> {
-	const { s3 } = configuration(platform, bucket);
+	const s3 = s3Client(platform, bucket);
 	try {
 		return await s3.bucketExists();
 	} catch (error) {
@@ -132,10 +100,9 @@ export async function presignS3Object(
 	platform: App.Platform | undefined,
 	bucket: Bucket,
 	key: string,
-	purpose: S3PresignPurpose
+	expiresIn: number
 ): Promise<string> {
-	const { s3, ttls } = configuration(platform, bucket);
-	const expiresIn = ttls[purpose];
+	const s3 = s3Client(platform, bucket);
 	try {
 		return await s3.getPresignedUrl('GET', key, expiresIn);
 	} catch (error) {

@@ -13,7 +13,7 @@
  */
 
 import { z } from 'zod';
-import { generationKinds } from '$lib/api/contract';
+import { generationKinds, mediaAccessSchema } from '$lib/api/contract';
 import type { ProjectDetailResponse, ProjectSessionRecord } from '$lib/api/contract';
 import { projectShare } from './project-share.svelte';
 import { describeCause, discardBody, issuePaths } from '$lib/utils';
@@ -23,14 +23,8 @@ export type ProjectDetailStatus = 'idle' | 'loading' | 'ready' | 'error' | 'not-
 
 const sessionGenerationSchema = z.object({
 	id: z.uuid(),
-	image: z.object({
-		key: z.string().min(1),
-		url: z.url()
-	}),
-	source: z.object({
-		key: z.string().min(1),
-		url: z.url()
-	}),
+	image: mediaAccessSchema,
+	source: mediaAccessSchema,
 	kind: z.enum(generationKinds),
 	createdAt: z.number().int().min(0),
 	amount: z.number(),

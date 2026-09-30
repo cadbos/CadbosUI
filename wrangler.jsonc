@@ -39,8 +39,8 @@
 		}
 	],
 	// Worker variables configured per environment in Cloudflare:
-	// S3_PRESIGNED_UI_TTL_SECONDS (optional, default 43200)
-	// S3_PRESIGNED_PROVIDER_TTL_SECONDS (optional, default 10800)
+	// MEDIA_CACHE_TTL_SECONDS (optional, default 31536000)
+	// RENDER_MEDIA_TTL_SECONDS (optional, default 10800)
 	// S3_UPLOADS_BUCKET_NAME (optional, default cadbos-uploads)
 	// ComfyUI runs on a private VPS, reachable only through this VPC Service
 	// (Cloudflare Tunnel `comfyui-equuleus` -> localhost:8188), never over the

@@ -206,8 +206,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			return json({
 				id: generationId,
 				status: 'completed',
-				output: await mediaAccess(
-					platform,
+				output: mediaAccess(
 					await getOrCreateMediaByKey(
 						db,
 						uploadsBucket,

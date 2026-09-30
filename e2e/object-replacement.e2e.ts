@@ -62,8 +62,8 @@ async function uploadInputs(page: Page): Promise<void> {
 			contentType: 'application/json',
 			body: JSON.stringify({
 				image: isScene
-					? media(1, 'https://cdn.example.test/scene.webp')
-					: media(2, 'https://cdn.example.test/reference-chair.webp'),
+					? media(1, '/api/media/test-media/scene.webp')
+					: media(2, '/api/media/test-media/reference-chair.webp'),
 				mime: 'image/webp',
 				size: 1024,
 				dimensions: [800, 600]
@@ -128,7 +128,7 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 			body: JSON.stringify({
 				id: JOB_ID,
 				status: 'completed',
-				output: media(3, 'https://cdn.example.test/replaced.webp'),
+				output: media(3, '/api/media/test-media/replaced.webp'),
 				cost: 2,
 				balance: 18
 			})
@@ -143,7 +143,7 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 	await expect(panel.locator('.job-status')).toContainText('Заменяем объект');
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/replaced.webp',
+		'/api/media/test-media/replaced.webp',
 		{ timeout: 10_000 }
 	);
 	await expect(panel.locator('.job-success')).toHaveText('Замена объекта завершена.');
@@ -214,7 +214,7 @@ test('resumes a stored completed job after reload without submitting again', asy
 			body: JSON.stringify({
 				id: JOB_ID,
 				status: 'completed',
-				output: media(3, 'https://cdn.example.test/recovered.webp'),
+				output: media(3, '/api/media/test-media/recovered.webp'),
 				cost: 2,
 				balance: 18
 			})
@@ -224,12 +224,12 @@ test('resumes a stored completed job after reload without submitting again', asy
 	await page.goto(`/edit?tool=object-replacement&object=sofa&job=${JOB_ID}`);
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/recovered.webp'
+		'/api/media/test-media/recovered.webp'
 	);
 	await page.reload();
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/recovered.webp'
+		'/api/media/test-media/recovered.webp'
 	);
 	await expect.poll(() => getCount).toBe(3);
 	expect(postCount).toBe(0);
@@ -248,8 +248,8 @@ test('keeps the submitted result’s lineage when another render finishes first'
 			body: JSON.stringify({
 				image:
 					uploads === 1
-						? media(1, 'https://cdn.example.test/room.webp')
-						: media(2, 'https://cdn.example.test/reference.webp'),
+						? media(1, '/api/media/test-media/room.webp')
+						: media(2, '/api/media/test-media/reference.webp'),
 				mime: 'image/webp',
 				size: 1024,
 				dimensions: [800, 600]
@@ -267,8 +267,8 @@ test('keeps the submitted result’s lineage when another render finishes first'
 				id: `00000000-0000-4000-8000-00000000010${renders}`,
 				output:
 					renders === 1
-						? media(3, 'https://cdn.example.test/original-result.webp')
-						: media(4, 'https://cdn.example.test/newer-result.webp'),
+						? media(3, '/api/media/test-media/original-result.webp')
+						: media(4, '/api/media/test-media/newer-result.webp'),
 				cost: 1,
 				balance: 19 - renders
 			})
@@ -297,7 +297,7 @@ test('keeps the submitted result’s lineage when another render finishes first'
 					: {
 							id: JOB_ID,
 							status: 'completed',
-							output: media(5, 'https://cdn.example.test/replaced.webp'),
+							output: media(5, '/api/media/test-media/replaced.webp'),
 							cost: 2,
 							balance: 16
 						}
@@ -322,7 +322,7 @@ test('keeps the submitted result’s lineage when another render finishes first'
 	]);
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/original-result.webp'
+		'/api/media/test-media/original-result.webp'
 	);
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
@@ -350,17 +350,17 @@ test('keeps the submitted result’s lineage when another render finishes first'
 	await page.keyboard.press('Enter');
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/newer-result.webp'
+		'/api/media/test-media/newer-result.webp'
 	);
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/replaced.webp',
+		'/api/media/test-media/replaced.webp',
 		{ timeout: 10_000 }
 	);
 	await page.getByRole('button', { name: 'Предыдущая генерация' }).click();
 	await expect(page.locator('.result img.output')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/original-result.webp'
+		'/api/media/test-media/original-result.webp'
 	);
 	await expect.poll(() => submittedImage).toBe(mediaKey(3));
 });

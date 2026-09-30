@@ -190,7 +190,7 @@ describe('POST /api/render/exterior — billing', () => {
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { output: { url: string } };
-		expect(result.output.url).toMatch(/^https:\/\//);
+		expect(result.output.url).toMatch(/^\/api\/media\//);
 	});
 
 	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
@@ -253,7 +253,7 @@ describe('POST /api/render/exterior — billing', () => {
 			kind: 'render'
 		});
 		expect(result.output.key).toBeTruthy();
-		expect(result.output.url).toContain('X-Amz-Expires=43200');
+		expect(result.output.url).toBe(`/api/media/${result.output.key}`);
 	});
 
 	it('still returns the completed, already-charged render if recordGeneration fails', async () => {
@@ -272,7 +272,7 @@ describe('POST /api/render/exterior — billing', () => {
 
 			expect(response.status).toBe(200);
 			const result = (await response.json()) as { output: { url: string } };
-			expect(result.output.url).toMatch(/^https:\/\//);
+			expect(result.output.url).toMatch(/^\/api\/media\//);
 			// No generation row exists to refer to, so none is claimed.
 			expect(result).not.toHaveProperty('id');
 			expect(consoleError).toHaveBeenCalledWith(
@@ -300,7 +300,7 @@ describe('POST /api/render/exterior — billing', () => {
 
 			expect(response.status).toBe(200);
 			const result = (await response.json()) as { output: { url: string } };
-			expect(result.output.url).toMatch(/^https:\/\//);
+			expect(result.output.url).toMatch(/^\/api\/media\//);
 			expect(consoleError).toHaveBeenCalledWith(
 				'recordBalance failed after a successful exterior render:',
 				expect.any(Error)

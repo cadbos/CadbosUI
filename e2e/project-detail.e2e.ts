@@ -12,7 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { expect, test } from './fixtures';
 import { media } from './helpers/media';
 
 const PROJECT_ID = '00000000-0000-4000-8000-000000000001';
@@ -252,8 +254,8 @@ test('continues a session into the render workspace showing its latest render as
 				generations: [
 					{
 						id: '00000000-0000-4000-8000-000000000100',
-						image: media(2, 'https://cdn.example.test/latest-render.webp'),
-						source: media(1, 'https://cdn.example.test/room.jpg'),
+						image: media(2, '/api/media/test-media/latest-render.webp'),
+						source: media(1, '/api/media/test-media/room.jpg'),
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 1),
 						amount: 5,
@@ -272,7 +274,7 @@ test('continues a session into the render workspace showing its latest render as
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000101',
-				output: media(3, 'https://cdn.example.test/render.webp'),
+				output: media(3, '/api/media/test-media/render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -292,7 +294,7 @@ test('continues a session into the render workspace showing its latest render as
 	const renderPanel = page.locator('#mode-panel-render');
 	await expect(renderPanel.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/latest-render.webp'
+		'/api/media/test-media/latest-render.webp'
 	);
 
 	// A generation submitted after resuming must still carry the *original*
@@ -333,8 +335,8 @@ test('continuing a session restores its latest generation’s exact settings, no
 				createdAt: Date.UTC(2026, 0, 1),
 				amount: 4,
 				balanceAfter: 96,
-				image: media(2, 'https://cdn.example.test/styled.webp'),
-				source: media(1, 'https://cdn.example.test/room.jpg'),
+				image: media(2, '/api/media/test-media/styled.webp'),
+				source: media(1, '/api/media/test-media/room.jpg'),
 				formSnapshot: {
 					promptFragments: [],
 					promptOverride: null,
@@ -360,8 +362,8 @@ test('continuing a session restores its latest generation’s exact settings, no
 				},
 				session: null,
 				media: [
-					media(2, 'https://cdn.example.test/styled.webp'),
-					media(1, 'https://cdn.example.test/room.jpg')
+					media(2, '/api/media/test-media/styled.webp'),
+					media(1, '/api/media/test-media/room.jpg')
 				]
 			})
 		});
@@ -373,8 +375,8 @@ test('continuing a session restores its latest generation’s exact settings, no
 				generations: [
 					{
 						id: generationId,
-						image: media(2, 'https://cdn.example.test/styled.webp'),
-						source: media(1, 'https://cdn.example.test/room.jpg'),
+						image: media(2, '/api/media/test-media/styled.webp'),
+						source: media(1, '/api/media/test-media/room.jpg'),
 						kind: 'style-transfer',
 						createdAt: Date.UTC(2026, 0, 1),
 						amount: 5,

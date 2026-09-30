@@ -210,7 +210,7 @@ describe('POST /api/texture-replacement', () => {
 			status: 'completed',
 			output: {
 				key: mediaKey(TEST_S3_BUCKET.name, 'masked-result.webp'),
-				url: expect.stringContaining('/masked-result.webp?')
+				url: `/api/media/${TEST_S3_BUCKET.name}/masked-result.webp`
 			},
 			cost: 1.5,
 			balance: 10.5

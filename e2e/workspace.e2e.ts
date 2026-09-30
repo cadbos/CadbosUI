@@ -99,8 +99,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 				? [
 						{
 							id: 'oldest',
-							image: media(2, 'https://cdn.example.test/oldest.webp'),
-							source: media(1, 'https://cdn.example.test/oldest-source.jpg'),
+							image: media(2, '/api/media/test-media/oldest.webp'),
+							source: media(1, '/api/media/test-media/oldest-source.jpg'),
 							kind: 'render',
 							createdAt: oldestCreatedAt,
 							session: null,
@@ -109,8 +109,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 						},
 						{
 							id: 'newest',
-							image: media(6, 'https://cdn.example.test/newest.webp'),
-							source: media(5, 'https://cdn.example.test/newest-source.jpg'),
+							image: media(6, '/api/media/test-media/newest.webp'),
+							source: media(5, '/api/media/test-media/newest-source.jpg'),
 							kind: 'style-transfer',
 							createdAt: newestCreatedAt,
 							session: null,
@@ -121,8 +121,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 				: [
 						{
 							id: 'middle',
-							image: media(4, 'https://cdn.example.test/middle.webp'),
-							source: media(3, 'https://cdn.example.test/middle-source.jpg'),
+							image: media(4, '/api/media/test-media/middle.webp'),
+							source: media(3, '/api/media/test-media/middle-source.jpg'),
 							kind: 'edit',
 							createdAt: middleCreatedAt,
 							session: null,
@@ -150,9 +150,9 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	await expect(page.getByRole('heading', { name: 'Сцены', exact: true })).toBeVisible();
 	const images = page.getByRole('img', { name: /Результат сцены/ });
 	await expect(images).toHaveCount(3);
-	await expect(images.nth(0)).toHaveAttribute('src', 'https://cdn.example.test/newest.webp');
-	await expect(images.nth(1)).toHaveAttribute('src', 'https://cdn.example.test/middle.webp');
-	await expect(images.nth(2)).toHaveAttribute('src', 'https://cdn.example.test/oldest.webp');
+	await expect(images.nth(0)).toHaveAttribute('src', '/api/media/test-media/newest.webp');
+	await expect(images.nth(1)).toHaveAttribute('src', '/api/media/test-media/middle.webp');
+	await expect(images.nth(2)).toHaveAttribute('src', '/api/media/test-media/oldest.webp');
 	const flowKinds = page.locator('.flow-kind');
 	await expect(flowKinds).toHaveCount(3);
 	expect(
@@ -189,7 +189,7 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	await expect(page).not.toHaveURL(/source=/);
 	await expect(page.getByRole('img', { name: 'Фото комнаты' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/newest-source.jpg'
+		'/api/media/test-media/newest-source.jpg'
 	);
 
 	await scenesButton.click();
@@ -224,8 +224,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 
 	expect(deletedImageId).toBe('middle');
 	await expect(images).toHaveCount(2);
-	await expect(images.nth(0)).toHaveAttribute('src', 'https://cdn.example.test/newest.webp');
-	await expect(images.nth(1)).toHaveAttribute('src', 'https://cdn.example.test/oldest.webp');
+	await expect(images.nth(0)).toHaveAttribute('src', '/api/media/test-media/newest.webp');
+	await expect(images.nth(1)).toHaveAttribute('src', '/api/media/test-media/oldest.webp');
 	await expect(generatedDates.nth(0).locator('span')).toHaveText([
 		localDateLabel(newestCreatedAt),
 		localTimeLabel(newestCreatedAt)
@@ -384,7 +384,7 @@ test('generating with the exterior scene type calls the exterior render route', 
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				image: media(1, 'https://cdn.example.test/facade.webp'),
+				image: media(1, '/api/media/test-media/facade.webp'),
 				mime: 'image/webp',
 				size: 1024,
 				dimensions: [800, 600]
@@ -409,7 +409,7 @@ test('generating with the exterior scene type calls the exterior render route', 
 			contentType: 'application/json',
 			body: JSON.stringify({
 				id: '00000000-0000-4000-8000-000000000201',
-				output: media(2, 'https://cdn.example.test/exterior-render.webp'),
+				output: media(2, '/api/media/test-media/exterior-render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -451,7 +451,7 @@ test('generating with the exterior scene type calls the exterior render route', 
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/exterior-render.webp'
+		'/api/media/test-media/exterior-render.webp'
 	);
 	const downloadLink = page.getByRole('link', { name: 'Скачать' });
 	await expect(downloadLink).toHaveAttribute('href', `/api/media/${mediaKey(2)}`);

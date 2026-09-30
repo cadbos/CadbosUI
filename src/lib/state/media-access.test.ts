@@ -18,35 +18,28 @@ import { TEST_S3_BUCKET } from '$lib/server/testing/generation-fixtures';
 import { MediaAccessState } from './media-access.svelte';
 
 describe('media access', () => {
-	it('normalizes URLs by key and clears retained references', () => {
+	it('registers each link once by key and clears on demand', () => {
 		const state = new MediaAccessState();
-		const original = state.normalize({
-			key: mediaKey(TEST_S3_BUCKET.name, 'one'),
-			url: 'https://s3.example.test/one?old'
-		});
-		const updated = state.normalize({
-			key: mediaKey(TEST_S3_BUCKET.name, 'one'),
-			url: 'https://s3.example.test/one?new'
-		});
+		const key = mediaKey(TEST_S3_BUCKET.name, 'one');
+		const original = state.normalize({ key, url: `/api/media/${key}` });
+		const repeated = state.normalize({ key, url: `/api/media/${key}` });
 
-		expect(updated).toBe(original);
-		expect(state.get(mediaKey(TEST_S3_BUCKET.name, 'one'))).toBe(original);
-		expect(original.url).toBe('https://s3.example.test/one?new');
+		expect(repeated).toBe(original);
+		expect(state.get(key)).toBe(original);
 
 		state.clear();
-		expect(original.url).toBe('');
-		expect(state.get(mediaKey(TEST_S3_BUCKET.name, 'one'))).toBeUndefined();
+		expect(state.get(key)).toBeUndefined();
 	});
 
 	it('keeps matching object names in different buckets separate', () => {
 		const state = new MediaAccessState();
 		const uploads = state.normalize({
 			key: mediaKey(TEST_S3_BUCKET.name, 'shared.webp'),
-			url: 'https://uploads.example.test/shared.webp'
+			url: `/api/media/${mediaKey(TEST_S3_BUCKET.name, 'shared.webp')}`
 		});
 		const archive = state.normalize({
 			key: 'archive/shared.webp',
-			url: 'https://archive.example.test/shared.webp'
+			url: '/api/media/archive/shared.webp'
 		});
 
 		expect(state.get(uploads.key)).toBe(uploads);

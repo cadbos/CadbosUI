@@ -42,6 +42,8 @@ declare global {
 				ARCHAI_API_KEY: string;
 				ARCHAI_API_URL: string;
 				HEALTH_CACHE_TTL_SECONDS?: string;
+				MEDIA_CACHE_TTL_SECONDS?: string;
+				RENDER_MEDIA_TTL_SECONDS?: string;
 				// VPC Service binding to the ComfyUI VPS (Cloudflare Tunnel
 				// `comfyui-equuleus` -> localhost:8188). Not a URL string — see
 				// wrangler.jsonc `vpc_services`.
@@ -51,8 +53,6 @@ declare global {
 				LIGHT_SETTINGS_COST?: string;
 				FLUX_KONTEXT_EDIT_COST?: string;
 				S3_ACCESS_KEY_ID: string;
-				S3_PRESIGNED_PROVIDER_TTL_SECONDS?: string;
-				S3_PRESIGNED_UI_TTL_SECONDS?: string;
 				S3_SECRET_ACCESS_KEY: string;
 				S3_UPLOADS_BUCKET_NAME?: string;
 				// Comma-separated Nostr pubkeys (hex) subject to the local metered

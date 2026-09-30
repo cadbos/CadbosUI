@@ -18,7 +18,7 @@ import { mediaAccess } from './media-access.svelte';
 import { resources } from './resources.svelte';
 
 function image(url: string, createdAt: number): ResourceImageRecord {
-	return { image: { key: new URL(url).pathname, url }, createdAt, roles: ['source'] };
+	return { image: { key: url.slice('/api/media/'.length), url }, createdAt, roles: ['source'] };
 }
 
 function page(images: ResourceImageRecord[], offset: number, hasMore: boolean): ResourcesResponse {
@@ -67,7 +67,7 @@ afterEach(() => {
 describe('resources pagination', () => {
 	it('loads the first resources page and exposes remaining records for loadMore', async () => {
 		const fetchMock = mockResourcesFetch([
-			page([image('https://cdn.example/one.jpg', Date.UTC(2026, 0, 1))], 0, true)
+			page([image('/api/media/test-media/one.jpg', Date.UTC(2026, 0, 1))], 0, true)
 		]);
 		vi.stubGlobal('fetch', fetchMock);
 
@@ -79,15 +79,15 @@ describe('resources pagination', () => {
 		});
 		expect(resources.status).toBe('ready');
 		expect(resources.images.map((record) => record.image.url)).toEqual([
-			'https://cdn.example/one.jpg'
+			'/api/media/test-media/one.jpg'
 		]);
 		expect(resources.hasMore).toBe(true);
 	});
 
 	it('loads the next resources page on demand', async () => {
 		const fetchMock = mockResourcesFetch([
-			page([image('https://cdn.example/one.jpg', Date.UTC(2026, 0, 1))], 0, true),
-			page([image('https://cdn.example/two.jpg', Date.UTC(2026, 0, 2))], 1, false)
+			page([image('/api/media/test-media/one.jpg', Date.UTC(2026, 0, 1))], 0, true),
+			page([image('/api/media/test-media/two.jpg', Date.UTC(2026, 0, 2))], 1, false)
 		]);
 		vi.stubGlobal('fetch', fetchMock);
 
@@ -100,8 +100,8 @@ describe('resources pagination', () => {
 		});
 		expect(resources.status).toBe('ready');
 		expect(resources.images.map((record) => record.image.url)).toEqual([
-			'https://cdn.example/one.jpg',
-			'https://cdn.example/two.jpg'
+			'/api/media/test-media/one.jpg',
+			'/api/media/test-media/two.jpg'
 		]);
 		expect(resources.hasMore).toBe(false);
 		expect(resources.loadingMore).toBe(false);
@@ -140,8 +140,8 @@ describe('resources pagination', () => {
 
 	it('asks for the chosen filter and keeps paging through it', async () => {
 		const fetchMock = mockResourcesFetch([
-			page([image('https://cdn.example/one.jpg', Date.UTC(2026, 0, 1))], 0, true),
-			page([image('https://cdn.example/two.jpg', Date.UTC(2026, 0, 2))], 1, false)
+			page([image('/api/media/test-media/one.jpg', Date.UTC(2026, 0, 1))], 0, true),
+			page([image('/api/media/test-media/two.jpg', Date.UTC(2026, 0, 2))], 1, false)
 		]);
 		vi.stubGlobal('fetch', fetchMock);
 

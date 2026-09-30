@@ -32,7 +32,6 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (!project) return apiError(404, 'project_not_found', 'Project not found');
 	const access = await mediaAccessBatch(
 		db,
-		platform,
 		project.sessions.flatMap((session) =>
 			session.generations.flatMap((generation) => [generation.mediaId, generation.sourceMediaId])
 		)

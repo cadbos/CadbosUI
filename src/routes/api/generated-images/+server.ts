@@ -67,7 +67,6 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	const page = await listGeneratedImages(db, userId, { view, projectId, sessionId }, offset, size);
 	const access = await mediaAccessBatch(
 		db,
-		platform,
 		page.images.flatMap((image) => [image.mediaId, image.sourceMediaId])
 	);
 	if (!access) return apiError(404, 'image_not_found', 'Image not found');

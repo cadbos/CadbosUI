@@ -18,7 +18,7 @@ import { expect, test } from './fixtures';
 import { media } from './helpers/media';
 import { mockResourceDetail } from './helpers/resource-routes';
 
-const resourcePhoto = media(1, 'https://cdn.example.test/resource-photo.jpg');
+const resourcePhoto = media(1, '/api/media/test-media/resource-photo.jpg');
 
 interface ResourceImage {
 	image: ReturnType<typeof media>;
@@ -108,8 +108,8 @@ test('lists uploaded photos newest first with their dates', async ({ page }) => 
 	await mockResourcesPages(page, {
 		0: {
 			images: [
-				{ image: media(2, 'https://cdn.example.test/newest.jpg'), createdAt: newest },
-				{ image: media(1, 'https://cdn.example.test/oldest.jpg'), createdAt: oldest }
+				{ image: media(2, '/api/media/test-media/newest.jpg'), createdAt: newest },
+				{ image: media(1, '/api/media/test-media/oldest.jpg'), createdAt: oldest }
 			],
 			hasMore: false
 		}
@@ -121,8 +121,8 @@ test('lists uploaded photos newest first with their dates', async ({ page }) => 
 	await expect(list).toBeVisible();
 	const images = page.getByRole('img', { name: /^Ресурс \d+$/ });
 	await expect(images).toHaveCount(2);
-	await expect(images.nth(0)).toHaveAttribute('src', 'https://cdn.example.test/newest.jpg');
-	await expect(images.nth(1)).toHaveAttribute('src', 'https://cdn.example.test/oldest.jpg');
+	await expect(images.nth(0)).toHaveAttribute('src', '/api/media/test-media/newest.jpg');
+	await expect(images.nth(1)).toHaveAttribute('src', '/api/media/test-media/oldest.jpg');
 
 	const times = page.locator('.card time');
 	await expect(times.nth(0).locator('span')).toHaveText([dateLabel(newest), timeLabel(newest)]);
@@ -131,7 +131,7 @@ test('lists uploaded photos newest first with their dates', async ({ page }) => 
 
 	await expect(page.getByRole('link', { name: 'Открыть ресурс 1' })).toHaveAttribute(
 		'href',
-		`/resources/${encodeURIComponent(media(2, 'https://cdn.example.test/newest.jpg').key)}`
+		`/resources/${encodeURIComponent(media(2, '/api/media/test-media/newest.jpg').key)}`
 	);
 });
 
@@ -139,11 +139,11 @@ test('loads more photos when scrolling near the end of the list', async ({ page 
 	await authenticate(page);
 	await mockResourcesPages(page, {
 		0: {
-			images: [{ image: media(1, 'https://cdn.example.test/one.jpg'), createdAt: 1 }],
+			images: [{ image: media(1, '/api/media/test-media/one.jpg'), createdAt: 1 }],
 			hasMore: true
 		},
 		1: {
-			images: [{ image: media(2, 'https://cdn.example.test/two.jpg'), createdAt: 2 }],
+			images: [{ image: media(2, '/api/media/test-media/two.jpg'), createdAt: 2 }],
 			hasMore: false
 		}
 	});
@@ -158,7 +158,7 @@ test('loads more photos when scrolling near the end of the list', async ({ page 
 	// removal once hasMore goes false and loses more often than not — verified
 	// against a real run, not just theory.
 	await expect(images).toHaveCount(2);
-	await expect(images.nth(1)).toHaveAttribute('src', 'https://cdn.example.test/two.jpg');
+	await expect(images.nth(1)).toHaveAttribute('src', '/api/media/test-media/two.jpg');
 	// hasMore is false after the second page, so the sentinel is gone — no
 	// further /api/resources request should ever follow.
 	await expect(page.locator('.load-more-sentinel')).toHaveCount(0);
@@ -181,12 +181,12 @@ test('filters sources and references, marks each card and keeps the filter acros
 }) => {
 	await authenticate(page);
 	const room = {
-		image: media(1, 'https://cdn.example.test/room.jpg'),
+		image: media(1, '/api/media/test-media/room.jpg'),
 		createdAt: Date.UTC(2026, 0, 1),
 		roles: ['source']
 	};
 	const chair = {
-		image: media(2, 'https://cdn.example.test/chair.png'),
+		image: media(2, '/api/media/test-media/chair.png'),
 		createdAt: Date.UTC(2026, 0, 2),
 		roles: ['object-reference']
 	};
@@ -220,7 +220,7 @@ test('filters sources and references, marks each card and keeps the filter acros
 	await expect(cards).toHaveCount(1);
 	await expect(page.getByRole('img', { name: /^Ресурс \d+$/ })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/chair.png'
+		'/api/media/test-media/chair.png'
 	);
 
 	await page.reload();
@@ -235,7 +235,7 @@ test('filters sources and references, marks each card and keeps the filter acros
 	await expect(page).toHaveURL(/\/resources\?filter=sources$/);
 	await expect(page.getByRole('img', { name: /^Ресурс \d+$/ })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/room.jpg'
+		'/api/media/test-media/room.jpg'
 	);
 
 	expect(requestedFilters).toEqual(['all', 'references', 'references', 'sources']);
@@ -291,7 +291,7 @@ test('uses a resource photo to start a new generation', async ({ page }) => {
 	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
 	await expect(page.locator('#mode-panel-render .image-wrapper img')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/resource-photo.jpg'
+		'/api/media/test-media/resource-photo.jpg'
 	);
 });
 
@@ -347,8 +347,8 @@ test('using a resource photo while a project tab is open starts project-less wor
 						generations: [
 							{
 								id: '00000000-0000-4000-8000-000000000100',
-								image: media(3, 'https://cdn.example.test/living-room.webp'),
-								source: media(2, 'https://cdn.example.test/room.jpg'),
+								image: media(3, '/api/media/test-media/living-room.webp'),
+								source: media(2, '/api/media/test-media/room.jpg'),
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 1),
 								amount: 5,
@@ -385,11 +385,11 @@ test('using a resource photo while a project tab is open starts project-less wor
 	await expect(tabs.getByRole('tab', { name: 'Living room', selected: false })).toBeVisible();
 	await expect(page.locator('#mode-panel-render .image-wrapper img')).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/resource-photo.jpg'
+		'/api/media/test-media/resource-photo.jpg'
 	);
 
 	await tabs.getByRole('tab', { name: 'Living room' }).click();
 	await expect(
 		page.locator('#mode-panel-render').getByRole('img', { name: 'Сгенерировать' })
-	).toHaveAttribute('src', 'https://cdn.example.test/living-room.webp');
+	).toHaveAttribute('src', '/api/media/test-media/living-room.webp');
 });

@@ -177,11 +177,11 @@ describe('initializeGenerationPreview', () => {
 		balanceAfter: 8.5,
 		image: {
 			key: mediaKey(TEST_S3_BUCKET.name, 'after.webp'),
-			url: 'https://example.test/after.webp'
+			url: '/api/media/test-media/after.webp'
 		},
 		source: {
 			key: mediaKey(TEST_S3_BUCKET.name, 'before.webp'),
-			url: 'https://example.test/before.webp'
+			url: '/api/media/test-media/before.webp'
 		},
 		formSnapshot: null,
 		session: {
@@ -193,11 +193,11 @@ describe('initializeGenerationPreview', () => {
 		media: [
 			{
 				key: mediaKey(TEST_S3_BUCKET.name, 'after.webp'),
-				url: 'https://example.test/after.webp'
+				url: '/api/media/test-media/after.webp'
 			},
 			{
 				key: mediaKey(TEST_S3_BUCKET.name, 'before.webp'),
-				url: 'https://example.test/before.webp'
+				url: '/api/media/test-media/before.webp'
 			}
 		]
 	};

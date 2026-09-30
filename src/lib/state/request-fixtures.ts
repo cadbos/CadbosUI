@@ -35,8 +35,8 @@ export const AC9_REFERENCE_IMAGE: ManagedImageInput = {
 	dimensions: [900, 1200]
 };
 
-export const AC9_IMAGE_URL = 'https://example.ufs.sh/f/ac9-fixture-room';
-export const AC9_REFERENCE_IMAGE_URL = 'https://example.ufs.sh/f/ac9-fixture-style-reference';
+export const AC9_IMAGE_URL = '/api/media/test-media/ac9-fixture-room';
+export const AC9_REFERENCE_IMAGE_URL = '/api/media/test-media/ac9-fixture-style-reference';
 
 export const AC9_FRAGMENTS: PromptFragment[] = [
 	{ id: AC9_FRAGMENT_IDS[0], label: 'Style', text: 'Scandinavian ', order: 0 },

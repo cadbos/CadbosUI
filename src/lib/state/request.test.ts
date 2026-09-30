@@ -661,7 +661,7 @@ describe('toRenderRequest', () => {
 		const uploadResult = {
 			image: {
 				key: mediaKey(TEST_S3_BUCKET.name, 'uploaded-room.webp'),
-				url: 'https://example.test/uploaded-room.webp'
+				url: '/api/media/test-media/uploaded-room.webp'
 			},
 			mime: 'image/webp',
 			size: 1234
@@ -745,7 +745,7 @@ describe('toRenderRequest', () => {
 				Promise.resolve({
 					image: {
 						key: mediaKey(TEST_S3_BUCKET.name, 'uploaded-room.webp'),
-						url: 'https://example.test/uploaded-room.webp'
+						url: '/api/media/test-media/uploaded-room.webp'
 					},
 					mime: 'image/webp',
 					size: 1234
@@ -2053,7 +2053,7 @@ describe('working image', () => {
 describe('renderResultFromResponse', () => {
 	const output = {
 		key: mediaKey(TEST_S3_BUCKET.name, 'out.webp'),
-		url: 'https://cdn.example.test/out.webp'
+		url: '/api/media/test-media/out.webp'
 	};
 
 	it('keeps the stored generation id the server returned', () => {

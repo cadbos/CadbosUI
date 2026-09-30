@@ -18,9 +18,7 @@ export class MediaAccessState {
 	entries = $state<Record<string, MediaAccess>>({});
 
 	normalize(access: MediaAccess): MediaAccess {
-		const current = this.entries[access.key];
-		if (current) Object.assign(current, access);
-		else this.entries[access.key] = access;
+		this.entries[access.key] ??= access;
 		return this.entries[access.key];
 	}
 
@@ -29,7 +27,6 @@ export class MediaAccessState {
 	}
 
 	clear(): void {
-		for (const access of Object.values(this.entries)) access.url = '';
 		this.entries = {};
 	}
 }

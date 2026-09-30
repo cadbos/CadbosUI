@@ -84,8 +84,8 @@ async function mockAddObjectScene(page: Page): Promise<void> {
 				images: [
 					{
 						id: ADD_OBJECT_GENERATION_ID,
-						image: media(2, 'https://cdn.example.test/added-plant.webp'),
-						source: media(1, 'https://cdn.example.test/scene.jpg'),
+						image: media(2, '/api/media/test-media/added-plant.webp'),
+						source: media(1, '/api/media/test-media/scene.jpg'),
 						kind: 'edit',
 						createdAt: Date.UTC(2026, 0, 1),
 						session: null,
@@ -109,13 +109,13 @@ async function mockAddObjectScene(page: Page): Promise<void> {
 				createdAt: Date.UTC(2026, 0, 1),
 				amount: 1.5,
 				balanceAfter: 8.5,
-				image: media(2, 'https://cdn.example.test/added-plant.webp'),
-				source: media(1, 'https://cdn.example.test/scene.jpg'),
+				image: media(2, '/api/media/test-media/added-plant.webp'),
+				source: media(1, '/api/media/test-media/scene.jpg'),
 				formSnapshot: ADD_OBJECT_FORM_SNAPSHOT,
 				session: null,
 				media: [
-					media(2, 'https://cdn.example.test/added-plant.webp'),
-					media(1, 'https://cdn.example.test/scene.jpg')
+					media(2, '/api/media/test-media/added-plant.webp'),
+					media(1, '/api/media/test-media/scene.jpg')
 				]
 			})
 		});
@@ -132,8 +132,8 @@ async function mockSingleStyleTransferScene(page: Page): Promise<void> {
 				images: [
 					{
 						id: GENERATION_ID,
-						image: media(2, 'https://cdn.example.test/result.webp'),
-						source: media(1, 'https://cdn.example.test/scene.jpg'),
+						image: media(2, '/api/media/test-media/result.webp'),
+						source: media(1, '/api/media/test-media/scene.jpg'),
 						kind: 'style-transfer',
 						createdAt: Date.UTC(2026, 0, 1),
 						session: null,
@@ -157,13 +157,13 @@ async function mockSingleStyleTransferScene(page: Page): Promise<void> {
 				createdAt: Date.UTC(2026, 0, 1),
 				amount: 1.5,
 				balanceAfter: 8.5,
-				image: media(2, 'https://cdn.example.test/result.webp'),
-				source: media(1, 'https://cdn.example.test/scene.jpg'),
+				image: media(2, '/api/media/test-media/result.webp'),
+				source: media(1, '/api/media/test-media/scene.jpg'),
 				formSnapshot: FORM_SNAPSHOT,
 				session: null,
 				media: [
-					media(2, 'https://cdn.example.test/result.webp'),
-					media(1, 'https://cdn.example.test/scene.jpg')
+					media(2, '/api/media/test-media/result.webp'),
+					media(1, '/api/media/test-media/scene.jpg')
 				]
 			})
 		});
@@ -187,7 +187,7 @@ test('restores a past generation’s exact settings from the scenes drawer', asy
 	await expect(page).toHaveURL(/\/style-transfer/);
 	await expect(
 		page.locator('#mode-panel-styleTransfer').getByRole('img', { name: 'Сгенерировать' })
-	).toHaveAttribute('src', 'https://cdn.example.test/result.webp');
+	).toHaveAttribute('src', '/api/media/test-media/result.webp');
 	await expect(page.getByLabel('Уточнение стиля')).toHaveValue('archived style note');
 });
 
@@ -260,8 +260,8 @@ async function mockSessionScene(page: Page): Promise<void> {
 				images: [
 					{
 						id: SESSION_GENERATION_ID,
-						image: media(2, 'https://cdn.example.test/render.webp'),
-						source: media(1, 'https://cdn.example.test/scene.jpg'),
+						image: media(2, '/api/media/test-media/render.webp'),
+						source: media(1, '/api/media/test-media/scene.jpg'),
 						kind: 'render',
 						createdAt: Date.UTC(2026, 0, 1),
 						session: null,
@@ -285,8 +285,8 @@ async function mockSessionScene(page: Page): Promise<void> {
 				createdAt: Date.UTC(2026, 0, 1),
 				amount: 1.5,
 				balanceAfter: 8.5,
-				image: media(2, 'https://cdn.example.test/render.webp'),
-				source: media(1, 'https://cdn.example.test/scene.jpg'),
+				image: media(2, '/api/media/test-media/render.webp'),
+				source: media(1, '/api/media/test-media/scene.jpg'),
 				formSnapshot: FORM_SNAPSHOT,
 				session: {
 					projectId: SESSION_PROJECT_ID,
@@ -295,8 +295,8 @@ async function mockSessionScene(page: Page): Promise<void> {
 					sessionTitle: 'Main thread'
 				},
 				media: [
-					media(2, 'https://cdn.example.test/render.webp'),
-					media(1, 'https://cdn.example.test/scene.jpg')
+					media(2, '/api/media/test-media/render.webp'),
+					media(1, '/api/media/test-media/scene.jpg')
 				]
 			})
 		});
@@ -335,7 +335,7 @@ test('continues the restored generation’s own session instead of starting a ne
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				output: media(3, 'https://cdn.example.test/next-render.webp'),
+				output: media(3, '/api/media/test-media/next-render.webp'),
 				cost: 5,
 				balance: 95
 			})
@@ -349,7 +349,7 @@ test('continues the restored generation’s own session instead of starting a ne
 	const renderPanel = page.locator('#mode-panel-render');
 	await expect(renderPanel.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/render.webp'
+		'/api/media/test-media/render.webp'
 	);
 
 	await Promise.all([
@@ -374,7 +374,7 @@ test('after opening a scene’s source image, each next generation continues fro
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				output: media(10 + n, `https://cdn.example.test/styled-${n}.webp`),
+				output: media(10 + n, `/api/media/test-media/styled-${n}.webp`),
 				cost: 4,
 				balance: 96 - n
 			})
@@ -433,7 +433,7 @@ test('asks before replacing unsaved work in the restored session’s background 
 }) => {
 	await authenticate(page);
 	await mockSessionScene(page);
-	const resourcePhoto = media(3, 'https://cdn.example.test/resource.jpg');
+	const resourcePhoto = media(3, '/api/media/test-media/resource.jpg');
 	await page.route('**/api/resources?**', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -495,8 +495,8 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 					createdAt: Date.UTC(2026, 0, 2),
 					amount: 1,
 					balanceAfter: 9,
-					image: media(3, 'https://cdn.example.test/kitchen-2.webp'),
-					source: media(2, 'https://cdn.example.test/kitchen-1.webp'),
+					image: media(3, '/api/media/test-media/kitchen-2.webp'),
+					source: media(2, '/api/media/test-media/kitchen-1.webp'),
 					formSnapshot: null,
 					session: kitchen,
 					media: []
@@ -513,8 +513,8 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 					? [
 							{
 								id: GENERATION_ID,
-								image: media(3, 'https://cdn.example.test/kitchen-2.webp'),
-								source: media(1, 'https://cdn.example.test/kitchen-source.jpg'),
+								image: media(3, '/api/media/test-media/kitchen-2.webp'),
+								source: media(1, '/api/media/test-media/kitchen-source.jpg'),
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 2),
 								session: kitchen,
@@ -525,8 +525,8 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 					: [
 							{
 								id: GENERATION_ID,
-								image: media(3, 'https://cdn.example.test/kitchen-2.webp'),
-								source: media(2, 'https://cdn.example.test/kitchen-1.webp'),
+								image: media(3, '/api/media/test-media/kitchen-2.webp'),
+								source: media(2, '/api/media/test-media/kitchen-1.webp'),
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 2),
 								session: kitchen,
@@ -535,8 +535,8 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 							},
 							{
 								id: ADD_OBJECT_GENERATION_ID,
-								image: media(2, 'https://cdn.example.test/kitchen-1.webp'),
-								source: media(1, 'https://cdn.example.test/kitchen-source.jpg'),
+								image: media(2, '/api/media/test-media/kitchen-1.webp'),
+								source: media(1, '/api/media/test-media/kitchen-source.jpg'),
 								kind: 'edit',
 								createdAt: Date.UTC(2026, 0, 1),
 								session: kitchen,
@@ -584,11 +584,11 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 	await expect(results.getByRole('img', { name: 'Генераций: 2' })).toHaveText('2');
 	await expect(results.getByRole('img', { name: 'Исходное изображение сцены 1' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/kitchen-source.jpg'
+		'/api/media/test-media/kitchen-source.jpg'
 	);
 	await expect(results.getByRole('img', { name: 'Результат сцены 1' })).toHaveAttribute(
 		'src',
-		'https://cdn.example.test/kitchen-2.webp'
+		'/api/media/test-media/kitchen-2.webp'
 	);
 	await expect(drawer.getByRole('button', { name: /Показать промпт/ })).toHaveCount(0);
 	await expect(drawer.getByRole('button', { name: /Удалить сцену/ })).toHaveCount(0);

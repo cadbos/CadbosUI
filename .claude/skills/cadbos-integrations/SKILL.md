@@ -17,7 +17,7 @@ All provider secrets are **server-only** (see `cadbos-conventions`). Use
   + `routes/api/render/+server.ts`). The API key is injected server-side, never
   sent to the client.
 - JSON body `{ image, prompt, outputFormat }`:
-  - `image` — **public URL** from the upload step (base64 not supported).
+  - `image` — presigned S3 URL of the uploaded image, valid for `RENDER_MEDIA_TTL_SECONDS` (base64 not supported). The UI never receives it; it reads images via `/api/media`.
   - `prompt` — final free-text prompt, sent **as is** (no forced language / post-processing).
   - `outputFormat` — enum `webp|jpg|png|avif` (UI default `webp`).
 - **Synchronous** call → show a "generating" state with a timeout (default 120s,
@@ -50,5 +50,5 @@ All provider secrets are **server-only** (see `cadbos-conventions`). Use
 
 ## Out of scope
 
-Aggregator LLM/image models, streaming, multi-image input, private+signed upload
-URLs, server-side history/settings.
+Aggregator LLM/image models, streaming, multi-image input, server-side
+history/settings.
