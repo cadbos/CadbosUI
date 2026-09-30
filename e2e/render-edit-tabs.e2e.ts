@@ -1057,8 +1057,8 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	// one current image, and it's now the just-generated render.
 	await expect(page.locator('#mode-panel-render input[type="file"]')).toHaveCount(0);
 
-	const undoButton = page.getByRole('button', { name: 'Отменить' });
-	const redoButton = page.getByRole('button', { name: 'Повторить' });
+	const undoButton = page.getByRole('button', { name: 'Предыдущая генерация' });
+	const redoButton = page.getByRole('button', { name: 'Следующая генерация' });
 	const compareButton = page.getByRole('button', { name: 'Сравнить до/после' });
 	const upscaleButton = page.getByRole('button', { name: 'Улучшить до 4K' });
 
@@ -1166,8 +1166,8 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 	await expect(resultImage).toHaveAttribute('src', 'https://cdn.example.test/render-1.webp');
 	expect(renderBodies.map(({ imageKey }) => imageKey)).toEqual([mediaKey(1)]);
 
-	const undoButton = page.getByRole('button', { name: 'Отменить' });
-	const redoButton = page.getByRole('button', { name: 'Повторить' });
+	const undoButton = page.getByRole('button', { name: 'Предыдущая генерация' });
+	const redoButton = page.getByRole('button', { name: 'Следующая генерация' });
 	// The originally uploaded photo is itself the root history step, so undo
 	// is already enabled right after the very first generation.
 	await expect(undoButton).toBeEnabled();
@@ -1310,8 +1310,8 @@ test('undo/redo across different edit tools restores both the settings and the a
 	const addObjectTab = page.getByRole('tab', { name: 'Добавить объект' });
 	const instructionField = page.getByLabel('Инструкция для правки');
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
-	const undoButton = page.getByRole('button', { name: 'Отменить' });
-	const redoButton = page.getByRole('button', { name: 'Повторить' });
+	const undoButton = page.getByRole('button', { name: 'Предыдущая генерация' });
+	const redoButton = page.getByRole('button', { name: 'Следующая генерация' });
 
 	await instructionField.fill('сделай стены голубыми');
 	await page.getByRole('button', { name: 'Применить правку' }).click();
@@ -1448,7 +1448,7 @@ test('undo restores the object-replacement tool tab and its settings after switc
 		.getByLabel(/Точно опишите существующий объект/);
 	const instructionField = page.getByLabel('Инструкция для правки');
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
-	const undoButton = page.getByRole('button', { name: 'Отменить' });
+	const undoButton = page.getByRole('button', { name: 'Предыдущая генерация' });
 
 	await objectField.fill('серый диван у окна');
 	await page.getByRole('button', { name: 'Заменить объект' }).click();

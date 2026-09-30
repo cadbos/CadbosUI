@@ -243,7 +243,7 @@ test('a duplicated tab reopens the result a fresh generation just produced', asy
 test('a duplicated tab reopens the original photo when undo went back to it', async ({ page }) => {
 	await generateFromUpload(page);
 	const renderPanel = page.locator('#mode-panel-render');
-	await renderPanel.getByRole('button', { name: ru['toolbar.undo'] }).click();
+	await renderPanel.getByRole('button', { name: ru['toolbar.previousGeneration'] }).click();
 	await expect(page).toHaveURL(new RegExp(`generation=${E2E_GENERATION_ID}&step=before`));
 
 	await duplicateTab(page);
@@ -253,7 +253,7 @@ test('a duplicated tab reopens the original photo when undo went back to it', as
 		'src',
 		BEFORE_URL
 	);
-	await renderPanel.getByRole('button', { name: ru['toolbar.redo'] }).click();
+	await renderPanel.getByRole('button', { name: ru['toolbar.nextGeneration'] }).click();
 	await expectGenerationOnScreen(page);
 	await expect(page).not.toHaveURL(/step=/);
 });
