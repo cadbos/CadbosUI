@@ -187,7 +187,7 @@ before the Change Date. See LICENSE for complete terms.
 		object-fit: contain;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-sm);
-		background: var(--color-surface);
+		background: #fff;
 		flex: 0 0 auto;
 	}
 
