@@ -148,7 +148,7 @@ before the Change Date. See LICENSE for complete terms.
 				<span class="toolbar-sep" aria-hidden="true"></span>
 
 				<a
-					href={resolve('/api/download/[bucket]/[...filename]', {
+					href={resolve('/api/media/[bucket]/[...filename]', {
 						bucket: render.outputKey.slice(0, render.outputKey.indexOf('/')),
 						filename: render.outputKey.slice(render.outputKey.indexOf('/') + 1)
 					})}
