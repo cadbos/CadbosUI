@@ -15,7 +15,8 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { Trash2 } from '@lucide/svelte';
 	import { resolve } from '$app/paths';
-	import type { ProjectRecord } from '$lib/api/contract';
+	import type { ProjectSummaryRecord } from '$lib/api/contract';
+	import ProjectStats from '$lib/components/ProjectStats.svelte';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 	import { projects } from '$lib/state/projects.svelte';
 	import { logBoundaryError } from '$lib/utils';
@@ -23,7 +24,7 @@ before the Change Date. See LICENSE for complete terms.
 	let loadMoreSentinel = $state<HTMLElement | null>(null);
 	let newTitle = $state('');
 	let createError = $state<string | null>(null);
-	let deleteTarget = $state<ProjectRecord | null>(null);
+	let deleteTarget = $state<ProjectSummaryRecord | null>(null);
 	let deleteError = $state<string | null>(null);
 
 	function openModal(dialog: HTMLDialogElement): () => void {
@@ -33,7 +34,7 @@ before the Change Date. See LICENSE for complete terms.
 		};
 	}
 
-	function requestDelete(project: ProjectRecord): void {
+	function requestDelete(project: ProjectSummaryRecord): void {
 		deleteError = null;
 		deleteTarget = project;
 	}
@@ -155,6 +156,10 @@ before the Change Date. See LICENSE for complete terms.
 							aria-label={ti('projects.openAria', { title: project.title })}
 						>
 							<span class="card-title">{project.title}</span>
+							<ProjectStats
+								sessionCount={project.sessionCount}
+								generationCount={project.generationCount}
+							/>
 							<span class="card-updated"
 								>{ti('projects.updatedAt', {
 									date: formatUpdatedAt(project.updatedAt)

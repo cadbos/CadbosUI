@@ -19,6 +19,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { page } from '$app/state';
 	import type { ProjectSessionRecord } from '$lib/api/contract';
 	import ProjectSessionCard from '$lib/components/ProjectSessionCard.svelte';
+	import ProjectStats from '$lib/components/ProjectStats.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { projectDetail } from '$lib/state/project-detail.svelte';
 	import { projectShare } from '$lib/state/project-share.svelte';
@@ -33,6 +34,10 @@ before the Change Date. See LICENSE for complete terms.
 	import { logBoundaryError, openModal } from '$lib/utils';
 
 	const projectId = $derived(page.params.id);
+	const generationCount = $derived(
+		projectDetail.project?.sessions.reduce((sum, session) => sum + session.generations.length, 0) ??
+			0
+	);
 
 	// Overridable derived (Svelte 5.25+ "optimistic UI" pattern): reassigning
 	// titleDraft as the user types locally overrides it, but it snaps back to
@@ -252,6 +257,7 @@ before the Change Date. See LICENSE for complete terms.
 				{#if renameError}
 					<p class="status error" role="alert">{renameError}</p>
 				{/if}
+				<ProjectStats sessionCount={project.sessions.length} {generationCount} />
 			</header>
 
 			<section class="sessions-section" aria-labelledby="sessions-title">
@@ -468,6 +474,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	.error {
 		color: var(--color-danger);
+	}
+
+	.project-header {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
 	}
 
 	.header-row {

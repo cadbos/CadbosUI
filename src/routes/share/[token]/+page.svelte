@@ -21,11 +21,15 @@ before the Change Date. See LICENSE for complete terms.
 		PublicFormSnapshot,
 		ShareGenerationDetailResponse
 	} from '$lib/api/contract';
+	import ProjectStats from '$lib/components/ProjectStats.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 	import { shareViewer } from '$lib/state/share-viewer.svelte';
 
 	const token = $derived(page.params.token);
+	const generationCount = $derived(
+		shareViewer.project?.sessions.reduce((sum, session) => sum + session.generations.length, 0) ?? 0
+	);
 
 	const OUTPUT_FORMAT_LABELS: Record<PublicFormSnapshot['outputFormat'], string> = {
 		webp: 'WebP',
@@ -194,6 +198,7 @@ before the Change Date. See LICENSE for complete terms.
 		<section class="share-shell">
 			<header class="share-header">
 				<h1 id="share-title">{project.title}</h1>
+				<ProjectStats sessionCount={project.sessions.length} {generationCount} />
 			</header>
 
 			{#if project.sessions.length === 0}
@@ -210,6 +215,9 @@ before the Change Date. See LICENSE for complete terms.
 										>{ti('share.sessionForkedFrom', { title: forkedFrom })}</span
 									>
 								{/if}
+								<span class="session-generations"
+									>{ti('share.sessionGenerationCount', { count: session.generations.length })}</span
+								>
 								<span class="session-updated"
 									>{ti('share.sessionUpdatedAt', { date: formatDate(session.updatedAt) })}</span
 								>
@@ -310,6 +318,12 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: var(--shadow);
 	}
 
+	.share-header {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
 	.share-header h1 {
 		margin: 0;
 		color: var(--color-text);
@@ -360,6 +374,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.session-forked,
+	.session-generations,
 	.session-updated {
 		color: var(--color-muted);
 		font-size: 0.75rem;
