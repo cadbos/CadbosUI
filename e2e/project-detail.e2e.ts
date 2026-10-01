@@ -110,6 +110,42 @@ test('loads a project with its sessions, showing fork lineage', async ({ page })
 	await expect(page.getByText('Форкнута от «Main thread»')).toBeVisible();
 });
 
+test('shows the project’s session and generation counts, and each session’s own', async ({
+	page
+}) => {
+	await authenticate(page);
+	const generation = (id: string, mediaId: number): SessionFixture['generations'][number] => ({
+		id,
+		image: media(mediaId, `/api/media/test-media/render-${mediaId}.webp`),
+		source: media(1, '/api/media/test-media/room.jpg'),
+		kind: 'render',
+		createdAt: Date.UTC(2026, 0, 1),
+		amount: 5,
+		balanceAfter: 95
+	});
+	await mockProjectDetail(page, {
+		sessions: [
+			session({
+				title: 'Main thread',
+				generations: [
+					generation('00000000-0000-4000-8000-000000000101', 3),
+					generation('00000000-0000-4000-8000-000000000100', 2)
+				]
+			}),
+			session({ id: '00000000-0000-4000-8000-000000000011', title: 'Empty branch' })
+		]
+	});
+
+	await page.goto(`/projects/${PROJECT_ID}`);
+
+	const header = page.locator('header.project-header');
+	await expect(header).toContainText('Сессий: 2');
+	await expect(header).toContainText('Генераций: 2');
+	const cards = page.locator('li.session-card');
+	await expect(cards.nth(0)).toContainText('Генераций: 2');
+	await expect(cards.nth(1)).toContainText('Генераций: 0');
+});
+
 test('renames the project inline', async ({ page }) => {
 	await authenticate(page);
 	await mockProjectDetail(page);

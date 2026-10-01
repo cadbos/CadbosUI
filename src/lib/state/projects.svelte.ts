@@ -13,7 +13,7 @@
  */
 
 import { z } from 'zod';
-import type { ProjectRecord } from '$lib/api/contract';
+import type { ProjectRecord, ProjectSummaryRecord } from '$lib/api/contract';
 
 export type ProjectsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -26,8 +26,13 @@ const projectRecordSchema = z.object({
 	updatedAt: z.number().int().min(0)
 });
 
+const projectSummaryRecordSchema = projectRecordSchema.extend({
+	sessionCount: z.number().int().min(0),
+	generationCount: z.number().int().min(0)
+});
+
 const projectsResponseSchema = z.object({
-	projects: z.array(projectRecordSchema),
+	projects: z.array(projectSummaryRecordSchema),
 	pagination: z.object({
 		offset: z.number().int().min(0),
 		size: z.number().int().min(1),
@@ -57,7 +62,7 @@ export class ProjectArchiveError extends Error {
 }
 
 class ProjectsState {
-	projects = $state.raw<ProjectRecord[]>([]);
+	projects = $state.raw<ProjectSummaryRecord[]>([]);
 	status = $state<ProjectsStatus>('idle');
 	error = $state<string | null>(null);
 	hasMore = $state(false);
@@ -131,8 +136,8 @@ class ProjectsState {
 
 	// Creates a project on the server and appends it to the in-memory list —
 	// listProjects orders by updated_at ASC, and a freshly created project is
-	// always the most recently updated one, so this matches what a reload
-	// would show without an extra round-trip.
+	// always the most recently updated one with no sessions yet, so this
+	// matches what a reload would show without an extra round-trip.
 	async create(title: string): Promise<ProjectRecord> {
 		const generation = this.#generation;
 		this.creating = true;
@@ -147,7 +152,9 @@ class ProjectsState {
 			const parsed = projectRecordSchema.safeParse(await response.json().catch(() => null));
 			if (!parsed.success) throw new ProjectCreateError('project creation response invalid');
 
-			if (this.#generation === generation) this.projects = [...this.projects, parsed.data];
+			if (this.#generation === generation) {
+				this.projects = [...this.projects, { ...parsed.data, sessionCount: 0, generationCount: 0 }];
+			}
 			return parsed.data;
 		} finally {
 			if (this.#generation === generation) this.creating = false;

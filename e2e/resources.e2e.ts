@@ -318,7 +318,9 @@ test('using a resource photo while a project tab is open starts project-less wor
 						id: projectId,
 						title: 'Living room',
 						createdAt: Date.UTC(2026, 0, 1),
-						updatedAt: Date.UTC(2026, 0, 1)
+						updatedAt: Date.UTC(2026, 0, 1),
+						sessionCount: 1,
+						generationCount: 0
 					}
 				],
 				pagination: { offset: 0, size: 20, hasMore: false }

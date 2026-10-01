@@ -97,6 +97,9 @@ test('shows a shared project read-only, without auth, with no editing controls',
 	await expect(page).toHaveTitle('Living room');
 	await expect(page.getByRole('heading', { name: 'Living room' })).toBeVisible();
 	await expect(page.getByText('Main thread')).toBeVisible();
+	await expect(page.locator('header.share-header').getByText('Сессий: 1')).toBeVisible();
+	await expect(page.locator('header.share-header').getByText('Генераций: 2')).toBeVisible();
+	await expect(page.locator('li.session-card').getByText('Генераций: 2')).toBeVisible();
 
 	// Every generation in the session is shown, not just the latest one — a
 	// share link is meant as a full, read-only demonstration of the project.

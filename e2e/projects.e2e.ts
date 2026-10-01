@@ -23,6 +23,11 @@ interface ProjectRecord {
 	updatedAt: number;
 }
 
+interface ProjectSummaryRecord extends ProjectRecord {
+	sessionCount: number;
+	generationCount: number;
+}
+
 async function authenticate(page: Page): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
 		await route.fulfill({
@@ -42,7 +47,7 @@ async function authenticate(page: Page): Promise<void> {
 	});
 }
 
-async function mockProjectsList(page: Page, projects: ProjectRecord[]): Promise<void> {
+async function mockProjectsList(page: Page, projects: ProjectSummaryRecord[]): Promise<void> {
 	await page.route('**/api/projects?**', async (route) => {
 		if (route.request().method() !== 'GET') return route.fallback();
 		await route.fulfill({
@@ -74,20 +79,24 @@ test('navigates from the workspace to the projects list', async ({ page }) => {
 	await expect(page.getByRole('heading', { name: 'Проекты' })).toBeVisible();
 });
 
-test('lists projects, oldest first, with their dates', async ({ page }) => {
+test('lists projects, oldest first, with their stats and dates', async ({ page }) => {
 	await authenticate(page);
 	await mockProjectsList(page, [
 		{
 			id: '00000000-0000-4000-8000-000000000002',
 			title: 'Kitchen',
 			createdAt: Date.UTC(2026, 0, 1),
-			updatedAt: Date.UTC(2026, 0, 2)
+			updatedAt: Date.UTC(2026, 0, 2),
+			sessionCount: 3,
+			generationCount: 12
 		},
 		{
 			id: '00000000-0000-4000-8000-000000000001',
 			title: 'Living room',
 			createdAt: Date.UTC(2026, 0, 1),
-			updatedAt: Date.UTC(2026, 0, 3)
+			updatedAt: Date.UTC(2026, 0, 3),
+			sessionCount: 0,
+			generationCount: 0
 		}
 	]);
 
@@ -98,7 +107,11 @@ test('lists projects, oldest first, with their dates', async ({ page }) => {
 	const links = page.getByRole('link', { name: /Открыть проект/ });
 	await expect(links).toHaveCount(2);
 	await expect(links.nth(0)).toContainText('Kitchen');
+	await expect(links.nth(0)).toContainText('Сессий: 3');
+	await expect(links.nth(0)).toContainText('Генераций: 12');
 	await expect(links.nth(1)).toContainText('Living room');
+	await expect(links.nth(1)).toContainText('Сессий: 0');
+	await expect(links.nth(1)).toContainText('Генераций: 0');
 });
 
 test('shows an empty state when there are no projects', async ({ page }) => {
@@ -152,7 +165,10 @@ test('creates a project from the list page and navigates into it', async ({ page
 	await page.getByLabel('Название нового проекта').fill('New living room');
 	await page.getByRole('button', { name: 'Создать проект' }).click();
 
-	await expect(page.getByRole('link', { name: /Открыть проект New living room/ })).toBeVisible();
+	const createdLink = page.getByRole('link', { name: /Открыть проект New living room/ });
+	await expect(createdLink).toBeVisible();
+	await expect(createdLink).toContainText('Сессий: 0');
+	await expect(createdLink).toContainText('Генераций: 0');
 
 	await page.getByRole('link', { name: /Открыть проект New living room/ }).click();
 	await expect(page).toHaveURL(new RegExp(`/projects/${created.id}$`));
@@ -160,11 +176,13 @@ test('creates a project from the list page and navigates into it', async ({ page
 
 test('deletes a project after confirming, and removes it from the list', async ({ page }) => {
 	await authenticate(page);
-	const project: ProjectRecord = {
+	const project: ProjectSummaryRecord = {
 		id: '00000000-0000-4000-8000-000000000001',
 		title: 'Living room',
 		createdAt: Date.UTC(2026, 0, 1),
-		updatedAt: Date.UTC(2026, 0, 1)
+		updatedAt: Date.UTC(2026, 0, 1),
+		sessionCount: 0,
+		generationCount: 0
 	};
 	await mockProjectsList(page, [project]);
 	let deleteCalled = false;
@@ -189,11 +207,13 @@ test('deletes a project after confirming, and removes it from the list', async (
 
 test('cancelling the delete confirmation keeps the project', async ({ page }) => {
 	await authenticate(page);
-	const project: ProjectRecord = {
+	const project: ProjectSummaryRecord = {
 		id: '00000000-0000-4000-8000-000000000001',
 		title: 'Living room',
 		createdAt: Date.UTC(2026, 0, 1),
-		updatedAt: Date.UTC(2026, 0, 1)
+		updatedAt: Date.UTC(2026, 0, 1),
+		sessionCount: 0,
+		generationCount: 0
 	};
 	await mockProjectsList(page, [project]);
 

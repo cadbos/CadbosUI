@@ -408,6 +408,8 @@ export const ru = {
 	'projects.listLabel': 'Проекты, сначала старые',
 	'projects.updatedAt': 'Обновлён {date}',
 	'projects.openAria': 'Открыть проект {title}',
+	'projects.stats.sessions': 'Сессий: {count}',
+	'projects.stats.generations': 'Генераций: {count}',
 	'projects.deleteButtonAria': 'Удалить проект {title}',
 	'projects.deleteConfirmTitle': 'Удалить этот проект?',
 	'projects.deleteConfirmDescription':

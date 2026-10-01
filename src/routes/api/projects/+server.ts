@@ -15,7 +15,7 @@
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
-import type { ProjectRecord, ProjectsResponse } from '$lib/api/contract';
+import type { ProjectRecord, ProjectSummaryRecord, ProjectsResponse } from '$lib/api/contract';
 import { apiError, createProjectRequestSchema, parseBody } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { getUserIdByPubkey } from '$lib/server/billing';
@@ -48,11 +48,13 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	const page = await listProjects(db, userId, parsed.data.offset, parsed.data.size);
 	return json({
 		projects: page.projects.map(
-			(project): ProjectRecord => ({
+			(project): ProjectSummaryRecord => ({
 				id: project.id,
 				title: project.title,
 				createdAt: project.createdAt,
-				updatedAt: project.updatedAt
+				updatedAt: project.updatedAt,
+				sessionCount: project.sessionCount,
+				generationCount: project.generationCount
 			})
 		),
 		pagination: {

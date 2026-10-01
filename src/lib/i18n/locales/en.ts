@@ -407,6 +407,8 @@ export const en = {
 	'projects.listLabel': 'Projects, oldest first',
 	'projects.updatedAt': 'Updated {date}',
 	'projects.openAria': 'Open project {title}',
+	'projects.stats.sessions': 'Sessions: {count}',
+	'projects.stats.generations': 'Generations: {count}',
 	'projects.deleteButtonAria': 'Delete project {title}',
 	'projects.deleteConfirmTitle': 'Delete this project?',
 	'projects.deleteConfirmDescription':

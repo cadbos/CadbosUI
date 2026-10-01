@@ -717,8 +717,15 @@ export interface ProjectRecord {
 	updatedAt: number;
 }
 
+// A /projects card. The counts cover only what the project page shows:
+// archived sessions and their generations are not counted.
+export interface ProjectSummaryRecord extends ProjectRecord {
+	sessionCount: number;
+	generationCount: number;
+}
+
 export interface ProjectsResponse {
-	projects: ProjectRecord[];
+	projects: ProjectSummaryRecord[];
 	pagination: {
 		offset: number;
 		size: number;

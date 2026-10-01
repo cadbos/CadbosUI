@@ -390,6 +390,8 @@ export interface Dictionary {
 	'projects.listLabel': string;
 	'projects.updatedAt': string;
 	'projects.openAria': string;
+	'projects.stats.sessions': string;
+	'projects.stats.generations': string;
 	'projects.deleteButtonAria': string;
 	'projects.deleteConfirmTitle': string;
 	'projects.deleteConfirmDescription': string;

@@ -93,6 +93,50 @@ describe('projects repository', () => {
 		expect(page.hasMore).toBe(true);
 	});
 
+	it('counts live sessions and their generations per project without fan-out', async () => {
+		const project = await createProject(db, 'user-1', 'Living room');
+		const empty = await createProject(db, 'user-1', 'Kitchen');
+		const main = await createSession(db, 'user-1', project.id, 'Main thread');
+		const branch = await createSession(db, 'user-1', project.id, 'Branch');
+		const archived = await createSession(db, 'user-1', project.id, 'Archived');
+		const foreign = await createProject(db, 'user-2', 'Foreign');
+		const foreignSession = await createSession(db, 'user-2', foreign.id, 'Foreign thread');
+		if (!main || !branch || !archived || !foreignSession) {
+			throw new Error('createSession returned null for a valid owner/project');
+		}
+		const now = Date.now();
+		seedGeneration(db, 'gen-1', 'user-1', main.id, now);
+		seedGeneration(db, 'gen-2', 'user-1', main.id, now + 1);
+		seedGeneration(db, 'gen-3', 'user-1', branch.id, now + 2);
+		seedGeneration(db, 'gen-archived', 'user-1', archived.id, now + 3);
+		seedGeneration(db, 'gen-foreign', 'user-2', foreignSession.id, now + 4);
+		seedGenerationFixture(db, {
+			id: 'gen-unknown-kind',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/gen-unknown-kind.webp',
+			sourceUrl: 'https://cdn.example.test/source.jpg',
+			createdAt: now + 5,
+			sessionId: branch.id,
+			kind: 'unknown'
+		});
+		await archiveSession(db, 'user-1', archived.id);
+
+		const page = await listProjects(db, 'user-1', 0, 10);
+		const counts = new Map(
+			page.projects.map((record) => [
+				record.id,
+				{ sessionCount: record.sessionCount, generationCount: record.generationCount }
+			])
+		);
+
+		expect(counts).toEqual(
+			new Map([
+				[project.id, { sessionCount: 2, generationCount: 3 }],
+				[empty.id, { sessionCount: 0, generationCount: 0 }]
+			])
+		);
+	});
+
 	it('renames only when owned, returns null otherwise', async () => {
 		const project = await createProject(db, 'user-1', 'Living room');
 
