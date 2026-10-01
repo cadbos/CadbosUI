@@ -63,7 +63,7 @@ function setWorkflowInput(
 function lightSettingsWorkflow(scene: ComfyImageDescriptor, instruction: string): ComfyWorkflow {
 	const workflow = structuredClone(workflowTemplate) as ComfyWorkflow;
 	setWorkflowInput(workflow, '1', 'LoadImage', 'image', uploadedImagePath(scene));
-	setWorkflowInput(workflow, '19', 'PrimitiveString', 'value', instruction);
+	setWorkflowInput(workflow, '149:150', 'PrimitiveStringMultiline', 'value', instruction);
 	const outputNode = workflow[FINAL_OUTPUT_NODE_ID];
 	if (!outputNode || outputNode.class_type !== 'SaveImage') {
 		throw new ComfyUiError('invalid_configuration', 'workflow', 'Invalid light settings workflow');

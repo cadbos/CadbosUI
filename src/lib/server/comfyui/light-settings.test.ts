@@ -108,10 +108,10 @@ describe('runLightSettings', () => {
 		const queuedWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
 		const expectedWorkflow = structuredClone(workflowTemplate) as ComfyWorkflow;
 		expectedWorkflow['1'].inputs.image = 'cadbos/jobs/scene (1).png';
-		expectedWorkflow['19'].inputs.value = 'зажги бра над кроватью';
+		expectedWorkflow['149:150'].inputs.value = 'зажги бра над кроватью';
 		expect(queuedWorkflow).toEqual(expectedWorkflow);
-		expect(workflowTemplate['1'].inputs.image).toBe('FluxKontext_edit_00151_.png');
-		expect(workflowTemplate['19'].inputs.value).toBe('выключи люстру');
+		expect(workflowTemplate['1'].inputs.image).toBe('s1_dark_chandelier_001.jpg');
+		expect(workflowTemplate['149:150'].inputs.value).toBe('зажги люстру');
 		expect(queuedWorkflow?.['17'].class_type).toBe('SaveImage');
 		expect(client.waitForCompletion).toHaveBeenCalledWith('prompt-1', {
 			pollIntervalMs: 25,
@@ -145,9 +145,14 @@ describe('runLightSettings', () => {
 		const secondWorkflow = vi.mocked(client.queueWorkflow).mock.calls[1]?.[0];
 		expect(firstWorkflow).not.toBe(secondWorkflow);
 		expect(firstWorkflow?.['1'].inputs.image).toBe('cadbos/jobs/scene (1).png');
-		expect(firstWorkflow?.['19'].inputs.value).toBe('выключи все светильники');
+		expect(firstWorkflow?.['149:150'].inputs.value).toBe('выключи все светильники');
 		expect(secondWorkflow?.['1'].inputs.image).toBe('cadbos/jobs/second-scene.png');
-		expect(secondWorkflow?.['19'].inputs.value).toBe('зажги торшер');
+		expect(secondWorkflow?.['149:150'].inputs.value).toBe('зажги торшер');
+	});
+
+	it('feeds the instruction node to both intent parsing and translation', () => {
+		expect(workflowTemplate['69'].inputs.instruction).toEqual(['149:150', 0]);
+		expect(workflowTemplate['149:151'].inputs.string_b).toEqual(['149:150', 0]);
 	});
 
 	it('fails when the completed workflow has no final node 17 image', async () => {
