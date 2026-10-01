@@ -1381,20 +1381,22 @@ before the Change Date. See LICENSE for complete terms.
 		min-width: 0;
 	}
 
+	/* The photo itself carries the rounded corners: the frame hugs it exactly
+	   rather than letterboxing it inside a bordered box. Until a lazy image
+	   loads, `auto 16 / 9` holds a placeholder of a typical shape, then gives
+	   way to the photo's own proportions. */
 	.image-frame {
 		position: relative;
-		aspect-ratio: 16 / 9;
 		overflow: hidden;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius);
 		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
 	}
 
 	.image-frame img {
 		display: block;
 		width: 100%;
-		height: 100%;
-		object-fit: contain;
+		height: auto;
+		aspect-ratio: auto 16 / 9;
 	}
 
 	.flow-kind {
