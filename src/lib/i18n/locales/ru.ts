@@ -214,6 +214,7 @@ export const ru = {
 	'generatedImages.confirmDeleteConfirm': 'Удалить',
 	'generatedImages.confirmDeleteDeleting': 'Удаление…',
 	'generatedImages.resizeHandle': 'Изменить ширину панели сцен',
+	'generatedImages.sizePreset': 'Изменить размер панели сцен',
 	'generatedImages.restore': 'Восстановить настройки сцены {order}',
 	'generatedImages.restoreFailed': 'Не удалось восстановить настройки сцены.',
 	'generatedImages.confirmRestoreTitle': 'Восстановить настройки?',

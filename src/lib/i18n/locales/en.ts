@@ -213,6 +213,7 @@ export const en = {
 	'generatedImages.confirmDeleteConfirm': 'Delete',
 	'generatedImages.confirmDeleteDeleting': 'Deleting…',
 	'generatedImages.resizeHandle': 'Resize the scenes panel',
+	'generatedImages.sizePreset': 'Change the scenes panel size',
 	'generatedImages.restore': 'Restore settings from scene {order}',
 	'generatedImages.restoreFailed': 'Could not restore the scene’s settings.',
 	'generatedImages.confirmRestoreTitle': 'Restore settings?',

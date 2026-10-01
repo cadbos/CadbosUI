@@ -14,6 +14,7 @@
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { page as browserPage } from 'vitest/browser';
 import type { GeneratedImagesResponse, SceneRecord } from '$lib/api/contract';
 import { setLocale, type Locale } from '$lib/i18n/index.svelte';
 import { generatedImages } from '$lib/state/generated-images.svelte';
@@ -247,4 +248,32 @@ it('switches to milestones, showing the iteration count and no prompt or delete 
 	await expect
 		.element(screen.getByRole('button', { name: 'Удалить сцену 1' }))
 		.not.toBeInTheDocument();
+});
+
+it('cycles the scenes panel through small, medium and large widths from the size button', async () => {
+	// The size button only exists on desktop, where the drawer isn't fullscreen.
+	await browserPage.viewport(1320, 900);
+	localStorage.removeItem('cadbos.scenesDrawer.width.v1');
+	generatedImages.status = 'ready';
+	generatedImages.images = [image('sample', 1000)];
+
+	const screen = render(ScenesDrawer, { open: true, onClose: vi.fn() });
+	const drawer = (): HTMLElement | null => document.querySelector('#scenes-drawer');
+	const resizedWidth = (): string | undefined =>
+		drawer()?.style.getPropertyValue('--drawer-resized-width');
+	await vi.waitFor(() => expect(drawer()?.getBoundingClientRect().left).toBe(0));
+
+	const sizeButton = screen.getByRole('button', { name: 'Изменить размер панели сцен' });
+	// Presets sit at a quarter, half and three quarters of the way from the
+	// 320px minimum to the 1320px viewport; the default 736px width steps up
+	// to the next one, and the largest wraps back to the smallest.
+	await sizeButton.click();
+	expect(resizedWidth()).toBe('820px');
+	await sizeButton.click();
+	expect(resizedWidth()).toBe('1070px');
+	await sizeButton.click();
+	expect(resizedWidth()).toBe('570px');
+
+	localStorage.removeItem('cadbos.scenesDrawer.width.v1');
+	await browserPage.viewport(414, 896);
 });

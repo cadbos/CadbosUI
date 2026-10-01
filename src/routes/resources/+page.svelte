@@ -22,6 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 		type ResourceFilter,
 		type ResourceImageRecord
 	} from '$lib/api/contract';
+	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { resourceRoleLabels } from '$lib/resource-roles';
 	import { resources } from '$lib/state/resources.svelte';
@@ -105,11 +106,7 @@ before the Change Date. See LICENSE for complete terms.
 
 {#snippet cardContent(image: ResourceImageRecord, index: number)}
 	<span class="image-frame">
-		<img
-			src={image.image.url}
-			alt={ti('resources.imageAlt', { order: index + 1 })}
-			loading="lazy"
-		/>
+		<BlurFillImage src={image.image.url} alt={ti('resources.imageAlt', { order: index + 1 })} />
 	</span>
 	<span class="card-footer">
 		<span class="roles" id={`resource-roles-${index}`}>
@@ -341,13 +338,6 @@ before the Change Date. See LICENSE for complete terms.
 		aspect-ratio: 4 / 3;
 		overflow: hidden;
 		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
-	}
-
-	.image-frame img {
-		display: block;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
 	}
 
 	.card-footer {
