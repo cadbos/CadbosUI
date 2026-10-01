@@ -21,7 +21,6 @@ before the Change Date. See LICENSE for complete terms.
 	import { projects } from '$lib/state/projects.svelte';
 	import { logBoundaryError } from '$lib/utils';
 
-	let loadMoreSentinel = $state<HTMLElement | null>(null);
 	let newTitle = $state('');
 	let createError = $state<string | null>(null);
 	let deleteTarget = $state<ProjectSummaryRecord | null>(null);
@@ -60,10 +59,7 @@ before the Change Date. See LICENSE for complete terms.
 		return () => projects.clear();
 	});
 
-	$effect(() => {
-		const sentinel = loadMoreSentinel;
-		if (!sentinel) return;
-
+	function loadMoreWhenVisible(sentinel: HTMLElement): () => void {
 		let intersecting = false;
 
 		async function maybeLoadMore(): Promise<void> {
@@ -86,7 +82,7 @@ before the Change Date. See LICENSE for complete terms.
 		observer.observe(sentinel);
 
 		return () => observer.disconnect();
-	});
+	}
 
 	function formatUpdatedAt(updatedAt: number): string {
 		return new Intl.DateTimeFormat(getLocale(), {
@@ -180,7 +176,7 @@ before the Change Date. See LICENSE for complete terms.
 			</ul>
 
 			{#if projects.hasMore}
-				<div bind:this={loadMoreSentinel} class="load-more-sentinel">
+				<div {@attach loadMoreWhenVisible} class="load-more-sentinel">
 					{#if projects.loadingMore}
 						<p class="status" aria-live="polite">{t('projects.loadingMore')}</p>
 					{/if}

@@ -23,7 +23,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	let { data }: PageProps = $props();
 
-	let loadMoreSentinel = $state<HTMLElement | null>(null);
 	let failedPicturePubkeys = $state<string[]>([]);
 	let timeZone = $derived('UTC');
 	$effect(() => {
@@ -41,10 +40,7 @@ before the Change Date. See LICENSE for complete terms.
 		return () => usage.clear();
 	});
 
-	$effect(() => {
-		const sentinel = loadMoreSentinel;
-		if (!sentinel || !usage.hasMore) return;
-
+	function loadMoreWhenVisible(sentinel: HTMLElement): () => void {
 		const observer = new IntersectionObserver(
 			(entries) => {
 				if (entries.some((entry) => entry.isIntersecting)) void usage.loadMore();
@@ -54,7 +50,7 @@ before the Change Date. See LICENSE for complete terms.
 		observer.observe(sentinel);
 
 		return () => observer.disconnect();
-	});
+	}
 
 	function formatTimestamp(timestamp: number | null): string {
 		if (timestamp === null) return t('usage.emptyValue');
@@ -216,7 +212,7 @@ before the Change Date. See LICENSE for complete terms.
 										<a
 											href={data.pubkeyViewer.replaceAll('{}', npub)}
 											target="_blank"
-											rel="noopener noreferrer">{npub}</a
+											rel="external noopener noreferrer">{npub}</a
 										>
 									</span>
 								</th>
@@ -238,7 +234,7 @@ before the Change Date. See LICENSE for complete terms.
 				</table>
 			</div>
 			{#if usage.hasMore}
-				<div bind:this={loadMoreSentinel} class="load-more-sentinel">
+				<div {@attach loadMoreWhenVisible} class="load-more-sentinel">
 					{#if usage.loadingMore}
 						<p class="status" aria-live="polite">{t('usage.loadingMore')}</p>
 					{/if}

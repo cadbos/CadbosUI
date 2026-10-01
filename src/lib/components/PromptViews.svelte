@@ -15,7 +15,9 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import type { Component } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import ChatView from '$lib/components/ChatView.svelte';
 	import KeyValueView from '$lib/components/KeyValueView.svelte';
@@ -56,11 +58,19 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => views.length,
 		getActiveIndex: () => activeIndex,
 		setActiveIndex: (index) => {
-			return goto(buildWorkspaceUrl('render', request, { view: views[index].id }), {
-				replaceState: true,
-				keepFocus: true,
-				noScroll: true
-			}).catch((error: unknown) => logBoundaryError('promptViews.viewNavigation', error));
+			return goto(
+				resolve(
+					buildWorkspaceUrl('render', request, {
+						view: views[index].id
+					}) as PathnameWithSearchOrHash,
+					{}
+				),
+				{
+					replaceState: true,
+					keepFocus: true,
+					noScroll: true
+				}
+			).catch((error: unknown) => logBoundaryError('promptViews.viewNavigation', error));
 		},
 		focusTab: (index) => tabs[index]?.focus()
 	});

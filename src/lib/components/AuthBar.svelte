@@ -152,7 +152,7 @@ before the Change Date. See LICENSE for complete terms.
 							class="chip-action"
 							href={primalUrl}
 							target="_blank"
-							rel="noopener noreferrer"
+							rel="external noopener noreferrer"
 							title={t('auth.profile.viewOnPrimal')}
 						>
 							<ArrowUpRight size={13} strokeWidth={1.8} aria-hidden="true" />

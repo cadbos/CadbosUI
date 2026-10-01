@@ -14,7 +14,9 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import type { OutputFormat, RenderResponse } from '$lib/api/contract';
 	import {
@@ -87,11 +89,19 @@ before the Change Date. See LICENSE for complete terms.
 		setActiveIndex: (index) => {
 			const nextTab = REFERENCE_TABS[index].id;
 			if (nextTab !== referenceTab) clearReferenceSelection();
-			return goto(buildWorkspaceUrl('styleTransfer', request, { reference: nextTab }), {
-				replaceState: true,
-				keepFocus: true,
-				noScroll: true
-			}).catch((err: unknown) => logBoundaryError('styleTransferPanel.referenceNavigation', err));
+			return goto(
+				resolve(
+					buildWorkspaceUrl('styleTransfer', request, {
+						reference: nextTab
+					}) as PathnameWithSearchOrHash,
+					{}
+				),
+				{
+					replaceState: true,
+					keepFocus: true,
+					noScroll: true
+				}
+			).catch((err: unknown) => logBoundaryError('styleTransferPanel.referenceNavigation', err));
 		},
 		focusTab: (index) => referenceTabButtons[index]?.focus()
 	});

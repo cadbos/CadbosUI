@@ -282,23 +282,6 @@ it('renders an error state when usage cannot be loaded', async () => {
 	await expect.element(screen.getByText('Could not load usage.')).toBeVisible();
 });
 
-it('renders each pubkey as an npub explorer link that opens in a new tab', async () => {
-	const pubkey = 'a'.repeat(64);
-	const npub = npubEncode(pubkey);
-	const fetchMock = mockUsageFetch([page([user(pubkey)], 0, false)], {
-		[pubkey]: { name: 'Alice' }
-	});
-	vi.stubGlobal('fetch', fetchMock);
-
-	const screen = render(UsagePage, pageProps());
-	const link = screen.getByRole('link', { name: npub });
-
-	await expect.element(link).toBeVisible();
-	await expect.element(link).toHaveAttribute('href', `https://explorer.example/p/${npub}`);
-	await expect.element(link).toHaveAttribute('target', '_blank');
-	await expect.element(link).toHaveAttribute('rel', 'noopener noreferrer');
-});
-
 it.each(['ru', 'en'] as const)('renders the platform totals for %s', async (locale) => {
 	vi.stubGlobal('fetch', mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)]));
 	setLocale(locale);

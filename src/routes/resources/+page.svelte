@@ -49,7 +49,6 @@ before the Change Date. See LICENSE for complete terms.
 	});
 
 	let filterTabs = $state<HTMLElement[]>([]);
-	let loadMoreSentinel = $state<HTMLElement | null>(null);
 
 	const filterTabController = createTabController({
 		itemCount: () => resourceFilters.length,
@@ -71,10 +70,7 @@ before the Change Date. See LICENSE for complete terms.
 		return () => resources.clear();
 	});
 
-	$effect(() => {
-		const sentinel = loadMoreSentinel;
-		if (!sentinel || !resources.hasMore) return;
-
+	function loadMoreWhenVisible(sentinel: HTMLElement): () => void {
 		const observer = new IntersectionObserver(
 			(entries) => {
 				if (entries.some((entry) => entry.isIntersecting)) void resources.loadMore();
@@ -84,7 +80,7 @@ before the Change Date. See LICENSE for complete terms.
 		observer.observe(sentinel);
 
 		return () => observer.disconnect();
-	});
+	}
 
 	function formatCreatedAt(createdAt: number): string {
 		return new Intl.DateTimeFormat(getLocale(), {
@@ -188,7 +184,7 @@ before the Change Date. See LICENSE for complete terms.
 				</ul>
 
 				{#if resources.hasMore}
-					<div bind:this={loadMoreSentinel} class="load-more-sentinel">
+					<div {@attach loadMoreWhenVisible} class="load-more-sentinel">
 						{#if resources.loadingMore}
 							<p class="status" aria-live="polite">{t('resources.loadingMore')}</p>
 						{/if}
