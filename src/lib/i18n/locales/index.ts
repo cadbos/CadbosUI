@@ -208,6 +208,7 @@ export interface Dictionary {
 	'generatedImages.confirmDeleteConfirm': string;
 	'generatedImages.confirmDeleteDeleting': string;
 	'generatedImages.resizeHandle': string;
+	'generatedImages.sizePreset': string;
 	'generatedImages.restore': string;
 	'generatedImages.restoreFailed': string;
 	'generatedImages.confirmRestoreTitle': string;

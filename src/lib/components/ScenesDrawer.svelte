@@ -18,6 +18,7 @@ before the Change Date. See LICENSE for complete terms.
 		History,
 		Lightbulb,
 		MessageSquareText,
+		MoveHorizontal,
 		Palette,
 		PaintRoller,
 		Pencil,
@@ -133,6 +134,12 @@ before the Change Date. See LICENSE for complete terms.
 	const MIN_DRAWER_WIDTH = 320;
 	const RESIZE_STEP = 24;
 	const WIDTH_STORAGE_KEY = 'cadbos.scenesDrawer.width.v1';
+	// Small / medium / large, as fractions of the range between the minimum
+	// width and the viewport — each well clear of both ends, so the size
+	// button never lands on a width the drag handle couldn't go beyond.
+	const SIZE_PRESET_FRACTIONS = [0.25, 0.5, 0.75];
+	// A dragged width this close to a preset counts as already being on it.
+	const SIZE_PRESET_TOLERANCE = 8;
 
 	function clampDrawerWidth(value: number): number {
 		return Math.min(Math.max(value, MIN_DRAWER_WIDTH), window.innerWidth);
@@ -226,8 +233,17 @@ before the Change Date. See LICENSE for complete terms.
 		resizing = false;
 	}
 
+	// measuredWidth is only refreshed on drag/resize, so while the CSS default
+	// is still in effect it can be stale (it was first taken while the drawer
+	// was closed) — read the live width instead.
+	function currentDrawerWidth(): number {
+		if (width !== null) return width;
+		if (!drawerEl) throw new Error('scenes drawer element missing');
+		return drawerEl.getBoundingClientRect().width;
+	}
+
 	function onResizeHandleKeydown(event: KeyboardEvent): void {
-		const current = width ?? measuredWidth;
+		const current = currentDrawerWidth();
 		let next: number;
 		if (event.key === 'ArrowLeft') next = current - RESIZE_STEP;
 		else if (event.key === 'ArrowRight') next = current + RESIZE_STEP;
@@ -235,6 +251,20 @@ before the Change Date. See LICENSE for complete terms.
 		else if (event.key === 'End') next = window.innerWidth;
 		else return;
 		event.preventDefault();
+		width = clampDrawerWidth(next);
+		measuredWidth = width;
+	}
+
+	// Steps to the next preset wider than the current width, wrapping back to
+	// the smallest one from the largest — so from any dragged width a click
+	// always moves to a predictable size.
+	function cycleSizePreset(): void {
+		const viewport = window.innerWidth;
+		const current = currentDrawerWidth();
+		const presets = SIZE_PRESET_FRACTIONS.map((fraction) =>
+			Math.round(MIN_DRAWER_WIDTH + (viewport - MIN_DRAWER_WIDTH) * fraction)
+		);
+		const next = presets.find((preset) => preset > current + SIZE_PRESET_TOLERANCE) ?? presets[0];
 		width = clampDrawerWidth(next);
 		measuredWidth = width;
 	}
@@ -539,6 +569,7 @@ before the Change Date. See LICENSE for complete terms.
 <dialog
 	id="scenes-drawer"
 	class="drawer"
+	class:resizing
 	{@attach attachDrawer}
 	aria-labelledby="scenes-title"
 	style:--drawer-resized-width={width !== null ? `${width}px` : undefined}
@@ -568,15 +599,26 @@ before the Change Date. See LICENSE for complete terms.
 				<h2 id="scenes-title">{t('generatedImages.title')}</h2>
 				<p>{t('generatedImages.subtitle')}</p>
 			</div>
-			<button
-				type="button"
-				class="close-button"
-				aria-label={t('generatedImages.close')}
-				title={t('generatedImages.close')}
-				onclick={closeDrawer}
-			>
-				<X size={20} strokeWidth={1.8} aria-hidden="true" />
-			</button>
+			<div class="header-actions">
+				<button
+					type="button"
+					class="close-button size-button"
+					aria-label={t('generatedImages.sizePreset')}
+					title={t('generatedImages.sizePreset')}
+					onclick={cycleSizePreset}
+				>
+					<MoveHorizontal size={20} strokeWidth={1.8} aria-hidden="true" />
+				</button>
+				<button
+					type="button"
+					class="close-button"
+					aria-label={t('generatedImages.close')}
+					title={t('generatedImages.close')}
+					onclick={closeDrawer}
+				>
+					<X size={20} strokeWidth={1.8} aria-hidden="true" />
+				</button>
+			</div>
 		</header>
 
 		<div class="scene-filters">
@@ -978,8 +1020,15 @@ before the Change Date. See LICENSE for complete terms.
 		transition:
 			opacity 0.24s ease,
 			transform 0.24s ease,
+			width 0.24s ease,
 			display 0.24s allow-discrete,
 			overlay 0.24s allow-discrete;
+	}
+
+	/* The width follows the pointer directly while dragging; easing it there
+	   would make the edge lag behind the cursor. */
+	.drawer.resizing {
+		transition: none;
 	}
 
 	.resize-handle {
@@ -1086,6 +1135,16 @@ before the Change Date. See LICENSE for complete terms.
 		background: var(--color-surface-hover);
 		border-color: var(--color-accent);
 		color: var(--color-accent-text);
+	}
+
+	.header-actions {
+		flex: 0 0 auto;
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.size-button {
+		color: var(--color-muted);
 	}
 
 	.scene-filters {
@@ -1675,7 +1734,8 @@ before the Change Date. See LICENSE for complete terms.
 			border-right: 0;
 		}
 
-		.resize-handle {
+		.resize-handle,
+		.size-button {
 			display: none;
 		}
 
