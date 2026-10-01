@@ -61,7 +61,6 @@ declare global {
 				// archAI-is-the-only-gate behavior. Not a secret; swap accounts by
 				// redeploying this var, no code change needed.
 				METERED_DESIGNER_PUBKEYS?: string;
-				ADMIN_PUBKEYS?: string;
 				PUBKEY_VIEWER?: string;
 			};
 		}

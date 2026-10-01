@@ -19,7 +19,8 @@ import type { UserUsageResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { listUserUsage } from '$lib/server/generations';
-import { authorizeUsageViewer, getUsageViewerDb } from '$lib/server/usage';
+import { getDb } from '$lib/server/auth/repository';
+import { authorizeUsageViewer } from '$lib/server/usage';
 
 const DEFAULT_USAGE_PAGE_OFFSET = 0;
 const DEFAULT_USAGE_PAGE_SIZE = 20;
@@ -34,16 +35,13 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	const user = locals.user;
 	if (!user) return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 
-	const authorization = authorizeUsageViewer(platform, user);
+	const authorization = await authorizeUsageViewer(platform, user);
 	if (authorization) return authorization;
 
 	const parsed = usageSearchParamsSchema.safeParse(Object.fromEntries(url.searchParams));
 	if (!parsed.success) return apiError(400, 'invalid_request', 'Invalid search params');
 
-	const db = await getUsageViewerDb(platform, user.pubkey);
-	if (db instanceof Response) return db;
-
-	const page = await listUserUsage(db, parsed.data.offset, parsed.data.size);
+	const page = await listUserUsage(getDb(platform), parsed.data.offset, parsed.data.size);
 	return json({
 		users: page.users,
 		pagination: {

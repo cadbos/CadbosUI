@@ -17,6 +17,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser, WalletBalanceResponse } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedAdmin } from '$lib/server/testing/session-fixtures';
 import { GET } from './+server';
 
 const getWalletBalance = vi.hoisted(() => vi.fn());
@@ -37,8 +38,8 @@ function call(user: SessionUser | null, platform: App.Platform): ReturnType<type
 	return GET({ platform, locals: { sessionLookupUnavailable: false, user } } as BalanceEvent);
 }
 
-function platform(db: D1Database, adminPubkeys = ADMIN_PUBKEY): App.Platform {
-	return { env: { DB: db, ADMIN_PUBKEYS: adminPubkeys } } as App.Platform;
+function platform(db: D1Database): App.Platform {
+	return { env: { DB: db } } as App.Platform;
 }
 
 beforeEach(() => {
@@ -62,9 +63,7 @@ describe('GET /api/usage/balance', () => {
 	});
 
 	it('fails closed for the dev-only demo session without touching D1', async () => {
-		const response = await call({ pubkey: DEMO_PUBKEY }, {
-			env: { ADMIN_PUBKEYS: DEMO_PUBKEY }
-		} as App.Platform);
+		const response = await call({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform);
 		const result = await response.json();
 
 		expect(response.status).toBe(500);
@@ -77,6 +76,7 @@ describe('GET /api/usage/balance', () => {
 	it('returns the live wallet balance for an admin', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY);
+		seedAdmin(db, 'admin');
 		getWalletBalance.mockResolvedValue(123.45);
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db));
@@ -89,6 +89,7 @@ describe('GET /api/usage/balance', () => {
 	it('returns 502 when the live balance check fails', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY);
+		seedAdmin(db, 'admin');
 		getWalletBalance.mockRejectedValue(new Error('archAI unreachable'));
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db));

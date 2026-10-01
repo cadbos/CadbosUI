@@ -19,7 +19,7 @@ import type { UsageProfile, UsageProfilesResponse } from '$lib/api/contract';
 import { parseBody } from '$lib/server/api';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { fetchNostrProfile } from '$lib/nostr/profile';
-import { authorizeUsageViewer, getUsageViewerDb } from '$lib/server/usage';
+import { authorizeUsageViewer } from '$lib/server/usage';
 
 const usageProfilesRequestSchema = z.object({
 	pubkeys: z
@@ -32,14 +32,11 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	const user = locals.user;
 	if (!user) return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 
-	const authorization = authorizeUsageViewer(platform, user);
+	const authorization = await authorizeUsageViewer(platform, user);
 	if (authorization) return authorization;
 
 	const parsed = await parseBody(request, usageProfilesRequestSchema);
 	if (!parsed.ok) return parsed.response;
-
-	const viewerDb = await getUsageViewerDb(platform, user.pubkey);
-	if (viewerDb instanceof Response) return viewerDb;
 
 	const pubkeys = [...new Set(parsed.data.pubkeys)];
 	const resolved = await Promise.all(
