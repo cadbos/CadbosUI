@@ -748,6 +748,14 @@ before the Change Date. See LICENSE for complete terms.
 								<div class="image-column">
 									<div class="image-frame">
 										<img
+											class="backdrop"
+											src={image.source.url}
+											alt=""
+											loading="lazy"
+											aria-hidden="true"
+										/>
+										<img
+											class="photo"
 											src={image.source.url}
 											alt={ti('generatedImages.sourceImageAlt', { order: image.number })}
 											loading="lazy"
@@ -821,6 +829,14 @@ before the Change Date. See LICENSE for complete terms.
 								<div class="image-column">
 									<div class="image-frame result-frame">
 										<img
+											class="backdrop"
+											src={image.image.url}
+											alt=""
+											loading="lazy"
+											aria-hidden="true"
+										/>
+										<img
+											class="photo"
 											src={image.image.url}
 											alt={ti('generatedImages.resultImageAlt', { order: image.number })}
 											loading="lazy"
@@ -1440,22 +1456,36 @@ before the Change Date. See LICENSE for complete terms.
 		min-width: 0;
 	}
 
-	/* The photo itself carries the rounded corners: the frame hugs it exactly
-	   rather than letterboxing it inside a bordered box. Until a lazy image
-	   loads, `auto 16 / 9` holds a placeholder of a typical shape, then gives
-	   way to the photo's own proportions. */
+	/* Every preview is a rounded 16:9 tile, so the rows line up whatever the
+	   photo's proportions. The photo is shown whole (contain) — cropping would
+	   hide edges where an edit may have happened — and the letterbox space is
+	   filled with a blurred, enlarged copy of the same image (served from the
+	   browser cache) instead of empty bars. */
 	.image-frame {
 		position: relative;
+		aspect-ratio: 16 / 9;
 		overflow: hidden;
 		border-radius: var(--radius);
 		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
 	}
 
 	.image-frame img {
+		position: absolute;
+		inset: 0;
 		display: block;
 		width: 100%;
-		height: auto;
-		aspect-ratio: auto 16 / 9;
+		height: 100%;
+	}
+
+	/* Scaled up so the blur's transparent fringe falls outside the tile. */
+	.image-frame .backdrop {
+		object-fit: cover;
+		filter: blur(20px) brightness(0.85);
+		transform: scale(1.15);
+	}
+
+	.image-frame .photo {
+		object-fit: contain;
 	}
 
 	.flow-kind {
