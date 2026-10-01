@@ -14,21 +14,21 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { Handle, Position, type Node, type NodeProps } from '@xyflow/svelte';
+	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { imageUrl, request } from '$lib/state/request.svelte';
 
 	type ImageNode = Node<Record<string, never>, 'image'>;
 
 	let props: NodeProps<ImageNode> = $props();
+	const thumbnailUrl = $derived(imageUrl(request.image));
 </script>
 
 <div id={props.id} class="graph-node graph-node--image">
-	{#if imageUrl(request.image)}
-		<img
-			class="graph-node__thumbnail"
-			src={imageUrl(request.image)}
-			alt={t('view.graph.imageNode.alt')}
-		/>
+	{#if thumbnailUrl}
+		<span class="graph-node__thumbnail">
+			<BlurFillImage src={thumbnailUrl} alt={t('view.graph.imageNode.alt')} loading="eager" />
+		</span>
 	{:else}
 		<p class="graph-node__placeholder">{t('view.graph.imageNode.placeholder')}</p>
 	{/if}
@@ -48,7 +48,7 @@ before the Change Date. See LICENSE for complete terms.
 		display: block;
 		width: 100%;
 		height: 6rem;
-		object-fit: cover;
+		overflow: hidden;
 		border-radius: var(--radius-sm);
 	}
 

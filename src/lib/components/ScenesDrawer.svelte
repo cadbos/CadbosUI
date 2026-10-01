@@ -40,6 +40,7 @@ before the Change Date. See LICENSE for complete terms.
 		type GenerationSessionRef,
 		type SceneView
 	} from '$lib/api/contract';
+	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
 	import HintLabel from '$lib/components/HintLabel.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
@@ -747,18 +748,9 @@ before the Change Date. See LICENSE for complete terms.
 							<div class="scene-flow">
 								<div class="image-column">
 									<div class="image-frame">
-										<img
-											class="backdrop"
-											src={image.source.url}
-											alt=""
-											loading="lazy"
-											aria-hidden="true"
-										/>
-										<img
-											class="photo"
+										<BlurFillImage
 											src={image.source.url}
 											alt={ti('generatedImages.sourceImageAlt', { order: image.number })}
-											loading="lazy"
 										/>
 										{#if !milestones && image.iteration === 1}
 											<span class="source-badge">{t('generatedImages.sourceBadge')}</span>
@@ -828,18 +820,9 @@ before the Change Date. See LICENSE for complete terms.
 
 								<div class="image-column">
 									<div class="image-frame result-frame">
-										<img
-											class="backdrop"
-											src={image.image.url}
-											alt=""
-											loading="lazy"
-											aria-hidden="true"
-										/>
-										<img
-											class="photo"
+										<BlurFillImage
 											src={image.image.url}
 											alt={ti('generatedImages.resultImageAlt', { order: image.number })}
-											loading="lazy"
 										/>
 										<div class="actions">
 											{#if image.kind === 'upscale'}
@@ -1457,35 +1440,13 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	/* Every preview is a rounded 16:9 tile, so the rows line up whatever the
-	   photo's proportions. The photo is shown whole (contain) — cropping would
-	   hide edges where an edit may have happened — and the letterbox space is
-	   filled with a blurred, enlarged copy of the same image (served from the
-	   browser cache) instead of empty bars. */
+	   photo's proportions; BlurFillImage shows the photo whole inside it. */
 	.image-frame {
 		position: relative;
 		aspect-ratio: 16 / 9;
 		overflow: hidden;
 		border-radius: var(--radius);
 		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
-	}
-
-	.image-frame img {
-		position: absolute;
-		inset: 0;
-		display: block;
-		width: 100%;
-		height: 100%;
-	}
-
-	/* Scaled up so the blur's transparent fringe falls outside the tile. */
-	.image-frame .backdrop {
-		object-fit: cover;
-		filter: blur(20px) brightness(0.85);
-		transform: scale(1.15);
-	}
-
-	.image-frame .photo {
-		object-fit: contain;
 	}
 
 	.flow-kind {

@@ -21,6 +21,7 @@ before the Change Date. See LICENSE for complete terms.
 		PublicFormSnapshot,
 		ShareGenerationDetailResponse
 	} from '$lib/api/contract';
+	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
 	import ProjectStats from '$lib/components/ProjectStats.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
@@ -240,7 +241,7 @@ before the Change Date. See LICENSE for complete terms.
 												})}
 												onclick={() => openLightbox(generation.id, alt)}
 											>
-												<img src={generation.image.url} {alt} loading="lazy" />
+												<BlurFillImage src={generation.image.url} {alt} />
 											</button>
 										</li>
 									{/each}
@@ -405,13 +406,6 @@ before the Change Date. See LICENSE for complete terms.
 	.generation-thumb:hover,
 	.generation-thumb:focus-visible {
 		border-color: var(--color-accent);
-	}
-
-	.generation-thumb img {
-		display: block;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
 	}
 
 	.visually-hidden {

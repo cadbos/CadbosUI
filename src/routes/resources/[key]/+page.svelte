@@ -18,6 +18,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { page } from '$app/state';
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import type { GenerationKind } from '$lib/api/contract';
+	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { resourceRoleLabels } from '$lib/resource-roles';
 	import { openGenerationInWorkspace } from '$lib/state/open-generation';
@@ -123,7 +124,9 @@ before the Change Date. See LICENSE for complete terms.
 		{:else if resourceDetail.image}
 			{@const image = resourceDetail.image}
 			<div class="resource-summary">
-				<img class="resource-image" src={image.url} alt={t('resources.detail.imageAlt')} />
+				<span class="resource-image">
+					<BlurFillImage src={image.url} alt={t('resources.detail.imageAlt')} loading="eager" />
+				</span>
 				<div class="resource-meta">
 					<ul class="roles" aria-label={t('resources.detail.rolesLabel')}>
 						{#each resourceDetail.roles as role (role)}
@@ -152,10 +155,9 @@ before the Change Date. See LICENSE for complete terms.
 						<li class="card">
 							{#snippet cardContent()}
 								<span class="image-frame">
-									<img
+									<BlurFillImage
 										src={generation.image.url}
 										alt={ti('resources.detail.resultAlt', { order: index + 1 })}
-										loading="lazy"
 									/>
 								</span>
 								<span class="card-body">
@@ -299,9 +301,10 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.resource-image {
+		display: block;
 		width: min(100%, 22rem);
 		aspect-ratio: 4 / 3;
-		object-fit: cover;
+		overflow: hidden;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);
 		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
@@ -399,13 +402,6 @@ before the Change Date. See LICENSE for complete terms.
 		aspect-ratio: 4 / 3;
 		overflow: hidden;
 		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
-	}
-
-	.image-frame img {
-		display: block;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
 	}
 
 	.card-body {

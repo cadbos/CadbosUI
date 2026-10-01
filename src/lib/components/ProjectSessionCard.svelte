@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { Trash2 } from '@lucide/svelte';
 	import type { ProjectSessionRecord } from '$lib/api/contract';
+	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
 	import ProjectStats from '$lib/components/ProjectStats.svelte';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 
@@ -93,10 +94,9 @@ before the Change Date. See LICENSE for complete terms.
 <li class="session-card">
 	{#if latest}
 		<span class="session-thumb">
-			<img
+			<BlurFillImage
 				src={latest.image.url}
 				alt={ti('projects.detail.sessionThumbnailAlt', { title: displayTitle })}
-				loading="lazy"
 			/>
 		</span>
 	{/if}
@@ -213,13 +213,6 @@ before the Change Date. See LICENSE for complete terms.
 		aspect-ratio: 4 / 3;
 		overflow: hidden;
 		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
-	}
-
-	.session-thumb img {
-		display: block;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
 	}
 
 	.session-body {

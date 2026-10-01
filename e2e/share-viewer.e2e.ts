@@ -109,11 +109,11 @@ test('shows a shared project read-only, without auth, with no editing controls',
 	const secondThumb = page.getByRole('button', { name: /Открыть рендер 2 из сессии/ });
 	await expect(firstThumb).toBeVisible();
 	await expect(secondThumb).toBeVisible();
-	await expect(firstThumb.locator('img')).toHaveAttribute(
+	await expect(firstThumb.getByAltText(/^Рендер \d в сессии/)).toHaveAttribute(
 		'src',
 		'/api/media/test-media/render-2.webp'
 	);
-	await expect(secondThumb.locator('img')).toHaveAttribute(
+	await expect(secondThumb.getByAltText(/^Рендер \d в сессии/)).toHaveAttribute(
 		'src',
 		'/api/media/test-media/render-1.webp'
 	);
