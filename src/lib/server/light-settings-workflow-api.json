@@ -1,7 +1,7 @@
 {
 	"1": {
 		"inputs": {
-			"image": "FluxKontext_edit_00151_.png"
+			"image": "s1_dark_chandelier_001.jpg"
 		},
 		"class_type": "LoadImage",
 		"_meta": {
@@ -92,38 +92,6 @@
 			"title": "SAVE RESULT"
 		}
 	},
-	"19": {
-		"inputs": {
-			"value": "выключи люстру"
-		},
-		"class_type": "PrimitiveString",
-		"_meta": {
-			"title": "Инструкция (что сделать со светом) — пишите как угодно: 'зажги люстру', 'выключи бра над кроватью', 'выключи все светильники'"
-		}
-	},
-	"20": {
-		"inputs": {
-			"model": "Hy-MT2-1.8B-Q6_K.gguf",
-			"device": "cpu",
-			"n_gpu_layers": 0
-		},
-		"class_type": "GGUFLoader",
-		"_meta": {
-			"title": "GGUFLoader"
-		}
-	},
-	"21": {
-		"inputs": {
-			"prompt": ["19", 0],
-			"target_language": "English",
-			"auto_release": false,
-			"llama_model": ["20", 0]
-		},
-		"class_type": "PromptTranslatorNode",
-		"_meta": {
-			"title": "Prompt Translator (GGUF)"
-		}
-	},
 	"23": {
 		"inputs": {
 			"value": "Picture 1 is a room containing one or more lighting fixtures (chandelier, pendant, lamp, sconce, spotlight, string lights).\n\nTASK: {}\n\nApply the instruction to the single fixture it refers to, and to no other fixture. If the instruction names a location (near the bed, on the wall, above the table), it refers to the one fixture standing at that location. Every other lighting fixture in the room keeps its current state exactly — if it was dark it stays dark, if it was lit it stays lit at the same intensity.\n\nGEOMETRY LOCK — the fixture's physical body is copied from Picture 1 pixel-for-pixel: identical silhouette, identical count of arms, identical count of bulbs, identical shape, size, thickness, material, colour and position. Never add, remove, extend, duplicate, lengthen or invent an arm, bulb, socket, cable, chain, bracket, shade or ornament that is not already visible in Picture 1. There must be exactly the same number of lighting fixtures in the output as in Picture 1 — never a second copy of a fixture, never a mirrored twin, never an extra unit beside it. The fixture must not become larger, wider or more elaborate. Only its illumination state may change.\n\nTURNING A FIXTURE ON: the bulbs that already exist become bright and emissive, and they cast warm realistic light, highlights and soft directional shadows onto the nearby ceiling, walls, floor and furniture, consistent with the room's existing light sources. The number of glowing points equals the number of bulbs visible in Picture 1.\n\nTURNING A FIXTURE OFF: the existing bulbs become dark and unlit, and the glow, light spill and cast shadows they produced disappear completely.\n\nEVERYTHING ELSE IS UNTOUCHED: walls, floor, ceiling, window, daylight, curtains, bedding, furniture, decor, camera position, framing, perspective, global white balance and overall exposure of the room stay pixel-identical to Picture 1. Do not warm up or cool down the whole image. Do not recolour the bedding, curtains or walls. The only permitted changes are the local illumination effects that physically follow from the instructed fixture switching state.\n\nPhotorealistic and seamless, as if the switch was flipped in that real room and re-photographed with the same camera, same lens and same base exposure."
@@ -137,7 +105,7 @@
 		"inputs": {
 			"string": ["102", 0],
 			"find": "{}",
-			"replace": ["21", 0]
+			"replace": ["149:148", 0]
 		},
 		"class_type": "StringReplace",
 		"_meta": {
@@ -210,7 +178,7 @@
 	},
 	"49": {
 		"inputs": {
-			"source": ["21", 0]
+			"source": ["149:148", 0]
 		},
 		"class_type": "PreviewAny",
 		"_meta": {
@@ -295,7 +263,7 @@
 	"69": {
 		"inputs": {
 			"fallback_object": "lighting fixture",
-			"instruction": ["19", 0]
+			"instruction": ["149:150", 0]
 		},
 		"class_type": "LightIntentParse",
 		"_meta": {
@@ -718,8 +686,8 @@
 	},
 	"122": {
 		"inputs": {
-			"min_fraction": 0.0008,
-			"max_fraction": 0.15,
+			"min_fraction": 0.0003,
+			"max_fraction": 0.35,
 			"lit_ratio": 1.8,
 			"mask": ["94", 0]
 		},
@@ -891,7 +859,8 @@
 	"137": {
 		"inputs": {
 			"ambiguous_mode": "all",
-			"plural": false,
+			"plural": ["69", 14],
+			"anchor_span": 0.9,
 			"masks": ["135", 0],
 			"anchor_en": ["69", 7],
 			"side": ["69", 8],
@@ -906,7 +875,7 @@
 	},
 	"138": {
 		"inputs": {
-			"value": "Picture 1 is an interior photograph showing {target}.\n\nChange only one thing: all of these fixtures are switched off. None of them gives\nout any light — there is no flame, no glowing bulb and no bright point of light on\nany of them, and no glow on the wall or ceiling around them. Everything else is\nuntouched: the fixtures keep the same shape, size, position, materials and colours\nas in Picture 1, and every other light in the room stays exactly as it is."
+			"value": "Picture 1 is an interior photograph showing {target}.\n\nChange only one thing: those specific fixtures are switched off. They give out no\nlight — no glowing bulb, no bright point of light on them, and no glow on the wall\nor ceiling around them.\n\nEvery other lamp and light in the room keeps burning exactly as it is now, at the\nsame brightness and the same colour — do not switch off any fixture that is not\nlisted above. Everything else is untouched: all fixtures keep the same shape,\nsize, position, materials and colours as in Picture 1."
 		},
 		"class_type": "PrimitiveStringMultiline",
 		"_meta": {
@@ -981,6 +950,66 @@
 		"class_type": "ShowText|pysssss",
 		"_meta": {
 			"title": "Caption Match status"
+		}
+	},
+	"145": {
+		"inputs": {
+			"mask": ["94", 0]
+		},
+		"class_type": "MaskPreview+",
+		"_meta": {
+			"title": "🔧 Mask Preview"
+		}
+	},
+	"149:148": {
+		"inputs": {
+			"prompt": ["149:151", 0],
+			"max_length": 512,
+			"sampling_mode": "on",
+			"sampling_mode.temperature": 0.7,
+			"sampling_mode.top_k": 64,
+			"sampling_mode.top_p": 0.95,
+			"sampling_mode.min_p": 0.05,
+			"sampling_mode.repetition_penalty": 1.05,
+			"sampling_mode.seed": 0,
+			"sampling_mode.presence_penalty": 0,
+			"thinking": false,
+			"use_default_template": true,
+			"clip": ["149:146", 0]
+		},
+		"class_type": "TextGenerate",
+		"_meta": {
+			"title": "Generate Text"
+		}
+	},
+	"149:146": {
+		"inputs": {
+			"clip_name": "Qwen3VL-4B-Instruct-Q8_0.gguf",
+			"type": "ltxv"
+		},
+		"class_type": "CLIPLoaderGGUF",
+		"_meta": {
+			"title": "CLIPLoader (GGUF)"
+		}
+	},
+	"149:150": {
+		"inputs": {
+			"value": "зажги люстру"
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "Text String (Multiline)"
+		}
+	},
+	"149:151": {
+		"inputs": {
+			"string_a": "Translate the following text to English, preserving original meaning:",
+			"string_b": ["149:150", 0],
+			"delimiter": " "
+		},
+		"class_type": "StringConcatenate",
+		"_meta": {
+			"title": "Concatenate Text"
 		}
 	}
 }
