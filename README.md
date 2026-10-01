@@ -77,7 +77,7 @@ Runtime integrations use Cloudflare bindings and variables rather than client-si
 environment variables. Their authoritative definitions are in
 [`wrangler.jsonc`](wrangler.jsonc) and [`src/app.d.ts`](src/app.d.ts):
 
-- `DB` — D1 database for users, sessions, credits, and generation records
+- `DB` — D1 database for users, sessions, admins, credits, and generation records
 - `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` — private S3-compatible image storage
 - `MEDIA_CACHE_TTL_SECONDS` — optional browser cache lifetime of `/api/media` images in
   seconds; the default is 31536000, and valid values range from 1 through 31536000
@@ -86,8 +86,7 @@ environment variables. Their authoritative definitions are in
   through 604800
 - `ARCHAI_API_URL` and the `ARCHAI_API_KEY` secret — archAI server integration
 - `COMFYUI_BASE_URL` — private VPC service binding for ComfyUI
-- `ADMIN_PUBKEYS`, `METERED_DESIGNER_PUBKEYS`, and `PUBKEY_VIEWER` — access and usage
-  display controls
+- `METERED_DESIGNER_PUBKEYS`, and `PUBKEY_VIEWER` — access and usage display controls
 - `OBJECT_REPLACEMENT_COST`, `TEXTURE_REPLACEMENT_COST`, `LIGHT_SETTINGS_COST`,
   `FLUX_KONTEXT_EDIT_COST`, `REPAINT_COST`, and `HEALTH_CACHE_TTL_SECONDS` — optional
   operational settings
@@ -103,6 +102,17 @@ pnpm exec wrangler d1 migrations apply DB --local
 
 Use `--remote` instead of `--local` only when intentionally applying migrations to the
 configured remote database.
+
+Administrators (access to the usage views) live in the `admins` table. After applying the
+migrations, make an account that has logged in at least once an administrator with its
+64-character lowercase hex pubkey:
+
+```sh
+pnpm exec wrangler d1 execute DB --remote --command \
+  "INSERT INTO admins (user_id) SELECT id FROM users WHERE pubkey = '<pubkey>'"
+```
+
+`migrations/0022_admins.sql` documents the revoke and list queries.
 
 Before serving application traffic, provision the uploads bucket in `buckets` under the name
 `cadbos-uploads`. Set `url` to the full bucket-scoped S3 API endpoint and `region` to its

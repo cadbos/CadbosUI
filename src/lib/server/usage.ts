@@ -13,40 +13,21 @@
  */
 
 import { dev } from '$app/environment';
-import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
-import { getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
-export async function getUsageViewerDb(
-	platform: App.Platform | undefined,
-	pubkey: string
-): Promise<D1Database | Response> {
-	const db = getDb(platform);
-	const userId = await getUserIdByPubkey(db, pubkey);
-	return userId ? db : apiError(500, 'account_error', 'Account record not found');
-}
-
-export function authorizeUsageViewer(
+export async function authorizeUsageViewer(
 	platform: App.Platform | undefined,
 	user: SessionUser
-): Response | null {
-	if (!isAdminPubkey(user.pubkey, platform?.env?.ADMIN_PUBKEYS)) {
-		return apiError(403, 'forbidden', 'Admin access required');
-	}
+): Promise<Response | null> {
 	if (dev && user.pubkey === DEMO_PUBKEY) {
 		return apiError(500, 'account_error', 'Account record not found');
 	}
-	return null;
-}
-
-function isAdminPubkey(pubkey: string, adminPubkeys: string | undefined): boolean {
-	return (
-		adminPubkeys
-			?.split(',')
-			.map((adminPubkey) => adminPubkey.trim())
-			.includes(pubkey) ?? false
-	);
+	const admin = await getDb(platform)
+		.prepare('SELECT 1 AS found FROM admins a JOIN users u ON u.id = a.user_id WHERE u.pubkey = ?')
+		.bind(user.pubkey)
+		.first<{ found: number }>();
+	return admin ? null : apiError(403, 'forbidden', 'Admin access required');
 }
