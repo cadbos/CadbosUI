@@ -17,18 +17,15 @@ import type { RequestHandler } from './$types';
 import type { WalletBalanceResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
-import { authorizeUsageViewer, getUsageViewerDb } from '$lib/server/usage';
+import { authorizeUsageViewer } from '$lib/server/usage';
 import { getWalletBalance } from '$lib/server/wallet';
 
 export const GET: RequestHandler = async ({ platform, locals }) => {
 	const user = locals.user;
 	if (!user) return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 
-	const authorization = authorizeUsageViewer(platform, user);
+	const authorization = await authorizeUsageViewer(platform, user);
 	if (authorization) return authorization;
-
-	const viewerDb = await getUsageViewerDb(platform, user.pubkey);
-	if (viewerDb instanceof Response) return viewerDb;
 
 	let balance: number;
 	try {

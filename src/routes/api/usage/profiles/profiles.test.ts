@@ -16,6 +16,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser, UsageProfilesResponse } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedAdmin } from '$lib/server/testing/session-fixtures';
 import { POST } from './+server';
 
 const fetchNostrProfile = vi.hoisted(() => vi.fn());
@@ -31,25 +32,20 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 		.run();
 }
 
-function platform(db: D1Database, adminPubkeys = ADMIN_PUBKEY): App.Platform {
-	return { env: { DB: db, ADMIN_PUBKEYS: adminPubkeys } } as App.Platform;
+function platform(db: D1Database): App.Platform {
+	return { env: { DB: db } } as App.Platform;
 }
 
 type ProfilesEvent = Parameters<typeof POST>[0];
 
-function call(
-	user: SessionUser | null,
-	db: D1Database,
-	body: unknown,
-	adminPubkeys = ADMIN_PUBKEY
-): ReturnType<typeof POST> {
+function call(user: SessionUser | null, db: D1Database, body: unknown): ReturnType<typeof POST> {
 	return POST({
 		request: new Request('https://cadbos.example/api/usage/profiles', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify(body)
 		}),
-		platform: platform(db, adminPubkeys),
+		platform: platform(db),
 		locals: { sessionLookupUnavailable: false, user }
 	} as ProfilesEvent);
 }
@@ -77,6 +73,7 @@ describe('POST /api/usage/profiles', () => {
 	it('validates the requested pubkeys', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY);
+		seedAdmin(db, 'admin');
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, db, { pubkeys: ['not-a-pubkey'] });
 
@@ -86,6 +83,7 @@ describe('POST /api/usage/profiles', () => {
 	it('returns name and picture without relay metadata', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY);
+		seedAdmin(db, 'admin');
 		fetchNostrProfile.mockResolvedValue({
 			name: 'Alice',
 			picture: 'https://avatar.example/alice.png',

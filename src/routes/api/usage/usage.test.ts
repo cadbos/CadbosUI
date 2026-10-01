@@ -18,6 +18,7 @@ import type { SessionUser, UserUsageResponse } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { seedGeneration as seedGenerationFixture } from '$lib/server/testing/generation-fixtures';
+import { seedAdmin } from '$lib/server/testing/session-fixtures';
 import { GET } from './+server';
 
 const ADMIN_PUBKEY = 'admin-pubkey';
@@ -65,8 +66,8 @@ function call(
 	} as UsageEvent);
 }
 
-function platform(db: D1Database, adminPubkeys = ADMIN_PUBKEY): App.Platform {
-	return { env: { DB: db, ADMIN_PUBKEYS: adminPubkeys } } as App.Platform;
+function platform(db: D1Database): App.Platform {
+	return { env: { DB: db } } as App.Platform;
 }
 
 describe('GET /api/usage', () => {
@@ -102,6 +103,7 @@ describe('GET /api/usage', () => {
 	it('rejects unknown search params', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY, 1000);
+		seedAdmin(db, 'admin');
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db), '?userId=user-1');
 
@@ -111,6 +113,7 @@ describe('GET /api/usage', () => {
 	it('rejects invalid pagination params', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY, 1000);
+		seedAdmin(db, 'admin');
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db), '?offset=-1&size=0');
 
@@ -120,6 +123,7 @@ describe('GET /api/usage', () => {
 	it('uses default pagination params', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY, 10_000);
+		seedAdmin(db, 'admin');
 		for (let index = 0; index < 20; index += 1) {
 			seedUser(db, `user-${index}`, `pubkey-${index}`, 1000 + index);
 		}
@@ -138,6 +142,7 @@ describe('GET /api/usage', () => {
 		seedUser(db, 'oldest', 'oldest-pubkey', 1000);
 		seedUser(db, 'middle', 'middle-pubkey', 2000);
 		seedUser(db, 'admin', ADMIN_PUBKEY, 3000);
+		seedAdmin(db, 'admin');
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db), '?offset=1&size=2');
 		const result = (await response.json()) as UserUsageResponse;
@@ -150,6 +155,7 @@ describe('GET /api/usage', () => {
 	it('returns all-user usage aggregates', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY, 3000);
+		seedAdmin(db, 'admin');
 		seedUser(db, 'user-1', 'pubkey-1', 2000);
 		seedUser(db, 'user-2', 'pubkey-2', 1000);
 		grantAccess(db, 'user-1', 7.5, 4000);
@@ -209,22 +215,35 @@ describe('GET /api/usage', () => {
 		]);
 	});
 
-	it('accepts comma-separated admin pubkeys with whitespace', async () => {
+	it('accepts an admin among several admins', async () => {
 		const db = makeD1();
+		seedUser(db, 'other-admin', 'other-pubkey', 1000);
+		seedAdmin(db, 'other-admin');
 		seedUser(db, 'admin', ADMIN_PUBKEY, 1000);
+		seedAdmin(db, 'admin');
 
-		const response = await call(
-			{ pubkey: ADMIN_PUBKEY },
-			platform(db, `other-pubkey, ${ADMIN_PUBKEY}`)
-		);
+		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db));
 
 		expect(response.status).toBe(200);
 	});
 
+	it('returns 403 once the admin row is removed', async () => {
+		const db = makeD1();
+		seedUser(db, 'admin', ADMIN_PUBKEY, 1000);
+		seedAdmin(db, 'admin');
+		db.prepare('DELETE FROM admins WHERE user_id = ?').bind('admin').run();
+
+		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db));
+
+		expect(response.status).toBe(403);
+	});
+
+	it('rejects an admin row for an unknown user', () => {
+		expect(() => seedAdmin(makeD1(), 'missing-user')).toThrow(/FOREIGN KEY/);
+	});
+
 	it('fails closed for the dev-only demo session without touching D1', async () => {
-		const response = await call({ pubkey: DEMO_PUBKEY }, {
-			env: { ADMIN_PUBKEYS: DEMO_PUBKEY }
-		} as App.Platform);
+		const response = await call({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform);
 		const result = await response.json();
 
 		expect(response.status).toBe(500);
@@ -239,6 +258,6 @@ describe('GET /api/usage', () => {
 	it('fails closed if a real session has no matching D1 user row', async () => {
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(makeD1()));
 
-		expect(response.status).toBe(500);
+		expect(response.status).toBe(403);
 	});
 });

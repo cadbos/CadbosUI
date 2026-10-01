@@ -46,3 +46,9 @@ export function seedForeignSession(db: D1Database): string {
 
 	return sessionId;
 }
+
+// Makes an already-seeded user an administrator (the `admins` table replaces
+// the old ADMIN_PUBKEYS env var), shared by the admin-only /api/usage* suites.
+export function seedAdmin(db: D1Database, userId: string): void {
+	db.prepare('INSERT INTO admins (user_id) VALUES (?)').bind(userId).run();
+}
