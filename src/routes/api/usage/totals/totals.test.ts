@@ -17,6 +17,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser, UsageTotals } from '$lib/api/contract';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedAdmin } from '$lib/server/testing/session-fixtures';
 import { GET } from './+server';
 
 const ADMIN_PUBKEY = 'admin-pubkey';
@@ -33,8 +34,8 @@ function call(user: SessionUser | null, platform: App.Platform): ReturnType<type
 	return GET({ platform, locals: { sessionLookupUnavailable: false, user } } as TotalsEvent);
 }
 
-function platform(db: D1Database, adminPubkeys = ADMIN_PUBKEY): App.Platform {
-	return { env: { DB: db, ADMIN_PUBKEYS: adminPubkeys } } as App.Platform;
+function platform(db: D1Database): App.Platform {
+	return { env: { DB: db } } as App.Platform;
 }
 
 describe('GET /api/usage/totals', () => {
@@ -54,9 +55,7 @@ describe('GET /api/usage/totals', () => {
 	});
 
 	it('fails closed for the dev-only demo session without touching D1', async () => {
-		const response = await call({ pubkey: DEMO_PUBKEY }, {
-			env: { ADMIN_PUBKEYS: DEMO_PUBKEY }
-		} as App.Platform);
+		const response = await call({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform);
 		const result = await response.json();
 
 		expect(response.status).toBe(500);
@@ -65,15 +64,16 @@ describe('GET /api/usage/totals', () => {
 		});
 	});
 
-	it('returns 500 when the admin has no user record', async () => {
+	it('returns 403 when the session has no user record', async () => {
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(makeD1()));
 
-		expect(response.status).toBe(500);
+		expect(response.status).toBe(403);
 	});
 
 	it('returns platform-wide totals for an admin', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY);
+		seedAdmin(db, 'admin');
 		seedUser(db, 'user-1', 'pubkey-1');
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db));

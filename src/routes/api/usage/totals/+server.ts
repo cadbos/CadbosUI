@@ -17,17 +17,15 @@ import type { RequestHandler } from './$types';
 import type { UsageTotals } from '$lib/api/contract';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUsageTotals } from '$lib/server/generations';
-import { authorizeUsageViewer, getUsageViewerDb } from '$lib/server/usage';
+import { getDb } from '$lib/server/auth/repository';
+import { authorizeUsageViewer } from '$lib/server/usage';
 
 export const GET: RequestHandler = async ({ platform, locals }) => {
 	const user = locals.user;
 	if (!user) return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 
-	const authorization = authorizeUsageViewer(platform, user);
+	const authorization = await authorizeUsageViewer(platform, user);
 	if (authorization) return authorization;
 
-	const db = await getUsageViewerDb(platform, user.pubkey);
-	if (db instanceof Response) return db;
-
-	return json((await getUsageTotals(db)) satisfies UsageTotals);
+	return json((await getUsageTotals(getDb(platform))) satisfies UsageTotals);
 };
