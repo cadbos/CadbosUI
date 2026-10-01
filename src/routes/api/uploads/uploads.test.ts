@@ -14,7 +14,6 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SessionUser } from '$lib/api/contract';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { mediaKey, parseMediaKey, type Bucket } from '$lib/server/media';
 import { MAX_IMAGE_UPLOAD_SIZE } from '$lib/server/remote-image';
 import { makeD1 } from '$lib/server/testing/d1-shim';
@@ -48,6 +47,7 @@ import { POST } from './+server';
 type UploadEvent = Parameters<typeof POST>[0];
 
 const UPLOADS_URL = 'https://uploads.cadbos.example';
+const DEFAULT_PUBKEY = 'a'.repeat(64);
 function platform(
 	bucket = {
 		put: vi.fn(async (_key: string, _bytes: ArrayBuffer, _metadata: unknown) => undefined)
@@ -55,6 +55,9 @@ function platform(
 	db = makeD1()
 ): App.Platform {
 	setBucketUrl(db, TEST_S3_BUCKET.name, UPLOADS_URL);
+	db.prepare('INSERT OR IGNORE INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+		.bind('default-user', DEFAULT_PUBKEY, Date.now())
+		.run();
 	storage.putS3Object.mockImplementation(async (_platform, _bucket, key, bytes, mime) => {
 		await bucket.put(key, bytes, { httpMetadata: { contentType: mime } });
 	});
@@ -66,12 +69,10 @@ function platform(
 	} as unknown as App.Platform;
 }
 
-// Demo requests still use D1 for the canonical uploads URL, but skip account
-// lookup and deduplication.
 function call(
 	body: unknown,
 	uploadPlatform = platform(),
-	user: SessionUser | null = { pubkey: DEMO_PUBKEY }
+	user: SessionUser | null = { pubkey: DEFAULT_PUBKEY }
 ): ReturnType<typeof POST> {
 	return POST({
 		request: new Request('https://cadbos.example/api/uploads', {
@@ -88,7 +89,7 @@ function call(
 function callMultipart(
 	file: File,
 	uploadPlatform = platform(),
-	user: SessionUser | null = { pubkey: DEMO_PUBKEY }
+	user: SessionUser | null = { pubkey: DEFAULT_PUBKEY }
 ): ReturnType<typeof POST> {
 	const body = new FormData();
 	body.set('file', file);
@@ -260,7 +261,7 @@ describe('POST /api/uploads auth', () => {
 	});
 });
 
-describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
+describe('POST /api/uploads dedup', () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
 	});

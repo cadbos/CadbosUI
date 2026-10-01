@@ -23,7 +23,6 @@ import {
 	TEST_S3_ENV
 } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 
 // Lets a single test force recordBalance/recordGeneration to reject, to prove
 // a bookkeeping failure doesn't discard an already-successful, already-charged upscale.
@@ -161,6 +160,22 @@ describe('POST /api/upscale — billing', () => {
 		expect(result.error.code).toBe('session_not_found');
 	});
 
+	it('returns 404 image_not_found when the source image does not exist', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', pubkey);
+		grantAccess(db, 'user-1', 12);
+
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
+			...body,
+			imageKey: mediaKey(TEST_S3_BUCKET.name, 'test/missing.webp')
+		});
+
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({
+			error: { code: 'image_not_found', message: 'Image not found' }
+		});
+	});
+
 	it('upscales the given image and returns a URL', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
@@ -296,11 +311,6 @@ describe('POST /api/upscale — billing', () => {
 		}
 		const otherAccount = await call({ pubkey: 'b'.repeat(64) }, platform, body);
 		expect(otherAccount.status).toBe(200);
-	});
-
-	it('bypasses balance recording and rate-limiting entirely for the dev-only demo session', async () => {
-		const response = await call({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform, body);
-		expect(response.status).toBe(200);
 	});
 
 	it('fails closed if a real session has no matching D1 user row', async () => {

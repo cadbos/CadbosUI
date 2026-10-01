@@ -12,7 +12,6 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
@@ -21,7 +20,6 @@ import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { getResourceRoles, listResourceGenerations } from '$lib/server/generations';
 import { getMediaByBucketKey, parseMediaKey } from '$lib/server/media';
 import { mediaAccessBatch } from '$lib/server/media-access';
@@ -44,10 +42,6 @@ export const GET: RequestHandler = async ({ params, url, platform, locals }) => 
 	if (!parsed.success) return apiError(400, 'invalid_request', 'Invalid search params');
 	const key = parseMediaKey(params.key);
 	if (!key) return apiError(404, 'resource_not_found', 'Resource not found');
-
-	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
-		return apiError(404, 'resource_not_found', 'Resource not found');
-	}
 
 	const db = getDb(platform);
 	const userId = await getUserIdByPubkey(db, locals.user.pubkey);

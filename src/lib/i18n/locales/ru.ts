@@ -129,8 +129,6 @@ export const ru = {
 	'auth.error.extensionMissing': 'Расширение Nostr не найдено. Установите Alby или nos2x.',
 	'auth.error.rejected': 'Вход отменён в подписанте.',
 	'auth.error.failed': 'Не удалось войти. Попробуйте снова.',
-	'auth.demo.login': 'Войти в демо-режиме',
-	'auth.demo.badge': 'DEMO',
 	'auth.credit.balance': 'Баланс: {balance}',
 	'auth.credit.history': 'История трат',
 	'auth.credit.historyEmpty': 'Пока нет операций',

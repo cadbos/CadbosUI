@@ -18,11 +18,18 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { SESSION_COOKIE } from '$lib/server/auth/config';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 
-vi.mock('$app/environment', () => ({ dev: false }));
+const appEnvironment = vi.hoisted(() => ({ dev: false }));
+
+vi.mock('$app/environment', () => ({
+	get dev() {
+		return appEnvironment.dev;
+	}
+}));
 
 const { handle } = await import('./hooks.server');
 
 afterEach(() => {
+	appEnvironment.dev = false;
 	vi.useRealTimers();
 	vi.restoreAllMocks();
 });
@@ -151,23 +158,37 @@ it('lets the health endpoint report D1 availability when session lookup fails', 
 	expect(response.headers.get('cache-control')).toBe('no-store');
 });
 
-it.each(['/auth/demo', '/auth/logout'])(
-	'lets the session-independent auth route %s resolve when session lookup fails',
-	async (path) => {
-		const { event } = sessionEvent(
-			path,
-			sessionDb(() => Promise.reject(new Error('D1_ERROR: internal error')))
-		);
-		const resolve = okResolve();
-		vi.spyOn(console, 'error').mockImplementation(() => undefined);
+it('lets the session-independent logout route resolve when session lookup fails', async () => {
+	const { event } = sessionEvent(
+		'/auth/logout',
+		sessionDb(() => Promise.reject(new Error('D1_ERROR: internal error')))
+	);
+	const resolve = okResolve();
+	vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-		const response = await handle({ event, resolve });
+	const response = await handle({ event, resolve });
 
-		expect(response.status).toBe(200);
-		expect(resolve).toHaveBeenCalledOnce();
-		expect(response.headers.get('cache-control')).toBe('no-store');
-	}
-);
+	expect(response.status).toBe(200);
+	expect(resolve).toHaveBeenCalledOnce();
+	expect(response.headers.get('cache-control')).toBe('no-store');
+});
+
+it('treats a leftover demo-mode session cookie as an ordinary unknown session in development', async () => {
+	appEnvironment.dev = true;
+	const first = vi.fn(async () => null);
+	const { deleteCookie, event } = sessionEvent(
+		'/',
+		sessionDb(first),
+		'cadbos-demo-session-showcase-2026'
+	);
+
+	const response = await handle({ event, resolve: okResolve() });
+
+	expect(response.status).toBe(200);
+	expect(first).toHaveBeenCalledOnce();
+	expect(event.locals.user).toBeNull();
+	expect(deleteCookie).toHaveBeenCalledOnce();
+});
 
 it.each(['/api/render', '/auth/me'])(
 	'returns a non-cacheable service-unavailable response for %s when session lookup fails',

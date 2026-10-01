@@ -223,7 +223,7 @@ describe('auth flow', () => {
 			}
 		});
 
-		// A real (non-demo) user is billing.ts-backed by D1 (Module 6), but there is
+		// A user is billing.ts-backed by D1 (Module 6), but there is
 		// nothing to show until they've generated at least once — no default balance
 		// is provisioned the way the old quota system used to.
 		const sk = generateSecretKey();

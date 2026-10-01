@@ -318,20 +318,6 @@ class AuthState {
 		workspaceTabs.resetAll();
 	}
 
-	async loginDemo(): Promise<void> {
-		if (this.status === 'connecting') return;
-		this.#cancelSessionLoad();
-		this.error = null;
-		this.status = 'connecting';
-		try {
-			const response = await fetchOrFail('/auth/demo', { method: 'POST' });
-			const data = await parseJsonOrFail(response, verifyResponseSchema);
-			this.#authenticate(data.user);
-		} catch {
-			this.#fail('failed');
-		}
-	}
-
 	// Re-pulls the approved-account balance/history (e.g. after a render/edit
 	// deducted credit server-side) so the profile panel reflects it without a
 	// page reload. A stale read here just leaves the last-known values in place.
@@ -434,7 +420,7 @@ class AuthState {
 	}
 
 	// `credit` is passed when the caller already has it from the same response
-	// (loadSession's /auth/me) — otherwise (a fresh NIP-07/NIP-46/demo login,
+	// (loadSession's /auth/me) — otherwise (a fresh NIP-07/NIP-46 login,
 	// which only get `user` back) it's fetched separately via refreshCredit().
 	#authenticate(user: SessionUser, credit?: CreditInfo | null): void {
 		this.user = user;

@@ -12,7 +12,6 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { RenderResponse } from '$lib/api/contract';
@@ -26,11 +25,10 @@ import {
 	getUserIdByPubkey,
 	recordBalance
 } from '$lib/server/billing';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { upscale4k, type StoredRenderResponse } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
-import { getOrCreateMediaByKey, uploadsBucketName } from '$lib/server/media';
-import { mediaAccess, mediaLink, providerMediaBatch } from '$lib/server/media-access';
+import { getOrCreateMediaByKey } from '$lib/server/media';
+import { mediaAccess, providerMediaBatch } from '$lib/server/media-access';
 import { assertSessionOwnedByUser } from '$lib/server/projects';
 
 // Anti-cost-abuse: each upscale is its own paid call, mirroring /api/edit — its
@@ -48,63 +46,54 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	const parsed = await parseBody(request, upscaleRequestSchema);
 	if (!parsed.ok) return parsed.response;
 
-	// The demo session bypasses D1 entirely (hooks.server.ts) — no balance to record
-	// and no rate-limit bucket to touch.
-	const demoUser = dev && locals.user.pubkey === DEMO_PUBKEY;
-	const db = demoUser ? null : getDb(platform);
-	const userId = db ? await getUserIdByPubkey(db, locals.user.pubkey) : null;
+	const db = getDb(platform);
+	const userId = await getUserIdByPubkey(db, locals.user.pubkey);
 
-	// A real session is only ever set from a D1 users↔sessions join (hooks.server.ts),
+	// A session is only ever set from a D1 users↔sessions join (hooks.server.ts),
 	// so a resolvable session with no matching user row is a data-integrity fault, not
 	// a normal case — fail closed rather than charge a call we can't attribute.
-	if (db && !userId) return apiError(500, 'account_error', 'Account record not found');
+	if (!userId) return apiError(500, 'account_error', 'Account record not found');
 
-	if (db) {
-		const limited = await touchRateLimit(
-			db,
-			`upscale:${locals.user.pubkey}`,
-			Date.now(),
-			UPSCALE_RATE_LIMIT
-		);
-		if (limited) return apiError(429, 'rate_limited', 'Too many requests');
-	}
+	const limited = await touchRateLimit(
+		db,
+		`upscale:${locals.user.pubkey}`,
+		Date.now(),
+		UPSCALE_RATE_LIMIT
+	);
+	if (limited) return apiError(429, 'rate_limited', 'Too many requests');
 
 	// The account's own balance right before this call — kept as the final,
 	// definitely-safe fallback if both recordGeneration and its own getCredit
 	// fallback fail below, so the response never falls through to upscale4k's
 	// raw (shared) archAI balance.
 	let precheckBalance: number | undefined;
-	if (db && userId) {
-		try {
-			const check = await assertGenerationAllowed(db, userId);
-			if (!check.allowed) {
-				return check.reason === 'not_approved'
-					? apiError(403, 'generation_restricted', 'Generation is limited to approved accounts')
-					: apiError(402, 'insufficient_credit', 'Test balance exhausted');
-			}
-			precheckBalance = check.balance;
-		} catch (err) {
-			console.error('credit pre-check failed:', err);
-			return apiError(500, 'upscale_failed', 'Upscale failed');
+	try {
+		const check = await assertGenerationAllowed(db, userId);
+		if (!check.allowed) {
+			return check.reason === 'not_approved'
+				? apiError(403, 'generation_restricted', 'Generation is limited to approved accounts')
+				: apiError(402, 'insufficient_credit', 'Test balance exhausted');
 		}
+		precheckBalance = check.balance;
+	} catch (err) {
+		console.error('credit pre-check failed:', err);
+		return apiError(500, 'upscale_failed', 'Upscale failed');
 	}
 
-	if (db && userId) {
-		const sessionOwned = await assertSessionOwnedByUser(db, userId, parsed.data.sessionId);
-		if (!sessionOwned) return apiError(404, 'session_not_found', 'Session not found');
-	}
+	const sessionOwned = await assertSessionOwnedByUser(db, userId, parsed.data.sessionId);
+	if (!sessionOwned) return apiError(404, 'session_not_found', 'Session not found');
 
-	const source =
-		db && userId ? await providerMediaBatch(db, platform, [parsed.data.imageKey]) : null;
-	if (db && userId && !source) return apiError(404, 'image_not_found', 'Image not found');
-	const sourceMedia = source?.get(parsed.data.imageKey)?.media;
-	const uploadsBucket = sourceMedia?.bucket;
+	const source = await providerMediaBatch(db, platform, [parsed.data.imageKey]);
+	const sourceImage = source?.get(parsed.data.imageKey);
+	if (!sourceImage) return apiError(404, 'image_not_found', 'Image not found');
+	const sourceMedia = sourceImage.media;
+	const uploadsBucket = sourceMedia.bucket;
 
 	let result: StoredRenderResponse;
 	try {
 		result = await upscale4k(platform, uploadsBucket, {
 			...parsed.data,
-			image: source?.get(parsed.data.imageKey)?.url ?? 'https://example.test/demo.webp'
+			image: sourceImage.url
 		});
 	} catch (err) {
 		// generation.ts already sanitizes/logs the detail; this route is the last
@@ -117,62 +106,49 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	// cache the resulting balance/deduction is a bookkeeping gap, not a reason to
 	// make the user think a completed, paid upscale failed.
 	let generationId: string | undefined;
-	if (db && userId) {
-		const outputMedia = await getOrCreateMediaByKey(
-			db,
-			uploadsBucket!,
-			result.outputKey,
-			result.outputHash,
-			result.outputSize
-		);
-		// recordBalance mirrors archAI's own (shared) account balance for ops
-		// visibility only — it must never reach the client, so read it before
-		// overwriting `result.balance` with the caller's own remaining limit.
-		try {
-			await recordBalance(db, userId, result.balance);
-		} catch (err) {
-			console.error('recordBalance failed after a successful upscale:', err);
-		}
-		try {
-			const credit = await recordGeneration(db, userId, {
-				resultMediaId: outputMedia.id,
-				sourceMediaId: sourceMedia!.id,
-				sessionId: parsed.data.sessionId,
-				prompt: '4k upscale',
-				kind: 'upscale',
-				amount: result.cost,
-				archaiRenderSec: result.renderSec,
-				archaiDownloadSec: result.downloadSec,
-				archaiReuploadSec: result.reuploadSec
-			});
-			generationId = credit.id;
-			result = { ...result, balance: credit.balance };
-		} catch (err) {
-			console.error('recordGeneration failed after a successful upscale:', err);
-			// Even on failure, never fall through to archAI's raw (shared) balance.
-			// Prefer a fresh read; if that also fails, fall back to the balance we
-			// already had from the precheck — still an approved-account balance,
-			// never the shared one.
-			const fallback = await getCredit(db, userId).catch((err) => {
-				console.error('getCredit fallback failed after a successful upscale:', err);
-				return null;
-			});
-			result = { ...result, balance: fallback?.balance ?? precheckBalance ?? 0 };
-		}
+	const outputMedia = await getOrCreateMediaByKey(
+		db,
+		uploadsBucket,
+		result.outputKey,
+		result.outputHash,
+		result.outputSize
+	);
+	// recordBalance mirrors archAI's own (shared) account balance for ops
+	// visibility only — it must never reach the client, so read it before
+	// overwriting `result.balance` with the caller's own remaining limit.
+	try {
+		await recordBalance(db, userId, result.balance);
+	} catch (err) {
+		console.error('recordBalance failed after a successful upscale:', err);
+	}
+	try {
+		const credit = await recordGeneration(db, userId, {
+			resultMediaId: outputMedia.id,
+			sourceMediaId: sourceMedia.id,
+			sessionId: parsed.data.sessionId,
+			prompt: '4k upscale',
+			kind: 'upscale',
+			amount: result.cost,
+			archaiRenderSec: result.renderSec,
+			archaiDownloadSec: result.downloadSec,
+			archaiReuploadSec: result.reuploadSec
+		});
+		generationId = credit.id;
+		result = { ...result, balance: credit.balance };
+	} catch (err) {
+		console.error('recordGeneration failed after a successful upscale:', err);
+		// Even on failure, never fall through to archAI's raw (shared) balance.
+		// Prefer a fresh read; if that also fails, fall back to the balance we
+		// already had from the precheck — still an approved-account balance,
+		// never the shared one.
+		const fallback = await getCredit(db, userId).catch((err) => {
+			console.error('getCredit fallback failed after a successful upscale:', err);
+			return null;
+		});
+		result = { ...result, balance: fallback?.balance ?? precheckBalance ?? 0 };
 	}
 
-	const output =
-		db && userId
-			? mediaAccess(
-					await getOrCreateMediaByKey(
-						db,
-						uploadsBucket!,
-						result.outputKey,
-						result.outputHash,
-						result.outputSize
-					)
-				)
-			: mediaLink(uploadsBucketName(platform), result.outputKey);
+	const output = mediaAccess(outputMedia);
 	return json({
 		...(generationId !== undefined ? { id: generationId } : {}),
 		output,

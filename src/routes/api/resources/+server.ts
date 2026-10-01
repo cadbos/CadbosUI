@@ -12,7 +12,6 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
@@ -21,7 +20,6 @@ import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { listResourceImages } from '$lib/server/generations';
 import { mediaAccessBatch } from '$lib/server/media-access';
 
@@ -47,13 +45,6 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 
 	const parsed = resourcesSearchParamsSchema.safeParse(Object.fromEntries(url.searchParams));
 	if (!parsed.success) return apiError(400, 'invalid_request', 'Invalid search params');
-
-	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
-		return json({
-			images: [],
-			pagination: { offset: parsed.data.offset, size: parsed.data.size, hasMore: false }
-		} satisfies ResourcesResponse);
-	}
 
 	const db = getDb(platform);
 	const userId = await getUserIdByPubkey(db, locals.user.pubkey);

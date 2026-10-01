@@ -15,7 +15,6 @@
 import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { mediaKey } from '$lib/server/media';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
@@ -223,19 +222,6 @@ describe('POST /api/style-transfer — billing', () => {
 
 		expect(responses.slice(0, 10).every((response) => response.status === 200)).toBe(true);
 		expect(responses[10].status).toBe(429);
-	});
-
-	it('uses the approved-account balance for the dev-only demo session', async () => {
-		const db = makeD1();
-		seedUser(db, 'demo-user', DEMO_PUBKEY);
-		grantAccess(db, 'demo-user', 12);
-
-		const response = await call({ pubkey: DEMO_PUBKEY }, { env: { DB: db } } as App.Platform, body);
-		expect(response.status).toBe(200);
-		const result = (await response.json()) as { balance: number; cost: number };
-
-		expect(result.balance).not.toBe(44);
-		expect(result.balance).toBe(12 - result.cost);
 	});
 
 	it('blocks an account with no credits row at all', async () => {

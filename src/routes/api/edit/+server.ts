@@ -12,7 +12,6 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { EditJobResponse } from '$lib/api/contract';
@@ -22,7 +21,6 @@ import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { assertGenerationAllowed, getUserIdByPubkey } from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import {
 	cancelFluxKontextEdit,
 	fluxKontextEditCost,
@@ -86,10 +84,7 @@ function remoteImageError(error: RemoteImageImportError): Response {
 
 // Editing is restricted further, by design: only accounts an admin has
 // manually approved (a `credits` row, billing.ts) may edit at all — a fresh
-// Nostr login alone is not enough (mirrors /api/render). ComfyUI jobs also
-// need a real D1 user row, so — unlike the old synchronous archAI-backed
-// handler — the dev demo account can't be used here (mirrors
-// object-replacement/light-settings).
+// Nostr login alone is not enough (mirrors /api/render).
 export const POST: RequestHandler = async ({ request, platform, locals, url }) => {
 	if (!locals.user) {
 		const response = authenticationRequiredResponse(locals.sessionLookupUnavailable);
@@ -101,10 +96,6 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 	}
 	const parsed = await parseBody(request, editRequestSchema);
 	if (!parsed.ok) return parsed.response;
-	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
-		logFailure(500, 'account_error', { operation: 'account_lookup' });
-		return apiError(500, 'account_error', 'Account record not found');
-	}
 
 	// Concurrent submissions from the same account could both pass the balance
 	// check before either job is persisted; a per-pubkey in-flight guard closes

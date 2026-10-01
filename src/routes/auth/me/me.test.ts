@@ -17,7 +17,6 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { MeResponse, SessionUser } from '$lib/api/contract';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { seedGeneration } from '$lib/server/testing/generation-fixtures';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { GET } from './+server';
 
 function seedUser(db: D1Database, id: string, pubkey: string): void {
@@ -126,12 +125,5 @@ describe('GET /auth/me — generation access control', () => {
 		expect(result.credit?.history).toEqual([
 			expect.objectContaining({ amount: 2, balanceAfter: 3, kind: 'render' })
 		]);
-	});
-
-	it('bypasses D1 entirely for the dev-only demo session', async () => {
-		const response = await call({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform);
-		expect(response.status).toBe(200);
-		const result = (await response.json()) as MeResponse;
-		expect(result.credit).toBeUndefined();
 	});
 });

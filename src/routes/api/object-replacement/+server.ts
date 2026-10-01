@@ -12,7 +12,6 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { ObjectReplacementJobResponse } from '$lib/api/contract';
@@ -22,7 +21,6 @@ import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { assertGenerationAllowed, getUserIdByPubkey } from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import {
 	cancelObjectReplacement,
 	objectReplacementCost,
@@ -93,10 +91,6 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 	}
 	const parsed = await parseBody(request, objectReplacementRequestSchema);
 	if (!parsed.ok) return parsed.response;
-	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
-		logFailure(500, 'account_error', { operation: 'account_lookup' });
-		return apiError(500, 'account_error', 'Account record not found');
-	}
 
 	// Concurrent submissions from the same account could both pass the balance
 	// check before either job is persisted; a per-pubkey in-flight guard closes

@@ -15,7 +15,6 @@
 import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser, UsageTotals } from '$lib/api/contract';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { GET } from './+server';
 
@@ -51,18 +50,6 @@ describe('GET /api/usage/totals', () => {
 		const response = await call({ pubkey: 'pubkey-1' }, platform(db));
 
 		expect(response.status).toBe(403);
-	});
-
-	it('fails closed for the dev-only demo session without touching D1', async () => {
-		const response = await call({ pubkey: DEMO_PUBKEY }, {
-			env: { ADMIN_PUBKEYS: DEMO_PUBKEY }
-		} as App.Platform);
-		const result = await response.json();
-
-		expect(response.status).toBe(500);
-		expect(result).toEqual({
-			error: { code: 'account_error', message: 'Account record not found' }
-		});
 	});
 
 	it('returns 500 when the admin has no user record', async () => {

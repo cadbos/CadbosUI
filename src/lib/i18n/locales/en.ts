@@ -128,8 +128,6 @@ export const en = {
 	'auth.error.extensionMissing': 'No Nostr extension found. Install Alby or nos2x.',
 	'auth.error.rejected': 'Sign-in was declined in the signer.',
 	'auth.error.failed': 'Sign-in failed. Please try again.',
-	'auth.demo.login': 'Enter demo mode',
-	'auth.demo.badge': 'DEMO',
 	'auth.credit.balance': 'Balance: {balance}',
 	'auth.credit.history': 'Spending history',
 	'auth.credit.historyEmpty': 'No transactions yet',

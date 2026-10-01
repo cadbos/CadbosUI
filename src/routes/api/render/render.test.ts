@@ -23,7 +23,6 @@ import {
 	TEST_S3_ENV
 } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 
 // Lets a single test force recordGeneration and/or the getCredit fallback to
 // reject, to prove the response never falls back to archAI's raw (shared) balance.
@@ -156,6 +155,22 @@ describe('POST /api/render — billing', () => {
 		expect(response.status).toBe(404);
 		const result = (await response.json()) as { error: { code: string } };
 		expect(result.error.code).toBe('session_not_found');
+	});
+
+	it('returns 404 image_not_found when the source image does not exist', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', pubkey);
+		grantAccess(db, 'user-1', 12);
+
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
+			...body,
+			imageKey: mediaKey(TEST_S3_BUCKET.name, 'test/missing.webp')
+		});
+
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({
+			error: { code: 'image_not_found', message: 'Image not found' }
+		});
 	});
 
 	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
@@ -305,12 +320,6 @@ describe('POST /api/render — billing', () => {
 		// approved-account balance read failing, the client must never see it.
 		expect(result.balance).not.toBe(48);
 		expect(result.balance).toBe(12);
-	});
-
-	it('bypasses balance recording entirely for the dev-only demo session', async () => {
-		// No D1 binding at all — proves the demo path never touches billing.
-		const response = await call({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform, body);
-		expect(response.status).toBe(200);
 	});
 
 	it('fails closed if a real session has no matching D1 user row', async () => {

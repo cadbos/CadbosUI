@@ -24,7 +24,6 @@ import {
 	TEST_S3_ENV
 } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { renderExterior } from '$lib/server/generation';
 
 // Lets a single test force recordGeneration and/or the getCredit fallback to
@@ -182,6 +181,22 @@ describe('POST /api/render/exterior — billing', () => {
 		expect(result.error.code).toBe('session_not_found');
 	});
 
+	it('returns 404 image_not_found when the source image does not exist', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', pubkey);
+		grantAccess(db, 'user-1', 12);
+
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
+			...body,
+			imageKey: mediaKey(TEST_S3_BUCKET.name, 'test/missing.webp')
+		});
+
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({
+			error: { code: 'image_not_found', message: 'Image not found' }
+		});
+	});
+
 	it('renders an exterior image and returns a URL', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);
@@ -321,12 +336,6 @@ describe('POST /api/render/exterior — billing', () => {
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as { balance: number };
 		expect(result.balance).toBe(12);
-	});
-
-	it('bypasses balance recording entirely for the dev-only demo session', async () => {
-		// No D1 binding at all — proves the demo path never touches billing.
-		const response = await call({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform, body);
-		expect(response.status).toBe(200);
 	});
 
 	it('fails closed if a real session has no matching D1 user row', async () => {
