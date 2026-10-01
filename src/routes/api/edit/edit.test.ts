@@ -16,7 +16,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { EditJobResponse, SessionUser } from '$lib/api/contract';
 import { ComfyUiError, type ComfyDownloadedImage } from '$lib/server/comfyui';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { mediaKey, type Bucket } from '$lib/server/media';
 import {
 	createFluxKontextEditJob,
@@ -309,17 +308,17 @@ describe('POST /api/edit', () => {
 		expect(integration.submit).not.toHaveBeenCalled();
 	});
 
-	it('rejects the dev demo account since ComfyUI jobs need a real D1 user row', async () => {
+	it('fails closed when the session has no matching D1 user row', async () => {
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-		const response = await callPost({ pubkey: DEMO_PUBKEY }, platform(makeD1()));
+		const response = await callPost({ pubkey: 'missing-pubkey' }, platform(makeD1()));
 
 		expect(response.status).toBe(500);
 		expectSingleLog(
 			consoleError.mock.calls.flat(),
 			failureLog(500, 'account_error', 'account_lookup')
 		);
-		expect(JSON.stringify(consoleError.mock.calls.flat())).not.toContain(DEMO_PUBKEY);
+		expect(JSON.stringify(consoleError.mock.calls.flat())).not.toContain('missing-pubkey');
 	});
 
 	it('requires an approved account with enough credit for the snapshotted tariff', async () => {

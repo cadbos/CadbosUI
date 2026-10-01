@@ -15,7 +15,6 @@
 import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser, UserUsageResponse } from '$lib/api/contract';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { seedGeneration as seedGenerationFixture } from '$lib/server/testing/generation-fixtures';
 import { GET } from './+server';
@@ -219,21 +218,6 @@ describe('GET /api/usage', () => {
 		);
 
 		expect(response.status).toBe(200);
-	});
-
-	it('fails closed for the dev-only demo session without touching D1', async () => {
-		const response = await call({ pubkey: DEMO_PUBKEY }, {
-			env: { ADMIN_PUBKEYS: DEMO_PUBKEY }
-		} as App.Platform);
-		const result = await response.json();
-
-		expect(response.status).toBe(500);
-		expect(result).toEqual({
-			error: {
-				code: 'account_error',
-				message: 'Account record not found'
-			}
-		});
 	});
 
 	it('fails closed if a real session has no matching D1 user row', async () => {

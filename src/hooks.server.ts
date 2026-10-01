@@ -24,7 +24,6 @@ import {
 	getClientIntegrityManifest,
 	type ClientIntegrityManifest
 } from '$lib/server/client-integrity';
-import { DEMO_SESSION_ID, DEMO_USER } from '$lib/server/demo';
 
 const securityHeaders: Record<string, string> = {
 	'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
@@ -38,11 +37,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const sessionId = event.cookies.get(SESSION_COOKIE);
 	event.locals.sessionLookupUnavailable = false;
 
-	// Demo bypass: in dev mode a special session cookie skips D1 entirely so the
-	// showcase branch works without a local D1 database being configured.
-	if (dev && sessionId === DEMO_SESSION_ID) {
-		event.locals.user = DEMO_USER;
-	} else if (sessionId) {
+	if (sessionId) {
 		try {
 			event.locals.user = await findValidSession(getDb(event.platform), sessionId, Date.now());
 		} catch (error) {

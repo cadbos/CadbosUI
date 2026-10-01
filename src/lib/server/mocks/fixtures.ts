@@ -16,8 +16,8 @@
 // built against the real wire types before the integrations land (phase C),
 // where every endpoint below is replaced by a real server-only module.
 //
-// Demo branch: URLs point to real Unsplash-licensed photos so the UI looks
-// convincing without requiring live external services.
+// URLs point to real Unsplash-licensed photos so the UI looks convincing
+// without requiring live external services.
 
 import { DEFAULT_UPLOADS_BUCKET_NAME } from '$lib/server/media';
 
@@ -34,7 +34,7 @@ export function mockUpload(): {
 	dimensions: [number, number];
 } {
 	return {
-		// Original room photo — Unsplash free (no attribution required for demo)
+		// Original room photo — Unsplash free (no attribution required)
 		image: {
 			key: `${DEFAULT_UPLOADS_BUCKET_NAME}/photo-1555041469-a586c61ea9bc`,
 			url: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=1200&q=80'

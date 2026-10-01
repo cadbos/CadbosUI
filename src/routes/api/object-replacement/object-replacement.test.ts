@@ -16,7 +16,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { ObjectReplacementJobResponse, SessionUser } from '$lib/api/contract';
 import { ComfyUiError, type ComfyDownloadedImage } from '$lib/server/comfyui';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { mediaKey, type Bucket } from '$lib/server/media';
 import {
 	createObjectReplacementJob,
@@ -350,12 +349,6 @@ describe('POST /api/object-replacement', () => {
 		});
 		expectSingleLog(consoleError.mock.calls.flat(), expectedLog);
 		expect(JSON.stringify(expectedLog)).not.toContain('missing-pubkey');
-		consoleError.mockClear();
-
-		const demoAccount = await callPost({ pubkey: DEMO_PUBKEY }, platform(makeD1()));
-		expect(demoAccount.status).toBe(500);
-		expectSingleLog(consoleError.mock.calls.flat(), expectedLog);
-		expect(JSON.stringify(expectedLog)).not.toContain(DEMO_PUBKEY);
 	});
 
 	it('requires an approved account with enough credit for the snapshotted tariff', async () => {

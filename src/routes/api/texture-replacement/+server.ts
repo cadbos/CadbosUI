@@ -12,7 +12,6 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { TextureReplacementJobResponse } from '$lib/api/contract';
@@ -27,7 +26,6 @@ import {
 	recordBalance
 } from '$lib/server/billing';
 import { ComfyUiError } from '$lib/server/comfyui';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { replaceTexturesWithMask, type StoredRenderResponse } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
 import { getOrCreateMediaByKey } from '$lib/server/media';
@@ -80,9 +78,6 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 	}
 	const parsed = await parseBody(request, textureReplacementRequestSchema);
 	if (!parsed.ok) return parsed.response;
-	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
-		return apiError(500, 'account_error', 'Account record not found');
-	}
 
 	const pubkey = locals.user.pubkey;
 	if (textureReplacementInFlight.has(pubkey)) {

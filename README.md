@@ -40,9 +40,10 @@ pnpm install
 pnpm dev
 ```
 
-Open the URL printed by Vite. Development mode includes a demo sign-in and deterministic
-fixtures for the core upload and generation flows, so those flows can be exercised without
-provider credentials. Features backed by Cloudflare resources or the private ComfyUI
+Open the URL printed by Vite and sign in with a Nostr login. Development mode includes
+deterministic fixtures for the core upload and generation flows, so those flows can be
+exercised without provider credentials; generation still requires an account approved by an
+admin (a `credits` row in D1). Features backed by Cloudflare resources or the private ComfyUI
 service require access to the corresponding bindings.
 
 To run browser-based unit tests or end-to-end tests, install Chromium once:

@@ -12,13 +12,11 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { dev } from '$app/environment';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { getUserIdByPubkey } from '$lib/server/billing';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 
 export async function getUsageViewerDb(
 	platform: App.Platform | undefined,
@@ -35,9 +33,6 @@ export function authorizeUsageViewer(
 ): Response | null {
 	if (!isAdminPubkey(user.pubkey, platform?.env?.ADMIN_PUBKEYS)) {
 		return apiError(403, 'forbidden', 'Admin access required');
-	}
-	if (dev && user.pubkey === DEMO_PUBKEY) {
-		return apiError(500, 'account_error', 'Account record not found');
 	}
 	return null;
 }

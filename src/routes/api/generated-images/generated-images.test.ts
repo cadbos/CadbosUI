@@ -30,7 +30,6 @@ import {
 	TEST_S3_BUCKET,
 	TEST_S3_ENV
 } from '$lib/server/testing/generation-fixtures';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 
 const storage = vi.hoisted(() => ({
 	deleteS3Object:
@@ -299,19 +298,6 @@ describe('GET /api/generated-images', () => {
 		expect(response.status).toBe(400);
 	});
 
-	it('fails closed for the dev-only demo session without touching D1', async () => {
-		const response = await call({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform);
-		const result = await response.json();
-
-		expect(response.status).toBe(500);
-		expect(result).toEqual({
-			error: {
-				code: 'account_error',
-				message: 'Account record not found'
-			}
-		});
-	});
-
 	it('fails closed if a real session has no matching D1 user row', async () => {
 		const response = await call({ pubkey: 'ghost-pubkey' }, {
 			env: { DB: makeD1() }
@@ -522,19 +508,6 @@ describe('DELETE /api/generated-images', () => {
 		expect(media).toBeNull();
 	});
 
-	it('fails closed for the dev-only demo session without touching D1 or S3', async () => {
-		const uploadsBucket = bucket();
-
-		const response = await callDelete(
-			{ pubkey: DEMO_PUBKEY },
-			{ env: {} } as unknown as App.Platform,
-			{ id: 'image-1' }
-		);
-
-		expect(response.status).toBe(500);
-		expect(uploadsBucket.delete).not.toHaveBeenCalled();
-	});
-
 	it('fails closed if a real session has no matching D1 user row', async () => {
 		const response = await callDelete(
 			{ pubkey: 'ghost-pubkey' },
@@ -673,16 +646,6 @@ describe('GET /api/generated-images/[id]', () => {
 		expect(result.formSnapshot).toEqual({ ...TEST_FORM_SNAPSHOT, styleReferenceImage: undefined });
 		expect(result.media).toEqual([result.image, result.source]);
 	});
-
-	it('fails closed for the dev-only demo session without touching D1', async () => {
-		const response = await callDetail(
-			{ pubkey: DEMO_PUBKEY },
-			{ env: {} } as App.Platform,
-			'image-1'
-		);
-
-		expect(response.status).toBe(500);
-	});
 });
 
 describe('GET /api/generated-images/sessions', () => {
@@ -722,11 +685,5 @@ describe('GET /api/generated-images/sessions', () => {
 				}
 			]
 		} satisfies SceneFilterOptionsResponse);
-	});
-
-	it('fails closed for the dev-only demo session without touching D1', async () => {
-		const response = await callSessions({ pubkey: DEMO_PUBKEY }, { env: {} } as App.Platform);
-
-		expect(response.status).toBe(500);
 	});
 });

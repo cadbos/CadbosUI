@@ -12,14 +12,12 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { apiError, remoteImageUploadRequestSchema } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import { findGenerationSourceByHash } from '$lib/server/generations';
 import {
 	getBucketByName,
@@ -54,26 +52,21 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 	}
 
-	// Demo sessions skip account lookup and deduplication, but still use D1 to
-	// resolve the uploads bucket via getBucketByName.
-	const demoUser = dev && locals.user.pubkey === DEMO_PUBKEY;
 	const db = getDb(platform);
 	const uploadsBucket = await getBucketByName(db, uploadsBucketName(platform));
-	const userId = demoUser ? null : await getUserIdByPubkey(db, locals.user.pubkey);
-	if (!demoUser && !userId) return apiError(500, 'account_error', 'Account record not found');
+	const userId = await getUserIdByPubkey(db, locals.user.pubkey);
+	if (!userId) return apiError(500, 'account_error', 'Account record not found');
 
 	// Generation source media isn't always a stored upload — render/edit calls
 	// can use their prior output (recordGeneration) — so a hash match
 	// is only reused when it actually resolves to our own bucket; otherwise
 	// this falls through to a normal upload rather than handing back an
 	// arbitrary URL as if it were deduped.
-	const findExisting = userId
-		? async (hash: string) => {
-				const mediaId = await findGenerationSourceByHash(db, userId, hash, uploadsBucket.name);
-				if (!mediaId) return null;
-				return (await getMedia(db, mediaId))?.filename ?? null;
-			}
-		: undefined;
+	const findExisting = async (hash: string): Promise<string | null> => {
+		const mediaId = await findGenerationSourceByHash(db, userId, hash, uploadsBucket.name);
+		if (!mediaId) return null;
+		return (await getMedia(db, mediaId))?.filename ?? null;
+	};
 
 	if (request.headers.get('content-type')?.startsWith('application/json')) {
 		const body: unknown = await request.json().catch(() => null);
@@ -134,11 +127,10 @@ export const POST: RequestHandler = async ({ request, platform, url, locals }) =
 	try {
 		const bytes = await file.arrayBuffer();
 		const hash = await hashBytes(bytes);
-		const existingKey = await findExisting?.(hash);
+		const existingKey = await findExisting(hash);
 		const result = existingKey
 			? { key: existingKey, mime: normalizedMime, size: bytes.byteLength, hash }
 			: await uploadImageBytes(platform, uploadsBucket, bytes, file.type, undefined, hash);
-		if (!userId) return apiError(500, 'account_error', 'Account record not found');
 		const media = await getOrCreateMediaByKey(
 			db,
 			uploadsBucket,

@@ -12,7 +12,6 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
@@ -21,7 +20,6 @@ import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/auth/repository';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
-import { DEMO_PUBKEY } from '$lib/server/demo';
 import {
 	deleteGeneratedImage,
 	getGeneratedImageForUser,
@@ -54,10 +52,6 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 
 	const parsed = generatedImagesSearchParamsSchema.safeParse(Object.fromEntries(url.searchParams));
 	if (!parsed.success) return apiError(400, 'invalid_request', 'Invalid search params');
-
-	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
-		return apiError(500, 'account_error', 'Account record not found');
-	}
 
 	const db = getDb(platform);
 	const userId = await getUserIdByPubkey(db, locals.user.pubkey);
@@ -100,10 +94,6 @@ export const DELETE: RequestHandler = async ({ request, platform, locals }) => {
 	const body = await request.json().catch(() => null);
 	const parsed = generatedImageDeleteSchema.safeParse(body);
 	if (!parsed.success) return apiError(400, 'invalid_request', 'Invalid request body');
-
-	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
-		return apiError(500, 'account_error', 'Account record not found');
-	}
 
 	const db = getDb(platform);
 	const userId = await getUserIdByPubkey(db, locals.user.pubkey);
