@@ -379,7 +379,7 @@ export const en = {
 	'status.hint.assets':
 		"Serves the app's own interface files (JS, CSS, images). Unrelated to the S3 storage used for user-uploaded images.",
 	'status.hint.comfyui':
-		'Provides all editing instruments: Object replacement, Texture replacement, Edit (custom prompt), and Light.',
+		'Provides all editing instruments: Object replacement, Texture replacement, Edit (custom prompt), Light, and Repaint.',
 	'status.hint.d1':
 		'Stores accounts, Spending history, Balance, and Scenes (your generation history).',
 	'status.hint.nostr':
