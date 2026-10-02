@@ -51,7 +51,9 @@ export const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	textureReplacementSurface: '',
 	textureReplacementMasked: false,
 	lightSettingsPresetIds: [],
-	lightSettingsInstruction: ''
+	lightSettingsInstruction: '',
+	repaintTarget: '',
+	repaintColor: '#f4f1ea'
 };
 
 function syncFirst<T>(value: Promise<T | null>): T | null {

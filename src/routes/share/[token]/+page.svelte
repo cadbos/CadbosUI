@@ -121,6 +121,11 @@ before the Change Date. See LICENSE for complete terms.
 					value: snapshot.lightSettingsInstruction
 				});
 			}
+		} else if (kind === 'repaint') {
+			if (snapshot.repaintTarget.trim() !== '') {
+				rows.push({ label: t('repaint.targetLabel'), value: snapshot.repaintTarget });
+			}
+			rows.push({ label: t('repaint.colorLabel'), value: snapshot.repaintColor });
 		}
 		return rows;
 	}

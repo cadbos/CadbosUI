@@ -1584,3 +1584,80 @@ test('the Light settings tool composes an instruction from selected presets and 
 		formSnapshot: expect.any(Object)
 	});
 });
+
+test('the Repaint tool sends the target and a palette or custom color, and shows the result', async ({
+	page
+}) => {
+	const jobId = '223e4567-e89b-42d3-a456-426614174000';
+	await authenticate(page);
+	await mockUpload(page);
+	let submittedBody: unknown;
+	await page.route('**/api/repaint', async (route) => {
+		submittedBody = route.request().postDataJSON();
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: `/api/repaint/${jobId}` },
+			body: JSON.stringify({ id: jobId, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/repaint/${jobId}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: jobId,
+				status: 'completed',
+				output: media(2, '/api/media/test-media/repainted.webp'),
+				cost: 2,
+				balance: 90
+			})
+		});
+	});
+
+	await openCreate(page);
+	await page.getByRole('tab', { name: 'Редактирование' }).click();
+	await page
+		.locator('#mode-panel-edit input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+
+	await page.getByRole('tab', { name: 'Перекраска' }).click();
+	const panel = page.locator('#edit-tool-panel-repaint');
+	const apply = panel.getByRole('button', { name: 'Перекрасить' });
+	await expect(panel.getByText('Напишите, что нужно перекрасить.')).toBeVisible();
+	await expect(apply).toBeDisabled();
+
+	await panel.getByRole('textbox', { name: 'Что перекрасить' }).fill('стены за диваном');
+	await panel.getByRole('button', { name: 'Шалфей' }).click();
+	await expect(panel.getByRole('button', { name: 'Шалфей' })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+
+	await panel.getByRole('textbox', { name: 'шестнадцатеричный код цвета' }).fill('#7A9E7E');
+	await expect(panel.getByText('#7A9E7E')).toBeVisible();
+	await expect(panel.getByRole('button', { name: 'Шалфей' })).toHaveAttribute(
+		'aria-pressed',
+		'false'
+	);
+
+	await apply.click();
+
+	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
+		'src',
+		'/api/media/test-media/repainted.webp',
+		{ timeout: 10_000 }
+	);
+	expect(submittedBody).toEqual({
+		imageKey: mediaKey(1),
+		target: 'стены за диваном',
+		color: '#7a9e7e',
+		sessionId: E2E_SESSION_ID,
+		formSnapshot: expect.objectContaining({
+			repaintTarget: 'стены за диваном',
+			repaintColor: '#7a9e7e',
+			editOperationType: 'repaint'
+		})
+	});
+	await expect(panel.getByRole('status')).toHaveText('Готово — цвет изменён.');
+});

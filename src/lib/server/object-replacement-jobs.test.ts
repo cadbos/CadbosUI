@@ -41,7 +41,9 @@ const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	textureReplacementSurface: '',
 	textureReplacementMasked: false,
 	lightSettingsPresetIds: [],
-	lightSettingsInstruction: ''
+	lightSettingsInstruction: '',
+	repaintTarget: '',
+	repaintColor: '#f4f1ea'
 };
 
 function seedAccount(db: D1Database, balance = 12): void {

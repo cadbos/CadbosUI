@@ -384,10 +384,13 @@ export async function deleteGeneratedImage(
 					'SELECT 1 FROM generations WHERE result_media_id = ? OR source_media_id = ? OR reference_media_id = ? ' +
 					'UNION ALL SELECT 1 FROM object_replacement_jobs WHERE scene_media_id = ? OR reference_media_id = ? OR output_media_id = ? ' +
 					'UNION ALL SELECT 1 FROM texture_replacement_jobs WHERE scene_media_id = ? OR reference_media_id = ? OR output_media_id = ? ' +
-					'UNION ALL SELECT 1 FROM light_settings_jobs WHERE scene_media_id = ? OR output_media_id = ?' +
+					'UNION ALL SELECT 1 FROM light_settings_jobs WHERE scene_media_id = ? OR output_media_id = ? ' +
+					'UNION ALL SELECT 1 FROM repaint_jobs WHERE scene_media_id = ? OR output_media_id = ?' +
 					') RETURNING 1 AS deleted'
 			)
 			.bind(
+				mediaId,
+				mediaId,
 				mediaId,
 				mediaId,
 				mediaId,

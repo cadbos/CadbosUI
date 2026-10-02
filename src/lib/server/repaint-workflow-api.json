@@ -1,0 +1,405 @@
+{
+	"42": {
+		"inputs": {
+			"image": "scene.png"
+		},
+		"class_type": "LoadImage",
+		"_meta": {
+			"title": "Load Image"
+		}
+	},
+	"46": {
+		"inputs": {
+			"image": "color-swatch.png"
+		},
+		"class_type": "LoadImage",
+		"_meta": {
+			"title": "Load Image"
+		}
+	},
+	"97": {
+		"inputs": {
+			"upscale_model": ["98", 0],
+			"image": ["62:8", 0]
+		},
+		"class_type": "ImageUpscaleWithModel",
+		"_meta": {
+			"title": "Upscale Image (using Model)"
+		}
+	},
+	"98": {
+		"inputs": {
+			"model_name": "4xNomos2_hq_dat2.safetensors"
+		},
+		"class_type": "UpscaleModelLoader",
+		"_meta": {
+			"title": "Upscale model"
+		}
+	},
+	"99": {
+		"inputs": {
+			"upscale_method": "lanczos",
+			"scale_by": 0.5,
+			"image": ["97", 0]
+		},
+		"class_type": "ImageScaleBy",
+		"_meta": {
+			"title": "Итоговый множитель (0.5 = x2, 1.0 = x4)"
+		}
+	},
+	"100": {
+		"inputs": {
+			"filename_prefix": "Flux2_upscaled",
+			"images": ["99", 0]
+		},
+		"class_type": "SaveImage",
+		"_meta": {
+			"title": "Save (upscaled)"
+		}
+	},
+	"101": {
+		"inputs": {
+			"value": ""
+		},
+		"class_type": "PrimitiveString",
+		"_meta": {
+			"title": "Prompt (RU)"
+		}
+	},
+	"103": {
+		"inputs": {
+			"source": ["102:150", 0]
+		},
+		"class_type": "PreviewAny",
+		"_meta": {
+			"title": "Translated prompt preview"
+		}
+	},
+	"104": {
+		"inputs": {
+			"value": "Image 1 is the scene. Image 2 is a flat color swatch: it contains no object, only a single solid color.\n\nRepaint the {} in image 1 using the exact color shown in image 2.\n\nThe color comes only from image 2: match its hue, saturation and brightness precisely. Use image 2 only as a color sample — do not place the swatch, a square, or any shape or pattern from it into the scene.\n\nThe repainted {} keeps everything except its color: the same shape, geometry, edges, position and size, the same material and surface texture (wood grain, fabric weave, plaster, metal and so on remain visible through the new color), and the same finish, whether matte, satin or glossy. The scene's lighting stays physically correct on the new color: the same highlights, shadows, reflections and shading gradients as in image 1, so the color looks naturally lit rather than flat or pasted on.\n\nOnly the {} changes color. Everything else in image 1 stays pixel-identical: all other objects, furniture, walls, floor, ceiling, decor, textiles, windows, light sources, background, camera position, framing and perspective remain exactly as they are, with their original colors. Do not recolor adjacent surfaces or objects, and do not let the new color bleed onto their edges.\n\nPhotorealistic and seamless, as if the {} had actually been painted in this color and photographed again with the same camera under the same light."
+		},
+		"class_type": "PrimitiveStringMultiline",
+		"_meta": {
+			"title": "Prompt template"
+		}
+	},
+	"105": {
+		"inputs": {
+			"string": ["104", 0],
+			"find": "{}",
+			"replace": ["102:150", 0]
+		},
+		"class_type": "StringReplace",
+		"_meta": {
+			"title": "Replace Text"
+		}
+	},
+	"106": {
+		"inputs": {
+			"source": ["105", 0]
+		},
+		"class_type": "PreviewAny",
+		"_meta": {
+			"title": "Positive prompt preview"
+		}
+	},
+	"102:147": {
+		"inputs": {
+			"clip_name": "Qwen3VL-4B-Instruct-Q8_0.gguf",
+			"type": "ltxv"
+		},
+		"class_type": "CLIPLoaderGGUF",
+		"_meta": {
+			"title": "CLIPLoader (GGUF)"
+		}
+	},
+	"102:152": {
+		"inputs": {
+			"string_a": "Translate the following text to English, preserving original meaning:",
+			"string_b": ["101", 0],
+			"delimiter": " "
+		},
+		"class_type": "StringConcatenate",
+		"_meta": {
+			"title": "Concatenate Text"
+		}
+	},
+	"102:150": {
+		"inputs": {
+			"prompt": ["102:152", 0],
+			"max_length": 512,
+			"sampling_mode": "on",
+			"sampling_mode.temperature": 0.7,
+			"sampling_mode.top_k": 64,
+			"sampling_mode.top_p": 0.95,
+			"sampling_mode.min_p": 0.05,
+			"sampling_mode.repetition_penalty": 1.05,
+			"sampling_mode.seed": 0,
+			"sampling_mode.presence_penalty": 0,
+			"thinking": false,
+			"use_default_template": true,
+			"clip": ["102:147", 0]
+		},
+		"class_type": "TextGenerate",
+		"_meta": {
+			"title": "Generate Text"
+		}
+	},
+	"62:48": {
+		"inputs": {
+			"steps": ["62:94", 0],
+			"width": ["62:66", 0],
+			"height": ["62:66", 1]
+		},
+		"class_type": "Flux2Scheduler",
+		"_meta": {
+			"title": "Flux2Scheduler"
+		}
+	},
+	"62:22": {
+		"inputs": {
+			"model": ["62:93", 0],
+			"conditioning": ["62:39", 0]
+		},
+		"class_type": "BasicGuider",
+		"_meta": {
+			"title": "Basic Guider"
+		}
+	},
+	"62:10": {
+		"inputs": {
+			"vae_name": "flux2-vae.safetensors"
+		},
+		"class_type": "VAELoader",
+		"_meta": {
+			"title": "Load VAE"
+		}
+	},
+	"62:40": {
+		"inputs": {
+			"pixels": ["62:41", 0],
+			"vae": ["62:10", 0]
+		},
+		"class_type": "VAEEncode",
+		"_meta": {
+			"title": "VAE Encode"
+		}
+	},
+	"62:44": {
+		"inputs": {
+			"pixels": ["62:45", 0],
+			"vae": ["62:10", 0]
+		},
+		"class_type": "VAEEncode",
+		"_meta": {
+			"title": "VAE Encode"
+		}
+	},
+	"62:41": {
+		"inputs": {
+			"upscale_method": "area",
+			"megapixels": 1,
+			"resolution_steps": 1,
+			"image": ["46", 0]
+		},
+		"class_type": "ImageScaleToTotalPixels",
+		"_meta": {
+			"title": "Scale Image to Total Pixels"
+		}
+	},
+	"62:26": {
+		"inputs": {
+			"guidance": 4,
+			"conditioning": ["62:6", 0]
+		},
+		"class_type": "FluxGuidance",
+		"_meta": {
+			"title": "FluxGuidance"
+		}
+	},
+	"62:8": {
+		"inputs": {
+			"samples": ["62:13", 0],
+			"vae": ["62:10", 0]
+		},
+		"class_type": "VAEDecode",
+		"_meta": {
+			"title": "VAE Decode"
+		}
+	},
+	"62:13": {
+		"inputs": {
+			"noise": ["62:25", 0],
+			"guider": ["62:22", 0],
+			"sampler": ["62:16", 0],
+			"sigmas": ["62:48", 0],
+			"latent_image": ["62:47", 0]
+		},
+		"class_type": "SamplerCustomAdvanced",
+		"_meta": {
+			"title": "SamplerCustomAdvanced"
+		}
+	},
+	"62:16": {
+		"inputs": {
+			"sampler_name": "euler"
+		},
+		"class_type": "KSamplerSelect",
+		"_meta": {
+			"title": "KSamplerSelect"
+		}
+	},
+	"62:43": {
+		"inputs": {
+			"conditioning": ["62:26", 0],
+			"latent": ["62:44", 0]
+		},
+		"class_type": "ReferenceLatent",
+		"_meta": {
+			"title": "ReferenceLatent"
+		}
+	},
+	"62:39": {
+		"inputs": {
+			"conditioning": ["62:43", 0],
+			"latent": ["62:40", 0]
+		},
+		"class_type": "ReferenceLatent",
+		"_meta": {
+			"title": "ReferenceLatent"
+		}
+	},
+	"62:12": {
+		"inputs": {
+			"unet_name": "flux2_dev_fp8mixed.safetensors",
+			"weight_dtype": "default"
+		},
+		"class_type": "UNETLoader",
+		"_meta": {
+			"title": "Load Diffusion Model"
+		}
+	},
+	"62:6": {
+		"inputs": {
+			"text": ["105", 0],
+			"clip": ["62:38", 0]
+		},
+		"class_type": "CLIPTextEncode",
+		"_meta": {
+			"title": "CLIP Text Encode (Positive Prompt)"
+		}
+	},
+	"62:25": {
+		"inputs": {
+			"noise_seed": 983899566287791
+		},
+		"class_type": "RandomNoise",
+		"_meta": {
+			"title": "RandomNoise"
+		}
+	},
+	"62:45": {
+		"inputs": {
+			"upscale_method": "area",
+			"megapixels": 1,
+			"resolution_steps": 1,
+			"image": ["42", 0]
+		},
+		"class_type": "ImageScaleToTotalPixels",
+		"_meta": {
+			"title": "Scale Image to Total Pixels"
+		}
+	},
+	"62:66": {
+		"inputs": {
+			"image": ["62:45", 0]
+		},
+		"class_type": "GetImageSize",
+		"_meta": {
+			"title": "Get Image Size"
+		}
+	},
+	"62:47": {
+		"inputs": {
+			"width": ["62:66", 0],
+			"height": ["62:66", 1],
+			"batch_size": 1
+		},
+		"class_type": "EmptyFlux2LatentImage",
+		"_meta": {
+			"title": "Empty Flux 2 Latent"
+		}
+	},
+	"62:38": {
+		"inputs": {
+			"clip_name": "mistral_3_small_flux2_fp8.safetensors",
+			"type": "flux2",
+			"device": "default"
+		},
+		"class_type": "CLIPLoader",
+		"_meta": {
+			"title": "Load CLIP"
+		}
+	},
+	"62:88": {
+		"inputs": {
+			"lora_name": "Flux_2-Turbo-LoRA_comfyui.safetensors",
+			"strength_model": 1,
+			"model": ["62:12", 0]
+		},
+		"class_type": "LoraLoaderModelOnly",
+		"_meta": {
+			"title": "Load LoRA"
+		}
+	},
+	"62:90": {
+		"inputs": {
+			"value": 20
+		},
+		"class_type": "PrimitiveInt",
+		"_meta": {
+			"title": "Step"
+		}
+	},
+	"62:92": {
+		"inputs": {
+			"value": 8
+		},
+		"class_type": "PrimitiveInt",
+		"_meta": {
+			"title": "Step"
+		}
+	},
+	"62:93": {
+		"inputs": {
+			"switch": ["62:95", 0],
+			"on_false": ["62:12", 0],
+			"on_true": ["62:88", 0]
+		},
+		"class_type": "ComfySwitchNode",
+		"_meta": {
+			"title": "Switch (Model)"
+		}
+	},
+	"62:94": {
+		"inputs": {
+			"switch": ["62:95", 0],
+			"on_false": ["62:90", 0],
+			"on_true": ["62:92", 0]
+		},
+		"class_type": "ComfySwitchNode",
+		"_meta": {
+			"title": "Switch (Step)"
+		}
+	},
+	"62:95": {
+		"inputs": {
+			"value": true
+		},
+		"class_type": "PrimitiveBoolean",
+		"_meta": {
+			"title": "Enable 8steps LoRA"
+		}
+	}
+}

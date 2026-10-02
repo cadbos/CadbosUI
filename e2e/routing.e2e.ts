@@ -261,6 +261,9 @@ test('switching edit tool tabs updates only the tool query param', async ({ page
 
 	await page.getByRole('tab', { name: /Замена текстуры.*Альфа/ }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=texture-replacement$/);
+
+	await page.getByRole('tab', { name: 'Перекраска' }).click();
+	await expect(page).toHaveURL(/\/edit\?tool=repaint&color=f4f1ea$/);
 });
 
 test('texture replacement surface text round-trips without image URLs or a legacy source mode', async ({

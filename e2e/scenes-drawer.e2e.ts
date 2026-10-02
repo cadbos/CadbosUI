@@ -38,7 +38,9 @@ const FORM_SNAPSHOT = {
 	textureReplacementSurface: '',
 	textureReplacementMasked: false,
 	lightSettingsPresetIds: [],
-	lightSettingsInstruction: ''
+	lightSettingsInstruction: '',
+	repaintTarget: '',
+	repaintColor: '#f4f1ea'
 };
 
 async function authenticate(page: Page): Promise<void> {

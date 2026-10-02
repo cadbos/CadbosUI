@@ -26,6 +26,7 @@ import {
 	applyAc9Fixture,
 	buildAc9RequestJSON
 } from '$lib/state/request-fixtures';
+import { DEFAULT_REPAINT_COLOR } from '$lib/repaint-colors';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 import {
 	RequestImageUploadError,
@@ -229,6 +230,8 @@ describe('serialization', () => {
 			textureReplacementMasked: false,
 			lightSettingsPresetIds: [],
 			lightSettingsInstruction: '',
+			repaintTarget: '',
+			repaintColor: DEFAULT_REPAINT_COLOR,
 			currentRender: undefined
 		});
 	});
@@ -335,6 +338,9 @@ describe('copyFrom', () => {
 		applyAc9Fixture();
 		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);
 		request.setActiveObjectReplacementJobId('123e4567-e89b-42d3-a456-426614174000');
+		request.setRepaintTarget('стены');
+		request.setRepaintColor('#2f3e5c');
+		request.setActiveRepaintJobId('223e4567-e89b-42d3-a456-426614174000');
 		request.setStatus('rendering');
 		request.setCurrentRender({
 			id: 'render-a',
@@ -360,6 +366,10 @@ describe('copyFrom', () => {
 		expect(other.sessionId).toBe(request.sessionId);
 		expect(other.status).toBe('rendering');
 		expect(other.activeObjectReplacementJobId).toBe(request.activeObjectReplacementJobId);
+		expect(other.repaintTarget).toBe('стены');
+		expect(other.repaintColor).toBe('#2f3e5c');
+		expect(other.activeRepaintJob).toEqual(request.activeRepaintJob);
+		expect(other.activeRepaintJob).not.toBe(request.activeRepaintJob);
 		expect(other.canUndoEdit).toBe(true);
 		expect(other.currentRender).toEqual(request.currentRender);
 	});
@@ -1480,6 +1490,105 @@ describe('toLightSettingsRequest', () => {
 			},
 			formSnapshot
 		});
+	});
+});
+
+describe('toRepaintRequest', () => {
+	it('reports a missing image and target when the form is empty', async () => {
+		expect(request.repaintColor).toBe(DEFAULT_REPAINT_COLOR);
+		expect(request.validateRepaint()).toEqual({
+			valid: false,
+			missing: ['image', 'repaintTarget']
+		});
+		expect(await request.toRepaintRequest()).toBeNull();
+	});
+
+	it('sends the trimmed target and the picked color with the current result', async () => {
+		request.setImage(AC9_IMAGE);
+		request.setRepaintTarget('  стены за диваном  ');
+		request.setRepaintColor('#a3b19b');
+		expect(request.validateRepaint()).toEqual({ valid: true, missing: [] });
+
+		expect(await request.toRepaintRequest()).toEqual({
+			imageKey: AC9_IMAGE.mediaKey,
+			target: 'стены за диваном',
+			color: '#a3b19b',
+			sessionId: AC9_SESSION_ID,
+			formSnapshot: request.captureFormSnapshot('repaint')
+		});
+
+		request.setCurrentRender({ id: 'render-1', outputKey: '201', cost: 2, balance: 18, ts: 0 });
+		expect((await request.toRepaintRequest())?.imageKey).toBe('201');
+	});
+
+	it('accepts only a lowercase #rrggbb color, a bounded target and a uuid job id', () => {
+		expect(() => request.setRepaintColor('#A3B19B')).toThrow();
+		expect(() => request.setRepaintColor('red')).toThrow();
+		expect(() => request.setRepaintTarget('x'.repeat(201))).toThrow();
+		expect(() => request.setActiveRepaintJobId('not-a-job-id')).toThrow();
+		expect(request.repaintColor).toBe(DEFAULT_REPAINT_COLOR);
+	});
+
+	it('captures the target and color in the form snapshot and restores them on undo', () => {
+		request.setImage(AC9_IMAGE);
+		request.setRepaintTarget('стены');
+		request.setRepaintColor('#a3b19b');
+		request.setCurrentRender({ id: 'render-1', outputKey: '201', cost: 1, balance: 9, ts: 0 });
+		request.setRepaintTarget('кресло');
+		request.setRepaintColor('#2f3e5c');
+		request.applyEditResult({ id: 'render-2', outputKey: '202', cost: 1, balance: 8, ts: 1 });
+
+		request.undoLastEdit();
+
+		expect(request.repaintTarget).toBe('стены');
+		expect(request.repaintColor).toBe('#a3b19b');
+	});
+
+	it('fills in defaults for a stored snapshot recorded before the repaint tool existed', () => {
+		const snapshot = request.captureFormSnapshot() as unknown as Record<string, unknown>;
+		delete snapshot.repaintTarget;
+		delete snapshot.repaintColor;
+
+		expect(requestFormSnapshotSchema.parse(snapshot)).toMatchObject({
+			repaintTarget: '',
+			repaintColor: DEFAULT_REPAINT_COLOR
+		});
+	});
+
+	it('retains an immutable source snapshot and target for the accepted job', () => {
+		const source: RenderResult = {
+			id: 'source-render',
+			outputKey: '201',
+			cost: 1,
+			balance: 19,
+			ts: 1
+		};
+		request.setActiveRepaintJob('123e4567-e89b-42d3-a456-426614174000', source, ' стены ');
+		const formSnapshot = request.activeRepaintJob?.formSnapshot;
+		source.outputKey = '999';
+		request.setRepaintTarget('changed after submission');
+
+		expect(request.activeRepaintJob).toEqual({
+			id: '123e4567-e89b-42d3-a456-426614174000',
+			instruction: 'стены',
+			sourceRender: { id: 'source-render', outputKey: '201', cost: 1, balance: 19, ts: 1 },
+			formSnapshot
+		});
+		expect(formSnapshot?.editOperationType).toBe('repaint');
+	});
+
+	it('is reset to its defaults and dropped from the canvas work', () => {
+		request.setRepaintTarget('стены');
+		request.setRepaintColor('#2f3e5c');
+		request.setActiveRepaintJobId('123e4567-e89b-42d3-a456-426614174000');
+
+		request.clearCanvasWork();
+		expect(request.activeRepaintJobId).toBeUndefined();
+		expect(request.repaintTarget).toBe('стены');
+
+		request.reset();
+		expect(request.repaintTarget).toBe('');
+		expect(request.repaintColor).toBe(DEFAULT_REPAINT_COLOR);
 	});
 });
 

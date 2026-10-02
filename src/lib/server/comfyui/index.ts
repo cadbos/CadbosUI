@@ -66,3 +66,9 @@ export {
 	type FluxKontextEditRequest,
 	type QueueFluxKontextEditRequest
 } from '$lib/server/comfyui/flux-kontext-edit';
+export {
+	getRepaintResult,
+	queueRepaint,
+	type QueueRepaintRequest,
+	type RepaintImage
+} from '$lib/server/comfyui/repaint';
