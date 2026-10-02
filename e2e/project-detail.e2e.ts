@@ -394,7 +394,9 @@ test('continuing a session restores its latest generation’s exact settings, no
 					textureReplacementSurface: '',
 					textureReplacementMasked: false,
 					lightSettingsPresetIds: [],
-					lightSettingsInstruction: ''
+					lightSettingsInstruction: '',
+					repaintTarget: '',
+					repaintColor: '#f4f1ea'
 				},
 				session: null,
 				media: [

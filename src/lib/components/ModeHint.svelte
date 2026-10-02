@@ -49,7 +49,8 @@ before the Change Date. See LICENSE for complete terms.
 	const FORMAT_MESSAGES: Record<ModeHintFormatField, TranslationKey> = {
 		removeObject: 'modeHint.format.removeObject',
 		objectReplacement: 'modeHint.format.objectReplacement',
-		textureReplacement: 'modeHint.format.textureReplacement'
+		textureReplacement: 'modeHint.format.textureReplacement',
+		repaint: 'modeHint.format.repaint'
 	};
 
 	const hint = $derived(modeHintFor(field, text));

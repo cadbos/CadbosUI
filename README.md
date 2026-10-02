@@ -88,8 +88,9 @@ environment variables. Their authoritative definitions are in
 - `COMFYUI_BASE_URL` — private VPC service binding for ComfyUI
 - `ADMIN_PUBKEYS`, `METERED_DESIGNER_PUBKEYS`, and `PUBKEY_VIEWER` — access and usage
   display controls
-- `OBJECT_REPLACEMENT_COST`, `TEXTURE_REPLACEMENT_COST`, and
-  `HEALTH_CACHE_TTL_SECONDS` — optional operational settings
+- `OBJECT_REPLACEMENT_COST`, `TEXTURE_REPLACEMENT_COST`, `LIGHT_SETTINGS_COST`,
+  `FLUX_KONTEXT_EDIT_COST`, `REPAINT_COST`, and `HEALTH_CACHE_TTL_SECONDS` — optional
+  operational settings
 
 Never place provider credentials in `.env` variables exposed to the client. Production
 secrets, including the S3 credentials, must be configured through Cloudflare;

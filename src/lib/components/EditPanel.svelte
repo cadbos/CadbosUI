@@ -13,7 +13,15 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Eraser, Lightbulb, PaintRoller, Pencil, Plus, Replace } from '@lucide/svelte';
+	import {
+		Eraser,
+		Lightbulb,
+		Paintbrush,
+		PaintRoller,
+		Pencil,
+		Plus,
+		Replace
+	} from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -42,6 +50,7 @@ before the Change Date. See LICENSE for complete terms.
 	import LightSettingsPanel from '$lib/components/LightSettingsPanel.svelte';
 	import ModeHint from '$lib/components/ModeHint.svelte';
 	import ObjectReplacementPanel from '$lib/components/ObjectReplacementPanel.svelte';
+	import RepaintPanel from '$lib/components/RepaintPanel.svelte';
 	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
 
 	const MAX_TRANSIENT_FAILURES = 5;
@@ -100,7 +109,8 @@ before the Change Date. See LICENSE for complete terms.
 			label: 'mode.textureReplacement',
 			Icon: PaintRoller,
 			alphaLabel: 'textureReplacement.alpha'
-		}
+		},
+		{ id: 'repaint', label: 'edit.tool.repaint', Icon: Paintbrush }
 	];
 
 	// Only ever rendered in edit mode (see Workspace.svelte), so the URL's
@@ -114,11 +124,21 @@ before the Change Date. See LICENSE for complete terms.
 	let objectReplacementOpened = $state(false);
 	let textureReplacementOpened = $state(false);
 	let lightSettingsOpened = $state(false);
+	let repaintOpened = $state(false);
+	// Tools with a panel (and job) of their own, as opposed to the inline
+	// freeform/add-object/remove-object panel that shares one Flux Kontext job.
+	const ownPanelTool = $derived(
+		activeTool === 'object-replacement' ||
+			activeTool === 'texture-replacement' ||
+			activeTool === 'light-settings' ||
+			activeTool === 'repaint'
+	);
 
 	$effect(() => {
 		if (activeTool === 'object-replacement') objectReplacementOpened = true;
 		if (activeTool === 'texture-replacement') textureReplacementOpened = true;
 		if (activeTool === 'light-settings') lightSettingsOpened = true;
+		if (activeTool === 'repaint') repaintOpened = true;
 	});
 
 	const toolTabs = createTabController({
@@ -148,7 +168,7 @@ before the Change Date. See LICENSE for complete terms.
 	// the actual upload is deferred, not skipped, see request.resolveWorkingImageKey().
 	const hasEditTarget = $derived(request.hasWorkingImage());
 	const jobId = $derived(request.activeFluxKontextEditJobId ?? null);
-	// Unlike the other three job-backed tools, a completed edit here clears
+	// Unlike the other job-backed tools, a completed edit here clears
 	// the job immediately (see applyCompletedJob) rather than staying set
 	// until an explicit "new request" — so isPolling only has to rule out an
 	// already-failed job, never an already-completed one.
@@ -431,7 +451,7 @@ before the Change Date. See LICENSE for complete terms.
 		</div>
 
 		<div class="tool-content">
-			{#if activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'light-settings'}
+			{#if !ownPanelTool}
 				<div
 					class="tool-panel"
 					role="tabpanel"
@@ -603,10 +623,31 @@ before the Change Date. See LICENSE for complete terms.
 					</svelte:boundary>
 				</div>
 			{/if}
+
+			{#if repaintOpened}
+				<div
+					class="tool-panel"
+					role="tabpanel"
+					id="edit-tool-panel-repaint"
+					aria-labelledby="edit-tool-tab-repaint"
+					tabindex="0"
+					hidden={activeTool !== 'repaint'}
+				>
+					<svelte:boundary onerror={(err: unknown) => logBoundaryError('editPanel.repaint', err)}>
+						<RepaintPanel />
+						{#snippet failed(_error: unknown, reset: () => void)}
+							<p class="error">{t('boundary.failed')}</p>
+							<button type="button" class="btn-apply" onclick={reset}>
+								{t('boundary.retry')}
+							</button>
+						{/snippet}
+					</svelte:boundary>
+				</div>
+			{/if}
 		</div>
 	</div>
 
-	{#if !isAuthenticated && activeTool !== 'object-replacement' && activeTool !== 'texture-replacement' && activeTool !== 'light-settings'}
+	{#if !isAuthenticated && !ownPanelTool}
 		<p class="auth-hint">{t('edit.signInToApply')}</p>
 	{/if}
 </section>

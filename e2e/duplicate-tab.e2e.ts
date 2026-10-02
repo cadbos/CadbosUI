@@ -44,7 +44,9 @@ const FORM_SNAPSHOT = {
 	textureReplacementSurface: '',
 	textureReplacementMasked: false,
 	lightSettingsPresetIds: [],
-	lightSettingsInstruction: ''
+	lightSettingsInstruction: '',
+	repaintTarget: '',
+	repaintColor: '#f4f1ea'
 };
 
 const GENERATION_DETAIL = {

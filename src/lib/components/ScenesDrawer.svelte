@@ -21,6 +21,7 @@ before the Change Date. See LICENSE for complete terms.
 		MoveHorizontal,
 		Palette,
 		PaintRoller,
+		Paintbrush,
 		Pencil,
 		PenLine,
 		Replace,
@@ -60,7 +61,8 @@ before the Change Date. See LICENSE for complete terms.
 		upscale: 'generatedImages.kind.upscale',
 		'object-replacement': 'generatedImages.kind.objectReplacement',
 		'texture-replacement': 'generatedImages.kind.textureReplacement',
-		'light-settings': 'generatedImages.kind.lightSettings'
+		'light-settings': 'generatedImages.kind.lightSettings',
+		repaint: 'generatedImages.kind.repaint'
 	};
 
 	const sceneViewKeys: Record<SceneView, TranslationKey> = {
@@ -75,7 +77,8 @@ before the Change Date. See LICENSE for complete terms.
 		upscale: Sparkles,
 		'object-replacement': Replace,
 		'texture-replacement': PaintRoller,
-		'light-settings': Lightbulb
+		'light-settings': Lightbulb,
+		repaint: Paintbrush
 	};
 
 	interface Props {

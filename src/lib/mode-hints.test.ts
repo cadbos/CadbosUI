@@ -32,6 +32,7 @@ const removeObject = { mode: 'edit', tool: 'remove-object' } as const;
 const lightSettings = { mode: 'edit', tool: 'light-settings' } as const;
 const objectReplacement = { mode: 'edit', tool: 'object-replacement' } as const;
 const textureReplacement = { mode: 'edit', tool: 'texture-replacement' } as const;
+const repaint = { mode: 'edit', tool: 'repaint' } as const;
 const styleTransfer = { mode: 'styleTransfer' } as const;
 const addObject = { mode: 'edit', tool: 'add-object' } as const;
 
@@ -52,12 +53,12 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 	[
 		'render',
 		'Сделай диван белым',
-		{ kind: 'switch', intent: 'recolor', target: freeform, triggers: ['Сделай', 'белым'] }
+		{ kind: 'switch', intent: 'recolor', target: repaint, triggers: ['Сделай', 'белым'] }
 	],
 	[
 		'render',
 		'Перекрась стены в белый',
-		{ kind: 'switch', intent: 'recolor', target: freeform, triggers: ['Перекрась'] }
+		{ kind: 'switch', intent: 'recolor', target: repaint, triggers: ['Перекрась'] }
 	],
 
 	['styleTransfer', 'Больше тёплых оттенков, мягкий свет', null],
@@ -89,7 +90,25 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 
 	['freeform', 'Замени диван на кожаное кресло', null],
 	['freeform', 'Добавь торшер у дивана', null],
-	['freeform', 'Сделай стены цвета слоновой кости', null],
+	[
+		'freeform',
+		'Сделай стены цвета слоновой кости',
+		{ kind: 'switch', intent: 'recolor', target: repaint, triggers: ['Сделай', 'цвета'] }
+	],
+	[
+		'freeform',
+		'Paint the ceiling blue',
+		{ kind: 'switch', intent: 'recolor', target: repaint, triggers: ['Paint'] }
+	],
+	[
+		'freeform',
+		'Поменяй цвет стен',
+		{ kind: 'switch', intent: 'recolor', target: repaint, triggers: ['Поменяй цвет'] }
+	],
+	['freeform', 'Сделай пол под дерево', null],
+	['freeform', 'Перетяни диван в бархат', null],
+	['freeform', 'Измени текстуру пола', null],
+	['freeform', 'Make the cabinets matte', null],
 	['freeform', 'Убери старый диван и поставь новый', null],
 	[
 		'freeform',
@@ -210,7 +229,32 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 		'textureReplacement',
 		'убери пятно с дивана',
 		{ kind: 'switch', intent: 'remove', target: removeObject, triggers: ['убери'] }
-	]
+	],
+
+	['repaint', 'стены за диваном', null],
+	['repaint', 'фасады кухонного гарнитура', null],
+	['repaint', 'the walls behind the sofa', null],
+	[
+		'repaint',
+		'перекрась стены за диваном',
+		{ kind: 'format', field: 'repaint', triggers: ['перекрась'] }
+	],
+	[
+		'repaint',
+		'сделай стены белыми',
+		{ kind: 'format', field: 'repaint', triggers: ['сделай', 'белыми'] }
+	],
+	[
+		'repaint',
+		'убери ковёр',
+		{ kind: 'switch', intent: 'remove', target: removeObject, triggers: ['убери'] }
+	],
+	[
+		'repaint',
+		'замени диван на кресло',
+		{ kind: 'switch', intent: 'replace', target: freeform, triggers: ['замени'] }
+	],
+	['repaint', 'стены в стиле лофт', null]
 ];
 
 describe('modeHintFor', () => {
@@ -224,7 +268,12 @@ describe('modeHintFor', () => {
 
 	it('ignores negated actions', () => {
 		expect(modeHintFor('objectReplacement', 'диван, ничего не добавляй')).toBeNull();
-		expect(modeHintFor('freeform', 'не убирай ковёр, перекрась стены')).toBeNull();
+		expect(modeHintFor('freeform', 'не убирай ковёр, перекрась стены')).toEqual({
+			kind: 'switch',
+			intent: 'recolor',
+			target: repaint,
+			triggers: ['перекрась']
+		});
 		expect(modeHintFor('render', 'Не убирай ковёр, но УДАЛИ стул')).toEqual({
 			kind: 'switch',
 			intent: 'remove',
@@ -278,6 +327,7 @@ describe('targetLabel', () => {
 	it('names the destination tool or mode', () => {
 		expect(targetLabel(freeform)).toBe('edit.tool.freeform');
 		expect(targetLabel(textureReplacement)).toBe('mode.textureReplacement');
+		expect(targetLabel(repaint)).toBe('edit.tool.repaint');
 		expect(targetLabel(styleTransfer)).toBe('mode.styleTransfer');
 		expect(targetLabel({ ...addObject, presetId: 'mirror' })).toBe('edit.tool.addObject');
 	});

@@ -18,6 +18,7 @@ import {
 	type RenderResult,
 	type RequestFormSnapshot
 } from '$lib/state/request.svelte';
+import { DEFAULT_REPAINT_COLOR } from '$lib/repaint-colors';
 import { STYLE_PRESETS } from '$lib/style-presets';
 import {
 	applyShareParams,
@@ -57,6 +58,8 @@ function formSnapshot(overrides: Partial<RequestFormSnapshot> = {}): RequestForm
 		textureReplacementMasked: false,
 		lightSettingsPresetIds: [],
 		lightSettingsInstruction: '',
+		repaintTarget: '',
+		repaintColor: '#f4f1ea',
 		...overrides
 	};
 }
@@ -98,6 +101,10 @@ describe('renderOrigin (keeps mode/tool in sync with undo/redo)', () => {
 		expect(
 			renderOrigin(render({ editOp: { type: 'change-surface-color', instruction: '' } }))
 		).toEqual({ mode: 'edit', tool: 'texture-replacement' });
+		expect(renderOrigin(render({ editOp: { type: 'repaint', instruction: '' } }))).toEqual({
+			mode: 'edit',
+			tool: 'repaint'
+		});
 	});
 
 	it('has no known origin for an upscale — applied from a toolbar shared by every mode', () => {
@@ -130,6 +137,10 @@ describe('generation history destinations', () => {
 		expect(destinationForGenerationKind('texture-replacement')).toEqual({
 			mode: 'edit',
 			subTab: { tool: 'texture-replacement' }
+		});
+		expect(destinationForGenerationKind('repaint')).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'repaint' }
 		});
 	});
 
@@ -345,6 +356,64 @@ describe('texture replacement edit URL state', () => {
 	it('recognizes the nested tool and removes the standalone workspace route', () => {
 		expect(slugToTool('texture-replacement')).toBe('texture-replacement');
 		expect(isWorkspaceRoute('/texture-replacement')).toBe(false);
+	});
+});
+
+describe('repaint edit URL state', () => {
+	it('serializes the target, the color without its # and the job', () => {
+		const request = new RequestState();
+		request.setRepaintTarget('стены за диваном');
+		request.setRepaintColor('#a3b19b');
+		request.setActiveRepaintJobId(JOB_ID);
+
+		const url = new URL(buildShareUrl('edit', request, { tool: 'repaint' }), 'https://cadbos.test');
+
+		expect(url.pathname).toBe('/edit');
+		expect(Object.fromEntries(url.searchParams)).toEqual({
+			tool: 'repaint',
+			target: 'стены за диваном',
+			color: 'a3b19b',
+			job: JOB_ID
+		});
+	});
+
+	it('hydrates the target and a valid color, case-insensitively', () => {
+		const request = new RequestState();
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({ tool: 'repaint', target: 'кресло', color: '2F3E5C', job: JOB_ID }),
+			request
+		);
+
+		expect(request.repaintTarget).toBe('кресло');
+		expect(request.repaintColor).toBe('#2f3e5c');
+		expect(request.activeRepaintJobId).toBe(JOB_ID);
+	});
+
+	it('falls back to the default color and drops an invalid job id', () => {
+		const request = new RequestState();
+		request.setRepaintColor('#2f3e5c');
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({ tool: 'repaint', color: 'javascript:alert(1)', job: 'invalid' }),
+			request
+		);
+
+		expect(request.repaintColor).toBe(DEFAULT_REPAINT_COLOR);
+		expect(request.repaintTarget).toBe('');
+		expect(request.activeRepaintJobId).toBeUndefined();
+	});
+
+	it('recognizes the tool and keeps only validated job ids on its sub-tab', () => {
+		expect(slugToTool('repaint')).toBe('repaint');
+		expect(subTabFromSearch('edit', new URLSearchParams({ tool: 'repaint', job: JOB_ID }))).toEqual(
+			{ tool: 'repaint', job: JOB_ID }
+		);
+		expect(
+			subTabFromSearch('edit', new URLSearchParams({ tool: 'repaint', job: 'invalid' }))
+		).toEqual({ tool: 'repaint' });
 	});
 });
 

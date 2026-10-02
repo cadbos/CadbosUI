@@ -70,6 +70,28 @@ test('the custom prompt suggests the removal tool', async ({ page }) => {
 	);
 });
 
+test('the custom prompt suggests Repaint for a color change, and Repaint explains its field', async ({
+	page
+}) => {
+	await page.goto('/edit?tool=freeform');
+
+	await page
+		.getByRole('textbox', { name: 'Инструкция для правки' })
+		.fill('перекрась стены в белый');
+	await page.getByRole('button', { name: 'Перейти в «Перекраска»' }).click();
+
+	await expect(page).toHaveURL(/tool=repaint/);
+	await expect(page.getByRole('tab', { name: 'Перекраска' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+
+	const panel = page.locator('#edit-tool-panel-repaint');
+	await panel.getByRole('textbox', { name: 'Что перекрасить' }).fill('перекрась стены');
+	await expect(panel.locator('.mode-hint q')).toHaveText(['перекрась']);
+	await expect(panel.getByRole('button', { name: /Перейти/ })).toHaveCount(0);
+});
+
 test('the create prompt suggests editing tools for targeted changes', async ({ page }) => {
 	await page.goto('/create/interior?view=chat&format=webp');
 

@@ -20,6 +20,7 @@ import {
 	type ApiError,
 	type RequestFormSnapshot
 } from '$lib/api/contract';
+import { DEFAULT_REPAINT_COLOR, REPAINT_COLOR_PATTERN } from '$lib/repaint-colors';
 import { parseMediaKey } from '$lib/server/media';
 
 export function apiError(status: number, code: string, message: string): Response {
@@ -94,7 +95,10 @@ export const formSnapshotSchema = z.object({
 	textureMaskImage: formSnapshotImage.optional(),
 	textureMaskSourceKey: z.string().min(1).optional(),
 	lightSettingsPresetIds: z.array(z.string()).max(50),
-	lightSettingsInstruction: z.string().max(500)
+	lightSettingsInstruction: z.string().max(500),
+	// Absent from a snapshot recorded before the repaint tool existed.
+	repaintTarget: z.string().max(200).default(''),
+	repaintColor: z.string().regex(REPAINT_COLOR_PATTERN).default(DEFAULT_REPAINT_COLOR)
 }) satisfies z.ZodType<RequestFormSnapshot>;
 
 const formSnapshot = formSnapshotSchema.optional();
@@ -154,6 +158,14 @@ export const objectReplacementRequestSchema = z.strictObject({
 export const lightSettingsRequestSchema = z.strictObject({
 	imageKey: mediaKey,
 	instruction: z.string().trim().min(1).max(500),
+	sessionId,
+	formSnapshot
+});
+
+export const repaintRequestSchema = z.strictObject({
+	imageKey: mediaKey,
+	target: z.string().trim().min(1).max(200),
+	color: z.string().regex(REPAINT_COLOR_PATTERN),
 	sessionId,
 	formSnapshot
 });

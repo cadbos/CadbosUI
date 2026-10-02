@@ -1,0 +1,202 @@
+/*
+ * Copyright (c) 2026 Cadbos company. All rights reserved.
+ *
+ * SPDX-License-Identifier: LicenseRef-Cadbos-BSL-1.1
+ *
+ * Cadbos Interior Design AI is licensed under the Business Source License 1.1.
+ * Access is limited to automated analysis tools for analysis of this repository.
+ * This code is not open for contribution or usage except under a separate
+ * written agreement with Cadbos company.
+ *
+ * Commercial use in Interior Design & AEC Generative AI Services is prohibited
+ * before the Change Date. See LICENSE for complete terms.
+ */
+
+import { describe, expect, it } from 'vitest';
+import type { D1Database } from '@cloudflare/workers-types';
+import {
+	completeRepaintJob,
+	createRepaintJob,
+	failRepaintJob,
+	getRepaintJob
+} from '$lib/server/repaint-jobs';
+import { makeD1 } from '$lib/server/testing/d1-shim';
+import { seedManagedMedia } from '$lib/server/testing/generation-fixtures';
+
+function seedAccount(db: D1Database): void {
+	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+		.bind('user-1', 'pubkey-1', 1)
+		.run();
+	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
+		.bind('user-1', 12, 1)
+		.run();
+	db.prepare(
+		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind('project-1', 'user-1', 'Test project', 1, 1)
+		.run();
+	db.prepare(
+		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+	)
+		.bind('session-1', 'project-1', 'Test session', 1, 1)
+		.run();
+}
+
+describe('repaint jobs', () => {
+	it('stores media references and atomically records a completed generation', async () => {
+		const db = makeD1();
+		seedAccount(db);
+		const sceneMediaId = seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
+		const outputMediaId = seedManagedMedia(db, 'edits/job-1.png', 'b'.repeat(64));
+
+		const created = await createRepaintJob(db, {
+			id: 'job-1',
+			userId: 'user-1',
+			comfyPromptId: 'prompt-1',
+			sceneMediaId,
+			sessionId: 'session-1',
+			target: 'стены',
+			color: '#a3b19b',
+			cost: 2,
+			createdAt: 10,
+			uploadQueueSec: 3
+		});
+		expect(created).toMatchObject({
+			sceneMediaId,
+			target: 'стены',
+			color: '#a3b19b',
+			status: 'processing',
+			outputMediaId: null
+		});
+
+		const completed = await completeRepaintJob(
+			db,
+			'user-1',
+			'job-1',
+			outputMediaId,
+			20,
+			5,
+			10,
+			2,
+			1
+		);
+		expect(completed).toMatchObject({ outputMediaId, status: 'completed', balanceAfter: 10 });
+
+		const jobRow = await db
+			.prepare(
+				'SELECT upload_queue_sec, queue_wait_sec, execution_sec, download_sec, reupload_sec ' +
+					'FROM repaint_jobs WHERE id = ?'
+			)
+			.bind('job-1')
+			.first<{
+				upload_queue_sec: number;
+				queue_wait_sec: number;
+				execution_sec: number;
+				download_sec: number;
+				reupload_sec: number;
+			}>();
+		expect(jobRow).toEqual({
+			upload_queue_sec: 3,
+			queue_wait_sec: 5,
+			execution_sec: 10,
+			download_sec: 2,
+			reupload_sec: 1
+		});
+		const generationRow = await db
+			.prepare(
+				'SELECT comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, ' +
+					'comfyui_download_sec, comfyui_reupload_sec FROM generations WHERE id = ?'
+			)
+			.bind('job-1')
+			.first<{
+				comfyui_upload_queue_sec: number;
+				comfyui_queue_wait_sec: number;
+				comfyui_execution_sec: number;
+				comfyui_download_sec: number;
+				comfyui_reupload_sec: number;
+			}>();
+		expect(generationRow).toEqual({
+			comfyui_upload_queue_sec: 3,
+			comfyui_queue_wait_sec: 5,
+			comfyui_execution_sec: 10,
+			comfyui_download_sec: 2,
+			comfyui_reupload_sec: 1
+		});
+
+		const references = await db
+			.prepare(
+				'SELECT j.scene_media_id, j.output_media_id, g.source_media_id, g.result_media_id, g.kind, g.prompt ' +
+					'FROM repaint_jobs j JOIN generations g ON g.id = j.id WHERE j.id = ?'
+			)
+			.bind('job-1')
+			.first<{
+				scene_media_id: number;
+				output_media_id: number;
+				source_media_id: number;
+				result_media_id: number;
+				kind: string;
+				prompt: string;
+			}>();
+		expect(references).toMatchObject({
+			source_media_id: references?.scene_media_id,
+			result_media_id: references?.output_media_id,
+			kind: 'repaint',
+			prompt: 'стены'
+		});
+	});
+
+	it('fails a processing job with an error code and completed timestamp', async () => {
+		const db = makeD1();
+		seedAccount(db);
+		const sceneMediaId = seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
+		await createRepaintJob(db, {
+			id: 'job-1',
+			userId: 'user-1',
+			comfyPromptId: 'prompt-1',
+			sceneMediaId,
+			sessionId: 'session-1',
+			target: 'диван',
+			color: '#2f3e5c',
+			cost: 2,
+			createdAt: 10,
+			uploadQueueSec: 1
+		});
+
+		const failed = await failRepaintJob(db, 'user-1', 'job-1', 'repaint_timeout', 30, 0, 20);
+
+		expect(failed).toMatchObject({
+			status: 'failed',
+			errorCode: 'repaint_timeout',
+			completedAt: 30
+		});
+		await expect(getRepaintJob(db, 'user-1', 'job-1')).resolves.toMatchObject({
+			status: 'failed'
+		});
+		const jobRow = await db
+			.prepare('SELECT queue_wait_sec, execution_sec, download_sec FROM repaint_jobs WHERE id = ?')
+			.bind('job-1')
+			.first<{ queue_wait_sec: number; execution_sec: number; download_sec: number }>();
+		expect(jobRow).toEqual({ queue_wait_sec: 0, execution_sec: 20, download_sec: 0 });
+	});
+
+	it('rejects a color that is not a lowercase #rrggbb hex', async () => {
+		const db = makeD1();
+		seedAccount(db);
+		const sceneMediaId = seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
+
+		await expect(
+			createRepaintJob(db, {
+				id: 'job-1',
+				userId: 'user-1',
+				comfyPromptId: 'prompt-1',
+				sceneMediaId,
+				sessionId: 'session-1',
+				target: 'стены',
+				color: 'red',
+				cost: 2,
+				createdAt: 10,
+				uploadQueueSec: 1
+			})
+		).rejects.toThrow();
+	});
+});

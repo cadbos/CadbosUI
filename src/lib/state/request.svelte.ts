@@ -25,6 +25,7 @@ import {
 	type OutputFormat,
 	type PromptFragment,
 	type RenderRequest,
+	type RepaintRequest,
 	type RenderResponse,
 	type RequestFormSnapshot,
 	type SceneType,
@@ -37,6 +38,7 @@ import { ADD_OBJECT_PRESETS } from '$lib/add-object-presets';
 import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 import { LIGHT_SETTINGS_FIXTURES, LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 import type { ModeHintTarget } from '$lib/mode-hints';
+import { DEFAULT_REPAINT_COLOR, REPAINT_COLOR_PATTERN } from '$lib/repaint-colors';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export {
@@ -127,8 +129,15 @@ export interface ActiveLightSettingsJob {
 	formSnapshot?: RequestFormSnapshot;
 }
 
+export interface ActiveRepaintJob {
+	id: string;
+	instruction: string;
+	sourceRender?: RenderResult;
+	formSnapshot?: RequestFormSnapshot;
+}
+
 // The one Flux Kontext ComfyUI job backing all three edit-panel tools
-// (freeform/add-object/remove-object share one endpoint) — unlike the three
+// (freeform/add-object/remove-object share one endpoint) — unlike the
 // single-purpose jobs above, it needs `type` to rebuild RenderResult.editOp
 // once the job completes.
 export interface ActiveFluxKontextEditJob {
@@ -153,7 +162,8 @@ export type ValidationField =
 	| 'mask'
 	| 'replacementObject'
 	| 'replacementSurface'
-	| 'instruction';
+	| 'instruction'
+	| 'repaintTarget';
 
 export interface ValidationResult {
 	valid: boolean;
@@ -183,6 +193,8 @@ export interface RequestJSON {
 	textureReplacementMasked?: boolean;
 	lightSettingsPresetIds?: string[];
 	lightSettingsInstruction?: string;
+	repaintTarget?: string;
+	repaintColor?: string;
 	promptOverride: string | null;
 	currentRender?: RenderResult;
 	status: RequestStatus;
@@ -211,6 +223,8 @@ export interface NormalizedRequest {
 	lightSettingsPresetIds: string[];
 	lightSettingsInstruction: string;
 	lightSettingsPrompt: string;
+	repaintTarget: string;
+	repaintColor: string;
 	editPrompt: string;
 	addObjectPresetId: string | null;
 	removeObjectText: string;
@@ -239,6 +253,9 @@ const replacementSurfaceSchema = z.string().max(200);
 const textureReplacementJobIdSchema = z.uuid();
 const lightSettingsInstructionSchema = z.string().max(500);
 export const lightSettingsJobIdSchema = z.uuid();
+const repaintTargetSchema = z.string().max(200);
+const repaintColorSchema = z.string().regex(REPAINT_COLOR_PATTERN);
+const repaintJobIdSchema = z.uuid();
 const fluxKontextEditJobIdSchema = z.uuid();
 const fluxKontextEditInstructionSchema = z.string();
 // A fixture's on/off ids are mutually exclusive (setLightSettingsFixtureState
@@ -324,7 +341,10 @@ export const requestFormSnapshotSchema = z.object({
 	textureMaskImage: optionalImageInputSchema,
 	textureMaskSourceKey: z.string().min(1).optional(),
 	lightSettingsPresetIds: lightSettingsPresetIdsSchema,
-	lightSettingsInstruction: lightSettingsInstructionSchema
+	lightSettingsInstruction: lightSettingsInstructionSchema,
+	// Absent for a snapshot recorded before the repaint tool existed.
+	repaintTarget: repaintTargetSchema.default(''),
+	repaintColor: repaintColorSchema.default(DEFAULT_REPAINT_COLOR)
 });
 
 const renderResultSchema = z.object({
@@ -365,6 +385,8 @@ const requestJsonSchema = z
 		textureReplacementMasked: z.boolean().default(false),
 		lightSettingsPresetIds: lightSettingsPresetIdsSchema.default([]),
 		lightSettingsInstruction: lightSettingsInstructionSchema.default(''),
+		repaintTarget: repaintTargetSchema.default(''),
+		repaintColor: repaintColorSchema.default(DEFAULT_REPAINT_COLOR),
 		promptOverride: z.string().nullable(),
 		currentRender: renderResultSchema.optional(),
 		status: z.enum(['idle', 'rendering', 'error'])
@@ -536,7 +558,9 @@ function cloneFormSnapshot(
 			? { textureMaskSourceKey: snapshot.textureMaskSourceKey }
 			: {}),
 		lightSettingsPresetIds: [...snapshot.lightSettingsPresetIds],
-		lightSettingsInstruction: snapshot.lightSettingsInstruction
+		lightSettingsInstruction: snapshot.lightSettingsInstruction,
+		repaintTarget: snapshot.repaintTarget,
+		repaintColor: snapshot.repaintColor
 	};
 }
 
@@ -585,6 +609,16 @@ function cloneActiveTextureReplacementJob(
 function cloneActiveLightSettingsJob(
 	job: ActiveLightSettingsJob | undefined
 ): ActiveLightSettingsJob | undefined {
+	if (!job) return undefined;
+	return {
+		id: job.id,
+		instruction: job.instruction,
+		sourceRender: cloneRenderResult(job.sourceRender),
+		formSnapshot: cloneFormSnapshot(job.formSnapshot)
+	};
+}
+
+function cloneActiveRepaintJob(job: ActiveRepaintJob | undefined): ActiveRepaintJob | undefined {
 	if (!job) return undefined;
 	return {
 		id: job.id,
@@ -775,6 +809,11 @@ export class RequestState {
 	lightSettingsPresetIds = $state<string[]>([]);
 	lightSettingsInstruction = $state('');
 	activeLightSettingsJob = $state<ActiveLightSettingsJob | undefined>(undefined);
+	// What to recolor (free text, sent as is) and the color to recolor it to —
+	// lowercase `#rrggbb`, always set, since the picker always shows a color.
+	repaintTarget = $state('');
+	repaintColor = $state(DEFAULT_REPAINT_COLOR);
+	activeRepaintJob = $state<ActiveRepaintJob | undefined>(undefined);
 	// Whether the currently displayed render is already the resolved result of a
 	// masked texture-replacement submission — Workspace.svelte reads this to know
 	// when to swap the canvas from the mask-drawing surface back to the render
@@ -863,6 +902,10 @@ export class RequestState {
 
 	get activeLightSettingsJobId(): string | undefined {
 		return this.activeLightSettingsJob?.id;
+	}
+
+	get activeRepaintJobId(): string | undefined {
+		return this.activeRepaintJob?.id;
 	}
 
 	get activeFluxKontextEditJobId(): string | undefined {
@@ -976,6 +1019,7 @@ export class RequestState {
 		this.setActiveObjectReplacementJobId(undefined);
 		this.setActiveTextureReplacementJobId(undefined);
 		this.setActiveLightSettingsJobId(undefined);
+		this.setActiveRepaintJobId(undefined);
 		this.setActiveFluxKontextEditJobId(undefined);
 		this.setStatus('idle');
 	}
@@ -1181,6 +1225,31 @@ export class RequestState {
 		};
 	}
 
+	setRepaintTarget(target: string): void {
+		this.repaintTarget = repaintTargetSchema.parse(target);
+	}
+
+	setRepaintColor(color: string): void {
+		this.repaintColor = repaintColorSchema.parse(color);
+	}
+
+	setActiveRepaintJobId(id: string | undefined): void {
+		const parsed = repaintJobIdSchema.optional().parse(id);
+		if (parsed === this.activeRepaintJob?.id) return;
+		this.activeRepaintJob = parsed
+			? { id: parsed, instruction: this.repaintTarget.trim() }
+			: undefined;
+	}
+
+	setActiveRepaintJob(id: string, sourceRender: RenderResult | undefined, target: string): void {
+		this.activeRepaintJob = {
+			id: repaintJobIdSchema.parse(id),
+			instruction: repaintTargetSchema.parse(target).trim(),
+			sourceRender: cloneRenderResult(sourceRender),
+			formSnapshot: this.captureFormSnapshot('repaint')
+		};
+	}
+
 	// `type` only matters for the id-only (URL-restore) path — the submit-time
 	// path below always has the real type from the tool that just submitted.
 	// add-object/remove-object have no persisted instruction field (unlike
@@ -1335,7 +1404,9 @@ export class RequestState {
 				? { textureMaskSourceKey: this.textureMaskSourceKey }
 				: {}),
 			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
-			lightSettingsInstruction: this.lightSettingsInstruction
+			lightSettingsInstruction: this.lightSettingsInstruction,
+			repaintTarget: this.repaintTarget,
+			repaintColor: this.repaintColor
 		};
 	}
 
@@ -1366,6 +1437,8 @@ export class RequestState {
 		this.textureMaskSourceKey = snapshot.textureMaskSourceKey;
 		this.lightSettingsPresetIds = [...snapshot.lightSettingsPresetIds];
 		this.lightSettingsInstruction = snapshot.lightSettingsInstruction;
+		this.repaintTarget = snapshot.repaintTarget;
+		this.repaintColor = snapshot.repaintColor;
 	}
 
 	// Public entry point for restoring a past generation's exact settings from
@@ -1481,6 +1554,13 @@ export class RequestState {
 		const missing: ValidationField[] = [];
 		if (!this.hasWorkingImage()) missing.push('image');
 		if (!this.lightSettingsPrompt.trim()) missing.push('instruction');
+		return { valid: missing.length === 0, missing };
+	}
+
+	validateRepaint(): ValidationResult {
+		const missing: ValidationField[] = [];
+		if (!this.hasWorkingImage()) missing.push('image');
+		if (!this.repaintTarget.trim()) missing.push('repaintTarget');
 		return { valid: missing.length === 0, missing };
 	}
 
@@ -1763,6 +1843,24 @@ export class RequestState {
 		};
 	}
 
+	async toRepaintRequest(): Promise<RepaintRequest | null> {
+		const validation = this.validateRepaint();
+		if (!validation.valid) return null;
+		const formSnapshot = this.captureFormSnapshot('repaint');
+		const target = this.repaintTarget.trim();
+		const color = this.repaintColor;
+		const imageKey = await this.resolveWorkingImageKey();
+		if (!imageKey) return null;
+		const { sessionId } = await this.ensureProjectSession();
+		return {
+			imageKey,
+			target,
+			color,
+			sessionId,
+			formSnapshot
+		};
+	}
+
 	toJSON(): RequestJSON {
 		return {
 			id: this.id,
@@ -1787,6 +1885,8 @@ export class RequestState {
 			textureReplacementMasked: this.textureReplacementMasked,
 			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
 			lightSettingsInstruction: this.lightSettingsInstruction,
+			repaintTarget: this.repaintTarget,
+			repaintColor: this.repaintColor,
 			promptOverride: this.promptOverride,
 			currentRender: cloneRenderResult(this.currentRender),
 			status: this.status
@@ -1825,6 +1925,9 @@ export class RequestState {
 		this.lightSettingsPresetIds = [...parsed.lightSettingsPresetIds];
 		this.lightSettingsInstruction = parsed.lightSettingsInstruction;
 		this.activeLightSettingsJob = undefined;
+		this.repaintTarget = parsed.repaintTarget;
+		this.repaintColor = parsed.repaintColor;
+		this.activeRepaintJob = undefined;
 		this.activeFluxKontextEditJob = undefined;
 		this.promptOverride = parsed.promptOverride;
 		const restoredRender = cloneRenderResult(parsed.currentRender);
@@ -1862,6 +1965,8 @@ export class RequestState {
 			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
 			lightSettingsInstruction: this.lightSettingsInstruction,
 			lightSettingsPrompt: this.lightSettingsPrompt,
+			repaintTarget: this.repaintTarget,
+			repaintColor: this.repaintColor,
 			editPrompt: this.editPrompt,
 			addObjectPresetId: this.addObjectPresetId,
 			removeObjectText: this.removeObjectText,
@@ -1908,6 +2013,9 @@ export class RequestState {
 		this.lightSettingsPresetIds = [];
 		this.lightSettingsInstruction = '';
 		this.activeLightSettingsJob = undefined;
+		this.repaintTarget = '';
+		this.repaintColor = DEFAULT_REPAINT_COLOR;
+		this.activeRepaintJob = undefined;
 		this.activeFluxKontextEditJob = undefined;
 		this.promptOverride = null;
 		this.#renderHistory = [];
@@ -1979,6 +2087,9 @@ export class RequestState {
 		this.lightSettingsPresetIds = [...source.lightSettingsPresetIds];
 		this.lightSettingsInstruction = source.lightSettingsInstruction;
 		this.activeLightSettingsJob = cloneActiveLightSettingsJob(source.activeLightSettingsJob);
+		this.repaintTarget = source.repaintTarget;
+		this.repaintColor = source.repaintColor;
+		this.activeRepaintJob = cloneActiveRepaintJob(source.activeRepaintJob);
 		this.promptOverride = source.promptOverride;
 		// currentRender/previousRender are derived from the history stack, not
 		// settable fields — copy the stack itself (deep-cloned, so neither

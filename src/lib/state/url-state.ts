@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { OUTPUT_FORMATS, type GenerationKind, type OutputFormat } from '$lib/api/contract';
 import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
+import { DEFAULT_REPAINT_COLOR, REPAINT_COLOR_PATTERN } from '$lib/repaint-colors';
 import {
 	SCENE_TYPES,
 	objectReplacementJobIdSchema,
@@ -36,7 +37,8 @@ export type ToolId =
 	| 'remove-object'
 	| 'light-settings'
 	| 'object-replacement'
-	| 'texture-replacement';
+	| 'texture-replacement'
+	| 'repaint';
 export type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
 
 // The sub-tab shown within the current mode — at most one of these applies,
@@ -80,7 +82,8 @@ const TOOL_IDS: readonly ToolId[] = [
 	'remove-object',
 	'light-settings',
 	'object-replacement',
-	'texture-replacement'
+	'texture-replacement',
+	'repaint'
 ];
 const REFERENCE_TABS: readonly ReferenceTab[] = ['photorealistic', 'conceptual', 'custom'];
 
@@ -138,7 +141,8 @@ const EDIT_OP_TOOL: Partial<Record<EditOperationType, ToolId>> = {
 	'remove-object': 'remove-object',
 	'light-settings': 'light-settings',
 	'replace-object': 'object-replacement',
-	'change-surface-color': 'texture-replacement'
+	'change-surface-color': 'texture-replacement',
+	repaint: 'repaint'
 };
 
 export interface RenderOrigin {
@@ -208,6 +212,8 @@ export function destinationForGenerationKind(
 			return { mode: 'edit', subTab: { tool: 'texture-replacement' } };
 		case 'light-settings':
 			return { mode: 'edit', subTab: { tool: 'light-settings' } };
+		case 'repaint':
+			return { mode: 'edit', subTab: { tool: 'repaint' } };
 		case 'edit':
 		case 'upscale': {
 			const editOperationType = formSnapshot?.editOperationType;
@@ -241,7 +247,7 @@ export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): Sub
 		const tool = slugToTool(searchParams.get('tool') ?? undefined);
 		const job = searchParams.get('job');
 		// Every edit-mode tool is job-backed now (freeform/add-object/remove-object
-		// share the Flux Kontext job, the other three each have their own).
+		// share the Flux Kontext job, every other tool has its own).
 		return isJobId(job) ? { tool, job } : { tool };
 	}
 	if (mode === 'styleTransfer') {
@@ -363,6 +369,13 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 				params.set('instruction', request.lightSettingsInstruction);
 			}
 			const job = subTab.job ?? request.activeLightSettingsJobId;
+			if (isJobId(job)) params.set('job', job);
+		} else if (tool === 'repaint') {
+			if (request.repaintTarget.trim() !== '') {
+				params.set('target', request.repaintTarget);
+			}
+			params.set('color', request.repaintColor.slice(1));
+			const job = subTab.job ?? request.activeRepaintJobId;
 			if (isJobId(job)) params.set('job', job);
 		} else if (tool === 'freeform' || tool === 'add-object' || tool === 'remove-object') {
 			if (tool === 'freeform' && request.editPrompt.trim() !== '') {
@@ -556,6 +569,12 @@ export function applyShareParams(
 			request.setLightSettingsInstruction((searchParams.get('instruction') ?? '').slice(0, 500));
 			const job = searchParams.get('job');
 			request.setActiveLightSettingsJobId(isJobId(job) ? job : undefined);
+		} else if (tool === 'repaint') {
+			request.setRepaintTarget((searchParams.get('target') ?? '').slice(0, 200));
+			const color = `#${(searchParams.get('color') ?? '').toLowerCase()}`;
+			request.setRepaintColor(REPAINT_COLOR_PATTERN.test(color) ? color : DEFAULT_REPAINT_COLOR);
+			const job = searchParams.get('job');
+			request.setActiveRepaintJobId(isJobId(job) ? job : undefined);
 		} else if (tool === 'freeform' || tool === 'add-object' || tool === 'remove-object') {
 			if (tool === 'freeform') {
 				request.setEditPrompt(searchParams.get('prompt') ?? '');

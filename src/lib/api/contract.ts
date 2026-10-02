@@ -61,6 +61,7 @@ export const EDIT_OPERATION_TYPES = [
 	'add-object',
 	'remove-object',
 	'light-settings',
+	'repaint',
 	'upscale'
 ] as const;
 
@@ -101,6 +102,9 @@ export interface RequestFormSnapshot {
 	textureMaskSourceKey?: string;
 	lightSettingsPresetIds: string[];
 	lightSettingsInstruction: string;
+	repaintTarget: string;
+	// Lowercase `#rrggbb` ($lib/repaint-colors).
+	repaintColor: string;
 }
 
 // Managed image identity plus its stable, cacheable /api/media link.
@@ -310,6 +314,41 @@ export type LightSettingsJobResponse =
 	| LightSettingsCompletedResponse
 	| LightSettingsFailedResponse;
 
+// POST /api/repaint — recolor `target` in the scene to `color` (lowercase
+// `#rrggbb`); the server renders the color as a solid swatch image for the
+// workflow's second picture. Async job — see RepaintJobResponse.
+export interface RepaintRequest {
+	imageKey: string;
+	target: string;
+	color: string;
+	sessionId: string;
+	formSnapshot?: RequestFormSnapshot;
+}
+
+export interface RepaintProcessingResponse {
+	id: string;
+	status: 'processing';
+}
+
+export interface RepaintCompletedResponse {
+	id: string;
+	status: 'completed';
+	output: MediaAccess;
+	cost: number;
+	balance: number;
+}
+
+export interface RepaintFailedResponse {
+	id: string;
+	status: 'failed';
+	error: { code: string; message: string };
+}
+
+export type RepaintJobResponse =
+	| RepaintProcessingResponse
+	| RepaintCompletedResponse
+	| RepaintFailedResponse;
+
 export interface AutomaticTextureReplacementRequest {
 	imageKey: string;
 	referenceImageKey: string;
@@ -374,7 +413,8 @@ export const generationKinds = [
 	'upscale',
 	'object-replacement',
 	'texture-replacement',
-	'light-settings'
+	'light-settings',
+	'repaint'
 ] as const;
 
 export type GenerationKind = (typeof generationKinds)[number];

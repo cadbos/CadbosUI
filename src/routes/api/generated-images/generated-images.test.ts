@@ -408,6 +408,45 @@ describe('DELETE /api/generated-images', () => {
 		expect(media).toEqual({ id: image.result_media_id });
 	});
 
+	it('retains media referenced by a repaint job', async () => {
+		const db = makeD1();
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		const image = await db
+			.prepare('SELECT result_media_id FROM generations WHERE id = ?')
+			.bind('image-1')
+			.first<{ result_media_id: number }>();
+		if (!image) throw new Error('generated image seed failed');
+		db.prepare(
+			'INSERT INTO repaint_jobs ' +
+				'(id, user_id, comfy_prompt_id, scene_media_id, target, color, cost, status, created_at, updated_at) ' +
+				"VALUES (?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?)"
+		)
+			.bind(
+				'repaint-1',
+				'user-1',
+				'prompt-1',
+				image.result_media_id,
+				'стены',
+				'#a3b19b',
+				1,
+				1000,
+				1000
+			)
+			.run();
+		const uploadsBucket = bucket();
+
+		const response = await callDelete({ pubkey: 'pubkey-1' }, platform(db), { id: 'image-1' });
+		const media = await db
+			.prepare('SELECT id FROM media WHERE id = ?')
+			.bind(image.result_media_id)
+			.first<{ id: number }>();
+
+		expect(response.status).toBe(204);
+		expect(uploadsBucket.delete).not.toHaveBeenCalled();
+		expect(media).toEqual({ id: image.result_media_id });
+	});
+
 	it('retains media when a reference is added immediately before the deletion batch', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');

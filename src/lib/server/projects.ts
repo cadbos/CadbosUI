@@ -366,7 +366,9 @@ function toPublicFormSnapshot(
 		textureReplacementSurface: snapshot.textureReplacementSurface,
 		textureReplacementMasked: snapshot.textureReplacementMasked,
 		lightSettingsPresetIds: snapshot.lightSettingsPresetIds,
-		lightSettingsInstruction: snapshot.lightSettingsInstruction
+		lightSettingsInstruction: snapshot.lightSettingsInstruction,
+		repaintTarget: snapshot.repaintTarget,
+		repaintColor: snapshot.repaintColor
 	};
 }
 

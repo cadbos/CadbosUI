@@ -52,6 +52,7 @@ declare global {
 				TEXTURE_REPLACEMENT_COST?: string;
 				LIGHT_SETTINGS_COST?: string;
 				FLUX_KONTEXT_EDIT_COST?: string;
+				REPAINT_COST?: string;
 				S3_ACCESS_KEY_ID: string;
 				S3_SECRET_ACCESS_KEY: string;
 				S3_UPLOADS_BUCKET_NAME?: string;

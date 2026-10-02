@@ -52,7 +52,9 @@ const FULL_FORM_SNAPSHOT = {
 	textureReplacementSurface: '',
 	textureReplacementMasked: false,
 	lightSettingsPresetIds: [],
-	lightSettingsInstruction: ''
+	lightSettingsInstruction: '',
+	repaintTarget: '',
+	repaintColor: '#f4f1ea'
 };
 
 test('shows a shared project read-only, without auth, with no editing controls', async ({

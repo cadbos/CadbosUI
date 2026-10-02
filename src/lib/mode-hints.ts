@@ -25,7 +25,8 @@ export type ModeHintField =
 	| 'removeObject'
 	| 'lightSettings'
 	| 'objectReplacement'
-	| 'textureReplacement';
+	| 'textureReplacement'
+	| 'repaint';
 
 export type ModeHintTarget =
 	| { mode: 'edit'; tool: Exclude<ToolId, 'add-object'> }
@@ -34,7 +35,7 @@ export type ModeHintTarget =
 
 export type ModeHintFormatField = Extract<
 	ModeHintField,
-	'removeObject' | 'objectReplacement' | 'textureReplacement'
+	'removeObject' | 'objectReplacement' | 'textureReplacement' | 'repaint'
 >;
 
 export type ModeHint =
@@ -128,20 +129,22 @@ const REPLACE = words(
 	'change'
 );
 
-const RECOLOR = words(
+const PAINT_VERBS = [
 	'перекрас\\p{L}*',
 	'покрас\\p{L}*',
 	'окрас\\p{L}*',
 	'раскрас\\p{L}*',
-	'перетян\\p{L}*',
 	'repaint\\p{L}*',
 	'recolou?r\\p{L}*',
-	'reupholster\\p{L}*',
 	'paint'
-);
+];
 
-const SURFACE_PROPERTY =
-	'(?:цвет|оттен\\p{L}*|текстур\\p{L}*|материал\\p{L}*|обивк\\p{L}*|отделк\\p{L}*|покрыти\\p{L}*|фактур\\p{L}*|colou?rs?|texture\\p{L}*|materials?|finish)';
+const RECOLOR = words(...PAINT_VERBS, 'перетян\\p{L}*', 'reupholster\\p{L}*');
+
+const MATERIAL_PROPERTY =
+	'(?:текстур\\p{L}*|материал\\p{L}*|обивк\\p{L}*|отделк\\p{L}*|покрыти\\p{L}*|фактур\\p{L}*|texture\\p{L}*|materials?|finish)';
+
+const SURFACE_PROPERTY = `(?:цвет|оттен\\p{L}*|colou?rs?|${MATERIAL_PROPERTY})`;
 
 const CHANGE_SURFACE = words(
 	`(?:замен|поменя|смен|измен)\\p{L}*\\s+${SURFACE_PROPERTY}`,
@@ -150,15 +153,43 @@ const CHANGE_SURFACE = words(
 
 const MAKE = words('сдела\\p{L}*', 'make', 'turn');
 
+const COLOR_NAMES_RU =
+	'(?:бел|черн|сер|син|голуб|зелен|красн|желт|оранжев|розов|фиолетов|бежев|коричнев|бирюзов|терракотов|графитов|молочн)(?:ый|ая|ое|ые|ым|ой|ую|ыми|ого)';
+
+const COLOR_NAMES_EN =
+	'white|black|gr[ae]y|blue|green|red|yellow|orange|pink|purple|beige|brown|teal|navy';
+
+const MATERIAL_NAMES_RU =
+	'(?:деревянн|мраморн|бетонн|кирпичн|кожан|бархатн|льнян|каменн|металлическ|глянцев|матов)\\p{L}*';
+
+const UNDER_MATERIAL = 'под (?:дерев\\p{L}*|мрамор\\p{L}*|бетон\\p{L}*|кам\\p{L}*|кирпич\\p{L}*)';
+
+const MATERIAL_NAMES_EN =
+	'wooden|marble|concrete|brick|leather|velvet|linen|stone|metallic|glossy|matte';
+
 const SURFACE_LOOK = words(
 	'цвет(?:а|ом|е|у)?',
 	'оттенк\\p{L}*',
-	'(?:бел|черн|сер|син|голуб|зелен|красн|желт|оранжев|розов|фиолетов|бежев|коричнев|бирюзов|терракотов|графитов|молочн)(?:ый|ая|ое|ые|ым|ой|ую|ыми|ого)',
-	'(?:деревянн|мраморн|бетонн|кирпичн|кожан|бархатн|льнян|каменн|металлическ|глянцев|матов)\\p{L}*',
-	'под (?:дерев\\p{L}*|мрамор\\p{L}*|бетон\\p{L}*|кам\\p{L}*|кирпич\\p{L}*)',
+	COLOR_NAMES_RU,
+	MATERIAL_NAMES_RU,
+	UNDER_MATERIAL,
 	'colou?r',
-	'white|black|gr[ae]y|blue|green|red|yellow|orange|pink|purple|beige|brown|teal|navy',
-	'wooden|marble|concrete|brick|leather|velvet|linen|stone|metallic|glossy|matte'
+	COLOR_NAMES_EN,
+	MATERIAL_NAMES_EN
+);
+
+const PAINT = words(...PAINT_VERBS);
+
+const COLOR = words('цвет\\p{L}*', 'оттен\\p{L}*', COLOR_NAMES_RU, 'colou?rs?', COLOR_NAMES_EN);
+
+const MATERIAL = words(
+	MATERIAL_PROPERTY,
+	MATERIAL_NAMES_RU,
+	UNDER_MATERIAL,
+	MATERIAL_NAMES_EN,
+	'перетян\\p{L}*',
+	'бархат\\p{L}*',
+	'reupholster\\p{L}*'
 );
 
 const LIGHT = words(
@@ -301,6 +332,12 @@ const FIELD_RULES: Record<ModeHintField, FieldRule> = {
 		accepts: [],
 		format: { field: 'textureReplacement', intents: ['replace', 'recolor'] },
 		ignores: NOUN_FIELD_IGNORES
+	},
+	repaint: {
+		own: { mode: 'edit', tool: 'repaint' },
+		accepts: [],
+		format: { field: 'repaint', intents: ['recolor'] },
+		ignores: NOUN_FIELD_IGNORES
 	}
 };
 
@@ -310,7 +347,8 @@ const TOOL_LABELS: Record<ToolId, TranslationKey> = {
 	'remove-object': 'edit.tool.removeObject',
 	'light-settings': 'edit.tool.lightSettings',
 	'object-replacement': 'mode.objectReplacement',
-	'texture-replacement': 'mode.textureReplacement'
+	'texture-replacement': 'mode.textureReplacement',
+	repaint: 'edit.tool.repaint'
 };
 
 function lowerCaseKeepingLength(text: string): string {
@@ -399,7 +437,14 @@ function intentTarget(intent: EditIntent, normalized: string): ModeHintTarget {
 		case 'replace':
 			return { mode: 'edit', tool: withReference ? 'object-replacement' : 'freeform' };
 		case 'recolor':
-			return { mode: 'edit', tool: withReference ? 'texture-replacement' : 'freeform' };
+			if (withReference) return { mode: 'edit', tool: 'texture-replacement' };
+			return {
+				mode: 'edit',
+				tool:
+					PAINT.test(normalized) || (COLOR.test(normalized) && !MATERIAL.test(normalized))
+						? 'repaint'
+						: 'freeform'
+			};
 		case 'light':
 			return { mode: 'edit', tool: 'light-settings' };
 		case 'style':
