@@ -14,6 +14,7 @@
 
 import type { Page } from '@playwright/test';
 
+import { ru } from '$lib/i18n/locales/ru';
 import { expect, test } from './fixtures';
 import { media, mediaKey } from './helpers/media';
 import { mockProjectSessionRoutes } from './helpers/project-session-routes';
@@ -26,7 +27,7 @@ const FORM_SNAPSHOT = {
 	promptFragments: [],
 	promptOverride: null,
 	editPrompt: '',
-	addObjectPresetId: null,
+	addObjectInstruction: '',
 	removeObjectText: '',
 	outputFormat: 'webp',
 	sceneType: 'interior',
@@ -72,7 +73,7 @@ const ADD_OBJECT_GENERATION_ID = '00000000-0000-4000-8000-000000000201';
 const ADD_OBJECT_FORM_SNAPSHOT = {
 	...FORM_SNAPSHOT,
 	editPrompt: 'сделай стены голубыми',
-	addObjectPresetId: 'houseplant',
+	addObjectInstruction: 'комнатное растение',
 	editOperationType: 'add-object'
 };
 
@@ -213,9 +214,8 @@ test('restores an edit-kind generation onto the edit-panel tool that actually pr
 		'aria-selected',
 		'true'
 	);
-	await expect(page.getByRole('radio', { name: 'Комнатное растение' })).toHaveAttribute(
-		'aria-checked',
-		'true'
+	await expect(page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] })).toHaveValue(
+		'комнатное растение'
 	);
 });
 

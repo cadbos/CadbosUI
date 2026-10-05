@@ -181,7 +181,7 @@ export interface RequestJSON {
 	textureMaskSourceKey?: string;
 	promptFragments: PromptFragment[];
 	editPrompt: string;
-	addObjectPresetId?: string | null;
+	addObjectInstruction?: string;
 	removeObjectText?: string;
 	outputFormat: OutputFormat;
 	sceneType: SceneType;
@@ -228,7 +228,7 @@ export interface NormalizedRequest {
 	repaintColor: string;
 	repaintRegion: RepaintRegion | null;
 	editPrompt: string;
-	addObjectPresetId: string | null;
+	addObjectInstruction: string;
 	removeObjectText: string;
 	styleTransferPrompt: string;
 	prompt: string;
@@ -254,6 +254,7 @@ export const objectReplacementJobIdSchema = z.uuid();
 const replacementSurfaceSchema = z.string().max(200);
 const textureReplacementJobIdSchema = z.uuid();
 const lightSettingsInstructionSchema = z.string().max(500);
+const addObjectInstructionSchema = z.string().max(500);
 export const lightSettingsJobIdSchema = z.uuid();
 const repaintTargetSchema = z.string().max(200);
 const repaintColorSchema = z.string().regex(REPAINT_COLOR_PATTERN);
@@ -271,12 +272,6 @@ const lightSettingsPresetGroupKey = (id: string): string => {
 	);
 	return fixture?.id ?? id;
 };
-const addObjectPresetIdSchema = z
-	.string()
-	.nullable()
-	.transform((id) =>
-		id !== null && ADD_OBJECT_PRESETS.some((preset) => preset.id === id) ? id : null
-	);
 const lightSettingsPresetIdsSchema = z.array(z.string()).transform((ids) => {
 	const validIds = ids.filter((id) => LIGHT_SETTINGS_PRESETS.some((preset) => preset.id === id));
 	const lastIndexByGroup: Record<string, number> = {};
@@ -317,13 +312,14 @@ const editOperationSchema = z.object({
 
 // Exported for callers that receive a snapshot from outside this session
 // (ScenesDrawer.svelte's restore flow, GET /api/generated-images/[id]) and
-// need to validate it — including catalog membership (ADD_OBJECT_PRESETS,
-// LIGHT_SETTINGS_PRESETS) — before handing it to restoreFormSnapshot().
+// need to validate it — including catalog membership (LIGHT_SETTINGS_PRESETS)
+// — before handing it to restoreFormSnapshot().
 export const requestFormSnapshotSchema = z.object({
 	promptFragments: z.array(promptFragmentSchema),
 	promptOverride: z.string().nullable(),
 	editPrompt: z.string(),
-	addObjectPresetId: addObjectPresetIdSchema,
+	// Absent for a snapshot recorded before the Add object user prompt existed.
+	addObjectInstruction: addObjectInstructionSchema.default(''),
 	removeObjectText: z.string(),
 	// Absent/null for a snapshot recorded before this field existed — restore
 	// degrades to the 'freeform' default tool the same way it always did.
@@ -374,7 +370,7 @@ const requestJsonSchema = z
 		textureMaskSourceKey: z.string().min(1).optional(),
 		promptFragments: z.array(promptFragmentSchema),
 		editPrompt: z.string().default(''),
-		addObjectPresetId: addObjectPresetIdSchema.default(null),
+		addObjectInstruction: addObjectInstructionSchema.default(''),
 		removeObjectText: z.string().default(''),
 		outputFormat: outputFormatSchema,
 		// Defaults to interior for persisted requests saved before this field existed.
@@ -533,7 +529,7 @@ function cloneFormSnapshot(
 		promptFragments: cloneFragments(snapshot.promptFragments),
 		promptOverride: snapshot.promptOverride,
 		editPrompt: snapshot.editPrompt,
-		addObjectPresetId: snapshot.addObjectPresetId,
+		addObjectInstruction: snapshot.addObjectInstruction,
 		removeObjectText: snapshot.removeObjectText,
 		editOperationType: snapshot.editOperationType,
 		outputFormat: snapshot.outputFormat,
@@ -787,11 +783,11 @@ export class RequestState {
 	textureMaskSourceKey = $state<string | undefined>(undefined);
 	promptFragments = $state<PromptFragment[]>([]);
 	editPrompt = $state('');
-	// The Add object/Remove object edit-panel tools' own selections — kept
-	// here (like every other edit tool's fields) rather than as component-
-	// local state, so they survive a panel remount and stay visible as "the
+	// The Add object/Remove object edit-panel tools' own text — kept here
+	// (like every other edit tool's fields) rather than as component-local
+	// state, so it survives a panel remount and stays visible as "the
 	// settings used for this generation" instead of silently resetting.
-	addObjectPresetId = $state<string | null>(null);
+	addObjectInstruction = $state('');
 	removeObjectText = $state('');
 	activeFluxKontextEditJob = $state<ActiveFluxKontextEditJob | undefined>(undefined);
 	outputFormat = $state<OutputFormat>('webp');
@@ -981,9 +977,8 @@ export class RequestState {
 		this.editPrompt = prompt;
 	}
 
-	setAddObjectPresetId(id: string | null): void {
-		this.addObjectPresetId =
-			id !== null && ADD_OBJECT_PRESETS.some((preset) => preset.id === id) ? id : null;
+	setAddObjectInstruction(text: string): void {
+		this.addObjectInstruction = addObjectInstructionSchema.parse(text);
 	}
 
 	setRemoveObjectText(text: string): void {
@@ -1206,7 +1201,10 @@ export class RequestState {
 		if (target.mode === 'styleTransfer') {
 			if (this.styleTransferPrompt.trim() === '') this.styleTransferPrompt = trimmed;
 		} else if (target.tool === 'add-object') {
-			this.setAddObjectPresetId(target.presetId);
+			const preset = ADD_OBJECT_PRESETS.find((candidate) => candidate.id === target.presetId);
+			if (preset && this.addObjectInstruction.trim() === '') {
+				this.setAddObjectInstruction(t(preset.phrase));
+			}
 		} else if (target.tool === 'freeform') {
 			if (this.editPrompt.trim() === '') this.editPrompt = trimmed;
 		} else if (target.tool === 'light-settings') {
@@ -1277,19 +1275,24 @@ export class RequestState {
 		};
 	}
 
-	// `type` only matters for the id-only (URL-restore) path — the submit-time
-	// path below always has the real type from the tool that just submitted.
-	// add-object/remove-object have no persisted instruction field (unlike
-	// freeform's `editPrompt`), so a restored job for those two loses its exact
-	// wording; the job id itself (what actually resumes polling) is unaffected.
+	// `type` and `instruction` only matter for the id-only (URL-restore) path —
+	// the submit-time path below always has the real values from the tool that
+	// just submitted. The instruction is the submitted wording the caller
+	// recovered, kept in the job context independently of the editable form
+	// fields so the completed edit's history entry records what was submitted.
 	setActiveFluxKontextEditJobId(
 		id: string | undefined,
-		type: EditOperationType = 'freeform'
+		type: EditOperationType = 'freeform',
+		instruction = ''
 	): void {
 		const parsed = fluxKontextEditJobIdSchema.optional().parse(id);
 		if (parsed === this.activeFluxKontextEditJob?.id) return;
 		this.activeFluxKontextEditJob = parsed
-			? { id: parsed, type, instruction: type === 'freeform' ? this.editPrompt.trim() : '' }
+			? {
+					id: parsed,
+					type,
+					instruction: fluxKontextEditInstructionSchema.parse(instruction).trim()
+				}
 			: undefined;
 	}
 
@@ -1405,7 +1408,7 @@ export class RequestState {
 			promptFragments: cloneFragments(this.promptFragments),
 			promptOverride: this.promptOverride,
 			editPrompt: this.editPrompt,
-			addObjectPresetId: this.addObjectPresetId,
+			addObjectInstruction: this.addObjectInstruction,
 			removeObjectText: this.removeObjectText,
 			editOperationType,
 			outputFormat: this.outputFormat,
@@ -1447,7 +1450,7 @@ export class RequestState {
 		this.promptFragments = cloneFragments(snapshot.promptFragments);
 		this.promptOverride = snapshot.promptOverride;
 		this.editPrompt = snapshot.editPrompt;
-		this.addObjectPresetId = snapshot.addObjectPresetId;
+		this.addObjectInstruction = snapshot.addObjectInstruction;
 		this.removeObjectText = snapshot.removeObjectText;
 		this.outputFormat = snapshot.outputFormat;
 		this.sceneType = snapshot.sceneType;
@@ -1911,7 +1914,7 @@ export class RequestState {
 			textureMaskSourceKey: this.textureMaskSourceKey,
 			promptFragments: cloneFragments(this.promptFragments),
 			editPrompt: this.editPrompt,
-			addObjectPresetId: this.addObjectPresetId,
+			addObjectInstruction: this.addObjectInstruction,
 			removeObjectText: this.removeObjectText,
 			outputFormat: this.outputFormat,
 			sceneType: this.sceneType,
@@ -1948,7 +1951,7 @@ export class RequestState {
 		this.textureMaskSourceKey = parsed.textureMaskImage ? parsed.textureMaskSourceKey : undefined;
 		this.promptFragments = cloneFragments(parsed.promptFragments);
 		this.editPrompt = parsed.editPrompt;
-		this.addObjectPresetId = parsed.addObjectPresetId;
+		this.addObjectInstruction = parsed.addObjectInstruction;
 		this.removeObjectText = parsed.removeObjectText;
 		this.outputFormat = parsed.outputFormat;
 		this.sceneType = parsed.sceneType;
@@ -2008,7 +2011,7 @@ export class RequestState {
 			repaintColor: this.repaintColor,
 			repaintRegion: this.activeRepaintRegion(),
 			editPrompt: this.editPrompt,
-			addObjectPresetId: this.addObjectPresetId,
+			addObjectInstruction: this.addObjectInstruction,
 			removeObjectText: this.removeObjectText,
 			styleTransferPrompt: this.styleTransferPrompt,
 			prompt: this.prompt
@@ -2037,7 +2040,7 @@ export class RequestState {
 		this.textureMaskSourceKey = undefined;
 		this.promptFragments = [];
 		this.editPrompt = '';
-		this.addObjectPresetId = null;
+		this.addObjectInstruction = '';
 		this.removeObjectText = '';
 		this.outputFormat = 'webp';
 		this.sceneType = 'interior';
@@ -2105,7 +2108,7 @@ export class RequestState {
 		this.textureMaskSourceKey = source.textureMaskSourceKey;
 		this.promptFragments = cloneFragments(source.promptFragments);
 		this.editPrompt = source.editPrompt;
-		this.addObjectPresetId = source.addObjectPresetId;
+		this.addObjectInstruction = source.addObjectInstruction;
 		this.removeObjectText = source.removeObjectText;
 		this.activeFluxKontextEditJob = cloneActiveFluxKontextEditJob(source.activeFluxKontextEditJob);
 		this.outputFormat = source.outputFormat;

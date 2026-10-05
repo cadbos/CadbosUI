@@ -376,6 +376,24 @@ describe('getGenerationDetailForUser', () => {
 		expect(await getGenerationDetailForUser(db, 'user-2', 'image-1')).toBeNull();
 	});
 
+	it('still reads a snapshot stored with the removed addObjectPresetId or without addObjectInstruction', async () => {
+		seedUser(db, 'user-1', 'pubkey-1');
+		seedGeneration(db, 'image-1', 'user-1', 1000);
+		const stored: Record<string, unknown> = {
+			...TEST_FORM_SNAPSHOT,
+			addObjectPresetId: 'houseplant'
+		};
+		delete stored.addObjectInstruction;
+		db.prepare('UPDATE generations SET form_snapshot = ? WHERE id = ?')
+			.bind(JSON.stringify(stored), 'image-1')
+			.run();
+
+		const detail = await getGenerationDetailForUser(db, 'user-1', 'image-1');
+
+		expect(detail?.formSnapshot).toEqual({ ...TEST_FORM_SNAPSHOT, addObjectInstruction: '' });
+		expect(detail?.formSnapshot).not.toHaveProperty('addObjectPresetId');
+	});
+
 	it('degrades to a null snapshot for a row whose stored JSON is malformed', async () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedGeneration(db, 'image-1', 'user-1', 1000);

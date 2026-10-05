@@ -377,7 +377,7 @@ test('continuing a session restores its latest generation’s exact settings, no
 					promptFragments: [],
 					promptOverride: null,
 					editPrompt: '',
-					addObjectPresetId: null,
+					addObjectInstruction: '',
 					removeObjectText: '',
 					editOperationType: null,
 					outputFormat: 'webp',

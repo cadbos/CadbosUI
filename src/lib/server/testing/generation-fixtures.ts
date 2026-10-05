@@ -38,7 +38,7 @@ export const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	promptFragments: [{ id: 'frag-1', text: 'cozy', order: 0 }],
 	promptOverride: null,
 	editPrompt: '',
-	addObjectPresetId: null,
+	addObjectInstruction: '',
 	removeObjectText: '',
 	editOperationType: null,
 	outputFormat: 'webp',

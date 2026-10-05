@@ -353,7 +353,7 @@ function toPublicFormSnapshot(
 		promptFragments: snapshot.promptFragments,
 		promptOverride: snapshot.promptOverride,
 		editPrompt: snapshot.editPrompt,
-		addObjectPresetId: snapshot.addObjectPresetId,
+		addObjectInstruction: snapshot.addObjectInstruction,
 		removeObjectText: snapshot.removeObjectText,
 		editOperationType: snapshot.editOperationType,
 		outputFormat: snapshot.outputFormat,

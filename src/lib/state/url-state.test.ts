@@ -44,7 +44,7 @@ function formSnapshot(overrides: Partial<RequestFormSnapshot> = {}): RequestForm
 		promptFragments: [],
 		promptOverride: null,
 		editPrompt: '',
-		addObjectPresetId: null,
+		addObjectInstruction: '',
 		removeObjectText: '',
 		editOperationType: null,
 		outputFormat: 'webp',
@@ -431,6 +431,43 @@ describe('flux kontext edit URL state (freeform/add-object/remove-object)', () =
 		);
 	});
 
+	it('round-trips the prompt query per tool without mixing the freeform and add-object texts', () => {
+		const state = new RequestState();
+		state.setEditPrompt('make the walls blue');
+		state.setAddObjectInstruction('a decorative mirror');
+
+		expect(buildShareUrl('edit', state, { tool: 'freeform' })).toBe(
+			'/edit?tool=freeform&prompt=make+the+walls+blue'
+		);
+		expect(buildShareUrl('edit', state, { tool: 'add-object' })).toBe(
+			'/edit?tool=add-object&prompt=a+decorative+mirror'
+		);
+		expect(buildShareUrl('edit', state, { tool: 'remove-object' })).toBe(
+			'/edit?tool=remove-object'
+		);
+
+		const restored = new RequestState();
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({ tool: 'add-object', prompt: 'a decorative mirror' }),
+			restored
+		);
+		expect(restored.addObjectInstruction).toBe('a decorative mirror');
+		expect(restored.editPrompt).toBe('');
+	});
+
+	it('truncates an over-long add-object prompt query instead of throwing', () => {
+		const state = new RequestState();
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({ tool: 'add-object', prompt: 'x'.repeat(600) }),
+			state
+		);
+		expect(state.addObjectInstruction).toBe('x'.repeat(500));
+	});
+
 	it('restores the job’s type from jobType, not from the current tab', () => {
 		const state = new RequestState();
 		const params = new URLSearchParams({ tool: 'freeform', job: JOB_ID, jobType: 'remove-object' });
@@ -439,6 +476,67 @@ describe('flux kontext edit URL state (freeform/add-object/remove-object)', () =
 
 		expect(state.activeFluxKontextEditJobId).toBe(JOB_ID);
 		expect(state.activeFluxKontextEditJob?.type).toBe('remove-object');
+	});
+
+	it('keeps the submitted prompt in the restored job context when the tab matches the job type', () => {
+		const addObject = new RequestState();
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({
+				tool: 'add-object',
+				prompt: 'a decorative mirror',
+				job: JOB_ID,
+				jobType: 'add-object'
+			}),
+			addObject
+		);
+		expect(addObject.activeFluxKontextEditJob?.instruction).toBe('a decorative mirror');
+
+		const freeform = new RequestState();
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({
+				tool: 'freeform',
+				prompt: 'make the walls blue',
+				job: JOB_ID,
+				jobType: 'freeform'
+			}),
+			freeform
+		);
+		expect(freeform.activeFluxKontextEditJob?.instruction).toBe('make the walls blue');
+
+		const overLong = new RequestState();
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({
+				tool: 'add-object',
+				prompt: 'x'.repeat(600),
+				job: JOB_ID,
+				jobType: 'add-object'
+			}),
+			overLong
+		);
+		expect(overLong.activeFluxKontextEditJob?.instruction).toBe('x'.repeat(500));
+	});
+
+	it('does not take the visible tab’s prompt as the instruction of a job from another tool', () => {
+		const state = new RequestState();
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({
+				tool: 'freeform',
+				prompt: 'make the walls blue',
+				job: JOB_ID,
+				jobType: 'add-object'
+			}),
+			state
+		);
+		expect(state.activeFluxKontextEditJob?.instruction).toBe('');
+		expect(state.editPrompt).toBe('make the walls blue');
 	});
 
 	it('falls back to freeform when jobType is missing or not a recognized edit type', () => {

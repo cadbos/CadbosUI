@@ -32,7 +32,7 @@ const FORM_SNAPSHOT = {
 	promptFragments: [],
 	promptOverride: 'scandinavian living room',
 	editPrompt: '',
-	addObjectPresetId: null,
+	addObjectInstruction: '',
 	removeObjectText: '',
 	outputFormat: 'webp',
 	sceneType: 'interior',

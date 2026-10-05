@@ -14,6 +14,7 @@
 
 import type { Locator, Page, Route } from '@playwright/test';
 
+import { ru } from '$lib/i18n/locales/ru';
 import { expect, test } from './fixtures';
 import { media, mediaKey } from './helpers/media';
 import {
@@ -1203,7 +1204,7 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 	await expect(redoButton).toBeDisabled();
 });
 
-test('the Add Object tool applies a selected preset to the current image', async ({ page }) => {
+test('the Add Object tool applies a clicked template to the current image', async ({ page }) => {
 	const jobId = '00000000-0000-4000-8000-000000000114';
 	await authenticate(page);
 	await mockUpload(page);
@@ -1238,10 +1239,10 @@ test('the Add Object tool applies a selected preset to the current image', async
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
 	await page.getByRole('tab', { name: 'Добавить объект' }).click();
-	const mirrorPreset = page.getByRole('radio', { name: 'Зеркало' });
-	await expect(mirrorPreset).toHaveAttribute('aria-checked', 'false');
-	await mirrorPreset.click();
-	await expect(mirrorPreset).toHaveAttribute('aria-checked', 'true');
+	await page.getByRole('button', { name: ru['edit.addObject.mirror.label'] }).click();
+	await expect(page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] })).toHaveValue(
+		ru['edit.addObject.mirror.phrase']
+	);
 	await page.getByRole('button', { name: 'Добавить объект' }).click();
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
@@ -1250,8 +1251,86 @@ test('the Add Object tool applies a selected preset to the current image', async
 		{ timeout: 10_000 }
 	);
 	expect(capturedPrompt).toBe(
-		'Выполни только добавочную локальную правку: добавь ровно одно декоративное зеркало на уже свободный видимый участок стены. Подбери размер, форму, раму, положение и угол под геометрию стены, масштаб и стиль интерьера; если места мало, используй зеркало меньшего размера. Не закрывай окна, двери, выключатели, розетки, молдинги, существующие картины или декор. Расположи зеркало так, чтобы оно преимущественно отражало известные по исходному изображению поверхности и объекты. Отражение должно точно соответствовать перспективе, планировке и освещению комнаты; для невидимой области за камерой используй нейтральное низкодетализированное продолжение существующих поверхностей без новой мебели, декора или дублированных предметов. Ничего из уже существующего не удаляй, не заменяй, не перемещай и не перерисовывай. Все области изображения, кроме нового зеркала, его физически корректного отражения и естественной контактной тени, должны остаться визуально идентичными исходному изображению.'
+		ru['edit.addObject.userPromptTemplate'].replace('{object}', ru['edit.addObject.mirror.phrase'])
 	);
+});
+
+test('the Add Object tool replaces the prompt with a clicked template and wraps the text', async ({
+	page
+}) => {
+	const jobId = '00000000-0000-4000-8000-000000000115';
+	await authenticate(page);
+	await mockUpload(page);
+	let capturedPrompt: string | undefined;
+	let capturedSnapshot: Record<string, unknown> | undefined;
+	await page.route('**/api/edit', async (route) => {
+		const body = route.request().postDataJSON() as {
+			prompt: string;
+			formSnapshot: Record<string, unknown>;
+		};
+		capturedPrompt = body.prompt;
+		capturedSnapshot = body.formSnapshot;
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: `/api/edit/${jobId}` },
+			body: JSON.stringify({ id: jobId, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/edit/${jobId}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: jobId,
+				status: 'completed',
+				output: media(2, '/api/media/test-media/added-armchair.webp'),
+				cost: 2,
+				balance: 90
+			})
+		});
+	});
+
+	await openCreate(page);
+	await page.getByRole('tab', { name: ru['mode.edit'] }).click();
+	await page
+		.locator('#mode-panel-edit input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+
+	await page.getByRole('tab', { name: ru['edit.tool.addObject'] }).click();
+	const applyButton = page.getByRole('button', { name: ru['edit.addObject.apply'] });
+	const promptField = page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] });
+	const mirrorTemplate = page.getByRole('button', { name: ru['edit.addObject.mirror.label'] });
+	const plantTemplate = page.getByRole('button', { name: ru['edit.addObject.houseplant.label'] });
+	const customPrompt = 'комнатное растение у окна';
+	await expect(applyButton).toBeDisabled();
+
+	await mirrorTemplate.click();
+	await expect(promptField).toHaveValue(ru['edit.addObject.mirror.phrase']);
+
+	await plantTemplate.click();
+	await expect(promptField).toHaveValue(ru['edit.addObject.houseplant.phrase']);
+
+	await promptField.fill(customPrompt);
+	await plantTemplate.click();
+	await expect(promptField).toHaveValue(ru['edit.addObject.houseplant.phrase']);
+	await promptField.fill(customPrompt);
+	await expect(applyButton).toBeEnabled();
+	await applyButton.click();
+
+	await expect(page.getByRole('img', { name: ru['render.generate'] })).toHaveAttribute(
+		'src',
+		'/api/media/test-media/added-armchair.webp',
+		{ timeout: 10_000 }
+	);
+	expect(capturedPrompt).toContain(
+		ru['edit.addObject.userPromptTemplate'].replace('{object}', customPrompt)
+	);
+	expect(capturedSnapshot).toMatchObject({
+		addObjectInstruction: customPrompt,
+		editOperationType: 'add-object'
+	});
+	expect(capturedSnapshot).not.toHaveProperty('addObjectPresetId');
 });
 
 test('undo/redo across different edit tools restores both the settings and the active tool tab', async ({
@@ -1324,7 +1403,7 @@ test('undo/redo across different edit tools restores both the settings and the a
 	// step above (see request.svelte.ts's RequestFormSnapshot) — the bug this
 	// test guards against.
 	await addObjectTab.click();
-	await page.getByRole('radio', { name: 'Комнатное растение' }).click();
+	await page.getByRole('button', { name: ru['edit.addObject.houseplant.label'] }).click();
 	await page.getByRole('button', { name: 'Добавить объект' }).click();
 	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/added-plant.webp', {
 		timeout: 10_000
@@ -1344,9 +1423,8 @@ test('undo/redo across different edit tools restores both the settings and the a
 	await redoButton.click();
 	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/added-plant.webp');
 	await expect(addObjectTab).toHaveAttribute('aria-selected', 'true');
-	await expect(page.getByRole('radio', { name: 'Комнатное растение' })).toHaveAttribute(
-		'aria-checked',
-		'true'
+	await expect(page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] })).toHaveValue(
+		ru['edit.addObject.houseplant.phrase']
 	);
 });
 
