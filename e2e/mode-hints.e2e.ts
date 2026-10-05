@@ -12,6 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { ru } from '$lib/i18n/locales/ru';
 import { expect, test } from './fixtures';
 
 test('object replacement suggests the custom prompt for adding an object and carries the text over', async ({
@@ -104,7 +105,9 @@ test('the create prompt suggests editing tools for targeted changes', async ({ p
 	);
 });
 
-test('adding a preset object opens Add object with that preset selected', async ({ page }) => {
+test('adding a preset object opens Add object with the template text filled in', async ({
+	page
+}) => {
 	await page.goto('/edit?tool=object-replacement');
 	const panel = page.locator('#edit-tool-panel-object-replacement');
 
@@ -112,8 +115,7 @@ test('adding a preset object opens Add object with that preset selected', async 
 	await panel.getByRole('button', { name: 'Перейти в «Добавить объект»' }).click();
 
 	await expect(page).toHaveURL(/tool=add-object/);
-	await expect(page.getByRole('radio', { name: 'Комнатное растение' })).toHaveAttribute(
-		'aria-checked',
-		'true'
+	await expect(page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] })).toHaveValue(
+		ru['edit.addObject.houseplant.phrase']
 	);
 });

@@ -383,7 +383,7 @@ before the Change Date. See LICENSE for complete terms.
 			const sourceRender = request.currentRender;
 			// Captured before the async calls below so the settings attached to
 			// this request are what was actually submitted — see toRenderRequest().
-			const formSnapshot = request.captureFormSnapshot();
+			const formSnapshot = request.captureFormSnapshot(type);
 			const source = await request.resolveWorkingImageKey();
 			if (!source) return;
 			const { sessionId } = await request.ensureProjectSession();

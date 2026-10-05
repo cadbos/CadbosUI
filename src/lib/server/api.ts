@@ -77,7 +77,8 @@ export const formSnapshotSchema = z.object({
 	promptFragments: z.array(formSnapshotPromptFragment).max(200),
 	promptOverride: z.string().nullable(),
 	editPrompt: z.string(),
-	addObjectPresetId: z.string().nullable(),
+	// Absent from a snapshot recorded before the Add object user prompt existed.
+	addObjectInstruction: z.string().max(500).default(''),
 	removeObjectText: z.string(),
 	// Absent/null for a snapshot recorded before this field existed.
 	editOperationType: z.enum(EDIT_OPERATION_TYPES).nullable().default(null),

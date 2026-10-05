@@ -14,9 +14,8 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { ADD_OBJECT_PRESETS } from '$lib/add-object-presets';
-	import { t } from '$lib/i18n/index.svelte';
+	import { t, ti } from '$lib/i18n/index.svelte';
 	import { request } from '$lib/state/request.svelte';
-	import { createTabController } from '$lib/utils';
 
 	interface Props {
 		disabled: boolean;
@@ -25,51 +24,24 @@ before the Change Date. See LICENSE for complete terms.
 	}
 	let { disabled, applying, onApply }: Props = $props();
 
-	let presetButtons = $state<HTMLElement[]>([]);
-	const selected = $derived(
-		ADD_OBJECT_PRESETS.find((preset) => preset.id === request.addObjectPresetId)
-	);
-	const activePresetIndex = $derived(
-		Math.max(
-			ADD_OBJECT_PRESETS.findIndex((preset) => preset.id === request.addObjectPresetId),
-			0
-		)
-	);
-
-	const presetRadios = createTabController({
-		itemCount: () => ADD_OBJECT_PRESETS.length,
-		getActiveIndex: () => activePresetIndex,
-		setActiveIndex: (index) => {
-			request.setAddObjectPresetId(ADD_OBJECT_PRESETS[index].id);
-		},
-		focusTab: (index) => presetButtons[index]?.focus()
-	});
+	const promptText = $derived(request.addObjectInstruction.trim());
 
 	function submit(): void {
-		if (!selected) return;
-		onApply(t(selected.prompt));
+		onApply(ti('edit.addObject.userPromptTemplate', { object: promptText }));
 	}
 </script>
 
 <div class="tool">
 	<p class="hint" id="add-object-select-hint">{t('edit.addObject.selectHint')}</p>
 
-	<div class="grid" role="radiogroup" aria-labelledby="add-object-select-hint">
-		{#each ADD_OBJECT_PRESETS as preset, index (preset.id)}
+	<div class="grid" role="group" aria-labelledby="add-object-select-hint">
+		{#each ADD_OBJECT_PRESETS as preset (preset.id)}
 			{@const Icon = preset.Icon}
 			<button
-				{@attach (node) => {
-					presetButtons[index] = node as HTMLElement;
-				}}
 				type="button"
-				role="radio"
 				class="preset"
-				class:selected={request.addObjectPresetId === preset.id}
-				aria-checked={request.addObjectPresetId === preset.id}
-				tabindex={index === activePresetIndex ? 0 : -1}
 				{disabled}
-				onclick={() => presetRadios.activate(index)}
-				onkeydown={presetRadios.onKeydown}
+				onclick={() => request.setAddObjectInstruction(t(preset.phrase))}
 			>
 				<Icon size={20} strokeWidth={1.6} aria-hidden="true" />
 				<span>{t(preset.label)}</span>
@@ -77,7 +49,18 @@ before the Change Date. See LICENSE for complete terms.
 		{/each}
 	</div>
 
-	<button type="button" class="btn-apply" disabled={disabled || !selected} onclick={submit}>
+	<label class="field">
+		<span class="field-label">{t('edit.addObject.customLabel')}</span>
+		<textarea
+			value={request.addObjectInstruction}
+			oninput={(event) => request.setAddObjectInstruction(event.currentTarget.value)}
+			rows="2"
+			maxlength="500"
+			{disabled}
+			placeholder={t('edit.addObject.customPlaceholder')}></textarea>
+	</label>
+
+	<button type="button" class="btn-apply" disabled={disabled || promptText === ''} onclick={submit}>
 		{#if applying}
 			<span class="spinner" aria-hidden="true"></span>
 		{/if}
@@ -135,15 +118,48 @@ before the Change Date. See LICENSE for complete terms.
 		border-color: var(--color-accent);
 	}
 
-	.preset.selected {
-		color: var(--color-accent-text);
-		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
-		border-color: var(--color-accent);
-	}
-
 	.preset:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+
+	.field-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--color-muted);
+	}
+
+	textarea {
+		font: inherit;
+		font-size: 0.9375rem;
+		resize: vertical;
+		padding: 0.625rem 0.875rem;
+		border: 1.5px solid var(--color-border);
+		border-radius: 10px;
+		background: var(--color-background);
+		color: var(--color-text);
+		transition: border-color 0.15s;
+		min-height: 3.5rem;
+	}
+
+	textarea:focus {
+		outline: none;
+		border-color: var(--color-accent);
+	}
+
+	textarea::placeholder {
+		color: var(--color-muted);
+		opacity: 0.6;
+	}
+
+	textarea:disabled {
+		opacity: 0.6;
 	}
 
 	.btn-apply {

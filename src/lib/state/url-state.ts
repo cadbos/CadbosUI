@@ -380,6 +380,8 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 		} else if (tool === 'freeform' || tool === 'add-object' || tool === 'remove-object') {
 			if (tool === 'freeform' && request.editPrompt.trim() !== '') {
 				params.set('prompt', request.editPrompt);
+			} else if (tool === 'add-object' && request.addObjectInstruction.trim() !== '') {
+				params.set('prompt', request.addObjectInstruction);
 			}
 			const job = subTab.job ?? request.activeFluxKontextEditJobId;
 			if (isJobId(job)) {
@@ -576,8 +578,11 @@ export function applyShareParams(
 			const job = searchParams.get('job');
 			request.setActiveRepaintJobId(isJobId(job) ? job : undefined);
 		} else if (tool === 'freeform' || tool === 'add-object' || tool === 'remove-object') {
+			const prompt = searchParams.get('prompt') ?? '';
 			if (tool === 'freeform') {
-				request.setEditPrompt(searchParams.get('prompt') ?? '');
+				request.setEditPrompt(prompt);
+			} else if (tool === 'add-object') {
+				request.setAddObjectInstruction(prompt.slice(0, 500));
 			}
 			const job = searchParams.get('job');
 			// The job's own type (see buildShareUrl), not the currently-selected
@@ -590,7 +595,15 @@ export function applyShareParams(
 				jobTypeParam === 'remove-object'
 					? jobTypeParam
 					: 'freeform';
-			request.setActiveFluxKontextEditJobId(isJobId(job) ? job : undefined, jobType);
+			// The `prompt` param is the visible tab's text, so it is the job's
+			// submitted instruction only when that tab is the job's own type.
+			const jobInstruction =
+				tool !== jobType ? '' : tool === 'add-object' ? prompt.slice(0, 500) : prompt;
+			request.setActiveFluxKontextEditJobId(
+				isJobId(job) ? job : undefined,
+				jobType,
+				jobInstruction
+			);
 		}
 	} else if (mode === 'styleTransfer') {
 		const presetId = searchParams.get('preset');

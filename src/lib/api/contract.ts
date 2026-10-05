@@ -79,7 +79,7 @@ export interface RequestFormSnapshot {
 	promptFragments: PromptFragment[];
 	promptOverride: string | null;
 	editPrompt: string;
-	addObjectPresetId: string | null;
+	addObjectInstruction: string;
 	removeObjectText: string;
 	// Only meaningful (non-null) for a kind: 'edit' generation — which of
 	// freeform/add-object/remove-object actually produced it, since those
