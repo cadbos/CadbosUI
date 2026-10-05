@@ -16,6 +16,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { ImagePlus, Import } from '@lucide/svelte';
 	import { tick } from 'svelte';
 	import { uploadResultSchema } from '$lib/api/contract';
+	import RegionSelector from '$lib/components/RegionSelector.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { normalizeImageContentType } from '$lib/image-mime';
 	import {
@@ -41,6 +42,8 @@ before the Change Date. See LICENSE for complete terms.
 		requiredLabel?: TranslationKey;
 		disabled?: boolean;
 		compact?: boolean;
+		// Lets the user drag out the part of the picture the repaint tool works on.
+		selectRegion?: boolean;
 		onUploadingChange?: (uploading: boolean) => void;
 	}
 
@@ -50,6 +53,7 @@ before the Change Date. See LICENSE for complete terms.
 		requiredLabel = undefined,
 		disabled = false,
 		compact = false,
+		selectRegion = false,
 		onUploadingChange = undefined
 	}: Props = $props();
 
@@ -60,6 +64,14 @@ before the Change Date. See LICENSE for complete terms.
 	let previewUrl = $state<string | null>(null);
 	let dragOver = $state(false);
 	let remoteUrl = $state('');
+	let imageSize = $state<{ width: number; height: number } | null>(null);
+
+	function rememberImageSize(event: Event): void {
+		const image = event.currentTarget;
+		if (image instanceof HTMLImageElement && image.naturalWidth > 0 && image.naturalHeight > 0) {
+			imageSize = { width: image.naturalWidth, height: image.naturalHeight };
+		}
+	}
 
 	function attachInput(node: HTMLInputElement): void {
 		inputEl = node;
@@ -428,7 +440,20 @@ before the Change Date. See LICENSE for complete terms.
 >
 	{#if hasImage}
 		<div class="image-wrapper">
-			<img src={effectivePreviewUrl ?? imageUrl ?? ''} alt={t(ariaLabelKey)} class="preview" />
+			<img
+				src={effectivePreviewUrl ?? imageUrl ?? ''}
+				alt={t(ariaLabelKey)}
+				class="preview"
+				onload={rememberImageSize}
+			/>
+			{#if selectRegion && imageSize}
+				<RegionSelector
+					region={request.activeRepaintRegion()}
+					naturalWidth={imageSize.width}
+					naturalHeight={imageSize.height}
+					onchange={(region) => request.setRepaintRegion(region)}
+				/>
+			{/if}
 			<div class="image-overlay">
 				<div class="image-actions">
 					<button
@@ -637,9 +662,13 @@ before the Change Date. See LICENSE for complete terms.
 		background: linear-gradient(to top, rgb(0 0 0 / 0.5), transparent 55%);
 		opacity: 1;
 		transition: opacity 0.2s;
+		/* Only the actions are interactive; the rest lets pointers through to the
+		   region selector underneath. */
+		pointer-events: none;
 	}
 
 	.image-actions {
+		pointer-events: auto;
 		display: flex;
 		align-items: center;
 		justify-content: center;

@@ -982,6 +982,15 @@ export const en = {
 	'repaint.pollFailed': 'Could not check the job status. Please try again.',
 	'repaint.timedOut': 'Timed out. Please try again.',
 	'repaint.notFound': 'Could not find this repaint job.',
+	'repaint.targetNotFound':
+		'Could not find that object in the picture. Name it differently or select its area on the picture.',
+	'repaint.region.label': 'Area',
+	'repaint.region.hint':
+		'Optional. Drag on the picture to confine the repaint to one area. It helps when several objects fit the name.',
+	'repaint.region.select': 'Select area',
+	'repaint.region.clear': 'Clear area',
+	'repaint.region.boxLabel':
+		'Selected area. Arrow keys move it, Shift with arrow keys resizes it, Delete clears it.',
 	'repaint.rateLimited': 'Too many requests. Wait a moment and try again.',
 	'repaint.insufficientCredit': 'Test balance exhausted.',
 	'repaint.generationRestricted': 'Generation is limited to approved accounts.',
