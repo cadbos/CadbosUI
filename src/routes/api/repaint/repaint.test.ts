@@ -291,7 +291,10 @@ describe('POST /api/repaint', () => {
 			{ target: 'x'.repeat(201) },
 			{ color: 'red' },
 			{ color: '#A3B19B' },
-			{ color: '#a3b19b80' }
+			{ color: '#a3b19b80' },
+			{ region: { x: 0.8, y: 0, width: 0.5, height: 0.5 } },
+			{ region: { x: 0, y: 0, width: 0.01, height: 0.5 } },
+			{ region: { x: 0, y: 0, width: 0.5, height: 0.5, rotation: 1 } }
 		]) {
 			const invalid = await callPost({ pubkey: 'pubkey-1' }, platform(db), overrides);
 			expect(invalid.status).toBe(400);
@@ -372,6 +375,22 @@ describe('POST /api/repaint', () => {
 			cost: 3.5,
 			status: 'processing'
 		});
+	});
+
+	it('passes a region to the workflow and leaves the whole scene otherwise', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		const region = { x: 0.68, y: 0.61, width: 0.14, height: 0.23 };
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), { region });
+
+		expect(response.status).toBe(202);
+		expect(integration.submit).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ region }),
+			expect.anything(),
+			expect.anything()
+		);
 	});
 
 	it.each([
@@ -595,6 +614,28 @@ describe('GET /api/repaint/[id]', () => {
 			id: 'job-1',
 			status: 'failed',
 			error: { code: 'repaint_failed', message: 'Repaint failed' }
+		});
+		const credit = await db
+			.prepare('SELECT balance FROM credits WHERE user_id = ?')
+			.bind('user-1')
+			.first<{ balance: number }>();
+		expect(credit?.balance).toBe(12);
+	});
+
+	it('reports a target the segmenter could not find without charging', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		await seedJob(db);
+		integration.poll.mockRejectedValue(
+			new ComfyUiError('target_not_found', 'workflow', 'Repaint target not found in the scene')
+		);
+
+		const response = await callGet({ pubkey: 'pubkey-1' }, platform(db), 'job-1');
+
+		expect(await response.json()).toEqual({
+			id: 'job-1',
+			status: 'failed',
+			error: { code: 'repaint_target_not_found', message: 'Repaint failed' }
 		});
 		const credit = await db
 			.prepare('SELECT balance FROM credits WHERE user_id = ?')

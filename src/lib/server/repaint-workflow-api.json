@@ -17,44 +17,14 @@
 			"title": "Load Image"
 		}
 	},
-	"97": {
-		"inputs": {
-			"upscale_model": ["98", 0],
-			"image": ["62:8", 0]
-		},
-		"class_type": "ImageUpscaleWithModel",
-		"_meta": {
-			"title": "Upscale Image (using Model)"
-		}
-	},
-	"98": {
-		"inputs": {
-			"model_name": "4xNomos2_hq_dat2.safetensors"
-		},
-		"class_type": "UpscaleModelLoader",
-		"_meta": {
-			"title": "Upscale model"
-		}
-	},
-	"99": {
-		"inputs": {
-			"upscale_method": "lanczos",
-			"scale_by": 0.5,
-			"image": ["97", 0]
-		},
-		"class_type": "ImageScaleBy",
-		"_meta": {
-			"title": "Итоговый множитель (0.5 = x2, 1.0 = x4)"
-		}
-	},
 	"100": {
 		"inputs": {
-			"filename_prefix": "Flux2_upscaled",
-			"images": ["99", 0]
+			"filename_prefix": "Flux2_repaint",
+			"images": ["222", 0]
 		},
 		"class_type": "SaveImage",
 		"_meta": {
-			"title": "Save (upscaled)"
+			"title": "Save Image"
 		}
 	},
 	"101": {
@@ -77,7 +47,7 @@
 	},
 	"104": {
 		"inputs": {
-			"value": "Image 1 is the scene. Image 2 is a flat color swatch: it contains no object, only a single solid color.\n\nRepaint the {} in image 1 using the exact color shown in image 2.\n\nThe color comes only from image 2: match its hue, saturation and brightness precisely. Use image 2 only as a color sample — do not place the swatch, a square, or any shape or pattern from it into the scene.\n\nThe repainted {} keeps everything except its color: the same shape, geometry, edges, position and size, the same material and surface texture (wood grain, fabric weave, plaster, metal and so on remain visible through the new color), and the same finish, whether matte, satin or glossy. The scene's lighting stays physically correct on the new color: the same highlights, shadows, reflections and shading gradients as in image 1, so the color looks naturally lit rather than flat or pasted on.\n\nOnly the {} changes color. Everything else in image 1 stays pixel-identical: all other objects, furniture, walls, floor, ceiling, decor, textiles, windows, light sources, background, camera position, framing and perspective remain exactly as they are, with their original colors. Do not recolor adjacent surfaces or objects, and do not let the new color bleed onto their edges.\n\nPhotorealistic and seamless, as if the {} had actually been painted in this color and photographed again with the same camera under the same light."
+			"value": "Image 1 is the scene. Image 2 is a flat color swatch: it contains no object, only a single solid color.\n\nRepaint the {} in image 1 using the exact color shown in image 2.\n\nThe color comes only from image 2: match its hue, saturation and brightness precisely. Use image 2 only as a color sample — do not place the swatch, a square, or any shape or pattern from it into the scene.\n\nThe repainted {} keeps everything except its color: the same shape, geometry, edges, position and size, and the same material and surface exactly as they appear in image 1. Do not add, invent or change any texture, grain or pattern that is not already visible in image 1; a smooth surface stays smooth. The same finish stays, whether matte, satin or glossy. The scene's lighting stays physically correct on the new color: the same highlights, shadows, reflections and shading gradients as in image 1, so the color looks naturally lit rather than flat or pasted on.\n\nOnly the {} changes color. Everything else in image 1 stays identical: all other objects, furniture, walls, floor, ceiling, decor, textiles, windows, light sources, background, camera position, framing and perspective remain exactly as they are, with their original colors. Do not recolor adjacent surfaces or objects, and do not let the new color bleed onto their edges.\n\nPhotorealistic and seamless, as if the {} had actually been painted in this color and photographed again with the same camera under the same light."
 		},
 		"class_type": "PrimitiveStringMultiline",
 		"_meta": {
@@ -102,6 +72,252 @@
 		"class_type": "PreviewAny",
 		"_meta": {
 			"title": "Positive prompt preview"
+		}
+	},
+	"200": {
+		"inputs": {
+			"value": 0
+		},
+		"class_type": "PrimitiveFloat",
+		"_meta": {
+			"title": "Region x (fraction)"
+		}
+	},
+	"201": {
+		"inputs": {
+			"value": 0
+		},
+		"class_type": "PrimitiveFloat",
+		"_meta": {
+			"title": "Region y (fraction)"
+		}
+	},
+	"202": {
+		"inputs": {
+			"value": 1
+		},
+		"class_type": "PrimitiveFloat",
+		"_meta": {
+			"title": "Region width (fraction)"
+		}
+	},
+	"203": {
+		"inputs": {
+			"value": 1
+		},
+		"class_type": "PrimitiveFloat",
+		"_meta": {
+			"title": "Region height (fraction)"
+		}
+	},
+	"204": {
+		"inputs": {
+			"image": ["42", 0]
+		},
+		"class_type": "GetImageSize",
+		"_meta": {
+			"title": "Scene size"
+		}
+	},
+	"205": {
+		"inputs": {
+			"value": "a*b",
+			"a": ["200", 0],
+			"b": ["204", 0]
+		},
+		"class_type": "SimpleMath+",
+		"_meta": {
+			"title": "Region x (px)"
+		}
+	},
+	"206": {
+		"inputs": {
+			"value": "a*b",
+			"a": ["201", 0],
+			"b": ["204", 1]
+		},
+		"class_type": "SimpleMath+",
+		"_meta": {
+			"title": "Region y (px)"
+		}
+	},
+	"207": {
+		"inputs": {
+			"value": "a*b",
+			"a": ["202", 0],
+			"b": ["204", 0]
+		},
+		"class_type": "SimpleMath+",
+		"_meta": {
+			"title": "Region width (px)"
+		}
+	},
+	"208": {
+		"inputs": {
+			"value": "a*b",
+			"a": ["203", 0],
+			"b": ["204", 1]
+		},
+		"class_type": "SimpleMath+",
+		"_meta": {
+			"title": "Region height (px)"
+		}
+	},
+	"210": {
+		"inputs": {
+			"image": ["42", 0],
+			"width": ["207", 0],
+			"height": ["208", 0],
+			"x": ["205", 0],
+			"y": ["206", 0]
+		},
+		"class_type": "ImageCrop",
+		"_meta": {
+			"title": "Crop scene to region"
+		}
+	},
+	"211": {
+		"inputs": {
+			"model_name": "GroundingDINO_SwinB (938MB)"
+		},
+		"class_type": "GroundingDinoModelLoader (segment anything)",
+		"_meta": {
+			"title": "GroundingDINO loader"
+		}
+	},
+	"212": {
+		"inputs": {
+			"model_name": "sam_hq_vit_h (2.57GB)"
+		},
+		"class_type": "SAMModelLoader (segment anything)",
+		"_meta": {
+			"title": "SAM loader"
+		}
+	},
+	"213": {
+		"inputs": {
+			"text": ["102:150", 0],
+			"max_words": 4,
+			"fallback": ""
+		},
+		"class_type": "TextExtractNounPhrase",
+		"_meta": {
+			"title": "Target noun phrase"
+		}
+	},
+	"214": {
+		"inputs": {
+			"sam_model": ["212", 0],
+			"grounding_dino_model": ["211", 0],
+			"image": ["210", 0],
+			"prompt": ["213", 0],
+			"threshold": 0.3
+		},
+		"class_type": "GroundingDinoSAMSegment (segment anything)",
+		"_meta": {
+			"title": "Segment target"
+		}
+	},
+	"215": {
+		"inputs": {
+			"mask": ["214", 1],
+			"mode": "union"
+		},
+		"class_type": "MaskFlatten",
+		"_meta": {
+			"title": "Union of target masks"
+		}
+	},
+	"216": {
+		"inputs": {
+			"mask": ["215", 0],
+			"expand": 0,
+			"incremental_expandrate": 0,
+			"tapered_corners": true,
+			"flip_input": false,
+			"blur_radius": 0,
+			"lerp_alpha": 1,
+			"decay_factor": 1,
+			"fill_holes": true
+		},
+		"class_type": "GrowMaskWithBlur",
+		"_meta": {
+			"title": "Grow target mask"
+		}
+	},
+	"217": {
+		"inputs": {
+			"mask": ["216", 0]
+		},
+		"class_type": "IsMaskEmpty",
+		"_meta": {
+			"title": "Target missing"
+		}
+	},
+	"218": {
+		"inputs": {
+			"source": ["217", 0]
+		},
+		"class_type": "PreviewAny",
+		"_meta": {
+			"title": "Target missing flag"
+		}
+	},
+	"220": {
+		"inputs": {
+			"image": ["210", 0],
+			"mask": ["216", 0],
+			"downscale_algorithm": "bicubic",
+			"upscale_algorithm": "lanczos",
+			"preresize": false,
+			"preresize_mode": "ensure minimum resolution",
+			"preresize_min_width": 1024,
+			"preresize_min_height": 1024,
+			"preresize_max_width": 16384,
+			"preresize_max_height": 16384,
+			"mask_fill_holes": true,
+			"mask_expand_pixels": 0,
+			"mask_invert": false,
+			"mask_blend_pixels": 4,
+			"mask_hipass_filter": 0.1,
+			"extend_for_outpainting": false,
+			"extend_up_factor": 1,
+			"extend_down_factor": 1,
+			"extend_left_factor": 1,
+			"extend_right_factor": 1,
+			"context_from_mask_extend_factor": 1.5,
+			"output_resize_to_target_size": false,
+			"output_target_width": 1024,
+			"output_target_height": 1024,
+			"output_padding": "32",
+			"device_mode": "cpu (compatible)"
+		},
+		"class_type": "InpaintCropImproved",
+		"_meta": {
+			"title": "Crop around target"
+		}
+	},
+	"221": {
+		"inputs": {
+			"stitcher": ["220", 0],
+			"inpainted_image": ["62:8", 0]
+		},
+		"class_type": "InpaintStitchImproved",
+		"_meta": {
+			"title": "Stitch repaint into crop"
+		}
+	},
+	"222": {
+		"inputs": {
+			"destination": ["42", 0],
+			"source": ["221", 0],
+			"x": ["205", 0],
+			"y": ["206", 0],
+			"resize_source": false
+		},
+		"class_type": "ImageCompositeMasked",
+		"_meta": {
+			"title": "Paste region into scene"
 		}
 	},
 	"102:147": {
@@ -301,10 +517,10 @@
 	},
 	"62:45": {
 		"inputs": {
-			"upscale_method": "area",
+			"upscale_method": "lanczos",
 			"megapixels": 1,
 			"resolution_steps": 1,
-			"image": ["42", 0]
+			"image": ["220", 1]
 		},
 		"class_type": "ImageScaleToTotalPixels",
 		"_meta": {

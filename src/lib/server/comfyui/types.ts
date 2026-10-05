@@ -63,6 +63,8 @@ export interface ComfyHistoryStatus {
 
 export interface ComfyHistoryNodeOutput {
 	images?: ComfyImageDescriptor[] | undefined;
+	// What a PreviewAny node printed.
+	text?: string[] | undefined;
 }
 
 export interface ComfyHistoryEntry {
@@ -91,6 +93,7 @@ export type ComfyUiErrorCode =
 	| 'missing_output'
 	| 'network_error'
 	| 'prompt_rejected'
+	| 'target_not_found'
 	| 'timeout';
 
 export class ComfyUiError extends Error {

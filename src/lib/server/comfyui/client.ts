@@ -77,14 +77,23 @@ function parseHistoryEntry(promptId: string, value: unknown): ComfyHistoryEntry 
 	const outputs: Record<string, ComfyHistoryNodeOutput> = {};
 	for (const [nodeId, nodeOutput] of Object.entries(value.outputs)) {
 		if (!isRecord(nodeOutput)) return null;
-		if (nodeOutput.images === undefined) {
-			outputs[nodeId] = {};
-			continue;
+		const output: ComfyHistoryNodeOutput = {};
+		if (nodeOutput.images !== undefined) {
+			if (!Array.isArray(nodeOutput.images)) return null;
+			const images = nodeOutput.images.map(parseImageDescriptor);
+			if (images.some((image) => image === null)) return null;
+			output.images = images as ComfyImageDescriptor[];
 		}
-		if (!Array.isArray(nodeOutput.images)) return null;
-		const images = nodeOutput.images.map(parseImageDescriptor);
-		if (images.some((image) => image === null)) return null;
-		outputs[nodeId] = { images: images as ComfyImageDescriptor[] };
+		if (nodeOutput.text !== undefined) {
+			if (
+				!Array.isArray(nodeOutput.text) ||
+				nodeOutput.text.some((line) => typeof line !== 'string')
+			) {
+				return null;
+			}
+			output.text = nodeOutput.text as string[];
+		}
+		outputs[nodeId] = output;
 	}
 
 	return {

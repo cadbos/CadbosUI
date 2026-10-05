@@ -12,6 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import type { RepaintRegion } from '$lib/repaint-region';
 import workflowTemplate from '$lib/server/repaint-workflow-api.json';
 import {
 	ComfyUiError,
@@ -33,10 +34,13 @@ export interface QueueRepaintRequest {
 	target: string;
 	scene: RepaintImage;
 	swatch: RepaintImage;
+	region?: RepaintRegion | undefined;
 	signal?: AbortSignal | undefined;
 }
 
 const FINAL_OUTPUT_NODE_ID = '100';
+// Prints "1" when the segmenter found nothing to repaint, "0" otherwise.
+const TARGET_MISSING_NODE_ID = '218';
 
 function uploadedImagePath(image: ComfyImageDescriptor): string {
 	const subfolder = image.subfolder.replace(/^\/+|\/+$/g, '');
@@ -48,7 +52,7 @@ function setWorkflowInput(
 	nodeId: string,
 	classType: string,
 	input: string,
-	value: string
+	value: string | number
 ): void {
 	const node = workflow[nodeId];
 	if (!node || node.class_type !== classType || !(input in node.inputs)) {
@@ -60,15 +64,24 @@ function setWorkflowInput(
 function repaintWorkflow(
 	scene: ComfyImageDescriptor,
 	swatch: ComfyImageDescriptor,
-	target: string
+	target: string,
+	region: RepaintRegion | undefined
 ): ComfyWorkflow {
 	const workflow = structuredClone(workflowTemplate) as ComfyWorkflow;
 	// Picture 1 (node 42) is the scene and fixes the output size; picture 2
 	// (node 46) is the solid color swatch. The target is translated to English
-	// (102:*) and substituted into the prompt template's `{}` slots (105).
+	// (102:*) and substituted into the prompt template's `{}` slots (105). The
+	// region (200-203) is the part of the scene the target is searched for and
+	// repainted in; the template's default is the whole scene.
 	setWorkflowInput(workflow, '42', 'LoadImage', 'image', uploadedImagePath(scene));
 	setWorkflowInput(workflow, '46', 'LoadImage', 'image', uploadedImagePath(swatch));
 	setWorkflowInput(workflow, '101', 'PrimitiveString', 'value', target);
+	if (region) {
+		setWorkflowInput(workflow, '200', 'PrimitiveFloat', 'value', region.x);
+		setWorkflowInput(workflow, '201', 'PrimitiveFloat', 'value', region.y);
+		setWorkflowInput(workflow, '202', 'PrimitiveFloat', 'value', region.width);
+		setWorkflowInput(workflow, '203', 'PrimitiveFloat', 'value', region.height);
+	}
 	const outputNode = workflow[FINAL_OUTPUT_NODE_ID];
 	if (!outputNode || outputNode.class_type !== 'SaveImage') {
 		throw new ComfyUiError('invalid_configuration', 'workflow', 'Invalid repaint workflow');
@@ -103,7 +116,7 @@ export async function queueRepaint(
 		},
 		{ signal: request.signal }
 	);
-	const workflow = repaintWorkflow(scene, swatch, target);
+	const workflow = repaintWorkflow(scene, swatch, target, request.region);
 	return client.queueWorkflow(workflow, { clientId: request.clientId, signal: request.signal });
 }
 
@@ -127,6 +140,9 @@ export async function getRepaintResult(
 		throw new ComfyUiError('execution_failed', 'workflow', 'ComfyUI workflow execution failed');
 	}
 	if (!history.status.completed) return null;
+	if (history.outputs[TARGET_MISSING_NODE_ID]?.text?.[0] === '1') {
+		throw new ComfyUiError('target_not_found', 'workflow', 'Repaint target not found in the scene');
+	}
 	const output = history.outputs[FINAL_OUTPUT_NODE_ID]?.images?.[0];
 	if (!output) {
 		throw new ComfyUiError(

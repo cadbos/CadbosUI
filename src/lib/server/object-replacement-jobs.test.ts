@@ -43,7 +43,8 @@ const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	lightSettingsPresetIds: [],
 	lightSettingsInstruction: '',
 	repaintTarget: '',
-	repaintColor: '#f4f1ea'
+	repaintColor: '#f4f1ea',
+	repaintRegion: null
 };
 
 function seedAccount(db: D1Database, balance = 12): void {

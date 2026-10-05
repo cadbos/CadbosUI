@@ -39,6 +39,7 @@ import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 import { LIGHT_SETTINGS_FIXTURES, LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 import type { ModeHintTarget } from '$lib/mode-hints';
 import { DEFAULT_REPAINT_COLOR, REPAINT_COLOR_PATTERN } from '$lib/repaint-colors';
+import { repaintRegionSchema, type RepaintRegion } from '$lib/repaint-region';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export {
@@ -225,6 +226,7 @@ export interface NormalizedRequest {
 	lightSettingsPrompt: string;
 	repaintTarget: string;
 	repaintColor: string;
+	repaintRegion: RepaintRegion | null;
 	editPrompt: string;
 	addObjectPresetId: string | null;
 	removeObjectText: string;
@@ -344,7 +346,8 @@ export const requestFormSnapshotSchema = z.object({
 	lightSettingsInstruction: lightSettingsInstructionSchema,
 	// Absent for a snapshot recorded before the repaint tool existed.
 	repaintTarget: repaintTargetSchema.default(''),
-	repaintColor: repaintColorSchema.default(DEFAULT_REPAINT_COLOR)
+	repaintColor: repaintColorSchema.default(DEFAULT_REPAINT_COLOR),
+	repaintRegion: repaintRegionSchema.nullable().default(null)
 });
 
 const renderResultSchema = z.object({
@@ -560,7 +563,8 @@ function cloneFormSnapshot(
 		lightSettingsPresetIds: [...snapshot.lightSettingsPresetIds],
 		lightSettingsInstruction: snapshot.lightSettingsInstruction,
 		repaintTarget: snapshot.repaintTarget,
-		repaintColor: snapshot.repaintColor
+		repaintColor: snapshot.repaintColor,
+		repaintRegion: snapshot.repaintRegion ? { ...snapshot.repaintRegion } : null
 	};
 }
 
@@ -813,6 +817,13 @@ export class RequestState {
 	// lowercase `#rrggbb`, always set, since the picker always shows a color.
 	repaintTarget = $state('');
 	repaintColor = $state(DEFAULT_REPAINT_COLOR);
+	// The part of the scene the repaint is confined to. It is drawn on one
+	// specific image, so it only counts while that image is still the working
+	// one (see activeRepaintRegion()). Session UI state, like the texture mask:
+	// not part of toJSON()/fromJSON() or the URL.
+	#repaintRegion = $state.raw<{ region: RepaintRegion; sourceKey: string | undefined } | null>(
+		null
+	);
 	activeRepaintJob = $state<ActiveRepaintJob | undefined>(undefined);
 	// Whether the currently displayed render is already the resolved result of a
 	// masked texture-replacement submission — Workspace.svelte reads this to know
@@ -1020,6 +1031,7 @@ export class RequestState {
 		this.setActiveTextureReplacementJobId(undefined);
 		this.setActiveLightSettingsJobId(undefined);
 		this.setActiveRepaintJobId(undefined);
+		this.#repaintRegion = null;
 		this.setActiveFluxKontextEditJobId(undefined);
 		this.setStatus('idle');
 	}
@@ -1043,6 +1055,7 @@ export class RequestState {
 		this.pendingImageFile = file;
 		this.pendingImagePreviewUrl = file ? URL.createObjectURL(file) : undefined;
 		this.image = undefined;
+		this.#repaintRegion = null;
 	}
 
 	#clearPendingImagePreview(): void {
@@ -1233,6 +1246,20 @@ export class RequestState {
 		this.repaintColor = repaintColorSchema.parse(color);
 	}
 
+	// The region the repaint is confined to, or null while the whole scene is in
+	// play. A region drawn on an image that is no longer the working one no
+	// longer applies.
+	activeRepaintRegion(): RepaintRegion | null {
+		const stored = this.#repaintRegion;
+		return stored && stored.sourceKey === this.workingImageKey() ? stored.region : null;
+	}
+
+	setRepaintRegion(region: RepaintRegion | null): void {
+		this.#repaintRegion = region
+			? { region: repaintRegionSchema.parse(region), sourceKey: this.workingImageKey() }
+			: null;
+	}
+
 	setActiveRepaintJobId(id: string | undefined): void {
 		const parsed = repaintJobIdSchema.optional().parse(id);
 		if (parsed === this.activeRepaintJob?.id) return;
@@ -1406,7 +1433,8 @@ export class RequestState {
 			lightSettingsPresetIds: [...this.lightSettingsPresetIds],
 			lightSettingsInstruction: this.lightSettingsInstruction,
 			repaintTarget: this.repaintTarget,
-			repaintColor: this.repaintColor
+			repaintColor: this.repaintColor,
+			repaintRegion: this.activeRepaintRegion()
 		};
 	}
 
@@ -1439,6 +1467,9 @@ export class RequestState {
 		this.lightSettingsInstruction = snapshot.lightSettingsInstruction;
 		this.repaintTarget = snapshot.repaintTarget;
 		this.repaintColor = snapshot.repaintColor;
+		// A past step's region was drawn on that step's source image, not on
+		// the one the form is being restored onto.
+		this.#repaintRegion = null;
 	}
 
 	// Public entry point for restoring a past generation's exact settings from
@@ -1658,7 +1689,13 @@ export class RequestState {
 			throw new RequestImageUploadError('upload superseded');
 		}
 
+		const localRegion = this.#repaintRegion;
 		this.setImage(uploaded);
+		// A region drawn on the photo while it was still only a local file is the
+		// uploaded photo's region from now on.
+		if (localRegion && localRegion.sourceKey === undefined && this.#repaintRegion === localRegion) {
+			this.#repaintRegion = { region: localRegion.region, sourceKey: this.workingImageKey() };
+		}
 		return this.image;
 	}
 
@@ -1849,6 +1886,7 @@ export class RequestState {
 		const formSnapshot = this.captureFormSnapshot('repaint');
 		const target = this.repaintTarget.trim();
 		const color = this.repaintColor;
+		const region = this.activeRepaintRegion();
 		const imageKey = await this.resolveWorkingImageKey();
 		if (!imageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
@@ -1856,6 +1894,7 @@ export class RequestState {
 			imageKey,
 			target,
 			color,
+			...(region ? { region } : {}),
 			sessionId,
 			formSnapshot
 		};
@@ -1967,6 +2006,7 @@ export class RequestState {
 			lightSettingsPrompt: this.lightSettingsPrompt,
 			repaintTarget: this.repaintTarget,
 			repaintColor: this.repaintColor,
+			repaintRegion: this.activeRepaintRegion(),
 			editPrompt: this.editPrompt,
 			addObjectPresetId: this.addObjectPresetId,
 			removeObjectText: this.removeObjectText,
@@ -2015,6 +2055,7 @@ export class RequestState {
 		this.activeLightSettingsJob = undefined;
 		this.repaintTarget = '';
 		this.repaintColor = DEFAULT_REPAINT_COLOR;
+		this.#repaintRegion = null;
 		this.activeRepaintJob = undefined;
 		this.activeFluxKontextEditJob = undefined;
 		this.promptOverride = null;
@@ -2089,6 +2130,9 @@ export class RequestState {
 		this.activeLightSettingsJob = cloneActiveLightSettingsJob(source.activeLightSettingsJob);
 		this.repaintTarget = source.repaintTarget;
 		this.repaintColor = source.repaintColor;
+		this.#repaintRegion = source.#repaintRegion
+			? { ...source.#repaintRegion, region: { ...source.#repaintRegion.region } }
+			: null;
 		this.activeRepaintJob = cloneActiveRepaintJob(source.activeRepaintJob);
 		this.promptOverride = source.promptOverride;
 		// currentRender/previousRender are derived from the history stack, not

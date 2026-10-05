@@ -1592,6 +1592,116 @@ describe('toRepaintRequest', () => {
 	});
 });
 
+describe('repaint region', () => {
+	const REGION = { x: 0.1, y: 0.2, width: 0.3, height: 0.4 };
+
+	it('is sent with the repaint and recorded in its snapshot, and left out when not set', async () => {
+		request.setImage(AC9_IMAGE);
+		request.setRepaintTarget('кресло');
+
+		const without = await request.toRepaintRequest();
+		expect(without).not.toBeNull();
+		expect(without).not.toHaveProperty('region');
+		expect(without?.formSnapshot?.repaintRegion).toBeNull();
+
+		request.setRepaintRegion(REGION);
+		const withRegion = await request.toRepaintRequest();
+		expect(withRegion?.region).toEqual(REGION);
+		expect(withRegion?.formSnapshot?.repaintRegion).toEqual(REGION);
+
+		request.setRepaintRegion(null);
+		expect(request.activeRepaintRegion()).toBeNull();
+	});
+
+	it('accepts only a region that lies on the picture and is not vanishingly small', () => {
+		expect(() => request.setRepaintRegion({ x: 0.8, y: 0, width: 0.5, height: 0.5 })).toThrow();
+		expect(() => request.setRepaintRegion({ x: -0.1, y: 0, width: 0.5, height: 0.5 })).toThrow();
+		expect(() => request.setRepaintRegion({ x: 0, y: 0, width: 0.01, height: 0.5 })).toThrow();
+		expect(request.activeRepaintRegion()).toBeNull();
+	});
+
+	it('stops applying once another image is the working one', () => {
+		request.setImage(AC9_IMAGE);
+		request.setRepaintRegion(REGION);
+		expect(request.activeRepaintRegion()).toEqual(REGION);
+
+		request.setCurrentRender({ id: 'render-1', outputKey: '201', cost: 1, balance: 9, ts: 0 });
+		expect(request.activeRepaintRegion()).toBeNull();
+	});
+
+	it('is dropped with the canvas work, a newly picked file and a reset', () => {
+		request.setImage(AC9_IMAGE);
+		request.setRepaintRegion(REGION);
+		request.clearCanvasWork();
+		expect(request.activeRepaintRegion()).toBeNull();
+
+		request.setImage(AC9_IMAGE);
+		request.setRepaintRegion(REGION);
+		request.setPendingImage(new File(['bytes'], 'other.jpg', { type: 'image/jpeg' }));
+		request.setImage(AC9_IMAGE);
+		expect(request.activeRepaintRegion()).toBeNull();
+
+		request.setRepaintRegion(REGION);
+		request.reset();
+		expect(request.activeRepaintRegion()).toBeNull();
+	});
+
+	it('is not restored from a past step, which was drawn on another image', () => {
+		request.setImage(AC9_IMAGE);
+		request.setRepaintRegion(REGION);
+		request.setCurrentRender({ id: 'render-1', outputKey: '201', cost: 1, balance: 9, ts: 0 });
+		request.applyEditResult({
+			id: 'render-2',
+			outputKey: '202',
+			cost: 1,
+			balance: 8,
+			ts: 1,
+			formSnapshot: request.captureFormSnapshot('repaint')
+		});
+		request.setRepaintRegion(REGION);
+
+		request.undoLastEdit();
+
+		expect(request.activeRepaintRegion()).toBeNull();
+	});
+
+	it('stays with a photo that was only a local file when it gets uploaded', async () => {
+		request.setPendingImage(new File(['bytes'], 'room.jpg', { type: 'image/jpeg' }));
+		request.setRepaintRegion(REGION);
+		expect(request.activeRepaintRegion()).toEqual(REGION);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						image: {
+							key: mediaKey(TEST_S3_BUCKET.name, 'uploaded-room.webp'),
+							url: '/api/media/test-media/uploaded-room.webp'
+						},
+						mime: 'image/webp',
+						size: 1234
+					})
+			})
+		);
+
+		await request.resolveWorkingImageKey();
+
+		expect(request.image).toBeDefined();
+		expect(request.activeRepaintRegion()).toEqual(REGION);
+	});
+
+	it('is carried over by copyFrom', () => {
+		request.setImage(AC9_IMAGE);
+		request.setRepaintRegion(REGION);
+
+		const other = new RequestState();
+		other.copyFrom(request);
+
+		expect(other.activeRepaintRegion()).toEqual(REGION);
+	});
+});
+
 describe('flux kontext edit job (freeform/add-object/remove-object)', () => {
 	it('enforces the job-id shape and clears on undefined', () => {
 		expect(() => request.setActiveFluxKontextEditJobId('not-a-job-id')).toThrow();

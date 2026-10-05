@@ -34,7 +34,7 @@ const swatchUpload: ComfyImageDescriptor = {
 	type: 'input'
 };
 const finalOutput: ComfyImageDescriptor = {
-	filename: 'Flux2_upscaled_00001_.png',
+	filename: 'Flux2_repaint_00001_.png',
 	subfolder: '',
 	type: 'output'
 };
@@ -117,13 +117,49 @@ describe('queueRepaint', () => {
 	});
 
 	it('wires the scene as picture 1 and the swatch as picture 2', () => {
-		expect(workflowTemplate['62:45'].inputs.image).toEqual(['42', 0]);
+		expect(workflowTemplate['210'].inputs.image).toEqual(['42', 0]);
+		expect(workflowTemplate['214'].inputs.image).toEqual(['210', 0]);
+		expect(workflowTemplate['213'].inputs.text).toEqual(['102:150', 0]);
+		expect(workflowTemplate['220'].inputs.image).toEqual(['210', 0]);
+		expect(workflowTemplate['62:45'].inputs.image).toEqual(['220', 1]);
+		expect(workflowTemplate['221'].inputs.inpainted_image).toEqual(['62:8', 0]);
+		expect(workflowTemplate['222'].inputs.destination).toEqual(['42', 0]);
+		expect(workflowTemplate['222'].inputs.source).toEqual(['221', 0]);
 		expect(workflowTemplate['62:41'].inputs.image).toEqual(['46', 0]);
 		expect(workflowTemplate['62:66'].inputs.image).toEqual(['62:45', 0]);
 		expect(workflowTemplate['102:152'].inputs.string_b).toEqual(['101', 0]);
 		expect(workflowTemplate['105'].inputs.replace).toEqual(['102:150', 0]);
 		expect(workflowTemplate['62:6'].inputs.text).toEqual(['105', 0]);
 		expect(workflowTemplate['100'].class_type).toBe('SaveImage');
+		expect(workflowTemplate['100'].inputs.images).toEqual(['222', 0]);
+		expect(workflowTemplate['217'].inputs.mask).toEqual(['216', 0]);
+		expect(workflowTemplate['218'].class_type).toBe('PreviewAny');
+		expect(workflowTemplate['218'].inputs.source).toEqual(['217', 0]);
+	});
+
+	it('defaults the region to the whole scene', () => {
+		expect(
+			[200, 201, 202, 203].map((id) => workflowTemplate[String(id) as '200'].inputs.value)
+		).toEqual([0, 0, 1, 1]);
+	});
+
+	it('confines the repaint to the region when one is given', async () => {
+		const client = mockClient();
+		vi.mocked(client.uploadImage)
+			.mockResolvedValueOnce(sceneUpload)
+			.mockResolvedValueOnce(swatchUpload);
+		vi.mocked(client.queueWorkflow).mockResolvedValue({ promptId: 'prompt-1', queueNumber: 2 });
+
+		await queueRepaint(client, {
+			...request(),
+			region: { x: 0.68, y: 0.61, width: 0.14, height: 0.23 }
+		});
+
+		const queuedWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
+		expect(['200', '201', '202', '203'].map((id) => queuedWorkflow?.[id]?.inputs.value)).toEqual([
+			0.68, 0.61, 0.14, 0.23
+		]);
+		expect(workflowTemplate['200'].inputs.value).toBe(0);
 	});
 
 	it('rejects an empty target before uploading', async () => {
@@ -146,7 +182,7 @@ describe('repaint polling', () => {
 		expect(client.downloadImage).not.toHaveBeenCalled();
 	});
 
-	it('downloads only the upscaled final output', async () => {
+	it('downloads only the final output', async () => {
 		const client = mockClient();
 		vi.mocked(client.getHistory).mockResolvedValue(
 			history({
@@ -165,6 +201,31 @@ describe('repaint polling', () => {
 		});
 		expect(client.downloadImage).toHaveBeenCalledTimes(1);
 		expect(client.downloadImage).toHaveBeenCalledWith(finalOutput, { signal: undefined });
+	});
+
+	it('reports a target the segmenter could not find, without downloading', async () => {
+		const client = mockClient();
+		vi.mocked(client.getHistory).mockResolvedValue(
+			history({ '100': { images: [finalOutput] }, '218': { text: ['1'] } })
+		);
+
+		await expect(getRepaintResult(client, 'prompt-1')).rejects.toMatchObject({
+			code: 'target_not_found',
+			operation: 'workflow'
+		});
+		expect(client.downloadImage).not.toHaveBeenCalled();
+	});
+
+	it('repaints when the segmenter found the target', async () => {
+		const client = mockClient();
+		vi.mocked(client.getHistory).mockResolvedValue(
+			history({ '100': { images: [finalOutput] }, '218': { text: ['0'] } })
+		);
+		vi.mocked(client.downloadImage).mockResolvedValue(downloadedImage);
+
+		await expect(getRepaintResult(client, 'prompt-1')).resolves.toMatchObject({
+			image: downloadedImage
+		});
 	});
 
 	it('fails when the completed workflow has no final image', async () => {

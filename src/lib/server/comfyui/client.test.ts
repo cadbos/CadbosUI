@@ -218,6 +218,25 @@ describe('createComfyUiClient', () => {
 		expect(fetcher.mock.calls[0]?.[0].toString()).toContain('history/prompt%2F1');
 	});
 
+	it('keeps what a text output node printed and rejects malformed text', async () => {
+		const entry = (text: unknown) => ({
+			'prompt-1': {
+				outputs: { '218': { text } },
+				status: { completed: true, status_str: 'success' }
+			}
+		});
+		const fetcher = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(jsonResponse(entry(['1'])))
+			.mockResolvedValueOnce(jsonResponse(entry('1')))
+			.mockResolvedValueOnce(jsonResponse(entry([1])));
+		const client = createComfyUiClient({ baseUrl: 'http://localhost:8188', fetch: fetcher });
+
+		expect((await client.getHistory('prompt-1'))?.outputs['218']).toEqual({ text: ['1'] });
+		await expect(client.getHistory('prompt-1')).rejects.toMatchObject({ code: 'invalid_response' });
+		await expect(client.getHistory('prompt-1')).rejects.toMatchObject({ code: 'invalid_response' });
+	});
+
 	it('parses execution_start/execution_success timestamps from status.messages', async () => {
 		const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
 			jsonResponse(

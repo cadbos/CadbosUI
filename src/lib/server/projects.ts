@@ -368,7 +368,8 @@ function toPublicFormSnapshot(
 		lightSettingsPresetIds: snapshot.lightSettingsPresetIds,
 		lightSettingsInstruction: snapshot.lightSettingsInstruction,
 		repaintTarget: snapshot.repaintTarget,
-		repaintColor: snapshot.repaintColor
+		repaintColor: snapshot.repaintColor,
+		repaintRegion: snapshot.repaintRegion
 	};
 }
 
