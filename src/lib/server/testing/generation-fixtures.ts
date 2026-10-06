@@ -53,7 +53,8 @@ export const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	lightSettingsPresetIds: [],
 	lightSettingsInstruction: '',
 	repaintTarget: '',
-	repaintColor: '#f4f1ea'
+	repaintColor: '#f4f1ea',
+	repaintRegion: null
 };
 
 function syncFirst<T>(value: Promise<T | null>): T | null {

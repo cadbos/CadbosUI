@@ -911,6 +911,12 @@ export interface Dictionary {
 	'repaint.pollFailed': string;
 	'repaint.timedOut': string;
 	'repaint.notFound': string;
+	'repaint.targetNotFound': string;
+	'repaint.region.label': string;
+	'repaint.region.hint': string;
+	'repaint.region.select': string;
+	'repaint.region.clear': string;
+	'repaint.region.boxLabel': string;
 	'repaint.rateLimited': string;
 	'repaint.insufficientCredit': string;
 	'repaint.generationRestricted': string;

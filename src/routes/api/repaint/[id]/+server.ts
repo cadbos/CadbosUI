@@ -90,14 +90,16 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	} catch (error) {
 		if (
 			error instanceof ComfyUiError &&
-			(error.code === 'execution_failed' || error.code === 'missing_output')
+			(error.code === 'execution_failed' ||
+				error.code === 'missing_output' ||
+				error.code === 'target_not_found')
 		) {
 			const now = Date.now();
 			job = await failRepaintJob(
 				db,
 				userId,
 				job.id,
-				'repaint_failed',
+				error.code === 'target_not_found' ? 'repaint_target_not_found' : 'repaint_failed',
 				now,
 				0,
 				Math.round((now - job.createdAt) / 1000)

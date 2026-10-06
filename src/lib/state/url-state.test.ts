@@ -60,6 +60,7 @@ function formSnapshot(overrides: Partial<RequestFormSnapshot> = {}): RequestForm
 		lightSettingsInstruction: '',
 		repaintTarget: '',
 		repaintColor: '#f4f1ea',
+		repaintRegion: null,
 		...overrides
 	};
 }

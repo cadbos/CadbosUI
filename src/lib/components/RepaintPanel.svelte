@@ -35,6 +35,8 @@ before the Change Date. See LICENSE for complete terms.
 	import { buildWorkspaceUrl, isEditToolRoute } from '$lib/state/url-state';
 	import { logBoundaryError } from '$lib/utils';
 
+	// Where a freshly selected area starts: centered, for the user to adjust.
+	const INITIAL_REGION = { x: 0.3, y: 0.3, width: 0.4, height: 0.4 } as const;
 	const MAX_TRANSIENT_FAILURES = 5;
 	const DEFAULT_POLL_DELAY_MS = 2_000;
 	const MAX_POLL_DELAY_MS = 30_000;
@@ -180,6 +182,7 @@ before the Change Date. See LICENSE for complete terms.
 		if (code === 'rate_limited') return 'repaint.rateLimited';
 		if (code === 'repaint_not_found') return 'repaint.notFound';
 		if (code === 'repaint_timeout') return 'repaint.timedOut';
+		if (code === 'repaint_target_not_found') return 'repaint.targetNotFound';
 		return 'repaint.failed';
 	}
 
@@ -400,6 +403,30 @@ before the Change Date. See LICENSE for complete terms.
 
 	<ModeHint field="repaint" text={request.repaintTarget} />
 
+	<div class="region-section">
+		<span class="section-label">{t('repaint.region.label')}</span>
+		<p class="region-hint">{t('repaint.region.hint')}</p>
+		{#if request.activeRepaintRegion()}
+			<button
+				type="button"
+				class="secondary-btn"
+				disabled={formLocked}
+				onclick={() => request.setRepaintRegion(null)}
+			>
+				{t('repaint.region.clear')}
+			</button>
+		{:else}
+			<button
+				type="button"
+				class="secondary-btn"
+				disabled={formLocked || !request.hasWorkingImage()}
+				onclick={() => request.setRepaintRegion(INITIAL_REGION)}
+			>
+				{t('repaint.region.select')}
+			</button>
+		{/if}
+	</div>
+
 	<div class="color-section" inert={formLocked} class:locked={formLocked}>
 		<div class="selected">
 			<span class="section-label">{t('repaint.colorLabel')}</span>
@@ -539,6 +566,19 @@ before the Change Date. See LICENSE for complete terms.
 
 	input[type='text']:disabled {
 		opacity: 0.6;
+	}
+
+	.region-section {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.375rem;
+	}
+
+	.region-hint {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--color-muted);
 	}
 
 	.color-section {

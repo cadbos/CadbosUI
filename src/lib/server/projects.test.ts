@@ -342,7 +342,8 @@ describe('projects repository', () => {
 					lightSettingsPresetIds: TEST_FORM_SNAPSHOT.lightSettingsPresetIds,
 					lightSettingsInstruction: TEST_FORM_SNAPSHOT.lightSettingsInstruction,
 					repaintTarget: TEST_FORM_SNAPSHOT.repaintTarget,
-					repaintColor: TEST_FORM_SNAPSHOT.repaintColor
+					repaintColor: TEST_FORM_SNAPSHOT.repaintColor,
+					repaintRegion: null
 				}
 			});
 			// The one field the fixture set beyond TEST_FORM_SNAPSHOT — proving it

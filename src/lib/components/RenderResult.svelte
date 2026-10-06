@@ -23,6 +23,7 @@ before the Change Date. See LICENSE for complete terms.
 	} from '@lucide/svelte';
 	import { resolve } from '$app/paths';
 	import CompareSlider from '$lib/components/CompareSlider.svelte';
+	import RegionSelector from '$lib/components/RegionSelector.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
@@ -31,10 +32,21 @@ before the Change Date. See LICENSE for complete terms.
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
 
+	// Lets the user drag out the part of the picture the repaint tool works on.
+	let { selectRegion = false }: { selectRegion?: boolean } = $props();
+
 	let comparing = $state(false);
+	let imageSize = $state<{ width: number; height: number } | null>(null);
 	let upscaling = $state(false);
 	let upscaleError = $state<string | null>(null);
 	let resetConfirmOpen = $state(false);
+
+	function rememberImageSize(event: Event): void {
+		const image = event.currentTarget;
+		if (image instanceof HTMLImageElement && image.naturalWidth > 0 && image.naturalHeight > 0) {
+			imageSize = { width: image.naturalWidth, height: image.naturalHeight };
+		}
+	}
 
 	function openModal(dialog: HTMLDialogElement): () => void {
 		dialog.showModal();
@@ -120,7 +132,15 @@ before the Change Date. See LICENSE for complete terms.
 					handleLabel={t('toolbar.compare')}
 				/>
 			{:else}
-				<img src={imageUrl} alt={t('render.generate')} class="output" />
+				<img src={imageUrl} alt={t('render.generate')} class="output" onload={rememberImageSize} />
+				{#if selectRegion && imageSize}
+					<RegionSelector
+						region={request.activeRepaintRegion()}
+						naturalWidth={imageSize.width}
+						naturalHeight={imageSize.height}
+						onchange={(region) => request.setRepaintRegion(region)}
+					/>
+				{/if}
 			{/if}
 
 			<div class="toolbar">

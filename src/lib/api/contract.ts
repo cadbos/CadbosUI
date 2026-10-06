@@ -13,6 +13,7 @@
  */
 
 import { z } from 'zod';
+import type { RepaintRegion } from '$lib/repaint-region';
 
 // Shared client↔server wire types (no secrets). The server proxy normalizes
 // external-service responses to these shapes, so the client never depends on
@@ -105,6 +106,8 @@ export interface RequestFormSnapshot {
 	repaintTarget: string;
 	// Lowercase `#rrggbb` ($lib/repaint-colors).
 	repaintColor: string;
+	// Null when the repaint was not confined to a region.
+	repaintRegion: RepaintRegion | null;
 }
 
 // Managed image identity plus its stable, cacheable /api/media link.
@@ -316,11 +319,13 @@ export type LightSettingsJobResponse =
 
 // POST /api/repaint — recolor `target` in the scene to `color` (lowercase
 // `#rrggbb`); the server renders the color as a solid swatch image for the
-// workflow's second picture. Async job — see RepaintJobResponse.
+// workflow's second picture. `region`, when present, confines the repaint to
+// that part of the scene. Async job — see RepaintJobResponse.
 export interface RepaintRequest {
 	imageKey: string;
 	target: string;
 	color: string;
+	region?: RepaintRegion;
 	sessionId: string;
 	formSnapshot?: RequestFormSnapshot;
 }
