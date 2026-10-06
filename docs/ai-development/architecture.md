@@ -164,4 +164,5 @@ ai-context/                    # L2 — local git-ignored knowledge base (read-o
 docs/ai-development/
   architecture.md              # this file
   skill-authoring.md           # how to write skills (200-line rule)
+  multi-llm-research.md        # Cursor/Claude/Codex/Gemini compatibility + layout proposal
 ```
