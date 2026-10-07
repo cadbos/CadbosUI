@@ -108,6 +108,7 @@ before the Change Date. See LICENSE for complete terms.
 	const railIndex = $derived(
 		isObjectTool(activeTool) ? 0 : RAIL.findIndex((tool) => tool.id === activeTool)
 	);
+	const activeRailLabel = $derived((RAIL[railIndex] ?? RAIL[0]).label);
 	const objectToolIndex = $derived(OBJECT_TOOLS.findIndex((tool) => tool.id === activeTool));
 	let toolTabButtons = $state<HTMLElement[]>([]);
 	let objectTabButtons = $state<HTMLElement[]>([]);
@@ -448,6 +449,8 @@ before the Change Date. See LICENSE for complete terms.
 			{/each}
 		</div>
 
+		<h2 class="panel-heading tool-heading">{t(activeRailLabel)}</h2>
+
 		<div class="tool-content">
 			{#if !ownPanelTool}
 				<div
@@ -700,6 +703,10 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+	}
+
+	.tool-heading {
+		font-weight: 700;
 	}
 
 	.tool-tabs {

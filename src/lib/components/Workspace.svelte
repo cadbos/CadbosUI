@@ -18,7 +18,7 @@ before the Change Date. See LICENSE for complete terms.
 		GalleryHorizontalEnd,
 		Images,
 		Layers,
-		Paintbrush,
+		Palette,
 		Pencil,
 		Share2,
 		Sparkles
@@ -87,7 +87,7 @@ before the Change Date. See LICENSE for complete terms.
 			id: 'styleTransfer',
 			label: 'mode.styleTransfer',
 			description: 'styleTransfer.panelDescription',
-			icon: Paintbrush
+			icon: Palette
 		}
 	] satisfies {
 		id: Mode;

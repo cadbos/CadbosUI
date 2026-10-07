@@ -157,7 +157,7 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 	await expect(flowKinds).toHaveCount(3);
 	expect(
 		await flowKinds.evaluateAll((elements) => elements.map((element) => element.ariaLabel))
-	).toEqual(['Миграция стиля', 'Редактирование', 'Генерация']);
+	).toEqual(['Миграция стиля', 'Объекты', 'Создание']);
 	const generatedDates = page.locator('time');
 	await expect(generatedDates.nth(0).locator('span')).toHaveText([
 		localDateLabel(newestCreatedAt),

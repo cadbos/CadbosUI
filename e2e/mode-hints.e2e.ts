@@ -79,10 +79,10 @@ test('the custom prompt suggests Repaint for a color change, and Repaint explain
 	await page
 		.getByRole('textbox', { name: 'Инструкция для правки' })
 		.fill('перекрась стены в белый');
-	await page.getByRole('button', { name: 'Перейти в «Перекраска»' }).click();
+	await page.getByRole('button', { name: 'Перейти в «Замена цвета»' }).click();
 
 	await expect(page).toHaveURL(/tool=repaint/);
-	await expect(page.getByRole('tab', { name: 'Перекраска' })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: 'Замена цвета' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
