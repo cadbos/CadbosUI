@@ -139,6 +139,7 @@ async function uploadInputs(page: Page): Promise<UploadCapture> {
 	// dropzone for the mask editor's canvas — wait for that canvas instead of
 	// the dropzone's "change photo" button, so validation has settled on the
 	// picked file rather than racing a pending reactive update.
+	await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
 	await sceneInput.setInputFiles({
 		name: 'scene.webp',
 		mimeType: 'image/webp',
@@ -311,7 +312,7 @@ test('draws a mask and applies the synchronous result without polling', async ({
 
 	await panel.getByRole('button', { name: 'Заменить текстуру' }).click();
 
-	await expect(page.locator('.result img.output')).toHaveAttribute(
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
 		'src',
 		'/api/media/test-media/masked-result.webp'
 	);
@@ -351,7 +352,7 @@ test('draws a mask and applies the synchronous result without polling', async ({
 	await page.getByRole('tab', { name: 'Удаление объекта' }).click();
 	await page.getByLabel('Что убрать?').fill('лампа');
 	await page.getByRole('button', { name: 'Удалить объект' }).click();
-	await expect(page.locator('.result img.output')).toHaveAttribute(
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
 		'src',
 		'/api/media/test-media/follow-up-edit.webp',
 		{ timeout: 10_000 }
