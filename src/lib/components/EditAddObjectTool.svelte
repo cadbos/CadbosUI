@@ -25,9 +25,13 @@ before the Change Date. See LICENSE for complete terms.
 	let { disabled, applying, onApply }: Props = $props();
 
 	const promptText = $derived(request.addObjectInstruction.trim());
+	const finalPrompt = $derived(
+		promptText === '' ? '' : ti('edit.addObject.userPromptTemplate', { object: promptText })
+	);
 
 	function submit(): void {
-		onApply(ti('edit.addObject.userPromptTemplate', { object: promptText }));
+		if (finalPrompt === '') return;
+		onApply(finalPrompt);
 	}
 </script>
 
@@ -60,7 +64,19 @@ before the Change Date. See LICENSE for complete terms.
 			placeholder={t('edit.addObject.customPlaceholder')}></textarea>
 	</label>
 
-	<button type="button" class="btn-apply" disabled={disabled || promptText === ''} onclick={submit}>
+	{#if promptText !== ''}
+		<p class="preview">
+			<span class="preview-label">{t('edit.addObject.previewLabel')}</span>
+			{promptText}
+		</p>
+	{/if}
+
+	<button
+		type="button"
+		class="btn-apply"
+		disabled={disabled || finalPrompt === ''}
+		onclick={submit}
+	>
 		{#if applying}
 			<span class="spinner" aria-hidden="true"></span>
 		{/if}
@@ -160,6 +176,24 @@ before the Change Date. See LICENSE for complete terms.
 
 	textarea:disabled {
 		opacity: 0.6;
+	}
+
+	.preview {
+		margin: 0;
+		padding: 0.625rem 0.875rem;
+		font-size: 0.8125rem;
+		line-height: 1.5;
+		color: var(--color-muted-strong);
+		background: var(--color-background);
+		border: 1px solid var(--color-border);
+		border-radius: 10px;
+	}
+
+	.preview-label {
+		display: block;
+		margin-bottom: 0.25rem;
+		font-weight: 600;
+		color: var(--color-muted);
 	}
 
 	.btn-apply {
