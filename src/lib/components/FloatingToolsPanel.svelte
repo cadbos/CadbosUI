@@ -15,13 +15,14 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { onMount, type Snippet } from 'svelte';
 	import { innerHeight, innerWidth } from 'svelte/reactivity/window';
-	import { ChevronDown, ChevronUp, Move, SlidersHorizontal } from '@lucide/svelte';
+	import { ChevronDown, ChevronUp, Move, MoveHorizontal, SlidersHorizontal } from '@lucide/svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import {
 		clampToolsPanelPosition,
 		clampToolsPanelWidth,
 		getToolsPanelTopBoundary,
 		MIN_TOOLS_PANEL_WIDTH,
+		nextToolsPanelSizePreset,
 		toolsPanel,
 		TOOLS_PANEL_WIDTH
 	} from '$lib/state/tools-panel.svelte';
@@ -43,7 +44,11 @@ before the Change Date. See LICENSE for complete terms.
 	// The actual reachable maximum — shared by aria-valuemax and the End-key
 	// branch below so the announced max always matches what End produces.
 	let maxWidth = $derived(
-		clampToolsPanelWidth(Number.MAX_SAFE_INTEGER, innerWidth.current ?? TOOLS_PANEL_WIDTH)
+		clampToolsPanelWidth(
+			Number.MAX_SAFE_INTEGER,
+			innerWidth.current ?? TOOLS_PANEL_WIDTH,
+			toolsPanel.position?.x ?? 0
+		)
 	);
 
 	// Where the panel is actually drawn: the user's chosen position, kept
@@ -136,7 +141,12 @@ before the Change Date. See LICENSE for complete terms.
 	const RESIZE_STEP = 24;
 
 	function clampWidth(value: number): number {
-		return clampToolsPanelWidth(value, window.innerWidth);
+		return clampToolsPanelWidth(value, window.innerWidth, toolsPanel.position?.x ?? 0);
+	}
+
+	function cycleSizePreset(): void {
+		const current = toolsPanel.width ?? panelWidth;
+		toolsPanel.setWidth(clampWidth(nextToolsPanelSizePreset(current, window.innerWidth)));
 	}
 
 	let resizeStartX = 0;
@@ -213,6 +223,15 @@ before the Change Date. See LICENSE for complete terms.
 				{@render header()}
 			</div>
 		{/if}
+		<button
+			type="button"
+			class="panel-toggle size-preset"
+			aria-label={t('toolsPanel.sizePreset')}
+			title={t('toolsPanel.sizePreset')}
+			onclick={cycleSizePreset}
+		>
+			<MoveHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
+		</button>
 		<Move size={14} strokeWidth={1.8} aria-hidden="true" class="drag-icon" />
 		<button
 			type="button"
@@ -256,7 +275,7 @@ before the Change Date. See LICENSE for complete terms.
 		position: fixed;
 		z-index: var(--z-tools-panel);
 		width: var(--tools-panel-width);
-		max-width: calc(100vw - 2rem);
+		max-width: 100vw;
 		max-height: calc(100dvh - 2rem);
 		display: flex;
 		flex-direction: column;
@@ -264,7 +283,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.floating-tools-panel.at-default-corner {
-		right: 1rem;
+		right: max(0px, min(1rem, calc(100vw - var(--tools-panel-width))));
 		/* Anchored just below the workspace header (topbar, plus the project
 		   tab bar row whenever one is open) rather than a fixed height — the
 		   header's real height varies with that tab bar, so Workspace.svelte
@@ -411,7 +430,8 @@ before the Change Date. See LICENSE for complete terms.
 			touch-action: auto;
 		}
 
-		.panel-bar :global(.drag-icon) {
+		.panel-bar :global(.drag-icon),
+		.size-preset {
 			display: none;
 		}
 
