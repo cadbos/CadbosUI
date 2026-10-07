@@ -387,10 +387,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	.scene-type-toggle button {
 		flex: 1;
-		padding: 0.5rem 1.25rem;
+		min-width: 0;
+		padding: 0.5rem 0.75rem;
 		font: inherit;
 		font-size: 0.875rem;
 		font-weight: 500;
+		line-height: 1.25;
 		color: var(--color-muted);
 		background: transparent;
 		border: none;
@@ -410,30 +412,32 @@ before the Change Date. See LICENSE for complete terms.
 	.reference-tabs {
 		display: flex;
 		width: 100%;
-		gap: 0.25rem;
+		gap: 0.5rem;
 		padding: 0.25rem;
 		background: var(--color-background);
-		border-radius: 10px;
+		border-radius: 12px;
 	}
 
 	.reference-tabs button {
 		flex: 1;
-		padding: 0.375rem 0.625rem;
+		min-width: 0;
+		padding: 0.5rem 0.75rem;
 		font: inherit;
-		font-size: 0.75rem;
+		font-size: 0.875rem;
 		font-weight: 500;
+		line-height: 1.25;
 		text-align: center;
 		color: var(--color-muted);
 		background: transparent;
 		border: none;
-		border-radius: 8px;
+		border-radius: 9px;
 		cursor: pointer;
 	}
 
 	.reference-tabs button.active {
 		color: var(--color-text);
 		background: var(--color-surface);
-		box-shadow: var(--shadow-sm);
+		box-shadow: var(--shadow);
 	}
 
 	#style-reference-panel {

@@ -1392,10 +1392,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	.scene-type-toggle button {
 		flex: 1;
-		padding: 0.5rem 1.25rem;
+		min-width: 0;
+		padding: 0.5rem 0.75rem;
 		font: inherit;
 		font-size: 0.875rem;
 		font-weight: 500;
+		line-height: 1.25;
 		color: var(--color-muted);
 		background: transparent;
 		border: none;

@@ -169,10 +169,11 @@ before the Change Date. See LICENSE for complete terms.
 		font: inherit;
 		font-size: 0.875rem;
 		font-weight: 500;
+		line-height: 1.25;
 		color: var(--color-muted);
 		background: transparent;
 		border: none;
-		border-radius: 10px;
+		border-radius: 9px;
 		cursor: pointer;
 		transition:
 			background 0.15s,
