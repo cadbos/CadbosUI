@@ -80,10 +80,20 @@ before the Change Date. See LICENSE for complete terms.
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
 	const modes = [
-		{ id: 'render', label: 'mode.render', icon: Sparkles },
-		{ id: 'edit', label: 'mode.edit', icon: Pencil },
-		{ id: 'styleTransfer', label: 'mode.styleTransfer', icon: Paintbrush }
-	] satisfies { id: Mode; label: TranslationKey; icon: typeof Sparkles }[];
+		{ id: 'render', label: 'mode.render', description: 'render.panelDescription', icon: Sparkles },
+		{ id: 'edit', label: 'mode.edit', description: 'edit.panelDescription', icon: Pencil },
+		{
+			id: 'styleTransfer',
+			label: 'mode.styleTransfer',
+			description: 'styleTransfer.panelDescription',
+			icon: Paintbrush
+		}
+	] satisfies {
+		id: Mode;
+		label: TranslationKey;
+		description: TranslationKey;
+		icon: typeof Sparkles;
+	}[];
 
 	const sceneTypes: { id: SceneType; label: TranslationKey }[] = [
 		{ id: 'interior', label: 'render.sceneType.interior' },
@@ -100,7 +110,8 @@ before the Change Date. See LICENSE for complete terms.
 	let shareTrigger: HTMLButtonElement | null = null;
 
 	// The URL is the source of truth for which mode is open — not local $state —
-	// so a shared link or a page reload always opens on the right tab.
+	// so a shared link or a page reload always opens on the right tab. Null on
+	// the workspace root: nothing is selected until the user picks a mode.
 	const mode = $derived(routeIdToMode(page.route.id));
 
 	const modeTabController = createTabController({
@@ -250,8 +261,9 @@ before the Change Date. See LICENSE for complete terms.
 		if (!target) return null;
 		const urlMode = mode;
 		const sceneParam = page.params.scene;
-		const applyUrlFields = (state: RequestState): void =>
-			applyShareParams(urlMode, sceneParam, searchParams, state);
+		const applyUrlFields = (state: RequestState): void => {
+			if (urlMode !== null) applyShareParams(urlMode, sceneParam, searchParams, state);
+		};
 
 		const anchor = generationAnchorFromSearch(searchParams);
 		const generation = anchor ? await fetchGeneratedImageDetail(anchor.generationId) : null;
@@ -389,7 +401,7 @@ before the Change Date. See LICENSE for complete terms.
 	// where `request` is already the source of truth and re-parsing the URL
 	// would be redundant.
 	afterNavigate(({ type }) => {
-		if (type === 'enter' || type === 'popstate' || type === 'link') {
+		if ((type === 'enter' || type === 'popstate' || type === 'link') && mode !== null) {
 			applyShareParams(mode, page.params.scene, page.url.searchParams, request);
 		}
 		if (type === 'enter') {
@@ -442,14 +454,18 @@ before the Change Date. See LICENSE for complete terms.
 	// in the meantime.
 	$effect(() => {
 		if (!hydrated || urlTargetStatus !== 'idle') return;
-		buildShareUrl(mode, request);
+		const activeMode = mode;
+		// The root has no mode to serialize. Syncing would invent /create and
+		// select a tab the user never chose.
+		if (activeMode === null) return;
+		buildShareUrl(activeMode, request);
 		const activeProjectId =
 			workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
 		const activeSessionId = workspaceTabs.activeTab.activeSessionTabId ?? undefined;
 		const generationAnchor = request.generationAnchor;
 		const timer = setTimeout(() => {
 			const currentSearch = new URLSearchParams(window.location.search);
-			const base = buildShareUrl(mode, request, subTabFromSearch(mode, currentSearch));
+			const base = buildShareUrl(activeMode, request, subTabFromSearch(activeMode, currentSearch));
 			const url = withProjectSession(base, activeProjectId, activeSessionId, generationAnchor);
 			if (`${window.location.pathname}${window.location.search}` !== url) {
 				goto(resolve(url as PathnameWithSearchOrHash, {}), {
@@ -674,7 +690,7 @@ before the Change Date. See LICENSE for complete terms.
 				aria-controls={`mode-panel-${modeOption.id}`}
 				aria-label={t(modeOption.label)}
 				title={t(modeOption.label)}
-				tabindex={mode === modeOption.id ? 0 : -1}
+				tabindex={mode === modeOption.id || (mode === null && index === 0) ? 0 : -1}
 				class:active={mode === modeOption.id}
 				onclick={() => modeTabController.activate(index)}
 				onkeydown={modeTabController.onKeydown}
@@ -780,7 +796,53 @@ before the Change Date. See LICENSE for complete terms.
 			     Texture Replacement tools' async job polling in particular — survives
 			     switching away to another mode and back. All three share the same
 			     `.canvas-layout` shape so the workspace footprint never changes
-			     between modes. -->
+			     between modes. The root route is a fourth layout: the same canvas,
+			     with no mode tab selected and a chooser in the tools panel. -->
+			<div
+				class="canvas-layout"
+				class:reserve-panel-space={toolsPanelAtDefaultCorner}
+				hidden={mode !== null || urlTargetStatus !== 'idle'}
+			>
+				<div class="canvas-col">
+					{#if !request.currentRender}
+						<ImageUpload />
+					{:else}
+						<section aria-label={t('render.result')}>
+							<svelte:boundary
+								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
+							>
+								<RenderResult />
+								{#snippet failed(_error: unknown, reset: () => void)}
+									<p class="boundary-failed">{t('boundary.failed')}</p>
+									<button type="button" class="boundary-retry" onclick={reset}>
+										{t('boundary.retry')}
+									</button>
+								{/snippet}
+							</svelte:boundary>
+						</section>
+					{/if}
+				</div>
+
+				<FloatingToolsPanel active={mode === null} header={modeSwitcher}>
+					<div class="step-card">
+						<p class="panel-description">{t('toolsPanel.chooseMode')}</p>
+						<ul class="mode-clouds">
+							{#each modes as modeOption (modeOption.id)}
+								<li class="mode-cloud">
+									<span class="mode-cloud-icon">
+										<modeOption.icon size={16} strokeWidth={1.8} aria-hidden="true" />
+									</span>
+									<span class="mode-cloud-copy">
+										<span class="mode-cloud-title">{t(modeOption.label)}</span>
+										<span class="mode-cloud-description">{t(modeOption.description)}</span>
+									</span>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				</FloatingToolsPanel>
+			</div>
+
 			<div
 				class="canvas-layout"
 				class:reserve-panel-space={toolsPanelAtDefaultCorner}
@@ -1205,6 +1267,56 @@ before the Change Date. See LICENSE for complete terms.
 
 	.mode-tabs:global(.icons-only) .mode-label {
 		display: none;
+	}
+
+	.mode-clouds {
+		display: flex;
+		flex-direction: column;
+		gap: 0.65rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.mode-cloud {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		padding: 0.85rem 1rem;
+		background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+		border-radius: 1.75rem;
+	}
+
+	.mode-cloud-icon {
+		flex: 0 0 auto;
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+		color: var(--color-accent-text);
+	}
+
+	.mode-cloud-copy {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		min-width: 0;
+	}
+
+	.mode-cloud-title {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		line-height: 1.3;
+		color: var(--color-text);
+	}
+
+	.mode-cloud-description {
+		font-size: 0.8125rem;
+		font-weight: 400;
+		line-height: 1.45;
+		color: var(--color-muted);
 	}
 
 	.canvas-layout {

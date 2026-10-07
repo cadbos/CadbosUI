@@ -28,6 +28,7 @@ import {
 	isEditToolRoute,
 	isWorkspaceRoute,
 	renderOrigin,
+	routeIdToMode,
 	slugToTool,
 	subTabFromSearch,
 	withProjectSession
@@ -64,6 +65,18 @@ function formSnapshot(overrides: Partial<RequestFormSnapshot> = {}): RequestForm
 		...overrides
 	};
 }
+
+describe('workspace root leaves every mode unselected', () => {
+	it('treats / as the workspace without guessing a mode', () => {
+		expect(isWorkspaceRoute('/')).toBe(true);
+		expect(routeIdToMode('/')).toBeNull();
+		expect(routeIdToMode('/create/interior')).toBe('render');
+		expect(routeIdToMode('/edit')).toBe('edit');
+		expect(routeIdToMode('/style-transfer/interior')).toBe('styleTransfer');
+		expect(routeIdToMode('/usage')).toBeNull();
+		expect(isWorkspaceRoute('/usage')).toBe(false);
+	});
+});
 
 describe('renderOrigin (keeps mode/tool in sync with undo/redo)', () => {
 	it('has no known origin for a render with neither sourceMode nor editOp', () => {
