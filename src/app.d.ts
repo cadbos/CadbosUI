@@ -41,6 +41,11 @@ declare global {
 				ASSETS?: Fetcher;
 				ARCHAI_API_KEY: string;
 				ARCHAI_API_URL: string;
+				CLOUDFLARE_ACCOUNT_ID?: string;
+				CLOUDFLARE_ANALYTICS_API_TOKEN?: string;
+				CLOUDFLARE_GRAPHQL_URL?: string;
+				D1_DAILY_ROWS_READ_LIMIT?: string;
+				D1_DAILY_ROWS_WRITTEN_LIMIT?: string;
 				HEALTH_CACHE_TTL_SECONDS?: string;
 				MEDIA_CACHE_TTL_SECONDS?: string;
 				RENDER_MEDIA_TTL_SECONDS?: string;

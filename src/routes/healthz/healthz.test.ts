@@ -14,6 +14,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CacheStorage, D1Database, Fetcher } from '@cloudflare/workers-types';
+import type { HealthSnapshot } from '$lib/api/contract';
 import { TEST_S3_BUCKET } from '$lib/server/testing/generation-fixtures';
 
 const getWalletBalance = vi.hoisted(() => vi.fn());
@@ -25,6 +26,9 @@ vi.mock('$lib/server/s3', () => ({ isS3BucketAvailable: storage.isS3BucketAvaila
 import { GET } from './+server';
 
 const NOW = new Date('2026-08-11T10:00:00.000Z');
+const CLOUDFLARE_GRAPHQL_URL = 'https://api.cloudflare.com/client/v4/graphql';
+const D1_READ_LIMIT = 5_000_000;
+const D1_WRITE_LIMIT = 100_000;
 
 type HealthGetEvent = Parameters<typeof GET>[0];
 
@@ -57,11 +61,11 @@ function fakeCache(initial?: Response): FakeCache {
 	};
 }
 
-function service(status: 'healthy' | 'unhealthy' = 'healthy') {
+function service(status: HealthSnapshot['status'] = 'healthy') {
 	return { status, latencyMs: 1 };
 }
 
-function snapshot(status: 'healthy' | 'unhealthy' = 'healthy') {
+function snapshot(status: HealthSnapshot['status'] = 'healthy'): HealthSnapshot {
 	return {
 		status,
 		timestamp: NOW.toISOString(),
@@ -103,6 +107,11 @@ function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 				ASSETS: { fetch: assetsFetch } as unknown as Fetcher,
 				COMFYUI_BASE_URL: { fetch: comfyuiFetch } as unknown as Fetcher,
 				DB: { prepare } as unknown as D1Database,
+				CLOUDFLARE_ACCOUNT_ID: 'account-id',
+				CLOUDFLARE_ANALYTICS_API_TOKEN: 'analytics-token',
+				CLOUDFLARE_GRAPHQL_URL,
+				D1_DAILY_ROWS_READ_LIMIT: String(D1_READ_LIMIT),
+				D1_DAILY_ROWS_WRITTEN_LIMIT: String(D1_WRITE_LIMIT),
 				...(ttl === undefined ? {} : { HEALTH_CACHE_TTL_SECONDS: ttl })
 			}
 		} as unknown as App.Platform,
@@ -113,9 +122,42 @@ function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 	};
 }
 
-function relayFetch(reachable = 4): typeof fetch {
+function analyticsPayload(rowsRead = 1_000, rowsWritten = 100): unknown {
+	return {
+		data: {
+			viewer: {
+				accounts: [
+					{
+						d1AnalyticsAdaptiveGroups: [{ sum: { rowsRead, rowsWritten } }]
+					}
+				]
+			}
+		}
+	};
+}
+
+interface AnalyticsResponse {
+	body?: unknown;
+	error?: unknown;
+	status?: number;
+}
+
+function requestUrl(input: Parameters<typeof fetch>[0]): string {
+	return input instanceof Request ? input.url : String(input);
+}
+
+function relayFetch(
+	reachable = 4,
+	analytics: AnalyticsResponse = { body: analyticsPayload() }
+): typeof fetch {
 	let requestCount = 0;
-	return vi.fn(async () => {
+	return vi.fn(async (input) => {
+		if (requestUrl(input) === CLOUDFLARE_GRAPHQL_URL) {
+			if (analytics.error !== undefined) throw analytics.error;
+			return Response.json(analytics.body ?? analyticsPayload(), {
+				status: analytics.status ?? 200
+			});
+		}
 		requestCount += 1;
 		return requestCount <= reachable
 			? Response.json({ name: 'relay' })
@@ -130,7 +172,10 @@ interface DelayedRelayResponse {
 
 function delayedRelayFetch(responses: readonly DelayedRelayResponse[]): typeof fetch {
 	let requestCount = 0;
-	return vi.fn(() => {
+	return vi.fn((input) => {
+		if (requestUrl(input) === CLOUDFLARE_GRAPHQL_URL) {
+			return Promise.resolve(Response.json(analyticsPayload()));
+		}
 		const response = responses[requestCount];
 		requestCount += 1;
 		if (!response) throw new Error('Missing delayed relay response');
@@ -262,7 +307,206 @@ describe('GET /healthz', () => {
 		expect(healthy.s3BucketExists).toHaveBeenCalledOnce();
 		expect(healthy.assetsFetch.mock.calls[0][0].url).toBe('https://assets.internal/favicon.svg');
 		expect(healthy.comfyuiFetch.mock.calls[0][0].url).toBe('http://localhost:8188/system_stats');
+		expect(fetcher).toHaveBeenCalledTimes(5);
+	});
+
+	it.each([
+		['read', D1_READ_LIMIT, 100],
+		['write', 1_000, D1_WRITE_LIMIT]
+	] as const)(
+		'marks D1 unhealthy when the daily %s limit is reached',
+		async (_, rowsRead, rowsWritten) => {
+			const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+			const cache = fakeCache();
+			const healthy = healthyPlatform(cache.storage);
+
+			const response = await callGet(
+				healthy.platform,
+				relayFetch(4, { body: analyticsPayload(rowsRead, rowsWritten) })
+			);
+
+			expect(response.status).toBe(503);
+			expect(await response.json()).toMatchObject({
+				status: 'unhealthy',
+				services: { d1: { status: 'unhealthy' } }
+			});
+			expect(warning).toHaveBeenCalledWith(
+				expect.stringContaining('"event":"d1_quota_limit_reached"')
+			);
+		}
+	);
+
+	it.each([
+		['read', D1_READ_LIMIT, 100],
+		['write', 1_000, D1_WRITE_LIMIT]
+	] as const)(
+		'applies the default %s quota limit when its variable is unset',
+		async (_, rowsRead, rowsWritten) => {
+			const cache = fakeCache();
+			const healthy = healthyPlatform(cache.storage);
+			delete healthy.platform.env.D1_DAILY_ROWS_READ_LIMIT;
+			delete healthy.platform.env.D1_DAILY_ROWS_WRITTEN_LIMIT;
+
+			const response = await callGet(
+				healthy.platform,
+				relayFetch(4, { body: analyticsPayload(rowsRead, rowsWritten) })
+			);
+
+			expect(response.status).toBe(503);
+			expect(await response.json()).toMatchObject({
+				status: 'unhealthy',
+				services: { d1: { status: 'unhealthy' } }
+			});
+		}
+	);
+
+	it('queries account-wide D1 usage for the current UTC date with the analytics token', async () => {
+		const cache = fakeCache();
+		const healthy = healthyPlatform(cache.storage);
+		delete healthy.platform.env.CLOUDFLARE_GRAPHQL_URL;
+		delete healthy.platform.env.D1_DAILY_ROWS_READ_LIMIT;
+		delete healthy.platform.env.D1_DAILY_ROWS_WRITTEN_LIMIT;
+		const fetcher = relayFetch();
+
+		await callGet(healthy.platform, fetcher);
+
+		const analyticsCall = vi
+			.mocked(fetcher)
+			.mock.calls.find(([input]) => requestUrl(input) === CLOUDFLARE_GRAPHQL_URL);
+		expect(analyticsCall).toBeDefined();
+		const init = analyticsCall?.[1];
+		expect(init?.method).toBe('POST');
+		expect(new Headers(init?.headers).get('authorization')).toBe('Bearer analytics-token');
+		const body = JSON.parse(String(init?.body)) as {
+			query: string;
+			variables: { accountTag: string; date: string };
+		};
+		expect(body.variables).toEqual({ accountTag: 'account-id', date: '2026-08-11' });
+		expect(body.query).not.toContain('databaseId');
+		expect(body.query).toContain('rowsRead');
+		expect(body.query).toContain('rowsWritten');
+	});
+
+	it('treats an empty analytics group as zero usage', async () => {
+		const cache = fakeCache();
+		const healthy = healthyPlatform(cache.storage);
+		const body = analyticsPayload() as {
+			data: { viewer: { accounts: Array<{ d1AnalyticsAdaptiveGroups: unknown[] }> } };
+		};
+		body.data.viewer.accounts[0].d1AnalyticsAdaptiveGroups = [];
+
+		const response = await callGet(healthy.platform, relayFetch(4, { body }));
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			status: 'healthy',
+			services: { d1: { status: 'healthy' } }
+		});
+	});
+
+	it.each([
+		['HTTP failure', { status: 503 }],
+		['request timeout', { error: new DOMException('timed out', 'TimeoutError') }],
+		['GraphQL error', { body: { errors: [{ message: 'unauthorized' }] } }],
+		['malformed response', { body: { data: { viewer: {} } } }],
+		['invalid metrics', { body: analyticsPayload(-1, 100) }]
+	] as const)('marks D1 unhealthy when analytics has an %s', async (_, analytics) => {
+		const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const cache = fakeCache();
+		const healthy = healthyPlatform(cache.storage);
+
+		const response = await callGet(healthy.platform, relayFetch(4, analytics));
+
+		expect(response.status).toBe(503);
+		expect(await response.json()).toMatchObject({
+			status: 'unhealthy',
+			services: { d1: { status: 'unhealthy', latencyMs: expect.any(Number) } }
+		});
+		expect(errorLog).toHaveBeenCalledWith(
+			expect.stringContaining('"event":"d1_quota_check_failed"')
+		);
+		expect(errorLog).not.toHaveBeenCalledWith(expect.stringContaining('analytics-token'));
+	});
+
+	it('marks D1 unhealthy when quota configuration is missing', async () => {
+		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const cache = fakeCache();
+		const healthy = healthyPlatform(cache.storage);
+		delete healthy.platform.env.CLOUDFLARE_ANALYTICS_API_TOKEN;
+		const fetcher = relayFetch();
+
+		const response = await callGet(healthy.platform, fetcher);
+
+		expect(response.status).toBe(503);
+		expect(await response.json()).toMatchObject({
+			status: 'unhealthy',
+			services: { d1: { status: 'unhealthy' } }
+		});
 		expect(fetcher).toHaveBeenCalledTimes(4);
+		expect(warning).toHaveBeenCalledWith(
+			JSON.stringify({ event: 'd1_quota_configuration_invalid' })
+		);
+	});
+
+	it.each(['0', '-1', '1.5', 'invalid'])(
+		'marks D1 unhealthy when its read quota is configured as %s',
+		async (configured) => {
+			const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+			const cache = fakeCache();
+			const healthy = healthyPlatform(cache.storage);
+			healthy.platform.env.D1_DAILY_ROWS_READ_LIMIT = configured;
+
+			const response = await callGet(healthy.platform, relayFetch());
+
+			expect(response.status).toBe(503);
+			expect(await response.json()).toMatchObject({
+				status: 'unhealthy',
+				services: { d1: { status: 'unhealthy' } }
+			});
+			expect(warning).toHaveBeenCalledWith(
+				JSON.stringify({ event: 'd1_quota_configuration_invalid' })
+			);
+		}
+	);
+
+	it.each(['', 'http://api.cloudflare.test/graphql', 'not-a-url'])(
+		'marks D1 unhealthy when the GraphQL URL is configured as %s',
+		async (configured) => {
+			const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+			const cache = fakeCache();
+			const healthy = healthyPlatform(cache.storage);
+			healthy.platform.env.CLOUDFLARE_GRAPHQL_URL = configured;
+
+			const response = await callGet(healthy.platform, relayFetch());
+
+			expect(response.status).toBe(503);
+			expect(await response.json()).toMatchObject({
+				status: 'unhealthy',
+				services: { d1: { status: 'unhealthy' } }
+			});
+			expect(warning).toHaveBeenCalledWith(
+				JSON.stringify({ event: 'd1_quota_configuration_invalid' })
+			);
+		}
+	);
+
+	it('keeps D1 unhealthy when its live probe and quota verification both fail', async () => {
+		const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		const cache = fakeCache();
+		const healthy = healthyPlatform(cache.storage);
+		healthy.dbFirst.mockRejectedValue(new Error('D1 unavailable'));
+
+		const response = await callGet(
+			healthy.platform,
+			relayFetch(4, { body: { errors: [{ message: 'unavailable' }] } })
+		);
+
+		expect(response.status).toBe(503);
+		expect(await response.json()).toMatchObject({
+			status: 'unhealthy',
+			services: { d1: { status: 'unhealthy' } }
+		});
+		expect(errorLog).toHaveBeenCalledTimes(2);
 	});
 
 	it.each(['archai', 'assets', 'comfyui', 'd1', 'nostr', 's3'] as const)(
