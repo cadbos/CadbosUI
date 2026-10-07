@@ -412,7 +412,7 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <section class="edit-panel">
-	<h2 class="panel-heading">{t('edit.title')}</h2>
+	<p class="panel-description">{t('edit.panelDescription')}</p>
 
 	<div class="edit-body">
 		<div
@@ -779,7 +779,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.field-label {
 		font-size: 0.8125rem;
-		font-weight: 500;
+		font-weight: 600;
 		color: var(--color-muted);
 	}
 

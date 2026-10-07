@@ -148,6 +148,7 @@ export interface Dictionary {
 	'upload.errorUpload': string;
 	'upload.pick': string;
 	'render.sceneType.label': string;
+	'render.panelDescription': string;
 	'render.sceneType.interior': string;
 	'render.sceneType.exterior': string;
 	'render.generate': string;
@@ -479,6 +480,7 @@ export interface Dictionary {
 	'share.settingsPrompt': string;
 	'render.insufficientCredit': string;
 	'render.generationRestricted': string;
+	'styleTransfer.panelDescription': string;
 	'styleTransfer.referenceImage': string;
 	'styleTransfer.referencePick': string;
 	'styleTransfer.referenceDropTitle': string;
@@ -741,7 +743,7 @@ export interface Dictionary {
 	'styleTransfer.preset.exterior.conceptual.naiveCrayon': string;
 	'styleTransfer.preset.exterior.conceptual.blueprint': string;
 	'styleTransfer.preset.exterior.conceptual.brutalist': string;
-	'edit.title': string;
+	'edit.panelDescription': string;
 	'edit.signInToApply': string;
 	'edit.templateReplace': string;
 	'edit.templateColor': string;

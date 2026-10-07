@@ -192,8 +192,9 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <section class="step-card">
+	<p class="panel-description">{t('styleTransfer.panelDescription')}</p>
 	<div class="field">
-		<span>{t('styleTransfer.referenceImage')}</span>
+		<h2 class="panel-heading">{t('styleTransfer.referenceImage')}</h2>
 
 		<div class="scene-type-toggle" role="tablist" aria-label={t('render.sceneType.label')}>
 			{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
@@ -248,7 +249,7 @@ before the Change Date. See LICENSE for complete terms.
 			{:else if currentPresets.length === 0}
 				<p class="presets-empty">{t('styleTransfer.presetsEmpty')}</p>
 			{:else}
-				<p class="presets-hint" id="style-presets-hint">{t('styleTransfer.presetsGridLabel')}</p>
+				<h2 class="panel-heading" id="style-presets-hint">{t('styleTransfer.presetsGridLabel')}</h2>
 				<div class="preset-grid" role="radiogroup" aria-labelledby="style-presets-hint">
 					{#each currentPresets as preset, index (preset.id)}
 						<button
@@ -435,7 +436,12 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: var(--shadow-sm);
 	}
 
-	.presets-hint,
+	#style-reference-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
 	.presets-empty {
 		margin: 0;
 		font-size: 0.75rem;
@@ -505,6 +511,8 @@ before the Change Date. See LICENSE for complete terms.
 
 	.strength-top,
 	.field span {
+		font-size: 0.8125rem;
+		font-weight: 600;
 		color: var(--color-muted);
 	}
 
