@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import type { OutputFormat, RenderResponse } from '$lib/api/contract';
 	import {
@@ -339,19 +340,12 @@ before the Change Date. See LICENSE for complete terms.
 		<p class="auth-hint">{t('styleTransfer.signInToApply')}</p>
 	{/if}
 
-	<button
-		type="button"
-		class="generate-btn"
+	<GenerateButton
+		label={t('styleTransfer.apply')}
 		disabled={!canApply || !isAuthenticated}
+		busy={applying || request.status === 'rendering'}
 		onclick={() => void submit()}
-	>
-		{#if request.status === 'rendering' && applying}
-			<span class="spinner" aria-hidden="true"></span>
-			{t('styleTransfer.applying')}
-		{:else}
-			{t('styleTransfer.apply')}
-		{/if}
-	</button>
+	/>
 
 	{#if error}
 		<p class="submit-error" role="alert">{error}</p>

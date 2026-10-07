@@ -14,7 +14,9 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { ADD_OBJECT_PRESETS } from '$lib/add-object-presets';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
+	import { auth } from '$lib/state/auth.svelte';
 	import { request } from '$lib/state/request.svelte';
 
 	interface Props {
@@ -71,17 +73,16 @@ before the Change Date. See LICENSE for complete terms.
 		</p>
 	{/if}
 
-	<button
-		type="button"
-		class="btn-apply"
+	{#if auth.status !== 'authenticated'}
+		<p class="auth-hint">{t('edit.signInToApply')}</p>
+	{/if}
+
+	<GenerateButton
+		label={t('edit.addObject.apply')}
 		disabled={disabled || finalPrompt === ''}
+		busy={applying}
 		onclick={submit}
-	>
-		{#if applying}
-			<span class="spinner" aria-hidden="true"></span>
-		{/if}
-		{applying ? t('edit.addObject.applying') : t('edit.addObject.apply')}
-	</button>
+	/>
 </div>
 
 <style>
@@ -196,46 +197,10 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-muted);
 	}
 
-	.btn-apply {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		align-self: flex-start;
-		padding: 0.6rem 1.25rem;
-		font: inherit;
-		font-size: 0.9375rem;
-		font-weight: 600;
-		color: var(--color-accent-contrast);
-		background: var(--color-accent);
-		border: none;
-		border-radius: 10px;
-		cursor: pointer;
-		transition: background 0.15s;
-	}
-
-	.btn-apply:hover:not(:disabled) {
-		background: var(--color-accent-hover);
-	}
-
-	.btn-apply:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
-	}
-
-	.spinner {
-		width: 0.875rem;
-		height: 0.875rem;
-		border: 2px solid rgb(255 255 255 / 0.35);
-		border-top-color: white;
-		border-radius: 50%;
-		animation: spin 0.7s linear infinite;
-		flex-shrink: 0;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
+	.auth-hint {
+		margin: 0;
+		font-size: 0.875rem;
+		color: var(--color-muted);
 	}
 
 	@media (max-width: 480px) {

@@ -29,6 +29,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import FloatingToolsPanel from '$lib/components/FloatingToolsPanel.svelte';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import { toolsPanel } from '$lib/state/tools-panel.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import RenderResult from '$lib/components/RenderResult.svelte';
@@ -927,19 +928,12 @@ before the Change Date. See LICENSE for complete terms.
 								<p class="auth-hint">{t('render.signInToGenerate')}</p>
 							{/if}
 
-							<button
-								type="button"
-								class="generate-btn"
+							<GenerateButton
+								label={t('render.generate')}
 								disabled={!canGenerate || !isAuthenticated}
+								busy={request.status === 'rendering'}
 								onclick={() => void generate()}
-							>
-								{#if request.status === 'rendering'}
-									<span class="spinner" aria-hidden="true"></span>
-									{t('render.generating')}
-								{:else}
-									{t('render.generate')}
-								{/if}
-							</button>
+							/>
 
 							{#if submitError}
 								<p class="submit-error" role="alert">{submitError}</p>

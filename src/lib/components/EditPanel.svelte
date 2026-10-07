@@ -38,6 +38,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { buildWorkspaceUrl, slugToTool, type ToolId } from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 	import EditAddObjectTool from '$lib/components/EditAddObjectTool.svelte';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
 	import LightSettingsPanel from '$lib/components/LightSettingsPanel.svelte';
 	import ModeHint from '$lib/components/ModeHint.svelte';
@@ -520,26 +521,19 @@ before the Change Date. See LICENSE for complete terms.
 
 							<ModeHint field="freeform" text={request.editPrompt} />
 
-							<div class="actions">
-								<button
-									type="button"
-									class="btn-apply"
-									disabled={!request.editPrompt.trim() ||
-										formLocked ||
-										!isAuthenticated ||
-										!hasEditTarget}
-									onclick={() => void submit(request.editPrompt, 'freeform')}
-								>
-									{#if submitting}
-										<span class="spinner" aria-hidden="true"></span>
-										{t('edit.submitting')}
-									{:else if isPolling}
-										{t('edit.processing')}
-									{:else}
-										{t('edit.apply')}
-									{/if}
-								</button>
-							</div>
+							{#if !isAuthenticated}
+								<p class="auth-hint">{t('edit.signInToApply')}</p>
+							{/if}
+
+							<GenerateButton
+								label={t('edit.apply')}
+								disabled={!request.editPrompt.trim() ||
+									formLocked ||
+									!isAuthenticated ||
+									!hasEditTarget}
+								busy={submitting || isPolling}
+								onclick={() => void submit(request.editPrompt, 'freeform')}
+							/>
 						{:else if activeTool === 'add-object'}
 							<EditAddObjectTool
 								disabled={formLocked || !hasEditTarget}
@@ -678,10 +672,6 @@ before the Change Date. See LICENSE for complete terms.
 			{/if}
 		</div>
 	</div>
-
-	{#if !isAuthenticated && !ownPanelTool}
-		<p class="auth-hint">{t('edit.signInToApply')}</p>
-	{/if}
 </section>
 
 <style>
@@ -872,12 +862,6 @@ before the Change Date. See LICENSE for complete terms.
 		margin: 0;
 		font-size: 0.875rem;
 		color: var(--color-muted);
-	}
-
-	.actions {
-		display: flex;
-		gap: 0.625rem;
-		flex-wrap: wrap;
 	}
 
 	.btn-apply {
