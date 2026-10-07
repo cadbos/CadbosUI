@@ -189,6 +189,67 @@ test('switching mode tabs opens each mode default, carrying scene but not sub-ta
 	await expect(page).toHaveURL(/\/create\/exterior\?view=chat&format=webp$/);
 });
 
+test('mode tabs stay in the tools header without toggling the panel', async ({ page }) => {
+	await page.goto('/create/interior');
+
+	const toolsHeader = page.getByRole('group', { name: ru['toolsPanel.title'] });
+	const toolsPanel = toolsHeader.locator('..');
+	const modeTabs = toolsHeader.getByRole('tablist', { name: ru['mode.switcher.label'] });
+	const modeLabels = [ru['mode.render'], ru['mode.edit'], ru['mode.styleTransfer']];
+
+	await expect(modeTabs).toBeVisible();
+	for (const label of modeLabels) {
+		const tab = modeTabs.getByRole('tab', { name: label });
+		await expect(tab.locator('svg')).toHaveCount(1);
+		await expect(tab.locator('.mode-label')).toBeHidden();
+	}
+
+	const titleBox = await toolsHeader.locator('.panel-title').boundingBox();
+	const tabsBox = await modeTabs.boundingBox();
+	expect(titleBox).not.toBeNull();
+	expect(tabsBox).not.toBeNull();
+	expect(titleBox!.x + titleBox!.width).toBeLessThanOrEqual(tabsBox!.x + 1);
+
+	const resizeHandle = toolsPanel.getByRole('slider', { name: ru['toolsPanel.resizeHandle'] });
+	await resizeHandle.press('End');
+	for (const label of modeLabels) {
+		await expect(modeTabs.getByRole('tab', { name: label }).locator('.mode-label')).toBeVisible();
+	}
+	await resizeHandle.press('Home');
+
+	const compactTitleBox = await toolsHeader.locator('.panel-title').boundingBox();
+	const compactTabsBox = await modeTabs.boundingBox();
+	const moveIconBox = await toolsHeader.locator('.drag-icon').boundingBox();
+	expect(compactTitleBox).not.toBeNull();
+	expect(compactTabsBox).not.toBeNull();
+	expect(moveIconBox).not.toBeNull();
+	expect(compactTitleBox!.x + compactTitleBox!.width).toBeLessThanOrEqual(compactTabsBox!.x + 1);
+	expect(compactTabsBox!.x + compactTabsBox!.width).toBeLessThanOrEqual(moveIconBox!.x + 1);
+
+	await modeTabs.getByRole('tab', { name: ru['mode.render'] }).focus();
+	await page.keyboard.press('ArrowRight');
+	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+	await expect(modeTabs.getByRole('tab', { name: ru['mode.edit'] })).toBeFocused();
+	await expect(page.getByRole('button', { name: ru['toolsPanel.collapse'] })).toBeVisible();
+	await expect(toolsPanel.locator('.panel-body')).toBeVisible();
+
+	await page.getByRole('button', { name: ru['toolsPanel.collapse'] }).click();
+	await expect(toolsPanel.locator('.panel-body')).toBeHidden();
+
+	await modeTabs.getByRole('tab', { name: ru['mode.styleTransfer'] }).click();
+	await expect(page).toHaveURL(
+		/\/style-transfer\/interior\?reference=photorealistic&format=webp&strength=0\.7$/
+	);
+	await expect(page.getByRole('button', { name: ru['toolsPanel.expand'] })).toBeVisible();
+	await expect(toolsPanel.locator('.panel-body')).toBeHidden();
+
+	await toolsHeader.locator('.panel-title').click();
+	await expect(toolsPanel.locator('.panel-body')).toBeHidden();
+
+	await page.getByRole('button', { name: ru['toolsPanel.expand'] }).click();
+	await expect(toolsPanel.locator('.panel-body')).toBeVisible();
+});
+
 test('object replacement scene-object text round-trips without image URLs or a legacy source mode', async ({
 	page
 }) => {
