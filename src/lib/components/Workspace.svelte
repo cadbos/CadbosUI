@@ -443,6 +443,11 @@ before the Change Date. See LICENSE for complete terms.
 	// switching workspace tabs is a workspaceTabs mutation that buildShareUrl
 	// itself never reads (see its own doc comment), so without reading them
 	// here directly, switching tabs wouldn't re-schedule this effect at all.
+	// On the root there is no mode to serialize — buildShareUrl is skipped so
+	// this effect cannot invent /create — but those same reads still run, so
+	// a project restored after a reload (or still open after the logo link
+	// lands on /) is written as /?project=&session=&generation= once it is
+	// on screen.
 	// generationAnchor rides along the same way, so the `?generation=`
 	// anchor (see request.svelte.ts) always names what's on screen — a stored
 	// generation, or with `step=before` the image one was made from — moving
@@ -456,17 +461,17 @@ before the Change Date. See LICENSE for complete terms.
 	$effect(() => {
 		if (!hydrated || urlTargetStatus !== 'idle') return;
 		const activeMode = mode;
-		// The root has no mode to serialize. Syncing would invent /create and
-		// select a tab the user never chose.
-		if (activeMode === null) return;
-		buildShareUrl(activeMode, request);
 		const activeProjectId =
 			workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
 		const activeSessionId = workspaceTabs.activeTab.activeSessionTabId ?? undefined;
 		const generationAnchor = request.generationAnchor;
+		if (activeMode !== null) buildShareUrl(activeMode, request);
 		const timer = setTimeout(() => {
 			const currentSearch = new URLSearchParams(window.location.search);
-			const base = buildShareUrl(activeMode, request, subTabFromSearch(activeMode, currentSearch));
+			const base =
+				activeMode === null
+					? '/'
+					: buildShareUrl(activeMode, request, subTabFromSearch(activeMode, currentSearch));
 			const url = withProjectSession(base, activeProjectId, activeSessionId, generationAnchor);
 			if (`${window.location.pathname}${window.location.search}` !== url) {
 				goto(resolve(url as PathnameWithSearchOrHash, {}), {
