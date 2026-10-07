@@ -168,6 +168,7 @@ export interface Dictionary {
 	'toolsPanel.expand': string;
 	'toolsPanel.resizeHandle': string;
 	'toolsPanel.sizePreset': string;
+	'toolsPanel.chooseMode': string;
 	'toolbar.previousGeneration': string;
 	'toolbar.nextGeneration': string;
 	'toolbar.compare': string;

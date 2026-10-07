@@ -123,12 +123,14 @@ function slugToScene(param: string | undefined): SceneType {
 		: 'interior';
 }
 
-// SvelteKit route ids identify the workspace leaf pages; anything else falls
-// back to the default mode.
-export function routeIdToMode(routeId: string | null): Mode {
+// SvelteKit route ids identify the workspace leaf pages. The workspace root
+// has no mode selected until the user picks one; a route the workspace is
+// not mounted for is unselected too, rather than guessed as create.
+export function routeIdToMode(routeId: string | null): Mode | null {
 	if (routeId?.startsWith('/edit')) return 'edit';
 	if (routeId?.startsWith('/style-transfer')) return 'styleTransfer';
-	return 'render';
+	if (routeId?.startsWith('/create')) return 'render';
+	return null;
 }
 
 // Every edit-panel tool tags its renders with a unique editOp.type (see
@@ -231,6 +233,7 @@ export function destinationForGenerationKind(
 // route.
 export function isWorkspaceRoute(routeId: string | null): boolean {
 	return (
+		routeId === '/' ||
 		routeId?.startsWith('/create') === true ||
 		routeId?.startsWith('/edit') === true ||
 		routeId?.startsWith('/style-transfer') === true

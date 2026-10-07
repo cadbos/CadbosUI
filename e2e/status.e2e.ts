@@ -106,7 +106,7 @@ test('checks health once across client-side navigation', async ({ page }) => {
 		});
 	});
 
-	await page.goto('/');
+	await page.goto('/create/interior');
 	await expect.poll(() => requests).toBe(1);
 	await page.getByRole('tab', { name: 'Экстерьер' }).click();
 	await expect(page).toHaveURL(/\/create\/exterior/);

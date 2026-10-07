@@ -43,16 +43,24 @@ async function authenticate(page: Page): Promise<void> {
 	});
 }
 
-test('root redirects to /create/interior with the current scene/view/format always explicit', async ({
-	page
-}) => {
+test('root opens the workspace with no mode selected', async ({ page }) => {
 	await page.goto('/');
+	await expect(page).toHaveURL(/\/$/);
+	for (const name of ['Создание', 'Редактирование', 'Миграция стиля']) {
+		await expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'false');
+	}
+	await expect(page.getByText('Выберите, с чего начать.')).toBeVisible();
+	await expect(page.locator('.mode-clouds')).toBeVisible();
+	await page.getByRole('tab', { name: 'Создание' }).click();
 	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
+	await expect(page.getByRole('tab', { name: 'Создание' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
 	await expect(page.getByRole('tab', { name: 'Интерьер' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
-	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('direct navigation to /create/exterior opens the exterior scene', async ({ page }) => {
@@ -572,7 +580,7 @@ for (const [path, title] of [
 		await expect(page).toHaveTitle(title);
 
 		await page.locator('.brand').click();
-		await expect(page).toHaveURL(/\/create\/interior/);
+		await expect(page).toHaveURL(/\/$/);
 		await expect(page).toHaveTitle(ru['app.title']);
 	});
 }
