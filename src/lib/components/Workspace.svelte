@@ -812,6 +812,7 @@ before the Change Date. See LICENSE for complete terms.
 
 				<FloatingToolsPanel active={mode === 'render'} header={modeSwitcher}>
 					<div class="step-card">
+						<p class="panel-description">{t('render.panelDescription')}</p>
 						<div class="panel-section">
 							<h2 class="panel-heading">{t('render.sceneType.label')}</h2>
 							<div
