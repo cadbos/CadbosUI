@@ -22,6 +22,7 @@ import {
 	type ServiceHealth
 } from '$lib/api/contract';
 import { NOSTR_PROFILE_BOOTSTRAP_RELAYS } from '$lib/nostr/connect';
+import { getD1DailyLimits } from '$lib/server/d1-limits';
 import { getBucketByName, uploadsBucketName } from '$lib/server/media';
 import { isS3BucketAvailable } from '$lib/server/s3';
 import { getWalletBalance } from '$lib/server/wallet';
@@ -30,26 +31,6 @@ const DEFAULT_HEALTH_CACHE_TTL_SECONDS = 30;
 const HEALTH_PROBE_TIMEOUT_MS = 10_000;
 const COMFYUI_SYSTEM_STATS_URL = 'http://localhost:8188/system_stats';
 const STATIC_ASSET_URL = 'https://assets.internal/favicon.svg';
-const DEFAULT_CLOUDFLARE_GRAPHQL_URL = 'https://api.cloudflare.com/client/v4/graphql';
-const DEFAULT_D1_DAILY_ROWS_READ_LIMIT = 5_000_000;
-const DEFAULT_D1_DAILY_ROWS_WRITTEN_LIMIT = 100_000;
-const D1_DAILY_USAGE_QUERY = `
-	query D1DailyUsage($accountTag: string!, $date: Date!) {
-		viewer {
-			accounts(filter: { accountTag: $accountTag }) {
-				d1AnalyticsAdaptiveGroups(
-					limit: 1
-					filter: { date_geq: $date, date_leq: $date }
-				) {
-					sum {
-						rowsRead
-						rowsWritten
-					}
-				}
-			}
-		}
-	}
-`;
 
 interface HealthCache {
 	match(request: Request): Promise<Response | undefined>;
@@ -76,146 +57,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-interface D1QuotaConfig {
-	accountId: string;
-	apiToken: string;
-	graphqlUrl: string;
-	readLimit: number;
-	writeLimit: number;
-}
-
-interface D1DailyUsage {
-	rowsRead: number;
-	rowsWritten: number;
-}
-
-class D1AnalyticsError extends Error {
-	constructor(reason: 'http' | 'response') {
-		super(reason);
-		this.name = 'D1AnalyticsError';
-	}
-}
-
-function positiveInteger(value: string | undefined): number | undefined {
-	if (!value?.trim()) return undefined;
-	const parsed = Number(value);
-	return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function configuredLimit(value: string | undefined, defaultValue: number): number | undefined {
-	return value === undefined ? defaultValue : positiveInteger(value);
-}
-
-function httpsUrl(value: string | undefined): string | undefined {
-	if (!value?.trim()) return undefined;
-	try {
-		const url = new URL(value);
-		return url.protocol === 'https:' ? url.href : undefined;
-	} catch {
-		return undefined;
-	}
-}
-
-function d1QuotaConfig(env: App.Platform['env'] | undefined): D1QuotaConfig | undefined {
-	const accountId = env?.CLOUDFLARE_ACCOUNT_ID?.trim();
-	const apiToken = env?.CLOUDFLARE_ANALYTICS_API_TOKEN?.trim();
-	const graphqlUrl = httpsUrl(env?.CLOUDFLARE_GRAPHQL_URL ?? DEFAULT_CLOUDFLARE_GRAPHQL_URL);
-	const readLimit = configuredLimit(
-		env?.D1_DAILY_ROWS_READ_LIMIT,
-		DEFAULT_D1_DAILY_ROWS_READ_LIMIT
-	);
-	const writeLimit = configuredLimit(
-		env?.D1_DAILY_ROWS_WRITTEN_LIMIT,
-		DEFAULT_D1_DAILY_ROWS_WRITTEN_LIMIT
-	);
-	if (
-		!accountId ||
-		!apiToken ||
-		!graphqlUrl ||
-		readLimit === undefined ||
-		writeLimit === undefined
-	) {
-		console.warn(JSON.stringify({ event: 'd1_quota_configuration_invalid' }));
-		return undefined;
-	}
-	return { accountId, apiToken, graphqlUrl, readLimit, writeLimit };
-}
-
-function metric(value: unknown): number | undefined {
-	return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
-}
-
-function parseD1DailyUsage(payload: unknown): D1DailyUsage | undefined {
-	if (!isRecord(payload)) return undefined;
-	if (Array.isArray(payload.errors) && payload.errors.length > 0) return undefined;
-	const data = payload.data;
-	if (!isRecord(data) || !isRecord(data.viewer) || !Array.isArray(data.viewer.accounts)) {
-		return undefined;
-	}
-	if (data.viewer.accounts.length !== 1) return undefined;
-	const account = data.viewer.accounts[0];
-	if (!isRecord(account) || !Array.isArray(account.d1AnalyticsAdaptiveGroups)) return undefined;
-
-	let rowsRead = 0;
-	let rowsWritten = 0;
-	for (const group of account.d1AnalyticsAdaptiveGroups) {
-		if (!isRecord(group) || !isRecord(group.sum)) return undefined;
-		const groupRowsRead = metric(group.sum.rowsRead);
-		const groupRowsWritten = metric(group.sum.rowsWritten);
-		if (groupRowsRead === undefined || groupRowsWritten === undefined) return undefined;
-		rowsRead += groupRowsRead;
-		rowsWritten += groupRowsWritten;
-	}
-	return { rowsRead, rowsWritten };
-}
-
-function logD1Error(event: 'd1_live_probe_failed' | 'd1_quota_check_failed', error: unknown): void {
-	const errorType =
-		error instanceof D1AnalyticsError
-			? error.message
-			: error instanceof Error
-				? error.name
-				: typeof error;
-	console.error(JSON.stringify({ event, error: errorType }));
-}
-
 async function probeD1Quota(
 	env: App.Platform['env'] | undefined,
 	fetcher: typeof fetch
 ): Promise<HealthServiceStatus> {
-	const config = d1QuotaConfig(env);
-	if (!config) return 'unhealthy';
-
-	try {
-		const date = new Date().toISOString().slice(0, 10);
-		const response = await fetcher(config.graphqlUrl, {
-			method: 'POST',
-			headers: {
-				authorization: `Bearer ${config.apiToken}`,
-				'content-type': 'application/json'
-			},
-			body: JSON.stringify({
-				query: D1_DAILY_USAGE_QUERY,
-				variables: { accountTag: config.accountId, date }
-			}),
-			signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS)
-		});
-		if (!response.ok) throw new D1AnalyticsError('http');
-		const usage = parseD1DailyUsage(await response.json());
-		if (!usage) throw new D1AnalyticsError('response');
-		const readLimitReached = usage.rowsRead >= config.readLimit;
-		const writeLimitReached = usage.rowsWritten >= config.writeLimit;
-		if (readLimitReached || writeLimitReached) {
-			console.warn(
-				JSON.stringify({ event: 'd1_quota_limit_reached', readLimitReached, writeLimitReached })
-			);
-			return 'unhealthy';
-		}
-		return 'healthy';
-	} catch (error) {
-		logD1Error('d1_quota_check_failed', error);
+	const usage = await getD1DailyLimits(env, fetcher);
+	if (!usage) return 'unhealthy';
+	const readLimitReached = usage.rowsRead >= usage.readLimit;
+	const writeLimitReached = usage.rowsWritten >= usage.writeLimit;
+	if (readLimitReached || writeLimitReached) {
+		console.warn(
+			JSON.stringify({ event: 'd1_quota_limit_reached', readLimitReached, writeLimitReached })
+		);
 		return 'unhealthy';
 	}
+	return 'healthy';
 }
 
 async function probeD1(
@@ -230,7 +86,12 @@ async function probeD1(
 			env?.DB !== undefined &&
 			(await env.DB.prepare('SELECT 1 AS healthy').first<number>('healthy')) === 1;
 	} catch (error) {
-		logD1Error('d1_live_probe_failed', error);
+		console.error(
+			JSON.stringify({
+				event: 'd1_live_probe_failed',
+				error: error instanceof Error ? error.name : typeof error
+			})
+		);
 	}
 	const latencyMs = latencySince(startedAt);
 	const quotaStatus = await quotaPromise;

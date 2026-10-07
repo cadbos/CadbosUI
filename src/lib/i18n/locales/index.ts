@@ -271,6 +271,12 @@ export interface Dictionary {
 	'usage.totals.references': string;
 	'usage.totals.countWithSize': string;
 	'usage.totals.users': string;
+	'usage.totals.d1RowsRead': string;
+	'usage.totals.d1RowsWritten': string;
+	'usage.totals.d1DivisionSign': string;
+	'usage.totals.d1LimitReached': string;
+	'usage.totals.d1Loading': string;
+	'usage.totals.d1Failed': string;
 	'usage.loading': string;
 	'usage.empty': string;
 	'usage.failed': string;

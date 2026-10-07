@@ -642,6 +642,14 @@ export interface UsageTotals {
 	totalSpend: number;
 }
 
+export interface D1DailyLimits {
+	date: string;
+	rowsRead: number;
+	rowsWritten: number;
+	readLimit: number;
+	writeLimit: number;
+}
+
 export interface UsageProfile {
 	name?: string;
 	picture?: string;

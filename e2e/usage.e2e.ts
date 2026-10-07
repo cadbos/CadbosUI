@@ -14,6 +14,7 @@
 
 import type { Page } from '@playwright/test';
 import { npubEncode } from 'nostr-tools/nip19';
+import { ru } from '$lib/i18n/locales/ru';
 
 import { expect, test } from './fixtures';
 
@@ -45,6 +46,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	const pubkeyWithoutPicture = 'b'.repeat(64);
 	const npub = npubEncode(pubkey);
 	const npubWithoutPicture = npubEncode(pubkeyWithoutPicture);
+	const quotaDate = '2026-10-07';
 
 	await page.route('**/api/usage**', async (route) => {
 		if (new URL(route.request().url()).pathname === '/api/usage/profiles') {
@@ -84,6 +86,21 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 					referenceCount: 0,
 					referenceBytes: null,
 					totalSpend: 12.5
+				})
+			});
+			return;
+		}
+
+		if (new URL(route.request().url()).pathname === '/api/usage/d1-limits') {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					date: quotaDate,
+					rowsRead: 5_000_000,
+					rowsWritten: 100,
+					readLimit: 5_000_000,
+					writeLimit: 100_000
 				})
 			});
 			return;
@@ -143,17 +160,60 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	const user = page.getByRole('rowheader', { name: npub });
 	const userWithoutPicture = page.getByRole('rowheader', { name: npubWithoutPicture });
 
-	await expect(page.getByRole('columnheader', { name: 'Пользователь' })).toBeVisible();
-	await expect(page.getByRole('columnheader', { name: 'Размер исходников' })).toBeVisible();
-	await expect(page.getByRole('columnheader', { name: 'Размер референсов' })).toBeVisible();
-	await expect(page.getByRole('cell', { name: /^3\s*МБ$/ })).toBeVisible();
-	const totals = page.getByRole('region', { name: 'Итого по платформе' });
-	await expect(totals).toContainText('Баланс кошелька 250.00 $');
-	await expect(totals).toContainText('Всего пополнено —');
-	await expect(totals).toContainText('Всего потрачено 12.50 $');
-	await expect(totals).toContainText('Зарегистрировано пользователей 2');
-	await expect(totals).toContainText(/Загруженные исходники 2 · 3\s*МБ/);
-	await expect(totals).toContainText('Загруженные референсы 0 · —');
+	await expect(page.getByRole('columnheader', { name: ru['usage.column.user'] })).toBeVisible();
+	await expect(
+		page.getByRole('columnheader', { name: ru['usage.column.sourceBytes'] })
+	).toBeVisible();
+	await expect(
+		page.getByRole('columnheader', { name: ru['usage.column.referenceBytes'] })
+	).toBeVisible();
+	const sourceSize = new Intl.NumberFormat('ru', {
+		style: 'unit',
+		unit: 'megabyte',
+		unitDisplay: 'short'
+	}).format(3);
+	await expect(page.getByRole('cell', { name: sourceSize })).toBeVisible();
+	const totals = page.getByRole('region', { name: ru['usage.totals.title'] });
+	await expect(totals).toContainText(`${ru['usage.totals.walletBalance']} 250.00 $`);
+	await expect(totals).toContainText(`${ru['usage.totals.deposits']} ${ru['usage.emptyValue']}`);
+	await expect(totals).toContainText(`${ru['usage.totals.spend']} 12.50 $`);
+	await expect(totals).toContainText(`${ru['usage.totals.users']} 2`);
+	const readQuota = totals
+		.getByText(ru['usage.totals.d1RowsRead'].replace('{date}', quotaDate))
+		.locator('..');
+	const writeQuota = totals
+		.getByText(ru['usage.totals.d1RowsWritten'].replace('{date}', quotaDate))
+		.locator('..');
+	const number = new Intl.NumberFormat('ru');
+	await expect(readQuota.locator('.d1-used')).toHaveText(number.format(5_000_000));
+	await expect(readQuota.locator('.d1-limit')).toHaveText(number.format(5_000_000));
+	await expect(writeQuota.locator('.d1-used')).toHaveText(number.format(100));
+	await expect(writeQuota.locator('.d1-limit')).toHaveText(number.format(100_000));
+	for (const quota of [readQuota, writeQuota]) {
+		await expect(quota.locator('.d1-divider')).toHaveText(ru['usage.totals.d1DivisionSign']);
+		const layout = await quota.locator('.d1-quotient').evaluate((element) => {
+			const used = element.querySelector('.d1-used')!.getBoundingClientRect();
+			const divider = element.querySelector('.d1-divider')!.getBoundingClientRect();
+			const limit = element.querySelector('.d1-limit')!.getBoundingClientRect();
+			return {
+				rightEdgeDifference: Math.abs(used.right - limit.right),
+				dividerLeftOfValues: divider.right < Math.min(used.left, limit.left),
+				verticalCenterDifference: Math.abs(
+					(divider.top + divider.bottom - used.top - limit.bottom) / 2
+				)
+			};
+		});
+		expect(layout.rightEdgeDifference).toBeLessThan(1);
+		expect(layout.dividerLeftOfValues).toBe(true);
+		expect(layout.verticalCenterDifference).toBeLessThan(1);
+	}
+	await expect(readQuota).toContainText(ru['usage.totals.d1LimitReached']);
+	await expect(totals).toContainText(
+		`${ru['usage.totals.sources']} ${ru['usage.totals.countWithSize'].replace('{count}', '2').replace('{size}', sourceSize)}`
+	);
+	await expect(totals).toContainText(
+		`${ru['usage.totals.references']} ${ru['usage.totals.countWithSize'].replace('{count}', '0').replace('{size}', ru['usage.emptyValue'])}`
+	);
 	await expect(user.locator('img')).toHaveAttribute('src', 'https://avatar.example/alice.svg');
 	await expect(userWithoutPicture.locator('.avatar')).toHaveText('B');
 	await expect(link).toHaveAttribute('href', `https://primal.net/profile/${npub}`);
@@ -176,6 +236,11 @@ test('shows an error message when the wallet balance cannot be loaded', async ({
 			return;
 		}
 
+		if (pathname === '/api/usage/d1-limits') {
+			await route.fulfill({ status: 503 });
+			return;
+		}
+
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -189,5 +254,55 @@ test('shows an error message when the wallet balance cannot be loaded', async ({
 
 	await page.goto('/usage');
 
-	await expect(page.getByText('Не удалось загрузить баланс кошелька.')).toBeVisible();
+	await expect(page.getByText(ru['usage.walletBalanceFailed'])).toBeVisible();
+	await expect(page.getByText(ru['usage.totals.d1Failed'])).toBeVisible();
+});
+
+test('keeps platform totals visible when D1 analytics is unavailable', async ({ page }) => {
+	await mockAuthenticatedSession(page);
+	await page.route('**/api/usage**', async (route) => {
+		const pathname = new URL(route.request().url()).pathname;
+		if (pathname === '/api/usage/d1-limits') {
+			await route.fulfill({ status: 503 });
+			return;
+		}
+		if (pathname === '/api/usage/balance') {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: '{"balance":250}'
+			});
+			return;
+		}
+		if (pathname === '/api/usage/totals') {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					userCount: 2,
+					projectCount: 3,
+					sessionCount: 4,
+					generationCount: 5,
+					sourceCount: 6,
+					sourceBytes: null,
+					referenceCount: 7,
+					referenceBytes: null,
+					totalSpend: 12.5
+				})
+			});
+			return;
+		}
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ users: [], pagination: { offset: 0, size: 20, hasMore: false } })
+		});
+	});
+
+	await page.goto('/usage');
+
+	const totals = page.getByRole('region', { name: ru['usage.totals.title'] });
+	await expect(totals).toContainText(`${ru['usage.totals.spend']} 12.50 $`);
+	await expect(totals).toContainText(`${ru['usage.totals.walletBalance']} 250.00 $`);
+	await expect(totals).toContainText(ru['usage.totals.d1Failed']);
 });

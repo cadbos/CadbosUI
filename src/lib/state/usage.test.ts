@@ -104,6 +104,16 @@ function mockUsageFetch(
 		if (url === '/api/usage/profiles') return Promise.resolve(profilesResponse(profiles));
 		if (url === '/api/usage/balance') return Promise.resolve(walletBalanceResponse());
 		if (url === '/api/usage/totals') return Promise.resolve(totalsResponse());
+		if (url === '/api/usage/d1-limits')
+			return Promise.resolve(
+				Response.json({
+					date: '2026-10-07',
+					rowsRead: 1_000,
+					rowsWritten: 100,
+					readLimit: 5_000_000,
+					writeLimit: 100_000
+				})
+			);
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
 }
@@ -126,7 +136,7 @@ describe('usage pagination', () => {
 
 		await usage.load();
 
-		expect(fetchMock).toHaveBeenCalledTimes(4);
+		expect(fetchMock).toHaveBeenCalledTimes(5);
 		expect(fetchMock).toHaveBeenCalledWith('/api/usage?offset=0&size=20', {
 			signal: expect.any(AbortSignal)
 		});
@@ -164,7 +174,7 @@ describe('usage pagination', () => {
 		await usage.load();
 		await usage.loadMore();
 
-		expect(fetchMock).toHaveBeenCalledTimes(6);
+		expect(fetchMock).toHaveBeenCalledTimes(7);
 		expect(fetchMock).toHaveBeenCalledWith('/api/usage?offset=1&size=20', {
 			signal: expect.any(AbortSignal)
 		});
@@ -281,5 +291,28 @@ describe('usage totals', () => {
 
 		expect(usage.totals).toBeNull();
 		expect(usage.totalsStatus).toBe('idle');
+	});
+});
+
+describe('D1 limits', () => {
+	it('reports invalid JSON as an invalid D1 limits response', async () => {
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const fetchMock = mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)]);
+		vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input) === '/api/usage/d1-limits') {
+				return Promise.resolve(new Response('{', { status: 200 }));
+			}
+			return fetchMock(input, init);
+		});
+
+		await usage.load();
+
+		await vi.waitFor(() => expect(usage.d1LimitsStatus).toBe('error'));
+		expect(usage.d1Limits).toBeNull();
+		expect(consoleError).toHaveBeenCalledWith(
+			'D1 limits load failed:',
+			expect.objectContaining({ name: 'UsageLoadError', message: 'D1 limits response invalid' })
+		);
+		consoleError.mockRestore();
 	});
 });
