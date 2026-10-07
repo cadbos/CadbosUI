@@ -338,6 +338,8 @@ before the Change Date. See LICENSE for complete terms.
 		display: inline-flex;
 		align-items: center;
 		gap: 0.5rem;
+		font-size: 0.875rem;
+		font-weight: 650;
 	}
 
 	.panel-title :global(svg) {

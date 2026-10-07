@@ -737,7 +737,7 @@ before the Change Date. See LICENSE for complete terms.
 										title={t('workspace.shareButton')}
 										onclick={() => (shareOpen = true)}
 									>
-										<Share2 size={13} strokeWidth={2} aria-hidden="true" />
+										<Share2 size={18} strokeWidth={1.8} aria-hidden="true" />
 									</button>
 								{/snippet}
 							</WorkspaceTabBar>
@@ -1117,8 +1117,8 @@ before the Change Date. See LICENSE for complete terms.
 		flex: 0 0 auto;
 		align-items: center;
 		justify-content: center;
-		width: 1.25rem;
-		height: 1.25rem;
+		width: 1.75rem;
+		height: 1.75rem;
 		padding: 0;
 		border: none;
 		border-radius: var(--radius-sm);
@@ -1222,9 +1222,17 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: stretch;
 		gap: 2px;
 		padding: 3px;
-		background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface));
-		border: 1px solid color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+		background: transparent;
+		border: 1px solid transparent;
 		border-radius: 10px;
+		transition:
+			background 0.15s,
+			border-color 0.15s;
+	}
+
+	.mode-tabs:hover {
+		background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface));
+		border-color: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
 	}
 
 	.mode-tabs button {
@@ -1238,8 +1246,8 @@ before the Change Date. See LICENSE for complete terms.
 		min-height: 0;
 		padding: 0 0.7rem;
 		font: inherit;
-		font-size: 0.8125rem;
-		font-weight: 600;
+		font-size: 0.875rem;
+		font-weight: 650;
 		line-height: 1;
 		white-space: nowrap;
 		overflow: hidden;
@@ -1268,16 +1276,9 @@ before the Change Date. See LICENSE for complete terms.
 		text-overflow: ellipsis;
 	}
 
-	.mode-tabs button:hover:not(.active) {
-		color: var(--color-accent-text);
-		background: color-mix(in srgb, var(--color-surface) 70%, transparent);
-	}
-
-	.mode-tabs button.active {
-		/* Pairs with --color-background rather than --color-accent-contrast: this
-		   pill is an inverted background/text swap (dark-on-light in light mode,
-		   light-on-dark in dark mode), not an accent fill, so its text needs to
-		   track --color-text's polarity flip rather than stay fixed white. */
+	.mode-tabs button.active,
+	.mode-tabs button:hover,
+	.mode-tabs button:focus-visible {
 		color: var(--color-background);
 		background: var(--color-text);
 		box-shadow: var(--shadow-sm);

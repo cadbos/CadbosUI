@@ -363,7 +363,7 @@ before the Change Date. See LICENSE for complete terms.
 			onclick={() => scrollByPage(-1)}
 			{@attach registerScrollPrev}
 		>
-			<ChevronLeft size={14} strokeWidth={2} aria-hidden="true" />
+			<ChevronLeft size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>
 	{/if}
 	<div
@@ -439,7 +439,7 @@ before the Change Date. See LICENSE for complete terms.
 								aria-label={closeLabel(tabTitle(tab))}
 								onclick={() => close(tab)}
 							>
-								<X size={13} strokeWidth={2} aria-hidden="true" />
+								<X size={18} strokeWidth={1.8} aria-hidden="true" />
 							</button>
 						</div>
 					{/if}
@@ -455,7 +455,7 @@ before the Change Date. See LICENSE for complete terms.
 			onclick={() => scrollByPage(1)}
 			{@attach registerScrollNext}
 		>
-			<ChevronRight size={14} strokeWidth={2} aria-hidden="true" />
+			<ChevronRight size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>
 	{/if}
 </nav>
@@ -515,8 +515,8 @@ before the Change Date. See LICENSE for complete terms.
 		flex: 0 0 auto;
 		align-items: center;
 		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
+		width: 1.75rem;
+		height: 1.75rem;
 		margin-bottom: 0.375rem;
 		padding: 0;
 		border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
@@ -577,8 +577,8 @@ before the Change Date. See LICENSE for complete terms.
 		background: transparent;
 		color: var(--color-muted-strong);
 		font: inherit;
-		font-size: 0.8125rem;
-		font-weight: 600;
+		font-size: 0.875rem;
+		font-weight: 650;
 		white-space: nowrap;
 		text-overflow: ellipsis;
 		cursor: pointer;
@@ -615,8 +615,8 @@ before the Change Date. See LICENSE for complete terms.
 		flex: 0 0 auto;
 		align-items: center;
 		justify-content: center;
-		width: 1.25rem;
-		height: 1.25rem;
+		width: 1.75rem;
+		height: 1.75rem;
 		padding: 0;
 		border: none;
 		border-radius: var(--radius-sm);

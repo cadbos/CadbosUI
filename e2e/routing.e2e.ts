@@ -253,6 +253,34 @@ test('mode tabs stay in the tools header without toggling the panel', async ({ p
 	await expect(toolsPanel.locator('.panel-body')).toBeVisible();
 });
 
+test('edit tool tabs show their names only when the panel is wide enough', async ({ page }) => {
+	await page.goto('/edit?tool=add-object');
+
+	const toolsHeader = page.getByRole('group', { name: ru['toolsPanel.title'] });
+	const toolsPanel = toolsHeader.locator('..');
+	const toolTabs = page.getByRole('tablist', { name: ru['edit.tool.switcher.label'] });
+	const toolLabels = [
+		ru['edit.tool.objects'],
+		ru['mode.objectReplacement'],
+		ru['mode.textureReplacement'],
+		ru['edit.tool.repaint'],
+		ru['edit.tool.lightSettings']
+	];
+	for (const label of toolLabels) {
+		await expect(toolTabs.getByRole('tab', { name: label }).locator('.tool-label')).toBeHidden();
+	}
+
+	const resizeHandle = toolsPanel.getByRole('slider', { name: ru['toolsPanel.resizeHandle'] });
+	await resizeHandle.press('End');
+	for (const label of toolLabels) {
+		await expect(toolTabs.getByRole('tab', { name: label }).locator('.tool-label')).toBeVisible();
+	}
+	await resizeHandle.press('Home');
+	for (const label of toolLabels) {
+		await expect(toolTabs.getByRole('tab', { name: label }).locator('.tool-label')).toBeHidden();
+	}
+});
+
 test('tools panel size button cycles three presets and the resize handle reaches the screen edges', async ({
 	page
 }) => {

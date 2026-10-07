@@ -379,6 +379,59 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
+	function toolTabsLabelWidth(node: HTMLElement): number {
+		const iconsOnly = node.classList.contains('icons-only');
+		if (iconsOnly) node.classList.remove('icons-only');
+		try {
+			const buttons = [...node.querySelectorAll(':scope > button')];
+			let widest = 0;
+			for (const button of buttons) {
+				const style = getComputedStyle(button);
+				const padding =
+					Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+				const gap = Number.parseFloat(style.columnGap);
+				const icon = button.querySelector('svg');
+				const label = button.querySelector('.tool-label');
+				const iconWidth = icon instanceof SVGElement ? icon.getBoundingClientRect().width : 0;
+				const labelWidth = label instanceof HTMLElement ? label.scrollWidth : 0;
+				const buttonWidth =
+					iconWidth +
+					(labelWidth > 0 && Number.isFinite(gap) ? gap : 0) +
+					labelWidth +
+					(Number.isFinite(padding) ? padding : 0);
+				widest = Math.max(widest, buttonWidth);
+			}
+			const style = getComputedStyle(node);
+			const gap = Number.parseFloat(style.columnGap);
+			const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+			return (
+				widest * buttons.length +
+				(Number.isFinite(gap) ? gap : 0) * Math.max(0, buttons.length - 1) +
+				(Number.isFinite(padding) ? padding : 0)
+			);
+		} finally {
+			if (iconsOnly) node.classList.add('icons-only');
+		}
+	}
+
+	function fitToolLabels(node: HTMLElement): () => void {
+		let alive = true;
+		const update = (): void => {
+			if (!alive || node.clientWidth === 0) return;
+			node.classList.toggle('icons-only', node.clientWidth < toolTabsLabelWidth(node));
+		};
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(node);
+		const panel = node.closest('.floating-tools-panel');
+		if (panel) observer.observe(panel);
+		void document.fonts.ready.then(update);
+		return () => {
+			alive = false;
+			observer.disconnect();
+		};
+	}
+
 	async function submit(prompt: string, type: EditOperationType): Promise<void> {
 		const trimmed = prompt.trim();
 		if (!hasEditTarget || !trimmed || formLocked || !isAuthenticated) return;
@@ -421,7 +474,12 @@ before the Change Date. See LICENSE for complete terms.
 	<p class="panel-description">{t('edit.panelDescription')}</p>
 
 	<div class="edit-body">
-		<div class="tool-tabs" role="tablist" aria-label={t('edit.tool.switcher.label')}>
+		<div
+			class="tool-tabs icons-only"
+			role="tablist"
+			aria-label={t('edit.tool.switcher.label')}
+			{@attach fitToolLabels}
+		>
 			{#each RAIL as tool, index (tool.id)}
 				{@const Icon = tool.Icon}
 				{@const selected =
@@ -437,6 +495,7 @@ before the Change Date. See LICENSE for complete terms.
 					aria-controls={`edit-tool-panel-${tool.id}`}
 					tabindex={index === railIndex ? 0 : -1}
 					class:active={selected}
+					aria-label={t(tool.label)}
 					title={t(tool.label)}
 					onclick={() => toolTabs.activate(index)}
 					onkeydown={toolTabs.onKeydown}
@@ -444,7 +503,7 @@ before the Change Date. See LICENSE for complete terms.
 					<span class="tool-icon">
 						<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
 					</span>
-					<span class="visually-hidden">{t(tool.label)}</span>
+					<span class="tool-label">{t(tool.label)}</span>
 				</button>
 			{/each}
 		</div>
@@ -736,11 +795,16 @@ before the Change Date. See LICENSE for complete terms.
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		gap: 0.4rem;
 		flex: 1 1 0;
 		min-width: 0;
-		height: calc(0.5rem * 2 + 0.875rem * 1.25);
-		padding: 0;
+		min-height: calc(0.5rem * 2 + 0.875rem * 1.25);
+		padding: 0.45rem 0.65rem;
 		font: inherit;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		line-height: 1.2;
+		white-space: nowrap;
 		color: var(--color-muted);
 		background: transparent;
 		border: none;
@@ -749,6 +813,25 @@ before the Change Date. See LICENSE for complete terms.
 		transition:
 			background 0.15s,
 			color 0.15s;
+	}
+
+	.tool-label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.tool-tabs:global(.icons-only) button {
+		padding: 0;
+		gap: 0;
+	}
+
+	.tool-tabs:global(.icons-only) .tool-label {
+		display: none;
+	}
+
+	.tool-tabs:not(:global(.icons-only)) + .tool-heading {
+		display: none;
 	}
 
 	.tool-tabs button:hover:not(.active) {
