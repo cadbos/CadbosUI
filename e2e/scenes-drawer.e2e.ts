@@ -227,12 +227,13 @@ test('asks for confirmation before restoring over unsaved form changes', async (
 	await waitForClientReady(page);
 	// Gives the form something to lose: an uploaded image with no matching
 	// confirmed generation behind it yet.
-	await page.setInputFiles('input[type="file"]', {
+	const renderPanel = page.locator('#mode-panel-render');
+	await renderPanel.locator('input[type="file"]').setInputFiles({
 		name: 'room.jpg',
 		mimeType: 'image/jpeg',
 		buffer: Buffer.from('fake-image-bytes')
 	});
-	await expect(page.locator('.image-wrapper img').first()).toBeVisible();
+	await expect(renderPanel.locator('.image-wrapper img')).toBeVisible();
 
 	await page.getByRole('button', { name: 'Сцены' }).click();
 	await page.locator('.image-frame.result-frame').hover();

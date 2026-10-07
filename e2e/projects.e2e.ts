@@ -162,6 +162,7 @@ test('creates a project from the list page and navigates into it', async ({ page
 	});
 
 	await page.goto('/projects');
+	await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
 	await page.getByLabel('Название нового проекта').fill('New living room');
 	await page.getByRole('button', { name: 'Создать проект' }).click();
 
