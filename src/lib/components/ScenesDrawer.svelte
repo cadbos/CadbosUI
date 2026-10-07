@@ -1508,6 +1508,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.actions {
 		position: absolute;
+		z-index: 1;
 		top: 0.5rem;
 		right: 0.5rem;
 		display: flex;
