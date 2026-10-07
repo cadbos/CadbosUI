@@ -79,7 +79,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	<GenerateButton
 		label={t('edit.addObject.apply')}
-		disabled={disabled || finalPrompt === ''}
+		disabled={disabled || finalPrompt === '' || auth.status !== 'authenticated'}
 		busy={applying}
 		onclick={submit}
 	/>

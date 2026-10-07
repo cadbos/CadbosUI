@@ -55,7 +55,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	<GenerateButton
 		label={t('edit.removeObject.apply')}
-		disabled={disabled || !request.removeObjectText.trim()}
+		disabled={disabled || !request.removeObjectText.trim() || auth.status !== 'authenticated'}
 		busy={applying}
 		onclick={submit}
 	/>
