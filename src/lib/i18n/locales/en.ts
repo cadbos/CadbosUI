@@ -830,6 +830,7 @@ export const en = {
 	'edit.addObject.selectHint': 'Choose a template or describe what to add to the image.',
 	'edit.addObject.customLabel': 'What to add',
 	'edit.addObject.customPlaceholder': 'e.g. a grey armchair by the window',
+	'edit.addObject.previewLabel': 'Instruction to send',
 	'edit.addObject.userPromptTemplate':
 		'Make an additive local edit only: add the following to the image: {object}. Place it only in an already empty visible floor, wall, ceiling, or surface area; do not create space for it, and reduce its size if available space is limited. Match its style to the interior and accurately match the scale, perspective, lighting, shadows, and contact with the supporting surface. Do not cover windows, doors, switches, sockets, mouldings, or existing decor. Do not remove, replace, move, resize, or redraw anything already present. Every image area except the added object and its natural shadow or light must remain visually identical to the source image.',
 	'edit.addObject.ledStrip.label': 'LED strip',

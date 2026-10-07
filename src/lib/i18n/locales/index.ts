@@ -779,6 +779,7 @@ export interface Dictionary {
 	'edit.addObject.selectHint': string;
 	'edit.addObject.customLabel': string;
 	'edit.addObject.customPlaceholder': string;
+	'edit.addObject.previewLabel': string;
 	'edit.addObject.userPromptTemplate': string;
 	'edit.addObject.ledStrip.label': string;
 	'edit.addObject.ledStrip.phrase': string;

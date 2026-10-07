@@ -1315,6 +1315,11 @@ test('the Add Object tool replaces the prompt with a clicked template and wraps 
 	await plantTemplate.click();
 	await expect(promptField).toHaveValue(ru['edit.addObject.houseplant.phrase']);
 	await promptField.fill(customPrompt);
+	const preview = page.locator('#mode-panel-edit .preview');
+	await expect(preview).toContainText(customPrompt);
+	await expect(preview).not.toContainText(
+		ru['edit.addObject.userPromptTemplate'].split('{object}')[0].trim()
+	);
 	await expect(applyButton).toBeEnabled();
 	await applyButton.click();
 
