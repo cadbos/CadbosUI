@@ -24,7 +24,8 @@ const CLOCK_PAUSE_BUFFER_MS = 500;
 function snapshot(
 	status: HealthSnapshot['status'],
 	timestamp: string,
-	s3Status: HealthSnapshot['status'] = status
+	s3Status: HealthSnapshot['status'] = status,
+	d1Status: HealthSnapshot['status'] = 'healthy'
 ): HealthSnapshot {
 	return {
 		status,
@@ -33,7 +34,7 @@ function snapshot(
 			archai: { status: 'healthy', latencyMs: 12 },
 			assets: { status: 'healthy', latencyMs: 13 },
 			comfyui: { status: 'healthy', latencyMs: 14 },
-			d1: { status: 'healthy', latencyMs: 15 },
+			d1: { status: d1Status, latencyMs: 15 },
 			nostr: { status: 'healthy', latencyMs: 16, reachable: 3, total: 4 },
 			s3: { status: s3Status, latencyMs: 17 }
 		}
@@ -93,6 +94,17 @@ test('does not show the global warning for healthy, failed, or invalid health ch
 		await healthResponse;
 		await expect(page.getByRole('link', { name: 'странице состояния' })).toHaveCount(0);
 	}
+});
+
+test('presents a D1 quota failure as generic unhealthy status', async ({ page }) => {
+	const body = snapshot('unhealthy', FIRST_TIMESTAMP, 'healthy', 'unhealthy');
+	await mockHealth(page, { status: 503, body });
+
+	await page.goto('/status');
+
+	await expect(page.getByRole('row', { name: /База данных D1.*Не работает — —/s })).toBeVisible();
+	await expect(page.getByText(/лимит/i)).toHaveCount(0);
+	await expect(page.getByText(/строк/i)).toHaveCount(0);
 });
 
 test('checks health once across client-side navigation', async ({ page }) => {

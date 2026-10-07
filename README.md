@@ -86,6 +86,12 @@ environment variables. Their authoritative definitions are in
   through 604800
 - `ARCHAI_API_URL` and the `ARCHAI_API_KEY` secret — archAI server integration
 - `COMFYUI_BASE_URL` — private VPC service binding for ComfyUI
+- `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GRAPHQL_URL`, and the
+  `CLOUDFLARE_ANALYTICS_API_TOKEN` secret — account-wide D1 usage metrics for health checks;
+  `CLOUDFLARE_GRAPHQL_URL` defaults to `https://api.cloudflare.com/client/v4/graphql`;
+  restrict the token to Account Analytics Read
+- `D1_DAILY_ROWS_READ_LIMIT` and `D1_DAILY_ROWS_WRITTEN_LIMIT` — the active account's
+  daily D1 row limits; both default to the Workers Free values `5000000` and `100000`
 - `METERED_DESIGNER_PUBKEYS`, and `PUBKEY_VIEWER` — access and usage display controls
 - `OBJECT_REPLACEMENT_COST`, `TEXTURE_REPLACEMENT_COST`, `LIGHT_SETTINGS_COST`,
   `FLUX_KONTEXT_EDIT_COST`, `REPAINT_COST`, and `HEALTH_CACHE_TTL_SECONDS` — optional
