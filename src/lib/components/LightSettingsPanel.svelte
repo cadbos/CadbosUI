@@ -23,6 +23,7 @@ before the Change Date. See LICENSE for complete terms.
 		type LightSettingsCompletedResponse,
 		type LightSettingsJobResponse
 	} from '$lib/api/contract';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import ModeHint from '$lib/components/ModeHint.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { LIGHT_SETTINGS_FIXTURES, lightSettingsPresetsFor } from '$lib/light-settings-presets';
@@ -475,18 +476,12 @@ before the Change Date. See LICENSE for complete terms.
 		<p class="validation-hint">{t(validationKey)}</p>
 	{/if}
 
-	<button type="button" class="btn-apply" disabled={!canSubmit} onclick={() => void submit()}>
-		{#if submitting}
-			<span class="spinner" aria-hidden="true"></span>
-			{t('lightSettings.submitting')}
-		{:else if isPolling}
-			{t('lightSettings.processing')}
-		{:else if terminalJob?.id === jobId}
-			{t('lightSettings.completed')}
-		{:else}
-			{t('lightSettings.apply')}
-		{/if}
-	</button>
+	<GenerateButton
+		label={t('lightSettings.apply')}
+		disabled={!canSubmit}
+		busy={submitting || isPolling}
+		onclick={() => void submit()}
+	/>
 
 	<div class="job-live" role="status" aria-live="polite" aria-atomic="true">
 		{#if isPolling}
@@ -715,32 +710,6 @@ before the Change Date. See LICENSE for complete terms.
 		margin: 0;
 		font-size: 0.875rem;
 		color: var(--color-muted);
-	}
-
-	.btn-apply {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		align-self: flex-start;
-		padding: 0.6rem 1.25rem;
-		font: inherit;
-		font-size: 0.9375rem;
-		font-weight: 600;
-		color: var(--color-accent-contrast);
-		background: var(--color-accent);
-		border: none;
-		border-radius: 10px;
-		cursor: pointer;
-		transition: background 0.15s;
-	}
-
-	.btn-apply:hover:not(:disabled) {
-		background: var(--color-accent-hover);
-	}
-
-	.btn-apply:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
 	}
 
 	.job-live:empty {

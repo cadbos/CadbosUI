@@ -152,7 +152,6 @@ export interface Dictionary {
 	'render.sceneType.interior': string;
 	'render.sceneType.exterior': string;
 	'render.generate': string;
-	'render.generating': string;
 	'render.optional': string;
 	'render.signInToGenerate': string;
 	'render.outputFormat': string;
@@ -511,7 +510,6 @@ export interface Dictionary {
 	'styleTransfer.negativePromptPlaceholder': string;
 	'styleTransfer.signInToApply': string;
 	'styleTransfer.apply': string;
-	'styleTransfer.applying': string;
 	'styleTransfer.failed': string;
 	'styleTransfer.insufficientCredit': string;
 	'styleTransfer.generationRestricted': string;
@@ -538,7 +536,6 @@ export interface Dictionary {
 	'objectReplacement.validationObject': string;
 	'objectReplacement.signInToApply': string;
 	'objectReplacement.apply': string;
-	'objectReplacement.submitting': string;
 	'objectReplacement.processing': string;
 	'objectReplacement.completed': string;
 	'objectReplacement.newReplacement': string;
@@ -591,7 +588,6 @@ export interface Dictionary {
 	'textureReplacement.validationSurface': string;
 	'textureReplacement.signInToApply': string;
 	'textureReplacement.apply': string;
-	'textureReplacement.submitting': string;
 	'textureReplacement.processing': string;
 	'textureReplacement.completed': string;
 	'textureReplacement.newReplacement': string;
@@ -754,7 +750,6 @@ export interface Dictionary {
 	'edit.templateColorFill': string;
 	'edit.instruction': string;
 	'edit.apply': string;
-	'edit.submitting': string;
 	'edit.processing': string;
 	'edit.tryAgain': string;
 	'edit.retryStatus': string;
@@ -775,7 +770,6 @@ export interface Dictionary {
 	'edit.tool.lightSettings': string;
 	'edit.tool.repaint': string;
 	'edit.addObject.apply': string;
-	'edit.addObject.applying': string;
 	'edit.addObject.selectHint': string;
 	'edit.addObject.customLabel': string;
 	'edit.addObject.customPlaceholder': string;
@@ -803,7 +797,6 @@ export interface Dictionary {
 	'edit.removeObject.placeholder': string;
 	'edit.removeObject.hint': string;
 	'edit.removeObject.apply': string;
-	'edit.removeObject.applying': string;
 	'edit.removeObject.promptTemplate': string;
 	'lightSettings.moodSectionLabel': string;
 	'lightSettings.fixtureSectionLabel': string;
@@ -823,7 +816,6 @@ export interface Dictionary {
 	'lightSettings.validationInstruction': string;
 	'lightSettings.signInToApply': string;
 	'lightSettings.apply': string;
-	'lightSettings.submitting': string;
 	'lightSettings.processing': string;
 	'lightSettings.completed': string;
 	'lightSettings.newRequest': string;
@@ -914,7 +906,6 @@ export interface Dictionary {
 	'repaint.validationTarget': string;
 	'repaint.signInToApply': string;
 	'repaint.apply': string;
-	'repaint.submitting': string;
 	'repaint.processing': string;
 	'repaint.completed': string;
 	'repaint.newRequest': string;

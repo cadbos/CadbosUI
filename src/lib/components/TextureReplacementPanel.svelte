@@ -24,6 +24,7 @@ before the Change Date. See LICENSE for complete terms.
 		type TextureReplacementCompletedResponse,
 		type TextureReplacementJobResponse
 	} from '$lib/api/contract';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import ModeHint from '$lib/components/ModeHint.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -518,18 +519,12 @@ before the Change Date. See LICENSE for complete terms.
 		{/if}
 	</div>
 
-	<button type="button" class="generate-btn" disabled={!canSubmit} onclick={() => void submit()}>
-		{#if submitting}
-			<span class="spinner" aria-hidden="true"></span>
-			{t('textureReplacement.submitting')}
-		{:else if isPolling}
-			{t('textureReplacement.processing')}
-		{:else if completedJobMatches}
-			{t('textureReplacement.completed')}
-		{:else}
-			{t('textureReplacement.apply')}
-		{/if}
-	</button>
+	<GenerateButton
+		label={t('textureReplacement.apply')}
+		disabled={!canSubmit}
+		busy={submitting || isPolling}
+		onclick={() => void submit()}
+	/>
 
 	<div class="job-live" role="status" aria-live="polite" aria-atomic="true">
 		{#if isPolling}
