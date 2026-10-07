@@ -13,7 +13,16 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { FolderKanban, GalleryHorizontalEnd, Images, Layers, Share2 } from '@lucide/svelte';
+	import {
+		FolderKanban,
+		GalleryHorizontalEnd,
+		Images,
+		Layers,
+		Paintbrush,
+		Pencil,
+		Share2,
+		Sparkles
+	} from '@lucide/svelte';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { PathnameWithSearchOrHash } from '$app/types';
@@ -70,11 +79,11 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
-	const modes: { id: Mode; label: TranslationKey }[] = [
-		{ id: 'render', label: 'mode.render' },
-		{ id: 'edit', label: 'mode.edit' },
-		{ id: 'styleTransfer', label: 'mode.styleTransfer' }
-	];
+	const modes = [
+		{ id: 'render', label: 'mode.render', icon: Sparkles },
+		{ id: 'edit', label: 'mode.edit', icon: Pencil },
+		{ id: 'styleTransfer', label: 'mode.styleTransfer', icon: Paintbrush }
+	] satisfies { id: Mode; label: TranslationKey; icon: typeof Sparkles }[];
 
 	const sceneTypes: { id: SceneType; label: TranslationKey }[] = [
 		{ id: 'interior', label: 'render.sceneType.interior' },
@@ -83,7 +92,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	let submitting = $state(false);
 	let submitError = $state<string | null>(null);
-	let modeTabs = $state<HTMLElement[]>([]);
+	let modeTabs = $state<(HTMLElement | null)[]>([]);
 	let sceneTypeTabs = $state<HTMLElement[]>([]);
 	let scenesOpen = $state(false);
 	let scenesTrigger: HTMLButtonElement | null = null;
@@ -589,6 +598,35 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
+{#snippet modeSwitcher()}
+	<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
+		{#each modes as modeOption, index (modeOption.id)}
+			<button
+				{@attach (node) => {
+					modeTabs[index] = node as HTMLElement;
+					return () => {
+						if (modeTabs[index] === node) modeTabs[index] = null;
+					};
+				}}
+				type="button"
+				role="tab"
+				id={`mode-tab-${modeOption.id}`}
+				aria-selected={mode === modeOption.id}
+				aria-controls={`mode-panel-${modeOption.id}`}
+				aria-label={t(modeOption.label)}
+				title={t(modeOption.label)}
+				tabindex={mode === modeOption.id ? 0 : -1}
+				class:active={mode === modeOption.id}
+				onclick={() => modeTabController.activate(index)}
+				onkeydown={modeTabController.onKeydown}
+			>
+				<modeOption.icon size={15} strokeWidth={1.8} aria-hidden="true" />
+				<span class="mode-label">{t(modeOption.label)}</span>
+			</button>
+		{/each}
+	</div>
+{/snippet}
+
 <main class="page">
 	<div class="workspace-shell">
 		<div
@@ -648,31 +686,8 @@ before the Change Date. See LICENSE for complete terms.
 					</div>
 				{/if}
 
-				<div class="workspace-row">
-					<nav class="mode-nav" aria-label={t('mode.switcher.label')}>
-						<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
-							{#each modes as modeOption, index (modeOption.id)}
-								<button
-									{@attach (node) => {
-										modeTabs[index] = node as HTMLElement;
-									}}
-									type="button"
-									role="tab"
-									id={`mode-tab-${modeOption.id}`}
-									aria-selected={mode === modeOption.id}
-									aria-controls={`mode-panel-${modeOption.id}`}
-									tabindex={mode === modeOption.id ? 0 : -1}
-									class:active={mode === modeOption.id}
-									onclick={() => modeTabController.activate(index)}
-									onkeydown={modeTabController.onKeydown}
-								>
-									<span>{t(modeOption.label)}</span>
-								</button>
-							{/each}
-						</div>
-					</nav>
-
-					{#if isAuthenticated && showSessionTabs}
+				{#if isAuthenticated && showSessionTabs}
+					<div class="workspace-row">
 						<a
 							class="resources-button"
 							href={resolve('/projects/[id]', { id: workspaceTabs.activeTabId })}
@@ -681,8 +696,8 @@ before the Change Date. See LICENSE for complete terms.
 							<span>{t('workspace.sessionsButton')}</span>
 						</a>
 						<SessionTabBar />
-					{/if}
-				</div>
+					</div>
+				{/if}
 			</div>
 
 			{#if urlTargetStatus === 'loading'}
@@ -736,7 +751,7 @@ before the Change Date. See LICENSE for complete terms.
 					{/if}
 				</div>
 
-				<FloatingToolsPanel>
+				<FloatingToolsPanel active={mode === 'render'} header={modeSwitcher}>
 					<div class="step-card">
 						<div class="panel-section">
 							<h2 class="panel-heading">{t('render.sceneType.label')}</h2>
@@ -857,7 +872,7 @@ before the Change Date. See LICENSE for complete terms.
 					{/if}
 				</div>
 
-				<FloatingToolsPanel>
+				<FloatingToolsPanel active={mode === 'edit'} header={modeSwitcher}>
 					<svelte:boundary
 						onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
 					>
@@ -901,7 +916,7 @@ before the Change Date. See LICENSE for complete terms.
 					{/if}
 				</div>
 
-				<FloatingToolsPanel>
+				<FloatingToolsPanel active={mode === 'styleTransfer'} header={modeSwitcher}>
 					<svelte:boundary
 						onerror={(error: unknown) => logBoundaryError('workspace.styleTransfer', error)}
 					>
@@ -978,22 +993,6 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 0.75rem;
 	}
 
-	/* Wide enough that "Миграция стиля" (the longest tab label) always fits on
-	   one line — narrower than this, only that tab wrapped to two lines while
-	   its siblings stayed single-line, making the row look uneven. No longer
-	   tied to the removed panel-col's width now that the tools panel floats.
-	   Leads its row now (Create/Edit/Style-transfer, then the Sessions button
-	   and its tab strip) rather than being pushed right, so no margin-left:
-	   auto here — see .scenes-button for that trick's other use. */
-	.mode-nav {
-		flex: 0 0 440px;
-		max-width: 100%;
-		padding: 0.25rem;
-		background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface));
-		border: 1px solid color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
-		border-radius: 14px;
-	}
-
 	.scenes-button {
 		flex: 0 0 auto;
 		display: inline-flex;
@@ -1067,8 +1066,17 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.mode-tabs {
+		flex: 1 1 auto;
+		min-width: 0;
+		height: 2rem;
+		box-sizing: border-box;
 		display: flex;
-		gap: 0.375rem;
+		align-items: stretch;
+		gap: 2px;
+		padding: 3px;
+		background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface));
+		border: 1px solid color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+		border-radius: 10px;
 	}
 
 	.mode-tabs button {
@@ -1076,13 +1084,15 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		justify-content: center;
 		gap: 0.4rem;
-		flex: 1;
+		flex: 1 1 0;
 		min-width: 0;
-		padding: 0.45rem 0.75rem;
+		height: auto;
+		min-height: 0;
+		padding: 0 0.7rem;
 		font: inherit;
 		font-size: 0.8125rem;
 		font-weight: 600;
-		line-height: 1.2;
+		line-height: 1;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -1090,12 +1100,18 @@ before the Change Date. See LICENSE for complete terms.
 		color: color-mix(in srgb, var(--color-accent) 55%, var(--color-text));
 		background: transparent;
 		border: none;
-		border-radius: 10px;
+		border-radius: 8px;
 		cursor: pointer;
 		transition:
 			background 0.15s,
 			color 0.15s,
 			box-shadow 0.15s;
+	}
+
+	.mode-tabs button :global(svg) {
+		flex: 0 0 auto;
+		width: 15px;
+		height: 15px;
 	}
 
 	.mode-tabs button:hover:not(.active) {
@@ -1117,12 +1133,16 @@ before the Change Date. See LICENSE for complete terms.
 		outline-color: var(--color-text);
 	}
 
-	/* One shared container for all three modes — its *content* switches on
-	   `mode`, so the canvas footprint is identical everywhere instead of each
-	   mode having its own independently-sized layout. The mode's tools live in
-	   a FloatingToolsPanel sibling (fixed-position on desktop, a normal-flow
-	   block here on narrow screens — see its own component for the
-	   breakpoint), so canvas-col is this container's only flex-sized child. */
+	@container tools-panel (max-width: 520px) {
+		.mode-tabs button {
+			padding-inline: 0;
+		}
+
+		.mode-label {
+			display: none;
+		}
+	}
+
 	.canvas-layout {
 		width: 100%;
 		display: flex;
@@ -1231,13 +1251,6 @@ before the Change Date. See LICENSE for complete terms.
 			   FloatingToolsPanel) shrink to their content width instead of
 			   filling the screen. */
 			align-items: stretch;
-		}
-
-		.mode-nav {
-			flex-basis: auto;
-			flex-shrink: 1;
-			min-width: 0;
-			width: 100%;
 		}
 	}
 
