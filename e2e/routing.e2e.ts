@@ -366,7 +366,7 @@ test('switching edit tool tabs updates only the tool query param', async ({ page
 	await page.getByRole('tab', { name: /Удаление объекта/ }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=remove-object$/);
 
-	await page.getByRole('tab', { name: /Свет/ }).click();
+	await page.getByRole('tab', { name: 'Управление освещением' }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=light-settings$/);
 
 	await page.getByRole('tab', { name: 'Замена объекта' }).click();
@@ -375,7 +375,7 @@ test('switching edit tool tabs updates only the tool query param', async ({ page
 	await page.getByRole('tab', { name: 'Замена текстуры' }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=texture-replacement$/);
 
-	await page.getByRole('tab', { name: 'Перекраска' }).click();
+	await page.getByRole('tab', { name: 'Замена цвета' }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=repaint&color=f4f1ea$/);
 });
 

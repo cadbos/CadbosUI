@@ -199,14 +199,14 @@ export const ru = {
 	'generatedImages.delete': 'Удалить сцену {order}',
 	'generatedImages.useSource': 'Обработать исходник сцены {order}',
 	'generatedImages.useResult': 'Обработать результат сцены {order}',
-	'generatedImages.kind.render': 'Генерация',
-	'generatedImages.kind.edit': 'Редактирование',
+	'generatedImages.kind.render': 'Создание',
+	'generatedImages.kind.edit': 'Объекты',
 	'generatedImages.kind.styleTransfer': 'Миграция стиля',
 	'generatedImages.kind.upscale': 'Улучшение 4K',
 	'generatedImages.kind.objectReplacement': 'Замена объекта',
 	'generatedImages.kind.textureReplacement': 'Замена текстуры',
-	'generatedImages.kind.lightSettings': 'Настройки света',
-	'generatedImages.kind.repaint': 'Перекраска',
+	'generatedImages.kind.lightSettings': 'Управление освещением',
+	'generatedImages.kind.repaint': 'Замена цвета',
 	'generatedImages.sourceImageAlt': 'Исходное изображение сцены {order}',
 	'generatedImages.resultImageAlt': 'Результат сцены {order}',
 	'generatedImages.createdAt': 'Сцена создана {date} в {time}',
@@ -379,11 +379,11 @@ export const ru = {
 	'status.service.d1': 'База данных D1',
 	'status.service.nostr': 'Ретрансляторы Nostr',
 	'status.service.s3': 'Хранилище S3',
-	'status.hint.archai': 'Обеспечивает «Создание» (генерацию), «Миграцию стиля» и «Улучшить до 4K».',
+	'status.hint.archai': 'Обеспечивает «Создание», «Миграцию стиля» и «Улучшение 4K».',
 	'status.hint.assets':
 		'Отдаёт статические файлы самого приложения (JS, CSS, изображения интерфейса). Не связано с хранилищем S3 для загруженных пользователями изображений.',
 	'status.hint.comfyui':
-		'Обеспечивает все инструменты редактирования: «Замену объекта», «Замену текстуры», «Редактирование» (свой промпт), «Свет» и «Перекраску».',
+		'Обеспечивает «Объекты», «Замену объекта», «Замену текстуры», «Замену цвета» и «Управление освещением».',
 	'status.hint.d1':
 		'Хранит аккаунты, историю расходов, баланс и «Сцены» (историю ваших генераций).',
 	'status.hint.nostr':
@@ -828,8 +828,8 @@ export const ru = {
 	'edit.tool.addObject.tab': 'Добавление объекта',
 	'edit.tool.removeObject': 'Удалить объект',
 	'edit.tool.removeObject.tab': 'Удаление объекта',
-	'edit.tool.lightSettings': 'Свет',
-	'edit.tool.repaint': 'Перекраска',
+	'edit.tool.lightSettings': 'Управление освещением',
+	'edit.tool.repaint': 'Замена цвета',
 	'edit.addObject.apply': 'Добавить объект',
 	'edit.addObject.selectHint': 'Выберите шаблон или опишите, что добавить на изображение.',
 	'edit.addObject.customLabel': 'Что добавить',
@@ -886,13 +886,13 @@ export const ru = {
 	'lightSettings.apply': 'Применить',
 	'lightSettings.processing': 'Настраиваем освещение. Это может занять несколько минут…',
 	'lightSettings.completed': 'Освещение обновлено.',
-	'lightSettings.newRequest': 'Новые настройки света',
+	'lightSettings.newRequest': 'Новое управление освещением',
 	'lightSettings.tryAgain': 'Попробовать снова',
 	'lightSettings.retryStatus': 'Повторить проверку статуса',
 	'lightSettings.failed': 'Не удалось изменить освещение. Попробуйте ещё раз.',
 	'lightSettings.pollFailed': 'Не удалось проверить статус задачи. Попробуйте ещё раз.',
 	'lightSettings.timedOut': 'Время ожидания истекло. Попробуйте ещё раз.',
-	'lightSettings.notFound': 'Не удалось найти эту задачу настройки света.',
+	'lightSettings.notFound': 'Не удалось найти эту задачу управления освещением.',
 	'lightSettings.rateLimited': 'Слишком много запросов. Подождите и повторите.',
 	'lightSettings.insufficientCredit': 'Тестовый баланс исчерпан.',
 	'lightSettings.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
@@ -979,18 +979,18 @@ export const ru = {
 	'repaint.apply': 'Перекрасить',
 	'repaint.processing': 'Перекрашиваем. Это занимает около 5 минут…',
 	'repaint.completed': 'Готово — цвет изменён.',
-	'repaint.newRequest': 'Новая перекраска',
+	'repaint.newRequest': 'Новая замена цвета',
 	'repaint.tryAgain': 'Попробовать снова',
 	'repaint.retryStatus': 'Повторить проверку статуса',
 	'repaint.failed': 'Не удалось перекрасить. Попробуйте ещё раз.',
 	'repaint.pollFailed': 'Не удалось проверить статус задачи. Попробуйте ещё раз.',
 	'repaint.timedOut': 'Время ожидания истекло. Попробуйте ещё раз.',
-	'repaint.notFound': 'Не удалось найти эту задачу перекраски.',
+	'repaint.notFound': 'Не удалось найти эту задачу замены цвета.',
 	'repaint.targetNotFound':
 		'Не удалось найти этот объект на фото. Назовите его иначе или выделите его область на фото.',
 	'repaint.region.label': 'Область',
 	'repaint.region.hint':
-		'Необязательно. Выделите область на фото, чтобы перекраска затронула только её. Это помогает, когда под название подходит несколько предметов.',
+		'Необязательно. Выделите область на фото, чтобы замена цвета затронула только её. Это помогает, когда под название подходит несколько предметов.',
 	'repaint.region.select': 'Выделить область',
 	'repaint.region.clear': 'Снять выделение',
 	'repaint.region.boxLabel':
@@ -1010,7 +1010,7 @@ export const ru = {
 	'modeHint.format.objectReplacement':
 		'{words} писать не нужно — опишите только предмет, который уже есть на фото, например «серый диван у окна». Новый предмет задаётся референсом.',
 	'modeHint.format.textureReplacement':
-		'{words} писать не нужно — назовите только поверхность, например «обивка дивана». Новая текстура задаётся референсом, а перекрасить в выбранный цвет можно в «Перекраске».',
+		'{words} писать не нужно — назовите только поверхность, например «обивка дивана». Новая текстура задаётся референсом, а перекрасить в выбранный цвет можно в «Замене цвета».',
 	'modeHint.format.repaint':
 		'{words} писать не нужно — назовите только то, что нужно перекрасить, например «стены за диваном». Цвет выбирается в палитре ниже.'
 } as const satisfies Dictionary;

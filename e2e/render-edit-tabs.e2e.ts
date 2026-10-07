@@ -1638,7 +1638,7 @@ test('the Light settings tool composes an instruction from selected presets and 
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	await page.getByRole('tab', { name: 'Свет' }).click();
+	await page.getByRole('tab', { name: 'Управление освещением' }).click();
 	const panel = page.locator('#edit-tool-panel-light-settings');
 	await panel.getByRole('button', { name: 'Золотой час' }).click();
 	await panel
@@ -1699,7 +1699,7 @@ test('the Repaint tool sends the target and a palette or custom color, and shows
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	await page.getByRole('tab', { name: 'Перекраска' }).click();
+	await page.getByRole('tab', { name: 'Замена цвета' }).click();
 	const panel = page.locator('#edit-tool-panel-repaint');
 	const apply = panel.getByRole('button', { name: 'Перекрасить' });
 	await expect(panel.getByText('Напишите, что нужно перекрасить.')).toBeVisible();
