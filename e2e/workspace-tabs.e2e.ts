@@ -229,6 +229,19 @@ test('closing a tab removes it and falls back to a neighboring project', async (
 	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
 
 	const tabs = page.getByRole('navigation', { name: 'Открытые проекты' });
+	await expect(tabs.getByRole('button', { name: 'Закрыть вкладку «Kitchen»' })).toBeVisible();
+	await expect(tabs.getByRole('button', { name: 'Закрыть вкладку «Living room»' })).toHaveCount(0);
+	const share = tabs.getByRole('button', { name: 'Поделиться', exact: true });
+	await expect(share).toBeVisible();
+	await expect(share).toHaveText('');
+	await expect(page.getByRole('button', { name: 'Поделиться', exact: true })).toHaveCount(1);
+
+	await tabs.getByRole('tab', { name: 'Living room' }).click();
+	await expect(tabs.getByRole('button', { name: 'Закрыть вкладку «Living room»' })).toBeVisible();
+	await expect(tabs.getByRole('button', { name: 'Закрыть вкладку «Kitchen»' })).toHaveCount(0);
+	await expect(tabs.getByRole('button', { name: 'Поделиться', exact: true })).toBeVisible();
+
+	await tabs.getByRole('tab', { name: 'Kitchen' }).click();
 	await tabs.getByRole('button', { name: 'Закрыть вкладку «Kitchen»' }).click();
 
 	await expect(tabs.getByRole('tab', { name: 'Kitchen' })).toHaveCount(0);

@@ -160,10 +160,6 @@ before the Change Date. See LICENSE for complete terms.
 	const showSessionTabs = $derived(
 		workspaceTabs.activeTabId !== SCRATCH_TAB_ID && workspaceTabs.activeSessionTabs.length > 0
 	);
-	// Whether the active tab is a real project (not the scratch tab) — gates
-	// project-level actions like Share, which don't depend on a session
-	// existing yet, unlike showSessionTabs.
-	const hasActiveProject = $derived(workspaceTabs.activeTabId !== SCRATCH_TAB_ID);
 	// Only reserves canvas space while the floating tools panel is both open
 	// and still sitting at its untouched default corner — the moment the user
 	// drags it elsewhere or collapses it, the canvas reclaims the full width
@@ -725,24 +721,26 @@ before the Change Date. See LICENSE for complete terms.
 							<span>{t('projects.navLabel')}</span>
 						</a>
 						{#if showWorkspaceTabs}
-							<WorkspaceTabBar />
-						{/if}
-						{#if hasActiveProject}
-							<button
-								{@attach (node) => {
-									shareTrigger = node as HTMLButtonElement;
-									return () => {
-										shareTrigger = null;
-									};
-								}}
-								type="button"
-								class="resources-button"
-								aria-expanded={shareOpen}
-								onclick={() => (shareOpen = true)}
-							>
-								<Share2 size={18} strokeWidth={1.8} aria-hidden="true" />
-								<span>{t('workspace.shareButton')}</span>
-							</button>
+							<WorkspaceTabBar>
+								{#snippet activeActions()}
+									<button
+										{@attach (node) => {
+											shareTrigger = node as HTMLButtonElement;
+											return () => {
+												shareTrigger = null;
+											};
+										}}
+										type="button"
+										class="tab-share"
+										aria-expanded={shareOpen}
+										aria-label={t('workspace.shareButton')}
+										title={t('workspace.shareButton')}
+										onclick={() => (shareOpen = true)}
+									>
+										<Share2 size={13} strokeWidth={2} aria-hidden="true" />
+									</button>
+								{/snippet}
+							</WorkspaceTabBar>
 						{/if}
 						<button
 							{@attach (node) => {
@@ -1112,6 +1110,35 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		align-items: stretch;
 		gap: 0.75rem;
+	}
+
+	.tab-share {
+		display: flex;
+		flex: 0 0 auto;
+		align-items: center;
+		justify-content: center;
+		width: 1.25rem;
+		height: 1.25rem;
+		padding: 0;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--color-muted);
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			color 0.15s;
+	}
+
+	.tab-share:hover {
+		background: var(--color-surface-hover);
+		color: var(--color-text);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.tab-share {
+			transition: none;
+		}
 	}
 
 	.scenes-button {

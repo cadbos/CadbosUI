@@ -14,6 +14,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { ChevronLeft, ChevronRight, X } from '@lucide/svelte';
+	import type { Snippet } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { createTabController } from '$lib/utils';
 
@@ -35,6 +36,7 @@ before the Change Date. See LICENSE for complete terms.
 		onActivate: (id: string) => void;
 		onClose: (id: string) => void;
 		onRename: (id: string, title: string) => Promise<void>;
+		activeActions?: Snippet;
 	}
 
 	let {
@@ -49,7 +51,8 @@ before the Change Date. See LICENSE for complete terms.
 		renameFailedLabel,
 		onActivate,
 		onClose,
-		onRename
+		onRename,
+		activeActions
 	}: Props = $props();
 
 	// Keyed by tab id rather than each-block index: a tab closing shifts
@@ -342,7 +345,7 @@ before the Change Date. See LICENSE for complete terms.
 			startRename(tab);
 			return;
 		}
-		if (event.key === 'Delete' || event.key === 'Backspace') {
+		if ((event.key === 'Delete' || event.key === 'Backspace') && tab.id === activeId) {
 			event.preventDefault();
 			close(tab);
 			return;
@@ -424,15 +427,22 @@ before the Change Date. See LICENSE for complete terms.
 							{tabTitle(tab)}
 						</button>
 					{/if}
-					<button
-						type="button"
-						class="tab-close"
-						tabindex={tab.id === focusableId ? 0 : -1}
-						aria-label={closeLabel(tabTitle(tab))}
-						onclick={() => close(tab)}
-					>
-						<X size={13} strokeWidth={2} aria-hidden="true" />
-					</button>
+					{#if active}
+						<div class="tab-actions">
+							{#if activeActions}
+								{@render activeActions()}
+							{/if}
+							<button
+								type="button"
+								class="tab-close"
+								tabindex={tab.id === focusableId ? 0 : -1}
+								aria-label={closeLabel(tabTitle(tab))}
+								onclick={() => close(tab)}
+							>
+								<X size={13} strokeWidth={2} aria-hidden="true" />
+							</button>
+						</div>
+					{/if}
 				</div>
 			{/each}
 		</div>
@@ -544,8 +554,19 @@ before the Change Date. See LICENSE for complete terms.
 		background: var(--color-background);
 	}
 
+	.tab:not(.active) {
+		padding-right: 0.875rem;
+	}
+
 	.tab:not(.active):hover {
 		background: color-mix(in srgb, var(--color-surface-hover) 80%, transparent);
+	}
+
+	.tab-actions {
+		display: flex;
+		flex: 0 0 auto;
+		align-items: center;
+		gap: 0.125rem;
 	}
 
 	.tab-select {
