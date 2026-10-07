@@ -402,11 +402,12 @@ before the Change Date. See LICENSE for complete terms.
 					class="preset-card"
 					class:selected
 					aria-pressed={selected}
+					title={t(preset.label)}
 					disabled={formLocked}
 					onclick={() => request.toggleLightSettingsPreset(preset.id)}
 				>
 					<Icon size={20} strokeWidth={1.6} aria-hidden="true" />
-					<span>{t(preset.label)}</span>
+					<span class="tile-label">{t(preset.label)}</span>
 				</button>
 			{/each}
 		</div>
@@ -540,6 +541,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.preset-card {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -561,9 +563,24 @@ before the Change Date. See LICENSE for complete terms.
 			color 0.15s;
 	}
 
-	.preset-card span {
+	.preset-card span,
+	.tile-label {
 		width: 100%;
 		overflow-wrap: break-word;
+	}
+
+	@container tools-panel (max-width: 520px) {
+		.tile-label {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			padding: 0;
+			margin: -1px;
+			overflow: hidden;
+			clip: rect(0, 0, 0, 0);
+			white-space: nowrap;
+			border: 0;
+		}
 	}
 
 	.preset-card:hover:not(:disabled) {

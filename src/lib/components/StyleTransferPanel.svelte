@@ -263,11 +263,12 @@ before the Change Date. See LICENSE for complete terms.
 							class:selected={selectedPresetId === preset.id}
 							aria-checked={selectedPresetId === preset.id}
 							tabindex={index === activePresetIndex ? 0 : -1}
+							title={t(preset.label)}
 							onclick={() => presetRadios.activate(index)}
 							onkeydown={presetRadios.onKeydown}
 						>
-							<img src={preset.src} alt={t(preset.label)} loading="lazy" />
-							<span>{t(preset.label)}</span>
+							<img src={preset.src} alt="" aria-hidden="true" loading="lazy" />
+							<span class="tile-label">{t(preset.label)}</span>
 						</button>
 					{/each}
 				</div>
@@ -458,6 +459,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.preset {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		gap: 0.375rem;
@@ -497,6 +499,20 @@ before the Change Date. See LICENSE for complete terms.
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	@container tools-panel (max-width: 520px) {
+		.tile-label {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			padding: 0;
+			margin: -1px;
+			overflow: hidden;
+			clip: rect(0, 0, 0, 0);
+			white-space: nowrap;
+			border: 0;
+		}
 	}
 
 	.strength-label,
