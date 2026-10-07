@@ -169,6 +169,7 @@ export const ru = {
 	'toolsPanel.collapse': 'Свернуть панель инструментов',
 	'toolsPanel.expand': 'Показать панель инструментов',
 	'toolsPanel.resizeHandle': 'Изменить ширину панели инструментов',
+	'toolsPanel.sizePreset': 'Изменить размер панели инструментов',
 	'toolbar.previousGeneration': 'Предыдущая генерация',
 	'toolbar.nextGeneration': 'Следующая генерация',
 	'toolbar.compare': 'Сравнить до/после',

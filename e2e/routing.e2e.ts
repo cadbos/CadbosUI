@@ -250,6 +250,55 @@ test('mode tabs stay in the tools header without toggling the panel', async ({ p
 	await expect(toolsPanel.locator('.panel-body')).toBeVisible();
 });
 
+test('tools panel size button cycles three presets and the resize handle reaches the screen edges', async ({
+	page
+}) => {
+	await page.goto('/create/interior');
+
+	const viewport = page.viewportSize();
+	expect(viewport).not.toBeNull();
+	const toolsHeader = page.getByRole('group', { name: ru['toolsPanel.title'] });
+	const toolsPanel = toolsHeader.locator('..');
+	const sizeButton = toolsHeader.getByRole('button', { name: ru['toolsPanel.sizePreset'] });
+	const moveIcon = toolsHeader.locator('.drag-icon');
+
+	const sizeBox = await sizeButton.boundingBox();
+	const moveBox = await moveIcon.boundingBox();
+	expect(sizeBox).not.toBeNull();
+	expect(moveBox).not.toBeNull();
+	expect(sizeBox!.x + sizeBox!.width).toBeLessThanOrEqual(moveBox!.x + 1);
+
+	const widths: number[] = [];
+	for (let step = 0; step < 3; step += 1) {
+		await sizeButton.click();
+		const box = await toolsPanel.boundingBox();
+		expect(box).not.toBeNull();
+		widths.push(box!.width);
+	}
+	expect(widths[0]).toBeGreaterThan(360);
+	expect(widths[1]).toBeGreaterThan(widths[0]);
+	expect(widths[2]).toBeGreaterThan(widths[1]);
+	expect(widths[2]).toBeLessThan(viewport!.width);
+
+	await sizeButton.click();
+	const wrapped = await toolsPanel.boundingBox();
+	expect(wrapped).not.toBeNull();
+	expect(wrapped!.width).toBeCloseTo(widths[0], 0);
+	await expect(toolsPanel.locator('.panel-body')).toBeVisible();
+
+	const resizeHandle = toolsPanel.getByRole('slider', { name: ru['toolsPanel.resizeHandle'] });
+	await resizeHandle.press('End');
+	const full = await toolsPanel.boundingBox();
+	expect(full).not.toBeNull();
+	expect(full!.x).toBeLessThanOrEqual(1);
+	expect(full!.x + full!.width).toBeGreaterThanOrEqual(viewport!.width - 1);
+
+	await resizeHandle.press('Home');
+	const compact = await toolsPanel.boundingBox();
+	expect(compact).not.toBeNull();
+	expect(compact!.width).toBeCloseTo(280, 0);
+});
+
 test('object replacement scene-object text round-trips without image URLs or a legacy source mode', async ({
 	page
 }) => {

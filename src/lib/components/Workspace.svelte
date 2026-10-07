@@ -587,6 +587,60 @@ before the Change Date. See LICENSE for complete terms.
 	// the tab bar appearing while the page happens to be scrolled).
 	let workspaceHeaderBottom = $state<number | null>(null);
 
+	function modeTabsLabelWidth(node: HTMLElement): number {
+		const iconsOnly = node.classList.contains('icons-only');
+		if (iconsOnly) node.classList.remove('icons-only');
+		try {
+			const buttons = [...node.querySelectorAll('button')];
+			let widest = 0;
+			for (const button of buttons) {
+				const style = getComputedStyle(button);
+				const padding =
+					Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+				const gap = Number.parseFloat(style.columnGap);
+				const icon = button.querySelector('svg');
+				const label = button.querySelector('.mode-label');
+				const iconWidth = icon instanceof SVGElement ? icon.getBoundingClientRect().width : 0;
+				const labelWidth = label instanceof HTMLElement ? label.scrollWidth : 0;
+				const buttonWidth =
+					iconWidth +
+					(labelWidth > 0 && Number.isFinite(gap) ? gap : 0) +
+					labelWidth +
+					(Number.isFinite(padding) ? padding : 0);
+				widest = Math.max(widest, buttonWidth);
+			}
+			const style = getComputedStyle(node);
+			const gap = Number.parseFloat(style.columnGap);
+			const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+			return (
+				widest * buttons.length +
+				(Number.isFinite(gap) ? gap : 0) * Math.max(0, buttons.length - 1) +
+				(Number.isFinite(padding) ? padding : 0)
+			);
+		} finally {
+			if (iconsOnly) node.classList.add('icons-only');
+		}
+	}
+
+	function fitModeLabels(node: HTMLElement): () => void {
+		let alive = true;
+		const update = (): void => {
+			if (!alive || node.clientWidth === 0) return;
+			const needed = modeTabsLabelWidth(node);
+			node.classList.toggle('icons-only', node.clientWidth < needed);
+		};
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(node);
+		const panel = node.closest('.floating-tools-panel');
+		if (panel) observer.observe(panel);
+		void document.fonts.ready.then(update);
+		return () => {
+			alive = false;
+			observer.disconnect();
+		};
+	}
+
 	function measureWorkspaceHeader(node: HTMLElement): () => void {
 		const update = () => {
 			workspaceHeaderBottom = node.getBoundingClientRect().bottom + window.scrollY;
@@ -599,7 +653,12 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 {#snippet modeSwitcher()}
-	<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
+	<div
+		class="mode-tabs"
+		role="tablist"
+		aria-label={t('mode.switcher.label')}
+		{@attach fitModeLabels}
+	>
 		{#each modes as modeOption, index (modeOption.id)}
 			<button
 				{@attach (node) => {
@@ -1114,6 +1173,12 @@ before the Change Date. See LICENSE for complete terms.
 		height: 15px;
 	}
 
+	.mode-label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
 	.mode-tabs button:hover:not(.active) {
 		color: var(--color-accent-text);
 		background: color-mix(in srgb, var(--color-surface) 70%, transparent);
@@ -1133,14 +1198,12 @@ before the Change Date. See LICENSE for complete terms.
 		outline-color: var(--color-text);
 	}
 
-	@container tools-panel (max-width: 520px) {
-		.mode-tabs button {
-			padding-inline: 0;
-		}
+	.mode-tabs:global(.icons-only) button {
+		padding-inline: 0;
+	}
 
-		.mode-label {
-			display: none;
-		}
+	.mode-tabs:global(.icons-only) .mode-label {
+		display: none;
 	}
 
 	.canvas-layout {

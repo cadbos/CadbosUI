@@ -168,6 +168,7 @@ export const en = {
 	'toolsPanel.collapse': 'Collapse the tools panel',
 	'toolsPanel.expand': 'Show the tools panel',
 	'toolsPanel.resizeHandle': 'Resize the tools panel',
+	'toolsPanel.sizePreset': 'Change the tools panel size',
 	'toolbar.previousGeneration': 'Previous generation',
 	'toolbar.nextGeneration': 'Next generation',
 	'toolbar.compare': 'Compare before/after',
