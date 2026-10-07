@@ -73,6 +73,10 @@ before the Change Date. See LICENSE for complete terms.
 		return formatBytes(bytes, getLocale());
 	}
 
+	function formatCount(value: number): string {
+		return new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 0 }).format(value);
+	}
+
 	function formatTimeZoneName(timeZoneName: Intl.DateTimeFormatOptions['timeZoneName']): string {
 		const formatter = new Intl.DateTimeFormat(getLocale(), { timeZone, timeZoneName });
 		return (
@@ -98,7 +102,7 @@ before the Change Date. See LICENSE for complete terms.
 			<p>{t('usage.subtitle')}</p>
 		</header>
 
-		{#if usage.totalsStatus !== 'idle' || usage.walletBalanceStatus !== 'idle'}
+		{#if usage.totalsStatus !== 'idle' || usage.walletBalanceStatus !== 'idle' || usage.d1LimitsStatus !== 'idle'}
 			<section class="totals" aria-labelledby="usage-totals-title">
 				<h2 id="usage-totals-title">{t('usage.totals.title')}</h2>
 				<dl>
@@ -156,11 +160,46 @@ before the Change Date. See LICENSE for complete terms.
 							</dd>
 						</div>
 					{/if}
+					{#if usage.d1LimitsStatus === 'ready' && usage.d1Limits !== null}
+						<div>
+							<dt>{ti('usage.totals.d1RowsRead', { date: usage.d1Limits.date })}</dt>
+							<dd>
+								<span class="d1-quotient">
+									<span class="d1-used">{formatCount(usage.d1Limits.rowsRead)}</span>
+									<span class="d1-divider">{t('usage.totals.d1DivisionSign')}</span>
+									<span class="d1-limit">{formatCount(usage.d1Limits.readLimit)}</span>
+								</span>
+								{#if usage.d1Limits.rowsRead >= usage.d1Limits.readLimit}
+									<span class="limit-reached" role="status">{t('usage.totals.d1LimitReached')}</span
+									>
+								{/if}
+							</dd>
+						</div>
+						<div>
+							<dt>{ti('usage.totals.d1RowsWritten', { date: usage.d1Limits.date })}</dt>
+							<dd>
+								<span class="d1-quotient">
+									<span class="d1-used">{formatCount(usage.d1Limits.rowsWritten)}</span>
+									<span class="d1-divider">{t('usage.totals.d1DivisionSign')}</span>
+									<span class="d1-limit">{formatCount(usage.d1Limits.writeLimit)}</span>
+								</span>
+								{#if usage.d1Limits.rowsWritten >= usage.d1Limits.writeLimit}
+									<span class="limit-reached" role="status">{t('usage.totals.d1LimitReached')}</span
+									>
+								{/if}
+							</dd>
+						</div>
+					{/if}
 				</dl>
 				{#if usage.totalsStatus === 'loading'}
 					<p class="status">{t('usage.totals.loading')}</p>
 				{:else if usage.totalsStatus === 'error'}
 					<p class="status error" role="alert">{t('usage.totals.failed')}</p>
+				{/if}
+				{#if usage.d1LimitsStatus === 'loading'}
+					<p class="status">{t('usage.totals.d1Loading')}</p>
+				{:else if usage.d1LimitsStatus === 'error'}
+					<p class="status error" role="alert">{t('usage.totals.d1Failed')}</p>
 				{/if}
 			</section>
 		{/if}
@@ -348,6 +387,39 @@ before the Change Date. See LICENSE for complete terms.
 	.totals dd.tile-status {
 		font-size: 0.9375rem;
 		font-weight: 500;
+	}
+
+	.totals .d1-quotient {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		column-gap: 0.375rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.totals .d1-used,
+	.totals .d1-limit {
+		grid-column: 2;
+		text-align: right;
+	}
+
+	.totals .d1-used {
+		grid-row: 1;
+	}
+
+	.totals .d1-limit {
+		grid-row: 2;
+	}
+
+	.totals .d1-divider {
+		grid-column: 1;
+		grid-row: 1 / 3;
+		align-self: center;
+	}
+
+	.totals .limit-reached {
+		display: block;
+		color: var(--color-danger);
+		font-size: 0.8125rem;
 	}
 
 	.table-wrap {

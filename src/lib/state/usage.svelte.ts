@@ -13,7 +13,7 @@
  */
 
 import { z } from 'zod';
-import type { UsageProfile, UsageTotals, UserUsageRecord } from '$lib/api/contract';
+import type { D1DailyLimits, UsageProfile, UsageTotals, UserUsageRecord } from '$lib/api/contract';
 
 export type UsageStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -69,6 +69,14 @@ const usageTotalsSchema = z.object({
 	totalSpend: z.number()
 });
 
+const d1DailyLimitsSchema = z.object({
+	date: z.iso.date(),
+	rowsRead: z.number().int().nonnegative(),
+	rowsWritten: z.number().int().nonnegative(),
+	readLimit: z.number().int().positive(),
+	writeLimit: z.number().int().positive()
+});
+
 export type WalletBalanceStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type UsageTotalsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -90,10 +98,13 @@ class UsageState {
 	walletBalanceStatus = $state<WalletBalanceStatus>('idle');
 	totals = $state.raw<UsageTotals | null>(null);
 	totalsStatus = $state<UsageTotalsStatus>('idle');
+	d1Limits = $state.raw<D1DailyLimits | null>(null);
+	d1LimitsStatus = $state<UsageTotalsStatus>('idle');
 	#abort: AbortController | null = null;
 	#profileAborts = new Set<AbortController>();
 	#walletBalanceAbort: AbortController | null = null;
 	#totalsAbort: AbortController | null = null;
+	#d1LimitsAbort: AbortController | null = null;
 	#nextOffset: number | null = null;
 
 	async load(): Promise<void> {
@@ -101,6 +112,7 @@ class UsageState {
 		this.#abortProfiles();
 		this.#walletBalanceAbort?.abort();
 		this.#totalsAbort?.abort();
+		this.#d1LimitsAbort?.abort();
 		const controller = new AbortController();
 		this.#abort = controller;
 		this.status = 'loading';
@@ -113,9 +125,12 @@ class UsageState {
 		this.walletBalanceStatus = 'idle';
 		this.totals = null;
 		this.totalsStatus = 'idle';
+		this.d1Limits = null;
+		this.d1LimitsStatus = 'idle';
 
 		void this.#loadWalletBalance();
 		void this.#loadTotals();
+		void this.#loadD1Limits();
 
 		try {
 			const page = await this.#fetchPage(0, controller.signal);
@@ -169,9 +184,11 @@ class UsageState {
 		this.#abortProfiles();
 		this.#walletBalanceAbort?.abort();
 		this.#totalsAbort?.abort();
+		this.#d1LimitsAbort?.abort();
 		this.#abort = null;
 		this.#walletBalanceAbort = null;
 		this.#totalsAbort = null;
+		this.#d1LimitsAbort = null;
 		this.users = [];
 		this.profiles = {};
 		this.status = 'idle';
@@ -183,6 +200,8 @@ class UsageState {
 		this.walletBalanceStatus = 'idle';
 		this.totals = null;
 		this.totalsStatus = 'idle';
+		this.d1Limits = null;
+		this.d1LimitsStatus = 'idle';
 	}
 
 	async #fetchPage(
@@ -279,6 +298,34 @@ class UsageState {
 			console.error('Usage totals load failed:', error);
 		} finally {
 			if (this.#totalsAbort === controller) this.#totalsAbort = null;
+		}
+	}
+
+	async #loadD1Limits(): Promise<void> {
+		const controller = new AbortController();
+		this.#d1LimitsAbort = controller;
+		this.d1LimitsStatus = 'loading';
+
+		try {
+			const response = await fetch('/api/usage/d1-limits', {
+				signal: controller.signal,
+				cache: 'no-store'
+			});
+			if (!response.ok) throw new UsageLoadError('D1 limits request failed');
+
+			const parsed = d1DailyLimitsSchema.safeParse(await response.json().catch(() => null));
+			if (!parsed.success) throw new UsageLoadError('D1 limits response invalid');
+
+			if (this.#d1LimitsAbort !== controller) return;
+			this.d1Limits = parsed.data;
+			this.d1LimitsStatus = 'ready';
+		} catch (error) {
+			if (controller.signal.aborted) return;
+			this.d1Limits = null;
+			this.d1LimitsStatus = 'error';
+			console.error('D1 limits load failed:', error);
+		} finally {
+			if (this.#d1LimitsAbort === controller) this.#d1LimitsAbort = null;
 		}
 	}
 

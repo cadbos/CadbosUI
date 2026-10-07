@@ -16,12 +16,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { npubEncode } from 'nostr-tools/nip19';
 import type {
+	D1DailyLimits,
 	UsageProfilesResponse,
 	UsageTotals,
 	UserUsageRecord,
 	UserUsageResponse
 } from '$lib/api/contract';
-import { setLocale, type Locale } from '$lib/i18n/index.svelte';
+import { setLocale, t, ti, type Locale } from '$lib/i18n/index.svelte';
 import { auth } from '$lib/state/auth.svelte';
 import { usage } from '$lib/state/usage.svelte';
 import UsagePage from './+page.svelte';
@@ -64,6 +65,14 @@ const TOTALS: UsageTotals = {
 	totalSpend: 99.5
 };
 
+const D1_LIMITS: D1DailyLimits = {
+	date: '2026-10-07',
+	rowsRead: 5_000_000,
+	rowsWritten: 100,
+	readLimit: 5_000_000,
+	writeLimit: 100_000
+};
+
 function page(users: UserUsageRecord[], offset: number, hasMore: boolean): UserUsageResponse {
 	return {
 		users,
@@ -84,7 +93,8 @@ function jsonResponse(body: UserUsageResponse): Response {
 
 function mockUsageFetch(
 	pages: UserUsageResponse[],
-	profiles: UsageProfilesResponse['profiles'] = {}
+	profiles: UsageProfilesResponse['profiles'] = {},
+	d1Limits: D1DailyLimits = D1_LIMITS
 ) {
 	let pageIndex = 0;
 	return vi.fn<typeof fetch>((input, init) => {
@@ -94,6 +104,7 @@ function mockUsageFetch(
 			return Promise.resolve(Response.json({ profiles }));
 		if (url === '/api/usage/balance') return Promise.resolve(Response.json({ balance: 0 }));
 		if (url === '/api/usage/totals') return Promise.resolve(Response.json(TOTALS));
+		if (url === '/api/usage/d1-limits') return Promise.resolve(Response.json(d1Limits));
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
 }
@@ -150,28 +161,26 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 
 	const screen = render(UsagePage, pageProps());
 
-	await expect
-		.element(screen.getByRole('heading', { name: locale === 'ru' ? 'Использование' : 'Usage' }))
-		.toBeVisible();
+	await expect.element(screen.getByRole('heading', { name: t('usage.title') })).toBeVisible();
 	await expect.element(screen.getByRole('cell', { name: '12.35' })).toBeVisible();
 	await expect.element(screen.getByRole('cell', { name: '7.50' })).toBeVisible();
 	await expect
 		.element(screen.getByRole('cell', { name: localDateTimeLabel(locale, latestSpendAt) }))
 		.toBeVisible();
 	await expect
-		.element(screen.getByRole('columnheader', { name: locale === 'ru' ? 'Пользователь' : 'User' }))
+		.element(screen.getByRole('columnheader', { name: t('usage.column.user') }))
 		.toBeVisible();
 	await expect
 		.element(
 			screen.getByRole('columnheader', {
-				name: locale === 'ru' ? 'Размер исходников' : 'Sources size'
+				name: t('usage.column.sourceBytes')
 			})
 		)
 		.toBeVisible();
 	await expect
 		.element(
 			screen.getByRole('columnheader', {
-				name: locale === 'ru' ? 'Размер референсов' : 'References size'
+				name: t('usage.column.referenceBytes')
 			})
 		)
 		.toBeVisible();
@@ -182,7 +191,7 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 		.element(screen.getByRole('cell', { name: localSizeLabel(locale, 'kilobyte', 512) }))
 		.toBeVisible();
 	const latestSpendHeader = screen.getByRole('columnheader', {
-		name: `${locale === 'ru' ? 'Последняя трата' : 'Latest spend'}, ${localTimeZoneName(locale, 'short')}`
+		name: `${t('usage.column.latestSpendAt')}, ${localTimeZoneName(locale, 'short')}`
 	});
 	await expect.element(latestSpendHeader).toBeVisible();
 	await expect
@@ -201,7 +210,7 @@ it('shows an em dash instead of a size when no upload size is known', async () =
 	await expect
 		.element(screen.getByRole('rowheader', { name: npubEncode(PUBKEY_ONE) }))
 		.toBeVisible();
-	expect(screen.getByRole('cell', { name: '—' }).elements()).toHaveLength(3);
+	expect(screen.getByRole('cell', { name: t('usage.emptyValue') }).elements()).toHaveLength(3);
 	expect(screen.getByRole('cell', { name: /MB|kB/ }).elements()).toHaveLength(0);
 });
 
@@ -262,9 +271,7 @@ it('never fetches or renders usage data while the auth store is not authenticate
 
 	const screen = render(UsagePage, pageProps());
 
-	await expect
-		.element(screen.getByText('Sign in with an account that has access to see this data.'))
-		.toBeVisible();
+	await expect.element(screen.getByText(t('usage.signInRequired'))).toBeVisible();
 	expect(fetchMock).not.toHaveBeenCalled();
 });
 
@@ -279,7 +286,7 @@ it('renders an error state when usage cannot be loaded', async () => {
 
 	const screen = render(UsagePage, pageProps());
 
-	await expect.element(screen.getByText('Could not load usage.')).toBeVisible();
+	await expect.element(screen.getByText(t('usage.failed'))).toBeVisible();
 });
 
 it('renders each pubkey as an npub explorer link that opens in a new tab', async () => {
@@ -304,34 +311,103 @@ it.each(['ru', 'en'] as const)('renders the platform totals for %s', async (loca
 	setLocale(locale);
 
 	const screen = render(UsagePage, pageProps());
-	const totals = screen.getByRole('region', {
-		name: locale === 'ru' ? 'Итого по платформе' : 'Platform totals'
-	});
+	const totals = screen.getByRole('region', { name: t('usage.totals.title') });
 
 	await expect.element(totals).toBeVisible();
-	const labels =
-		locale === 'ru'
-			? [
-					'Всего пополнено —',
-					'Всего потрачено 99.50',
-					'Зарегистрировано пользователей 7',
-					'Проекты 11',
-					'Сессии 23',
-					'Генерации 42',
-					`Загруженные исходники 40 · ${localSizeLabel(locale, 'megabyte', 3)}`,
-					'Загруженные референсы 6 · —'
-				]
-			: [
-					'Total deposits —',
-					'Total spent 99.50',
-					'Registered users 7',
-					'Projects 11',
-					'Sessions 23',
-					'Generations 42',
-					`Uploaded sources 40 · ${localSizeLabel(locale, 'megabyte', 3)}`,
-					'Uploaded references 6 · —'
-				];
+	const labels = [
+		`${t('usage.totals.deposits')} ${t('usage.emptyValue')}`,
+		`${t('usage.totals.spend')} 99.50`,
+		`${t('usage.totals.users')} 7`,
+		`${t('usage.totals.projects')} 11`,
+		`${t('usage.totals.sessions')} 23`,
+		`${t('usage.totals.generations')} 42`,
+		`${t('usage.totals.sources')} ${ti('usage.totals.countWithSize', { count: 40, size: localSizeLabel(locale, 'megabyte', 3) })}`,
+		`${t('usage.totals.references')} ${ti('usage.totals.countWithSize', { count: 6, size: t('usage.emptyValue') })}`
+	];
 	for (const label of labels) await expect.element(totals).toHaveTextContent(label);
+	const readTerm = totals.getByText(ti('usage.totals.d1RowsRead', { date: D1_LIMITS.date }));
+	const writeTerm = totals.getByText(ti('usage.totals.d1RowsWritten', { date: D1_LIMITS.date }));
+	const number = new Intl.NumberFormat(locale);
+	await expect.element(readTerm).toBeVisible();
+	await expect.element(writeTerm).toBeVisible();
+	const readQuota = readTerm.element().parentElement!;
+	const writeQuota = writeTerm.element().parentElement!;
+	expect(readQuota.querySelector('.d1-used')?.textContent).toBe(number.format(5_000_000));
+	expect(readQuota.querySelector('.d1-limit')?.textContent).toBe(number.format(5_000_000));
+	expect(writeQuota.querySelector('.d1-used')?.textContent).toBe(number.format(100));
+	expect(writeQuota.querySelector('.d1-limit')?.textContent).toBe(number.format(100_000));
+	expect(readQuota.querySelector('.d1-divider')?.textContent).toBe(
+		t('usage.totals.d1DivisionSign')
+	);
+	expect(writeQuota.querySelector('.d1-divider')?.textContent).toBe(
+		t('usage.totals.d1DivisionSign')
+	);
+	expect(readQuota.textContent).toContain(t('usage.totals.d1LimitReached'));
+});
+
+it.each(['ru', 'en'] as const)('shows full D1 counts without rounding for %s', async (locale) => {
+	vi.stubGlobal(
+		'fetch',
+		mockUsageFetch(
+			[page([], 0, false)],
+			{},
+			{
+				...D1_LIMITS,
+				rowsRead: 1_250,
+				readLimit: 500_000,
+				rowsWritten: 523_400,
+				writeLimit: 500_001
+			}
+		)
+	);
+	setLocale(locale);
+
+	const screen = render(UsagePage, pageProps());
+	const totals = screen.getByRole('region', { name: t('usage.totals.title') });
+	const number = new Intl.NumberFormat(locale);
+	const readTerm = totals.getByText(ti('usage.totals.d1RowsRead', { date: D1_LIMITS.date }));
+	const writeTerm = totals.getByText(ti('usage.totals.d1RowsWritten', { date: D1_LIMITS.date }));
+	await expect.element(readTerm).toBeVisible();
+	await expect.element(writeTerm).toBeVisible();
+	const readQuota = readTerm.element().parentElement!;
+	const writeQuota = writeTerm.element().parentElement!;
+	expect(readQuota.querySelector('.d1-used')?.textContent).toBe(number.format(1_250));
+	expect(readQuota.querySelector('.d1-limit')?.textContent).toBe(number.format(500_000));
+	expect(writeQuota.querySelector('.d1-used')?.textContent).toBe(number.format(523_400));
+	expect(writeQuota.querySelector('.d1-limit')?.textContent).toBe(number.format(500_001));
+	await expect.element(totals).toHaveTextContent(t('usage.totals.d1LimitReached'));
+});
+
+it('keeps raw quota comparisons when rounded figures look equal', async () => {
+	vi.stubGlobal(
+		'fetch',
+		mockUsageFetch(
+			[page([], 0, false)],
+			{},
+			{
+				...D1_LIMITS,
+				rowsRead: 499_999,
+				readLimit: 500_000,
+				rowsWritten: 999,
+				writeLimit: 1_000
+			}
+		)
+	);
+
+	const screen = render(UsagePage, pageProps());
+	const totals = screen.getByRole('region', { name: t('usage.totals.title') });
+	const readTerm = totals.getByText(ti('usage.totals.d1RowsRead', { date: D1_LIMITS.date }));
+	const writeTerm = totals.getByText(ti('usage.totals.d1RowsWritten', { date: D1_LIMITS.date }));
+	const number = new Intl.NumberFormat('en');
+	await expect.element(readTerm).toBeVisible();
+	await expect.element(writeTerm).toBeVisible();
+	const readQuota = readTerm.element().parentElement!;
+	const writeQuota = writeTerm.element().parentElement!;
+	expect(readQuota.querySelector('.d1-used')?.textContent).toBe(number.format(499_999));
+	expect(readQuota.querySelector('.d1-limit')?.textContent).toBe(number.format(500_000));
+	expect(writeQuota.querySelector('.d1-used')?.textContent).toBe(number.format(999));
+	expect(writeQuota.querySelector('.d1-limit')?.textContent).toBe(number.format(1_000));
+	expect(totals.getByText(t('usage.totals.d1LimitReached')).elements()).toHaveLength(0);
 });
 
 it('renders a totals error without hiding the table', async () => {
@@ -344,7 +420,7 @@ it('renders a totals error without hiding the table', async () => {
 
 	const screen = render(UsagePage, pageProps());
 
-	await expect.element(screen.getByText('Could not load totals.')).toBeVisible();
+	await expect.element(screen.getByText(t('usage.totals.failed'))).toBeVisible();
 	await expect
 		.element(screen.getByRole('rowheader', { name: npubEncode(PUBKEY_ONE) }))
 		.toBeVisible();
@@ -360,10 +436,12 @@ it('shows the wallet balance as the first tile of the platform totals', async ()
 
 	const screen = render(UsagePage, pageProps());
 
-	const totals = screen.getByRole('region', { name: 'Platform totals' });
-	await expect.element(totals.getByText('Wallet balance')).toBeVisible();
+	const totals = screen.getByRole('region', { name: t('usage.totals.title') });
+	await expect.element(totals.getByText(t('usage.totals.walletBalance'))).toBeVisible();
 	await expect.element(totals.getByText('250.00')).toBeVisible();
-	await expect.element(totals.getByRole('term').first()).toHaveTextContent('Wallet balance');
+	await expect
+		.element(totals.getByRole('term').first())
+		.toHaveTextContent(t('usage.totals.walletBalance'));
 });
 
 it('shows a wallet balance error inside the totals even when totals fail', async () => {
@@ -377,7 +455,7 @@ it('shows a wallet balance error inside the totals even when totals fail', async
 
 	const screen = render(UsagePage, pageProps());
 
-	const totals = screen.getByRole('region', { name: 'Platform totals' });
-	await expect.element(totals.getByText('Could not load wallet balance.')).toBeVisible();
-	await expect.element(totals.getByText('Could not load totals.')).toBeVisible();
+	const totals = screen.getByRole('region', { name: t('usage.totals.title') });
+	await expect.element(totals.getByText(t('usage.walletBalanceFailed'))).toBeVisible();
+	await expect.element(totals.getByText(t('usage.totals.failed'))).toBeVisible();
 });
