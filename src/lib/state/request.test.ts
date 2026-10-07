@@ -2357,6 +2357,12 @@ describe('prefillFromModeHint', () => {
 		expect(state.editPrompt).toBe('убери блики');
 	});
 
+	it('carries an unmatched add request into the custom add-object field', () => {
+		const state = new RequestState();
+		state.prefillFromModeHint({ mode: 'edit', tool: 'add-object' }, '  добавь стол у окна ');
+		expect(state.addObjectInstruction).toBe('добавь стол у окна');
+	});
+
 	it('fills an empty add-object field with the matched template phrase, never overwriting typed text', () => {
 		const state = new RequestState();
 		state.prefillFromModeHint({ mode: 'edit', tool: 'add-object', presetId: 'houseplant' }, 'x');

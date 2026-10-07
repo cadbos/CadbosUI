@@ -76,11 +76,11 @@ test('direct navigation to /create/interior?view=graph opens the graph tab', asy
 	await expect(page.getByRole('tab', { name: 'Граф' })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('direct navigation to /edit opens the edit tab with the freeform tool explicit', async ({
+test('direct navigation to /edit opens the edit tab with the add-object tool explicit', async ({
 	page
 }) => {
 	await page.goto('/edit');
-	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+	await expect(page).toHaveURL(/\/edit\?tool=add-object$/);
 	await expect(page.getByRole('tab', { name: 'Редактирование' })).toHaveAttribute(
 		'aria-selected',
 		'true'
@@ -91,7 +91,7 @@ test('direct navigation to /edit?tool=add-object opens the add-object tool tab',
 	page
 }) => {
 	await page.goto('/edit?tool=add-object');
-	await expect(page.getByRole('tab', { name: /Добавить объект/ })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: /Добавление объекта/ })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
@@ -119,14 +119,12 @@ test('direct navigation opens object replacement inside edit with explicit defau
 		'aria-selected',
 		'true'
 	);
-	const replacementTab = page.getByRole('tab', { name: /Замена объекта.*Альфа/ });
+	const replacementTab = page.getByRole('tab', { name: 'Замена объекта' });
 	await expect(replacementTab).toHaveAttribute('aria-selected', 'true');
 	await expect(replacementTab.locator('svg')).toHaveCount(1);
 
 	const panel = page.locator('#edit-tool-panel-object-replacement');
-	await expect(
-		panel.getByText('Замена объектов находится на раннем этапе', { exact: false })
-	).toBeVisible();
+	await expect(panel.getByLabel(/Точно опишите существующий объект/)).toBeVisible();
 });
 
 test('the removed standalone object replacement route returns 404', async ({ page }) => {
@@ -143,14 +141,11 @@ test('direct navigation opens texture replacement inside edit with explicit defa
 		'aria-selected',
 		'true'
 	);
-	const replacementTab = page.getByRole('tab', { name: /Замена текстуры.*Альфа/ });
+	const replacementTab = page.getByRole('tab', { name: 'Замена текстуры' });
 	await expect(replacementTab).toHaveAttribute('aria-selected', 'true');
 	await expect(replacementTab.locator('svg')).toHaveCount(1);
 
 	const panel = page.locator('#edit-tool-panel-texture-replacement');
-	await expect(
-		panel.getByText('Замена текстур находится на раннем этапе', { exact: false })
-	).toBeVisible();
 	await expect(panel.getByRole('region', { name: /Референс новой текстуры/ })).toBeVisible();
 	// Mask-based replacement is the only mode (the free-text surface field is
 	// retired) — the panel shows the canvas hint instead, even before a source
@@ -180,7 +175,7 @@ test('switching mode tabs opens each mode default, carrying scene but not sub-ta
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	// Edit has no scene concept, so it isn't in the path.
-	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+	await expect(page).toHaveURL(/\/edit\?tool=add-object$/);
 
 	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
 	// Style transfer's scene toggle is bound to the same request.sceneType, so
@@ -236,7 +231,7 @@ test('mode tabs stay in the tools header without toggling the panel', async ({ p
 
 	await modeTabs.getByRole('tab', { name: ru['mode.render'] }).focus();
 	await page.keyboard.press('ArrowRight');
-	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+	await expect(page).toHaveURL(/\/edit\?tool=add-object$/);
 	await expect(modeTabs.getByRole('tab', { name: ru['mode.edit'] })).toBeFocused();
 	await expect(page.getByRole('button', { name: ru['toolsPanel.collapse'] })).toBeVisible();
 	await expect(toolsPanel.locator('.panel-body')).toBeVisible();
@@ -335,13 +330,13 @@ test('browser Back steps through mode tabs instead of leaving the app', async ({
 	await page.goto('/create/exterior');
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
-	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+	await expect(page).toHaveURL(/\/edit\?tool=add-object$/);
 
 	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
 	await expect(page).toHaveURL(/\/style-transfer\/exterior\?/);
 
 	await page.goBack();
-	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+	await expect(page).toHaveURL(/\/edit\?tool=add-object$/);
 	await expect(page.getByRole('tab', { name: 'Редактирование' })).toHaveAttribute(
 		'aria-selected',
 		'true'
@@ -368,16 +363,16 @@ test('switching view tabs updates only the view query param', async ({ page }) =
 test('switching edit tool tabs updates only the tool query param', async ({ page }) => {
 	await page.goto('/edit?tool=freeform');
 
-	await page.getByRole('tab', { name: /Удалить объект/ }).click();
+	await page.getByRole('tab', { name: /Удаление объекта/ }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=remove-object$/);
 
 	await page.getByRole('tab', { name: /Свет/ }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=light-settings$/);
 
-	await page.getByRole('tab', { name: /Замена объекта.*Альфа/ }).click();
+	await page.getByRole('tab', { name: 'Замена объекта' }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=object-replacement$/);
 
-	await page.getByRole('tab', { name: /Замена текстуры.*Альфа/ }).click();
+	await page.getByRole('tab', { name: 'Замена текстуры' }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=texture-replacement$/);
 
 	await page.getByRole('tab', { name: 'Перекраска' }).click();
