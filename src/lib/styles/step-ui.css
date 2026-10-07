@@ -24,6 +24,14 @@
 	gap: 1rem;
 }
 
+.step-card.plain {
+	background: none;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+	padding: 0;
+}
+
 .step-header,
 .step-card .column-header {
 	display: flex;

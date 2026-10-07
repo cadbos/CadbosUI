@@ -210,7 +210,7 @@ test('restores an edit-kind generation onto the edit-panel tool that actually pr
 	// stale freeform instruction left over from the earlier edit.
 	await expect(page).toHaveURL(/\/edit/);
 	await expect(page).toHaveURL(/tool=add-object/);
-	await expect(page.getByRole('tab', { name: 'Добавить объект' })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: 'Добавление объекта' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);

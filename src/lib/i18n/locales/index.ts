@@ -509,8 +509,6 @@ export interface Dictionary {
 	'styleTransfer.failed': string;
 	'styleTransfer.insufficientCredit': string;
 	'styleTransfer.generationRestricted': string;
-	'objectReplacement.alpha': string;
-	'objectReplacement.alphaNotice': string;
 	'objectReplacement.required': string;
 	'objectReplacement.images': string;
 	'objectReplacement.referenceImage': string;
@@ -547,8 +545,6 @@ export interface Dictionary {
 	'objectReplacement.rateLimited': string;
 	'objectReplacement.insufficientCredit': string;
 	'objectReplacement.generationRestricted': string;
-	'textureReplacement.alpha': string;
-	'textureReplacement.alphaNotice': string;
 	'textureReplacement.required': string;
 	'textureReplacement.images': string;
 	'textureReplacement.referenceImage': string;
@@ -765,8 +761,11 @@ export interface Dictionary {
 	'edit.generationRestricted': string;
 	'edit.tool.switcher.label': string;
 	'edit.tool.freeform': string;
+	'edit.tool.objects': string;
 	'edit.tool.addObject': string;
+	'edit.tool.addObject.tab': string;
 	'edit.tool.removeObject': string;
+	'edit.tool.removeObject.tab': string;
 	'edit.tool.lightSettings': string;
 	'edit.tool.repaint': string;
 	'edit.addObject.apply': string;

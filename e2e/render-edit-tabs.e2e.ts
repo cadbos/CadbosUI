@@ -968,8 +968,8 @@ test('switching edit tools never drops project/session/generation from the URL, 
 	);
 	await expect(page.getByLabel('Инструкция для правки')).toBeVisible();
 
-	await page.getByRole('tab', { name: 'Удалить объект' }).click();
-	await expect(page.getByRole('tab', { name: 'Удалить объект' })).toHaveAttribute(
+	await page.getByRole('tab', { name: 'Удаление объекта' }).click();
+	await expect(page.getByRole('tab', { name: 'Удаление объекта' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
@@ -1238,7 +1238,7 @@ test('the Add Object tool applies a clicked template to the current image', asyn
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	await page.getByRole('tab', { name: 'Добавить объект' }).click();
+	await page.getByRole('tab', { name: 'Добавление объекта' }).click();
 	await page.getByRole('button', { name: ru['edit.addObject.mirror.label'] }).click();
 	await expect(page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] })).toHaveValue(
 		ru['edit.addObject.mirror.phrase']
@@ -1297,7 +1297,7 @@ test('the Add Object tool replaces the prompt with a clicked template and wraps 
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	await page.getByRole('tab', { name: ru['edit.tool.addObject'] }).click();
+	await page.getByRole('tab', { name: ru['edit.tool.addObject.tab'] }).click();
 	const applyButton = page.getByRole('button', { name: ru['edit.addObject.apply'] });
 	const promptField = page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] });
 	const mirrorTemplate = page.getByRole('button', { name: ru['edit.addObject.mirror.label'] });
@@ -1385,23 +1385,20 @@ test('undo/redo across different edit tools restores both the settings and the a
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	const freeformTab = page.getByRole('tab', { name: 'Свой промпт' });
-	const addObjectTab = page.getByRole('tab', { name: 'Добавить объект' });
-	const instructionField = page.getByLabel('Инструкция для правки');
+	const removeObjectTab = page.getByRole('tab', { name: 'Удаление объекта' });
+	const addObjectTab = page.getByRole('tab', { name: 'Добавление объекта' });
+	const removeField = page.getByLabel('Что убрать?');
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
 	const undoButton = page.getByRole('button', { name: 'Предыдущая генерация' });
 	const redoButton = page.getByRole('button', { name: 'Следующая генерация' });
 
-	await instructionField.fill('сделай стены голубыми');
-	await page.getByRole('button', { name: 'Применить правку' }).click();
+	await removeObjectTab.click();
+	await removeField.fill('старый диван');
+	await page.getByRole('button', { name: 'Удалить объект' }).click();
 	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/freeform-a.webp', {
 		timeout: 10_000
 	});
 
-	// Switching to a different edit-panel tool and generating from it is a new
-	// history step, sharing the same monolithic form store as the freeform
-	// step above (see request.svelte.ts's RequestFormSnapshot) — the bug this
-	// test guards against.
 	await addObjectTab.click();
 	await page.getByRole('button', { name: ru['edit.addObject.houseplant.label'] }).click();
 	await page.getByRole('button', { name: 'Добавить объект' }).click();
@@ -1409,16 +1406,13 @@ test('undo/redo across different edit tools restores both the settings and the a
 		timeout: 10_000
 	});
 
-	await freeformTab.click();
-	await expect(instructionField).toHaveValue('сделай стены голубыми');
+	await removeObjectTab.click();
+	await expect(removeField).toHaveValue('старый диван');
 
-	// Undoing back to the freeform step (produced from a different tool tab)
-	// switches the active tab to match it, instead of leaving the freeform tab
-	// merely showing a leftover value that happens to look unchanged.
 	await undoButton.click();
 	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/freeform-a.webp');
-	await expect(freeformTab).toHaveAttribute('aria-selected', 'true');
-	await expect(instructionField).toHaveValue('сделай стены голубыми');
+	await expect(removeObjectTab).toHaveAttribute('aria-selected', 'true');
+	await expect(removeField).toHaveValue('старый диван');
 
 	await redoButton.click();
 	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/added-plant.webp');
@@ -1520,11 +1514,11 @@ test('undo restores the object-replacement tool tab and its settings after switc
 	]);
 
 	const objectReplacementTab = page.getByRole('tab', { name: /Замена объекта/ });
-	const freeformTab = page.getByRole('tab', { name: 'Свой промпт' });
+	const removeObjectTab = page.getByRole('tab', { name: 'Удаление объекта' });
 	const objectField = page
 		.locator('#edit-tool-panel-object-replacement')
 		.getByLabel(/Точно опишите существующий объект/);
-	const instructionField = page.getByLabel('Инструкция для правки');
+	const removeField = page.getByLabel('Что убрать?');
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
 	const undoButton = page.getByRole('button', { name: 'Предыдущая генерация' });
 
@@ -1536,9 +1530,10 @@ test('undo restores the object-replacement tool tab and its settings after switc
 
 	// Switching to a different edit-panel tool and generating from it is a new
 	// history step, anchored on the object-replacement result above.
-	await freeformTab.click();
-	await instructionField.fill('сделать светлее');
-	await page.getByRole('button', { name: 'Применить правку' }).click();
+	await page.getByRole('tab', { name: 'Объекты' }).click();
+	await removeObjectTab.click();
+	await removeField.fill('лампа');
+	await page.getByRole('button', { name: 'Удалить объект' }).click();
 	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/brighter.webp', {
 		timeout: 10_000
 	});
@@ -1588,7 +1583,7 @@ test('the Remove Object tool builds a removal prompt from the described object',
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	await page.getByRole('tab', { name: 'Удалить объект' }).click();
+	await page.getByRole('tab', { name: 'Удаление объекта' }).click();
 	await page.getByLabel('Что убрать?').fill('старый диван');
 	await page.getByRole('button', { name: 'Удалить объект' }).click();
 

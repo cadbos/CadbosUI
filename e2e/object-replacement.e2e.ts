@@ -518,7 +518,7 @@ test('does not navigate back when an accepted submission finishes after a mode s
 	// mockProjectSessionRoutes) — the mode switch carries that forward instead
 	// of dropping it (see buildWorkspaceUrl in url-state.ts).
 	await expect(page).toHaveURL(
-		new RegExp(`/edit\\?tool=freeform&project=${E2E_PROJECT_ID}&session=${E2E_SESSION_ID}$`)
+		new RegExp(`/edit\\?tool=add-object&project=${E2E_PROJECT_ID}&session=${E2E_SESSION_ID}$`)
 	);
 	await expect(page).not.toHaveURL(/tool=object-replacement/);
 });

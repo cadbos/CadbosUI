@@ -1201,9 +1201,13 @@ export class RequestState {
 		if (target.mode === 'styleTransfer') {
 			if (this.styleTransferPrompt.trim() === '') this.styleTransferPrompt = trimmed;
 		} else if (target.tool === 'add-object') {
+			if (this.addObjectInstruction.trim() !== '') return;
 			const preset = ADD_OBJECT_PRESETS.find((candidate) => candidate.id === target.presetId);
-			if (preset && this.addObjectInstruction.trim() === '') {
+			if (preset) {
 				this.setAddObjectInstruction(t(preset.phrase));
+			} else {
+				const instruction = addObjectInstructionSchema.safeParse(trimmed);
+				if (instruction.success) this.addObjectInstruction = instruction.data;
 			}
 		} else if (target.tool === 'freeform') {
 			if (this.editPrompt.trim() === '') this.editPrompt = trimmed;

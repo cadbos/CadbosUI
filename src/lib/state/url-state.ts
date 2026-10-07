@@ -97,7 +97,7 @@ export function slugToView(param: string | undefined): ViewId {
 
 // Tool/reference ids double as their own query values (already kebab-case).
 export function slugToTool(param: string | undefined): ToolId {
-	return (TOOL_IDS as readonly string[]).includes(param ?? '') ? (param as ToolId) : 'freeform';
+	return (TOOL_IDS as readonly string[]).includes(param ?? '') ? (param as ToolId) : 'add-object';
 }
 
 export function isEditToolRoute(
@@ -348,7 +348,7 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 	}
 
 	if (mode === 'edit') {
-		const tool = subTab.tool ?? 'freeform';
+		const tool = subTab.tool ?? 'add-object';
 		params.set('tool', tool);
 		if (tool === 'object-replacement') {
 			if (request.objectReplacementObject.trim() !== '') {
