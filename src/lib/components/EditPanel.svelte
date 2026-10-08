@@ -392,7 +392,7 @@ before the Change Date. See LICENSE for complete terms.
 		if (iconsOnly) node.classList.remove('icons-only');
 		try {
 			const buttons = [...node.querySelectorAll(':scope > button')];
-			let widest = 0;
+			let total = 0;
 			for (const button of buttons) {
 				const style = getComputedStyle(button);
 				const padding =
@@ -402,18 +402,17 @@ before the Change Date. See LICENSE for complete terms.
 				const label = button.querySelector('.tool-label');
 				const iconWidth = icon instanceof SVGElement ? icon.getBoundingClientRect().width : 0;
 				const labelWidth = label instanceof HTMLElement ? label.scrollWidth : 0;
-				const buttonWidth =
+				total +=
 					iconWidth +
 					(labelWidth > 0 && Number.isFinite(gap) ? gap : 0) +
 					labelWidth +
 					(Number.isFinite(padding) ? padding : 0);
-				widest = Math.max(widest, buttonWidth);
 			}
 			const style = getComputedStyle(node);
 			const gap = Number.parseFloat(style.columnGap);
 			const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
 			return (
-				widest * buttons.length +
+				total +
 				(Number.isFinite(gap) ? gap : 0) * Math.max(0, buttons.length - 1) +
 				(Number.isFinite(padding) ? padding : 0)
 			);
@@ -802,8 +801,8 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		justify-content: center;
 		gap: 0.4rem;
-		flex: 1 1 0;
-		min-width: 0;
+		flex: 1 1 auto;
+		min-width: max-content;
 		min-height: calc(0.5rem * 2 + 0.875rem * 1.25);
 		padding: 0.45rem 0.65rem;
 		font: inherit;
@@ -828,6 +827,8 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.tool-tabs:global(.icons-only) button {
+		flex: 1 1 0;
+		min-width: 0;
 		padding: 0;
 		gap: 0;
 	}

@@ -311,7 +311,7 @@ test('edit tool tabs show their names only when the panel is wide enough', async
 	}
 });
 
-test('tools panel size button cycles three presets and the resize handle reaches the screen edges', async ({
+test('tools panel size button cycles three presets and the resize handle stays inset from the screen edges', async ({
 	page
 }) => {
 	await page.goto('/create/interior');
@@ -351,8 +351,11 @@ test('tools panel size button cycles three presets and the resize handle reaches
 	await resizeHandle.press('End');
 	const full = await toolsPanel.boundingBox();
 	expect(full).not.toBeNull();
-	expect(full!.x).toBeLessThanOrEqual(1);
-	expect(full!.x + full!.width).toBeGreaterThanOrEqual(viewport!.width - 1);
+	const screenEdgeMargin = 16;
+	expect(full!.x).toBeGreaterThanOrEqual(screenEdgeMargin - 1);
+	expect(full!.x).toBeLessThanOrEqual(screenEdgeMargin + 1);
+	expect(full!.x + full!.width).toBeGreaterThanOrEqual(viewport!.width - screenEdgeMargin - 1);
+	expect(full!.x + full!.width).toBeLessThanOrEqual(viewport!.width - screenEdgeMargin + 1);
 
 	await resizeHandle.press('Home');
 	const compact = await toolsPanel.boundingBox();
