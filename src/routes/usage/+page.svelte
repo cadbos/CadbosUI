@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { npubEncode } from 'nostr-tools/nip19';
 	import type { PageProps } from './$types';
+	import LazyImage from '$lib/components/LazyImage.svelte';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
@@ -246,7 +247,13 @@ before the Change Date. See LICENSE for complete terms.
 								<th scope="row" class="pubkey" title={npub}>
 									<span class="user-identity">
 										{#if picture}
-											<img src={picture} alt="" onerror={() => markPictureFailed(user.pubkey)} />
+											<LazyImage
+												src={picture}
+												alt=""
+												decorative
+												fetchPriority="low"
+												onError={() => markPictureFailed(user.pubkey)}
+											/>
 										{:else}
 											<span class="avatar" aria-hidden="true"
 												>{[...avatarLabel][0]?.toUpperCase()}</span
@@ -476,27 +483,24 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.user-identity {
+		--image-width: 2rem;
+		--image-height: 2rem;
+		--image-radius: 50%;
+		--image-fit: cover;
+		--image-flex: 0 0 auto;
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2);
 		white-space: nowrap;
 	}
 
-	.user-identity img,
 	.avatar {
+		display: grid;
+		place-items: center;
 		width: 2rem;
 		height: 2rem;
 		border-radius: 50%;
 		flex: 0 0 auto;
-	}
-
-	.user-identity img {
-		object-fit: cover;
-	}
-
-	.avatar {
-		display: grid;
-		place-items: center;
 		color: var(--color-accent-contrast);
 		background: var(--color-accent);
 		font-family: inherit;

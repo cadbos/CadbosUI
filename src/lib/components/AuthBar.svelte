@@ -21,6 +21,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { currency } from '$lib/state/currency.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { dismissable, logBoundaryError } from '$lib/utils';
+	import LazyImage from './LazyImage.svelte';
 	import QrCode from './QrCode.svelte';
 	import CurrencySwitcher from './CurrencySwitcher.svelte';
 	import HintIcon from './HintIcon.svelte';
@@ -125,7 +126,13 @@ before the Change Date. See LICENSE for complete terms.
 				onclick={() => (profileState = profileOpen ? 'closed' : 'open')}
 			>
 				{#if auth.nostrProfile?.picture}
-					<img src={auth.nostrProfile.picture} alt="" />
+					<LazyImage
+						src={auth.nostrProfile.picture}
+						alt=""
+						decorative
+						loading="eager"
+						fetchPriority="low"
+					/>
 				{:else if auth.status === 'authenticated'}
 					<span class="avatar" aria-hidden="true">{displayName.slice(0, 1).toUpperCase()}</span>
 				{:else}
@@ -336,6 +343,11 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.auth-trigger {
+		--image-width: 2rem;
+		--image-height: 2rem;
+		--image-radius: 50%;
+		--image-fit: cover;
+		--image-flex: 0 0 auto;
 		display: inline-flex;
 		flex: 1;
 		align-items: center;
@@ -348,16 +360,11 @@ before the Change Date. See LICENSE for complete terms.
 		border: none;
 	}
 
-	.auth-trigger img,
 	.avatar {
 		width: 2rem;
 		height: 2rem;
 		border-radius: 50%;
 		flex: 0 0 auto;
-	}
-
-	.auth-trigger img {
-		object-fit: cover;
 	}
 
 	.chip-actions {

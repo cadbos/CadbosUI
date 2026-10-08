@@ -13,18 +13,60 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { bindImageLoad } from '$lib/bind-image-load';
+	import ImageSkeleton from '$lib/components/ImageSkeleton.svelte';
+
 	interface Props {
 		src: string;
 		alt: string;
 		loading?: 'lazy' | 'eager';
+		fetchPriority?: 'high' | 'low' | 'auto';
 	}
 
-	let { src, alt, loading = 'lazy' }: Props = $props();
+	let { src, alt, loading = 'lazy', fetchPriority }: Props = $props();
+
+	let loadedUrl = $state<string | null>(null);
+	let failedUrl = $state<string | null>(null);
+	const ready = $derived(loadedUrl === src);
+	const failed = $derived(!ready && failedUrl === src);
+
+	function watchPhoto(node: HTMLImageElement): () => void {
+		const current = src;
+		return bindImageLoad(node, {
+			onReady: () => {
+				loadedUrl = current;
+			},
+			onError: () => {
+				failedUrl = current;
+			}
+		});
+	}
 </script>
 
-<span class="blur-fill">
-	<img class="backdrop" {src} alt="" {loading} aria-hidden="true" />
-	<img class="photo" {src} {alt} {loading} />
+<span class="blur-fill" class:ready>
+	{#if !ready}
+		<ImageSkeleton quiet={failed} />
+	{/if}
+	<img
+		class="backdrop"
+		class:failed
+		{src}
+		alt=""
+		{loading}
+		decoding="async"
+		fetchpriority={fetchPriority}
+		aria-hidden="true"
+	/>
+	<img
+		class="photo"
+		class:failed
+		{src}
+		{alt}
+		{loading}
+		decoding="async"
+		fetchpriority={fetchPriority}
+		{@attach watchPhoto}
+	/>
 </span>
 
 <style>
@@ -39,6 +81,11 @@ before the Change Date. See LICENSE for complete terms.
 		width: 100%;
 		height: 100%;
 		overflow: hidden;
+		background: var(--color-skeleton);
+	}
+
+	.blur-fill.ready {
+		background: transparent;
 	}
 
 	img {
@@ -58,5 +105,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	.photo {
 		object-fit: contain;
+	}
+
+	img.failed {
+		opacity: 0;
 	}
 </style>

@@ -126,7 +126,12 @@ before the Change Date. See LICENSE for complete terms.
 			{@const image = resourceDetail.image}
 			<div class="resource-summary">
 				<span class="resource-image">
-					<BlurFillImage src={image.url} alt={t('resources.detail.imageAlt')} loading="eager" />
+					<BlurFillImage
+						src={image.url}
+						alt={t('resources.detail.imageAlt')}
+						loading="eager"
+						fetchPriority="high"
+					/>
 				</span>
 				<div class="resource-meta">
 					<ul class="roles" aria-label={t('resources.detail.rolesLabel')}>

@@ -22,6 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 		ShareGenerationDetailResponse
 	} from '$lib/api/contract';
 	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
+	import LazyImage from '$lib/components/LazyImage.svelte';
 	import ProjectStats from '$lib/components/ProjectStats.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
@@ -287,7 +288,7 @@ before the Change Date. See LICENSE for complete terms.
 				<span class="visually-hidden">{t('share.lightboxClose')}</span>
 			</button>
 			<div class="lightbox-body">
-				<img src={image.url} alt={image.alt} />
+				<LazyImage src={image.url} alt={image.alt} loading="eager" fetchPriority="high" />
 				<div class="lightbox-settings" aria-live="polite">
 					{#if shareViewer.generationDetailStatus === 'loading'}
 						<p class="status">{t('share.settingsLoading')}</p>
@@ -452,19 +453,18 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.lightbox-body {
+		--image-height: auto;
+		--image-position: static;
+		--image-img-height: auto;
+		--image-max-height: 70dvh;
+		--image-fit: contain;
+		--image-bg: var(--color-surface);
+		--image-min-height: 12rem;
 		display: flex;
 		flex-direction: column;
 		max-height: 90dvh;
 		overflow-y: auto;
 		border-radius: var(--radius-lg);
-	}
-
-	.lightbox-body img {
-		display: block;
-		width: 100%;
-		max-height: 70dvh;
-		object-fit: contain;
-		background: var(--color-surface);
 	}
 
 	.lightbox-settings {

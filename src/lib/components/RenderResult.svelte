@@ -23,6 +23,7 @@ before the Change Date. See LICENSE for complete terms.
 	} from '@lucide/svelte';
 	import { resolve } from '$app/paths';
 	import CompareSlider from '$lib/components/CompareSlider.svelte';
+	import LazyImage from '$lib/components/LazyImage.svelte';
 	import RegionSelector from '$lib/components/RegionSelector.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
@@ -41,9 +42,8 @@ before the Change Date. See LICENSE for complete terms.
 	let upscaleError = $state<string | null>(null);
 	let resetConfirmOpen = $state(false);
 
-	function rememberImageSize(event: Event): void {
-		const image = event.currentTarget;
-		if (image instanceof HTMLImageElement && image.naturalWidth > 0 && image.naturalHeight > 0) {
+	function rememberImageSize(image: HTMLImageElement): void {
+		if (image.naturalWidth > 0 && image.naturalHeight > 0) {
 			imageSize = { width: image.naturalWidth, height: image.naturalHeight };
 		}
 	}
@@ -132,7 +132,13 @@ before the Change Date. See LICENSE for complete terms.
 					handleLabel={t('toolbar.compare')}
 				/>
 			{:else}
-				<img src={imageUrl} alt={t('render.generate')} class="output" onload={rememberImageSize} />
+				<LazyImage
+					src={imageUrl}
+					alt={t('render.generate')}
+					loading="eager"
+					fetchPriority="high"
+					onReady={rememberImageSize}
+				/>
 				{#if selectRegion && imageSize}
 					<RegionSelector
 						region={request.activeRepaintRegion()}
@@ -272,18 +278,12 @@ before the Change Date. See LICENSE for complete terms.
 	   this app already has to guard against elsewhere, see the watchdog
 	   below). */
 	.image-card {
+		--image-fit: contain;
 		position: relative;
 		width: 100%;
 		aspect-ratio: 16 / 9;
 		max-height: min(70vh, 720px);
 		background: var(--color-background);
-	}
-
-	.output {
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
-		display: block;
 	}
 
 	/* Floats over the bottom of the canvas instead of sitting in a bordered

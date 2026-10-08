@@ -16,6 +16,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { ImagePlus, Import } from '@lucide/svelte';
 	import { tick } from 'svelte';
 	import { uploadResultSchema } from '$lib/api/contract';
+	import LazyImage from '$lib/components/LazyImage.svelte';
 	import RegionSelector from '$lib/components/RegionSelector.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { normalizeImageContentType } from '$lib/image-mime';
@@ -66,9 +67,8 @@ before the Change Date. See LICENSE for complete terms.
 	let remoteUrl = $state('');
 	let imageSize = $state<{ width: number; height: number } | null>(null);
 
-	function rememberImageSize(event: Event): void {
-		const image = event.currentTarget;
-		if (image instanceof HTMLImageElement && image.naturalWidth > 0 && image.naturalHeight > 0) {
+	function rememberImageSize(image: HTMLImageElement): void {
+		if (image.naturalWidth > 0 && image.naturalHeight > 0) {
 			imageSize = { width: image.naturalWidth, height: image.naturalHeight };
 		}
 	}
@@ -440,11 +440,13 @@ before the Change Date. See LICENSE for complete terms.
 >
 	{#if hasImage}
 		<div class="image-wrapper">
-			<img
+			<LazyImage
+				class="preview"
 				src={effectivePreviewUrl ?? imageUrl ?? ''}
 				alt={t(ariaLabelKey)}
-				class="preview"
-				onload={rememberImageSize}
+				loading="eager"
+				fetchPriority="high"
+				onReady={rememberImageSize}
 			/>
 			{#if selectRegion && imageSize}
 				<RegionSelector
@@ -633,6 +635,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.image-wrapper {
+		--image-fit: contain;
 		position: relative;
 		aspect-ratio: 16 / 9;
 		min-width: 12rem;
@@ -643,13 +646,6 @@ before the Change Date. See LICENSE for complete terms.
 		border: 1.5px solid var(--color-border);
 		background: var(--color-background);
 		resize: both;
-	}
-
-	.preview {
-		display: block;
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
 	}
 
 	.image-overlay {
