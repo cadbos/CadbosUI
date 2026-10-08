@@ -44,12 +44,16 @@ before the Change Date. See LICENSE for complete terms.
 	// The actual reachable maximum — shared by aria-valuemax and the End-key
 	// branch below so the announced max always matches what End produces.
 	let maxWidth = $derived(
-		clampToolsPanelWidth(
-			Number.MAX_SAFE_INTEGER,
-			innerWidth.current ?? TOOLS_PANEL_WIDTH,
-			toolsPanel.position?.x ?? 0
-		)
+		clampToolsPanelWidth(Number.MAX_SAFE_INTEGER, innerWidth.current ?? TOOLS_PANEL_WIDTH)
 	);
+
+	$effect(() => {
+		const viewport = innerWidth.current;
+		const chosen = toolsPanel.width;
+		if (viewport === undefined || chosen === null) return;
+		const fitted = clampToolsPanelWidth(chosen, viewport);
+		if (fitted !== chosen) toolsPanel.setWidth(fitted);
+	});
 
 	// Where the panel is actually drawn: the user's chosen position, kept
 	// inside the current viewport and below the app header. Derived rather
@@ -141,12 +145,31 @@ before the Change Date. See LICENSE for complete terms.
 	const RESIZE_STEP = 24;
 
 	function clampWidth(value: number): number {
-		return clampToolsPanelWidth(value, window.innerWidth, toolsPanel.position?.x ?? 0);
+		return clampToolsPanelWidth(value, window.innerWidth);
+	}
+
+	function placeWidth(nextWidth: number, persist: boolean): void {
+		const width = clampWidth(nextWidth);
+		const drawn = position;
+		if (drawn && toolsPanel.position !== null) {
+			const placed = clampToolsPanelPosition(
+				drawn.x,
+				drawn.y,
+				width,
+				panelHeight,
+				window.innerWidth,
+				window.innerHeight,
+				topBoundary()
+			);
+			toolsPanel.updatePosition(placed.x, placed.y);
+		}
+		if (persist) toolsPanel.setWidth(width);
+		else toolsPanel.updateWidth(width);
 	}
 
 	function cycleSizePreset(): void {
 		const current = toolsPanel.width ?? panelWidth;
-		toolsPanel.setWidth(clampWidth(nextToolsPanelSizePreset(current, window.innerWidth)));
+		placeWidth(nextToolsPanelSizePreset(current, window.innerWidth), true);
 	}
 
 	let resizeStartX = 0;
@@ -168,7 +191,7 @@ before the Change Date. See LICENSE for complete terms.
 		// edge (`left: var(--tools-panel-x)`) and grows rightward instead, like
 		// ScenesDrawer's drawer — so the sign flips.
 		const delta = toolsPanel.position === null ? -dx : dx;
-		toolsPanel.updateWidth(clampWidth(resizeStartWidth + delta));
+		placeWidth(resizeStartWidth + delta, false);
 	}
 
 	function onResizeHandlePointerUp(event: PointerEvent): void {
@@ -189,7 +212,7 @@ before the Change Date. See LICENSE for complete terms.
 		else if (event.key === 'End') next = maxWidth;
 		else return;
 		event.preventDefault();
-		toolsPanel.setWidth(clampWidth(next));
+		placeWidth(next, true);
 	}
 
 	onMount(() => {
@@ -283,7 +306,8 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.floating-tools-panel.at-default-corner {
-		right: max(0px, min(1rem, calc(100vw - var(--tools-panel-width))));
+		right: 1rem;
+		max-width: calc(100vw - 2rem);
 		/* Anchored just below the workspace header (topbar, plus the project
 		   tab bar row whenever one is open) rather than a fixed height — the
 		   header's real height varies with that tab bar, so Workspace.svelte
@@ -405,10 +429,11 @@ before the Change Date. See LICENSE for complete terms.
 
 	.resize-handle {
 		position: absolute;
+		z-index: 2;
 		top: 0;
 		bottom: 0;
 		right: 0;
-		width: 8px;
+		width: 14px;
 		cursor: ew-resize;
 		touch-action: none;
 	}

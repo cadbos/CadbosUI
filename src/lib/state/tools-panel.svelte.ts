@@ -73,12 +73,8 @@ export function clampToolsPanelPosition(
 	};
 }
 
-export function clampToolsPanelWidth(
-	value: number,
-	viewportWidth: number,
-	originX: number = 0
-): number {
-	const max = Math.max(MIN_TOOLS_PANEL_WIDTH, viewportWidth - Math.max(0, originX));
+export function clampToolsPanelWidth(value: number, viewportWidth: number): number {
+	const max = Math.max(MIN_TOOLS_PANEL_WIDTH, viewportWidth - VIEWPORT_MARGIN * 2);
 	return Math.min(Math.max(value, MIN_TOOLS_PANEL_WIDTH), max);
 }
 
@@ -154,9 +150,7 @@ class ToolsPanelState {
 			this.open = stored.open;
 			this.position = stored.position;
 			this.width =
-				stored.width === null
-					? null
-					: clampToolsPanelWidth(stored.width, window.innerWidth, stored.position?.x ?? 0);
+				stored.width === null ? null : clampToolsPanelWidth(stored.width, window.innerWidth);
 		}
 	}
 

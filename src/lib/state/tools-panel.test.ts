@@ -74,13 +74,16 @@ describe('clampToolsPanelPosition', () => {
 });
 
 describe('clampToolsPanelWidth', () => {
-	it('keeps the minimum and lets a resize reach the viewport edge', () => {
+	it('keeps the minimum and leaves a margin so the resize handle stays on screen', () => {
 		expect(clampToolsPanelWidth(10, 1280)).toBe(MIN_TOOLS_PANEL_WIDTH);
-		expect(clampToolsPanelWidth(5000, 1280)).toBe(1280);
+		expect(clampToolsPanelWidth(5000, 1280)).toBe(1280 - 32);
+		expect(clampToolsPanelWidth(5000, 400)).toBe(400 - 32);
 	});
 
-	it('stops the right edge at the screen when the panel has been dragged', () => {
-		expect(clampToolsPanelWidth(5000, 1280, 200)).toBe(1080);
+	it('keeps a panel widened against the right edge inset by that same margin', () => {
+		const width = clampToolsPanelWidth(900, 1280);
+		const placed = clampToolsPanelPosition(1100, 120, width, 400, 1280, 800, 0, 16);
+		expect(placed.x + width).toBe(1280 - 16);
 	});
 });
 
