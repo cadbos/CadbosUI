@@ -19,9 +19,8 @@ before the Change Date. See LICENSE for complete terms.
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
-	import { currency } from '$lib/state/currency.svelte';
 	import { usage } from '$lib/state/usage.svelte';
-	import { formatBytes } from '$lib/utils';
+	import UsageNumber from './UsageNumber.svelte';
 
 	let { data }: PageProps = $props();
 
@@ -70,15 +69,6 @@ before the Change Date. See LICENSE for complete terms.
 		}).format(new Date(timestamp));
 	}
 
-	function formatSize(bytes: number | null): string {
-		if (bytes === null) return t('usage.emptyValue');
-		return formatBytes(bytes, getLocale());
-	}
-
-	function formatCount(value: number): string {
-		return new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 0 }).format(value);
-	}
-
 	function formatTimeZoneName(timeZoneName: Intl.DateTimeFormatOptions['timeZoneName']): string {
 		const formatter = new Intl.DateTimeFormat(getLocale(), { timeZone, timeZoneName });
 		return (
@@ -124,50 +114,52 @@ before the Change Date. See LICENSE for complete terms.
 						{:else if usage.walletBalanceStatus === 'error'}
 							<dd class="tile-status error" role="alert">{t('usage.walletBalanceFailed')}</dd>
 						{:else if usage.walletBalanceStatus === 'ready' && usage.walletBalance !== null}
-							<dd>{currency.format(usage.walletBalance)}</dd>
+							<dd><UsageNumber kind="currency" value={usage.walletBalance} /></dd>
 						{/if}
 					</div>
 					{#if usage.totalsStatus === 'ready' && usage.totals !== null}
 						<div>
 							<dt>{t('usage.totals.deposits')}</dt>
-							<dd>{t('usage.emptyValue')}</dd>
+							<dd><UsageNumber kind="count" value={null} /></dd>
 						</div>
 						<div>
 							<dt>{t('usage.totals.spend')}</dt>
-							<dd>{currency.format(usage.totals.totalSpend)}</dd>
+							<dd><UsageNumber kind="currency" value={usage.totals.totalSpend} /></dd>
 						</div>
 						<div>
 							<dt>{t('usage.totals.users')}</dt>
-							<dd>{usage.totals.userCount}</dd>
+							<dd><UsageNumber kind="count" value={usage.totals.userCount} /></dd>
 						</div>
 						<div>
 							<dt>{t('usage.totals.projects')}</dt>
-							<dd>{usage.totals.projectCount}</dd>
+							<dd><UsageNumber kind="count" value={usage.totals.projectCount} /></dd>
 						</div>
 						<div>
 							<dt>{t('usage.totals.sessions')}</dt>
-							<dd>{usage.totals.sessionCount}</dd>
+							<dd><UsageNumber kind="count" value={usage.totals.sessionCount} /></dd>
 						</div>
 						<div>
 							<dt>{t('usage.totals.generations')}</dt>
-							<dd>{usage.totals.generationCount}</dd>
+							<dd><UsageNumber kind="count" value={usage.totals.generationCount} /></dd>
 						</div>
 						<div>
 							<dt>{t('usage.totals.sources')}</dt>
 							<dd>
-								{ti('usage.totals.countWithSize', {
-									count: usage.totals.sourceCount,
-									size: formatSize(usage.totals.sourceBytes)
-								})}
+								<UsageNumber
+									kind="countWithSize"
+									value={usage.totals.sourceCount}
+									bytes={usage.totals.sourceBytes}
+								/>
 							</dd>
 						</div>
 						<div>
 							<dt>{t('usage.totals.references')}</dt>
 							<dd>
-								{ti('usage.totals.countWithSize', {
-									count: usage.totals.referenceCount,
-									size: formatSize(usage.totals.referenceBytes)
-								})}
+								<UsageNumber
+									kind="countWithSize"
+									value={usage.totals.referenceCount}
+									bytes={usage.totals.referenceBytes}
+								/>
 							</dd>
 						</div>
 					{/if}
@@ -176,9 +168,13 @@ before the Change Date. See LICENSE for complete terms.
 							<dt>{ti('usage.totals.d1RowsRead', { date: usage.d1Limits.date })}</dt>
 							<dd>
 								<span class="d1-quotient">
-									<span class="d1-used">{formatCount(usage.d1Limits.rowsRead)}</span>
+									<span class="d1-used"
+										><UsageNumber kind="count" value={usage.d1Limits.rowsRead} /></span
+									>
 									<span class="d1-divider">{t('usage.totals.d1DivisionSign')}</span>
-									<span class="d1-limit">{formatCount(usage.d1Limits.readLimit)}</span>
+									<span class="d1-limit"
+										><UsageNumber kind="count" value={usage.d1Limits.readLimit} /></span
+									>
 								</span>
 								{#if usage.d1Limits.rowsRead >= usage.d1Limits.readLimit}
 									<span class="limit-reached" role="status">{t('usage.totals.d1LimitReached')}</span
@@ -190,9 +186,13 @@ before the Change Date. See LICENSE for complete terms.
 							<dt>{ti('usage.totals.d1RowsWritten', { date: usage.d1Limits.date })}</dt>
 							<dd>
 								<span class="d1-quotient">
-									<span class="d1-used">{formatCount(usage.d1Limits.rowsWritten)}</span>
+									<span class="d1-used"
+										><UsageNumber kind="count" value={usage.d1Limits.rowsWritten} /></span
+									>
 									<span class="d1-divider">{t('usage.totals.d1DivisionSign')}</span>
-									<span class="d1-limit">{formatCount(usage.d1Limits.writeLimit)}</span>
+									<span class="d1-limit"
+										><UsageNumber kind="count" value={usage.d1Limits.writeLimit} /></span
+									>
 								</span>
 								{#if usage.d1Limits.rowsWritten >= usage.d1Limits.writeLimit}
 									<span class="limit-reached" role="status">{t('usage.totals.d1LimitReached')}</span
@@ -253,17 +253,17 @@ before the Change Date. See LICENSE for complete terms.
 					<thead>
 						<tr>
 							<th scope="col">{t('usage.column.user')}</th>
-							<th scope="col">{t('usage.column.balance')}</th>
-							<th scope="col">{t('usage.column.totalDeposit')}</th>
+							<th scope="col" class="numeric-column">{t('usage.column.balance')}</th>
+							<th scope="col" class="numeric-column">{t('usage.column.totalDeposit')}</th>
 							<th scope="col">{t('usage.column.lastDepositAt')}</th>
-							<th scope="col">{t('usage.column.projectCount')}</th>
-							<th scope="col">{t('usage.column.sessionCount')}</th>
-							<th scope="col">{t('usage.column.generationCount')}</th>
-							<th scope="col">{t('usage.column.sourceCount')}</th>
-							<th scope="col">{t('usage.column.sourceBytes')}</th>
-							<th scope="col">{t('usage.column.referenceCount')}</th>
-							<th scope="col">{t('usage.column.referenceBytes')}</th>
-							<th scope="col">{t('usage.column.totalSpend')}</th>
+							<th scope="col" class="numeric-column">{t('usage.column.projectCount')}</th>
+							<th scope="col" class="numeric-column">{t('usage.column.sessionCount')}</th>
+							<th scope="col" class="numeric-column">{t('usage.column.generationCount')}</th>
+							<th scope="col" class="numeric-column">{t('usage.column.sourceCount')}</th>
+							<th scope="col" class="numeric-column">{t('usage.column.sourceBytes')}</th>
+							<th scope="col" class="numeric-column">{t('usage.column.referenceCount')}</th>
+							<th scope="col" class="numeric-column">{t('usage.column.referenceBytes')}</th>
+							<th scope="col" class="numeric-column">{t('usage.column.totalSpend')}</th>
 							<th scope="col" title={timeZoneFullName}
 								>{t('usage.column.latestSpendAt')}, {timeZoneAbbreviation}</th
 							>
@@ -300,17 +300,32 @@ before the Change Date. See LICENSE for complete terms.
 										>
 									</span>
 								</th>
-								<td>{currency.format(user.balance)}</td>
-								<td>{currency.format(user.totalDeposit)}</td>
+								<td class="numeric-column"><UsageNumber kind="currency" value={user.balance} /></td>
+								<td class="numeric-column"
+									><UsageNumber kind="currency" value={user.totalDeposit} /></td
+								>
 								<td>{formatTimestamp(user.lastDepositAt)}</td>
-								<td>{user.projectCount}</td>
-								<td>{user.sessionCount}</td>
-								<td>{user.generationCount}</td>
-								<td>{user.sourceCount}</td>
-								<td>{formatSize(user.sourceBytes)}</td>
-								<td>{user.referenceCount}</td>
-								<td>{formatSize(user.referenceBytes)}</td>
-								<td>{currency.format(user.totalSpend)}</td>
+								<td class="numeric-column"
+									><UsageNumber kind="count" value={user.projectCount} /></td
+								>
+								<td class="numeric-column"
+									><UsageNumber kind="count" value={user.sessionCount} /></td
+								>
+								<td class="numeric-column"
+									><UsageNumber kind="count" value={user.generationCount} /></td
+								>
+								<td class="numeric-column"><UsageNumber kind="count" value={user.sourceCount} /></td
+								>
+								<td class="numeric-column"><UsageNumber kind="size" value={user.sourceBytes} /></td>
+								<td class="numeric-column"
+									><UsageNumber kind="count" value={user.referenceCount} /></td
+								>
+								<td class="numeric-column"
+									><UsageNumber kind="size" value={user.referenceBytes} /></td
+								>
+								<td class="numeric-column"
+									><UsageNumber kind="currency" value={user.totalSpend} /></td
+								>
 								<td>{formatTimestamp(user.latestSpendAt)}</td>
 							</tr>
 						{/each}
@@ -431,6 +446,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.totals dd.tile-status {
+		text-align: left;
 		font-size: 0.9375rem;
 		font-weight: 500;
 	}
@@ -488,6 +504,11 @@ before the Change Date. See LICENSE for complete terms.
 		text-align: left;
 		vertical-align: top;
 		white-space: nowrap;
+	}
+
+	.numeric-column {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
 	}
 
 	thead th {
