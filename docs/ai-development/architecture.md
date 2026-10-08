@@ -80,9 +80,10 @@ Auto-loaded by task description. Installed in [.claude/skills/](../../.claude/sk
   `svelte-styling`, `svelte-template-directives`, `sveltekit-data-flow`,
   `sveltekit-remote-functions`, `sveltekit-structure`, `svelte-deployment`,
   `svelte-layerchart`, `ecosystem-guide`.
-- **Project (9):** `cadbos-conventions`, `cadbos-structure`, `cadbos-request-model`,
-  `cadbos-integrations`, `cadbos-testing`, `cadbos-security`, `cadbos-commits`,
-  `cadbos-self-review`, `cadbos-pull-requests`.
+- **Project (10):** `cadbos-conventions`, `cadbos-structure`, `cadbos-request-model`,
+  `cadbos-integrations`, `cadbos-numeric-display`, `cadbos-testing`,
+  `cadbos-security`, `cadbos-commits`, `cadbos-self-review`,
+  `cadbos-pull-requests`.
 - **Supporting (2):** `frontend-design` for intentional UI design and
   `prompt-architect` for prompt-engineering frameworks (see §4).
 
@@ -142,7 +143,7 @@ four:
 |---|---|
 | Instructions (AGENTS.md/CLAUDE.md) | [CLAUDE.md](../../CLAUDE.md) + [AGENTS.md](../../AGENTS.md) ✅ |
 | MCP Server | Svelte MCP in [.mcp.json](../../.mcp.json) ✅ |
-| Skills | 10 Svelte + 9 project + 2 supporting skills in [.claude/skills](../../.claude/skills) ✅ |
+| Skills | 10 Svelte + 10 project + 2 supporting skills in [.claude/skills](../../.claude/skills) ✅ |
 | Subagents | svelte-file-editor, test-runner, code-reviewer, a11y-validator ✅ |
 
 ---
@@ -159,7 +160,7 @@ AGENTS.md                      # L1 — portable instructions (other tools)
                                #      code-reviewer, a11y-validator
   settings.json                # hooks (svelte-legacy-guard)
   hooks/svelte-legacy-guard.py # Svelte 4 syntax guard
-  skills/                      # L3 — 10 Svelte + 9 cadbos-* + 2 supporting skills
+  skills/                      # L3 — 10 Svelte + 10 cadbos-* + 2 supporting skills
 ai-context/                    # L2 — local git-ignored knowledge base (read-only)
 docs/ai-development/
   architecture.md              # this file
