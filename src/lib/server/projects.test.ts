@@ -337,6 +337,7 @@ describe('projects repository', () => {
 					styleNegativePrompt: TEST_FORM_SNAPSHOT.styleNegativePrompt,
 					objectReplacementObject: TEST_FORM_SNAPSHOT.objectReplacementObject,
 					objectReplacementScale: TEST_FORM_SNAPSHOT.objectReplacementScale,
+					objectReplacementRegion: TEST_FORM_SNAPSHOT.objectReplacementRegion,
 					textureReplacementSurface: TEST_FORM_SNAPSHOT.textureReplacementSurface,
 					textureReplacementMasked: TEST_FORM_SNAPSHOT.textureReplacementMasked,
 					lightSettingsPresetIds: TEST_FORM_SNAPSHOT.lightSettingsPresetIds,

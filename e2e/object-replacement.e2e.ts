@@ -13,6 +13,7 @@
  */
 
 import type { Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 import { expect, test } from './fixtures';
 import { media, mediaKey } from './helpers/media';
@@ -52,7 +53,7 @@ async function authenticate(page: Page): Promise<void> {
 	await mockProjectSessionRoutes(page);
 }
 
-async function uploadInputs(page: Page): Promise<void> {
+async function uploadInputs(page: Page, sceneBuffer?: Buffer): Promise<void> {
 	await page.route('**/api/uploads', async (route) => {
 		const body = route.request().postDataBuffer();
 		if (body === null) throw new Error('Upload request body is missing');
@@ -79,9 +80,9 @@ async function uploadInputs(page: Page): Promise<void> {
 	// preview to render before continuing, so validation/canSubmit has settled
 	// on the picked file rather than racing a still-pending reactive update.
 	await inputs.nth(0).setInputFiles({
-		name: 'scene.webp',
-		mimeType: 'image/webp',
-		buffer: Buffer.from('scene')
+		name: sceneBuffer ? 'scene.png' : 'scene.webp',
+		mimeType: sceneBuffer ? 'image/png' : 'image/webp',
+		buffer: sceneBuffer ?? Buffer.from('scene')
 	});
 	await expect(page.getByRole('button', { name: 'Выбрать фото' })).toBeVisible();
 	await Promise.all([
@@ -187,6 +188,50 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 	await panel.getByRole('button', { name: 'Выбрать референс объекта' }).click();
 	await expect(panel.getByRole('button', { name: 'Выбрать референс объекта' })).toHaveCount(0);
 	await expect(panel.getByRole('button', { name: /^Референс нового объекта/ })).toBeFocused();
+});
+
+test('submits an adjusted area and clears it independently', async ({ page }) => {
+	await authenticate(page);
+	await page.goto('/edit?tool=object-replacement');
+	await uploadInputs(page, await readFile(new URL('../static/icon-192.png', import.meta.url)));
+
+	const panel = page.locator('#edit-tool-panel-object-replacement');
+	const select = panel.getByRole('button', { name: 'Выбрать область' });
+	await select.click();
+	const box = page.getByRole('button', { name: /Выбранная область/ });
+	await expect(box).toBeVisible();
+	await panel.getByRole('button', { name: 'Очистить область' }).click();
+	await expect(box).toHaveCount(0);
+	await select.click();
+	await box.focus();
+	await box.press('ArrowRight');
+
+	let submittedBody: unknown;
+	await page.route('**/api/object-replacement', async (route) => {
+		submittedBody = route.request().postDataJSON();
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: `/api/object-replacement/${JOB_ID}` },
+			body: JSON.stringify({ id: JOB_ID, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/object-replacement/${JOB_ID}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			headers: { 'retry-after': '30' },
+			body: JSON.stringify({ id: JOB_ID, status: 'processing' })
+		});
+	});
+	await panel.getByLabel(/Точно опишите существующий объект/).fill('серый диван');
+	await panel.getByRole('button', { name: 'Заменить объект' }).click();
+	await expect(page).toHaveURL(new RegExp(`job=${JOB_ID}`));
+	const expectedRegion = { x: 0.31, y: 0.3, width: 0.4, height: 0.4 };
+	expect(submittedBody).toMatchObject({
+		region: expectedRegion,
+		formSnapshot: { objectReplacementRegion: expectedRegion }
+	});
 });
 
 test('resumes a stored completed job after reload without submitting again', async ({ page }) => {

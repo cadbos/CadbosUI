@@ -172,7 +172,8 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				{
 					image: media.get(parsed.data.imageKey)!.url,
 					referenceImage: media.get(parsed.data.referenceImageKey)!.url,
-					replacementObject: parsed.data.replacementObject
+					replacementObject: parsed.data.replacementObject,
+					region: parsed.data.region
 				},
 				url.origin,
 				id

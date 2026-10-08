@@ -44,8 +44,7 @@ before the Change Date. See LICENSE for complete terms.
 		requiredLabel?: TranslationKey;
 		disabled?: boolean;
 		compact?: boolean;
-		// Lets the user drag out the part of the picture the repaint tool works on.
-		selectRegion?: boolean;
+		regionTool?: 'repaint' | 'object-replacement';
 		onUploadingChange?: (uploading: boolean) => void;
 	}
 
@@ -55,7 +54,7 @@ before the Change Date. See LICENSE for complete terms.
 		requiredLabel = undefined,
 		disabled = false,
 		compact = false,
-		selectRegion = false,
+		regionTool = undefined,
 		onUploadingChange = undefined
 	}: Props = $props();
 
@@ -449,13 +448,22 @@ before the Change Date. See LICENSE for complete terms.
 				fetchPriority="high"
 				onReady={rememberImageSize}
 			/>
-			{#if selectRegion && imageSize}
+			{#if regionTool && imageSize}
 				<RegionSelector
-					region={request.activeRepaintRegion()}
+					region={regionTool === 'repaint'
+						? request.activeRepaintRegion()
+						: request.activeObjectReplacementRegion()}
 					naturalWidth={imageSize.width}
 					naturalHeight={imageSize.height}
-					boxLabel={t('repaint.region.boxLabel')}
-					onchange={(region) => request.setRepaintRegion(region)}
+					boxLabel={t(
+						regionTool === 'repaint'
+							? 'repaint.region.boxLabel'
+							: 'objectReplacement.region.boxLabel'
+					)}
+					onchange={(region) =>
+						regionTool === 'repaint'
+							? request.setRepaintRegion(region)
+							: request.setObjectReplacementRegion(region)}
 				/>
 			{/if}
 			<div class="image-overlay">

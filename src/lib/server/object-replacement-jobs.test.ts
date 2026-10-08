@@ -38,6 +38,7 @@ const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	styleNegativePrompt: '',
 	objectReplacementObject: 'sofa',
 	objectReplacementScale: 1,
+	objectReplacementRegion: null,
 	textureReplacementSurface: '',
 	textureReplacementMasked: false,
 	lightSettingsPresetIds: [],
