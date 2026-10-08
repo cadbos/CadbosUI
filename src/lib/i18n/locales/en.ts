@@ -219,6 +219,7 @@ export const en = {
 	'generatedImages.resizeHandle': 'Resize the scenes panel',
 	'generatedImages.sizePreset': 'Change the scenes panel size',
 	'generatedImages.restore': 'Restore settings from scene {order}',
+	'generatedImages.restoreSource': 'Restore settings from scene {order} base',
 	'generatedImages.restoreFailed': 'Could not restore the scene’s settings.',
 	'generatedImages.confirmRestoreTitle': 'Restore settings?',
 	'generatedImages.confirmRestoreDescription':

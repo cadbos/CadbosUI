@@ -216,6 +216,7 @@ export interface Dictionary {
 	'generatedImages.resizeHandle': string;
 	'generatedImages.sizePreset': string;
 	'generatedImages.restore': string;
+	'generatedImages.restoreSource': string;
 	'generatedImages.restoreFailed': string;
 	'generatedImages.confirmRestoreTitle': string;
 	'generatedImages.confirmRestoreDescription': string;

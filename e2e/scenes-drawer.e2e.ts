@@ -173,6 +173,97 @@ async function mockSingleStyleTransferScene(page: Page): Promise<void> {
 	});
 }
 
+const BASE_PROJECT_ID = '00000000-0000-4000-8000-000000000230';
+const BASE_SESSION_ID = '00000000-0000-4000-8000-000000000231';
+const BASE_RENDER_ID = '00000000-0000-4000-8000-000000000232';
+const BASE_FOLLOWUP_ID = '00000000-0000-4000-8000-000000000233';
+
+async function mockBaseThatIsAPreviousResult(page: Page): Promise<void> {
+	const session = {
+		projectId: BASE_PROJECT_ID,
+		projectTitle: 'Living room',
+		sessionId: BASE_SESSION_ID,
+		sessionTitle: 'Main thread'
+	};
+	await page.route('**/api/generated-images**', async (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				images: [
+					{
+						id: BASE_FOLLOWUP_ID,
+						image: media(3, '/api/media/test-media/styled.webp'),
+						source: media(2, '/api/media/test-media/render.webp'),
+						kind: 'style-transfer',
+						createdAt: Date.UTC(2026, 0, 2),
+						session,
+						iteration: 2,
+						number: 2,
+						sourceGeneration: { id: BASE_RENDER_ID, kind: 'render' }
+					},
+					{
+						id: BASE_RENDER_ID,
+						image: media(2, '/api/media/test-media/render.webp'),
+						source: media(1, '/api/media/test-media/scene.jpg'),
+						kind: 'render',
+						createdAt: Date.UTC(2026, 0, 1),
+						session,
+						iteration: 1,
+						number: 1,
+						sourceGeneration: null
+					}
+				],
+				pagination: { offset: 0, size: 100, hasMore: false }
+			})
+		});
+	});
+	await mockSceneFilterOptions(page);
+	await page.route(`**/api/generated-images/${BASE_RENDER_ID}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: BASE_RENDER_ID,
+				prompt: 'тёплый дуб',
+				kind: 'render',
+				createdAt: Date.UTC(2026, 0, 1),
+				amount: 1.5,
+				balanceAfter: 8.5,
+				image: media(2, '/api/media/test-media/render.webp'),
+				source: media(1, '/api/media/test-media/scene.jpg'),
+				formSnapshot: { ...FORM_SNAPSHOT, promptOverride: 'тёплый дуб' },
+				session,
+				media: [
+					media(2, '/api/media/test-media/render.webp'),
+					media(1, '/api/media/test-media/scene.jpg')
+				]
+			})
+		});
+	});
+}
+
+test('restores the generation that produced a scene’s base, not the scene that reused it', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockBaseThatIsAPreviousResult(page);
+
+	await page.goto('/create/interior?view=chat&format=webp');
+	await page.getByRole('button', { name: 'Сцены' }).click();
+	await page.locator('.scene-card').first().locator('.image-frame').first().hover();
+	await page.getByRole('button', { name: 'Восстановить настройки основы сцены 2' }).click();
+
+	await expect(page).toHaveURL(new RegExp(`/create/.*generation=${BASE_RENDER_ID}`));
+	await expect(page).toHaveURL(new RegExp(`project=${BASE_PROJECT_ID}&session=${BASE_SESSION_ID}`));
+	await expect(page).not.toHaveURL(/style-transfer/);
+	await expect(
+		page.locator('#mode-panel-render').getByRole('img', { name: 'Сгенерировать' })
+	).toHaveAttribute('src', '/api/media/test-media/render.webp');
+	await expect(page.getByLabel('Промпт чата')).toHaveValue('тёплый дуб');
+});
+
 test('restores a past generation’s exact settings from the scenes drawer', async ({ page }) => {
 	await authenticate(page);
 	await mockSingleStyleTransferScene(page);

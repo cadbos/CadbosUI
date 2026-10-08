@@ -220,6 +220,7 @@ export const ru = {
 	'generatedImages.resizeHandle': 'Изменить ширину панели сцен',
 	'generatedImages.sizePreset': 'Изменить размер панели сцен',
 	'generatedImages.restore': 'Восстановить настройки сцены {order}',
+	'generatedImages.restoreSource': 'Восстановить настройки основы сцены {order}',
 	'generatedImages.restoreFailed': 'Не удалось восстановить настройки сцены.',
 	'generatedImages.confirmRestoreTitle': 'Восстановить настройки?',
 	'generatedImages.confirmRestoreDescription':
