@@ -63,6 +63,36 @@ test('root opens the workspace with no mode selected', async ({ page }) => {
 	);
 });
 
+test('mode chooser cards switch to that mode', async ({ page }) => {
+	await page.goto('/');
+	await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
+
+	await page.getByRole('button', { name: ru['mode.edit'] }).click();
+	await expect(page).toHaveURL(/\/edit\?tool=add-object$/);
+	await expect(page.getByRole('tab', { name: ru['mode.edit'] })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+
+	await page.goto('/');
+	await page.getByRole('button', { name: ru['mode.styleTransfer'] }).click();
+	await expect(page).toHaveURL(
+		/\/style-transfer\/interior\?reference=photorealistic&format=webp&strength=0\.7$/
+	);
+	await expect(page.getByRole('tab', { name: ru['mode.styleTransfer'] })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+
+	await page.goto('/');
+	await page.getByRole('button', { name: ru['mode.render'] }).click();
+	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
+	await expect(page.getByRole('tab', { name: ru['mode.render'] })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+});
+
 test('direct navigation to /create/exterior opens the exterior scene', async ({ page }) => {
 	await page.goto('/create/exterior');
 	await expect(page.getByRole('tab', { name: 'Экстерьер' })).toHaveAttribute(

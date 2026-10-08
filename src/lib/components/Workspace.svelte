@@ -831,15 +831,21 @@ before the Change Date. See LICENSE for complete terms.
 					<div class="step-card">
 						<p class="panel-description">{t('toolsPanel.chooseMode')}</p>
 						<ul class="mode-clouds">
-							{#each modes as modeOption (modeOption.id)}
-								<li class="mode-cloud">
-									<span class="mode-cloud-icon">
-										<modeOption.icon size={16} strokeWidth={1.8} aria-hidden="true" />
-									</span>
-									<span class="mode-cloud-copy">
-										<span class="mode-cloud-title">{t(modeOption.label)}</span>
-										<span class="mode-cloud-description">{t(modeOption.description)}</span>
-									</span>
+							{#each modes as modeOption, index (modeOption.id)}
+								<li>
+									<button
+										type="button"
+										class="mode-cloud"
+										onclick={() => modeTabController.activate(index)}
+									>
+										<span class="mode-cloud-icon">
+											<modeOption.icon size={16} strokeWidth={1.8} aria-hidden="true" />
+										</span>
+										<span class="mode-cloud-copy">
+											<span class="mode-cloud-title">{t(modeOption.label)}</span>
+											<span class="mode-cloud-description">{t(modeOption.description)}</span>
+										</span>
+									</button>
 								</li>
 							{/each}
 						</ul>
@@ -1309,9 +1315,38 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		align-items: flex-start;
 		gap: 0.75rem;
+		width: 100%;
+		margin: 0;
 		padding: 0.85rem 1rem;
+		font: inherit;
+		text-align: start;
+		color: inherit;
 		background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+		border: 1px solid transparent;
 		border-radius: 1.75rem;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			color 0.15s,
+			box-shadow 0.15s;
+	}
+
+	.mode-cloud:hover {
+		background: var(--color-surface-hover);
+		border-color: var(--color-accent);
+		box-shadow: var(--shadow);
+	}
+
+	.mode-cloud:hover .mode-cloud-title,
+	.mode-cloud:hover .mode-cloud-description,
+	.mode-cloud:hover .mode-cloud-icon {
+		color: var(--color-accent-text);
+	}
+
+	.mode-cloud:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 2px;
 	}
 
 	.mode-cloud-icon {
