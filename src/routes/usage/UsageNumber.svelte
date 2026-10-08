@@ -23,7 +23,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	let props: Props = $props();
 
-	const byteUnits = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const;
 	const numericPartTypes = new Set(['integer', 'group', 'decimal', 'fraction', 'minusSign']);
 
 	function formatNumber(value: number, maximumFractionDigits: number): string {
@@ -34,17 +33,11 @@ before the Change Date. See LICENSE for complete terms.
 	function formatSize(bytes: number | null): string {
 		if (bytes === null) return t('usage.emptyValue');
 
-		let value = bytes;
-		let unit = 0;
-		while (value >= 1024 && unit < byteUnits.length - 1) {
-			value /= 1024;
-			unit += 1;
-		}
-
-		const maximumFractionDigits = unit === 0 ? 0 : 1;
+		const value = bytes / 1024 ** 2;
+		const maximumFractionDigits = 1;
 		const parts = new Intl.NumberFormat(getLocale(), {
 			style: 'unit',
-			unit: byteUnits[unit],
+			unit: 'megabyte',
 			unitDisplay: 'short',
 			maximumFractionDigits
 		}).formatToParts(value);
