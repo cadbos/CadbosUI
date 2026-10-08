@@ -423,7 +423,12 @@ before the Change Date. See LICENSE for complete terms.
 	function restoreSource(image: SceneRecord): void {
 		const sourceGeneration = image.sourceGeneration;
 		if (!sourceGeneration || sourceGeneration.kind === 'upscale') return;
-		void requestRestore(sourceGeneration.id, sourceGeneration.kind, image.number);
+		const produced = generatedImages.images.find((scene) => scene.id === sourceGeneration.id);
+		void requestRestore(
+			sourceGeneration.id,
+			sourceGeneration.kind,
+			produced?.number ?? image.number
+		);
 	}
 
 	// True once there's something a restore would actually discard — an empty
