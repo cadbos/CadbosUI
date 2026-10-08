@@ -79,6 +79,7 @@ export interface Scene extends GeneratedImage {
 	session: GenerationSessionRef | null;
 	iteration: number | null;
 	number: number;
+	sourceGeneration: { id: string; kind: GenerationKind } | null;
 }
 
 export interface GeneratedImagesPage {
@@ -448,12 +449,26 @@ export interface SceneFilter {
 interface SceneRow extends GenerationRow, SessionRefColumns {
 	iteration: number | null;
 	number: number;
+	source_generation_id: string | null;
+	source_generation_kind: string | null;
+}
+
+function sourceGenerationForRow(row: SceneRow): Scene['sourceGeneration'] {
+	if (!row.source_generation_id || !row.source_generation_kind) return null;
+	const kind = generationKindForRow(row.source_generation_id, row.source_generation_kind);
+	return kind ? { id: row.source_generation_id, kind } : null;
 }
 
 function toScene(row: SceneRow): Scene | null {
 	const image = toGeneratedImage(row);
 	return image
-		? { ...image, session: sessionRefForRow(row), iteration: row.iteration, number: row.number }
+		? {
+				...image,
+				session: sessionRefForRow(row),
+				iteration: row.iteration,
+				number: row.number,
+				sourceGeneration: sourceGenerationForRow(row)
+			}
 		: null;
 }
 
@@ -483,7 +498,18 @@ function sceneQuery(filter: SceneFilter): string {
 	const columns =
 		's.id, s.user_id, s.result_media_id, s.source_media_id, result_media.filename AS result_filename, ' +
 		'result_bucket.name AS result_bucket_name, s.kind, s.created_at, ' +
-		's.session_id, s.session_title, s.project_id, s.project_title, s.iteration, s.number ';
+		's.session_id, s.session_title, s.project_id, s.project_title, s.iteration, s.number, ' +
+		'source_generation.id AS source_generation_id, source_generation.kind AS source_generation_kind ';
+	const sourceGenerationJoin =
+		'LEFT JOIN generations source_generation ON source_generation.id = (' +
+		'SELECT produced.id FROM generations produced ' +
+		'WHERE produced.user_id = s.user_id AND produced.result_media_id = s.source_media_id ' +
+		'AND produced.id != s.id ' +
+		'AND (produced.created_at, produced.id) < (' +
+		'SELECT earliest.created_at, earliest.id FROM generations earliest ' +
+		'WHERE earliest.user_id = s.user_id AND earliest.source_media_id = s.source_media_id ' +
+		'ORDER BY earliest.created_at, earliest.id LIMIT 1) ' +
+		'ORDER BY produced.created_at DESC, produced.id DESC LIMIT 1) ';
 	const sessionColumns =
 		'ps.id AS session_id, ps.title AS session_title, p.id AS project_id, p.title AS project_title';
 	if (filter.view === 'iterations') {
@@ -493,7 +519,7 @@ function sceneQuery(filter: SceneFilter): string {
 			'ROW_NUMBER() OVER (PARTITION BY g.session_id ORDER BY g.created_at, g.id) END AS iteration, ' +
 			'ROW_NUMBER() OVER (ORDER BY g.created_at, g.id) AS number ' +
 			`FROM generations g ${LIVE_SESSION_JOINS}WHERE ${SCENE_FILTER_CONDITIONS}) ` +
-			`SELECT ${columns}FROM s ${media}ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`
+			`SELECT ${columns}FROM s ${media}${sourceGenerationJoin}ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`
 		);
 	}
 	return (
@@ -507,7 +533,7 @@ function sceneQuery(filter: SceneFilter): string {
 		`AND g.kind IN (${generationKinds.map(() => '?').join(', ')})), ` +
 		's AS (SELECT ranked.*, ROW_NUMBER() OVER (ORDER BY created_at, id) AS number ' +
 		'FROM ranked WHERE latest_rank = 1) ' +
-		`SELECT ${columns}FROM s ${media}ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`
+		`SELECT ${columns}FROM s ${media}${sourceGenerationJoin}ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`
 	);
 }
 

@@ -38,6 +38,7 @@ before the Change Date. See LICENSE for complete terms.
 		sceneViews,
 		type GenerationKind,
 		type GenerationSessionRef,
+		type SceneRecord,
 		type SceneView
 	} from '$lib/api/contract';
 	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
@@ -419,6 +420,17 @@ before the Change Date. See LICENSE for complete terms.
 		navigateToDestination(kind, 'scenesDrawer.imageNavigation');
 	}
 
+	function restoreSource(image: SceneRecord): void {
+		const sourceGeneration = image.sourceGeneration;
+		if (!sourceGeneration || sourceGeneration.kind === 'upscale') return;
+		const produced = generatedImages.images.find((scene) => scene.id === sourceGeneration.id);
+		void requestRestore(
+			sourceGeneration.id,
+			sourceGeneration.kind,
+			produced?.number ?? image.number
+		);
+	}
+
 	// True once there's something a restore would actually discard — an empty
 	// form has nothing to lose, and a form that already matches the last
 	// generation it produced (nothing typed since) is effectively saved.
@@ -758,15 +770,34 @@ before the Change Date. See LICENSE for complete terms.
 											<span class="source-badge">{t('generatedImages.sourceBadge')}</span>
 										{/if}
 										<div class="actions">
-											<button
-												type="button"
-												class="icon-button"
-												aria-label={ti('generatedImages.useSource', { order: image.number })}
-												title={ti('generatedImages.useSource', { order: image.number })}
-												onclick={() => useImage(image.source.key, image.kind)}
-											>
-												<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
-											</button>
+											{#if image.sourceGeneration && image.sourceGeneration.kind !== 'upscale'}
+												<button
+													type="button"
+													class="icon-button"
+													disabled={restoringId !== null}
+													aria-label={ti('generatedImages.restoreSource', {
+														order: image.number
+													})}
+													title={ti('generatedImages.restoreSource', { order: image.number })}
+													onclick={() => restoreSource(image)}
+												>
+													{#if restoringId === image.sourceGeneration.id}
+														<span class="spinner" aria-hidden="true"></span>
+													{:else}
+														<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
+													{/if}
+												</button>
+											{:else}
+												<button
+													type="button"
+													class="icon-button"
+													aria-label={ti('generatedImages.useSource', { order: image.number })}
+													title={ti('generatedImages.useSource', { order: image.number })}
+													onclick={() => useImage(image.source.key, image.kind)}
+												>
+													<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
+												</button>
+											{/if}
 											<a
 												href={resolve('/api/media/[bucket]/[...filename]', {
 													bucket: image.source.key.slice(0, image.source.key.indexOf('/')),

@@ -36,7 +36,8 @@ function image(id: string, createdAt: number): SceneRecord {
 		createdAt,
 		session: null,
 		iteration: null,
-		number: 1
+		number: 1,
+		sourceGeneration: null
 	};
 }
 

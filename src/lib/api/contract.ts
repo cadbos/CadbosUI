@@ -452,6 +452,7 @@ export interface SceneRecord extends GeneratedImageRecord {
 	session: GenerationSessionRef | null;
 	iteration: number | null;
 	number: number;
+	sourceGeneration: { id: string; kind: GenerationKind } | null;
 }
 
 export interface GeneratedImagesResponse {

@@ -80,7 +80,8 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 				createdAt: image.createdAt,
 				session: image.session,
 				iteration: image.iteration,
-				number: image.number
+				number: image.number,
+				sourceGeneration: image.sourceGeneration
 			})),
 			pagination: {
 				offset,

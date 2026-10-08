@@ -610,7 +610,8 @@ describe('listGeneratedImages', () => {
 					createdAt: 3000,
 					session: null,
 					iteration: null,
-					number: 3
+					number: 3,
+					sourceGeneration: null
 				},
 				{
 					id: 'middle',
@@ -623,7 +624,8 @@ describe('listGeneratedImages', () => {
 					createdAt: 2000,
 					session: null,
 					iteration: null,
-					number: 2
+					number: 2,
+					sourceGeneration: null
 				}
 			],
 			hasMore: true
@@ -761,6 +763,101 @@ describe('listGeneratedImages filtering', () => {
 			sessionId: kitchen.sessionId,
 			sessionTitle: 'Kitchen'
 		});
+	});
+
+	it('points a base that is an earlier result at the generation that produced it', async () => {
+		seedUser(db, 'user-2', 'pubkey-2');
+		const session = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen');
+		seedGenerationFixture(db, {
+			id: 'render-1',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/render-1.webp',
+			sourceUrl: 'https://cdn.example.test/room.jpg',
+			createdAt: 1000,
+			sessionId: session.sessionId,
+			kind: 'render'
+		});
+		seedGenerationFixture(db, {
+			id: 'styled-1',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/styled-1.webp',
+			sourceUrl: 'https://cdn.example.test/render-1.webp',
+			createdAt: 2000,
+			sessionId: session.sessionId,
+			kind: 'style-transfer'
+		});
+		seedGenerationFixture(db, {
+			id: 'other-user',
+			userId: 'user-2',
+			url: 'https://cdn.example.test/render-1.webp',
+			sourceUrl: 'https://cdn.example.test/other.jpg',
+			createdAt: 3000,
+			kind: 'edit'
+		});
+		seedGenerationFixture(db, {
+			id: 'later-copy',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/render-1.webp',
+			sourceUrl: 'https://cdn.example.test/elsewhere.jpg',
+			createdAt: 2500,
+			kind: 'render'
+		});
+
+		const page = await listGeneratedImages(db, 'user-1', ALL_SCENES, 0, 10);
+		const styled = page.images.find((image) => image.id === 'styled-1');
+		const render = page.images.find((image) => image.id === 'render-1');
+
+		expect(styled?.sourceGeneration).toEqual({ id: 'render-1', kind: 'render' });
+		expect(render?.sourceGeneration).toBeNull();
+	});
+
+	it('attributes a milestone base to the generation that preceded its first use', async () => {
+		const session = seedTitledSession(db, 'user-1', 'Flat', 'Kitchen');
+		seedGenerationFixture(db, {
+			id: 'origin',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/origin.webp',
+			sourceUrl: 'https://cdn.example.test/room.jpg',
+			createdAt: 1000,
+			kind: 'render'
+		});
+		seedGenerationFixture(db, {
+			id: 'first',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/first.webp',
+			sourceUrl: 'https://cdn.example.test/origin.webp',
+			createdAt: 2000,
+			sessionId: session.sessionId,
+			kind: 'edit'
+		});
+		seedGenerationFixture(db, {
+			id: 'later-copy',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/origin.webp',
+			sourceUrl: 'https://cdn.example.test/elsewhere.jpg',
+			createdAt: 3000,
+			kind: 'render'
+		});
+		seedGenerationFixture(db, {
+			id: 'latest',
+			userId: 'user-1',
+			url: 'https://cdn.example.test/latest.webp',
+			sourceUrl: 'https://cdn.example.test/first.webp',
+			createdAt: 4000,
+			sessionId: session.sessionId,
+			kind: 'style-transfer'
+		});
+
+		const page = await listGeneratedImages(
+			db,
+			'user-1',
+			{ view: 'milestones', projectId: null, sessionId: null },
+			0,
+			10
+		);
+		const milestone = page.images.find((image) => image.id === 'latest');
+
+		expect(milestone?.sourceGeneration).toEqual({ id: 'origin', kind: 'render' });
 	});
 
 	it('narrows every step to a project, then to one of its sessions', async () => {
