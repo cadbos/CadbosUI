@@ -505,6 +505,10 @@ function sceneQuery(filter: SceneFilter): string {
 		'SELECT produced.id FROM generations produced ' +
 		'WHERE produced.user_id = s.user_id AND produced.result_media_id = s.source_media_id ' +
 		'AND produced.id != s.id ' +
+		'AND (produced.created_at, produced.id) < (' +
+		'SELECT earliest.created_at, earliest.id FROM generations earliest ' +
+		'WHERE earliest.user_id = s.user_id AND earliest.source_media_id = s.source_media_id ' +
+		'ORDER BY earliest.created_at, earliest.id LIMIT 1) ' +
 		'ORDER BY produced.created_at DESC, produced.id DESC LIMIT 1) ';
 	const sessionColumns =
 		'ps.id AS session_id, ps.title AS session_title, p.id AS project_id, p.title AS project_title';
