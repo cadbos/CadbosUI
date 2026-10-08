@@ -283,7 +283,7 @@ export const ru = {
 	'usage.totals.generations': 'Генерации',
 	'usage.totals.sources': 'Загруженные исходники',
 	'usage.totals.references': 'Загруженные референсы',
-	'usage.totals.countWithSize': '{count} · {size}',
+	'usage.totals.countWithSize': '{count} | {size}',
 	'usage.totals.users': 'Зарегистрировано пользователей',
 	'usage.totals.d1RowsRead': 'Прочитано строк D1 · {date} UTC',
 	'usage.totals.d1RowsWritten': 'Записано строк D1 · {date} UTC',
