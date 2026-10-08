@@ -126,8 +126,15 @@ function localDateTimeLabel(locale: Locale, timestamp: number): string {
 	}).format(new Date(timestamp));
 }
 
-function localSizeLabel(locale: Locale, unit: 'kilobyte' | 'megabyte', value: number): string {
-	return new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'short' }).format(value);
+function localSizeLabel(locale: Locale, value: number): string {
+	return new Intl.NumberFormat(locale, {
+		style: 'unit',
+		unit: 'megabyte',
+		unitDisplay: 'short',
+		maximumFractionDigits: 1
+	})
+		.format(value)
+		.replace(',', '.');
 }
 
 function localTimeZoneName(
@@ -190,11 +197,9 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 			})
 		)
 		.toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: localSizeLabel(locale, 3) })).toBeVisible();
 	await expect
-		.element(screen.getByRole('cell', { name: localSizeLabel(locale, 'megabyte', 3) }))
-		.toBeVisible();
-	await expect
-		.element(screen.getByRole('cell', { name: localSizeLabel(locale, 'kilobyte', 512) }))
+		.element(screen.getByRole('cell', { name: localSizeLabel(locale, 0.5) }))
 		.toBeVisible();
 	const latestSpendHeader = screen.getByRole('columnheader', {
 		name: `${t('usage.column.latestSpendAt')}, ${localTimeZoneName(locale, 'short')}`
@@ -206,7 +211,7 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 });
 
 it.each(['ru', 'en'] as const)('uses fixed numeric punctuation for %s', async (locale) => {
-	const sourceBytes = 1.5 * 1024 * 1024 * 1024;
+	const sourceBytes = 1536.5 * 1024 * 1024;
 	vi.stubGlobal(
 		'fetch',
 		mockUsageFetch(
@@ -237,8 +242,8 @@ it.each(['ru', 'en'] as const)('uses fixed numeric punctuation for %s', async (l
 	await expect.element(screen.getByRole('cell', { name: '12 345' })).toBeVisible();
 	await expect.element(totals.getByText('$ 1,234.50')).toBeVisible();
 	await expect.element(totals.getByText('2 345')).toBeVisible();
-	await expect.element(totals.getByText(/1 234 \| 1 536/)).toBeVisible();
-	await expect.element(screen.getByRole('cell', { name: /1 536/ })).toBeVisible();
+	await expect.element(totals.getByText(/1 234 \| 1 536\.5/)).toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: /1 536\.5/ })).toBeVisible();
 });
 
 it('uses the selected RUB rate with the symbol before the grouped amount', async () => {
@@ -375,7 +380,7 @@ it.each(['ru', 'en'] as const)('renders the platform totals for %s', async (loca
 		`${t('usage.totals.projects')} 11`,
 		`${t('usage.totals.sessions')} 23`,
 		`${t('usage.totals.generations')} 42`,
-		`${t('usage.totals.sources')} ${ti('usage.totals.countWithSize', { count: 40, size: localSizeLabel(locale, 'megabyte', 3) })}`,
+		`${t('usage.totals.sources')} ${ti('usage.totals.countWithSize', { count: 40, size: localSizeLabel(locale, 3) })}`,
 		`${t('usage.totals.references')} ${ti('usage.totals.countWithSize', { count: 6, size: t('usage.emptyValue') })}`
 	];
 	for (const label of labels) await expect.element(totals).toHaveTextContent(label);
