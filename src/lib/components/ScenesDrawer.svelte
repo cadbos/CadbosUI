@@ -779,7 +779,7 @@ before the Change Date. See LICENSE for complete terms.
 													{#if restoringId === image.sourceGeneration.id}
 														<span class="spinner" aria-hidden="true"></span>
 													{:else}
-														<History size={17} strokeWidth={1.8} aria-hidden="true" />
+														<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
 													{/if}
 												</button>
 											{:else}
