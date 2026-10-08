@@ -39,7 +39,7 @@ import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 import { LIGHT_SETTINGS_FIXTURES, LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 import type { ModeHintTarget } from '$lib/mode-hints';
 import { DEFAULT_REPAINT_COLOR, REPAINT_COLOR_PATTERN } from '$lib/repaint-colors';
-import { repaintRegionSchema, type RepaintRegion } from '$lib/repaint-region';
+import { imageRegionSchema, type ImageRegion } from '$lib/image-region';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 
 export {
@@ -226,7 +226,7 @@ export interface NormalizedRequest {
 	lightSettingsPrompt: string;
 	repaintTarget: string;
 	repaintColor: string;
-	repaintRegion: RepaintRegion | null;
+	repaintRegion: ImageRegion | null;
 	editPrompt: string;
 	addObjectInstruction: string;
 	removeObjectText: string;
@@ -343,7 +343,7 @@ export const requestFormSnapshotSchema = z.object({
 	// Absent for a snapshot recorded before the repaint tool existed.
 	repaintTarget: repaintTargetSchema.default(''),
 	repaintColor: repaintColorSchema.default(DEFAULT_REPAINT_COLOR),
-	repaintRegion: repaintRegionSchema.nullable().default(null)
+	repaintRegion: imageRegionSchema.nullable().default(null)
 });
 
 const renderResultSchema = z.object({
@@ -817,9 +817,7 @@ export class RequestState {
 	// specific image, so it only counts while that image is still the working
 	// one (see activeRepaintRegion()). Session UI state, like the texture mask:
 	// not part of toJSON()/fromJSON() or the URL.
-	#repaintRegion = $state.raw<{ region: RepaintRegion; sourceKey: string | undefined } | null>(
-		null
-	);
+	#repaintRegion = $state.raw<{ region: ImageRegion; sourceKey: string | undefined } | null>(null);
 	activeRepaintJob = $state<ActiveRepaintJob | undefined>(undefined);
 	// Whether the currently displayed render is already the resolved result of a
 	// masked texture-replacement submission — Workspace.svelte reads this to know
@@ -1251,14 +1249,14 @@ export class RequestState {
 	// The region the repaint is confined to, or null while the whole scene is in
 	// play. A region drawn on an image that is no longer the working one no
 	// longer applies.
-	activeRepaintRegion(): RepaintRegion | null {
+	activeRepaintRegion(): ImageRegion | null {
 		const stored = this.#repaintRegion;
 		return stored && stored.sourceKey === this.workingImageKey() ? stored.region : null;
 	}
 
-	setRepaintRegion(region: RepaintRegion | null): void {
+	setRepaintRegion(region: ImageRegion | null): void {
 		this.#repaintRegion = region
-			? { region: repaintRegionSchema.parse(region), sourceKey: this.workingImageKey() }
+			? { region: imageRegionSchema.parse(region), sourceKey: this.workingImageKey() }
 			: null;
 	}
 
