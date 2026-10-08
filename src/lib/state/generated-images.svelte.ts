@@ -50,7 +50,14 @@ const generatedImageRecordSchema = z.object({
 		})
 		.nullable(),
 	iteration: z.number().int().min(1).nullable(),
-	number: z.number().int().min(1)
+	number: z.number().int().min(1),
+	sourceGeneration: z
+		.object({
+			id: z.string().min(1),
+			kind: z.enum(generationKinds)
+		})
+		.nullable()
+		.default(null)
 });
 
 const generatedImagesResponseSchema = z.object({

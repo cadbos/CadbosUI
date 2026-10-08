@@ -215,7 +215,8 @@ describe('GET /api/generated-images', () => {
 			createdAt: 10020,
 			session: null,
 			iteration: null,
-			number: 21
+			number: 21,
+			sourceGeneration: null
 		});
 		expect(result.pagination).toEqual({ offset: 0, size: 20, hasMore: true });
 	});
