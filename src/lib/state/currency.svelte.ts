@@ -72,12 +72,15 @@ class CurrencyState {
 		this.#persist();
 	}
 
+	convert(amountUsd: number): number {
+		const rate = this.rubPerUsd;
+		return this.displayCode === 'rub' && rate !== null ? amountUsd * rate : amountUsd;
+	}
+
 	// Formats a USD amount for display in the currently selected currency,
 	// including the symbol — callers never hardcode "$"/"₽" themselves.
 	format(amountUsd: number): string {
-		const rate = this.rubPerUsd;
-		const amount = this.displayCode === 'rub' && rate !== null ? amountUsd * rate : amountUsd;
-		return `${formatCredit(amount)} ${this.symbol}`;
+		return `${formatCredit(this.convert(amountUsd))} ${this.symbol}`;
 	}
 
 	#persist(): void {

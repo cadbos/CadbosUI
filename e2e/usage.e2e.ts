@@ -67,7 +67,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
-				body: JSON.stringify({ balance: 250 })
+				body: JSON.stringify({ balance: 1250 })
 			});
 			return;
 		}
@@ -77,15 +77,15 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 				status: 200,
 				contentType: 'application/json',
 				body: JSON.stringify({
-					userCount: 2,
+					userCount: 1200,
 					projectCount: 2,
 					sessionCount: 2,
 					generationCount: 0,
 					sourceCount: 2,
-					sourceBytes: 3 * 1024 * 1024,
+					sourceBytes: 1.5 * 1024 * 1024 * 1024,
 					referenceCount: 0,
 					referenceBytes: null,
-					totalSpend: 12.5
+					totalSpend: 1234.5
 				})
 			});
 			return;
@@ -113,14 +113,14 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 				users: [
 					{
 						pubkey,
-						balance: 0,
+						balance: 1234.5,
 						totalDeposit: 0,
 						lastDepositAt: null,
-						projectCount: 1,
+						projectCount: 1234,
 						sessionCount: 1,
 						generationCount: 0,
 						sourceCount: 2,
-						sourceBytes: 3 * 1024 * 1024,
+						sourceBytes: 1.5 * 1024 * 1024 * 1024,
 						referenceCount: 0,
 						referenceBytes: null,
 						totalSpend: 0,
@@ -171,24 +171,33 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 		style: 'unit',
 		unit: 'megabyte',
 		unitDisplay: 'short'
-	}).format(3);
+	})
+		.format(1536)
+		.replace(/1[\u00a0\u202f]536/, '1 536');
 	await expect(page.getByRole('cell', { name: sourceSize })).toBeVisible();
 	const totals = page.getByRole('region', { name: ru['usage.totals.title'] });
-	await expect(totals).toContainText(`${ru['usage.totals.walletBalance']} 250.00 $`);
+	await expect(totals).toContainText(`${ru['usage.totals.walletBalance']} $ 1,250.00`);
 	await expect(totals).toContainText(`${ru['usage.totals.deposits']} ${ru['usage.emptyValue']}`);
-	await expect(totals).toContainText(`${ru['usage.totals.spend']} 12.50 $`);
-	await expect(totals).toContainText(`${ru['usage.totals.users']} 2`);
+	await expect(totals).toContainText(`${ru['usage.totals.spend']} $ 1,234.50`);
+	await expect(totals).toContainText(`${ru['usage.totals.users']} 1 200`);
+	await expect(page.getByRole('cell', { name: '$ 1,234.50' })).toBeVisible();
+	await expect(page.getByRole('cell', { name: '1 234', exact: true })).toBeVisible();
+	await expect(page.getByRole('columnheader', { name: ru['usage.column.balance'] })).toHaveCSS(
+		'text-align',
+		'right'
+	);
+	await expect(page.getByRole('cell', { name: '$ 1,234.50' })).toHaveCSS('text-align', 'right');
+	await expect(totals.getByText('$ 1,250.00')).toHaveCSS('text-align', 'right');
 	const readQuota = totals
 		.getByText(ru['usage.totals.d1RowsRead'].replace('{date}', quotaDate))
 		.locator('..');
 	const writeQuota = totals
 		.getByText(ru['usage.totals.d1RowsWritten'].replace('{date}', quotaDate))
 		.locator('..');
-	const number = new Intl.NumberFormat('ru');
-	await expect(readQuota.locator('.d1-used')).toHaveText(number.format(5_000_000));
-	await expect(readQuota.locator('.d1-limit')).toHaveText(number.format(5_000_000));
-	await expect(writeQuota.locator('.d1-used')).toHaveText(number.format(100));
-	await expect(writeQuota.locator('.d1-limit')).toHaveText(number.format(100_000));
+	await expect(readQuota.locator('.d1-used')).toHaveText('5 000 000');
+	await expect(readQuota.locator('.d1-limit')).toHaveText('5 000 000');
+	await expect(writeQuota.locator('.d1-used')).toHaveText('100');
+	await expect(writeQuota.locator('.d1-limit')).toHaveText('100 000');
 	for (const quota of [readQuota, writeQuota]) {
 		await expect(quota.locator('.d1-divider')).toHaveText(ru['usage.totals.d1DivisionSign']);
 		const layout = await quota.locator('.d1-quotient').evaluate((element) => {
@@ -219,6 +228,16 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	await expect(link).toHaveAttribute('href', `https://primal.net/profile/${npub}`);
 	await expect(link).toHaveAttribute('target', '_blank');
 	await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+
+	await page.locator('.auth-trigger').click();
+	const languageSwitcher = page.getByRole('group', { name: ru['language.switcher.label'] });
+	await languageSwitcher.getByRole('button', { name: 'ru' }).click();
+	await languageSwitcher.getByRole('button', { name: ru['language.en'] }).click();
+	await expect(page.getByRole('heading', { name: 'Usage' })).toBeVisible();
+	await expect(page.getByRole('cell', { name: '$ 1,234.50' })).toBeVisible();
+	await expect(page.getByRole('cell', { name: '1 234', exact: true })).toBeVisible();
+	await expect(page.locator('.d1-used').first()).toHaveText('5 000 000');
+	await expect(page.getByRole('cell', { name: '1 536 MB' })).toBeVisible();
 });
 
 test('shows an error message when the wallet balance cannot be loaded', async ({ page }) => {
@@ -302,7 +321,7 @@ test('keeps platform totals visible when D1 analytics is unavailable', async ({ 
 	await page.goto('/usage');
 
 	const totals = page.getByRole('region', { name: ru['usage.totals.title'] });
-	await expect(totals).toContainText(`${ru['usage.totals.spend']} 12.50 $`);
-	await expect(totals).toContainText(`${ru['usage.totals.walletBalance']} 250.00 $`);
+	await expect(totals).toContainText(`${ru['usage.totals.spend']} $ 12.50`);
+	await expect(totals).toContainText(`${ru['usage.totals.walletBalance']} $ 250.00`);
 	await expect(totals).toContainText(ru['usage.totals.d1Failed']);
 });

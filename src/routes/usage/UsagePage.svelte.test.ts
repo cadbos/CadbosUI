@@ -24,6 +24,7 @@ import type {
 } from '$lib/api/contract';
 import { setLocale, t, ti, type Locale } from '$lib/i18n/index.svelte';
 import { auth } from '$lib/state/auth.svelte';
+import { currency } from '$lib/state/currency.svelte';
 import { usage } from '$lib/state/usage.svelte';
 import UsagePage from './+page.svelte';
 import type { PageProps } from './$types';
@@ -94,7 +95,8 @@ function jsonResponse(body: UserUsageResponse): Response {
 function mockUsageFetch(
 	pages: UserUsageResponse[],
 	profiles: UsageProfilesResponse['profiles'] = {},
-	d1Limits: D1DailyLimits = D1_LIMITS
+	d1Limits: D1DailyLimits = D1_LIMITS,
+	totals: UsageTotals = TOTALS
 ) {
 	let pageIndex = 0;
 	return vi.fn<typeof fetch>((input, init) => {
@@ -103,7 +105,7 @@ function mockUsageFetch(
 		if (url === '/api/usage/profiles' && init?.method === 'POST')
 			return Promise.resolve(Response.json({ profiles }));
 		if (url === '/api/usage/balance') return Promise.resolve(Response.json({ balance: 0 }));
-		if (url === '/api/usage/totals') return Promise.resolve(Response.json(TOTALS));
+		if (url === '/api/usage/totals') return Promise.resolve(Response.json(totals));
 		if (url === '/api/usage/d1-limits') return Promise.resolve(Response.json(d1Limits));
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
@@ -143,12 +145,16 @@ function localTimeZoneName(
 beforeEach(() => {
 	usage.clear();
 	setLocale('en');
+	currency.code = 'usd';
+	currency.rubPerUsd = null;
 	auth.status = 'authenticated';
 });
 
 afterEach(() => {
 	usage.clear();
 	setLocale('ru');
+	currency.code = 'usd';
+	currency.rubPerUsd = null;
 	auth.status = 'anonymous';
 	vi.unstubAllGlobals();
 });
@@ -162,8 +168,8 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	const screen = render(UsagePage, pageProps());
 
 	await expect.element(screen.getByRole('heading', { name: t('usage.title') })).toBeVisible();
-	await expect.element(screen.getByRole('cell', { name: '12.35' })).toBeVisible();
-	await expect.element(screen.getByRole('cell', { name: '7.50' })).toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: '$ 12.35' })).toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: '$ 7.50' })).toBeVisible();
 	await expect
 		.element(screen.getByRole('cell', { name: localDateTimeLabel(locale, latestSpendAt) }))
 		.toBeVisible();
@@ -197,6 +203,54 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	await expect
 		.element(latestSpendHeader)
 		.toHaveAttribute('title', localTimeZoneName(locale, 'long'));
+});
+
+it.each(['ru', 'en'] as const)('uses fixed numeric punctuation for %s', async (locale) => {
+	const sourceBytes = 1.5 * 1024 * 1024 * 1024;
+	vi.stubGlobal(
+		'fetch',
+		mockUsageFetch(
+			[
+				page(
+					[
+						{
+							...user(PUBKEY_ONE),
+							balance: 1234.5,
+							projectCount: 12_345,
+							sourceBytes
+						}
+					],
+					0,
+					false
+				)
+			],
+			{},
+			D1_LIMITS,
+			{ ...TOTALS, userCount: 2_345, sourceCount: 1_234, sourceBytes, totalSpend: 1234.5 }
+		)
+	);
+	setLocale(locale);
+
+	const screen = render(UsagePage, pageProps());
+	const totals = screen.getByRole('region', { name: t('usage.totals.title') });
+	await expect.element(screen.getByRole('cell', { name: '$ 1,234.50' })).toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: '12 345' })).toBeVisible();
+	await expect.element(totals.getByText('$ 1,234.50')).toBeVisible();
+	await expect.element(totals.getByText('2 345')).toBeVisible();
+	await expect.element(totals.getByText(/1 234 \| 1 536/)).toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: /1 536/ })).toBeVisible();
+});
+
+it('uses the selected RUB rate with the symbol before the grouped amount', async () => {
+	currency.code = 'rub';
+	currency.rubPerUsd = 90;
+	vi.stubGlobal(
+		'fetch',
+		mockUsageFetch([page([{ ...user(PUBKEY_ONE), balance: 1234.5 }], 0, false)])
+	);
+
+	const screen = render(UsagePage, pageProps());
+	await expect.element(screen.getByRole('cell', { name: '₽ 111,105.00' })).toBeVisible();
 });
 
 it('shows an em dash instead of a size when no upload size is known', async () => {
@@ -316,7 +370,7 @@ it.each(['ru', 'en'] as const)('renders the platform totals for %s', async (loca
 	await expect.element(totals).toBeVisible();
 	const labels = [
 		`${t('usage.totals.deposits')} ${t('usage.emptyValue')}`,
-		`${t('usage.totals.spend')} 99.50`,
+		`${t('usage.totals.spend')} $ 99.50`,
 		`${t('usage.totals.users')} 7`,
 		`${t('usage.totals.projects')} 11`,
 		`${t('usage.totals.sessions')} 23`,
@@ -327,15 +381,14 @@ it.each(['ru', 'en'] as const)('renders the platform totals for %s', async (loca
 	for (const label of labels) await expect.element(totals).toHaveTextContent(label);
 	const readTerm = totals.getByText(ti('usage.totals.d1RowsRead', { date: D1_LIMITS.date }));
 	const writeTerm = totals.getByText(ti('usage.totals.d1RowsWritten', { date: D1_LIMITS.date }));
-	const number = new Intl.NumberFormat(locale);
 	await expect.element(readTerm).toBeVisible();
 	await expect.element(writeTerm).toBeVisible();
 	const readQuota = readTerm.element().parentElement!;
 	const writeQuota = writeTerm.element().parentElement!;
-	expect(readQuota.querySelector('.d1-used')?.textContent).toBe(number.format(5_000_000));
-	expect(readQuota.querySelector('.d1-limit')?.textContent).toBe(number.format(5_000_000));
-	expect(writeQuota.querySelector('.d1-used')?.textContent).toBe(number.format(100));
-	expect(writeQuota.querySelector('.d1-limit')?.textContent).toBe(number.format(100_000));
+	expect(readQuota.querySelector('.d1-used')?.textContent).toBe('5 000 000');
+	expect(readQuota.querySelector('.d1-limit')?.textContent).toBe('5 000 000');
+	expect(writeQuota.querySelector('.d1-used')?.textContent).toBe('100');
+	expect(writeQuota.querySelector('.d1-limit')?.textContent).toBe('100 000');
 	expect(readQuota.querySelector('.d1-divider')?.textContent).toBe(
 		t('usage.totals.d1DivisionSign')
 	);
@@ -364,17 +417,16 @@ it.each(['ru', 'en'] as const)('shows full D1 counts without rounding for %s', a
 
 	const screen = render(UsagePage, pageProps());
 	const totals = screen.getByRole('region', { name: t('usage.totals.title') });
-	const number = new Intl.NumberFormat(locale);
 	const readTerm = totals.getByText(ti('usage.totals.d1RowsRead', { date: D1_LIMITS.date }));
 	const writeTerm = totals.getByText(ti('usage.totals.d1RowsWritten', { date: D1_LIMITS.date }));
 	await expect.element(readTerm).toBeVisible();
 	await expect.element(writeTerm).toBeVisible();
 	const readQuota = readTerm.element().parentElement!;
 	const writeQuota = writeTerm.element().parentElement!;
-	expect(readQuota.querySelector('.d1-used')?.textContent).toBe(number.format(1_250));
-	expect(readQuota.querySelector('.d1-limit')?.textContent).toBe(number.format(500_000));
-	expect(writeQuota.querySelector('.d1-used')?.textContent).toBe(number.format(523_400));
-	expect(writeQuota.querySelector('.d1-limit')?.textContent).toBe(number.format(500_001));
+	expect(readQuota.querySelector('.d1-used')?.textContent).toBe('1 250');
+	expect(readQuota.querySelector('.d1-limit')?.textContent).toBe('500 000');
+	expect(writeQuota.querySelector('.d1-used')?.textContent).toBe('523 400');
+	expect(writeQuota.querySelector('.d1-limit')?.textContent).toBe('500 001');
 	await expect.element(totals).toHaveTextContent(t('usage.totals.d1LimitReached'));
 });
 
@@ -398,15 +450,14 @@ it('keeps raw quota comparisons when rounded figures look equal', async () => {
 	const totals = screen.getByRole('region', { name: t('usage.totals.title') });
 	const readTerm = totals.getByText(ti('usage.totals.d1RowsRead', { date: D1_LIMITS.date }));
 	const writeTerm = totals.getByText(ti('usage.totals.d1RowsWritten', { date: D1_LIMITS.date }));
-	const number = new Intl.NumberFormat('en');
 	await expect.element(readTerm).toBeVisible();
 	await expect.element(writeTerm).toBeVisible();
 	const readQuota = readTerm.element().parentElement!;
 	const writeQuota = writeTerm.element().parentElement!;
-	expect(readQuota.querySelector('.d1-used')?.textContent).toBe(number.format(499_999));
-	expect(readQuota.querySelector('.d1-limit')?.textContent).toBe(number.format(500_000));
-	expect(writeQuota.querySelector('.d1-used')?.textContent).toBe(number.format(999));
-	expect(writeQuota.querySelector('.d1-limit')?.textContent).toBe(number.format(1_000));
+	expect(readQuota.querySelector('.d1-used')?.textContent).toBe('499 999');
+	expect(readQuota.querySelector('.d1-limit')?.textContent).toBe('500 000');
+	expect(writeQuota.querySelector('.d1-used')?.textContent).toBe('999');
+	expect(writeQuota.querySelector('.d1-limit')?.textContent).toBe('1 000');
 	expect(totals.getByText(t('usage.totals.d1LimitReached')).elements()).toHaveLength(0);
 });
 
@@ -438,7 +489,7 @@ it('shows the wallet balance as the first tile of the platform totals', async ()
 
 	const totals = screen.getByRole('region', { name: t('usage.totals.title') });
 	await expect.element(totals.getByText(t('usage.totals.walletBalance'))).toBeVisible();
-	await expect.element(totals.getByText('250.00')).toBeVisible();
+	await expect.element(totals.getByText('$ 250.00')).toBeVisible();
 	await expect
 		.element(totals.getByRole('term').first())
 		.toHaveTextContent(t('usage.totals.walletBalance'));
