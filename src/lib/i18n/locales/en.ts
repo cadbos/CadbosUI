@@ -282,7 +282,7 @@ export const en = {
 	'usage.totals.generations': 'Generations',
 	'usage.totals.sources': 'Uploaded sources',
 	'usage.totals.references': 'Uploaded references',
-	'usage.totals.countWithSize': '{count} · {size}',
+	'usage.totals.countWithSize': '{count} | {size}',
 	'usage.totals.users': 'Registered users',
 	'usage.totals.d1RowsRead': 'D1 rows read · {date} UTC',
 	'usage.totals.d1RowsWritten': 'D1 rows written · {date} UTC',
