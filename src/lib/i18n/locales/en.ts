@@ -205,7 +205,7 @@ export const en = {
 	'generatedImages.kind.objectReplacement': 'Object replacement',
 	'generatedImages.kind.textureReplacement': 'Texture replacement',
 	'generatedImages.kind.lightSettings': 'Lighting control',
-	'generatedImages.kind.repaint': 'Color replacement',
+	'generatedImages.kind.repaint': 'Recolor',
 	'generatedImages.sourceImageAlt': 'Source image for scene {order}',
 	'generatedImages.resultImageAlt': 'Result for scene {order}',
 	'generatedImages.createdAt': 'Scene created {date} at {time}',
@@ -387,7 +387,7 @@ export const en = {
 	'status.hint.assets':
 		"Serves the app's own interface files (JS, CSS, images). Unrelated to the S3 storage used for user-uploaded images.",
 	'status.hint.comfyui':
-		'Provides Objects, Object replacement, Texture replacement, Color replacement, and Lighting control.',
+		'Provides Objects, Object replacement, Texture replacement, Recolor, and Lighting control.',
 	'status.hint.d1':
 		'Stores accounts, Spending history, Balance, and Scenes (your generation history).',
 	'status.hint.nostr':
@@ -819,7 +819,7 @@ export const en = {
 	'edit.tool.removeObject': 'Remove object',
 	'edit.tool.removeObject.tab': 'Removing an object',
 	'edit.tool.lightSettings': 'Lighting control',
-	'edit.tool.repaint': 'Color replacement',
+	'edit.tool.repaint': 'Recolor',
 	'edit.addObject.apply': 'Add object',
 	'edit.addObject.selectHint': 'Choose a template or describe what to add to the image.',
 	'edit.addObject.customLabel': 'What to add',
@@ -941,9 +941,12 @@ export const en = {
 	'lightSettings.preset.allLightsOn.phrase': 'turn on all the lights',
 	'lightSettings.preset.allLightsOff.label': 'All lights off',
 	'lightSettings.preset.allLightsOff.phrase': 'turn off all the lights',
-	'repaint.targetLabel': 'What to repaint',
+	'repaint.lead': 'Change the color of any element.',
+	'repaint.targetLabel': 'Object',
+	'repaint.targetHint':
+		'Be as specific as you can: walls, floor, ceiling, furniture, textiles, doors, windows, fixtures, decor, or another object.',
 	'repaint.targetPlaceholder': 'e.g. the walls behind the sofa',
-	'repaint.colorLabel': 'Color',
+	'repaint.colorLabel': 'Choose a new color',
 	'repaint.paletteLabel': 'Preset colors',
 	'repaint.customColorLabel': 'Custom color',
 	'repaint.selectedColor': 'Selected color',
@@ -969,19 +972,18 @@ export const en = {
 	'repaint.apply': 'Repaint',
 	'repaint.processing': 'Repainting. This takes about 5 minutes…',
 	'repaint.completed': 'Done — the color has been changed.',
-	'repaint.newRequest': 'New color replacement',
+	'repaint.newRequest': 'New recolor',
 	'repaint.tryAgain': 'Try again',
 	'repaint.retryStatus': 'Retry status check',
 	'repaint.failed': 'Could not repaint. Please try again.',
 	'repaint.pollFailed': 'Could not check the job status. Please try again.',
 	'repaint.timedOut': 'Timed out. Please try again.',
-	'repaint.notFound': 'Could not find this color replacement job.',
+	'repaint.notFound': 'Could not find this recolor.',
 	'repaint.targetNotFound':
 		'Could not find that object in the picture. Name it differently or select its area on the picture.',
-	'repaint.region.label': 'Area',
-	'repaint.region.hint':
-		'Optional. Drag on the picture to confine the repaint to one area. It helps when several objects fit the name.',
-	'repaint.region.select': 'Select area',
+	'repaint.region.label': 'You can mark an area on the scene',
+	'repaint.region.hint': 'This helps when several objects fit the name.',
+	'repaint.region.select': 'Set selection',
 	'repaint.region.clear': 'Clear area',
 	'repaint.region.boxLabel':
 		'Selected area. Arrow keys move it, Shift with arrow keys resizes it, Delete clears it.',
@@ -1002,7 +1004,7 @@ export const en = {
 	'modeHint.format.objectReplacement':
 		'You can leave out {words} — describe only the object that is already in the photo, for example “gray sofa by the window”. The new object comes from the reference image.',
 	'modeHint.format.textureReplacement':
-		'You can leave out {words} — name only the surface, for example “sofa upholstery”. The new texture comes from the reference image; to recolor in a picked color, use “Color replacement”.',
+		'You can leave out {words} — name only the surface, for example “sofa upholstery”. The new texture comes from the reference image; to recolor in a picked color, use “Recolor”.',
 	'modeHint.format.repaint':
 		'You can leave out {words} — name only what to repaint, for example “the walls behind the sofa”. Pick the color in the palette below.'
 } as const satisfies Dictionary;

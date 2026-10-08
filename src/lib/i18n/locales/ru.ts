@@ -206,7 +206,7 @@ export const ru = {
 	'generatedImages.kind.objectReplacement': 'Замена объекта',
 	'generatedImages.kind.textureReplacement': 'Замена текстуры',
 	'generatedImages.kind.lightSettings': 'Управление освещением',
-	'generatedImages.kind.repaint': 'Замена цвета',
+	'generatedImages.kind.repaint': 'Перекраска',
 	'generatedImages.sourceImageAlt': 'Исходное изображение сцены {order}',
 	'generatedImages.resultImageAlt': 'Результат сцены {order}',
 	'generatedImages.createdAt': 'Сцена создана {date} в {time}',
@@ -389,7 +389,7 @@ export const ru = {
 	'status.hint.assets':
 		'Отдаёт статические файлы самого приложения (JS, CSS, изображения интерфейса). Не связано с хранилищем S3 для загруженных пользователями изображений.',
 	'status.hint.comfyui':
-		'Обеспечивает «Объекты», «Замену объекта», «Замену текстуры», «Замену цвета» и «Управление освещением».',
+		'Обеспечивает «Объекты», «Замену объекта», «Замену текстуры», «Перекраску» и «Управление освещением».',
 	'status.hint.d1':
 		'Хранит аккаунты, историю расходов, баланс и «Сцены» (историю ваших генераций).',
 	'status.hint.nostr':
@@ -835,7 +835,7 @@ export const ru = {
 	'edit.tool.removeObject': 'Удалить объект',
 	'edit.tool.removeObject.tab': 'Удаление объекта',
 	'edit.tool.lightSettings': 'Управление освещением',
-	'edit.tool.repaint': 'Замена цвета',
+	'edit.tool.repaint': 'Перекраска',
 	'edit.addObject.apply': 'Добавить объект',
 	'edit.addObject.selectHint': 'Выберите шаблон или опишите, что добавить на изображение.',
 	'edit.addObject.customLabel': 'Что добавить',
@@ -957,9 +957,12 @@ export const ru = {
 	'lightSettings.preset.allLightsOn.phrase': 'включи все светильники',
 	'lightSettings.preset.allLightsOff.label': 'Выключить все светильники',
 	'lightSettings.preset.allLightsOff.phrase': 'выключи все светильники',
-	'repaint.targetLabel': 'Что перекрасить',
+	'repaint.lead': 'Измените цвет любого элемента.',
+	'repaint.targetLabel': 'Объект',
+	'repaint.targetHint':
+		'Опишите максимально точно: стены, пол, потолок, мебель, текстиль, двери, окна, сантехнику, декор или другой объект.',
 	'repaint.targetPlaceholder': 'например: стены за диваном',
-	'repaint.colorLabel': 'Цвет',
+	'repaint.colorLabel': 'Выберите новый цвет',
 	'repaint.paletteLabel': 'Готовые цвета',
 	'repaint.customColorLabel': 'Свой цвет',
 	'repaint.selectedColor': 'Выбранный цвет',
@@ -985,19 +988,18 @@ export const ru = {
 	'repaint.apply': 'Перекрасить',
 	'repaint.processing': 'Перекрашиваем. Это занимает около 5 минут…',
 	'repaint.completed': 'Готово — цвет изменён.',
-	'repaint.newRequest': 'Новая замена цвета',
+	'repaint.newRequest': 'Новая перекраска',
 	'repaint.tryAgain': 'Попробовать снова',
 	'repaint.retryStatus': 'Повторить проверку статуса',
 	'repaint.failed': 'Не удалось перекрасить. Попробуйте ещё раз.',
 	'repaint.pollFailed': 'Не удалось проверить статус задачи. Попробуйте ещё раз.',
 	'repaint.timedOut': 'Время ожидания истекло. Попробуйте ещё раз.',
-	'repaint.notFound': 'Не удалось найти эту задачу замены цвета.',
+	'repaint.notFound': 'Не удалось найти эту перекраску.',
 	'repaint.targetNotFound':
 		'Не удалось найти этот объект на фото. Назовите его иначе или выделите его область на фото.',
-	'repaint.region.label': 'Область',
-	'repaint.region.hint':
-		'Необязательно. Выделите область на фото, чтобы замена цвета затронула только её. Это помогает, когда под название подходит несколько предметов.',
-	'repaint.region.select': 'Выделить область',
+	'repaint.region.label': 'Можете указать область на сцене',
+	'repaint.region.hint': 'Это помогает, когда под название подходит несколько предметов.',
+	'repaint.region.select': 'Установить выделение',
 	'repaint.region.clear': 'Снять выделение',
 	'repaint.region.boxLabel':
 		'Выделенная область. Стрелки перемещают её, Shift со стрелками меняет размер, Delete снимает выделение.',
@@ -1016,7 +1018,7 @@ export const ru = {
 	'modeHint.format.objectReplacement':
 		'{words} писать не нужно — опишите только предмет, который уже есть на фото, например «серый диван у окна». Новый предмет задаётся референсом.',
 	'modeHint.format.textureReplacement':
-		'{words} писать не нужно — назовите только поверхность, например «обивка дивана». Новая текстура задаётся референсом, а перекрасить в выбранный цвет можно в «Замене цвета».',
+		'{words} писать не нужно — назовите только поверхность, например «обивка дивана». Новая текстура задаётся референсом, а перекрасить в выбранный цвет можно в «Перекраске».',
 	'modeHint.format.repaint':
 		'{words} писать не нужно — назовите только то, что нужно перекрасить, например «стены за диваном». Цвет выбирается в палитре ниже.'
 } as const satisfies Dictionary;

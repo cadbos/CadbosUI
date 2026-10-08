@@ -390,17 +390,22 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <section class="tool">
-	<label class="field">
-		<span class="field-label">{t('repaint.targetLabel')}</span>
+	<p class="panel-description">{t('repaint.lead')}</p>
+
+	<div class="field">
+		<label class="field-label" for="repaint-target">{t('repaint.targetLabel')}</label>
 		<input
+			id="repaint-target"
 			type="text"
 			value={request.repaintTarget}
 			oninput={(event) => request.setRepaintTarget(event.currentTarget.value)}
 			maxlength="200"
 			disabled={formLocked}
 			placeholder={t('repaint.targetPlaceholder')}
+			aria-describedby="repaint-target-hint"
 		/>
-	</label>
+		<p id="repaint-target-hint" class="field-hint">{t('repaint.targetHint')}</p>
+	</div>
 
 	<ModeHint field="repaint" text={request.repaintTarget} />
 
@@ -538,6 +543,14 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-muted);
 	}
 
+	.field-hint {
+		margin: 0;
+		font-size: 0.8125rem;
+		font-weight: 400;
+		line-height: 1.45;
+		color: var(--color-muted);
+	}
+
 	input[type='text'] {
 		font: inherit;
 		font-size: 0.9375rem;
@@ -588,9 +601,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	.selected {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.375rem;
 	}
 
 	.selected-value {

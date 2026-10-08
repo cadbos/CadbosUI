@@ -880,7 +880,9 @@ export interface Dictionary {
 	'lightSettings.preset.allLightsOn.phrase': string;
 	'lightSettings.preset.allLightsOff.label': string;
 	'lightSettings.preset.allLightsOff.phrase': string;
+	'repaint.lead': string;
 	'repaint.targetLabel': string;
+	'repaint.targetHint': string;
 	'repaint.targetPlaceholder': string;
 	'repaint.colorLabel': string;
 	'repaint.paletteLabel': string;

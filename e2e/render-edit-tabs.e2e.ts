@@ -1721,13 +1721,13 @@ test('the Repaint tool sends the target and a palette or custom color, and shows
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	await page.getByRole('tab', { name: 'Замена цвета' }).click();
+	await page.getByRole('tab', { name: 'Перекраска' }).click();
 	const panel = page.locator('#edit-tool-panel-repaint');
 	const apply = panel.getByRole('button', { name: 'Перекрасить' });
 	await expect(panel.getByText('Напишите, что нужно перекрасить.')).toBeVisible();
 	await expect(apply).toBeDisabled();
 
-	await panel.getByRole('textbox', { name: 'Что перекрасить' }).fill('стены за диваном');
+	await panel.getByRole('textbox', { name: 'Объект' }).fill('стены за диваном');
 	await panel.getByRole('button', { name: 'Шалфей' }).click();
 	await expect(panel.getByRole('button', { name: 'Шалфей' })).toHaveAttribute(
 		'aria-pressed',

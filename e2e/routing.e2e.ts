@@ -433,7 +433,7 @@ test('switching edit tool tabs updates only the tool query param', async ({ page
 	await page.getByRole('tab', { name: 'Замена текстуры' }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=texture-replacement$/);
 
-	await page.getByRole('tab', { name: 'Замена цвета' }).click();
+	await page.getByRole('tab', { name: 'Перекраска' }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=repaint&color=f4f1ea$/);
 });
 
