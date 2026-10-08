@@ -454,6 +454,7 @@ before the Change Date. See LICENSE for complete terms.
 					region={request.activeRepaintRegion()}
 					naturalWidth={imageSize.width}
 					naturalHeight={imageSize.height}
+					boxLabel={t('repaint.region.boxLabel')}
 					onchange={(region) => request.setRepaintRegion(region)}
 				/>
 			{/if}
