@@ -14,6 +14,8 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { Play } from '@lucide/svelte';
+	import { t } from '$lib/i18n/index.svelte';
+	import { auth } from '$lib/state/auth.svelte';
 
 	interface Props {
 		label: string;
@@ -23,25 +25,49 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	let { label, disabled = false, busy = false, onclick }: Props = $props();
+
+	const signedIn = $derived(auth.status === 'authenticated');
 </script>
 
-<button
-	type="button"
-	class="run"
-	aria-label={label}
-	title={label}
-	aria-busy={busy}
-	disabled={disabled || busy}
-	{onclick}
->
-	{#if busy}
-		<span class="spinner" aria-hidden="true"></span>
-	{:else}
-		<Play class="glyph" size={24} fill="currentColor" strokeWidth={0} aria-hidden="true" />
+<div class="run-row">
+	{#if !signedIn}
+		<p class="sign-in">{t('generation.signInToStart')}</p>
 	{/if}
-</button>
+	<button
+		type="button"
+		class="run"
+		aria-label={label}
+		title={t('generation.startHint')}
+		aria-busy={busy}
+		disabled={disabled || busy}
+		{onclick}
+	>
+		{#if busy}
+			<span class="spinner" aria-hidden="true"></span>
+		{:else}
+			<Play class="glyph" size={24} fill="currentColor" strokeWidth={0} aria-hidden="true" />
+		{/if}
+	</button>
+</div>
 
 <style>
+	.run-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		width: 100%;
+	}
+
+	.sign-in {
+		margin: 0;
+		flex: 1 1 auto;
+		min-width: 0;
+		font-size: 0.875rem;
+		line-height: 1.35;
+		text-align: start;
+		color: var(--color-muted-strong);
+	}
+
 	.run {
 		display: inline-flex;
 		align-items: center;

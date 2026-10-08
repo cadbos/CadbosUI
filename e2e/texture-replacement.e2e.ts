@@ -348,9 +348,13 @@ test('draws a mask and applies the synchronous result without polling', async ({
 			})
 		});
 	});
-	await page.getByRole('tab', { name: 'Объекты' }).click();
+	await page.getByRole('tab', { name: 'Изменение с объектами' }).click();
 	await page.getByRole('tab', { name: 'Удаление объекта' }).click();
-	await page.getByLabel('Что убрать?').fill('лампа');
+	await page
+		.getByLabel(
+			'Опишите объект, который нужно удалить со сцены как можно точнее словами — так ИИ модели будет проще его найти и убрать'
+		)
+		.fill('лампа');
 	await page.getByRole('button', { name: 'Удалить объект' }).click();
 	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
 		'src',
@@ -398,7 +402,7 @@ test('does not navigate back after switching tools during submission', async ({ 
 	const panel = page.locator('#edit-tool-panel-texture-replacement');
 	await panel.getByRole('button', { name: 'Заменить текстуру' }).click();
 	await expect.poll(() => postCount).toBe(1);
-	await page.getByRole('tab', { name: 'Объекты' }).focus();
+	await page.getByRole('tab', { name: 'Изменение с объектами' }).focus();
 	await page.keyboard.press('Enter');
 	releaseResponse?.();
 

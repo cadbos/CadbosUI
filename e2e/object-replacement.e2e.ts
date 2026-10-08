@@ -401,7 +401,7 @@ test('requires authentication before starting a replacement', async ({ page }) =
 	await page.goto('/edit?tool=object-replacement');
 
 	const panel = page.locator('#edit-tool-panel-object-replacement');
-	await expect(panel.getByText('Войдите, чтобы заменить объект')).toBeVisible();
+	await expect(panel.getByText('Войдите, чтобы запустить генерацию')).toBeVisible();
 	await expect(panel.getByRole('button', { name: 'Заменить объект' })).toBeDisabled();
 });
 

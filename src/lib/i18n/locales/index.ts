@@ -153,7 +153,8 @@ export interface Dictionary {
 	'render.sceneType.exterior': string;
 	'render.generate': string;
 	'render.optional': string;
-	'render.signInToGenerate': string;
+	'generation.signInToStart': string;
+	'generation.startHint': string;
 	'render.outputFormat': string;
 	'render.cost': string;
 	'render.balance': string;
@@ -508,7 +509,6 @@ export interface Dictionary {
 	'styleTransfer.advanced': string;
 	'styleTransfer.negativePrompt': string;
 	'styleTransfer.negativePromptPlaceholder': string;
-	'styleTransfer.signInToApply': string;
 	'styleTransfer.apply': string;
 	'styleTransfer.failed': string;
 	'styleTransfer.insufficientCredit': string;
@@ -765,8 +765,10 @@ export interface Dictionary {
 	'edit.tool.objects': string;
 	'edit.tool.addObject': string;
 	'edit.tool.addObject.tab': string;
+	'edit.tool.addObject.tabHint': string;
 	'edit.tool.removeObject': string;
 	'edit.tool.removeObject.tab': string;
+	'edit.tool.removeObject.tabHint': string;
 	'edit.tool.lightSettings': string;
 	'edit.tool.repaint': string;
 	'edit.addObject.apply': string;
@@ -795,7 +797,6 @@ export interface Dictionary {
 	'edit.addObject.mirror.phrase': string;
 	'edit.removeObject.label': string;
 	'edit.removeObject.placeholder': string;
-	'edit.removeObject.hint': string;
 	'edit.removeObject.apply': string;
 	'edit.removeObject.promptTemplate': string;
 	'lightSettings.moodSectionLabel': string;

@@ -82,9 +82,17 @@ before the Change Date. See LICENSE for complete terms.
 	type LucideIcon = typeof Pencil;
 
 	const OBJECT_TOOLS = [
-		{ id: 'add-object', label: 'edit.tool.addObject.tab' },
-		{ id: 'remove-object', label: 'edit.tool.removeObject.tab' }
-	] as const satisfies readonly { id: ToolId; label: TranslationKey }[];
+		{
+			id: 'add-object',
+			label: 'edit.tool.addObject.tab',
+			hint: 'edit.tool.addObject.tabHint'
+		},
+		{
+			id: 'remove-object',
+			label: 'edit.tool.removeObject.tab',
+			hint: 'edit.tool.removeObject.tabHint'
+		}
+	] as const satisfies readonly { id: ToolId; label: TranslationKey; hint: TranslationKey }[];
 
 	function isObjectTool(tool: ToolId): boolean {
 		return tool === 'freeform' || OBJECT_TOOLS.some((objectTool) => objectTool.id === tool);
@@ -538,6 +546,8 @@ before the Change Date. See LICENSE for complete terms.
 										? 0
 										: -1}
 								class:active={activeTool === objectTool.id}
+								aria-label={t(objectTool.hint)}
+								title={t(objectTool.hint)}
 								onclick={() => objectTabs.activate(index)}
 								onkeydown={objectTabs.onKeydown}
 							>
@@ -582,10 +592,6 @@ before the Change Date. See LICENSE for complete terms.
 							</label>
 
 							<ModeHint field="freeform" text={request.editPrompt} />
-
-							{#if !isAuthenticated}
-								<p class="auth-hint">{t('edit.signInToApply')}</p>
-							{/if}
 
 							<GenerateButton
 								label={t('edit.apply')}
@@ -946,12 +952,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	textarea:disabled {
 		opacity: 0.6;
-	}
-
-	.auth-hint {
-		margin: 0;
-		font-size: 0.875rem;
-		color: var(--color-muted);
 	}
 
 	.btn-apply {

@@ -510,9 +510,6 @@ before the Change Date. See LICENSE for complete terms.
 		<p class="canvas-hint">{t('textureReplacement.maskEditor.canvasHint')}</p>
 	{/if}
 
-	{#if !isAuthenticated}
-		<p class="auth-hint">{t('textureReplacement.signInToApply')}</p>
-	{/if}
 	<div class="validation-live" role="status" aria-live="polite" aria-atomic="true">
 		{#if isAuthenticated && validationKey && jobId === null}
 			<p class="validation-hint">{t(validationKey)}</p>

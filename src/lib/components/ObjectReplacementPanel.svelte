@@ -463,9 +463,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	<ModeHint field="objectReplacement" text={request.objectReplacementObject} />
 
-	{#if !isAuthenticated}
-		<p class="auth-hint">{t('objectReplacement.signInToApply')}</p>
-	{:else if validationKey && jobId === null}
+	{#if isAuthenticated && validationKey && jobId === null}
 		<p class="validation-hint">{t(validationKey)}</p>
 	{/if}
 

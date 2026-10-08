@@ -105,18 +105,10 @@
 	cursor: pointer;
 }
 
-.step-card .auth-hint,
 .step-card .submit-error {
 	margin: 0;
 	font-size: 0.875rem;
 	text-align: center;
-}
-
-.step-card .auth-hint {
-	color: var(--color-muted-strong);
-}
-
-.step-card .submit-error {
 	color: var(--color-danger);
 }
 

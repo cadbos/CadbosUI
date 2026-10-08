@@ -155,7 +155,8 @@ export const en = {
 	'render.sceneType.exterior': 'Exterior',
 	'render.generate': 'Generate',
 	'render.optional': 'optional',
-	'render.signInToGenerate': 'Sign in to generate',
+	'generation.signInToStart': 'Sign in to start generation',
+	'generation.startHint': 'Start AI generation',
 	'render.outputFormat': 'Format',
 	'render.cost': 'Cost: {cost}',
 	'render.balance': 'Balance: {balance}',
@@ -387,7 +388,7 @@ export const en = {
 	'status.hint.assets':
 		"Serves the app's own interface files (JS, CSS, images). Unrelated to the S3 storage used for user-uploaded images.",
 	'status.hint.comfyui':
-		'Provides Objects, Object replacement, Texture replacement, Recolor, and Lighting control.',
+		'Provides Object changes, Object replacement, Texture replacement, Recolor, and Lighting control.',
 	'status.hint.d1':
 		'Stores accounts, Spending history, Balance, and Scenes (your generation history).',
 	'status.hint.nostr':
@@ -531,7 +532,6 @@ export const en = {
 	'styleTransfer.advanced': 'Advanced',
 	'styleTransfer.negativePrompt': 'What to avoid',
 	'styleTransfer.negativePromptPlaceholder': 'e.g. people, extra decor, dark walls',
-	'styleTransfer.signInToApply': 'Sign in to transfer style',
 	'styleTransfer.apply': 'Transfer style',
 	'styleTransfer.failed': 'Style transfer failed. Please try again.',
 	'styleTransfer.insufficientCredit': 'Test balance exhausted.',
@@ -813,16 +813,18 @@ export const en = {
 	'edit.generationRestricted': 'Generation is available to a limited set of accounts.',
 	'edit.tool.switcher.label': 'Editing method',
 	'edit.tool.freeform': 'Custom prompt',
-	'edit.tool.objects': 'Objects',
+	'edit.tool.objects': 'Object changes',
 	'edit.tool.addObject': 'Add object',
-	'edit.tool.addObject.tab': 'Adding an object',
+	'edit.tool.addObject.tab': 'Adding',
+	'edit.tool.addObject.tabHint': 'Adding an object to the scene',
 	'edit.tool.removeObject': 'Remove object',
-	'edit.tool.removeObject.tab': 'Removing an object',
+	'edit.tool.removeObject.tab': 'Removing',
+	'edit.tool.removeObject.tabHint': 'Removing an object from the scene',
 	'edit.tool.lightSettings': 'Lighting control',
 	'edit.tool.repaint': 'Recolor',
 	'edit.addObject.apply': 'Add object',
 	'edit.addObject.selectHint': 'Choose a template or describe what to add to the image.',
-	'edit.addObject.customLabel': 'What to add',
+	'edit.addObject.customLabel': 'Description of the object to add to the scene',
 	'edit.addObject.customPlaceholder': 'e.g. a grey armchair by the window',
 	'edit.addObject.previewLabel': 'Instruction to send',
 	'edit.addObject.userPromptTemplate':
@@ -845,10 +847,9 @@ export const en = {
 	'edit.addObject.bookshelf.phrase': 'a wall-mounted bookshelf with books',
 	'edit.addObject.mirror.label': 'Mirror',
 	'edit.addObject.mirror.phrase': 'a decorative mirror',
-	'edit.removeObject.label': 'What to remove?',
-	'edit.removeObject.placeholder': 'e.g. the old sofa',
-	'edit.removeObject.hint':
-		'Describe the object as precisely as you can — that makes it easier for the model to find and remove it.',
+	'edit.removeObject.label':
+		'Describe the object to remove from the scene as precisely as you can — that makes it easier for the AI model to find and remove it',
+	'edit.removeObject.placeholder': 'e.g. the floor lamp in the corner',
 	'edit.removeObject.apply': 'Remove object',
 	'edit.removeObject.promptTemplate':
 		'Remove {object} from the image, carefully restoring what was behind/underneath it.',

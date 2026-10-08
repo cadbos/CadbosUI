@@ -337,10 +337,6 @@ before the Change Date. See LICENSE for complete terms.
 		</select>
 	</label>
 
-	{#if !isAuthenticated}
-		<p class="auth-hint">{t('styleTransfer.signInToApply')}</p>
-	{/if}
-
 	<GenerateButton
 		label={t('styleTransfer.apply')}
 		disabled={!canApply || !isAuthenticated}

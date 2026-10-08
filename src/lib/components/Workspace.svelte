@@ -933,10 +933,6 @@ before the Change Date. See LICENSE for complete terms.
 								</select>
 							</label>
 
-							{#if !isAuthenticated}
-								<p class="auth-hint">{t('render.signInToGenerate')}</p>
-							{/if}
-
 							<GenerateButton
 								label={t('render.generate')}
 								disabled={!canGenerate || !isAuthenticated}

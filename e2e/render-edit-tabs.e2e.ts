@@ -212,7 +212,7 @@ test('the Edit tab lets you upload an image directly, without generating a rende
 	await page
 		.getByRole('textbox', { name: ru['edit.addObject.customLabel'], exact: true })
 		.fill('Replace the sofa');
-	await expect(page.getByText('Войдите, чтобы применить правку')).toBeVisible();
+	await expect(editPanel.getByText('Войдите, чтобы запустить генерацию')).toBeVisible();
 	await expect(page.getByRole('button', { name: ru['edit.addObject.apply'] })).toBeDisabled();
 
 	// The uploaded photo is the same underlying image used by the Render tab.
@@ -1413,7 +1413,7 @@ test('undo/redo across different edit tools restores both the settings and the a
 
 	const removeObjectTab = page.getByRole('tab', { name: 'Удаление объекта' });
 	const addObjectTab = page.getByRole('tab', { name: 'Добавление объекта' });
-	const removeField = page.getByLabel('Что убрать?');
+	const removeField = page.getByLabel(ru['edit.removeObject.label']);
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
 	const undoButton = page.getByRole('button', { name: 'Предыдущая генерация' });
 	const redoButton = page.getByRole('button', { name: 'Следующая генерация' });
@@ -1545,7 +1545,7 @@ test('undo restores the object-replacement tool tab and its settings after switc
 	const objectField = page
 		.locator('#edit-tool-panel-object-replacement')
 		.getByLabel(/Точно опишите существующий объект/);
-	const removeField = page.getByLabel('Что убрать?');
+	const removeField = page.getByLabel(ru['edit.removeObject.label']);
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
 	const undoButton = page.getByRole('button', { name: 'Предыдущая генерация' });
 
@@ -1557,7 +1557,7 @@ test('undo restores the object-replacement tool tab and its settings after switc
 
 	// Switching to a different edit-panel tool and generating from it is a new
 	// history step, anchored on the object-replacement result above.
-	await page.getByRole('tab', { name: 'Объекты' }).click();
+	await page.getByRole('tab', { name: 'Изменение с объектами' }).click();
 	await removeObjectTab.click();
 	await removeField.fill('лампа');
 	await page.getByRole('button', { name: 'Удалить объект' }).click();
@@ -1611,7 +1611,7 @@ test('the Remove Object tool builds a removal prompt from the described object',
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
 	await page.getByRole('tab', { name: 'Удаление объекта' }).click();
-	await page.getByLabel('Что убрать?').fill('старый диван');
+	await page.getByLabel(ru['edit.removeObject.label']).fill('старый диван');
 	await page.getByRole('button', { name: 'Удалить объект' }).click();
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(

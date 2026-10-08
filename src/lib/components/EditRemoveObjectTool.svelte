@@ -45,13 +45,7 @@ before the Change Date. See LICENSE for complete terms.
 		/>
 	</label>
 
-	<p class="hint">{t('edit.removeObject.hint')}</p>
-
 	<ModeHint field="removeObject" text={request.removeObjectText} />
-
-	{#if auth.status !== 'authenticated'}
-		<p class="auth-hint">{t('edit.signInToApply')}</p>
-	{/if}
 
 	<GenerateButton
 		label={t('edit.removeObject.apply')}
@@ -103,17 +97,5 @@ before the Change Date. See LICENSE for complete terms.
 
 	input:disabled {
 		opacity: 0.6;
-	}
-
-	.hint {
-		margin: 0;
-		font-size: 0.8125rem;
-		color: var(--color-muted);
-	}
-
-	.auth-hint {
-		margin: 0;
-		font-size: 0.875rem;
-		color: var(--color-muted);
 	}
 </style>

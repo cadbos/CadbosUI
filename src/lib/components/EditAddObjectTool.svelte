@@ -74,10 +74,6 @@ before the Change Date. See LICENSE for complete terms.
 		</p>
 	{/if}
 
-	{#if auth.status !== 'authenticated'}
-		<p class="auth-hint">{t('edit.signInToApply')}</p>
-	{/if}
-
 	<GenerateButton
 		label={t('edit.addObject.apply')}
 		disabled={disabled || finalPrompt === '' || auth.status !== 'authenticated'}
@@ -211,12 +207,6 @@ before the Change Date. See LICENSE for complete terms.
 		display: block;
 		margin-bottom: 0.25rem;
 		font-weight: 600;
-		color: var(--color-muted);
-	}
-
-	.auth-hint {
-		margin: 0;
-		font-size: 0.875rem;
 		color: var(--color-muted);
 	}
 

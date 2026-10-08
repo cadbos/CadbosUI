@@ -471,9 +471,7 @@ before the Change Date. See LICENSE for complete terms.
 		</p>
 	{/if}
 
-	{#if !isAuthenticated}
-		<p class="auth-hint">{t('lightSettings.signInToApply')}</p>
-	{:else if validationKey && jobId === null}
+	{#if isAuthenticated && validationKey && jobId === null}
 		<p class="validation-hint">{t(validationKey)}</p>
 	{/if}
 
@@ -722,7 +720,6 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-muted);
 	}
 
-	.auth-hint,
 	.validation-hint {
 		margin: 0;
 		font-size: 0.875rem;

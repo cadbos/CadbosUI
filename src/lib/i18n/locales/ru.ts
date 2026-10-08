@@ -156,7 +156,8 @@ export const ru = {
 	'render.sceneType.exterior': 'Экстерьер',
 	'render.generate': 'Сгенерировать',
 	'render.optional': 'необязательно',
-	'render.signInToGenerate': 'Войдите, чтобы сгенерировать',
+	'generation.signInToStart': 'Войдите, чтобы запустить генерацию',
+	'generation.startHint': 'Запустить генерацию с помощью ИИ',
 	'render.outputFormat': 'Формат',
 	'render.cost': 'Стоимость: {cost}',
 	'render.balance': 'Баланс: {balance}',
@@ -389,7 +390,7 @@ export const ru = {
 	'status.hint.assets':
 		'Отдаёт статические файлы самого приложения (JS, CSS, изображения интерфейса). Не связано с хранилищем S3 для загруженных пользователями изображений.',
 	'status.hint.comfyui':
-		'Обеспечивает «Объекты», «Замену объекта», «Замену текстуры», «Перекраску» и «Управление освещением».',
+		'Обеспечивает «Изменение с объектами», «Замену объекта», «Замену текстуры», «Перекраску» и «Управление освещением».',
 	'status.hint.d1':
 		'Хранит аккаунты, историю расходов, баланс и «Сцены» (историю ваших генераций).',
 	'status.hint.nostr':
@@ -532,7 +533,6 @@ export const ru = {
 	'styleTransfer.advanced': 'Дополнительно',
 	'styleTransfer.negativePrompt': 'Что исключить',
 	'styleTransfer.negativePromptPlaceholder': 'например: люди, лишний декор, тёмные стены',
-	'styleTransfer.signInToApply': 'Войдите, чтобы перенести стиль',
 	'styleTransfer.apply': 'Перенести стиль',
 	'styleTransfer.failed': 'Не удалось перенести стиль. Попробуйте ещё раз.',
 	'styleTransfer.insufficientCredit': 'Тестовый баланс исчерпан.',
@@ -829,16 +829,18 @@ export const ru = {
 	'edit.generationRestricted': 'Генерация доступна ограниченному кругу пользователей.',
 	'edit.tool.switcher.label': 'Способ редактирования',
 	'edit.tool.freeform': 'Свой промпт',
-	'edit.tool.objects': 'Объекты',
+	'edit.tool.objects': 'Изменение с объектами',
 	'edit.tool.addObject': 'Добавить объект',
-	'edit.tool.addObject.tab': 'Добавление объекта',
+	'edit.tool.addObject.tab': 'Добавление',
+	'edit.tool.addObject.tabHint': 'Добавление объекта на сцену',
 	'edit.tool.removeObject': 'Удалить объект',
-	'edit.tool.removeObject.tab': 'Удаление объекта',
+	'edit.tool.removeObject.tab': 'Удаление',
+	'edit.tool.removeObject.tabHint': 'Удаление объекта со сцены',
 	'edit.tool.lightSettings': 'Управление освещением',
 	'edit.tool.repaint': 'Перекраска',
 	'edit.addObject.apply': 'Добавить объект',
 	'edit.addObject.selectHint': 'Выберите шаблон или опишите, что добавить на изображение.',
-	'edit.addObject.customLabel': 'Что добавить',
+	'edit.addObject.customLabel': 'Описание объекта, который нужно добавить на сцену',
 	'edit.addObject.customPlaceholder': 'например: серое кресло у окна',
 	'edit.addObject.previewLabel': 'Итоговая инструкция',
 	'edit.addObject.userPromptTemplate':
@@ -861,10 +863,9 @@ export const ru = {
 	'edit.addObject.bookshelf.phrase': 'настенную книжную полку с книгами',
 	'edit.addObject.mirror.label': 'Зеркало',
 	'edit.addObject.mirror.phrase': 'декоративное зеркало',
-	'edit.removeObject.label': 'Что убрать?',
-	'edit.removeObject.placeholder': 'например: старый диван',
-	'edit.removeObject.hint':
-		'Опишите объект как можно точнее словами — так модели будет проще его найти и убрать.',
+	'edit.removeObject.label':
+		'Опишите объект, который нужно удалить со сцены как можно точнее словами — так ИИ модели будет проще его найти и убрать',
+	'edit.removeObject.placeholder': 'например: торшер в углу',
 	'edit.removeObject.apply': 'Удалить объект',
 	'edit.removeObject.promptTemplate':
 		'Убери с изображения {object}, аккуратно восстановив то, что было на его месте.',
