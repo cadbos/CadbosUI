@@ -28,7 +28,7 @@ const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	promptFragments: [],
 	promptOverride: null,
 	editPrompt: '',
-	addObjectPresetId: null,
+	addObjectInstruction: '',
 	removeObjectText: '',
 	editOperationType: null,
 	outputFormat: 'webp',

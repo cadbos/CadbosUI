@@ -13,39 +13,42 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { onMount, type Snippet } from 'svelte';
 	import { innerHeight, innerWidth } from 'svelte/reactivity/window';
-	import { ChevronDown, ChevronUp, Move, SlidersHorizontal } from '@lucide/svelte';
+	import { ChevronDown, ChevronUp, Move, MoveHorizontal, SlidersHorizontal } from '@lucide/svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import {
 		clampToolsPanelPosition,
 		clampToolsPanelWidth,
 		getToolsPanelTopBoundary,
 		MIN_TOOLS_PANEL_WIDTH,
+		nextToolsPanelSizePreset,
 		toolsPanel,
 		TOOLS_PANEL_WIDTH
 	} from '$lib/state/tools-panel.svelte';
 
 	interface Props {
+		active: boolean;
 		children: Snippet;
+		header: Snippet;
 	}
 
-	let { children }: Props = $props();
+	let { active, children, header }: Props = $props();
 
 	const topBoundary = getToolsPanelTopBoundary();
 	const uid = $props.id();
 	const bodyId = `${uid}-body`;
 
-	// The panel's rendered size, measured by Svelte's dimension bindings. A
-	// hidden instance (Workspace mounts one per mode, only the active one
-	// visible) measures 0×0 — harmless, since each instance only uses its own
-	// size to place itself.
 	let panelWidth = $state(TOOLS_PANEL_WIDTH);
 	let panelHeight = $state(0);
 	// The actual reachable maximum — shared by aria-valuemax and the End-key
 	// branch below so the announced max always matches what End produces.
 	let maxWidth = $derived(
-		clampToolsPanelWidth(Number.MAX_SAFE_INTEGER, innerWidth.current ?? TOOLS_PANEL_WIDTH)
+		clampToolsPanelWidth(
+			Number.MAX_SAFE_INTEGER,
+			innerWidth.current ?? TOOLS_PANEL_WIDTH,
+			toolsPanel.position?.x ?? 0
+		)
 	);
 
 	// Where the panel is actually drawn: the user's chosen position, kept
@@ -71,10 +74,6 @@ before the Change Date. See LICENSE for complete terms.
 		);
 	});
 
-	// A drag gesture and a click-to-toggle share the same bar: below the
-	// threshold it's a click, at/above it the panel follows the pointer. This
-	// avoids a second, redundant control just for toggling (which would also
-	// double-fire on pointerup if the bar itself were a <button>).
 	const DRAG_THRESHOLD_PX = 4;
 	let drag: {
 		pointerId: number;
@@ -86,7 +85,7 @@ before the Change Date. See LICENSE for complete terms.
 	} | null = null;
 
 	function onBarPointerDown(event: PointerEvent): void {
-		if (event.button !== 0) return;
+		if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
 		// The default corner is CSS-anchored, so its origin is only known from
 		// the rendered box — the bar's, which sits at the panel's top-left.
 		const origin = position ?? (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -132,24 +131,22 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function onBarPointerUp(event: PointerEvent): void {
-		const wasDrag = endDrag(event);
-		if (!wasDrag) toolsPanel.setOpen(!toolsPanel.open);
+		endDrag(event);
 	}
 
 	function onBarPointerCancel(event: PointerEvent): void {
 		endDrag(event);
 	}
 
-	function onBarKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Enter' && event.key !== ' ') return;
-		event.preventDefault();
-		toolsPanel.setOpen(!toolsPanel.open);
-	}
-
 	const RESIZE_STEP = 24;
 
 	function clampWidth(value: number): number {
-		return clampToolsPanelWidth(value, window.innerWidth);
+		return clampToolsPanelWidth(value, window.innerWidth, toolsPanel.position?.x ?? 0);
+	}
+
+	function cycleSizePreset(): void {
+		const current = toolsPanel.width ?? panelWidth;
+		toolsPanel.setWidth(clampWidth(nextToolsPanelSizePreset(current, window.innerWidth)));
 	}
 
 	let resizeStartX = 0;
@@ -195,7 +192,7 @@ before the Change Date. See LICENSE for complete terms.
 		toolsPanel.setWidth(clampWidth(next));
 	}
 
-	$effect(() => {
+	onMount(() => {
 		toolsPanel.hydrate();
 	});
 </script>
@@ -210,32 +207,51 @@ before the Change Date. See LICENSE for complete terms.
 >
 	<div
 		class="panel-bar"
-		role="button"
-		tabindex="0"
-		aria-expanded={toolsPanel.open}
-		aria-controls={bodyId}
-		aria-label={toolsPanel.open ? t('toolsPanel.collapse') : t('toolsPanel.expand')}
+		role="group"
+		aria-label={t('toolsPanel.title')}
 		onpointerdown={onBarPointerDown}
 		onpointermove={onBarPointerMove}
 		onpointerup={onBarPointerUp}
 		onpointercancel={onBarPointerCancel}
-		onkeydown={onBarKeydown}
 	>
-		<SlidersHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
-		<span>{t('toolsPanel.title')}</span>
-		<Move size={14} strokeWidth={1.8} aria-hidden="true" class="drag-icon" />
-		{#if toolsPanel.open}
-			<ChevronUp size={16} strokeWidth={1.8} aria-hidden="true" />
-		{:else}
-			<ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" />
+		<div class="panel-title" title={t('toolsPanel.title')}>
+			<SlidersHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
+			<span class="panel-title-label">{t('toolsPanel.title')}</span>
+		</div>
+		{#if active}
+			<div class="panel-header-content">
+				{@render header()}
+			</div>
 		{/if}
+		<button
+			type="button"
+			class="panel-toggle size-preset"
+			aria-label={t('toolsPanel.sizePreset')}
+			title={t('toolsPanel.sizePreset')}
+			onclick={cycleSizePreset}
+		>
+			<MoveHorizontal size={16} strokeWidth={1.8} aria-hidden="true" />
+		</button>
+		<Move size={14} strokeWidth={1.8} aria-hidden="true" class="drag-icon" />
+		<button
+			type="button"
+			class="panel-toggle"
+			aria-expanded={toolsPanel.open}
+			aria-controls={bodyId}
+			aria-label={toolsPanel.open ? t('toolsPanel.collapse') : t('toolsPanel.expand')}
+			onclick={() => toolsPanel.setOpen(!toolsPanel.open)}
+		>
+			{#if toolsPanel.open}
+				<ChevronUp size={16} strokeWidth={1.8} aria-hidden="true" />
+			{:else}
+				<ChevronDown size={16} strokeWidth={1.8} aria-hidden="true" />
+			{/if}
+		</button>
 	</div>
 
-	{#if toolsPanel.open}
-		<div class="panel-body" id={bodyId}>
-			{@render children()}
-		</div>
-	{/if}
+	<div class="panel-body" id={bodyId} hidden={!toolsPanel.open}>
+		{@render children()}
+	</div>
 
 	<div
 		class="resize-handle"
@@ -259,14 +275,15 @@ before the Change Date. See LICENSE for complete terms.
 		position: fixed;
 		z-index: var(--z-tools-panel);
 		width: var(--tools-panel-width);
-		max-width: calc(100vw - 2rem);
+		max-width: 100vw;
 		max-height: calc(100dvh - 2rem);
 		display: flex;
 		flex-direction: column;
+		container: tools-panel / inline-size;
 	}
 
 	.floating-tools-panel.at-default-corner {
-		right: 1rem;
+		right: max(0px, min(1rem, calc(100vw - var(--tools-panel-width))));
 		/* Anchored just below the workspace header (topbar, plus the project
 		   tab bar row whenever one is open) rather than a fixed height — the
 		   header's real height varies with that tab bar, so Workspace.svelte
@@ -299,7 +316,7 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.625rem 0.75rem;
+		padding: 0.5rem 0.75rem;
 		background: var(--color-surface);
 		border: 1.5px solid var(--color-border);
 		border-radius: var(--radius-lg);
@@ -316,17 +333,67 @@ before the Change Date. See LICENSE for complete terms.
 		cursor: grabbing;
 	}
 
-	.panel-bar:focus-visible {
-		outline: 2px solid var(--color-accent);
-		outline-offset: 2px;
+	.panel-title {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.875rem;
+		font-weight: 650;
 	}
 
-	.panel-bar span {
-		flex: 1 1 auto;
+	.panel-title :global(svg) {
+		flex: 0 0 auto;
+		width: 16px;
+		height: 16px;
+	}
+
+	.panel-title-label {
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	@container tools-panel (max-width: 600px) {
+		.panel-title-label {
+			display: none;
+		}
+	}
+
+	.panel-bar :global(.drag-icon) {
+		flex: 0 0 auto;
+		width: 14px;
+		height: 14px;
+	}
+
+	.panel-header-content {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	.panel-toggle {
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		padding: 0;
+		border: 0;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+	}
+
+	.panel-toggle:hover {
+		background: var(--color-surface-hover);
+	}
+
+	.panel-toggle:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 1px;
 	}
 
 	.panel-body {
@@ -365,7 +432,8 @@ before the Change Date. See LICENSE for complete terms.
 			touch-action: auto;
 		}
 
-		.panel-bar :global(.drag-icon) {
+		.panel-bar :global(.drag-icon),
+		.size-preset {
 			display: none;
 		}
 

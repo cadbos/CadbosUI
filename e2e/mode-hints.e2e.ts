@@ -12,6 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { ru } from '$lib/i18n/locales/ru';
 import { expect, test } from './fixtures';
 
 test('object replacement suggests the custom prompt for adding an object and carries the text over', async ({
@@ -30,14 +31,14 @@ test('object replacement suggests the custom prompt for adding an object and car
 		hint.getByText('похоже, вы хотите добавить новый предмет', { exact: false })
 	).toBeVisible();
 	await expect(hint.locator('q')).toHaveText(['добавь']);
-	await panel.getByRole('button', { name: 'Перейти в «Свой промпт»' }).click();
+	await panel.getByRole('button', { name: 'Перейти в «Добавить объект»' }).click();
 
-	await expect(page).toHaveURL(/tool=freeform/);
-	await expect(page.getByRole('tab', { name: 'Свой промпт' })).toHaveAttribute(
+	await expect(page).toHaveURL(/tool=add-object/);
+	await expect(page.getByRole('tab', { name: 'Добавление объекта' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
-	await expect(page.getByRole('textbox', { name: 'Инструкция для правки' })).toHaveValue(
+	await expect(page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] })).toHaveValue(
 		'добавь стол у окна'
 	);
 });
@@ -64,7 +65,7 @@ test('the custom prompt suggests the removal tool', async ({ page }) => {
 	await page.getByRole('button', { name: 'Перейти в «Удалить объект»' }).click();
 
 	await expect(page).toHaveURL(/tool=remove-object/);
-	await expect(page.getByRole('tab', { name: 'Удалить объект' })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: 'Удаление объекта' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
@@ -78,10 +79,10 @@ test('the custom prompt suggests Repaint for a color change, and Repaint explain
 	await page
 		.getByRole('textbox', { name: 'Инструкция для правки' })
 		.fill('перекрась стены в белый');
-	await page.getByRole('button', { name: 'Перейти в «Перекраска»' }).click();
+	await page.getByRole('button', { name: 'Перейти в «Замена цвета»' }).click();
 
 	await expect(page).toHaveURL(/tool=repaint/);
-	await expect(page.getByRole('tab', { name: 'Перекраска' })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: 'Замена цвета' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
@@ -96,15 +97,18 @@ test('the create prompt suggests editing tools for targeted changes', async ({ p
 	await page.goto('/create/interior?view=chat&format=webp');
 
 	await page.getByRole('textbox', { name: 'Промпт чата' }).fill('Замени кресло на пуф');
-	await page.getByRole('button', { name: 'Перейти в «Свой промпт»' }).click();
+	await page.getByRole('button', { name: 'Перейти в «Замена объекта»' }).click();
 
-	await expect(page).toHaveURL(/\/edit.*tool=freeform/);
-	await expect(page.getByRole('textbox', { name: 'Инструкция для правки' })).toHaveValue(
-		'Замени кресло на пуф'
+	await expect(page).toHaveURL(/\/edit.*tool=object-replacement/);
+	await expect(page.getByRole('tab', { name: /Замена объекта/ })).toHaveAttribute(
+		'aria-selected',
+		'true'
 	);
 });
 
-test('adding a preset object opens Add object with that preset selected', async ({ page }) => {
+test('adding a preset object opens Add object with the template text filled in', async ({
+	page
+}) => {
 	await page.goto('/edit?tool=object-replacement');
 	const panel = page.locator('#edit-tool-panel-object-replacement');
 
@@ -112,8 +116,7 @@ test('adding a preset object opens Add object with that preset selected', async 
 	await panel.getByRole('button', { name: 'Перейти в «Добавить объект»' }).click();
 
 	await expect(page).toHaveURL(/tool=add-object/);
-	await expect(page.getByRole('radio', { name: 'Комнатное растение' })).toHaveAttribute(
-		'aria-checked',
-		'true'
+	await expect(page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] })).toHaveValue(
+		ru['edit.addObject.houseplant.phrase']
 	);
 });

@@ -17,8 +17,8 @@ before the Change Date. See LICENSE for complete terms.
 		ArrowLeft,
 		ArrowRight,
 		Download,
+		Hd,
 		ImagePlus,
-		Sparkles,
 		SquareSplitHorizontal
 	} from '@lucide/svelte';
 	import { resolve } from '$app/paths';
@@ -187,7 +187,7 @@ before the Change Date. See LICENSE for complete terms.
 					title={isAuthenticated ? t('toolbar.upscale') : t('toolbar.signInToUpscale')}
 					onclick={() => void upscale()}
 				>
-					<Sparkles size={16} strokeWidth={1.8} aria-hidden="true" />
+					<Hd size={16} strokeWidth={1.8} aria-hidden="true" />
 				</button>
 				<button
 					type="button"

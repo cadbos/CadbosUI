@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import type { OutputFormat, RenderResponse } from '$lib/api/contract';
 	import {
@@ -192,8 +193,9 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <section class="step-card">
+	<p class="panel-description">{t('styleTransfer.panelDescription')}</p>
 	<div class="field">
-		<span>{t('styleTransfer.referenceImage')}</span>
+		<h2 class="panel-heading">{t('styleTransfer.referenceImage')}</h2>
 
 		<div class="scene-type-toggle" role="tablist" aria-label={t('render.sceneType.label')}>
 			{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
@@ -248,7 +250,7 @@ before the Change Date. See LICENSE for complete terms.
 			{:else if currentPresets.length === 0}
 				<p class="presets-empty">{t('styleTransfer.presetsEmpty')}</p>
 			{:else}
-				<p class="presets-hint" id="style-presets-hint">{t('styleTransfer.presetsGridLabel')}</p>
+				<h2 class="panel-heading" id="style-presets-hint">{t('styleTransfer.presetsGridLabel')}</h2>
 				<div class="preset-grid" role="radiogroup" aria-labelledby="style-presets-hint">
 					{#each currentPresets as preset, index (preset.id)}
 						<button
@@ -261,11 +263,12 @@ before the Change Date. See LICENSE for complete terms.
 							class:selected={selectedPresetId === preset.id}
 							aria-checked={selectedPresetId === preset.id}
 							tabindex={index === activePresetIndex ? 0 : -1}
+							title={t(preset.label)}
 							onclick={() => presetRadios.activate(index)}
 							onkeydown={presetRadios.onKeydown}
 						>
-							<img src={preset.src} alt={t(preset.label)} loading="lazy" />
-							<span>{t(preset.label)}</span>
+							<img src={preset.src} alt="" aria-hidden="true" loading="lazy" />
+							<span class="tile-label">{t(preset.label)}</span>
 						</button>
 					{/each}
 				</div>
@@ -338,19 +341,12 @@ before the Change Date. See LICENSE for complete terms.
 		<p class="auth-hint">{t('styleTransfer.signInToApply')}</p>
 	{/if}
 
-	<button
-		type="button"
-		class="generate-btn"
+	<GenerateButton
+		label={t('styleTransfer.apply')}
 		disabled={!canApply || !isAuthenticated}
+		busy={applying || request.status === 'rendering'}
 		onclick={() => void submit()}
-	>
-		{#if request.status === 'rendering' && applying}
-			<span class="spinner" aria-hidden="true"></span>
-			{t('styleTransfer.applying')}
-		{:else}
-			{t('styleTransfer.apply')}
-		{/if}
-	</button>
+	/>
 
 	{#if error}
 		<p class="submit-error" role="alert">{error}</p>
@@ -386,10 +382,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	.scene-type-toggle button {
 		flex: 1;
-		padding: 0.5rem 1.25rem;
+		min-width: 0;
+		padding: 0.5rem 0.75rem;
 		font: inherit;
 		font-size: 0.875rem;
 		font-weight: 500;
+		line-height: 1.25;
 		color: var(--color-muted);
 		background: transparent;
 		border: none;
@@ -409,33 +407,40 @@ before the Change Date. See LICENSE for complete terms.
 	.reference-tabs {
 		display: flex;
 		width: 100%;
-		gap: 0.25rem;
+		gap: 0.5rem;
 		padding: 0.25rem;
 		background: var(--color-background);
-		border-radius: 10px;
+		border-radius: 12px;
 	}
 
 	.reference-tabs button {
 		flex: 1;
-		padding: 0.375rem 0.625rem;
+		min-width: 0;
+		padding: 0.5rem 0.75rem;
 		font: inherit;
-		font-size: 0.75rem;
+		font-size: 0.875rem;
 		font-weight: 500;
+		line-height: 1.25;
 		text-align: center;
 		color: var(--color-muted);
 		background: transparent;
 		border: none;
-		border-radius: 8px;
+		border-radius: 9px;
 		cursor: pointer;
 	}
 
 	.reference-tabs button.active {
 		color: var(--color-text);
 		background: var(--color-surface);
-		box-shadow: var(--shadow-sm);
+		box-shadow: var(--shadow);
 	}
 
-	.presets-hint,
+	#style-reference-panel {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
 	.presets-empty {
 		margin: 0;
 		font-size: 0.75rem;
@@ -454,6 +459,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.preset {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		gap: 0.375rem;
@@ -495,6 +501,20 @@ before the Change Date. See LICENSE for complete terms.
 		white-space: nowrap;
 	}
 
+	@container tools-panel (max-width: 520px) {
+		.tile-label {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			padding: 0;
+			margin: -1px;
+			overflow: hidden;
+			clip: rect(0, 0, 0, 0);
+			white-space: nowrap;
+			border: 0;
+		}
+	}
+
 	.strength-label,
 	.field {
 		display: flex;
@@ -505,6 +525,8 @@ before the Change Date. See LICENSE for complete terms.
 
 	.strength-top,
 	.field span {
+		font-size: 0.8125rem;
+		font-weight: 600;
 		color: var(--color-muted);
 	}
 

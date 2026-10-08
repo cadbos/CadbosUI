@@ -29,7 +29,7 @@ type LucideIcon = typeof Lamp;
 export interface AddObjectPreset {
 	id: string;
 	label: TranslationKey;
-	prompt: TranslationKey;
+	phrase: TranslationKey;
 	keywords: readonly string[];
 	Icon: LucideIcon;
 }
@@ -41,35 +41,35 @@ export const ADD_OBJECT_PRESETS: AddObjectPreset[] = [
 	{
 		id: 'led-strip',
 		label: 'edit.addObject.ledStrip.label',
-		prompt: 'edit.addObject.ledStrip.prompt',
+		phrase: 'edit.addObject.ledStrip.phrase',
 		keywords: ['светодиодн\\p{L}*', 'лент\\p{L}*', 'led', 'strips?'],
 		Icon: Lamp
 	},
 	{
 		id: 'recessed-lights',
 		label: 'edit.addObject.recessedLights.label',
-		prompt: 'edit.addObject.recessedLights.prompt',
+		phrase: 'edit.addObject.recessedLights.phrase',
 		keywords: ['точечн\\p{L}*', 'встроенн\\p{L}*', 'recessed', 'downlights?'],
 		Icon: Lightbulb
 	},
 	{
 		id: 'cove-lighting',
 		label: 'edit.addObject.coveLighting.label',
-		prompt: 'edit.addObject.coveLighting.prompt',
+		phrase: 'edit.addObject.coveLighting.phrase',
 		keywords: ['подсветк\\p{L}* потолк\\p{L}*', 'потолочн\\p{L}* подсветк\\p{L}*', 'cove'],
 		Icon: Sparkles
 	},
 	{
 		id: 'people',
 		label: 'edit.addObject.people.label',
-		prompt: 'edit.addObject.people.prompt',
+		phrase: 'edit.addObject.people.phrase',
 		keywords: ['люд\\p{L}*', 'человек\\p{L}*', 'people', 'persons?'],
 		Icon: Users
 	},
 	{
 		id: 'people-motion',
 		label: 'edit.addObject.peopleMotion.label',
-		prompt: 'edit.addObject.peopleMotion.prompt',
+		phrase: 'edit.addObject.peopleMotion.phrase',
 		keywords: [
 			'люд\\p{L}*',
 			'человек\\p{L}*',
@@ -87,7 +87,7 @@ export const ADD_OBJECT_PRESETS: AddObjectPreset[] = [
 	{
 		id: 'houseplant',
 		label: 'edit.addObject.houseplant.label',
-		prompt: 'edit.addObject.houseplant.prompt',
+		phrase: 'edit.addObject.houseplant.phrase',
 		keywords: [
 			'растени\\p{L}*',
 			'цвет(?:ы|ок|ов|ами|ком)',
@@ -104,7 +104,7 @@ export const ADD_OBJECT_PRESETS: AddObjectPreset[] = [
 	{
 		id: 'wall-art',
 		label: 'edit.addObject.wallArt.label',
-		prompt: 'edit.addObject.wallArt.prompt',
+		phrase: 'edit.addObject.wallArt.phrase',
 		keywords: [
 			'картин\\p{L}*',
 			'постер\\p{L}*',
@@ -121,7 +121,7 @@ export const ADD_OBJECT_PRESETS: AddObjectPreset[] = [
 	{
 		id: 'bookshelf',
 		label: 'edit.addObject.bookshelf.label',
-		prompt: 'edit.addObject.bookshelf.prompt',
+		phrase: 'edit.addObject.bookshelf.phrase',
 		keywords: [
 			'книжн\\p{L}*',
 			'полк\\p{L}*',
@@ -135,7 +135,7 @@ export const ADD_OBJECT_PRESETS: AddObjectPreset[] = [
 	{
 		id: 'mirror',
 		label: 'edit.addObject.mirror.label',
-		prompt: 'edit.addObject.mirror.prompt',
+		phrase: 'edit.addObject.mirror.phrase',
 		keywords: ['зеркал\\p{L}*', 'mirrors?'],
 		Icon: MirrorRectangular
 	}

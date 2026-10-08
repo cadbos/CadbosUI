@@ -13,6 +13,15 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <!--
-	Intentionally empty: +page.ts redirects '/' to '/create/interior' before this
-	ever renders. The actual UI is <Workspace /> in the root +layout.svelte.
+	The workspace root: no mode is selected until the user picks one. This
+	route only registers the URL and restores the app title. The UI is
+	<Workspace /> in the root layout, which stays mounted across navigation.
 -->
+
+<script lang="ts">
+	import { t } from '$lib/i18n/index.svelte';
+</script>
+
+<svelte:head>
+	<title>{t('app.title')}</title>
+</svelte:head>

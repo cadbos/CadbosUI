@@ -139,6 +139,7 @@ async function uploadInputs(page: Page): Promise<UploadCapture> {
 	// dropzone for the mask editor's canvas — wait for that canvas instead of
 	// the dropzone's "change photo" button, so validation has settled on the
 	// picked file rather than racing a pending reactive update.
+	await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
 	await sceneInput.setInputFiles({
 		name: 'scene.webp',
 		mimeType: 'image/webp',
@@ -311,7 +312,7 @@ test('draws a mask and applies the synchronous result without polling', async ({
 
 	await panel.getByRole('button', { name: 'Заменить текстуру' }).click();
 
-	await expect(page.locator('.result img.output')).toHaveAttribute(
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
 		'src',
 		'/api/media/test-media/masked-result.webp'
 	);
@@ -347,10 +348,11 @@ test('draws a mask and applies the synchronous result without polling', async ({
 			})
 		});
 	});
-	await page.getByRole('tab', { name: 'Свой промпт' }).click();
-	await page.getByLabel('Инструкция для правки').fill('Сделать светлее');
-	await page.getByRole('button', { name: 'Применить правку' }).click();
-	await expect(page.locator('.result img.output')).toHaveAttribute(
+	await page.getByRole('tab', { name: 'Объекты' }).click();
+	await page.getByRole('tab', { name: 'Удаление объекта' }).click();
+	await page.getByLabel('Что убрать?').fill('лампа');
+	await page.getByRole('button', { name: 'Удалить объект' }).click();
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
 		'src',
 		'/api/media/test-media/follow-up-edit.webp',
 		{ timeout: 10_000 }
@@ -396,7 +398,7 @@ test('does not navigate back after switching tools during submission', async ({ 
 	const panel = page.locator('#edit-tool-panel-texture-replacement');
 	await panel.getByRole('button', { name: 'Заменить текстуру' }).click();
 	await expect.poll(() => postCount).toBe(1);
-	await page.getByRole('tab', { name: 'Свой промпт' }).focus();
+	await page.getByRole('tab', { name: 'Объекты' }).focus();
 	await page.keyboard.press('Enter');
 	releaseResponse?.();
 
@@ -404,7 +406,7 @@ test('does not navigate back after switching tools during submission', async ({ 
 	// mockProjectSessionRoutes) — the tool switch carries that forward instead
 	// of dropping it (see buildWorkspaceUrl in url-state.ts).
 	await expect(page).toHaveURL(
-		new RegExp(`/edit\\?tool=freeform&project=${E2E_PROJECT_ID}&session=${E2E_SESSION_ID}$`)
+		new RegExp(`/edit\\?tool=add-object&project=${E2E_PROJECT_ID}&session=${E2E_SESSION_ID}$`)
 	);
 	await expect(page).not.toHaveURL(/tool=texture-replacement/);
 });

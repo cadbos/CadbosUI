@@ -70,6 +70,15 @@ before the Change Date. See LICENSE for complete terms.
 			if (snapshot.editPrompt.trim() !== '') {
 				rows.push({ label: t('edit.instruction'), value: snapshot.editPrompt });
 			}
+			if (
+				snapshot.editOperationType === 'add-object' &&
+				snapshot.addObjectInstruction.trim() !== ''
+			) {
+				rows.push({
+					label: t('edit.addObject.customLabel'),
+					value: snapshot.addObjectInstruction
+				});
+			}
 		} else if (kind === 'style-transfer') {
 			if (snapshot.styleTransferPrompt.trim() !== '') {
 				rows.push({ label: t('styleTransfer.guidance'), value: snapshot.styleTransferPrompt });

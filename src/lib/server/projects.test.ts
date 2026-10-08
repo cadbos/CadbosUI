@@ -327,7 +327,7 @@ describe('projects repository', () => {
 					promptFragments: TEST_FORM_SNAPSHOT.promptFragments,
 					promptOverride: TEST_FORM_SNAPSHOT.promptOverride,
 					editPrompt: TEST_FORM_SNAPSHOT.editPrompt,
-					addObjectPresetId: TEST_FORM_SNAPSHOT.addObjectPresetId,
+					addObjectInstruction: TEST_FORM_SNAPSHOT.addObjectInstruction,
 					removeObjectText: TEST_FORM_SNAPSHOT.removeObjectText,
 					editOperationType: TEST_FORM_SNAPSHOT.editOperationType,
 					outputFormat: TEST_FORM_SNAPSHOT.outputFormat,

@@ -229,9 +229,108 @@ test('closing a tab removes it and falls back to a neighboring project', async (
 	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
 
 	const tabs = page.getByRole('navigation', { name: 'Открытые проекты' });
+	await expect(tabs.getByRole('button', { name: 'Закрыть вкладку «Kitchen»' })).toBeVisible();
+	await expect(tabs.getByRole('button', { name: 'Закрыть вкладку «Living room»' })).toHaveCount(0);
+	const share = tabs.getByRole('button', { name: 'Поделиться', exact: true });
+	await expect(share).toBeVisible();
+	await expect(share).toHaveText('');
+	await expect(page.getByRole('button', { name: 'Поделиться', exact: true })).toHaveCount(1);
+
+	await tabs.getByRole('tab', { name: 'Living room' }).click();
+	await expect(tabs.getByRole('button', { name: 'Закрыть вкладку «Living room»' })).toBeVisible();
+	await expect(tabs.getByRole('button', { name: 'Закрыть вкладку «Kitchen»' })).toHaveCount(0);
+	await expect(tabs.getByRole('button', { name: 'Поделиться', exact: true })).toBeVisible();
+
+	await tabs.getByRole('tab', { name: 'Kitchen' }).click();
 	await tabs.getByRole('button', { name: 'Закрыть вкладку «Kitchen»' }).click();
 
 	await expect(tabs.getByRole('tab', { name: 'Kitchen' })).toHaveCount(0);
 	await expect(tabs.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
 	await expect(resultImage(page)).toHaveAttribute('src', '/api/media/test-media/living-room.webp');
+});
+
+const ROOT_SESSION_URL = new RegExp(
+	`/\\?project=${PROJECT_A}&session=${SESSION_A}&generation=${GENERATION_A}$`
+);
+
+async function expectNoModeSelected(page: Page): Promise<void> {
+	await Promise.all([
+		expect(page.locator('#mode-tab-render')).toHaveAttribute('aria-selected', 'false'),
+		expect(page.locator('#mode-tab-edit')).toHaveAttribute('aria-selected', 'false'),
+		expect(page.locator('#mode-tab-styleTransfer')).toHaveAttribute('aria-selected', 'false'),
+		expect(page.getByText('Выберите, с чего начать.')).toBeVisible()
+	]);
+}
+
+test('the logo keeps the open project in the address without selecting a mode', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockProjectList(page, { [PROJECT_A]: 'Living room' });
+	await mockProjectDetail(
+		page,
+		PROJECT_A,
+		SESSION_A,
+		GENERATION_A,
+		'Living room',
+		'/api/media/test-media/living-room.webp'
+	);
+
+	await page.goto(`/projects/${PROJECT_A}`);
+	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
+	await expect(page).toHaveURL(new RegExp(`/create/interior\\?.*project=${PROJECT_A}`));
+
+	await page.locator('.brand').click();
+
+	await expect(page).toHaveURL(ROOT_SESSION_URL);
+	await expectNoModeSelected(page);
+	await expect(page.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
+
+	await page.locator('#mode-tab-render').click();
+	await expect(page).toHaveURL(
+		new RegExp(
+			`/create/interior\\?view=chat&format=webp&project=${PROJECT_A}&session=${SESSION_A}&generation=${GENERATION_A}$`
+		)
+	);
+});
+
+test('a reopened tab writes the restored project into the address without selecting a mode', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockProjectList(page, { [PROJECT_A]: 'Living room' });
+	await mockProjectDetail(
+		page,
+		PROJECT_A,
+		SESSION_A,
+		GENERATION_A,
+		'Living room',
+		'/api/media/test-media/living-room.webp'
+	);
+	await page.addInitScript(
+		(persisted) => {
+			localStorage.setItem('cadbos.workspace-tabs.v1', JSON.stringify(persisted));
+		},
+		{
+			tabs: [
+				{
+					id: PROJECT_A,
+					title: 'Living room',
+					sessionTabs: [{ id: SESSION_A, title: 'Main thread' }],
+					activeSessionTabId: SESSION_A
+				}
+			],
+			activeTabId: PROJECT_A
+		}
+	);
+
+	await page.goto('/');
+
+	await expect(page).toHaveURL(ROOT_SESSION_URL);
+	await expectNoModeSelected(page);
+	await expect(page.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
+	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
+		'src',
+		'/api/media/test-media/living-room.webp'
+	);
 });

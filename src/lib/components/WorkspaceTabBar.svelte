@@ -13,9 +13,12 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import TabStrip from '$lib/components/TabStrip.svelte';
 	import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+
+	let { activeActions }: { activeActions?: Snippet } = $props();
 
 	// The scratch tab is internal state for project-less work, never a tab the
 	// user sees: a first generation there promotes it into its own "Untitled"
@@ -37,4 +40,5 @@ before the Change Date. See LICENSE for complete terms.
 	onActivate={(id) => workspaceTabs.activate(id)}
 	onClose={(id) => workspaceTabs.close(id)}
 	onRename={(id, title) => workspaceTabs.renameProject(id, title)}
+	{activeActions}
 />
