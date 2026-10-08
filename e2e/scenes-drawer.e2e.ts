@@ -14,6 +14,7 @@
 
 import type { Page } from '@playwright/test';
 
+import { ru } from '$lib/i18n/locales/ru';
 import { expect, test } from './fixtures';
 import { media, mediaKey } from './helpers/media';
 import { mockProjectSessionRoutes } from './helpers/project-session-routes';
@@ -26,7 +27,7 @@ const FORM_SNAPSHOT = {
 	promptFragments: [],
 	promptOverride: null,
 	editPrompt: '',
-	addObjectPresetId: null,
+	addObjectInstruction: '',
 	removeObjectText: '',
 	outputFormat: 'webp',
 	sceneType: 'interior',
@@ -72,7 +73,7 @@ const ADD_OBJECT_GENERATION_ID = '00000000-0000-4000-8000-000000000201';
 const ADD_OBJECT_FORM_SNAPSHOT = {
 	...FORM_SNAPSHOT,
 	editPrompt: 'сделай стены голубыми',
-	addObjectPresetId: 'houseplant',
+	addObjectInstruction: 'комнатное растение',
 	editOperationType: 'add-object'
 };
 
@@ -209,13 +210,12 @@ test('restores an edit-kind generation onto the edit-panel tool that actually pr
 	// stale freeform instruction left over from the earlier edit.
 	await expect(page).toHaveURL(/\/edit/);
 	await expect(page).toHaveURL(/tool=add-object/);
-	await expect(page.getByRole('tab', { name: 'Добавить объект' })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: 'Добавление объекта' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
-	await expect(page.getByRole('radio', { name: 'Комнатное растение' })).toHaveAttribute(
-		'aria-checked',
-		'true'
+	await expect(page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] })).toHaveValue(
+		'комнатное растение'
 	);
 });
 
@@ -227,12 +227,13 @@ test('asks for confirmation before restoring over unsaved form changes', async (
 	await waitForClientReady(page);
 	// Gives the form something to lose: an uploaded image with no matching
 	// confirmed generation behind it yet.
-	await page.setInputFiles('input[type="file"]', {
+	const renderPanel = page.locator('#mode-panel-render');
+	await renderPanel.locator('input[type="file"]').setInputFiles({
 		name: 'room.jpg',
 		mimeType: 'image/jpeg',
 		buffer: Buffer.from('fake-image-bytes')
 	});
-	await expect(page.locator('.image-wrapper img').first()).toBeVisible();
+	await expect(renderPanel.locator('.image-wrapper img')).toBeVisible();
 
 	await page.getByRole('button', { name: 'Сцены' }).click();
 	await page.locator('.image-frame.result-frame').hover();

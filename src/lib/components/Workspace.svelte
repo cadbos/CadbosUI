@@ -13,13 +13,23 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { FolderKanban, GalleryHorizontalEnd, Images, Layers, Share2 } from '@lucide/svelte';
+	import {
+		FolderKanban,
+		GalleryHorizontalEnd,
+		Images,
+		Layers,
+		Palette,
+		Pencil,
+		Share2,
+		Sparkles
+	} from '@lucide/svelte';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import FloatingToolsPanel from '$lib/components/FloatingToolsPanel.svelte';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import { toolsPanel } from '$lib/state/tools-panel.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import RenderResult from '$lib/components/RenderResult.svelte';
@@ -70,11 +80,21 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
-	const modes: { id: Mode; label: TranslationKey }[] = [
-		{ id: 'render', label: 'mode.render' },
-		{ id: 'edit', label: 'mode.edit' },
-		{ id: 'styleTransfer', label: 'mode.styleTransfer' }
-	];
+	const modes = [
+		{ id: 'render', label: 'mode.render', description: 'render.panelDescription', icon: Sparkles },
+		{ id: 'edit', label: 'mode.edit', description: 'edit.panelDescription', icon: Pencil },
+		{
+			id: 'styleTransfer',
+			label: 'mode.styleTransfer',
+			description: 'styleTransfer.panelDescription',
+			icon: Palette
+		}
+	] satisfies {
+		id: Mode;
+		label: TranslationKey;
+		description: TranslationKey;
+		icon: typeof Sparkles;
+	}[];
 
 	const sceneTypes: { id: SceneType; label: TranslationKey }[] = [
 		{ id: 'interior', label: 'render.sceneType.interior' },
@@ -83,7 +103,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	let submitting = $state(false);
 	let submitError = $state<string | null>(null);
-	let modeTabs = $state<HTMLElement[]>([]);
+	let modeTabs = $state<(HTMLElement | null)[]>([]);
 	let sceneTypeTabs = $state<HTMLElement[]>([]);
 	let scenesOpen = $state(false);
 	let scenesTrigger: HTMLButtonElement | null = null;
@@ -91,7 +111,8 @@ before the Change Date. See LICENSE for complete terms.
 	let shareTrigger: HTMLButtonElement | null = null;
 
 	// The URL is the source of truth for which mode is open — not local $state —
-	// so a shared link or a page reload always opens on the right tab.
+	// so a shared link or a page reload always opens on the right tab. Null on
+	// the workspace root: nothing is selected until the user picks a mode.
 	const mode = $derived(routeIdToMode(page.route.id));
 
 	const modeTabController = createTabController({
@@ -139,10 +160,6 @@ before the Change Date. See LICENSE for complete terms.
 	const showSessionTabs = $derived(
 		workspaceTabs.activeTabId !== SCRATCH_TAB_ID && workspaceTabs.activeSessionTabs.length > 0
 	);
-	// Whether the active tab is a real project (not the scratch tab) — gates
-	// project-level actions like Share, which don't depend on a session
-	// existing yet, unlike showSessionTabs.
-	const hasActiveProject = $derived(workspaceTabs.activeTabId !== SCRATCH_TAB_ID);
 	// Only reserves canvas space while the floating tools panel is both open
 	// and still sitting at its untouched default corner — the moment the user
 	// drags it elsewhere or collapses it, the canvas reclaims the full width
@@ -241,8 +258,9 @@ before the Change Date. See LICENSE for complete terms.
 		if (!target) return null;
 		const urlMode = mode;
 		const sceneParam = page.params.scene;
-		const applyUrlFields = (state: RequestState): void =>
-			applyShareParams(urlMode, sceneParam, searchParams, state);
+		const applyUrlFields = (state: RequestState): void => {
+			if (urlMode !== null) applyShareParams(urlMode, sceneParam, searchParams, state);
+		};
 
 		const anchor = generationAnchorFromSearch(searchParams);
 		const generation = anchor ? await fetchGeneratedImageDetail(anchor.generationId) : null;
@@ -380,7 +398,7 @@ before the Change Date. See LICENSE for complete terms.
 	// where `request` is already the source of truth and re-parsing the URL
 	// would be redundant.
 	afterNavigate(({ type }) => {
-		if (type === 'enter' || type === 'popstate' || type === 'link') {
+		if ((type === 'enter' || type === 'popstate' || type === 'link') && mode !== null) {
 			applyShareParams(mode, page.params.scene, page.url.searchParams, request);
 		}
 		if (type === 'enter') {
@@ -421,6 +439,11 @@ before the Change Date. See LICENSE for complete terms.
 	// switching workspace tabs is a workspaceTabs mutation that buildShareUrl
 	// itself never reads (see its own doc comment), so without reading them
 	// here directly, switching tabs wouldn't re-schedule this effect at all.
+	// On the root there is no mode to serialize — buildShareUrl is skipped so
+	// this effect cannot invent /create — but those same reads still run, so
+	// a project restored after a reload (or still open after the logo link
+	// lands on /) is written as /?project=&session=&generation= once it is
+	// on screen.
 	// generationAnchor rides along the same way, so the `?generation=`
 	// anchor (see request.svelte.ts) always names what's on screen — a stored
 	// generation, or with `step=before` the image one was made from — moving
@@ -433,14 +456,18 @@ before the Change Date. See LICENSE for complete terms.
 	// in the meantime.
 	$effect(() => {
 		if (!hydrated || urlTargetStatus !== 'idle') return;
-		buildShareUrl(mode, request);
+		const activeMode = mode;
 		const activeProjectId =
 			workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
 		const activeSessionId = workspaceTabs.activeTab.activeSessionTabId ?? undefined;
 		const generationAnchor = request.generationAnchor;
+		if (activeMode !== null) buildShareUrl(activeMode, request);
 		const timer = setTimeout(() => {
 			const currentSearch = new URLSearchParams(window.location.search);
-			const base = buildShareUrl(mode, request, subTabFromSearch(mode, currentSearch));
+			const base =
+				activeMode === null
+					? '/'
+					: buildShareUrl(activeMode, request, subTabFromSearch(activeMode, currentSearch));
 			const url = withProjectSession(base, activeProjectId, activeSessionId, generationAnchor);
 			if (`${window.location.pathname}${window.location.search}` !== url) {
 				goto(resolve(url as PathnameWithSearchOrHash, {}), {
@@ -578,6 +605,60 @@ before the Change Date. See LICENSE for complete terms.
 	// the tab bar appearing while the page happens to be scrolled).
 	let workspaceHeaderBottom = $state<number | null>(null);
 
+	function modeTabsLabelWidth(node: HTMLElement): number {
+		const iconsOnly = node.classList.contains('icons-only');
+		if (iconsOnly) node.classList.remove('icons-only');
+		try {
+			const buttons = [...node.querySelectorAll('button')];
+			let widest = 0;
+			for (const button of buttons) {
+				const style = getComputedStyle(button);
+				const padding =
+					Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+				const gap = Number.parseFloat(style.columnGap);
+				const icon = button.querySelector('svg');
+				const label = button.querySelector('.mode-label');
+				const iconWidth = icon instanceof SVGElement ? icon.getBoundingClientRect().width : 0;
+				const labelWidth = label instanceof HTMLElement ? label.scrollWidth : 0;
+				const buttonWidth =
+					iconWidth +
+					(labelWidth > 0 && Number.isFinite(gap) ? gap : 0) +
+					labelWidth +
+					(Number.isFinite(padding) ? padding : 0);
+				widest = Math.max(widest, buttonWidth);
+			}
+			const style = getComputedStyle(node);
+			const gap = Number.parseFloat(style.columnGap);
+			const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+			return (
+				widest * buttons.length +
+				(Number.isFinite(gap) ? gap : 0) * Math.max(0, buttons.length - 1) +
+				(Number.isFinite(padding) ? padding : 0)
+			);
+		} finally {
+			if (iconsOnly) node.classList.add('icons-only');
+		}
+	}
+
+	function fitModeLabels(node: HTMLElement): () => void {
+		let alive = true;
+		const update = (): void => {
+			if (!alive || node.clientWidth === 0) return;
+			const needed = modeTabsLabelWidth(node);
+			node.classList.toggle('icons-only', node.clientWidth < needed);
+		};
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(node);
+		const panel = node.closest('.floating-tools-panel');
+		if (panel) observer.observe(panel);
+		void document.fonts.ready.then(update);
+		return () => {
+			alive = false;
+			observer.disconnect();
+		};
+	}
+
 	function measureWorkspaceHeader(node: HTMLElement): () => void {
 		const update = () => {
 			workspaceHeaderBottom = node.getBoundingClientRect().bottom + window.scrollY;
@@ -588,6 +669,40 @@ before the Change Date. See LICENSE for complete terms.
 		return () => observer.disconnect();
 	}
 </script>
+
+{#snippet modeSwitcher()}
+	<div
+		class="mode-tabs"
+		role="tablist"
+		aria-label={t('mode.switcher.label')}
+		{@attach fitModeLabels}
+	>
+		{#each modes as modeOption, index (modeOption.id)}
+			<button
+				{@attach (node) => {
+					modeTabs[index] = node as HTMLElement;
+					return () => {
+						if (modeTabs[index] === node) modeTabs[index] = null;
+					};
+				}}
+				type="button"
+				role="tab"
+				id={`mode-tab-${modeOption.id}`}
+				aria-selected={mode === modeOption.id}
+				aria-controls={`mode-panel-${modeOption.id}`}
+				aria-label={t(modeOption.label)}
+				title={t(modeOption.label)}
+				tabindex={mode === modeOption.id || (mode === null && index === 0) ? 0 : -1}
+				class:active={mode === modeOption.id}
+				onclick={() => modeTabController.activate(index)}
+				onkeydown={modeTabController.onKeydown}
+			>
+				<modeOption.icon size={15} strokeWidth={1.8} aria-hidden="true" />
+				<span class="mode-label">{t(modeOption.label)}</span>
+			</button>
+		{/each}
+	</div>
+{/snippet}
 
 <main class="page">
 	<div class="workspace-shell">
@@ -606,24 +721,26 @@ before the Change Date. See LICENSE for complete terms.
 							<span>{t('projects.navLabel')}</span>
 						</a>
 						{#if showWorkspaceTabs}
-							<WorkspaceTabBar />
-						{/if}
-						{#if hasActiveProject}
-							<button
-								{@attach (node) => {
-									shareTrigger = node as HTMLButtonElement;
-									return () => {
-										shareTrigger = null;
-									};
-								}}
-								type="button"
-								class="resources-button"
-								aria-expanded={shareOpen}
-								onclick={() => (shareOpen = true)}
-							>
-								<Share2 size={18} strokeWidth={1.8} aria-hidden="true" />
-								<span>{t('workspace.shareButton')}</span>
-							</button>
+							<WorkspaceTabBar>
+								{#snippet activeActions()}
+									<button
+										{@attach (node) => {
+											shareTrigger = node as HTMLButtonElement;
+											return () => {
+												shareTrigger = null;
+											};
+										}}
+										type="button"
+										class="tab-share"
+										aria-expanded={shareOpen}
+										aria-label={t('workspace.shareButton')}
+										title={t('workspace.shareButton')}
+										onclick={() => (shareOpen = true)}
+									>
+										<Share2 size={18} strokeWidth={1.8} aria-hidden="true" />
+									</button>
+								{/snippet}
+							</WorkspaceTabBar>
 						{/if}
 						<button
 							{@attach (node) => {
@@ -648,31 +765,8 @@ before the Change Date. See LICENSE for complete terms.
 					</div>
 				{/if}
 
-				<div class="workspace-row">
-					<nav class="mode-nav" aria-label={t('mode.switcher.label')}>
-						<div class="mode-tabs" role="tablist" aria-label={t('mode.switcher.label')}>
-							{#each modes as modeOption, index (modeOption.id)}
-								<button
-									{@attach (node) => {
-										modeTabs[index] = node as HTMLElement;
-									}}
-									type="button"
-									role="tab"
-									id={`mode-tab-${modeOption.id}`}
-									aria-selected={mode === modeOption.id}
-									aria-controls={`mode-panel-${modeOption.id}`}
-									tabindex={mode === modeOption.id ? 0 : -1}
-									class:active={mode === modeOption.id}
-									onclick={() => modeTabController.activate(index)}
-									onkeydown={modeTabController.onKeydown}
-								>
-									<span>{t(modeOption.label)}</span>
-								</button>
-							{/each}
-						</div>
-					</nav>
-
-					{#if isAuthenticated && showSessionTabs}
+				{#if isAuthenticated && showSessionTabs}
+					<div class="workspace-row">
 						<a
 							class="resources-button"
 							href={resolve('/projects/[id]', { id: workspaceTabs.activeTabId })}
@@ -681,8 +775,8 @@ before the Change Date. See LICENSE for complete terms.
 							<span>{t('workspace.sessionsButton')}</span>
 						</a>
 						<SessionTabBar />
-					{/if}
-				</div>
+					</div>
+				{/if}
 			</div>
 
 			{#if urlTargetStatus === 'loading'}
@@ -706,7 +800,59 @@ before the Change Date. See LICENSE for complete terms.
 			     Texture Replacement tools' async job polling in particular — survives
 			     switching away to another mode and back. All three share the same
 			     `.canvas-layout` shape so the workspace footprint never changes
-			     between modes. -->
+			     between modes. The root route is a fourth layout: the same canvas,
+			     with no mode tab selected and a chooser in the tools panel. -->
+			<div
+				class="canvas-layout"
+				class:reserve-panel-space={toolsPanelAtDefaultCorner}
+				hidden={mode !== null || urlTargetStatus !== 'idle'}
+			>
+				<div class="canvas-col">
+					{#if !request.currentRender}
+						<ImageUpload />
+					{:else}
+						<section aria-label={t('render.result')}>
+							<svelte:boundary
+								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
+							>
+								<RenderResult />
+								{#snippet failed(_error: unknown, reset: () => void)}
+									<p class="boundary-failed">{t('boundary.failed')}</p>
+									<button type="button" class="boundary-retry" onclick={reset}>
+										{t('boundary.retry')}
+									</button>
+								{/snippet}
+							</svelte:boundary>
+						</section>
+					{/if}
+				</div>
+
+				<FloatingToolsPanel active={mode === null} header={modeSwitcher}>
+					<div class="step-card">
+						<p class="panel-description">{t('toolsPanel.chooseMode')}</p>
+						<ul class="mode-clouds">
+							{#each modes as modeOption, index (modeOption.id)}
+								<li>
+									<button
+										type="button"
+										class="mode-cloud"
+										onclick={() => modeTabController.activate(index)}
+									>
+										<span class="mode-cloud-icon">
+											<modeOption.icon size={16} strokeWidth={1.8} aria-hidden="true" />
+										</span>
+										<span class="mode-cloud-copy">
+											<span class="mode-cloud-title">{t(modeOption.label)}</span>
+											<span class="mode-cloud-description">{t(modeOption.description)}</span>
+										</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				</FloatingToolsPanel>
+			</div>
+
 			<div
 				class="canvas-layout"
 				class:reserve-panel-space={toolsPanelAtDefaultCorner}
@@ -736,8 +882,9 @@ before the Change Date. See LICENSE for complete terms.
 					{/if}
 				</div>
 
-				<FloatingToolsPanel>
+				<FloatingToolsPanel active={mode === 'render'} header={modeSwitcher}>
 					<div class="step-card">
+						<p class="panel-description">{t('render.panelDescription')}</p>
 						<div class="panel-section">
 							<h2 class="panel-heading">{t('render.sceneType.label')}</h2>
 							<div
@@ -786,23 +933,12 @@ before the Change Date. See LICENSE for complete terms.
 								</select>
 							</label>
 
-							{#if !isAuthenticated}
-								<p class="auth-hint">{t('render.signInToGenerate')}</p>
-							{/if}
-
-							<button
-								type="button"
-								class="generate-btn"
+							<GenerateButton
+								label={t('render.generate')}
 								disabled={!canGenerate || !isAuthenticated}
+								busy={request.status === 'rendering'}
 								onclick={() => void generate()}
-							>
-								{#if request.status === 'rendering'}
-									<span class="spinner" aria-hidden="true"></span>
-									{t('render.generating')}
-								{:else}
-									{t('render.generate')}
-								{/if}
-							</button>
+							/>
 
 							{#if submitError}
 								<p class="submit-error" role="alert">{submitError}</p>
@@ -857,7 +993,7 @@ before the Change Date. See LICENSE for complete terms.
 					{/if}
 				</div>
 
-				<FloatingToolsPanel>
+				<FloatingToolsPanel active={mode === 'edit'} header={modeSwitcher}>
 					<svelte:boundary
 						onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
 					>
@@ -901,7 +1037,7 @@ before the Change Date. See LICENSE for complete terms.
 					{/if}
 				</div>
 
-				<FloatingToolsPanel>
+				<FloatingToolsPanel active={mode === 'styleTransfer'} header={modeSwitcher}>
 					<svelte:boundary
 						onerror={(error: unknown) => logBoundaryError('workspace.styleTransfer', error)}
 					>
@@ -978,20 +1114,33 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 0.75rem;
 	}
 
-	/* Wide enough that "Миграция стиля" (the longest tab label) always fits on
-	   one line — narrower than this, only that tab wrapped to two lines while
-	   its siblings stayed single-line, making the row look uneven. No longer
-	   tied to the removed panel-col's width now that the tools panel floats.
-	   Leads its row now (Create/Edit/Style-transfer, then the Sessions button
-	   and its tab strip) rather than being pushed right, so no margin-left:
-	   auto here — see .scenes-button for that trick's other use. */
-	.mode-nav {
-		flex: 0 0 440px;
-		max-width: 100%;
-		padding: 0.25rem;
-		background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface));
-		border: 1px solid color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
-		border-radius: 14px;
+	.tab-share {
+		display: flex;
+		flex: 0 0 auto;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		padding: 0;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: transparent;
+		color: var(--color-muted);
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			color 0.15s;
+	}
+
+	.tab-share:hover {
+		background: var(--color-surface-hover);
+		color: var(--color-text);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.tab-share {
+			transition: none;
+		}
 	}
 
 	.scenes-button {
@@ -1067,8 +1216,25 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.mode-tabs {
+		flex: 1 1 auto;
+		min-width: 0;
+		height: 2rem;
+		box-sizing: border-box;
 		display: flex;
-		gap: 0.375rem;
+		align-items: stretch;
+		gap: 2px;
+		padding: 3px;
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: 10px;
+		transition:
+			background 0.15s,
+			border-color 0.15s;
+	}
+
+	.mode-tabs:hover {
+		background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface));
+		border-color: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
 	}
 
 	.mode-tabs button {
@@ -1076,13 +1242,15 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		justify-content: center;
 		gap: 0.4rem;
-		flex: 1;
+		flex: 1 1 0;
 		min-width: 0;
-		padding: 0.45rem 0.75rem;
+		height: auto;
+		min-height: 0;
+		padding: 0 0.7rem;
 		font: inherit;
-		font-size: 0.8125rem;
-		font-weight: 600;
-		line-height: 1.2;
+		font-size: 0.875rem;
+		font-weight: 650;
+		line-height: 1;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -1090,7 +1258,7 @@ before the Change Date. See LICENSE for complete terms.
 		color: color-mix(in srgb, var(--color-accent) 55%, var(--color-text));
 		background: transparent;
 		border: none;
-		border-radius: 10px;
+		border-radius: 8px;
 		cursor: pointer;
 		transition:
 			background 0.15s,
@@ -1098,16 +1266,21 @@ before the Change Date. See LICENSE for complete terms.
 			box-shadow 0.15s;
 	}
 
-	.mode-tabs button:hover:not(.active) {
-		color: var(--color-accent-text);
-		background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+	.mode-tabs button :global(svg) {
+		flex: 0 0 auto;
+		width: 15px;
+		height: 15px;
 	}
 
-	.mode-tabs button.active {
-		/* Pairs with --color-background rather than --color-accent-contrast: this
-		   pill is an inverted background/text swap (dark-on-light in light mode,
-		   light-on-dark in dark mode), not an accent fill, so its text needs to
-		   track --color-text's polarity flip rather than stay fixed white. */
+	.mode-label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.mode-tabs button.active,
+	.mode-tabs button:hover,
+	.mode-tabs button:focus-visible {
 		color: var(--color-background);
 		background: var(--color-text);
 		box-shadow: var(--shadow-sm);
@@ -1117,12 +1290,93 @@ before the Change Date. See LICENSE for complete terms.
 		outline-color: var(--color-text);
 	}
 
-	/* One shared container for all three modes — its *content* switches on
-	   `mode`, so the canvas footprint is identical everywhere instead of each
-	   mode having its own independently-sized layout. The mode's tools live in
-	   a FloatingToolsPanel sibling (fixed-position on desktop, a normal-flow
-	   block here on narrow screens — see its own component for the
-	   breakpoint), so canvas-col is this container's only flex-sized child. */
+	.mode-tabs:global(.icons-only) button {
+		padding-inline: 0;
+	}
+
+	.mode-tabs:global(.icons-only) .mode-label {
+		display: none;
+	}
+
+	.mode-clouds {
+		display: flex;
+		flex-direction: column;
+		gap: 0.65rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.mode-cloud {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		width: 100%;
+		margin: 0;
+		padding: 0.85rem 1rem;
+		font: inherit;
+		text-align: start;
+		color: inherit;
+		background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+		border: 1px solid transparent;
+		border-radius: 1.75rem;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			border-color 0.15s,
+			color 0.15s,
+			box-shadow 0.15s;
+	}
+
+	.mode-cloud:hover {
+		background: var(--color-surface-hover);
+		border-color: var(--color-accent);
+		box-shadow: var(--shadow);
+	}
+
+	.mode-cloud:hover .mode-cloud-title,
+	.mode-cloud:hover .mode-cloud-description,
+	.mode-cloud:hover .mode-cloud-icon {
+		color: var(--color-accent-text);
+	}
+
+	.mode-cloud:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+
+	.mode-cloud-icon {
+		flex: 0 0 auto;
+		display: grid;
+		place-items: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+		color: var(--color-accent-text);
+	}
+
+	.mode-cloud-copy {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		min-width: 0;
+	}
+
+	.mode-cloud-title {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		line-height: 1.3;
+		color: var(--color-text);
+	}
+
+	.mode-cloud-description {
+		font-size: 0.8125rem;
+		font-weight: 400;
+		line-height: 1.45;
+		color: var(--color-muted);
+	}
+
 	.canvas-layout {
 		width: 100%;
 		display: flex;
@@ -1196,10 +1450,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	.scene-type-toggle button {
 		flex: 1;
-		padding: 0.5rem 1.25rem;
+		min-width: 0;
+		padding: 0.5rem 0.75rem;
 		font: inherit;
 		font-size: 0.875rem;
 		font-weight: 500;
+		line-height: 1.25;
 		color: var(--color-muted);
 		background: transparent;
 		border: none;
@@ -1231,13 +1487,6 @@ before the Change Date. See LICENSE for complete terms.
 			   FloatingToolsPanel) shrink to their content width instead of
 			   filling the screen. */
 			align-items: stretch;
-		}
-
-		.mode-nav {
-			flex-basis: auto;
-			flex-shrink: 1;
-			min-width: 0;
-			width: 100%;
 		}
 	}
 

@@ -156,7 +156,21 @@ export function createTabController(options: TabControllerOptions): TabControlle
 
 	function onKeydown(event: KeyboardEvent): void {
 		const last = itemCount() - 1;
-		const current = getActiveIndex();
+		const selected = getActiveIndex();
+		// With nothing selected, roving tabindex parks on one tab that is not
+		// the active index. Arrows must move from that focused tab.
+		const focused =
+			selected >= 0
+				? selected
+				: Math.max(
+						0,
+						[
+							...(event.currentTarget instanceof HTMLElement
+								? (event.currentTarget.parentElement?.querySelectorAll('[role="tab"]') ?? [])
+								: [])
+						].indexOf(event.currentTarget as HTMLElement)
+					);
+		const current = selected >= 0 ? selected : focused;
 		let next: number | null = null;
 
 		// ArrowDown/ArrowUp mirror ArrowRight/ArrowLeft so the same controller

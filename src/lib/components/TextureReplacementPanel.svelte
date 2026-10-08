@@ -24,6 +24,7 @@ before the Change Date. See LICENSE for complete terms.
 		type TextureReplacementCompletedResponse,
 		type TextureReplacementJobResponse
 	} from '$lib/api/contract';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import ModeHint from '$lib/components/ModeHint.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -459,12 +460,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
-<section class="step-card">
-	<aside class="alpha-notice" aria-label={t('textureReplacement.alpha')}>
-		<span class="alpha-badge">{t('textureReplacement.alpha')}</span>
-		<p>{t('textureReplacement.alphaNotice')}</p>
-	</aside>
-
+<section class="step-card plain">
 	<div class="field">
 		<span>
 			{t('textureReplacement.referenceImage')}
@@ -514,27 +510,18 @@ before the Change Date. See LICENSE for complete terms.
 		<p class="canvas-hint">{t('textureReplacement.maskEditor.canvasHint')}</p>
 	{/if}
 
-	{#if !isAuthenticated}
-		<p class="auth-hint">{t('textureReplacement.signInToApply')}</p>
-	{/if}
 	<div class="validation-live" role="status" aria-live="polite" aria-atomic="true">
 		{#if isAuthenticated && validationKey && jobId === null}
 			<p class="validation-hint">{t(validationKey)}</p>
 		{/if}
 	</div>
 
-	<button type="button" class="generate-btn" disabled={!canSubmit} onclick={() => void submit()}>
-		{#if submitting}
-			<span class="spinner" aria-hidden="true"></span>
-			{t('textureReplacement.submitting')}
-		{:else if isPolling}
-			{t('textureReplacement.processing')}
-		{:else if completedJobMatches}
-			{t('textureReplacement.completed')}
-		{:else}
-			{t('textureReplacement.apply')}
-		{/if}
-	</button>
+	<GenerateButton
+		label={t('textureReplacement.apply')}
+		disabled={!canSubmit}
+		busy={submitting || isPolling}
+		onclick={() => void submit()}
+	/>
 
 	<div class="job-live" role="status" aria-live="polite" aria-atomic="true">
 		{#if isPolling}
@@ -567,46 +554,10 @@ before the Change Date. See LICENSE for complete terms.
 </section>
 
 <style>
-	/* Stacked (badge above text) rather than side-by-side: this panel lives in
-	   a fixed-width floating tools panel, next to EditPanel's vertical tool
-	   rail — there isn't enough width left for a badge-beside-paragraph row
-	   without squeezing the text down to single-word-per-line wrapping. */
-	.alpha-notice {
-		width: 100%;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		box-sizing: border-box;
-		padding: 0.875rem 1rem;
-		border: 1px solid color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
-		border-radius: var(--radius);
-		background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface));
-	}
-
-	.alpha-notice p,
 	.job-status,
 	.job-success,
 	.validation-hint {
 		margin: 0;
-	}
-
-	.alpha-notice p {
-		font-size: 0.875rem;
-		line-height: 1.5;
-		color: var(--color-text);
-	}
-
-	.alpha-badge {
-		align-self: flex-start;
-		flex: 0 0 auto;
-		padding: 0.2rem 0.5rem;
-		border-radius: 100px;
-		background: var(--color-accent);
-		color: var(--color-accent-contrast);
-		font-size: 0.6875rem;
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
 	}
 
 	.masked-toggle {

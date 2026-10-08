@@ -97,7 +97,7 @@ export function slugToView(param: string | undefined): ViewId {
 
 // Tool/reference ids double as their own query values (already kebab-case).
 export function slugToTool(param: string | undefined): ToolId {
-	return (TOOL_IDS as readonly string[]).includes(param ?? '') ? (param as ToolId) : 'freeform';
+	return (TOOL_IDS as readonly string[]).includes(param ?? '') ? (param as ToolId) : 'add-object';
 }
 
 export function isEditToolRoute(
@@ -123,12 +123,14 @@ function slugToScene(param: string | undefined): SceneType {
 		: 'interior';
 }
 
-// SvelteKit route ids identify the workspace leaf pages; anything else falls
-// back to the default mode.
-export function routeIdToMode(routeId: string | null): Mode {
+// SvelteKit route ids identify the workspace leaf pages. The workspace root
+// has no mode selected until the user picks one; a route the workspace is
+// not mounted for is unselected too, rather than guessed as create.
+export function routeIdToMode(routeId: string | null): Mode | null {
 	if (routeId?.startsWith('/edit')) return 'edit';
 	if (routeId?.startsWith('/style-transfer')) return 'styleTransfer';
-	return 'render';
+	if (routeId?.startsWith('/create')) return 'render';
+	return null;
 }
 
 // Every edit-panel tool tags its renders with a unique editOp.type (see
@@ -231,6 +233,7 @@ export function destinationForGenerationKind(
 // route.
 export function isWorkspaceRoute(routeId: string | null): boolean {
 	return (
+		routeId === '/' ||
 		routeId?.startsWith('/create') === true ||
 		routeId?.startsWith('/edit') === true ||
 		routeId?.startsWith('/style-transfer') === true
@@ -345,7 +348,7 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 	}
 
 	if (mode === 'edit') {
-		const tool = subTab.tool ?? 'freeform';
+		const tool = subTab.tool ?? 'add-object';
 		params.set('tool', tool);
 		if (tool === 'object-replacement') {
 			if (request.objectReplacementObject.trim() !== '') {
@@ -380,6 +383,8 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 		} else if (tool === 'freeform' || tool === 'add-object' || tool === 'remove-object') {
 			if (tool === 'freeform' && request.editPrompt.trim() !== '') {
 				params.set('prompt', request.editPrompt);
+			} else if (tool === 'add-object' && request.addObjectInstruction.trim() !== '') {
+				params.set('prompt', request.addObjectInstruction);
 			}
 			const job = subTab.job ?? request.activeFluxKontextEditJobId;
 			if (isJobId(job)) {
@@ -576,8 +581,11 @@ export function applyShareParams(
 			const job = searchParams.get('job');
 			request.setActiveRepaintJobId(isJobId(job) ? job : undefined);
 		} else if (tool === 'freeform' || tool === 'add-object' || tool === 'remove-object') {
+			const prompt = searchParams.get('prompt') ?? '';
 			if (tool === 'freeform') {
-				request.setEditPrompt(searchParams.get('prompt') ?? '');
+				request.setEditPrompt(prompt);
+			} else if (tool === 'add-object') {
+				request.setAddObjectInstruction(prompt.slice(0, 500));
 			}
 			const job = searchParams.get('job');
 			// The job's own type (see buildShareUrl), not the currently-selected
@@ -590,7 +598,15 @@ export function applyShareParams(
 				jobTypeParam === 'remove-object'
 					? jobTypeParam
 					: 'freeform';
-			request.setActiveFluxKontextEditJobId(isJobId(job) ? job : undefined, jobType);
+			// The `prompt` param is the visible tab's text, so it is the job's
+			// submitted instruction only when that tab is the job's own type.
+			const jobInstruction =
+				tool !== jobType ? '' : tool === 'add-object' ? prompt.slice(0, 500) : prompt;
+			request.setActiveFluxKontextEditJobId(
+				isJobId(job) ? job : undefined,
+				jobType,
+				jobInstruction
+			);
 		}
 	} else if (mode === 'styleTransfer') {
 		const presetId = searchParams.get('preset');

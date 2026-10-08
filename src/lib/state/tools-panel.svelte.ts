@@ -22,7 +22,8 @@ import { logBoundaryError } from '$lib/utils';
 // DOM access to read that value back at import time).
 export const TOOLS_PANEL_WIDTH = 360;
 export const MIN_TOOLS_PANEL_WIDTH = 280;
-const MAX_TOOLS_PANEL_WIDTH = 640;
+export const TOOLS_PANEL_SIZE_PRESET_FRACTIONS = [0.25, 0.5, 0.75] as const;
+const SIZE_PRESET_TOLERANCE = 8;
 
 const VIEWPORT_MARGIN = 16;
 const STORAGE_KEY = 'cadbos.toolsPanel.v1';
@@ -60,23 +61,32 @@ export function clampToolsPanelPosition(
 	margin: number = VIEWPORT_MARGIN
 ): ToolsPanelPosition {
 	const minY = Math.max(0, topBoundary) + margin;
-	const maxX = Math.max(margin, viewportWidth - panelWidth - margin);
 	const maxY = Math.max(minY, viewportHeight - panelHeight - margin);
+	const marginMaxX = viewportWidth - panelWidth - margin;
+	const nextX =
+		marginMaxX >= margin
+			? Math.min(Math.max(x, margin), marginMaxX)
+			: Math.min(Math.max(x, 0), Math.max(0, viewportWidth - panelWidth));
 	return {
-		x: Math.min(Math.max(x, margin), maxX),
+		x: nextX,
 		y: Math.min(Math.max(y, minY), maxY)
 	};
 }
 
-// Keeps a resized panel width within a usable range no matter what drag
-// delta or window resize produced the candidate value — mirrors
-// clampToolsPanelPosition's role for the position axis.
 export function clampToolsPanelWidth(value: number, viewportWidth: number): number {
-	const max = Math.max(
-		MIN_TOOLS_PANEL_WIDTH,
-		Math.min(MAX_TOOLS_PANEL_WIDTH, viewportWidth - VIEWPORT_MARGIN * 2)
-	);
+	const max = Math.max(MIN_TOOLS_PANEL_WIDTH, viewportWidth - VIEWPORT_MARGIN * 2);
 	return Math.min(Math.max(value, MIN_TOOLS_PANEL_WIDTH), max);
+}
+
+export function toolsPanelSizePresets(viewportWidth: number): number[] {
+	return TOOLS_PANEL_SIZE_PRESET_FRACTIONS.map((fraction) =>
+		Math.round(MIN_TOOLS_PANEL_WIDTH + (viewportWidth - MIN_TOOLS_PANEL_WIDTH) * fraction)
+	);
+}
+
+export function nextToolsPanelSizePreset(current: number, viewportWidth: number): number {
+	const presets = toolsPanelSizePresets(viewportWidth);
+	return presets.find((preset) => preset > current + SIZE_PRESET_TOLERANCE) ?? presets[0];
 }
 
 function isToolsPanelPosition(value: unknown): value is ToolsPanelPosition {

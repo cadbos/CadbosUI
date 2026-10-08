@@ -71,6 +71,7 @@ async function uploadInputs(page: Page): Promise<void> {
 		});
 	});
 
+	await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
 	const inputs = page.locator('#mode-panel-edit input[type="file"]');
 	// The room/main photo upload (nth(0)) is deferred to submit time — just
 	// pick the file locally here; the actual /api/uploads call fires once the
@@ -141,14 +142,14 @@ test('submits two uploaded images, polls the job, and promotes the completed res
 
 	await expect(page).toHaveURL(new RegExp(`job=${JOB_ID}`));
 	await expect(panel.locator('.job-status')).toContainText('Заменяем объект');
-	await expect(page.locator('.result img.output')).toHaveAttribute(
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
 		'src',
 		'/api/media/test-media/replaced.webp',
 		{ timeout: 10_000 }
 	);
 	await expect(panel.locator('.job-success')).toHaveText('Замена объекта завершена.');
-	await expect(page.getByText('Стоимость: 2.00')).toBeVisible();
-	await expect(page.getByText('Баланс: 18.00')).toBeVisible();
+	await expect(page.locator('.result:visible').getByText('Стоимость: 2.00')).toBeVisible();
+	await expect(page.locator('.result:visible').getByText('Баланс: 18.00')).toBeVisible();
 	await expect.poll(() => polls).toBe(2);
 	expect(submittedBody).toEqual({
 		imageKey: mediaKey(1),
@@ -222,12 +223,12 @@ test('resumes a stored completed job after reload without submitting again', asy
 	});
 
 	await page.goto(`/edit?tool=object-replacement&object=sofa&job=${JOB_ID}`);
-	await expect(page.locator('.result img.output')).toHaveAttribute(
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
 		'src',
 		'/api/media/test-media/recovered.webp'
 	);
 	await page.reload();
-	await expect(page.locator('.result img.output')).toHaveAttribute(
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
 		'src',
 		'/api/media/test-media/recovered.webp'
 	);
@@ -306,6 +307,7 @@ test('keeps the submitted result’s lineage when another render finishes first'
 	});
 
 	await page.goto('/create/interior');
+	await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
 	// The room/main photo upload is deferred to generate time — picking the
 	// file only produces a local preview here, no /api/uploads call yet.
 	const renderPanel = page.locator('#mode-panel-render');
@@ -320,7 +322,7 @@ test('keeps the submitted result’s lineage when another render finishes first'
 		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
 		page.getByRole('button', { name: 'Сгенерировать' }).click()
 	]);
-	await expect(page.locator('.result img.output')).toHaveAttribute(
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
 		'src',
 		'/api/media/test-media/original-result.webp'
 	);
@@ -348,17 +350,17 @@ test('keeps the submitted result’s lineage when another render finishes first'
 	await page.keyboard.press('Enter');
 	await page.getByRole('button', { name: 'Сгенерировать' }).focus();
 	await page.keyboard.press('Enter');
-	await expect(page.locator('.result img.output')).toHaveAttribute(
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
 		'src',
 		'/api/media/test-media/newer-result.webp'
 	);
-	await expect(page.locator('.result img.output')).toHaveAttribute(
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
 		'src',
 		'/api/media/test-media/replaced.webp',
 		{ timeout: 10_000 }
 	);
 	await page.getByRole('button', { name: 'Предыдущая генерация' }).click();
-	await expect(page.locator('.result img.output')).toHaveAttribute(
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
 		'src',
 		'/api/media/test-media/original-result.webp'
 	);
@@ -399,7 +401,7 @@ test('requires authentication before starting a replacement', async ({ page }) =
 	await page.goto('/edit?tool=object-replacement');
 
 	const panel = page.locator('#edit-tool-panel-object-replacement');
-	await expect(panel.getByText('Войдите, чтобы заменить объект')).toBeVisible();
+	await expect(panel.getByText('Войдите, чтобы запустить генерацию')).toBeVisible();
 	await expect(panel.getByRole('button', { name: 'Заменить объект' })).toBeDisabled();
 });
 
@@ -518,7 +520,7 @@ test('does not navigate back when an accepted submission finishes after a mode s
 	// mockProjectSessionRoutes) — the mode switch carries that forward instead
 	// of dropping it (see buildWorkspaceUrl in url-state.ts).
 	await expect(page).toHaveURL(
-		new RegExp(`/edit\\?tool=freeform&project=${E2E_PROJECT_ID}&session=${E2E_SESSION_ID}$`)
+		new RegExp(`/edit\\?tool=add-object&project=${E2E_PROJECT_ID}&session=${E2E_SESSION_ID}$`)
 	);
 	await expect(page).not.toHaveURL(/tool=object-replacement/);
 });

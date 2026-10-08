@@ -14,6 +14,7 @@
 
 import type { Locator, Page, Route } from '@playwright/test';
 
+import { ru } from '$lib/i18n/locales/ru';
 import { expect, test } from './fixtures';
 import { media, mediaKey } from './helpers/media';
 import {
@@ -52,6 +53,7 @@ async function authenticate(page: Page): Promise<void> {
 
 async function openCreate(page: Page): Promise<void> {
 	await page.goto('/create/interior?view=chat&format=webp');
+	await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
 }
 
 async function mockUpload(page: Page): Promise<void> {
@@ -207,9 +209,11 @@ test('the Edit tab lets you upload an image directly, without generating a rende
 		.locator('input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 	await expect(editPanel.getByRole('button', { name: 'Выбрать фото' })).toBeVisible();
-	await page.getByLabel('Инструкция для правки').fill('Replace the sofa');
-	await expect(page.getByText('Войдите, чтобы применить правку')).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Применить правку' })).toBeDisabled();
+	await page
+		.getByRole('textbox', { name: ru['edit.addObject.customLabel'], exact: true })
+		.fill('Replace the sofa');
+	await expect(editPanel.getByText('Войдите, чтобы запустить генерацию')).toBeVisible();
+	await expect(page.getByRole('button', { name: ru['edit.addObject.apply'] })).toBeDisabled();
 
 	// The uploaded photo is the same underlying image used by the Render tab.
 	await renderTab.click();
@@ -661,8 +665,10 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	await page.getByLabel('Инструкция для правки').fill('Replace the sofa with an armchair');
-	await page.getByRole('button', { name: 'Применить правку' }).click();
+	await page
+		.getByRole('textbox', { name: ru['edit.addObject.customLabel'], exact: true })
+		.fill('Replace the sofa with an armchair');
+	await page.getByRole('button', { name: ru['edit.addObject.apply'] }).click();
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
@@ -684,7 +690,12 @@ test('a completed freeform edit unlocks the form for the next edit on the same r
 	await mockUpload(page);
 	await page.route('**/api/edit', async (route) => {
 		const body = route.request().postDataJSON() as { prompt: string };
-		const isFirst = body.prompt === 'Replace the sofa with an armchair';
+		const isFirst =
+			body.prompt ===
+			ru['edit.addObject.userPromptTemplate'].replace(
+				'{object}',
+				'Replace the sofa with an armchair'
+			);
 		const jobId = isFirst ? firstJobId : secondJobId;
 		await route.fulfill({
 			status: 202,
@@ -726,8 +737,11 @@ test('a completed freeform edit unlocks the form for the next edit on the same r
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	const applyButton = page.getByRole('button', { name: 'Применить правку' });
-	const instructionField = page.getByLabel('Инструкция для правки');
+	const applyButton = page.getByRole('button', { name: ru['edit.addObject.apply'] });
+	const instructionField = page.getByRole('textbox', {
+		name: ru['edit.addObject.customLabel'],
+		exact: true
+	});
 	await instructionField.fill('Replace the sofa with an armchair');
 	await applyButton.click();
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
@@ -769,8 +783,10 @@ test('a failed edit request surfaces the error in the Edit tab instead of a resu
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	await page.getByLabel('Инструкция для правки').fill('Replace the sofa with an armchair');
-	await page.getByRole('button', { name: 'Применить правку' }).click();
+	await page
+		.getByRole('textbox', { name: ru['edit.addObject.customLabel'], exact: true })
+		.fill('Replace the sofa with an armchair');
+	await page.getByRole('button', { name: ru['edit.addObject.apply'] }).click();
 
 	await expect(page.getByRole('alert')).toHaveText(
 		'Не удалось применить правку. Попробуйте ещё раз.'
@@ -820,7 +836,9 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 	const editTab = page.getByRole('tab', { name: 'Редактирование' });
 	await editTab.click();
 	await expect(editTab).toHaveAttribute('aria-selected', 'true');
-	await expect(page.getByLabel('Инструкция для правки')).toBeVisible();
+	await expect(
+		page.getByRole('textbox', { name: ru['edit.addObject.customLabel'], exact: true })
+	).toBeVisible();
 	await expect(page.locator('#mode-panel-edit input[type="file"]')).toHaveCount(0);
 
 	const renderTab = page.getByRole('tab', { name: 'Создание' });
@@ -828,7 +846,9 @@ test('generating a render makes the Edit tab usable, reachable independent of th
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toBeVisible();
 
 	await editTab.click();
-	await expect(page.getByLabel('Инструкция для правки')).toBeVisible();
+	await expect(
+		page.getByRole('textbox', { name: ru['edit.addObject.customLabel'], exact: true })
+	).toBeVisible();
 });
 
 // Regression test: ensureProjectSession() (request.svelte.ts) lazily creates a
@@ -965,10 +985,10 @@ test('switching edit tools never drops project/session/generation from the URL, 
 	await page.goto(
 		`/edit?tool=freeform&project=${E2E_PROJECT_ID}&session=${E2E_SESSION_ID}&generation=${E2E_GENERATION_ID}`
 	);
-	await expect(page.getByLabel('Инструкция для правки')).toBeVisible();
+	await expect(page.getByLabel(ru['edit.instruction'])).toBeVisible();
 
-	await page.getByRole('tab', { name: 'Удалить объект' }).click();
-	await expect(page.getByRole('tab', { name: 'Удалить объект' })).toHaveAttribute(
+	await page.getByRole('tab', { name: 'Удаление объекта' }).click();
+	await expect(page.getByRole('tab', { name: 'Удаление объекта' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
@@ -1081,8 +1101,10 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 	await compareButton.click();
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
-	await page.getByLabel('Инструкция для правки').fill('Replace the sofa with an armchair');
-	await page.getByRole('button', { name: 'Применить правку' }).click();
+	await page
+		.getByRole('textbox', { name: ru['edit.addObject.customLabel'], exact: true })
+		.fill('Replace the sofa with an armchair');
+	await page.getByRole('button', { name: ru['edit.addObject.apply'] }).click();
 	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/edited.webp', {
 		timeout: 10_000
 	});
@@ -1203,7 +1225,7 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 	await expect(redoButton).toBeDisabled();
 });
 
-test('the Add Object tool applies a selected preset to the current image', async ({ page }) => {
+test('the Add Object tool applies a clicked template to the current image', async ({ page }) => {
 	const jobId = '00000000-0000-4000-8000-000000000114';
 	await authenticate(page);
 	await mockUpload(page);
@@ -1237,11 +1259,11 @@ test('the Add Object tool applies a selected preset to the current image', async
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	await page.getByRole('tab', { name: 'Добавить объект' }).click();
-	const mirrorPreset = page.getByRole('radio', { name: 'Зеркало' });
-	await expect(mirrorPreset).toHaveAttribute('aria-checked', 'false');
-	await mirrorPreset.click();
-	await expect(mirrorPreset).toHaveAttribute('aria-checked', 'true');
+	await page.getByRole('tab', { name: 'Добавление объекта' }).click();
+	await page.getByRole('button', { name: ru['edit.addObject.mirror.label'] }).click();
+	await expect(page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] })).toHaveValue(
+		ru['edit.addObject.mirror.phrase']
+	);
 	await page.getByRole('button', { name: 'Добавить объект' }).click();
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
@@ -1250,8 +1272,91 @@ test('the Add Object tool applies a selected preset to the current image', async
 		{ timeout: 10_000 }
 	);
 	expect(capturedPrompt).toBe(
-		'Выполни только добавочную локальную правку: добавь ровно одно декоративное зеркало на уже свободный видимый участок стены. Подбери размер, форму, раму, положение и угол под геометрию стены, масштаб и стиль интерьера; если места мало, используй зеркало меньшего размера. Не закрывай окна, двери, выключатели, розетки, молдинги, существующие картины или декор. Расположи зеркало так, чтобы оно преимущественно отражало известные по исходному изображению поверхности и объекты. Отражение должно точно соответствовать перспективе, планировке и освещению комнаты; для невидимой области за камерой используй нейтральное низкодетализированное продолжение существующих поверхностей без новой мебели, декора или дублированных предметов. Ничего из уже существующего не удаляй, не заменяй, не перемещай и не перерисовывай. Все области изображения, кроме нового зеркала, его физически корректного отражения и естественной контактной тени, должны остаться визуально идентичными исходному изображению.'
+		ru['edit.addObject.userPromptTemplate'].replace('{object}', ru['edit.addObject.mirror.phrase'])
 	);
+});
+
+test('the Add Object tool replaces the prompt with a clicked template and wraps the text', async ({
+	page
+}) => {
+	const jobId = '00000000-0000-4000-8000-000000000115';
+	await authenticate(page);
+	await mockUpload(page);
+	let capturedPrompt: string | undefined;
+	let capturedSnapshot: Record<string, unknown> | undefined;
+	await page.route('**/api/edit', async (route) => {
+		const body = route.request().postDataJSON() as {
+			prompt: string;
+			formSnapshot: Record<string, unknown>;
+		};
+		capturedPrompt = body.prompt;
+		capturedSnapshot = body.formSnapshot;
+		await route.fulfill({
+			status: 202,
+			contentType: 'application/json',
+			headers: { location: `/api/edit/${jobId}` },
+			body: JSON.stringify({ id: jobId, status: 'processing' })
+		});
+	});
+	await page.route(`**/api/edit/${jobId}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: jobId,
+				status: 'completed',
+				output: media(2, '/api/media/test-media/added-armchair.webp'),
+				cost: 2,
+				balance: 90
+			})
+		});
+	});
+
+	await openCreate(page);
+	await page.getByRole('tab', { name: ru['mode.edit'] }).click();
+	await page
+		.locator('#mode-panel-edit input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+
+	await page.getByRole('tab', { name: ru['edit.tool.addObject.tab'] }).click();
+	const applyButton = page.getByRole('button', { name: ru['edit.addObject.apply'] });
+	const promptField = page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] });
+	const mirrorTemplate = page.getByRole('button', { name: ru['edit.addObject.mirror.label'] });
+	const plantTemplate = page.getByRole('button', { name: ru['edit.addObject.houseplant.label'] });
+	const customPrompt = 'комнатное растение у окна';
+	await expect(applyButton).toBeDisabled();
+
+	await mirrorTemplate.click();
+	await expect(promptField).toHaveValue(ru['edit.addObject.mirror.phrase']);
+
+	await plantTemplate.click();
+	await expect(promptField).toHaveValue(ru['edit.addObject.houseplant.phrase']);
+
+	await promptField.fill(customPrompt);
+	await plantTemplate.click();
+	await expect(promptField).toHaveValue(ru['edit.addObject.houseplant.phrase']);
+	await promptField.fill(customPrompt);
+	const preview = page.locator('#mode-panel-edit p.preview');
+	await expect(preview).toContainText(customPrompt);
+	await expect(preview).not.toContainText(
+		ru['edit.addObject.userPromptTemplate'].split('{object}')[0].trim()
+	);
+	await expect(applyButton).toBeEnabled();
+	await applyButton.click();
+
+	await expect(page.getByRole('img', { name: ru['render.generate'] })).toHaveAttribute(
+		'src',
+		'/api/media/test-media/added-armchair.webp',
+		{ timeout: 10_000 }
+	);
+	expect(capturedPrompt).toContain(
+		ru['edit.addObject.userPromptTemplate'].replace('{object}', customPrompt)
+	);
+	expect(capturedSnapshot).toMatchObject({
+		addObjectInstruction: customPrompt,
+		editOperationType: 'add-object'
+	});
+	expect(capturedSnapshot).not.toHaveProperty('addObjectPresetId');
 });
 
 test('undo/redo across different edit tools restores both the settings and the active tool tab', async ({
@@ -1306,47 +1411,40 @@ test('undo/redo across different edit tools restores both the settings and the a
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	const freeformTab = page.getByRole('tab', { name: 'Свой промпт' });
-	const addObjectTab = page.getByRole('tab', { name: 'Добавить объект' });
-	const instructionField = page.getByLabel('Инструкция для правки');
+	const removeObjectTab = page.getByRole('tab', { name: 'Удаление объекта' });
+	const addObjectTab = page.getByRole('tab', { name: 'Добавление объекта' });
+	const removeField = page.getByLabel(ru['edit.removeObject.label']);
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
 	const undoButton = page.getByRole('button', { name: 'Предыдущая генерация' });
 	const redoButton = page.getByRole('button', { name: 'Следующая генерация' });
 
-	await instructionField.fill('сделай стены голубыми');
-	await page.getByRole('button', { name: 'Применить правку' }).click();
+	await removeObjectTab.click();
+	await removeField.fill('старый диван');
+	await page.getByRole('button', { name: 'Удалить объект' }).click();
 	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/freeform-a.webp', {
 		timeout: 10_000
 	});
 
-	// Switching to a different edit-panel tool and generating from it is a new
-	// history step, sharing the same monolithic form store as the freeform
-	// step above (see request.svelte.ts's RequestFormSnapshot) — the bug this
-	// test guards against.
 	await addObjectTab.click();
-	await page.getByRole('radio', { name: 'Комнатное растение' }).click();
+	await page.getByRole('button', { name: ru['edit.addObject.houseplant.label'] }).click();
 	await page.getByRole('button', { name: 'Добавить объект' }).click();
 	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/added-plant.webp', {
 		timeout: 10_000
 	});
 
-	await freeformTab.click();
-	await expect(instructionField).toHaveValue('сделай стены голубыми');
+	await removeObjectTab.click();
+	await expect(removeField).toHaveValue('старый диван');
 
-	// Undoing back to the freeform step (produced from a different tool tab)
-	// switches the active tab to match it, instead of leaving the freeform tab
-	// merely showing a leftover value that happens to look unchanged.
 	await undoButton.click();
 	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/freeform-a.webp');
-	await expect(freeformTab).toHaveAttribute('aria-selected', 'true');
-	await expect(instructionField).toHaveValue('сделай стены голубыми');
+	await expect(removeObjectTab).toHaveAttribute('aria-selected', 'true');
+	await expect(removeField).toHaveValue('старый диван');
 
 	await redoButton.click();
 	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/added-plant.webp');
 	await expect(addObjectTab).toHaveAttribute('aria-selected', 'true');
-	await expect(page.getByRole('radio', { name: 'Комнатное растение' })).toHaveAttribute(
-		'aria-checked',
-		'true'
+	await expect(page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] })).toHaveValue(
+		ru['edit.addObject.houseplant.phrase']
 	);
 });
 
@@ -1425,6 +1523,7 @@ test('undo restores the object-replacement tool tab and its settings after switc
 	});
 
 	await page.goto('/edit?tool=object-replacement');
+	await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
 	const inputs = page.locator('#mode-panel-edit input[type="file"]');
 	await inputs.nth(0).setInputFiles({
 		name: 'scene.webp',
@@ -1442,11 +1541,11 @@ test('undo restores the object-replacement tool tab and its settings after switc
 	]);
 
 	const objectReplacementTab = page.getByRole('tab', { name: /Замена объекта/ });
-	const freeformTab = page.getByRole('tab', { name: 'Свой промпт' });
+	const removeObjectTab = page.getByRole('tab', { name: 'Удаление объекта' });
 	const objectField = page
 		.locator('#edit-tool-panel-object-replacement')
 		.getByLabel(/Точно опишите существующий объект/);
-	const instructionField = page.getByLabel('Инструкция для правки');
+	const removeField = page.getByLabel(ru['edit.removeObject.label']);
 	const resultImage = page.getByRole('img', { name: 'Сгенерировать' });
 	const undoButton = page.getByRole('button', { name: 'Предыдущая генерация' });
 
@@ -1458,9 +1557,10 @@ test('undo restores the object-replacement tool tab and its settings after switc
 
 	// Switching to a different edit-panel tool and generating from it is a new
 	// history step, anchored on the object-replacement result above.
-	await freeformTab.click();
-	await instructionField.fill('сделать светлее');
-	await page.getByRole('button', { name: 'Применить правку' }).click();
+	await page.getByRole('tab', { name: 'Изменение с объектами' }).click();
+	await removeObjectTab.click();
+	await removeField.fill('лампа');
+	await page.getByRole('button', { name: 'Удалить объект' }).click();
 	await expect(resultImage).toHaveAttribute('src', '/api/media/test-media/brighter.webp', {
 		timeout: 10_000
 	});
@@ -1510,8 +1610,8 @@ test('the Remove Object tool builds a removal prompt from the described object',
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	await page.getByRole('tab', { name: 'Удалить объект' }).click();
-	await page.getByLabel('Что убрать?').fill('старый диван');
+	await page.getByRole('tab', { name: 'Удаление объекта' }).click();
+	await page.getByLabel(ru['edit.removeObject.label']).fill('старый диван');
 	await page.getByRole('button', { name: 'Удалить объект' }).click();
 
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
@@ -1560,7 +1660,7 @@ test('the Light settings tool composes an instruction from selected presets and 
 		.locator('#mode-panel-edit input[type="file"]')
 		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 
-	await page.getByRole('tab', { name: 'Свет' }).click();
+	await page.getByRole('tab', { name: 'Управление освещением' }).click();
 	const panel = page.locator('#edit-tool-panel-light-settings');
 	await panel.getByRole('button', { name: 'Золотой час' }).click();
 	await panel
@@ -1627,7 +1727,7 @@ test('the Repaint tool sends the target and a palette or custom color, and shows
 	await expect(panel.getByText('Напишите, что нужно перекрасить.')).toBeVisible();
 	await expect(apply).toBeDisabled();
 
-	await panel.getByRole('textbox', { name: 'Что перекрасить' }).fill('стены за диваном');
+	await panel.getByRole('textbox', { name: 'Объект' }).fill('стены за диваном');
 	await panel.getByRole('button', { name: 'Шалфей' }).click();
 	await expect(panel.getByRole('button', { name: 'Шалфей' })).toHaveAttribute(
 		'aria-pressed',

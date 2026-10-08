@@ -39,10 +39,9 @@ before the Change Date. See LICENSE for complete terms.
 	// UI state intact) while the user navigates between mode/scene routes.
 	let { children }: { children: Snippet } = $props();
 
-	// Standalone pages outside the three-tab workspace (e.g. '/usage') must not
-	// mount it: Workspace derives its mode from the route id, defaulting to
-	// 'render' for anything it doesn't recognize, and its URL-sync effect would
-	// then "correct" that unrecognized address back to /render/*.
+	// Standalone pages outside the workspace (e.g. '/usage') must not mount it.
+	// The root route is the workspace with no mode selected; a mode route is
+	// selected only once the user opens it.
 	const showWorkspace = $derived(isWorkspaceRoute(page.route.id));
 	const showHealthWarning = $derived(
 		page.route.id !== '/status' && status.snapshot?.status === 'unhealthy'

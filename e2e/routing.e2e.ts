@@ -43,16 +43,54 @@ async function authenticate(page: Page): Promise<void> {
 	});
 }
 
-test('root redirects to /create/interior with the current scene/view/format always explicit', async ({
-	page
-}) => {
+test('root opens the workspace with no mode selected', async ({ page }) => {
 	await page.goto('/');
+	await expect(page).toHaveURL(/\/$/);
+	for (const name of ['Создание', 'Редактирование', 'Миграция стиля']) {
+		await expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'false');
+	}
+	await expect(page.getByText('Выберите, с чего начать.')).toBeVisible();
+	await expect(page.locator('.mode-clouds')).toBeVisible();
+	await page.getByRole('tab', { name: 'Создание' }).click();
 	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
+	await expect(page.getByRole('tab', { name: 'Создание' })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
 	await expect(page.getByRole('tab', { name: 'Интерьер' })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
-	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('mode chooser cards switch to that mode', async ({ page }) => {
+	await page.goto('/');
+	await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
+
+	await page.getByRole('button', { name: ru['mode.edit'] }).click();
+	await expect(page).toHaveURL(/\/edit\?tool=add-object$/);
+	await expect(page.getByRole('tab', { name: ru['mode.edit'] })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+
+	await page.goto('/');
+	await page.getByRole('button', { name: ru['mode.styleTransfer'] }).click();
+	await expect(page).toHaveURL(
+		/\/style-transfer\/interior\?reference=photorealistic&format=webp&strength=0\.7$/
+	);
+	await expect(page.getByRole('tab', { name: ru['mode.styleTransfer'] })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+
+	await page.goto('/');
+	await page.getByRole('button', { name: ru['mode.render'] }).click();
+	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
+	await expect(page.getByRole('tab', { name: ru['mode.render'] })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
 });
 
 test('direct navigation to /create/exterior opens the exterior scene', async ({ page }) => {
@@ -68,11 +106,11 @@ test('direct navigation to /create/interior?view=graph opens the graph tab', asy
 	await expect(page.getByRole('tab', { name: 'Граф' })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('direct navigation to /edit opens the edit tab with the freeform tool explicit', async ({
+test('direct navigation to /edit opens the edit tab with the add-object tool explicit', async ({
 	page
 }) => {
 	await page.goto('/edit');
-	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+	await expect(page).toHaveURL(/\/edit\?tool=add-object$/);
 	await expect(page.getByRole('tab', { name: 'Редактирование' })).toHaveAttribute(
 		'aria-selected',
 		'true'
@@ -83,7 +121,7 @@ test('direct navigation to /edit?tool=add-object opens the add-object tool tab',
 	page
 }) => {
 	await page.goto('/edit?tool=add-object');
-	await expect(page.getByRole('tab', { name: /Добавить объект/ })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: /Добавление объекта/ })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
@@ -111,14 +149,12 @@ test('direct navigation opens object replacement inside edit with explicit defau
 		'aria-selected',
 		'true'
 	);
-	const replacementTab = page.getByRole('tab', { name: /Замена объекта.*Альфа/ });
+	const replacementTab = page.getByRole('tab', { name: 'Замена объекта' });
 	await expect(replacementTab).toHaveAttribute('aria-selected', 'true');
 	await expect(replacementTab.locator('svg')).toHaveCount(1);
 
 	const panel = page.locator('#edit-tool-panel-object-replacement');
-	await expect(
-		panel.getByText('Замена объектов находится на раннем этапе', { exact: false })
-	).toBeVisible();
+	await expect(panel.getByLabel(/Точно опишите существующий объект/)).toBeVisible();
 });
 
 test('the removed standalone object replacement route returns 404', async ({ page }) => {
@@ -135,14 +171,11 @@ test('direct navigation opens texture replacement inside edit with explicit defa
 		'aria-selected',
 		'true'
 	);
-	const replacementTab = page.getByRole('tab', { name: /Замена текстуры.*Альфа/ });
+	const replacementTab = page.getByRole('tab', { name: 'Замена текстуры' });
 	await expect(replacementTab).toHaveAttribute('aria-selected', 'true');
 	await expect(replacementTab.locator('svg')).toHaveCount(1);
 
 	const panel = page.locator('#edit-tool-panel-texture-replacement');
-	await expect(
-		panel.getByText('Замена текстур находится на раннем этапе', { exact: false })
-	).toBeVisible();
 	await expect(panel.getByRole('region', { name: /Референс новой текстуры/ })).toBeVisible();
 	// Mask-based replacement is the only mode (the free-text surface field is
 	// retired) — the panel shows the canvas hint instead, even before a source
@@ -172,7 +205,7 @@ test('switching mode tabs opens each mode default, carrying scene but not sub-ta
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
 	// Edit has no scene concept, so it isn't in the path.
-	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+	await expect(page).toHaveURL(/\/edit\?tool=add-object$/);
 
 	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
 	// Style transfer's scene toggle is bound to the same request.sceneType, so
@@ -187,6 +220,147 @@ test('switching mode tabs opens each mode default, carrying scene but not sub-ta
 
 	await page.getByRole('tab', { name: 'Создание' }).click();
 	await expect(page).toHaveURL(/\/create\/exterior\?view=chat&format=webp$/);
+});
+
+test('mode tabs stay in the tools header without toggling the panel', async ({ page }) => {
+	await page.goto('/create/interior');
+
+	const toolsHeader = page.getByRole('group', { name: ru['toolsPanel.title'] });
+	const toolsPanel = toolsHeader.locator('..');
+	const modeTabs = toolsHeader.getByRole('tablist', { name: ru['mode.switcher.label'] });
+	const modeLabels = [ru['mode.render'], ru['mode.edit'], ru['mode.styleTransfer']];
+
+	await expect(modeTabs).toBeVisible();
+	for (const label of modeLabels) {
+		const tab = modeTabs.getByRole('tab', { name: label });
+		await expect(tab.locator('svg')).toHaveCount(1);
+		await expect(tab.locator('.mode-label')).toBeHidden();
+	}
+
+	const titleBox = await toolsHeader.locator('.panel-title').boundingBox();
+	const tabsBox = await modeTabs.boundingBox();
+	expect(titleBox).not.toBeNull();
+	expect(tabsBox).not.toBeNull();
+	expect(titleBox!.x + titleBox!.width).toBeLessThanOrEqual(tabsBox!.x + 1);
+
+	const resizeHandle = toolsPanel.getByRole('slider', { name: ru['toolsPanel.resizeHandle'] });
+	await resizeHandle.press('End');
+	for (const label of modeLabels) {
+		await expect(modeTabs.getByRole('tab', { name: label }).locator('.mode-label')).toBeVisible();
+	}
+	await resizeHandle.press('Home');
+
+	const compactTitleBox = await toolsHeader.locator('.panel-title').boundingBox();
+	const compactTabsBox = await modeTabs.boundingBox();
+	const moveIconBox = await toolsHeader.locator('.drag-icon').boundingBox();
+	expect(compactTitleBox).not.toBeNull();
+	expect(compactTabsBox).not.toBeNull();
+	expect(moveIconBox).not.toBeNull();
+	expect(compactTitleBox!.x + compactTitleBox!.width).toBeLessThanOrEqual(compactTabsBox!.x + 1);
+	expect(compactTabsBox!.x + compactTabsBox!.width).toBeLessThanOrEqual(moveIconBox!.x + 1);
+
+	await modeTabs.getByRole('tab', { name: ru['mode.render'] }).focus();
+	await page.keyboard.press('ArrowRight');
+	await expect(page).toHaveURL(/\/edit\?tool=add-object$/);
+	await expect(modeTabs.getByRole('tab', { name: ru['mode.edit'] })).toBeFocused();
+	await expect(page.getByRole('button', { name: ru['toolsPanel.collapse'] })).toBeVisible();
+	await expect(toolsPanel.locator('.panel-body')).toBeVisible();
+
+	await page.getByRole('button', { name: ru['toolsPanel.collapse'] }).click();
+	await expect(toolsPanel.locator('.panel-body')).toBeHidden();
+
+	await modeTabs.getByRole('tab', { name: ru['mode.styleTransfer'] }).click();
+	await expect(page).toHaveURL(
+		/\/style-transfer\/interior\?reference=photorealistic&format=webp&strength=0\.7$/
+	);
+	await expect(page.getByRole('button', { name: ru['toolsPanel.expand'] })).toBeVisible();
+	await expect(toolsPanel.locator('.panel-body')).toBeHidden();
+
+	await toolsHeader.locator('.panel-title').click();
+	await expect(toolsPanel.locator('.panel-body')).toBeHidden();
+
+	await page.getByRole('button', { name: ru['toolsPanel.expand'] }).click();
+	await expect(toolsPanel.locator('.panel-body')).toBeVisible();
+});
+
+test('edit tool tabs show their names only when the panel is wide enough', async ({ page }) => {
+	await page.goto('/edit?tool=add-object');
+
+	const toolsHeader = page.getByRole('group', { name: ru['toolsPanel.title'] });
+	const toolsPanel = toolsHeader.locator('..');
+	const toolTabs = page.getByRole('tablist', { name: ru['edit.tool.switcher.label'] });
+	const toolLabels = [
+		ru['edit.tool.objects'],
+		ru['mode.objectReplacement'],
+		ru['mode.textureReplacement'],
+		ru['edit.tool.repaint'],
+		ru['edit.tool.lightSettings']
+	];
+	for (const label of toolLabels) {
+		await expect(toolTabs.getByRole('tab', { name: label }).locator('.tool-label')).toBeHidden();
+	}
+
+	const resizeHandle = toolsPanel.getByRole('slider', { name: ru['toolsPanel.resizeHandle'] });
+	await resizeHandle.press('End');
+	for (const label of toolLabels) {
+		await expect(toolTabs.getByRole('tab', { name: label }).locator('.tool-label')).toBeVisible();
+	}
+	await resizeHandle.press('Home');
+	for (const label of toolLabels) {
+		await expect(toolTabs.getByRole('tab', { name: label }).locator('.tool-label')).toBeHidden();
+	}
+});
+
+test('tools panel size button cycles three presets and the resize handle stays inset from the screen edges', async ({
+	page
+}) => {
+	await page.goto('/create/interior');
+
+	const viewport = page.viewportSize();
+	expect(viewport).not.toBeNull();
+	const toolsHeader = page.getByRole('group', { name: ru['toolsPanel.title'] });
+	const toolsPanel = toolsHeader.locator('..');
+	const sizeButton = toolsHeader.getByRole('button', { name: ru['toolsPanel.sizePreset'] });
+	const moveIcon = toolsHeader.locator('.drag-icon');
+
+	const sizeBox = await sizeButton.boundingBox();
+	const moveBox = await moveIcon.boundingBox();
+	expect(sizeBox).not.toBeNull();
+	expect(moveBox).not.toBeNull();
+	expect(sizeBox!.x + sizeBox!.width).toBeLessThanOrEqual(moveBox!.x + 1);
+
+	const widths: number[] = [];
+	for (let step = 0; step < 3; step += 1) {
+		await sizeButton.click();
+		const box = await toolsPanel.boundingBox();
+		expect(box).not.toBeNull();
+		widths.push(box!.width);
+	}
+	expect(widths[0]).toBeGreaterThan(360);
+	expect(widths[1]).toBeGreaterThan(widths[0]);
+	expect(widths[2]).toBeGreaterThan(widths[1]);
+	expect(widths[2]).toBeLessThan(viewport!.width);
+
+	await sizeButton.click();
+	const wrapped = await toolsPanel.boundingBox();
+	expect(wrapped).not.toBeNull();
+	expect(wrapped!.width).toBeCloseTo(widths[0], 0);
+	await expect(toolsPanel.locator('.panel-body')).toBeVisible();
+
+	const resizeHandle = toolsPanel.getByRole('slider', { name: ru['toolsPanel.resizeHandle'] });
+	await resizeHandle.press('End');
+	const full = await toolsPanel.boundingBox();
+	expect(full).not.toBeNull();
+	const screenEdgeMargin = 16;
+	expect(full!.x).toBeGreaterThanOrEqual(screenEdgeMargin - 1);
+	expect(full!.x).toBeLessThanOrEqual(screenEdgeMargin + 1);
+	expect(full!.x + full!.width).toBeGreaterThanOrEqual(viewport!.width - screenEdgeMargin - 1);
+	expect(full!.x + full!.width).toBeLessThanOrEqual(viewport!.width - screenEdgeMargin + 1);
+
+	await resizeHandle.press('Home');
+	const compact = await toolsPanel.boundingBox();
+	expect(compact).not.toBeNull();
+	expect(compact!.width).toBeCloseTo(280, 0);
 });
 
 test('object replacement scene-object text round-trips without image URLs or a legacy source mode', async ({
@@ -217,13 +391,13 @@ test('browser Back steps through mode tabs instead of leaving the app', async ({
 	await page.goto('/create/exterior');
 
 	await page.getByRole('tab', { name: 'Редактирование' }).click();
-	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+	await expect(page).toHaveURL(/\/edit\?tool=add-object$/);
 
 	await page.getByRole('tab', { name: 'Миграция стиля' }).click();
 	await expect(page).toHaveURL(/\/style-transfer\/exterior\?/);
 
 	await page.goBack();
-	await expect(page).toHaveURL(/\/edit\?tool=freeform$/);
+	await expect(page).toHaveURL(/\/edit\?tool=add-object$/);
 	await expect(page.getByRole('tab', { name: 'Редактирование' })).toHaveAttribute(
 		'aria-selected',
 		'true'
@@ -250,16 +424,16 @@ test('switching view tabs updates only the view query param', async ({ page }) =
 test('switching edit tool tabs updates only the tool query param', async ({ page }) => {
 	await page.goto('/edit?tool=freeform');
 
-	await page.getByRole('tab', { name: /Удалить объект/ }).click();
+	await page.getByRole('tab', { name: /Удаление объекта/ }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=remove-object$/);
 
-	await page.getByRole('tab', { name: /Свет/ }).click();
+	await page.getByRole('tab', { name: 'Управление освещением' }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=light-settings$/);
 
-	await page.getByRole('tab', { name: /Замена объекта.*Альфа/ }).click();
+	await page.getByRole('tab', { name: 'Замена объекта' }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=object-replacement$/);
 
-	await page.getByRole('tab', { name: /Замена текстуры.*Альфа/ }).click();
+	await page.getByRole('tab', { name: 'Замена текстуры' }).click();
 	await expect(page).toHaveURL(/\/edit\?tool=texture-replacement$/);
 
 	await page.getByRole('tab', { name: 'Перекраска' }).click();
@@ -462,7 +636,7 @@ for (const [path, title] of [
 		await expect(page).toHaveTitle(title);
 
 		await page.locator('.brand').click();
-		await expect(page).toHaveURL(/\/create\/interior/);
+		await expect(page).toHaveURL(/\/$/);
 		await expect(page).toHaveTitle(ru['app.title']);
 	});
 }

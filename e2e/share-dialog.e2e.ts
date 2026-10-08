@@ -75,8 +75,7 @@ async function mockProjectDetail(page: Page): Promise<void> {
 
 // Opens the project's session into the render workspace — the same flow
 // project-detail.e2e.ts's own "continues a session..." test uses — so the
-// workspace header's Share button (only shown once a project tab is active,
-// see Workspace.svelte's showSessionTabs) becomes visible.
+// active project tab's Share button becomes visible.
 async function openProjectInWorkspace(page: Page): Promise<void> {
 	await page.goto(`/projects/${PROJECT_ID}`);
 	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();

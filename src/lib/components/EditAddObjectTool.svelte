@@ -14,9 +14,10 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { ADD_OBJECT_PRESETS } from '$lib/add-object-presets';
-	import { t } from '$lib/i18n/index.svelte';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
+	import { t, ti } from '$lib/i18n/index.svelte';
+	import { auth } from '$lib/state/auth.svelte';
 	import { request } from '$lib/state/request.svelte';
-	import { createTabController } from '$lib/utils';
 
 	interface Props {
 		disabled: boolean;
@@ -25,64 +26,60 @@ before the Change Date. See LICENSE for complete terms.
 	}
 	let { disabled, applying, onApply }: Props = $props();
 
-	let presetButtons = $state<HTMLElement[]>([]);
-	const selected = $derived(
-		ADD_OBJECT_PRESETS.find((preset) => preset.id === request.addObjectPresetId)
+	const promptText = $derived(request.addObjectInstruction.trim());
+	const finalPrompt = $derived(
+		promptText === '' ? '' : ti('edit.addObject.userPromptTemplate', { object: promptText })
 	);
-	const activePresetIndex = $derived(
-		Math.max(
-			ADD_OBJECT_PRESETS.findIndex((preset) => preset.id === request.addObjectPresetId),
-			0
-		)
-	);
-
-	const presetRadios = createTabController({
-		itemCount: () => ADD_OBJECT_PRESETS.length,
-		getActiveIndex: () => activePresetIndex,
-		setActiveIndex: (index) => {
-			request.setAddObjectPresetId(ADD_OBJECT_PRESETS[index].id);
-		},
-		focusTab: (index) => presetButtons[index]?.focus()
-	});
 
 	function submit(): void {
-		if (!selected) return;
-		onApply(t(selected.prompt));
+		if (finalPrompt === '') return;
+		onApply(finalPrompt);
 	}
 </script>
 
 <div class="tool">
 	<p class="hint" id="add-object-select-hint">{t('edit.addObject.selectHint')}</p>
 
-	<div class="grid" role="radiogroup" aria-labelledby="add-object-select-hint">
-		{#each ADD_OBJECT_PRESETS as preset, index (preset.id)}
+	<div class="grid" role="group" aria-labelledby="add-object-select-hint">
+		{#each ADD_OBJECT_PRESETS as preset (preset.id)}
 			{@const Icon = preset.Icon}
 			<button
-				{@attach (node) => {
-					presetButtons[index] = node as HTMLElement;
-				}}
 				type="button"
-				role="radio"
 				class="preset"
-				class:selected={request.addObjectPresetId === preset.id}
-				aria-checked={request.addObjectPresetId === preset.id}
-				tabindex={index === activePresetIndex ? 0 : -1}
 				{disabled}
-				onclick={() => presetRadios.activate(index)}
-				onkeydown={presetRadios.onKeydown}
+				title={t(preset.label)}
+				onclick={() => request.setAddObjectInstruction(t(preset.phrase))}
 			>
 				<Icon size={20} strokeWidth={1.6} aria-hidden="true" />
-				<span>{t(preset.label)}</span>
+				<span class="tile-label">{t(preset.label)}</span>
 			</button>
 		{/each}
 	</div>
 
-	<button type="button" class="btn-apply" disabled={disabled || !selected} onclick={submit}>
-		{#if applying}
-			<span class="spinner" aria-hidden="true"></span>
-		{/if}
-		{applying ? t('edit.addObject.applying') : t('edit.addObject.apply')}
-	</button>
+	<label class="field">
+		<span class="field-label">{t('edit.addObject.customLabel')}</span>
+		<textarea
+			value={request.addObjectInstruction}
+			oninput={(event) => request.setAddObjectInstruction(event.currentTarget.value)}
+			rows="2"
+			maxlength="500"
+			{disabled}
+			placeholder={t('edit.addObject.customPlaceholder')}></textarea>
+	</label>
+
+	{#if promptText !== ''}
+		<p class="preview">
+			<span class="preview-label">{t('edit.addObject.previewLabel')}</span>
+			{promptText}
+		</p>
+	{/if}
+
+	<GenerateButton
+		label={t('edit.addObject.apply')}
+		disabled={disabled || finalPrompt === '' || auth.status !== 'authenticated'}
+		busy={applying}
+		onclick={submit}
+	/>
 </div>
 
 <style>
@@ -105,6 +102,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.preset {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -126,18 +124,27 @@ before the Change Date. See LICENSE for complete terms.
 			color 0.15s;
 	}
 
-	.preset span {
+	.preset span,
+	.tile-label {
 		width: 100%;
 		overflow-wrap: break-word;
 	}
 
-	.preset:hover:not(:disabled) {
-		border-color: var(--color-accent);
+	@container tools-panel (max-width: 520px) {
+		.tile-label {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			padding: 0;
+			margin: -1px;
+			overflow: hidden;
+			clip: rect(0, 0, 0, 0);
+			white-space: nowrap;
+			border: 0;
+		}
 	}
 
-	.preset.selected {
-		color: var(--color-accent-text);
-		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+	.preset:hover:not(:disabled) {
 		border-color: var(--color-accent);
 	}
 
@@ -146,46 +153,61 @@ before the Change Date. See LICENSE for complete terms.
 		cursor: not-allowed;
 	}
 
-	.btn-apply {
-		display: inline-flex;
-		align-items: center;
+	.field {
+		display: flex;
+		flex-direction: column;
 		gap: 0.375rem;
-		align-self: flex-start;
-		padding: 0.6rem 1.25rem;
+	}
+
+	.field-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--color-muted);
+	}
+
+	textarea {
 		font: inherit;
 		font-size: 0.9375rem;
-		font-weight: 600;
-		color: var(--color-accent-contrast);
-		background: var(--color-accent);
-		border: none;
+		resize: vertical;
+		padding: 0.625rem 0.875rem;
+		border: 1.5px solid var(--color-border);
 		border-radius: 10px;
-		cursor: pointer;
-		transition: background 0.15s;
+		background: var(--color-background);
+		color: var(--color-text);
+		transition: border-color 0.15s;
+		min-height: 3.5rem;
 	}
 
-	.btn-apply:hover:not(:disabled) {
-		background: var(--color-accent-hover);
+	textarea:focus {
+		outline: none;
+		border-color: var(--color-accent);
 	}
 
-	.btn-apply:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
+	textarea::placeholder {
+		color: var(--color-muted);
+		opacity: 0.6;
 	}
 
-	.spinner {
-		width: 0.875rem;
-		height: 0.875rem;
-		border: 2px solid rgb(255 255 255 / 0.35);
-		border-top-color: white;
-		border-radius: 50%;
-		animation: spin 0.7s linear infinite;
-		flex-shrink: 0;
+	textarea:disabled {
+		opacity: 0.6;
 	}
 
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
+	.preview {
+		margin: 0;
+		padding: 0.625rem 0.875rem;
+		font-size: 0.8125rem;
+		line-height: 1.5;
+		color: var(--color-muted-strong);
+		background: var(--color-background);
+		border: 1px solid var(--color-border);
+		border-radius: 10px;
+	}
+
+	.preview-label {
+		display: block;
+		margin-bottom: 0.25rem;
+		font-weight: 600;
+		color: var(--color-muted);
 	}
 
 	@media (max-width: 480px) {

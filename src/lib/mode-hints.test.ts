@@ -48,7 +48,7 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 	[
 		'render',
 		'Замени кресло на пуф',
-		{ kind: 'switch', intent: 'replace', target: freeform, triggers: ['Замени'] }
+		{ kind: 'switch', intent: 'replace', target: objectReplacement, triggers: ['Замени'] }
 	],
 	[
 		'render',
@@ -75,12 +75,12 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 	[
 		'styleTransfer',
 		'Добавь пуф у дивана',
-		{ kind: 'switch', intent: 'add', target: freeform, triggers: ['Добавь'] }
+		{ kind: 'switch', intent: 'add', target: addObject, triggers: ['Добавь'] }
 	],
 	[
 		'styleTransfer',
 		'Убери старый диван и поставь новый',
-		{ kind: 'switch', intent: 'replace', target: freeform, triggers: ['Убери', 'поставь'] }
+		{ kind: 'switch', intent: 'replace', target: objectReplacement, triggers: ['Убери', 'поставь'] }
 	],
 	[
 		'styleTransfer',
@@ -88,8 +88,16 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 		{ kind: 'switch', intent: 'remove', target: removeObject, triggers: ['Убери'] }
 	],
 
-	['freeform', 'Замени диван на кожаное кресло', null],
-	['freeform', 'Добавь торшер у дивана', null],
+	[
+		'freeform',
+		'Замени диван на кожаное кресло',
+		{ kind: 'switch', intent: 'replace', target: objectReplacement, triggers: ['Замени'] }
+	],
+	[
+		'freeform',
+		'Добавь торшер у дивана',
+		{ kind: 'switch', intent: 'add', target: addObject, triggers: ['Добавь'] }
+	],
 	[
 		'freeform',
 		'Сделай стены цвета слоновой кости',
@@ -105,11 +113,46 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 		'Поменяй цвет стен',
 		{ kind: 'switch', intent: 'recolor', target: repaint, triggers: ['Поменяй цвет'] }
 	],
-	['freeform', 'Сделай пол под дерево', null],
-	['freeform', 'Перетяни диван в бархат', null],
-	['freeform', 'Измени текстуру пола', null],
-	['freeform', 'Make the cabinets matte', null],
-	['freeform', 'Убери старый диван и поставь новый', null],
+	[
+		'freeform',
+		'Сделай пол под дерево',
+		{
+			kind: 'switch',
+			intent: 'recolor',
+			target: textureReplacement,
+			triggers: ['Сделай', 'под дерево']
+		}
+	],
+	[
+		'freeform',
+		'Перетяни диван в бархат',
+		{ kind: 'switch', intent: 'recolor', target: textureReplacement, triggers: ['Перетяни'] }
+	],
+	[
+		'freeform',
+		'Измени текстуру пола',
+		{
+			kind: 'switch',
+			intent: 'recolor',
+			target: textureReplacement,
+			triggers: ['Измени текстуру']
+		}
+	],
+	[
+		'freeform',
+		'Make the cabinets matte',
+		{ kind: 'switch', intent: 'recolor', target: textureReplacement, triggers: ['Make', 'matte'] }
+	],
+	[
+		'freeform',
+		'Убери старый диван и поставь новый',
+		{
+			kind: 'switch',
+			intent: 'replace',
+			target: objectReplacement,
+			triggers: ['Убери', 'поставь']
+		}
+	],
 	[
 		'freeform',
 		'Убери стул у окна',
@@ -151,12 +194,12 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 	[
 		'removeObject',
 		'добавь вазу на стол',
-		{ kind: 'switch', intent: 'add', target: freeform, triggers: ['добавь'] }
+		{ kind: 'switch', intent: 'add', target: addObject, triggers: ['добавь'] }
 	],
 	[
 		'removeObject',
 		'замени стул на кресло',
-		{ kind: 'switch', intent: 'replace', target: freeform, triggers: ['замени'] }
+		{ kind: 'switch', intent: 'replace', target: objectReplacement, triggers: ['замени'] }
 	],
 
 	['lightSettings', 'добавь тёплый акцентный свет над картиной', null],
@@ -176,7 +219,7 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 	[
 		'lightSettings',
 		'добавь пуф в угол',
-		{ kind: 'switch', intent: 'add', target: freeform, triggers: ['добавь'] }
+		{ kind: 'switch', intent: 'add', target: addObject, triggers: ['добавь'] }
 	],
 
 	['objectReplacement', 'серый диван у окна', null],
@@ -185,12 +228,12 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 	[
 		'objectReplacement',
 		'добавь стол у окна',
-		{ kind: 'switch', intent: 'add', target: freeform, triggers: ['добавь'] }
+		{ kind: 'switch', intent: 'add', target: addObject, triggers: ['добавь'] }
 	],
 	[
 		'objectReplacement',
 		'add a table by the window',
-		{ kind: 'switch', intent: 'add', target: freeform, triggers: ['add'] }
+		{ kind: 'switch', intent: 'add', target: addObject, triggers: ['add'] }
 	],
 	[
 		'objectReplacement',
@@ -223,7 +266,7 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 	[
 		'textureReplacement',
 		'добавь ковёр',
-		{ kind: 'switch', intent: 'add', target: freeform, triggers: ['добавь'] }
+		{ kind: 'switch', intent: 'add', target: addObject, triggers: ['добавь'] }
 	],
 	[
 		'textureReplacement',
@@ -252,7 +295,7 @@ const cases: [ModeHintField, string, ModeHint | null][] = [
 	[
 		'repaint',
 		'замени диван на кресло',
-		{ kind: 'switch', intent: 'replace', target: freeform, triggers: ['замени'] }
+		{ kind: 'switch', intent: 'replace', target: objectReplacement, triggers: ['замени'] }
 	],
 	['repaint', 'стены в стиле лофт', null]
 ];
@@ -283,11 +326,16 @@ describe('modeHintFor', () => {
 	});
 
 	it('does not treat words that merely contain a stem as an action', () => {
-		expect(modeHintFor('freeform', 'добавь стол, включая стулья')).toBeNull();
+		expect(modeHintFor('freeform', 'добавь стол, включая стулья')).toEqual({
+			kind: 'switch',
+			intent: 'add',
+			target: addObject,
+			triggers: ['добавь']
+		});
 		expect(modeHintFor('lightSettings', 'add a bench above the painting')).toEqual({
 			kind: 'switch',
 			intent: 'add',
-			target: freeform,
+			target: addObject,
 			triggers: ['add']
 		});
 	});

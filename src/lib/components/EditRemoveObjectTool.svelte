@@ -13,9 +13,10 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Eraser } from '@lucide/svelte';
-	import { t, ti } from '$lib/i18n/index.svelte';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import ModeHint from '$lib/components/ModeHint.svelte';
+	import { t, ti } from '$lib/i18n/index.svelte';
+	import { auth } from '$lib/state/auth.svelte';
 	import { request } from '$lib/state/request.svelte';
 
 	interface Props {
@@ -44,23 +45,14 @@ before the Change Date. See LICENSE for complete terms.
 		/>
 	</label>
 
-	<p class="hint">{t('edit.removeObject.hint')}</p>
-
 	<ModeHint field="removeObject" text={request.removeObjectText} />
 
-	<button
-		type="button"
-		class="btn-apply"
-		disabled={disabled || !request.removeObjectText.trim()}
+	<GenerateButton
+		label={t('edit.removeObject.apply')}
+		disabled={disabled || !request.removeObjectText.trim() || auth.status !== 'authenticated'}
+		busy={applying}
 		onclick={submit}
-	>
-		{#if applying}
-			<span class="spinner" aria-hidden="true"></span>
-		{:else}
-			<Eraser size={16} strokeWidth={1.8} aria-hidden="true" />
-		{/if}
-		{applying ? t('edit.removeObject.applying') : t('edit.removeObject.apply')}
-	</button>
+	/>
 </div>
 
 <style>
@@ -105,53 +97,5 @@ before the Change Date. See LICENSE for complete terms.
 
 	input:disabled {
 		opacity: 0.6;
-	}
-
-	.hint {
-		margin: 0;
-		font-size: 0.8125rem;
-		color: var(--color-muted);
-	}
-
-	.btn-apply {
-		align-self: flex-start;
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.6rem 1.25rem;
-		font: inherit;
-		font-size: 0.9375rem;
-		font-weight: 600;
-		color: var(--color-accent-contrast);
-		background: var(--color-accent);
-		border: none;
-		border-radius: 10px;
-		cursor: pointer;
-		transition: background 0.15s;
-	}
-
-	.btn-apply:hover:not(:disabled) {
-		background: var(--color-accent-hover);
-	}
-
-	.btn-apply:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
-	}
-
-	.spinner {
-		width: 0.875rem;
-		height: 0.875rem;
-		border: 2px solid rgb(255 255 255 / 0.35);
-		border-top-color: white;
-		border-radius: 50%;
-		animation: spin 0.7s linear infinite;
-		flex-shrink: 0;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 </style>

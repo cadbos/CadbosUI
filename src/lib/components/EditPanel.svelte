@@ -13,15 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import {
-		Eraser,
-		Lightbulb,
-		Paintbrush,
-		PaintRoller,
-		Pencil,
-		Plus,
-		Replace
-	} from '@lucide/svelte';
+	import { Lightbulb, Paintbrush, PaintRoller, Pencil, Replace } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -46,6 +38,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { buildWorkspaceUrl, slugToTool, type ToolId } from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 	import EditAddObjectTool from '$lib/components/EditAddObjectTool.svelte';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
 	import LightSettingsPanel from '$lib/components/LightSettingsPanel.svelte';
 	import ModeHint from '$lib/components/ModeHint.svelte';
@@ -88,35 +81,45 @@ before the Change Date. See LICENSE for complete terms.
 
 	type LucideIcon = typeof Pencil;
 
-	const TOOLS: {
-		id: ToolId;
+	const OBJECT_TOOLS = [
+		{
+			id: 'add-object',
+			label: 'edit.tool.addObject.tab',
+			hint: 'edit.tool.addObject.tabHint'
+		},
+		{
+			id: 'remove-object',
+			label: 'edit.tool.removeObject.tab',
+			hint: 'edit.tool.removeObject.tabHint'
+		}
+	] as const satisfies readonly { id: ToolId; label: TranslationKey; hint: TranslationKey }[];
+
+	function isObjectTool(tool: ToolId): boolean {
+		return tool === 'freeform' || OBJECT_TOOLS.some((objectTool) => objectTool.id === tool);
+	}
+
+	const RAIL: {
+		id: ToolId | 'objects';
 		label: TranslationKey;
 		Icon: LucideIcon;
-		alphaLabel?: TranslationKey;
 	}[] = [
-		{ id: 'freeform', label: 'edit.tool.freeform', Icon: Pencil },
-		{ id: 'add-object', label: 'edit.tool.addObject', Icon: Plus },
-		{ id: 'remove-object', label: 'edit.tool.removeObject', Icon: Eraser },
-		{ id: 'light-settings', label: 'edit.tool.lightSettings', Icon: Lightbulb },
-		{
-			id: 'object-replacement',
-			label: 'mode.objectReplacement',
-			Icon: Replace,
-			alphaLabel: 'objectReplacement.alpha'
-		},
-		{
-			id: 'texture-replacement',
-			label: 'mode.textureReplacement',
-			Icon: PaintRoller,
-			alphaLabel: 'textureReplacement.alpha'
-		},
-		{ id: 'repaint', label: 'edit.tool.repaint', Icon: Paintbrush }
+		{ id: 'objects', label: 'edit.tool.objects', Icon: Pencil },
+		{ id: 'object-replacement', label: 'mode.objectReplacement', Icon: Replace },
+		{ id: 'texture-replacement', label: 'mode.textureReplacement', Icon: PaintRoller },
+		{ id: 'repaint', label: 'edit.tool.repaint', Icon: Paintbrush },
+		{ id: 'light-settings', label: 'edit.tool.lightSettings', Icon: Lightbulb }
 	];
 
 	// Only ever rendered in edit mode (see Workspace.svelte), so the URL's
 	// `tool` query param is this component's tab state.
 	const activeTool = $derived(slugToTool(page.url.searchParams.get('tool') ?? undefined));
+	const railIndex = $derived(
+		isObjectTool(activeTool) ? 0 : RAIL.findIndex((tool) => tool.id === activeTool)
+	);
+	const activeRailLabel = $derived((RAIL[railIndex] ?? RAIL[0]).label);
+	const objectToolIndex = $derived(OBJECT_TOOLS.findIndex((tool) => tool.id === activeTool));
 	let toolTabButtons = $state<HTMLElement[]>([]);
+	let objectTabButtons = $state<HTMLElement[]>([]);
 	let submitting = $state(false);
 	let terminalError = $state<PollFailure | null>(null);
 	let pollFailure = $state<PollFailure | null>(null);
@@ -125,8 +128,6 @@ before the Change Date. See LICENSE for complete terms.
 	let textureReplacementOpened = $state(false);
 	let lightSettingsOpened = $state(false);
 	let repaintOpened = $state(false);
-	// Tools with a panel (and job) of their own, as opposed to the inline
-	// freeform/add-object/remove-object panel that shares one Flux Kontext job.
 	const ownPanelTool = $derived(
 		activeTool === 'object-replacement' ||
 			activeTool === 'texture-replacement' ||
@@ -141,23 +142,36 @@ before the Change Date. See LICENSE for complete terms.
 		if (activeTool === 'repaint') repaintOpened = true;
 	});
 
+	function openTool(tool: ToolId): Promise<void> {
+		return goto(
+			resolve(buildWorkspaceUrl('edit', request, { tool }) as PathnameWithSearchOrHash, {}),
+			{
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true
+			}
+		).catch((err: unknown) => logBoundaryError('editPanel.toolNavigation', err));
+	}
+
+	function openRail(index: number): Promise<void> {
+		const tool = RAIL[index].id;
+		if (tool !== 'objects') return openTool(tool);
+		if (activeTool === 'add-object' || activeTool === 'remove-object') return Promise.resolve();
+		return openTool('add-object');
+	}
+
 	const toolTabs = createTabController({
-		itemCount: () => TOOLS.length,
-		getActiveIndex: () => TOOLS.findIndex((tool) => tool.id === activeTool),
-		setActiveIndex: (index) => {
-			return goto(
-				resolve(
-					buildWorkspaceUrl('edit', request, { tool: TOOLS[index].id }) as PathnameWithSearchOrHash,
-					{}
-				),
-				{
-					replaceState: true,
-					keepFocus: true,
-					noScroll: true
-				}
-			).catch((err: unknown) => logBoundaryError('editPanel.toolNavigation', err));
-		},
+		itemCount: () => RAIL.length,
+		getActiveIndex: () => railIndex,
+		setActiveIndex: (index) => openRail(index),
 		focusTab: (index) => toolTabButtons[index]?.focus()
+	});
+
+	const objectTabs = createTabController({
+		itemCount: () => OBJECT_TOOLS.length,
+		getActiveIndex: () => objectToolIndex,
+		setActiveIndex: (index) => openTool(OBJECT_TOOLS[index].id),
+		focusTab: (index) => objectTabButtons[index]?.focus()
 	});
 
 	const isAuthenticated = $derived(auth.status === 'authenticated');
@@ -373,6 +387,58 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
+	function toolTabsLabelWidth(node: HTMLElement): number {
+		const iconsOnly = node.classList.contains('icons-only');
+		if (iconsOnly) node.classList.remove('icons-only');
+		try {
+			const buttons = [...node.querySelectorAll(':scope > button')];
+			let total = 0;
+			for (const button of buttons) {
+				const style = getComputedStyle(button);
+				const padding =
+					Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+				const gap = Number.parseFloat(style.columnGap);
+				const icon = button.querySelector('svg');
+				const label = button.querySelector('.tool-label');
+				const iconWidth = icon instanceof SVGElement ? icon.getBoundingClientRect().width : 0;
+				const labelWidth = label instanceof HTMLElement ? label.scrollWidth : 0;
+				total +=
+					iconWidth +
+					(labelWidth > 0 && Number.isFinite(gap) ? gap : 0) +
+					labelWidth +
+					(Number.isFinite(padding) ? padding : 0);
+			}
+			const style = getComputedStyle(node);
+			const gap = Number.parseFloat(style.columnGap);
+			const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+			return (
+				total +
+				(Number.isFinite(gap) ? gap : 0) * Math.max(0, buttons.length - 1) +
+				(Number.isFinite(padding) ? padding : 0)
+			);
+		} finally {
+			if (iconsOnly) node.classList.add('icons-only');
+		}
+	}
+
+	function fitToolLabels(node: HTMLElement): () => void {
+		let alive = true;
+		const update = (): void => {
+			if (!alive || node.clientWidth === 0) return;
+			node.classList.toggle('icons-only', node.clientWidth < toolTabsLabelWidth(node));
+		};
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(node);
+		const panel = node.closest('.floating-tools-panel');
+		if (panel) observer.observe(panel);
+		void document.fonts.ready.then(update);
+		return () => {
+			alive = false;
+			observer.disconnect();
+		};
+	}
+
 	async function submit(prompt: string, type: EditOperationType): Promise<void> {
 		const trimmed = prompt.trim();
 		if (!hasEditTarget || !trimmed || formLocked || !isAuthenticated) return;
@@ -383,7 +449,7 @@ before the Change Date. See LICENSE for complete terms.
 			const sourceRender = request.currentRender;
 			// Captured before the async calls below so the settings attached to
 			// this request are what was actually submitted — see toRenderRequest().
-			const formSnapshot = request.captureFormSnapshot();
+			const formSnapshot = request.captureFormSnapshot(type);
 			const source = await request.resolveWorkingImageKey();
 			if (!source) return;
 			const { sessionId } = await request.ensureProjectSession();
@@ -412,17 +478,19 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <section class="edit-panel">
-	<h2 class="panel-heading">{t('edit.title')}</h2>
+	<p class="panel-description">{t('edit.panelDescription')}</p>
 
 	<div class="edit-body">
 		<div
-			class="tool-tabs"
+			class="tool-tabs icons-only"
 			role="tablist"
 			aria-label={t('edit.tool.switcher.label')}
-			aria-orientation="vertical"
+			{@attach fitToolLabels}
 		>
-			{#each TOOLS as tool, index (tool.id)}
+			{#each RAIL as tool, index (tool.id)}
 				{@const Icon = tool.Icon}
+				{@const selected =
+					tool.id === 'objects' ? isObjectTool(activeTool) : activeTool === tool.id}
 				<button
 					{@attach (node) => {
 						toolTabButtons[index] = node as HTMLElement;
@@ -430,98 +498,123 @@ before the Change Date. See LICENSE for complete terms.
 					type="button"
 					role="tab"
 					id={`edit-tool-tab-${tool.id}`}
-					aria-selected={activeTool === tool.id}
+					aria-selected={selected}
 					aria-controls={`edit-tool-panel-${tool.id}`}
-					tabindex={activeTool === tool.id ? 0 : -1}
-					class:active={activeTool === tool.id}
-					title={tool.alphaLabel ? `${t(tool.label)} — ${t(tool.alphaLabel)}` : t(tool.label)}
+					tabindex={index === railIndex ? 0 : -1}
+					class:active={selected}
+					aria-label={t(tool.label)}
+					title={t(tool.label)}
 					onclick={() => toolTabs.activate(index)}
 					onkeydown={toolTabs.onKeydown}
 				>
-					<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-					<span class="visually-hidden">
-						{t(tool.label)}{#if tool.alphaLabel}
-							&nbsp;— {t(tool.alphaLabel)}{/if}
+					<span class="tool-icon">
+						<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
 					</span>
-					{#if tool.alphaLabel}
-						<span class="tool-alpha-dot" aria-hidden="true"></span>
-					{/if}
+					<span class="tool-label">{t(tool.label)}</span>
 				</button>
 			{/each}
 		</div>
+
+		<h2 class="panel-heading tool-heading">{t(activeRailLabel)}</h2>
 
 		<div class="tool-content">
 			{#if !ownPanelTool}
 				<div
 					class="tool-panel"
 					role="tabpanel"
-					id={`edit-tool-panel-${activeTool}`}
-					aria-labelledby={`edit-tool-tab-${activeTool}`}
+					id="edit-tool-panel-objects"
+					aria-labelledby="edit-tool-tab-objects"
 					tabindex="0"
 				>
-					{#if activeTool === 'freeform'}
-						<div class="chips">
+					<div class="prompt-tabs" role="tablist" aria-label={t('edit.tool.objects')}>
+						{#each OBJECT_TOOLS as objectTool, index (objectTool.id)}
 							<button
+								{@attach (node) => {
+									objectTabButtons[index] = node as HTMLElement;
+								}}
 								type="button"
-								class="chip"
-								onclick={() => applyTemplate(t('edit.templateReplaceFill'))}
+								role="tab"
+								id={`edit-object-tab-${objectTool.id}`}
+								aria-selected={activeTool === objectTool.id}
+								aria-controls={`edit-object-panel-${objectTool.id}`}
+								tabindex={objectToolIndex < 0
+									? index === 0
+										? 0
+										: -1
+									: index === objectToolIndex
+										? 0
+										: -1}
+								class:active={activeTool === objectTool.id}
+								aria-label={t(objectTool.hint)}
+								title={t(objectTool.hint)}
+								onclick={() => objectTabs.activate(index)}
+								onkeydown={objectTabs.onKeydown}
 							>
-								{t('edit.templateReplace')}
+								{t(objectTool.label)}
 							</button>
-							<button
-								type="button"
-								class="chip"
-								onclick={() => applyTemplate(t('edit.templateColorFill'))}
-							>
-								{t('edit.templateColor')}
-							</button>
-						</div>
+						{/each}
+					</div>
 
-						<label class="field">
-							<span class="field-label">{t('edit.instruction')}</span>
-							<textarea
-								value={request.editPrompt}
-								oninput={(event) => request.setEditPrompt(event.currentTarget.value)}
-								rows="3"
-								disabled={formLocked}
-								placeholder={t('edit.templateReplaceFill')}></textarea>
-						</label>
+					<div
+						role="tabpanel"
+						id={`edit-object-panel-${activeTool}`}
+						aria-labelledby={activeTool === 'add-object' || activeTool === 'remove-object'
+							? `edit-object-tab-${activeTool}`
+							: undefined}
+					>
+						{#if activeTool === 'freeform'}
+							<div class="chips">
+								<button
+									type="button"
+									class="chip"
+									onclick={() => applyTemplate(t('edit.templateReplaceFill'))}
+								>
+									{t('edit.templateReplace')}
+								</button>
+								<button
+									type="button"
+									class="chip"
+									onclick={() => applyTemplate(t('edit.templateColorFill'))}
+								>
+									{t('edit.templateColor')}
+								</button>
+							</div>
 
-						<ModeHint field="freeform" text={request.editPrompt} />
+							<label class="field">
+								<span class="field-label">{t('edit.instruction')}</span>
+								<textarea
+									value={request.editPrompt}
+									oninput={(event) => request.setEditPrompt(event.currentTarget.value)}
+									rows="3"
+									disabled={formLocked}
+									placeholder={t('edit.templateReplaceFill')}></textarea>
+							</label>
 
-						<div class="actions">
-							<button
-								type="button"
-								class="btn-apply"
+							<ModeHint field="freeform" text={request.editPrompt} />
+
+							<GenerateButton
+								label={t('edit.apply')}
 								disabled={!request.editPrompt.trim() ||
 									formLocked ||
 									!isAuthenticated ||
 									!hasEditTarget}
+								busy={submitting || isPolling}
 								onclick={() => void submit(request.editPrompt, 'freeform')}
-							>
-								{#if submitting}
-									<span class="spinner" aria-hidden="true"></span>
-									{t('edit.submitting')}
-								{:else if isPolling}
-									{t('edit.processing')}
-								{:else}
-									{t('edit.apply')}
-								{/if}
-							</button>
-						</div>
-					{:else if activeTool === 'add-object'}
-						<EditAddObjectTool
-							disabled={formLocked || !hasEditTarget}
-							applying={submitting || isPolling}
-							onApply={(prompt) => void submit(prompt, 'add-object')}
-						/>
-					{:else if activeTool === 'remove-object'}
-						<EditRemoveObjectTool
-							disabled={formLocked || !hasEditTarget}
-							applying={submitting || isPolling}
-							onApply={(prompt) => void submit(prompt, 'remove-object')}
-						/>
-					{/if}
+							/>
+						{:else if activeTool === 'add-object'}
+							<EditAddObjectTool
+								disabled={formLocked || !hasEditTarget}
+								applying={submitting || isPolling}
+								onApply={(prompt) => void submit(prompt, 'add-object')}
+							/>
+						{:else if activeTool === 'remove-object'}
+							<EditRemoveObjectTool
+								disabled={formLocked || !hasEditTarget}
+								applying={submitting || isPolling}
+								onApply={(prompt) => void submit(prompt, 'remove-object')}
+							/>
+						{/if}
+					</div>
 
 					<div class="job-live" role="status" aria-live="polite" aria-atomic="true">
 						{#if isPolling}
@@ -646,10 +739,6 @@ before the Change Date. See LICENSE for complete terms.
 			{/if}
 		</div>
 	</div>
-
-	{#if !isAuthenticated && !ownPanelTool}
-		<p class="auth-hint">{t('edit.signInToApply')}</p>
-	{/if}
 </section>
 
 <style>
@@ -667,7 +756,8 @@ before the Change Date. See LICENSE for complete terms.
 
 	.edit-body {
 		display: flex;
-		align-items: flex-start;
+		flex-direction: column;
+		align-items: stretch;
 		gap: 1rem;
 	}
 
@@ -679,17 +769,14 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 1rem;
 	}
 
-	/* A vertical icon rail instead of horizontal tabs — switches the same
-	   tools via the same tablist/URL-driven controller, just reoriented.
-	   Ordered after .tool-content so it still renders on the right visually
-	   despite coming first in the DOM (a keyboard user tabbing through must
-	   reach the tabs before the panel they control). */
+	.tool-heading {
+		font-weight: 700;
+	}
+
 	.tool-tabs {
-		order: 1;
-		flex: 0 0 auto;
 		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
+		width: 100%;
+		gap: 0.5rem;
 		padding: 0.25rem;
 		background: var(--color-background);
 		border-radius: 12px;
@@ -705,15 +792,24 @@ before the Change Date. See LICENSE for complete terms.
 		display: none;
 	}
 
+	.tool-icon {
+		display: inline-flex;
+	}
+
 	.tool-tabs button {
-		position: relative;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 2.75rem;
-		height: 2.75rem;
-		padding: 0;
+		gap: 0.4rem;
+		flex: 1 1 auto;
+		min-width: max-content;
+		min-height: calc(0.5rem * 2 + 0.875rem * 1.25);
+		padding: 0.45rem 0.65rem;
 		font: inherit;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		line-height: 1.2;
+		white-space: nowrap;
 		color: var(--color-muted);
 		background: transparent;
 		border: none;
@@ -722,6 +818,27 @@ before the Change Date. See LICENSE for complete terms.
 		transition:
 			background 0.15s,
 			color 0.15s;
+	}
+
+	.tool-label {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.tool-tabs:global(.icons-only) button {
+		flex: 1 1 0;
+		min-width: 0;
+		padding: 0;
+		gap: 0;
+	}
+
+	.tool-tabs:global(.icons-only) .tool-label {
+		display: none;
+	}
+
+	.tool-tabs:not(:global(.icons-only)) + .tool-heading {
+		display: none;
 	}
 
 	.tool-tabs button:hover:not(.active) {
@@ -735,14 +852,42 @@ before the Change Date. See LICENSE for complete terms.
 		box-shadow: var(--shadow);
 	}
 
-	.tool-alpha-dot {
-		position: absolute;
-		top: 0.3rem;
-		right: 0.3rem;
-		width: 0.375rem;
-		height: 0.375rem;
-		border-radius: 50%;
-		background: var(--color-accent);
+	.prompt-tabs {
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.25rem;
+		background: var(--color-background);
+		border-radius: 12px;
+	}
+
+	.prompt-tabs button {
+		flex: 1 1 0;
+		min-width: 0;
+		padding: 0.5rem 0.75rem;
+		font: inherit;
+		font-size: 0.875rem;
+		font-weight: 500;
+		line-height: 1.25;
+		text-align: center;
+		color: var(--color-muted);
+		background: transparent;
+		border: none;
+		border-radius: 9px;
+		cursor: pointer;
+		transition:
+			background 0.15s,
+			color 0.15s;
+	}
+
+	.prompt-tabs button:hover:not(.active) {
+		background: var(--color-surface-hover);
+		color: var(--color-text);
+	}
+
+	.prompt-tabs button.active {
+		color: var(--color-text);
+		background: var(--color-surface);
+		box-shadow: var(--shadow);
 	}
 
 	.chips {
@@ -779,7 +924,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.field-label {
 		font-size: 0.8125rem;
-		font-weight: 500;
+		font-weight: 600;
 		color: var(--color-muted);
 	}
 
@@ -808,18 +953,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	textarea:disabled {
 		opacity: 0.6;
-	}
-
-	.auth-hint {
-		margin: 0;
-		font-size: 0.875rem;
-		color: var(--color-muted);
-	}
-
-	.actions {
-		display: flex;
-		gap: 0.625rem;
-		flex-wrap: wrap;
 	}
 
 	.btn-apply {

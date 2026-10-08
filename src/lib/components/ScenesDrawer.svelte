@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import {
 		Download,
+		Hd,
 		History,
 		Lightbulb,
 		MessageSquareText,
@@ -23,11 +24,9 @@ before the Change Date. See LICENSE for complete terms.
 		PaintRoller,
 		Paintbrush,
 		Pencil,
-		PenLine,
 		Replace,
 		Sparkles,
 		Trash2,
-		Wand,
 		X
 	} from '@lucide/svelte';
 	import { browser } from '$app/environment';
@@ -71,10 +70,10 @@ before the Change Date. See LICENSE for complete terms.
 	};
 
 	const generationKindIcons: Record<GenerationKind, Component<ComponentProps<typeof Sparkles>>> = {
-		render: Wand,
-		edit: PenLine,
+		render: Sparkles,
+		edit: Pencil,
 		'style-transfer': Palette,
-		upscale: Sparkles,
+		upscale: Hd,
 		'object-replacement': Replace,
 		'texture-replacement': PaintRoller,
 		'light-settings': Lightbulb,
@@ -1509,6 +1508,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.actions {
 		position: absolute;
+		z-index: 1;
 		top: 0.5rem;
 		right: 0.5rem;
 		display: flex;

@@ -40,7 +40,7 @@ const FULL_FORM_SNAPSHOT = {
 	promptFragments: [],
 	promptOverride: null,
 	editPrompt: '',
-	addObjectPresetId: null,
+	addObjectInstruction: '',
 	removeObjectText: '',
 	outputFormat: 'webp',
 	sceneType: 'interior',

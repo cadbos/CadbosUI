@@ -30,7 +30,7 @@ export type ModeHintField =
 
 export type ModeHintTarget =
 	| { mode: 'edit'; tool: Exclude<ToolId, 'add-object'> }
-	| { mode: 'edit'; tool: 'add-object'; presetId: string }
+	| { mode: 'edit'; tool: 'add-object'; presetId?: string }
 	| { mode: 'styleTransfer' };
 
 export type ModeHintFormatField = Extract<
@@ -429,13 +429,13 @@ function intentTarget(intent: EditIntent, normalized: string): ModeHintTarget {
 		case 'add': {
 			const presetId = matchAddObjectPreset(normalized);
 			return presetId === null
-				? { mode: 'edit', tool: 'freeform' }
+				? { mode: 'edit', tool: 'add-object' }
 				: { mode: 'edit', tool: 'add-object', presetId };
 		}
 		case 'remove':
 			return { mode: 'edit', tool: 'remove-object' };
 		case 'replace':
-			return { mode: 'edit', tool: withReference ? 'object-replacement' : 'freeform' };
+			return { mode: 'edit', tool: 'object-replacement' };
 		case 'recolor':
 			if (withReference) return { mode: 'edit', tool: 'texture-replacement' };
 			return {
@@ -443,7 +443,7 @@ function intentTarget(intent: EditIntent, normalized: string): ModeHintTarget {
 				tool:
 					PAINT.test(normalized) || (COLOR.test(normalized) && !MATERIAL.test(normalized))
 						? 'repaint'
-						: 'freeform'
+						: 'texture-replacement'
 			};
 		case 'light':
 			return { mode: 'edit', tool: 'light-settings' };

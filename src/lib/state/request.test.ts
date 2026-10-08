@@ -13,6 +13,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { t } from '$lib/i18n/index.svelte';
 import { mediaKey } from '$lib/server/media';
 import { TEST_S3_BUCKET } from '$lib/server/testing/generation-fixtures';
 import {
@@ -214,7 +215,7 @@ describe('serialization', () => {
 		expect(request.toJSON()).toEqual({
 			...snapshot,
 			editPrompt: '',
-			addObjectPresetId: null,
+			addObjectInstruction: '',
 			removeObjectText: '',
 			styleReferenceImage: undefined,
 			objectReferenceImage: undefined,
@@ -1711,6 +1712,23 @@ describe('flux kontext edit job (freeform/add-object/remove-object)', () => {
 		expect(request.activeFluxKontextEditJobId).toBeUndefined();
 	});
 
+	it('stores the trimmed submitted instruction for an id-only restored job', () => {
+		request.setActiveFluxKontextEditJobId(
+			'123e4567-e89b-42d3-a456-426614174000',
+			'add-object',
+			'  a floor lamp '
+		);
+		expect(request.activeFluxKontextEditJob).toEqual({
+			id: '123e4567-e89b-42d3-a456-426614174000',
+			type: 'add-object',
+			instruction: 'a floor lamp'
+		});
+
+		request.setActiveFluxKontextEditJobId(undefined);
+		request.setActiveFluxKontextEditJobId('123e4567-e89b-42d3-a456-426614174000');
+		expect(request.activeFluxKontextEditJob?.instruction).toBe('');
+	});
+
 	it('retains an immutable source snapshot, instruction, and type for the accepted job', () => {
 		const source: RenderResult = {
 			id: 'source-render',
@@ -1745,13 +1763,41 @@ describe('flux kontext edit job (freeform/add-object/remove-object)', () => {
 });
 
 describe('add object / remove object edit tool selections', () => {
-	it('keeps a valid add-object preset id and rejects unknown ones', () => {
-		request.setAddObjectPresetId('houseplant');
-		expect(request.addObjectPresetId).toBe('houseplant');
-		request.setAddObjectPresetId('not-a-real-preset');
-		expect(request.addObjectPresetId).toBeNull();
-		request.setAddObjectPresetId(null);
-		expect(request.addObjectPresetId).toBeNull();
+	it('stores the add-object user prompt and enforces the length limit', () => {
+		request.setAddObjectInstruction('a grey armchair by the window');
+		expect(request.addObjectInstruction).toBe('a grey armchair by the window');
+		expect(() => request.setAddObjectInstruction('x'.repeat(501))).toThrow();
+		expect(request.addObjectInstruction).toBe('a grey armchair by the window');
+	});
+
+	it('restores the add-object user prompt from a form snapshot and defaults it for an old one', () => {
+		request.setAddObjectInstruction('a floor lamp');
+		const snapshot = request.captureFormSnapshot('add-object');
+		expect(snapshot.addObjectInstruction).toBe('a floor lamp');
+		request.reset();
+		expect(request.addObjectInstruction).toBe('');
+		request.restoreFormSnapshot(snapshot);
+		expect(request.addObjectInstruction).toBe('a floor lamp');
+
+		const legacy: Partial<typeof snapshot> = { ...snapshot };
+		delete legacy.addObjectInstruction;
+		expect(requestFormSnapshotSchema.parse(legacy).addObjectInstruction).toBe('');
+	});
+
+	it('drops the removed addObjectPresetId from a snapshot recorded by an older version', () => {
+		request.setAddObjectInstruction('a floor lamp');
+		const stored = {
+			...request.captureFormSnapshot('add-object'),
+			addObjectPresetId: 'houseplant'
+		};
+
+		const parsed = requestFormSnapshotSchema.parse(JSON.parse(JSON.stringify(stored)));
+
+		expect(parsed.addObjectInstruction).toBe('a floor lamp');
+		expect(parsed).not.toHaveProperty('addObjectPresetId');
+		request.reset();
+		request.restoreFormSnapshot(parsed);
+		expect(request.addObjectInstruction).toBe('a floor lamp');
 	});
 
 	it('stores the remove-object free text verbatim', () => {
@@ -1760,7 +1806,7 @@ describe('add object / remove object edit tool selections', () => {
 	});
 
 	it('survives a completed-edit cycle — settings used for a generation are not reset', () => {
-		request.setAddObjectPresetId('mirror');
+		request.setAddObjectInstruction('a mirror');
 		request.setRemoveObjectText('the coffee table');
 		request.applyEditResult({
 			id: 'edit-result-1',
@@ -1770,19 +1816,19 @@ describe('add object / remove object edit tool selections', () => {
 			editOp: { type: 'add-object', instruction: 'add a mirror' },
 			ts: 1
 		});
-		expect(request.addObjectPresetId).toBe('mirror');
+		expect(request.addObjectInstruction).toBe('a mirror');
 		expect(request.removeObjectText).toBe('the coffee table');
 	});
 
 	it('round-trips through toJSON/fromJSON and clears on reset', () => {
-		request.setAddObjectPresetId('bookshelf');
+		request.setAddObjectInstruction('a tall fern');
 		request.setRemoveObjectText('the rug');
 		const snapshot = request.toJSON();
 		request.reset();
-		expect(request.addObjectPresetId).toBeNull();
+		expect(request.addObjectInstruction).toBe('');
 		expect(request.removeObjectText).toBe('');
 		request.fromJSON(snapshot);
-		expect(request.addObjectPresetId).toBe('bookshelf');
+		expect(request.addObjectInstruction).toBe('a tall fern');
 		expect(request.removeObjectText).toBe('the rug');
 	});
 });
@@ -2054,16 +2100,16 @@ describe('undo/redo restores the form settings used for each step (FR-К6)', () 
 		expect(request.outputFormat).toBe('jpg');
 	});
 
-	it('restores the add-object preset and remove-object text an edit step was submitted with', () => {
+	it('restores the add-object and remove-object text an edit step was submitted with', () => {
 		request.setCurrentRender(render('gen-1'));
 
-		request.setAddObjectPresetId('houseplant');
+		request.setAddObjectInstruction('a houseplant');
 		request.applyEditResult({
 			...render('edit-1'),
 			editOp: { type: 'add-object', instruction: 'add a houseplant' }
 		});
 
-		request.setAddObjectPresetId(null);
+		request.setAddObjectInstruction('');
 		request.setRemoveObjectText('the floor lamp');
 		request.applyEditResult({
 			...render('edit-2'),
@@ -2072,12 +2118,12 @@ describe('undo/redo restores the form settings used for each step (FR-К6)', () 
 
 		request.undoLastEdit();
 		expect(request.currentRender?.id).toBe('edit-1');
-		expect(request.addObjectPresetId).toBe('houseplant');
+		expect(request.addObjectInstruction).toBe('a houseplant');
 		expect(request.removeObjectText).toBe('');
 
 		request.redoEdit();
 		expect(request.currentRender?.id).toBe('edit-2');
-		expect(request.addObjectPresetId).toBeNull();
+		expect(request.addObjectInstruction).toBe('');
 		expect(request.removeObjectText).toBe('the floor lamp');
 	});
 
@@ -2309,6 +2355,22 @@ describe('prefillFromModeHint', () => {
 		state.setEditPrompt('убери блики');
 		state.prefillFromModeHint({ mode: 'edit', tool: 'freeform' }, 'добавь стол у окна');
 		expect(state.editPrompt).toBe('убери блики');
+	});
+
+	it('carries an unmatched add request into the custom add-object field', () => {
+		const state = new RequestState();
+		state.prefillFromModeHint({ mode: 'edit', tool: 'add-object' }, '  добавь стол у окна ');
+		expect(state.addObjectInstruction).toBe('добавь стол у окна');
+	});
+
+	it('fills an empty add-object field with the matched template phrase, never overwriting typed text', () => {
+		const state = new RequestState();
+		state.prefillFromModeHint({ mode: 'edit', tool: 'add-object', presetId: 'houseplant' }, 'x');
+		expect(state.addObjectInstruction).toBe(t('edit.addObject.houseplant.phrase'));
+
+		state.setAddObjectInstruction('a floor lamp');
+		state.prefillFromModeHint({ mode: 'edit', tool: 'add-object', presetId: 'mirror' }, 'x');
+		expect(state.addObjectInstruction).toBe('a floor lamp');
 	});
 
 	it('leaves the light instruction empty when the text exceeds its limit', () => {
