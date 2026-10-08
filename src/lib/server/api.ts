@@ -90,6 +90,7 @@ export const formSnapshotSchema = z.object({
 	styleReferenceImage: formSnapshotImage.optional(),
 	objectReplacementObject: z.string().max(200),
 	objectReplacementScale: z.number().min(0.5).max(2),
+	objectReplacementRegion: imageRegionSchema.nullable().default(null),
 	objectReferenceImage: formSnapshotImage.optional(),
 	textureReplacementSurface: z.string().max(200),
 	textureReplacementMasked: z.boolean(),
@@ -154,6 +155,7 @@ export const objectReplacementRequestSchema = z.strictObject({
 	imageKey: mediaKey,
 	referenceImageKey: mediaKey,
 	replacementObject: z.string().trim().min(1).max(200),
+	region: imageRegionSchema.optional(),
 	sessionId,
 	formSnapshot
 });

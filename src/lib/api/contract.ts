@@ -95,6 +95,7 @@ export interface RequestFormSnapshot {
 	styleReferenceImage?: ImageInput;
 	objectReplacementObject: string;
 	objectReplacementScale: number;
+	objectReplacementRegion: ImageRegion | null;
 	objectReferenceImage?: ImageInput;
 	textureReplacementSurface: string;
 	textureReplacementMasked: boolean;
@@ -258,6 +259,7 @@ export interface ObjectReplacementRequest {
 	imageKey: string;
 	referenceImageKey: string;
 	replacementObject: string;
+	region?: ImageRegion;
 	sessionId: string;
 	formSnapshot?: RequestFormSnapshot;
 }

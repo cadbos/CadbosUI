@@ -219,6 +219,7 @@ export interface NormalizedRequest {
 	workingImageKey: string | undefined;
 	objectReplacementObject: string;
 	objectReplacementScale: number;
+	objectReplacementRegion: ImageRegion | null;
 	textureReplacementSurface: string;
 	textureReplacementMasked: boolean;
 	lightSettingsPresetIds: string[];
@@ -332,6 +333,7 @@ export const requestFormSnapshotSchema = z.object({
 	styleReferenceImage: optionalImageInputSchema,
 	objectReplacementObject: replacementObjectSchema,
 	objectReplacementScale: objectReplacementScaleSchema,
+	objectReplacementRegion: imageRegionSchema.nullable().default(null),
 	objectReferenceImage: optionalImageInputSchema,
 	textureReplacementSurface: replacementSurfaceSchema,
 	textureReplacementMasked: z.boolean(),
@@ -542,6 +544,9 @@ function cloneFormSnapshot(
 			: {}),
 		objectReplacementObject: snapshot.objectReplacementObject,
 		objectReplacementScale: snapshot.objectReplacementScale,
+		objectReplacementRegion: snapshot.objectReplacementRegion
+			? { ...snapshot.objectReplacementRegion }
+			: null,
 		...(snapshot.objectReferenceImage
 			? { objectReferenceImage: cloneImage(snapshot.objectReferenceImage) }
 			: {}),
@@ -797,6 +802,10 @@ export class RequestState {
 	styleNegativePrompt = $state('');
 	objectReplacementObject = $state('');
 	objectReplacementScale = $state(1);
+	#objectReplacementRegion = $state.raw<{
+		region: ImageRegion;
+		sourceKey: string | undefined;
+	} | null>(null);
 	activeObjectReplacementJob = $state<ActiveObjectReplacementJob | undefined>(undefined);
 	textureReplacementSurface = $state('');
 	textureReplacementMasked = $state(false);
@@ -1021,6 +1030,7 @@ export class RequestState {
 		this.setCurrentRender(undefined);
 		this.setTextureMaskImage(undefined);
 		this.setActiveObjectReplacementJobId(undefined);
+		this.#objectReplacementRegion = null;
 		this.setActiveTextureReplacementJobId(undefined);
 		this.setActiveLightSettingsJobId(undefined);
 		this.setActiveRepaintJobId(undefined);
@@ -1049,6 +1059,7 @@ export class RequestState {
 		this.pendingImagePreviewUrl = file ? URL.createObjectURL(file) : undefined;
 		this.image = undefined;
 		this.#repaintRegion = null;
+		this.#objectReplacementRegion = null;
 	}
 
 	#clearPendingImagePreview(): void {
@@ -1143,6 +1154,17 @@ export class RequestState {
 		this.objectReplacementScale = objectReplacementScaleSchema.parse(scale);
 	}
 
+	activeObjectReplacementRegion(): ImageRegion | null {
+		const stored = this.#objectReplacementRegion;
+		return stored && stored.sourceKey === this.workingImageKey() ? stored.region : null;
+	}
+
+	setObjectReplacementRegion(region: ImageRegion | null): void {
+		this.#objectReplacementRegion = region
+			? { region: imageRegionSchema.parse(region), sourceKey: this.workingImageKey() }
+			: null;
+	}
+
 	setActiveObjectReplacementJobId(id: string | undefined): void {
 		const parsed = objectReplacementJobIdSchema.optional().parse(id);
 		if (parsed === this.activeObjectReplacementJob?.id) return;
@@ -1154,13 +1176,14 @@ export class RequestState {
 	setActiveObjectReplacementJob(
 		id: string,
 		sourceRender: RenderResult | undefined,
-		instruction: string
+		instruction: string,
+		formSnapshot: RequestFormSnapshot | undefined
 	): void {
 		this.activeObjectReplacementJob = {
 			id: objectReplacementJobIdSchema.parse(id),
 			instruction: replacementObjectSchema.parse(instruction).trim(),
 			sourceRender: cloneRenderResult(sourceRender),
-			formSnapshot: this.captureFormSnapshot('replace-object')
+			formSnapshot: cloneFormSnapshot(formSnapshot)
 		};
 	}
 
@@ -1423,6 +1446,7 @@ export class RequestState {
 				: {}),
 			objectReplacementObject: this.objectReplacementObject,
 			objectReplacementScale: this.objectReplacementScale,
+			objectReplacementRegion: this.activeObjectReplacementRegion(),
 			...(this.objectReferenceImage
 				? { objectReferenceImage: cloneImage(this.objectReferenceImage) }
 				: {}),
@@ -1462,6 +1486,7 @@ export class RequestState {
 		this.styleReferenceImage = cloneImage(snapshot.styleReferenceImage);
 		this.objectReplacementObject = snapshot.objectReplacementObject;
 		this.objectReplacementScale = snapshot.objectReplacementScale;
+		this.#objectReplacementRegion = null;
 		this.objectReferenceImage = cloneImage(snapshot.objectReferenceImage);
 		this.textureReplacementSurface = snapshot.textureReplacementSurface;
 		this.textureReplacementMasked = snapshot.textureReplacementMasked;
@@ -1695,11 +1720,22 @@ export class RequestState {
 		}
 
 		const localRegion = this.#repaintRegion;
+		const localObjectRegion = this.#objectReplacementRegion;
 		this.setImage(uploaded);
 		// A region drawn on the photo while it was still only a local file is the
 		// uploaded photo's region from now on.
 		if (localRegion && localRegion.sourceKey === undefined && this.#repaintRegion === localRegion) {
 			this.#repaintRegion = { region: localRegion.region, sourceKey: this.workingImageKey() };
+		}
+		if (
+			localObjectRegion &&
+			localObjectRegion.sourceKey === undefined &&
+			this.#objectReplacementRegion === localObjectRegion
+		) {
+			this.#objectReplacementRegion = {
+				region: localObjectRegion.region,
+				sourceKey: this.workingImageKey()
+			};
 		}
 		return this.image;
 	}
@@ -1826,6 +1862,7 @@ export class RequestState {
 		const formSnapshot = this.captureFormSnapshot('replace-object');
 		const referenceImageKey = managedImageKey(this.objectReferenceImage);
 		const replacementObject = this.objectReplacementInstruction;
+		const region = this.activeObjectReplacementRegion();
 		const imageKey = await this.resolveWorkingImageKey();
 		if (!imageKey || !referenceImageKey) return null;
 		const { sessionId } = await this.ensureProjectSession();
@@ -1833,6 +1870,7 @@ export class RequestState {
 			imageKey,
 			referenceImageKey,
 			replacementObject,
+			...(region ? { region } : {}),
 			sessionId,
 			formSnapshot
 		};
@@ -1962,6 +2000,7 @@ export class RequestState {
 		this.styleNegativePrompt = parsed.styleNegativePrompt;
 		this.objectReplacementObject = parsed.objectReplacementObject;
 		this.objectReplacementScale = parsed.objectReplacementScale;
+		this.#objectReplacementRegion = null;
 		this.activeObjectReplacementJob = undefined;
 		this.textureReplacementSurface = parsed.textureReplacementSurface;
 		this.textureReplacementMasked = parsed.textureReplacementMasked;
@@ -1971,6 +2010,7 @@ export class RequestState {
 		this.activeLightSettingsJob = undefined;
 		this.repaintTarget = parsed.repaintTarget;
 		this.repaintColor = parsed.repaintColor;
+		this.#repaintRegion = null;
 		this.activeRepaintJob = undefined;
 		this.activeFluxKontextEditJob = undefined;
 		this.promptOverride = parsed.promptOverride;
@@ -2002,6 +2042,7 @@ export class RequestState {
 			workingImageKey: this.workingImageKey(),
 			objectReplacementObject: this.objectReplacementObject,
 			objectReplacementScale: this.objectReplacementScale,
+			objectReplacementRegion: this.activeObjectReplacementRegion(),
 			textureReplacementSurface: this.textureReplacementMasked
 				? ''
 				: this.textureReplacementSurface,
@@ -2051,6 +2092,7 @@ export class RequestState {
 		this.styleNegativePrompt = '';
 		this.objectReplacementObject = '';
 		this.objectReplacementScale = 1;
+		this.#objectReplacementRegion = null;
 		this.activeObjectReplacementJob = undefined;
 		this.textureReplacementSurface = '';
 		this.textureReplacementMasked = false;
@@ -2120,6 +2162,12 @@ export class RequestState {
 		this.styleNegativePrompt = source.styleNegativePrompt;
 		this.objectReplacementObject = source.objectReplacementObject;
 		this.objectReplacementScale = source.objectReplacementScale;
+		this.#objectReplacementRegion = source.#objectReplacementRegion
+			? {
+					...source.#objectReplacementRegion,
+					region: { ...source.#objectReplacementRegion.region }
+				}
+			: null;
 		this.activeObjectReplacementJob = cloneActiveObjectReplacementJob(
 			source.activeObjectReplacementJob
 		);

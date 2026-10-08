@@ -548,6 +548,13 @@ export const ru = {
 	'objectReplacement.objectHint':
 		'Точно опишите существующий объект, чтобы модель смогла его найти.',
 	'objectReplacement.objectPlaceholder': 'например: серый диван у окна',
+	'objectReplacement.region.label': 'Область',
+	'objectReplacement.region.hint':
+		'Необязательно. Выделите область на изображении, чтобы ограничить замену. Это помогает, когда под описание подходит несколько объектов.',
+	'objectReplacement.region.select': 'Выбрать область',
+	'objectReplacement.region.clear': 'Очистить область',
+	'objectReplacement.region.boxLabel':
+		'Выбранная область. Стрелки перемещают её, Shift со стрелками меняет размер, Delete удаляет.',
 	'objectReplacement.scale': 'Размер объекта',
 	'objectReplacement.scaleSmaller': 'Меньше',
 	'objectReplacement.scaleAsShown': 'Как на фото',

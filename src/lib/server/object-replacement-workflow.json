@@ -22,7 +22,7 @@
 			"upscale_method": "lanczos",
 			"megapixels": 1,
 			"resolution_steps": 1,
-			"image": ["1", 0]
+			"image": ["210", 0]
 		},
 		"class_type": "ImageScaleToTotalPixels",
 		"_meta": {
@@ -108,7 +108,7 @@
 	"17": {
 		"inputs": {
 			"filename_prefix": "obj-replace-v23",
-			"images": ["68", 0]
+			"images": ["222", 0]
 		},
 		"class_type": "SaveImage",
 		"_meta": {
@@ -123,6 +123,73 @@
 		"_meta": {
 			"title": "Target object"
 		}
+	},
+	"200": {
+		"inputs": { "value": 0 },
+		"class_type": "PrimitiveFloat",
+		"_meta": { "title": "Region x (fraction)" }
+	},
+	"201": {
+		"inputs": { "value": 0 },
+		"class_type": "PrimitiveFloat",
+		"_meta": { "title": "Region y (fraction)" }
+	},
+	"202": {
+		"inputs": { "value": 1 },
+		"class_type": "PrimitiveFloat",
+		"_meta": { "title": "Region width (fraction)" }
+	},
+	"203": {
+		"inputs": { "value": 1 },
+		"class_type": "PrimitiveFloat",
+		"_meta": { "title": "Region height (fraction)" }
+	},
+	"204": {
+		"inputs": { "image": ["1", 0] },
+		"class_type": "GetImageSize",
+		"_meta": { "title": "Scene size" }
+	},
+	"205": {
+		"inputs": { "value": "a*b", "a": ["200", 0], "b": ["204", 0] },
+		"class_type": "SimpleMath+",
+		"_meta": { "title": "Region x (px)" }
+	},
+	"206": {
+		"inputs": { "value": "a*b", "a": ["201", 0], "b": ["204", 1] },
+		"class_type": "SimpleMath+",
+		"_meta": { "title": "Region y (px)" }
+	},
+	"207": {
+		"inputs": { "value": "a*b", "a": ["202", 0], "b": ["204", 0] },
+		"class_type": "SimpleMath+",
+		"_meta": { "title": "Region width (px)" }
+	},
+	"208": {
+		"inputs": { "value": "a*b", "a": ["203", 0], "b": ["204", 1] },
+		"class_type": "SimpleMath+",
+		"_meta": { "title": "Region height (px)" }
+	},
+	"210": {
+		"inputs": {
+			"image": ["1", 0],
+			"width": ["207", 0],
+			"height": ["208", 0],
+			"x": ["205", 0],
+			"y": ["206", 0]
+		},
+		"class_type": "ImageCrop",
+		"_meta": { "title": "Crop scene to region" }
+	},
+	"222": {
+		"inputs": {
+			"destination": ["1", 0],
+			"source": ["68", 0],
+			"x": ["205", 0],
+			"y": ["206", 0],
+			"resize_source": false
+		},
+		"class_type": "ImageCompositeMasked",
+		"_meta": { "title": "Paste region into scene" }
 	},
 	"153:147": {
 		"inputs": {
@@ -208,7 +275,7 @@
 			"background_color": "#FFFFFF",
 			"image1": ["1", 0],
 			"image2": ["2", 0],
-			"image3": ["68", 0]
+			"image3": ["222", 0]
 		},
 		"class_type": "AILab_ImageStitch",
 		"_meta": {
@@ -434,7 +501,7 @@
 	},
 	"66": {
 		"inputs": {
-			"image": ["1", 0]
+			"image": ["210", 0]
 		},
 		"class_type": "GetImageSize",
 		"_meta": {
@@ -464,7 +531,7 @@
 			"x": 0,
 			"y": 0,
 			"resize_source": false,
-			"destination": ["1", 0],
+			"destination": ["210", 0],
 			"source": ["67", 0],
 			"mask": ["67", 3]
 		},
