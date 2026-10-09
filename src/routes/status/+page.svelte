@@ -61,7 +61,8 @@ before the Change Date. See LICENSE for complete terms.
 		</header>
 
 		{#if status.state === 'loading'}
-			<div aria-busy="true" aria-label={t('status.loading')}>
+			<p class="visually-hidden" role="status">{t('status.loading')}</p>
+			<div aria-busy="true">
 				<div class="summary" aria-hidden="true">
 					<SkeletonBlock width="8rem" height="1.6rem" radius="999px" />
 					<SkeletonBlock width="12rem" height="0.75rem" />
