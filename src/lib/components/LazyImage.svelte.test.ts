@@ -29,6 +29,14 @@ it('keeps a skeleton over a lazily loaded image until it decodes', async () => {
 	await expect.element(photo).toHaveAttribute('decoding', 'async');
 	await expect.element(photo).toHaveAttribute('fetchpriority', 'low');
 	expect(screen.container.querySelector('.image-skeleton')).not.toBeNull();
+
+	const image = photo.element() as HTMLImageElement;
+	Object.defineProperty(image, 'complete', { configurable: true, get: () => true });
+	Object.defineProperty(image, 'naturalWidth', { configurable: true, get: () => 2 });
+	image.dispatchEvent(new Event('load'));
+
+	await expect.poll(() => screen.container.querySelector('.image-skeleton')).toBeNull();
+	expect(screen.container.querySelector('.frame')?.classList.contains('ready')).toBe(true);
 });
 
 it('loads the first visible image eagerly', async () => {
