@@ -27,6 +27,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { resourceDetail } from '$lib/state/resource-detail.svelte';
 	import { buildShareUrl } from '$lib/state/url-state';
 	import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+	import { revealOnTimeout } from '$lib/reveal-on-timeout';
 	import { logBoundaryError } from '$lib/utils';
 
 	const generationKindKeys: Record<GenerationKind, TranslationKey> = {
@@ -51,6 +52,14 @@ before the Change Date. See LICENSE for complete terms.
 	$effect(() => {
 		void resourceDetail.load(key);
 		return () => resourceDetail.clear();
+	});
+
+	$effect(() => {
+		const current = key;
+		if (current === '' || settledSummaryKey === current) return;
+		return revealOnTimeout(() => {
+			settledSummaryKey = current;
+		});
 	});
 
 	function observeLoadMore(sentinel: HTMLElement): () => void {

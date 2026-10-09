@@ -27,6 +27,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { resourceRoleLabels } from '$lib/resource-roles';
 	import { resources } from '$lib/state/resources.svelte';
+	import { createRevealTimers } from '$lib/reveal-on-timeout';
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
 	const filterLabels: Record<ResourceFilter, TranslationKey> = {
@@ -52,6 +53,11 @@ before the Change Date. See LICENSE for complete terms.
 	let filterTabs = $state<HTMLElement[]>([]);
 	let loadMoreSentinel = $state<HTMLElement | null>(null);
 	let settledImageKeys = $state<string[]>([]);
+	const revealTimers = createRevealTimers();
+
+	$effect(() => {
+		return () => revealTimers.clear();
+	});
 
 	const filterTabController = createTabController({
 		itemCount: () => resourceFilters.length,
@@ -92,6 +98,13 @@ before the Change Date. See LICENSE for complete terms.
 		if (settledImageKeys.includes(key)) return;
 		settledImageKeys = [...settledImageKeys, key];
 	}
+
+	$effect(() => {
+		const pending = resources.images
+			.map((image) => image.image.key)
+			.filter((key) => !settledImageKeys.includes(key));
+		revealTimers.retain(pending, settleImage);
+	});
 
 	function formatCreatedAt(createdAt: number): string {
 		return new Intl.DateTimeFormat(getLocale(), {

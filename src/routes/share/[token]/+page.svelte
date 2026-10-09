@@ -28,6 +28,7 @@ before the Change Date. See LICENSE for complete terms.
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
+	import { createRevealTimers } from '$lib/reveal-on-timeout';
 	import { shareViewer } from '$lib/state/share-viewer.svelte';
 
 	const token = $derived(page.params.token);
@@ -40,6 +41,26 @@ before the Change Date. See LICENSE for complete terms.
 		if (settledThumbs.includes(id)) return;
 		settledThumbs = [...settledThumbs, id];
 	}
+
+	const revealTimers = createRevealTimers();
+
+	$effect(() => {
+		return () => revealTimers.clear();
+	});
+
+	$effect(() => {
+		const sessions = shareViewer.project?.sessions ?? [];
+		const pending = sessions
+			.filter((session) =>
+				session.generations.some((generation) => !settledThumbs.includes(generation.id))
+			)
+			.map((session) => session.id);
+		revealTimers.retain(pending, (sessionId) => {
+			const session = shareViewer.project?.sessions.find((item) => item.id === sessionId);
+			if (!session) return;
+			for (const generation of session.generations) settleThumb(generation.id);
+		});
+	});
 
 	const OUTPUT_FORMAT_LABELS: Record<PublicFormSnapshot['outputFormat'], string> = {
 		webp: 'WebP',

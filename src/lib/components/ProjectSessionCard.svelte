@@ -19,6 +19,7 @@ before the Change Date. See LICENSE for complete terms.
 	import ProjectStats from '$lib/components/ProjectStats.svelte';
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
+	import { revealOnTimeout } from '$lib/reveal-on-timeout';
 
 	interface Props {
 		session: ProjectSessionRecord;
@@ -47,6 +48,14 @@ before the Change Date. See LICENSE for complete terms.
 	const latest = $derived(session.generations[0]);
 	let settledThumbUrl = $state<string | null>(null);
 	const cardReady = $derived(!latest || settledThumbUrl === latest.image.url);
+
+	$effect(() => {
+		const url = latest?.image.url;
+		if (!url || settledThumbUrl === url) return;
+		return revealOnTimeout(() => {
+			settledThumbUrl = url;
+		});
+	});
 
 	function openModal(dialog: HTMLDialogElement): () => void {
 		dialog.showModal();
