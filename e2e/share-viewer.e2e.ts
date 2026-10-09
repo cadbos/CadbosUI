@@ -147,6 +147,16 @@ test('shows a shared project read-only, without auth, with no editing controls',
 	await expect(lightbox.getByRole('heading', { name: 'Настройки генерации' })).toBeVisible();
 	await expect(lightbox.getByText('cozy scandinavian living room')).toBeVisible();
 	await expect(lightbox.getByText('WebP')).toBeVisible();
+	await expect(page).toHaveURL(/\/share\/b{64}\/00000000-0000-4000-8000-000000000100$/);
+
+	await page.goBack();
+	await expect(lightbox).toBeHidden();
+	await expect(page).toHaveURL(/\/share\/b{64}$/);
+	await page.goForward();
+	await expect(lightbox.getByRole('img')).toHaveAttribute(
+		'src',
+		'/api/media/test-media/render-2.webp'
+	);
 
 	// Still no inputs and still only the two thumbnail buttons plus the
 	// lightbox's own close button — the settings panel is text, not a form.
@@ -155,6 +165,83 @@ test('shows a shared project read-only, without auth, with no editing controls',
 
 	await lightbox.getByRole('button', { name: 'Закрыть полноразмерный просмотр' }).click();
 	await expect(lightbox).toBeHidden();
+	await expect(page).toHaveURL(/\/share\/b{64}$/);
+});
+
+test('opens the generation named in the share URL', async ({ page }) => {
+	const generationId = '00000000-0000-4000-8000-000000000100';
+	await mockShare(page, {
+		id: '00000000-0000-4000-8000-000000000001',
+		title: 'Living room',
+		createdAt: Date.UTC(2026, 0, 1),
+		updatedAt: Date.UTC(2026, 0, 1),
+		shareActive: true,
+		sessions: [
+			{
+				id: '00000000-0000-4000-8000-000000000010',
+				title: 'Main thread',
+				parentSessionId: null,
+				forkedFromGenerationId: null,
+				createdAt: Date.UTC(2026, 0, 1),
+				updatedAt: Date.UTC(2026, 0, 1),
+				generations: [
+					{
+						id: generationId,
+						image: media(3, '/api/media/test-media/render-2.webp'),
+						source: media(1, '/api/media/test-media/room.jpg'),
+						kind: 'render',
+						createdAt: Date.UTC(2026, 0, 2)
+					}
+				]
+			}
+		]
+	});
+	await mockShareGenerationDetail(page, generationId, {
+		id: generationId,
+		prompt: 'cozy scandinavian living room',
+		kind: 'render',
+		createdAt: Date.UTC(2026, 0, 2),
+		formSnapshot: {
+			...FULL_FORM_SNAPSHOT,
+			promptFragments: [{ id: 'f1', text: 'cozy scandinavian living room', order: 0 }]
+		}
+	});
+
+	await page.goto(`/share/${TOKEN}/${generationId}`);
+
+	const lightbox = page.getByRole('dialog');
+	await expect(lightbox.getByRole('img')).toHaveAttribute(
+		'src',
+		'/api/media/test-media/render-2.webp'
+	);
+	await expect(lightbox.getByText('cozy scandinavian living room')).toBeVisible();
+	await expect(page).toHaveURL(new RegExp(`/share/${TOKEN}/${generationId}$`));
+
+	await lightbox.getByRole('button', { name: 'Закрыть полноразмерный просмотр' }).click();
+	await expect(lightbox).toBeHidden();
+	await expect(page).toHaveURL(new RegExp(`/share/${TOKEN}$`));
+});
+
+test('returns to the project when the generation in the share URL is missing', async ({ page }) => {
+	await mockShare(page, {
+		id: '00000000-0000-4000-8000-000000000001',
+		title: 'Living room',
+		createdAt: Date.UTC(2026, 0, 1),
+		updatedAt: Date.UTC(2026, 0, 1),
+		shareActive: true,
+		sessions: []
+	});
+
+	await page.goto(`/share/${TOKEN}/00000000-0000-4000-8000-000000000999`);
+
+	await expect(page.getByRole('heading', { name: 'Living room' })).toBeVisible();
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	await expect(page).toHaveURL(new RegExp(`/share/${TOKEN}$`));
+});
+
+test('rejects a share URL whose generation segment is not an id', async ({ page }) => {
+	const response = await page.goto(`/share/${TOKEN}/not-a-generation`);
+	expect(response?.status()).toBe(404);
 });
 
 test('shows a per-kind settings summary for the generation being previewed', async ({ page }) => {
