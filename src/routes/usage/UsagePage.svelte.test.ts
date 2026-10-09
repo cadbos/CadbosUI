@@ -137,6 +137,16 @@ function localSizeLabel(locale: Locale, value: number): string {
 		.replace(',', '.');
 }
 
+function localSizeUnit(locale: Locale): string {
+	return new Intl.NumberFormat(locale, {
+		style: 'unit',
+		unit: 'megabyte',
+		unitDisplay: 'short'
+	})
+		.formatToParts(1)
+		.find((part) => part.type === 'unit')!.value;
+}
+
 function localTimeZoneName(
 	locale: Locale,
 	timeZoneName: Intl.DateTimeFormatOptions['timeZoneName']
@@ -175,8 +185,13 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	const screen = render(UsagePage, pageProps());
 
 	await expect.element(screen.getByRole('heading', { name: t('usage.title') })).toBeVisible();
-	await expect.element(screen.getByRole('cell', { name: '$ 12.35' })).toBeVisible();
-	await expect.element(screen.getByRole('cell', { name: '$ 7.50' })).toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: '12.35', exact: true })).toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: '7.50', exact: true })).toBeVisible();
+	for (const key of ['balance', 'totalDeposit', 'totalSpend'] as const) {
+		await expect
+			.element(screen.getByRole('columnheader', { name: `${t(`usage.column.${key}`)}, $` }))
+			.toBeVisible();
+	}
 	await expect
 		.element(screen.getByRole('cell', { name: localDateTimeLabel(locale, latestSpendAt) }))
 		.toBeVisible();
@@ -186,21 +201,19 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	await expect
 		.element(
 			screen.getByRole('columnheader', {
-				name: t('usage.column.sourceBytes')
+				name: `${t('usage.column.sourceBytes')}, ${localSizeUnit(locale)}`
 			})
 		)
 		.toBeVisible();
 	await expect
 		.element(
 			screen.getByRole('columnheader', {
-				name: t('usage.column.referenceBytes')
+				name: `${t('usage.column.referenceBytes')}, ${localSizeUnit(locale)}`
 			})
 		)
 		.toBeVisible();
-	await expect.element(screen.getByRole('cell', { name: localSizeLabel(locale, 3) })).toBeVisible();
-	await expect
-		.element(screen.getByRole('cell', { name: localSizeLabel(locale, 0.5) }))
-		.toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: '3', exact: true })).toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: '0.5', exact: true })).toBeVisible();
 	const latestSpendHeader = screen.getByRole('columnheader', {
 		name: `${t('usage.column.latestSpendAt')}, ${localTimeZoneName(locale, 'short')}`
 	});
@@ -238,15 +251,15 @@ it.each(['ru', 'en'] as const)('uses fixed numeric punctuation for %s', async (l
 
 	const screen = render(UsagePage, pageProps());
 	const totals = screen.getByRole('region', { name: t('usage.totals.title') });
-	await expect.element(screen.getByRole('cell', { name: '$ 1,234.50' })).toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: '1,234.50' })).toBeVisible();
 	await expect.element(screen.getByRole('cell', { name: '12 345' })).toBeVisible();
 	await expect.element(totals.getByText('$ 1,234.50')).toBeVisible();
 	await expect.element(totals.getByText('2 345')).toBeVisible();
-	await expect.element(totals.getByText(/1 234 \| 1 536\.5/)).toBeVisible();
-	await expect.element(screen.getByRole('cell', { name: /1 536\.5/ })).toBeVisible();
+	await expect.element(totals.getByText(/1 234 \| 1,536\.5/)).toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: '1,536.5' })).toBeVisible();
 });
 
-it('uses the selected RUB rate with the symbol before the grouped amount', async () => {
+it('uses the selected RUB rate in amount cells and column headings', async () => {
 	currency.code = 'rub';
 	currency.rubPerUsd = 90;
 	vi.stubGlobal(
@@ -255,7 +268,21 @@ it('uses the selected RUB rate with the symbol before the grouped amount', async
 	);
 
 	const screen = render(UsagePage, pageProps());
-	await expect.element(screen.getByRole('cell', { name: '₽ 111,105.00' })).toBeVisible();
+	await expect
+		.element(screen.getByRole('columnheader', { name: `${t('usage.column.balance')}, ₽` }))
+		.toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: '111,105.00' })).toBeVisible();
+});
+
+it('keeps USD headings and amounts when the RUB rate is unavailable', async () => {
+	currency.code = 'rub';
+	vi.stubGlobal('fetch', mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)]));
+
+	const screen = render(UsagePage, pageProps());
+	await expect
+		.element(screen.getByRole('columnheader', { name: `${t('usage.column.balance')}, $` }))
+		.toBeVisible();
+	await expect.element(screen.getByRole('cell', { name: '12.35', exact: true })).toBeVisible();
 });
 
 it('shows an em dash instead of a size when no upload size is known', async () => {

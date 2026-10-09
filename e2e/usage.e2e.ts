@@ -42,6 +42,13 @@ async function mockAuthenticatedSession(page: Page): Promise<void> {
 
 test('links usage pubkeys to Primal in a new tab by default', async ({ page }) => {
 	await mockAuthenticatedSession(page);
+	await page.route('**/api/exchange-rate', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ rubPerUsd: 90, asOf: '2026-10-07T00:00:00.000Z' })
+		});
+	});
 	const pubkey = 'a'.repeat(64);
 	const pubkeyWithoutPicture = 'b'.repeat(64);
 	const npub = npubEncode(pubkey);
@@ -161,12 +168,16 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	const userWithoutPicture = page.getByRole('rowheader', { name: npubWithoutPicture });
 
 	await expect(page.getByRole('columnheader', { name: ru['usage.column.user'] })).toBeVisible();
-	await expect(
-		page.getByRole('columnheader', { name: ru['usage.column.sourceBytes'] })
-	).toBeVisible();
-	await expect(
-		page.getByRole('columnheader', { name: ru['usage.column.referenceBytes'] })
-	).toBeVisible();
+	for (const key of ['balance', 'totalDeposit', 'totalSpend'] as const) {
+		await expect(
+			page.getByRole('columnheader', { name: `${ru[`usage.column.${key}`]}, $` })
+		).toBeVisible();
+	}
+	for (const key of ['sourceBytes', 'referenceBytes'] as const) {
+		await expect(
+			page.getByRole('columnheader', { name: `${ru[`usage.column.${key}`]}, МБ` })
+		).toBeVisible();
+	}
 	const sourceSize = new Intl.NumberFormat('ru', {
 		style: 'unit',
 		unit: 'megabyte',
@@ -174,19 +185,18 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	})
 		.format(1536)
 		.replace(/1[\u00a0\u202f]536/, '1 536');
-	await expect(page.getByRole('cell', { name: sourceSize })).toBeVisible();
+	await expect(page.getByRole('cell', { name: '1 536', exact: true })).toBeVisible();
 	const totals = page.getByRole('region', { name: ru['usage.totals.title'] });
 	await expect(totals).toContainText(`${ru['usage.totals.walletBalance']} $ 1,250.00`);
 	await expect(totals).toContainText(`${ru['usage.totals.deposits']} ${ru['usage.emptyValue']}`);
 	await expect(totals).toContainText(`${ru['usage.totals.spend']} $ 1,234.50`);
 	await expect(totals).toContainText(`${ru['usage.totals.users']} 1 200`);
-	await expect(page.getByRole('cell', { name: '$ 1,234.50' })).toBeVisible();
+	await expect(page.getByRole('cell', { name: '1,234.50' })).toBeVisible();
 	await expect(page.getByRole('cell', { name: '1 234', exact: true })).toBeVisible();
-	await expect(page.getByRole('columnheader', { name: ru['usage.column.balance'] })).toHaveCSS(
-		'text-align',
-		'right'
-	);
-	await expect(page.getByRole('cell', { name: '$ 1,234.50' })).toHaveCSS('text-align', 'right');
+	await expect(
+		page.getByRole('columnheader', { name: `${ru['usage.column.balance']}, $` })
+	).toHaveCSS('text-align', 'right');
+	await expect(page.getByRole('cell', { name: '1,234.50' })).toHaveCSS('text-align', 'right');
 	await expect(totals.getByText('$ 1,250.00')).toHaveCSS('text-align', 'right');
 	const readQuota = totals
 		.getByText(ru['usage.totals.d1RowsRead'].replace('{date}', quotaDate))
@@ -234,10 +244,15 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	await languageSwitcher.getByRole('button', { name: 'ru' }).click();
 	await languageSwitcher.getByRole('button', { name: ru['language.en'] }).click();
 	await expect(page.getByRole('heading', { name: 'Usage' })).toBeVisible();
-	await expect(page.getByRole('cell', { name: '$ 1,234.50' })).toBeVisible();
+	await expect(page.getByRole('cell', { name: '1,234.50' })).toBeVisible();
 	await expect(page.getByRole('cell', { name: '1 234', exact: true })).toBeVisible();
 	await expect(page.locator('.d1-used').first()).toHaveText('5 000 000');
-	await expect(page.getByRole('cell', { name: '1 536 MB' })).toBeVisible();
+	await expect(page.getByRole('columnheader', { name: 'Sources size, MB' })).toBeVisible();
+	await expect(page.getByRole('cell', { name: '1 536', exact: true })).toBeVisible();
+	await page.locator('.currency-trigger').click();
+	await page.getByRole('button', { name: '₽ RUB' }).click();
+	await expect(page.getByRole('columnheader', { name: 'Balance, ₽' })).toBeVisible();
+	await expect(page.getByRole('cell', { name: '111,105.00' })).toBeVisible();
 });
 
 test('shows an error message when the wallet balance cannot be loaded', async ({ page }) => {
