@@ -30,10 +30,13 @@ before the Change Date. See LICENSE for complete terms.
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import LazyImage from '$lib/components/LazyImage.svelte';
 	import ModeHint from '$lib/components/ModeHint.svelte';
 	import { stylePresetsFor, type StylePreset } from '$lib/style-presets';
 	import { buildWorkspaceUrl, slugToReference, type ReferenceTab } from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
+
+	const PRESET_EAGER_COUNT = 3;
 
 	const REFERENCE_TABS: { id: ReferenceTab; label: TranslationKey }[] = [
 		{ id: 'photorealistic', label: 'styleTransfer.referenceTabPhotorealistic' },
@@ -267,7 +270,14 @@ before the Change Date. See LICENSE for complete terms.
 							onclick={() => presetRadios.activate(index)}
 							onkeydown={presetRadios.onKeydown}
 						>
-							<img src={preset.src} alt="" aria-hidden="true" loading="lazy" />
+							<LazyImage
+								src={preset.src}
+								alt={t(preset.label)}
+								decorative
+								bleed
+								loading={index < PRESET_EAGER_COUNT ? 'eager' : 'lazy'}
+								fetchPriority={index < PRESET_EAGER_COUNT ? 'high' : 'low'}
+							/>
 							<span class="tile-label">{t(preset.label)}</span>
 						</button>
 					{/each}
@@ -455,6 +465,10 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.preset {
+		--image-height: auto;
+		--image-ratio: 1 / 1;
+		--image-fit: cover;
+		--image-radius: calc(var(--radius) - 4px);
 		position: relative;
 		display: flex;
 		flex-direction: column;
@@ -468,6 +482,7 @@ before the Change Date. See LICENSE for complete terms.
 		background: var(--color-background);
 		border: 1.5px solid var(--color-border);
 		border-radius: var(--radius);
+		overflow: hidden;
 		cursor: pointer;
 		transition:
 			border-color 0.15s,
@@ -478,17 +493,15 @@ before the Change Date. See LICENSE for complete terms.
 		border-color: var(--color-accent);
 	}
 
+	.preset:has(:global(.frame:not(.ready))) {
+		border-width: 0;
+		background: transparent;
+		padding: 0;
+	}
+
 	.preset.selected {
 		border-color: var(--color-accent);
 		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
-	}
-
-	.preset img {
-		width: 100%;
-		aspect-ratio: 1 / 1;
-		object-fit: cover;
-		border-radius: calc(var(--radius) - 4px);
-		display: block;
 	}
 
 	.preset span {

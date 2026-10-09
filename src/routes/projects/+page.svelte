@@ -17,6 +17,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { resolve } from '$app/paths';
 	import type { ProjectSummaryRecord } from '$lib/api/contract';
 	import ProjectStats from '$lib/components/ProjectStats.svelte';
+	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 	import { projects } from '$lib/state/projects.svelte';
 	import { logBoundaryError } from '$lib/utils';
@@ -111,6 +112,20 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
+{#snippet projectCardSkeleton()}
+	<li class="card" aria-hidden="true">
+		<span class="card-link">
+			<SkeletonBlock width="62%" height="1rem" />
+			<span class="sk-row">
+				<SkeletonBlock width="5.5rem" height="0.75rem" />
+				<SkeletonBlock width="6.5rem" height="0.75rem" />
+			</span>
+			<SkeletonBlock width="42%" height="0.75rem" />
+		</span>
+		<SkeletonBlock width="2rem" height="2rem" radius="var(--radius-sm)" />
+	</li>
+{/snippet}
+
 <svelte:head>
 	<title>{t('projects.title')}</title>
 </svelte:head>
@@ -141,7 +156,11 @@ before the Change Date. See LICENSE for complete terms.
 		{/if}
 
 		{#if projects.status === 'loading'}
-			<p class="status">{t('projects.loading')}</p>
+			<ul class="grid" aria-busy="true" aria-label={t('projects.loading')}>
+				{#each [0, 1, 2, 3, 4, 5] as slot (slot)}
+					{@render projectCardSkeleton()}
+				{/each}
+			</ul>
 		{:else if projects.status === 'error' && projects.projects.length === 0}
 			<p class="status error" role="alert">{t('projects.failed')}</p>
 		{:else if projects.projects.length === 0}
@@ -177,12 +196,17 @@ before the Change Date. See LICENSE for complete terms.
 						</button>
 					</li>
 				{/each}
+				{#if projects.loadingMore}
+					{#each [0, 1, 2] as slot (`more-${slot}`)}
+						{@render projectCardSkeleton()}
+					{/each}
+				{/if}
 			</ul>
 
 			{#if projects.hasMore}
 				<div bind:this={loadMoreSentinel} class="load-more-sentinel">
 					{#if projects.loadingMore}
-						<p class="status" aria-live="polite">{t('projects.loadingMore')}</p>
+						<p class="visually-hidden" aria-live="polite">{t('projects.loadingMore')}</p>
 					{/if}
 				</div>
 			{/if}
@@ -358,6 +382,12 @@ before the Change Date. See LICENSE for complete terms.
 		min-width: 0;
 		color: inherit;
 		text-decoration: none;
+	}
+
+	.sk-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.875rem;
 	}
 
 	.card-delete {

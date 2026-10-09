@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { uploadResultSchema } from '$lib/api/contract';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import LazyImage from '$lib/components/LazyImage.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { request } from '$lib/state/request.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
@@ -92,9 +93,11 @@ before the Change Date. See LICENSE for complete terms.
 		errorKey = null;
 	}
 
-	function initializeCanvas(event: Event): void {
-		if (!(event.currentTarget instanceof HTMLImageElement) || !canvas) return;
-		const image = event.currentTarget;
+	function initializeCanvas(image: HTMLImageElement, retry = true): void {
+		if (!canvas) {
+			if (retry) queueMicrotask(() => initializeCanvas(image, false));
+			return;
+		}
 		const scale = Math.min(
 			1,
 			MAX_CANVAS_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight)
@@ -409,11 +412,13 @@ before the Change Date. See LICENSE for complete terms.
 
 		{#key sourceIdentity}
 			<div class:disabled={disabled || editorBusy} class="drawing-stage">
-				<img
+				<LazyImage
 					src={sourceUrl}
 					alt={t('textureReplacement.maskEditor.sourceAlt')}
-					onload={initializeCanvas}
-					onerror={sourceLoadFailed}
+					loading="eager"
+					fetchPriority="high"
+					onReady={initializeCanvas}
+					onError={sourceLoadFailed}
 				/>
 				<canvas
 					{@attach attachCanvas}
@@ -589,6 +594,11 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.drawing-stage {
+		--image-height: auto;
+		--image-position: static;
+		--image-img-height: auto;
+		--image-min-height: 12rem;
+		--image-fit: contain;
 		position: relative;
 		width: 100%;
 		border: 1.5px solid var(--color-muted-strong);
@@ -603,11 +613,6 @@ before the Change Date. See LICENSE for complete terms.
 				0 0 / 16px 16px,
 			var(--color-background);
 		isolation: isolate;
-	}
-
-	.drawing-stage img {
-		display: block;
-		width: 100%;
 	}
 
 	.drawing-stage canvas {

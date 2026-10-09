@@ -18,6 +18,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { status } from '$lib/state/status.svelte';
 	import HintIcon from '$lib/components/HintIcon.svelte';
+	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 
 	type ServiceKey = keyof HealthSnapshot['services'];
 
@@ -60,8 +61,34 @@ before the Change Date. See LICENSE for complete terms.
 		</header>
 
 		{#if status.state === 'loading'}
-			<div class="loader" role="status">
-				<p>{t('status.loading')}</p>
+			<p class="visually-hidden" role="status">{t('status.loading')}</p>
+			<div aria-busy="true">
+				<div class="summary" aria-hidden="true">
+					<SkeletonBlock width="8rem" height="1.6rem" radius="999px" />
+					<SkeletonBlock width="12rem" height="0.75rem" />
+				</div>
+				<div class="table-wrap">
+					<table>
+						<thead>
+							<tr>
+								<th scope="col">{t('status.column.service')}</th>
+								<th scope="col">{t('status.column.status')}</th>
+								<th scope="col">{t('status.column.latency')}</th>
+								<th scope="col">{t('status.column.details')}</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each serviceKeys as key (key)}
+								<tr>
+									<th scope="row">{serviceName(key)}</th>
+									<td><SkeletonBlock width="5rem" height="1.25rem" radius="999px" /></td>
+									<td><SkeletonBlock width="3.5rem" height="0.75rem" /></td>
+									<td><SkeletonBlock width="6rem" height="0.75rem" /></td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		{:else if status.state === 'error' && status.snapshot === null}
 			<p class="message error" role="alert">{t('status.failed')}</p>
@@ -165,7 +192,6 @@ before the Change Date. See LICENSE for complete terms.
 	h1,
 	.status-header p,
 	.summary p,
-	.loader p,
 	.message {
 		margin: 0;
 	}
@@ -178,17 +204,9 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.status-header p,
-	.loader,
 	.message {
 		color: var(--color-muted);
 		font-size: 0.9375rem;
-	}
-
-	.loader {
-		display: grid;
-		place-items: center;
-		padding: clamp(4rem, 12vw, 8rem) 1rem;
-		text-align: center;
 	}
 
 	.message.error {

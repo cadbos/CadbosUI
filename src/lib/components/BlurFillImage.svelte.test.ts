@@ -21,7 +21,10 @@ it('shows the photo whole over a blurred copy hidden from assistive tech', async
 
 	const photo = screen.getByRole('img', { name: 'Фото комнаты' });
 	await expect.element(photo).toHaveAttribute('src', '/photo.jpg');
+	await expect.element(photo).toHaveAttribute('loading', 'lazy');
+	await expect.element(photo).toHaveAttribute('decoding', 'async');
 	expect(getComputedStyle(photo.element()).objectFit).toBe('contain');
+	expect(screen.container.querySelector('.image-skeleton')).not.toBeNull();
 
 	// The backdrop is the only other image and is purely decorative.
 	expect(screen.getByRole('img').all()).toHaveLength(1);

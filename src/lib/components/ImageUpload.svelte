@@ -16,7 +16,9 @@ before the Change Date. See LICENSE for complete terms.
 	import { ImagePlus, Import } from '@lucide/svelte';
 	import { tick } from 'svelte';
 	import { uploadResultSchema } from '$lib/api/contract';
+	import LazyImage from '$lib/components/LazyImage.svelte';
 	import RegionSelector from '$lib/components/RegionSelector.svelte';
+	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { normalizeImageContentType } from '$lib/image-mime';
 	import {
@@ -66,9 +68,8 @@ before the Change Date. See LICENSE for complete terms.
 	let remoteUrl = $state('');
 	let imageSize = $state<{ width: number; height: number } | null>(null);
 
-	function rememberImageSize(event: Event): void {
-		const image = event.currentTarget;
-		if (image instanceof HTMLImageElement && image.naturalWidth > 0 && image.naturalHeight > 0) {
+	function rememberImageSize(image: HTMLImageElement): void {
+		if (image.naturalWidth > 0 && image.naturalHeight > 0) {
 			imageSize = { width: image.naturalWidth, height: image.naturalHeight };
 		}
 	}
@@ -440,11 +441,13 @@ before the Change Date. See LICENSE for complete terms.
 >
 	{#if hasImage}
 		<div class="image-wrapper">
-			<img
+			<LazyImage
+				class="preview"
 				src={effectivePreviewUrl ?? imageUrl ?? ''}
 				alt={t(ariaLabelKey)}
-				class="preview"
-				onload={rememberImageSize}
+				loading="eager"
+				fetchPriority="high"
+				onReady={rememberImageSize}
 			/>
 			{#if selectRegion && imageSize}
 				<RegionSelector
@@ -480,7 +483,12 @@ before the Change Date. See LICENSE for complete terms.
 				aria-label={dropButtonLabel}
 			>
 				{#if uploading}
-					<span class="uploading-text">{t('upload.uploading')}</span>
+					<span class="sk-upload" aria-hidden="true">
+						<SkeletonBlock width="2.5rem" height="2.5rem" radius="999px" />
+						<SkeletonBlock width="8rem" height="0.9rem" />
+						<SkeletonBlock width="11rem" height="0.75rem" />
+					</span>
+					<span class="visually-hidden">{t('upload.uploading')}</span>
 				{:else}
 					<svg
 						class="upload-icon"
@@ -627,12 +635,15 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-muted-strong);
 	}
 
-	.uploading-text {
-		font-size: 0.9375rem;
-		color: var(--color-muted-strong);
+	.sk-upload {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.45rem;
 	}
 
 	.image-wrapper {
+		--image-fit: contain;
 		position: relative;
 		aspect-ratio: 16 / 9;
 		min-width: 12rem;
@@ -643,13 +654,6 @@ before the Change Date. See LICENSE for complete terms.
 		border: 1.5px solid var(--color-border);
 		background: var(--color-background);
 		resize: both;
-	}
-
-	.preview {
-		display: block;
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
 	}
 
 	.image-overlay {
@@ -796,8 +800,7 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 0.6875rem;
 	}
 
-	.compact .drop-subtitle,
-	.compact .uploading-text {
+	.compact .drop-subtitle {
 		display: none;
 	}
 

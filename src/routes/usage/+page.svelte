@@ -15,6 +15,8 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { npubEncode } from 'nostr-tools/nip19';
 	import type { PageProps } from './$types';
+	import LazyImage from '$lib/components/LazyImage.svelte';
+	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
@@ -91,6 +93,14 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
+{#snippet usageSkeletonRow(key: string)}
+	<tr aria-hidden="true">
+		{#each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as cell (`${key}-${cell}`)}
+			<td><SkeletonBlock width={cell === 0 ? '8rem' : '3.5rem'} height="0.75rem" /></td>
+		{/each}
+	</tr>
+{/snippet}
+
 <svelte:head>
 	<title>{t('usage.title')}</title>
 </svelte:head>
@@ -109,7 +119,8 @@ before the Change Date. See LICENSE for complete terms.
 					<div>
 						<dt>{t('usage.totals.walletBalance')}</dt>
 						{#if usage.walletBalanceStatus === 'loading'}
-							<dd class="tile-status">{t('usage.walletBalanceLoading')}</dd>
+							<dd><SkeletonBlock width="5rem" height="1rem" /></dd>
+							<p class="visually-hidden">{t('usage.walletBalanceLoading')}</p>
 						{:else if usage.walletBalanceStatus === 'error'}
 							<dd class="tile-status error" role="alert">{t('usage.walletBalanceFailed')}</dd>
 						{:else if usage.walletBalanceStatus === 'ready' && usage.walletBalance !== null}
@@ -190,14 +201,30 @@ before the Change Date. See LICENSE for complete terms.
 							</dd>
 						</div>
 					{/if}
+					{#if usage.totalsStatus === 'loading'}
+						{#each [0, 1, 2, 3, 4, 5, 6, 7] as slot (slot)}
+							<div aria-hidden="true">
+								<dt><SkeletonBlock width="70%" height="0.7rem" /></dt>
+								<dd><SkeletonBlock width="4.5rem" height="1rem" /></dd>
+							</div>
+						{/each}
+					{/if}
+					{#if usage.d1LimitsStatus === 'loading'}
+						{#each [0, 1] as slot (`d1-${slot}`)}
+							<div aria-hidden="true">
+								<dt><SkeletonBlock width="80%" height="0.7rem" /></dt>
+								<dd><SkeletonBlock width="5rem" height="1rem" /></dd>
+							</div>
+						{/each}
+					{/if}
 				</dl>
 				{#if usage.totalsStatus === 'loading'}
-					<p class="status">{t('usage.totals.loading')}</p>
+					<p class="visually-hidden">{t('usage.totals.loading')}</p>
 				{:else if usage.totalsStatus === 'error'}
 					<p class="status error" role="alert">{t('usage.totals.failed')}</p>
 				{/if}
 				{#if usage.d1LimitsStatus === 'loading'}
-					<p class="status">{t('usage.totals.d1Loading')}</p>
+					<p class="visually-hidden">{t('usage.totals.d1Loading')}</p>
 				{:else if usage.d1LimitsStatus === 'error'}
 					<p class="status error" role="alert">{t('usage.totals.d1Failed')}</p>
 				{/if}
@@ -207,7 +234,15 @@ before the Change Date. See LICENSE for complete terms.
 		{#if auth.status !== 'authenticated'}
 			<p class="status">{t('usage.signInRequired')}</p>
 		{:else if usage.status === 'loading'}
-			<p class="status">{t('usage.loading')}</p>
+			<div class="table-wrap" aria-busy="true" aria-label={t('usage.loading')}>
+				<table>
+					<tbody>
+						{#each [0, 1, 2, 3, 4, 5] as slot (slot)}
+							{@render usageSkeletonRow(String(slot))}
+						{/each}
+					</tbody>
+				</table>
+			</div>
 		{:else if usage.status === 'error' && usage.users.length === 0}
 			<p class="status error" role="alert">{t('usage.failed')}</p>
 		{:else if usage.users.length === 0}
@@ -246,7 +281,13 @@ before the Change Date. See LICENSE for complete terms.
 								<th scope="row" class="pubkey" title={npub}>
 									<span class="user-identity">
 										{#if picture}
-											<img src={picture} alt="" onerror={() => markPictureFailed(user.pubkey)} />
+											<LazyImage
+												src={picture}
+												alt=""
+												decorative
+												fetchPriority="low"
+												onError={() => markPictureFailed(user.pubkey)}
+											/>
 										{:else}
 											<span class="avatar" aria-hidden="true"
 												>{[...avatarLabel][0]?.toUpperCase()}</span
@@ -273,13 +314,18 @@ before the Change Date. See LICENSE for complete terms.
 								<td>{formatTimestamp(user.latestSpendAt)}</td>
 							</tr>
 						{/each}
+						{#if usage.loadingMore}
+							{#each [0, 1, 2] as slot (`more-${slot}`)}
+								{@render usageSkeletonRow(`more-${slot}`)}
+							{/each}
+						{/if}
 					</tbody>
 				</table>
 			</div>
 			{#if usage.hasMore}
 				<div bind:this={loadMoreSentinel} class="load-more-sentinel">
 					{#if usage.loadingMore}
-						<p class="status" aria-live="polite">{t('usage.loadingMore')}</p>
+						<p class="visually-hidden" aria-live="polite">{t('usage.loadingMore')}</p>
 					{/if}
 				</div>
 			{/if}
@@ -476,27 +522,24 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.user-identity {
+		--image-width: 2rem;
+		--image-height: 2rem;
+		--image-radius: 50%;
+		--image-fit: cover;
+		--image-flex: 0 0 auto;
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2);
 		white-space: nowrap;
 	}
 
-	.user-identity img,
 	.avatar {
+		display: grid;
+		place-items: center;
 		width: 2rem;
 		height: 2rem;
 		border-radius: 50%;
 		flex: 0 0 auto;
-	}
-
-	.user-identity img {
-		object-fit: cover;
-	}
-
-	.avatar {
-		display: grid;
-		place-items: center;
 		color: var(--color-accent-contrast);
 		background: var(--color-accent);
 		font-family: inherit;

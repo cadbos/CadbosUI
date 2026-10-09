@@ -43,6 +43,8 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/api/contract';
 	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
 	import HintLabel from '$lib/components/HintLabel.svelte';
+	import ImageSkeleton from '$lib/components/ImageSkeleton.svelte';
+	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import {
@@ -575,6 +577,20 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
+{#snippet sceneSkeleton()}
+	<div aria-hidden="true">
+		<SkeletonBlock width="9rem" height="0.75rem" />
+		<div class="scene-flow">
+			<span class="image-frame"><ImageSkeleton /></span>
+			<span class="flow-middle">
+				<SkeletonBlock width="4rem" height="0.75rem" />
+				<SkeletonBlock width="5.5rem" height="1.75rem" radius="var(--radius-sm)" />
+			</span>
+			<span class="image-frame"><ImageSkeleton /></span>
+		</div>
+	</div>
+{/snippet}
+
 {#snippet columnHeader(label: TranslationKey, hint: TranslationKey)}
 	<span class="column-title">
 		<HintLabel text={t(label)} hint={t(hint)} />
@@ -690,7 +706,11 @@ before the Change Date. See LICENSE for complete terms.
 
 		<div class="drawer-content">
 			{#if generatedImages.status === 'loading'}
-				<p class="status">{t('generatedImages.loading')}</p>
+				<ul class="list" aria-busy="true" aria-label={t('generatedImages.loading')}>
+					{#each [0, 1, 2] as slot (slot)}
+						<li class="scene-card">{@render sceneSkeleton()}</li>
+					{/each}
+				</ul>
 			{:else if generatedImages.status === 'error' && generatedImages.images.length === 0}
 				<p class="status error" role="alert">{t('generatedImages.failed')}</p>
 			{:else if generatedImages.images.length === 0}
@@ -905,12 +925,17 @@ before the Change Date. See LICENSE for complete terms.
 							</div>
 						</li>
 					{/each}
+					{#if generatedImages.loadingMore}
+						{#each [0, 1] as slot (`more-${slot}`)}
+							<li class="scene-card">{@render sceneSkeleton()}</li>
+						{/each}
+					{/if}
 				</ul>
 
 				{#if generatedImages.hasMore}
 					<div class="load-more-sentinel" {@attach observeLoadMore}>
 						{#if generatedImages.loadingMore}
-							<p class="status" aria-live="polite">{t('generatedImages.loadingMore')}</p>
+							<p class="visually-hidden" aria-live="polite">{t('generatedImages.loadingMore')}</p>
 						{/if}
 					</div>
 				{/if}
@@ -988,7 +1013,12 @@ before the Change Date. See LICENSE for complete terms.
 			</button>
 		</header>
 		{#if promptCandidate.status === 'loading'}
-			<p aria-live="polite">{t('generatedImages.promptLoading')}</p>
+			<div class="sk-lines" aria-hidden="true">
+				<SkeletonBlock height="0.8rem" />
+				<SkeletonBlock width="92%" height="0.8rem" />
+				<SkeletonBlock width="64%" height="0.8rem" />
+			</div>
+			<p class="visually-hidden" aria-live="polite">{t('generatedImages.promptLoading')}</p>
 		{:else if promptCandidate.status === 'error'}
 			<p class="warning" role="alert">{t('generatedImages.promptFailed')}</p>
 		{:else if promptCandidate.prompt === ''}
@@ -1654,6 +1684,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	.prompt-dialog {
 		width: min(100% - 2rem, 36rem);
+	}
+
+	.sk-lines {
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
 	}
 
 	.prompt-dialog-header {

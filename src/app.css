@@ -39,6 +39,7 @@
 	--color-danger-bg: #fff0f0;
 	--color-warning-bg: #ffcb56;
 	--color-warning-text: #251f12;
+	--color-skeleton: #e6e6e6;
 
 	--radius-sm: 8px;
 	--radius: 12px;
@@ -105,6 +106,7 @@
 		--color-danger-bg: #3a1f22;
 		--color-warning-bg: #4a3a12;
 		--color-warning-text: #ffd989;
+		--color-skeleton: #3a3a3e;
 	}
 }
 
@@ -124,6 +126,7 @@
 	--color-danger-bg: #3a1f22;
 	--color-warning-bg: #4a3a12;
 	--color-warning-text: #ffd989;
+	--color-skeleton: #3a3a3e;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -27,7 +27,12 @@ before the Change Date. See LICENSE for complete terms.
 <div id={props.id} class="graph-node graph-node--image">
 	{#if thumbnailUrl}
 		<span class="graph-node__thumbnail">
-			<BlurFillImage src={thumbnailUrl} alt={t('view.graph.imageNode.alt')} loading="eager" />
+			<BlurFillImage
+				src={thumbnailUrl}
+				alt={t('view.graph.imageNode.alt')}
+				loading="eager"
+				fetchPriority="high"
+			/>
 		</span>
 	{:else}
 		<p class="graph-node__placeholder">{t('view.graph.imageNode.placeholder')}</p>

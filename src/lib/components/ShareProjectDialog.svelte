@@ -17,6 +17,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { t } from '$lib/i18n/index.svelte';
+	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { projectShare } from '$lib/state/project-share.svelte';
 	import { logBoundaryError, openModal } from '$lib/utils';
 
@@ -143,7 +144,14 @@ before the Change Date. See LICENSE for complete terms.
 
 	<div class="share-status" aria-live="polite">
 		{#if projectShare.status === 'loading'}
-			<p class="status">{t('projects.detail.shareLoading')}</p>
+			<div aria-hidden="true">
+				<SkeletonBlock height="2.5rem" radius="var(--radius)" />
+				<span class="share-link-actions">
+					<SkeletonBlock height="2.5rem" radius="var(--radius)" />
+					<SkeletonBlock height="2.5rem" radius="var(--radius)" />
+				</span>
+			</div>
+			<p class="visually-hidden">{t('projects.detail.shareLoading')}</p>
 		{:else if projectShare.token}
 			{@const token = projectShare.token}
 			<div class="share-link">

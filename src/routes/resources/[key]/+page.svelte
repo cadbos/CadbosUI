@@ -19,6 +19,7 @@ before the Change Date. See LICENSE for complete terms.
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import type { GenerationKind } from '$lib/api/contract';
 	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
+	import ImageSkeleton from '$lib/components/ImageSkeleton.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { resourceRoleLabels } from '$lib/resource-roles';
 	import { openGenerationInWorkspace } from '$lib/state/open-generation';
@@ -26,6 +27,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { resourceDetail } from '$lib/state/resource-detail.svelte';
 	import { buildShareUrl } from '$lib/state/url-state';
 	import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
+	import { revealOnTimeout } from '$lib/reveal-on-timeout';
 	import { logBoundaryError } from '$lib/utils';
 
 	const generationKindKeys: Record<GenerationKind, TranslationKey> = {
@@ -43,10 +45,21 @@ before the Change Date. See LICENSE for complete terms.
 
 	let openingId = $state<string | null>(null);
 	let openFailed = $state(false);
+	let settledSummaryKey = $state<string | null>(null);
+	let settledGenerationIds = $state<string[]>([]);
+	const summarySettled = $derived(settledSummaryKey === key);
 
 	$effect(() => {
 		void resourceDetail.load(key);
 		return () => resourceDetail.clear();
+	});
+
+	$effect(() => {
+		const current = key;
+		if (current === '' || settledSummaryKey === current) return;
+		return revealOnTimeout(() => {
+			settledSummaryKey = current;
+		});
 	});
 
 	function observeLoadMore(sentinel: HTMLElement): () => void {
@@ -58,6 +71,11 @@ before the Change Date. See LICENSE for complete terms.
 		);
 		observer.observe(sentinel);
 		return () => observer.disconnect();
+	}
+
+	function settleGeneration(id: string): void {
+		if (settledGenerationIds.includes(id)) return;
+		settledGenerationIds = [...settledGenerationIds, id];
 	}
 
 	function formatDate(createdAt: number): string {
@@ -107,6 +125,30 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
+{#snippet summarySkeleton()}
+	<span class="resource-image" aria-hidden="true">
+		<ImageSkeleton />
+	</span>
+	<div class="resource-meta" aria-hidden="true">
+		<span class="sk-pill"><ImageSkeleton /></span>
+		<span class="sk-button"><ImageSkeleton /></span>
+	</div>
+{/snippet}
+
+{#snippet generationSkeleton()}
+	<div class="card-surface" aria-hidden="true">
+		<span class="image-frame">
+			<ImageSkeleton />
+		</span>
+		<span class="card-body">
+			<span class="sk-line sk-line-title"><ImageSkeleton /></span>
+			<span class="sk-pill"><ImageSkeleton /></span>
+			<span class="sk-line"><ImageSkeleton /></span>
+			<span class="sk-line sk-line-short"><ImageSkeleton /></span>
+		</span>
+	</div>
+{/snippet}
+
 <svelte:head>
 	<title>{t('resources.detail.title')}</title>
 </svelte:head>
@@ -117,7 +159,15 @@ before the Change Date. See LICENSE for complete terms.
 		<h1 id="resource-title">{t('resources.detail.title')}</h1>
 
 		{#if resourceDetail.status === 'loading'}
-			<p class="status">{t('resources.loading')}</p>
+			<div class="resource-summary" aria-busy="true" aria-label={t('resources.loading')}>
+				{@render summarySkeleton()}
+			</div>
+			<h2>{t('resources.detail.generations')}</h2>
+			<ul class="grid" aria-hidden="true">
+				{#each [0, 1, 2] as slot (slot)}
+					<li class="card">{@render generationSkeleton()}</li>
+				{/each}
+			</ul>
 		{:else if resourceDetail.status === 'not-found'}
 			<p class="status">{t('resources.detail.notFound')}</p>
 		{:else if resourceDetail.status === 'error' && !resourceDetail.image}
@@ -126,24 +176,37 @@ before the Change Date. See LICENSE for complete terms.
 			{@const image = resourceDetail.image}
 			<div class="resource-summary">
 				<span class="resource-image">
-					<BlurFillImage src={image.url} alt={t('resources.detail.imageAlt')} loading="eager" />
+					<BlurFillImage
+						src={image.url}
+						alt={t('resources.detail.imageAlt')}
+						loading="eager"
+						fetchPriority="high"
+						onSettled={() => (settledSummaryKey = key)}
+					/>
 				</span>
-				<div class="resource-meta">
-					<ul class="roles" aria-label={t('resources.detail.rolesLabel')}>
-						{#each resourceDetail.roles as role (role)}
-							<li class="role">{t(resourceRoleLabels[role])}</li>
-						{/each}
-					</ul>
-					{#if resourceDetail.roles.includes('source')}
-						<button
-							type="button"
-							class="primary-action"
-							onclick={() => startNewGeneration(image.key)}
-						>
-							{t('resources.detail.startNewGeneration')}
-						</button>
-					{/if}
-				</div>
+				{#if summarySettled}
+					<div class="resource-meta">
+						<ul class="roles" aria-label={t('resources.detail.rolesLabel')}>
+							{#each resourceDetail.roles as role (role)}
+								<li class="role">{t(resourceRoleLabels[role])}</li>
+							{/each}
+						</ul>
+						{#if resourceDetail.roles.includes('source')}
+							<button
+								type="button"
+								class="primary-action"
+								onclick={() => startNewGeneration(image.key)}
+							>
+								{t('resources.detail.startNewGeneration')}
+							</button>
+						{/if}
+					</div>
+				{:else}
+					<div class="resource-meta" aria-hidden="true">
+						<span class="sk-pill"><ImageSkeleton /></span>
+						<span class="sk-button"><ImageSkeleton /></span>
+					</div>
+				{/if}
 			</div>
 
 			<h2>{t('resources.detail.generations')}</h2>
@@ -153,51 +216,62 @@ before the Change Date. See LICENSE for complete terms.
 				<ul class="grid" aria-label={t('resources.detail.generationsLabel')}>
 					{#each resourceDetail.generations as generation, index (generation.id)}
 						{@const session = generation.session}
+						{@const settled = settledGenerationIds.includes(generation.id)}
 						<li class="card">
 							{#snippet cardContent()}
 								<span class="image-frame">
 									<BlurFillImage
 										src={generation.image.url}
 										alt={ti('resources.detail.resultAlt', { order: index + 1 })}
+										onSettled={() => settleGeneration(generation.id)}
 									/>
 								</span>
-								<span class="card-body">
-									<span class="kind">{t(generationKindKeys[generation.kind])}</span>
-									<span class="roles" id={`generation-roles-${index}`}>
-										{#each generation.roles as role (role)}
-											<span class="role">{t(resourceRoleLabels[role])}</span>
-										{/each}
-									</span>
-									{#if session}
-										<span class="session">
-											{session.projectTitle} · {session.sessionTitle.trim() === ''
-												? t('workspace.tabs.untitled')
-												: session.sessionTitle}
+								{#if settled}
+									<span class="card-body">
+										<span class="kind">{t(generationKindKeys[generation.kind])}</span>
+										<span class="roles" id={`generation-roles-${index}`}>
+											{#each generation.roles as role (role)}
+												<span class="role">{t(resourceRoleLabels[role])}</span>
+											{/each}
 										</span>
-									{/if}
-									{#if !session}
-										<span class="note">{t('resources.detail.archived')}</span>
-									{:else if !generation.settingsSaved}
-										<span class="note">{t('resources.detail.settingsNotSaved')}</span>
-									{/if}
-									<time
-										datetime={new Date(generation.createdAt).toISOString()}
-										aria-label={ti('resources.detail.createdAt', {
-											date: formatDate(generation.createdAt),
-											time: formatTime(generation.createdAt)
-										})}
-									>
-										<span>{formatDate(generation.createdAt)}</span>
-										<span>{formatTime(generation.createdAt)}</span>
-									</time>
-								</span>
+										{#if session}
+											<span class="session">
+												{session.projectTitle} · {session.sessionTitle.trim() === ''
+													? t('workspace.tabs.untitled')
+													: session.sessionTitle}
+											</span>
+										{/if}
+										{#if !session}
+											<span class="note">{t('resources.detail.archived')}</span>
+										{:else if !generation.settingsSaved}
+											<span class="note">{t('resources.detail.settingsNotSaved')}</span>
+										{/if}
+										<time
+											datetime={new Date(generation.createdAt).toISOString()}
+											aria-label={ti('resources.detail.createdAt', {
+												date: formatDate(generation.createdAt),
+												time: formatTime(generation.createdAt)
+											})}
+										>
+											<span>{formatDate(generation.createdAt)}</span>
+											<span>{formatTime(generation.createdAt)}</span>
+										</time>
+									</span>
+								{:else}
+									<span class="card-body" aria-hidden="true">
+										<span class="sk-line sk-line-title"><ImageSkeleton /></span>
+										<span class="sk-pill"><ImageSkeleton /></span>
+										<span class="sk-line"><ImageSkeleton /></span>
+										<span class="sk-line sk-line-short"><ImageSkeleton /></span>
+									</span>
+								{/if}
 							{/snippet}
 							{#if session && generation.settingsSaved}
 								<button
 									type="button"
 									class="card-surface card-button"
 									aria-label={ti('resources.detail.openAria', { order: index + 1 })}
-									aria-describedby={`generation-roles-${index}`}
+									aria-describedby={settled ? `generation-roles-${index}` : undefined}
 									aria-busy={openingId === generation.id}
 									disabled={openingId !== null}
 									onclick={() => openGeneration(generation.id)}
@@ -211,12 +285,17 @@ before the Change Date. See LICENSE for complete terms.
 							{/if}
 						</li>
 					{/each}
+					{#if resourceDetail.loadingMore}
+						{#each [0, 1, 2] as slot (`more-${slot}`)}
+							<li class="card">{@render generationSkeleton()}</li>
+						{/each}
+					{/if}
 				</ul>
 
 				{#if resourceDetail.hasMore}
 					<div class="load-more-sentinel" {@attach observeLoadMore}>
 						{#if resourceDetail.loadingMore}
-							<p class="status" aria-live="polite">{t('resources.loadingMore')}</p>
+							<p class="visually-hidden" aria-live="polite">{t('resources.loadingMore')}</p>
 						{/if}
 					</div>
 				{/if}
@@ -302,13 +381,14 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.resource-image {
+		position: relative;
 		display: block;
 		width: min(100%, 22rem);
 		aspect-ratio: 4 / 3;
 		overflow: hidden;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);
-		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
+		background: var(--color-skeleton);
 	}
 
 	.resource-meta {
@@ -399,10 +479,45 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.image-frame {
+		position: relative;
 		display: block;
 		aspect-ratio: 4 / 3;
 		overflow: hidden;
-		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
+		background: var(--color-skeleton);
+	}
+
+	.sk-pill,
+	.sk-button,
+	.sk-line {
+		position: relative;
+		display: block;
+		overflow: hidden;
+		border-radius: 999px;
+	}
+
+	.sk-pill {
+		width: 4.75rem;
+		height: 0.875rem;
+	}
+
+	.sk-button {
+		width: 11rem;
+		height: 2.25rem;
+		border-radius: var(--radius);
+	}
+
+	.sk-line {
+		width: 72%;
+		height: 0.75rem;
+	}
+
+	.sk-line-title {
+		width: 46%;
+		height: 0.875rem;
+	}
+
+	.sk-line-short {
+		width: 38%;
 	}
 
 	.card-body {

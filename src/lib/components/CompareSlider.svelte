@@ -14,10 +14,11 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { ChevronsLeftRight } from '@lucide/svelte';
+	import LazyImage from '$lib/components/LazyImage.svelte';
 
 	interface Props {
-		beforeSrc: string | undefined;
-		afterSrc: string | undefined;
+		beforeSrc: string;
+		afterSrc: string;
 		beforeAlt: string;
 		afterAlt: string;
 		handleLabel: string;
@@ -84,14 +85,10 @@ before the Change Date. See LICENSE for complete terms.
 	onpointerup={onPointerUp}
 	onpointercancel={onPointerUp}
 >
-	<img src={afterSrc} alt={afterAlt} class="output" draggable="false" />
-	<img
-		src={beforeSrc}
-		alt={beforeAlt}
-		class="overlay"
-		draggable="false"
-		style:clip-path={`inset(0 ${100 - position}% 0 0)`}
-	/>
+	<LazyImage src={afterSrc} alt={afterAlt} loading="eager" fetchPriority="high" draggable={false} />
+	<div class="overlay" style:clip-path={`inset(0 ${100 - position}% 0 0)`}>
+		<LazyImage src={beforeSrc} alt={beforeAlt} loading="eager" draggable={false} />
+	</div>
 	<div class="divider" style:left="{position}%" aria-hidden="true"></div>
 	<div
 		class="handle"
@@ -110,6 +107,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <style>
 	.compare-slider {
+		--image-fit: contain;
 		position: relative;
 		width: 100%;
 		height: 100%;
@@ -117,19 +115,11 @@ before the Change Date. See LICENSE for complete terms.
 		cursor: ew-resize;
 	}
 
-	.output {
-		width: 100%;
-		height: 100%;
-		object-fit: contain;
-		display: block;
-	}
-
 	.overlay {
 		position: absolute;
 		inset: 0;
 		width: 100%;
 		height: 100%;
-		object-fit: contain;
 	}
 
 	.divider {
