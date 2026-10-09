@@ -144,15 +144,9 @@ test('presents the initial status load as a separate loader region', async ({ pa
 	await page.goto('/status');
 	await expect.poll(() => requests).toBe(1);
 
-	const loader = page.getByRole('status');
-	await expect(loader).toHaveText('Загрузка состояния сервисов…');
-	await expect(loader).toHaveCSS('display', 'grid');
-	await expect(loader).toHaveCSS('align-items', 'center');
-	await expect(loader).toHaveCSS('justify-items', 'center');
-	await expect(loader).toHaveCSS('text-align', 'center');
-	expect(
-		await loader.evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingTop))
-	).toBeGreaterThanOrEqual(64);
+	const loader = page.getByLabel('Загрузка состояния сервисов…');
+	await expect(loader).toBeVisible();
+	await expect(loader.locator('.skeleton-block').first()).toBeVisible();
 	await expect(
 		page.getByRole('table', { name: 'Состояние сервисов, используемых Cadbos' })
 	).toHaveCount(0);

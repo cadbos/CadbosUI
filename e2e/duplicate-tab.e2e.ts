@@ -304,18 +304,16 @@ test('a slow connection never strips the session out of a duplicated tab’s URL
 
 	await page.goto(url);
 
-	await expect(
-		page.getByRole('status').filter({ hasText: ru['workspace.urlTarget.loading'] })
-	).toBeVisible();
+	await expect(page.getByRole('status', { name: ru['workspace.urlTarget.loading'] })).toBeVisible();
 	// Well past the URL-sync debounce (400ms) while the session is still
 	// loading — the address bar must still point at it.
 	await page.waitForTimeout(1200);
 	await expect(page).toHaveURL(new RegExp(`generation=${E2E_GENERATION_ID}`));
 
 	await expectGenerationOnScreen(page);
-	await expect(
-		page.getByRole('status').filter({ hasText: ru['workspace.urlTarget.loading'] })
-	).toHaveCount(0);
+	await expect(page.getByRole('status', { name: ru['workspace.urlTarget.loading'] })).toHaveCount(
+		0
+	);
 });
 
 test('a blocked connection keeps the link and offers a retry instead of a blank workspace', async ({

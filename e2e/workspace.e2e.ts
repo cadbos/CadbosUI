@@ -425,17 +425,19 @@ test('generating with the exterior scene type calls the exterior render route', 
 		.setInputFiles({ name: 'house.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 	const uploadedImage = page.locator('#mode-panel-render .image-wrapper img');
 	await expect(uploadedImage).toHaveAttribute('src', /^blob:/);
-	const uploadViewportStyles = await uploadedImage.evaluate((image) => {
-		const viewport = image.parentElement;
-		if (!viewport) throw new Error('uploaded image viewport missing');
-		const viewportStyle = getComputedStyle(viewport);
-		const imageStyle = getComputedStyle(image);
-		return {
-			aspectRatio: viewportStyle.aspectRatio,
-			backgroundColor: viewportStyle.backgroundColor,
-			objectFit: imageStyle.objectFit
-		};
-	});
+	const uploadViewportStyles = await page
+		.locator('#mode-panel-render .image-wrapper')
+		.evaluate((viewport) => {
+			const image = viewport.querySelector('img');
+			if (!image) throw new Error('uploaded image viewport missing');
+			const viewportStyle = getComputedStyle(viewport);
+			const imageStyle = getComputedStyle(image);
+			return {
+				aspectRatio: viewportStyle.aspectRatio,
+				backgroundColor: viewportStyle.backgroundColor,
+				objectFit: imageStyle.objectFit
+			};
+		});
 	expect(uploadViewportStyles).toEqual({
 		aspectRatio: '16 / 9',
 		backgroundColor: 'rgb(245, 245, 247)',
