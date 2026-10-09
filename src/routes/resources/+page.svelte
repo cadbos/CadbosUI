@@ -23,6 +23,7 @@ before the Change Date. See LICENSE for complete terms.
 		type ResourceImageRecord
 	} from '$lib/api/contract';
 	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
+	import ImageSkeleton from '$lib/components/ImageSkeleton.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { resourceRoleLabels } from '$lib/resource-roles';
 	import { resources } from '$lib/state/resources.svelte';
@@ -50,6 +51,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	let filterTabs = $state<HTMLElement[]>([]);
 	let loadMoreSentinel = $state<HTMLElement | null>(null);
+	let settledImageKeys = $state<string[]>([]);
 
 	const filterTabController = createTabController({
 		itemCount: () => resourceFilters.length,
@@ -86,6 +88,11 @@ before the Change Date. See LICENSE for complete terms.
 		return () => observer.disconnect();
 	});
 
+	function settleImage(key: string): void {
+		if (settledImageKeys.includes(key)) return;
+		settledImageKeys = [...settledImageKeys, key];
+	}
+
 	function formatCreatedAt(createdAt: number): string {
 		return new Intl.DateTimeFormat(getLocale(), {
 			day: 'numeric',
@@ -104,27 +111,51 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
-{#snippet cardContent(image: ResourceImageRecord, index: number)}
-	<span class="image-frame">
-		<BlurFillImage src={image.image.url} alt={ti('resources.imageAlt', { order: index + 1 })} />
-	</span>
-	<span class="card-footer">
-		<span class="roles" id={`resource-roles-${index}`}>
-			{#each image.roles as role (role)}
-				<span class="role">{t(resourceRoleLabels[role])}</span>
-			{/each}
+{#snippet cardSkeleton()}
+	<div class="card-body card-skeleton" aria-hidden="true">
+		<span class="image-frame">
+			<ImageSkeleton />
 		</span>
-		<time
-			datetime={new Date(image.createdAt).toISOString()}
-			aria-label={ti('resources.createdAt', {
-				date: formatCreatedAt(image.createdAt),
-				time: formatCreatedAtTime(image.createdAt)
-			})}
-		>
-			<span>{formatCreatedAt(image.createdAt)}</span>
-			<span>{formatCreatedAtTime(image.createdAt)}</span>
-		</time>
+		<span class="card-footer">
+			<span class="sk-pill"><ImageSkeleton /></span>
+			<span class="sk-time"><ImageSkeleton /></span>
+		</span>
+	</div>
+{/snippet}
+
+{#snippet cardContent(image: ResourceImageRecord, index: number)}
+	{@const settled = settledImageKeys.includes(image.image.key)}
+	<span class="image-frame">
+		<BlurFillImage
+			src={image.image.url}
+			alt={ti('resources.imageAlt', { order: index + 1 })}
+			onSettled={() => settleImage(image.image.key)}
+		/>
 	</span>
+	{#if settled}
+		<span class="card-footer">
+			<span class="roles" id={`resource-roles-${index}`}>
+				{#each image.roles as role (role)}
+					<span class="role">{t(resourceRoleLabels[role])}</span>
+				{/each}
+			</span>
+			<time
+				datetime={new Date(image.createdAt).toISOString()}
+				aria-label={ti('resources.createdAt', {
+					date: formatCreatedAt(image.createdAt),
+					time: formatCreatedAtTime(image.createdAt)
+				})}
+			>
+				<span>{formatCreatedAt(image.createdAt)}</span>
+				<span>{formatCreatedAtTime(image.createdAt)}</span>
+			</time>
+		</span>
+	{:else}
+		<span class="card-footer" aria-hidden="true">
+			<span class="sk-pill"><ImageSkeleton /></span>
+			<span class="sk-time"><ImageSkeleton /></span>
+		</span>
+	{/if}
 {/snippet}
 
 <svelte:head>
@@ -166,7 +197,11 @@ before the Change Date. See LICENSE for complete terms.
 			aria-labelledby={`resources-filter-${filter}`}
 		>
 			{#if resources.status === 'loading'}
-				<p class="status">{t('resources.loading')}</p>
+				<ul class="grid" aria-busy="true" aria-label={t('resources.loading')}>
+					{#each [0, 1, 2, 3, 4, 5] as slot (slot)}
+						<li class="card">{@render cardSkeleton()}</li>
+					{/each}
+				</ul>
 			{:else if resources.status === 'error' && resources.images.length === 0}
 				<p class="status error" role="alert">{t('resources.failed')}</p>
 			{:else if resources.images.length === 0}
@@ -179,18 +214,25 @@ before the Change Date. See LICENSE for complete terms.
 								class="card-body card-link"
 								href={resolve('/resources/[key]', { key: encodeURIComponent(image.image.key) })}
 								aria-label={ti('resources.openAria', { order: index + 1 })}
-								aria-describedby={`resource-roles-${index}`}
+								aria-describedby={settledImageKeys.includes(image.image.key)
+									? `resource-roles-${index}`
+									: undefined}
 							>
 								{@render cardContent(image, index)}
 							</a>
 						</li>
 					{/each}
+					{#if resources.loadingMore}
+						{#each [0, 1, 2] as slot (`more-${slot}`)}
+							<li class="card">{@render cardSkeleton()}</li>
+						{/each}
+					{/if}
 				</ul>
 
 				{#if resources.hasMore}
 					<div bind:this={loadMoreSentinel} class="load-more-sentinel">
 						{#if resources.loadingMore}
-							<p class="status" aria-live="polite">{t('resources.loadingMore')}</p>
+							<p class="visually-hidden" aria-live="polite">{t('resources.loadingMore')}</p>
 						{/if}
 					</div>
 				{/if}
@@ -334,10 +376,28 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.image-frame {
+		position: relative;
 		display: block;
 		aspect-ratio: 4 / 3;
 		overflow: hidden;
-		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
+		background: var(--color-skeleton);
+	}
+
+	.sk-pill,
+	.sk-time {
+		position: relative;
+		display: block;
+		height: 0.875rem;
+		overflow: hidden;
+		border-radius: 999px;
+	}
+
+	.sk-pill {
+		width: 4.75rem;
+	}
+
+	.sk-time {
+		width: 7rem;
 	}
 
 	.card-footer {

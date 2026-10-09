@@ -21,9 +21,10 @@ before the Change Date. See LICENSE for complete terms.
 		alt: string;
 		loading?: 'lazy' | 'eager';
 		fetchPriority?: 'high' | 'low' | 'auto';
+		onSettled?: () => void;
 	}
 
-	let { src, alt, loading = 'lazy', fetchPriority }: Props = $props();
+	let { src, alt, loading = 'lazy', fetchPriority, onSettled }: Props = $props();
 
 	let loadedUrl = $state<string | null>(null);
 	let failedUrl = $state<string | null>(null);
@@ -35,9 +36,11 @@ before the Change Date. See LICENSE for complete terms.
 		return bindImageLoad(node, {
 			onReady: () => {
 				loadedUrl = current;
+				onSettled?.();
 			},
 			onError: () => {
 				failedUrl = current;
+				onSettled?.();
 			}
 		});
 	}
