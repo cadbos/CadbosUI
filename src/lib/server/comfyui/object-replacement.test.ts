@@ -140,27 +140,32 @@ describe('runObjectReplacement', () => {
 		expect(queuedWorkflow?.['11'].inputs.image2).toEqual(['4', 0]);
 		expect(queuedWorkflow?.['153:152'].inputs.string_b).toEqual(['19', 0]);
 		expect(queuedWorkflow?.['26'].inputs.replace).toEqual(['108', 0]);
+		expect(queuedWorkflow?.['3']?.inputs.image).toEqual(['1', 0]);
 		expect(queuedWorkflow?.['210']).toMatchObject({
 			class_type: 'ImageCrop',
 			inputs: {
-				image: ['1', 0],
+				image: ['53', 0],
 				x: ['205', 0],
 				y: ['206', 0],
 				width: ['207', 0],
 				height: ['208', 0]
 			}
 		});
-		expect(queuedWorkflow?.['222']).toMatchObject({
-			class_type: 'ImageCompositeMasked',
+		expect(queuedWorkflow?.['59']?.inputs.image).toEqual(['210', 0]);
+		expect(queuedWorkflow?.['212']).toMatchObject({
+			class_type: 'MaskComposite',
 			inputs: {
-				destination: ['1', 0],
-				source: ['68', 0],
+				destination: ['211', 0],
+				source: ['84', 0],
 				x: ['205', 0],
-				y: ['206', 0]
+				y: ['206', 0],
+				operation: 'add'
 			}
 		});
+		expect(queuedWorkflow?.['60']?.inputs.mask).toEqual(['212', 0]);
+		expect(queuedWorkflow?.['68']?.inputs.destination).toEqual(['1', 0]);
 		expect(queuedWorkflow?.['17']).toEqual({
-			inputs: { filename_prefix: 'obj-replace-v23', images: ['222', 0] },
+			inputs: { filename_prefix: 'obj-replace-v23', images: ['68', 0] },
 			class_type: 'SaveImage',
 			_meta: { title: 'SAVE RESULT' }
 		});
