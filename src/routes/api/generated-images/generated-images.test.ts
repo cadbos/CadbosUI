@@ -21,6 +21,7 @@ import type {
 	SessionUser
 } from '$lib/api/contract';
 import { mediaKey, type Bucket } from '$lib/server/media';
+import { createDb } from '$lib/server/db';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedGeneration as seedGenerationFixture,
@@ -52,9 +53,15 @@ function seedUser(db: D1Database, id: string, pubkey: string): void {
 		.run();
 }
 
-function seedGeneratedImage(db: D1Database, id: string, userId: string, createdAt: number): void {
-	setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
-	seedGenerationFixture(db, {
+async function seedGeneratedImage(
+	rawDb: D1Database,
+	id: string,
+	userId: string,
+	createdAt: number
+): Promise<void> {
+	const db = createDb(rawDb);
+	await setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
+	await seedGenerationFixture(db, {
 		id,
 		userId,
 		url: `https://cdn.example.test/${id}.webp`,
@@ -68,14 +75,15 @@ type DeleteGeneratedImageEvent = Parameters<typeof DELETE>[0];
 type GeneratedImageDetailEvent = Parameters<typeof GET_DETAIL>[0];
 type SceneFilterOptionsEvent = Parameters<typeof GET_SESSIONS>[0];
 
-function seedSessionGeneration(
+async function seedSessionGeneration(
 	db: D1Database,
 	id: string,
 	sessionId: string,
 	createdAt: number
-): void {
-	setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
-	seedGenerationFixture(db, {
+): Promise<void> {
+	const wrapped = createDb(db);
+	await setBucketUrl(wrapped, TEST_S3_BUCKET.name, 'https://cdn.example.test');
+	await seedGenerationFixture(wrapped, {
 		id,
 		userId: 'user-1',
 		url: `https://cdn.example.test/${id}.webp`,
@@ -193,7 +201,7 @@ describe('GET /api/generated-images', () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 
 		for (let index = 0; index < 21; index += 1) {
-			seedGeneratedImage(db, `user-1-image-${index}`, 'user-1', 10_000 + index);
+			await seedGeneratedImage(db, `user-1-image-${index}`, 'user-1', 10_000 + index);
 		}
 
 		const response = await call({ pubkey: 'pubkey-1' }, platform(db));
@@ -233,9 +241,9 @@ describe('GET /api/generated-images', () => {
 	it('applies offset and size search params', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'first', 'user-1', 3000);
-		seedGeneratedImage(db, 'second', 'user-1', 2000);
-		seedGeneratedImage(db, 'third', 'user-1', 1000);
+		await seedGeneratedImage(db, 'first', 'user-1', 3000);
+		await seedGeneratedImage(db, 'second', 'user-1', 2000);
+		await seedGeneratedImage(db, 'third', 'user-1', 1000);
 
 		const response = await call({ pubkey: 'pubkey-1' }, platform(db), '?offset=1&size=2');
 		const result = (await response.json()) as GeneratedImagesResponse;
@@ -250,9 +258,9 @@ describe('GET /api/generated-images', () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedSession(db, PROJECT_ID, KITCHEN_SESSION_ID, 'Kitchen');
 		seedSession(db, PROJECT_ID, HALL_SESSION_ID, 'Hall');
-		seedSessionGeneration(db, 'kitchen-1', KITCHEN_SESSION_ID, 1000);
-		seedSessionGeneration(db, 'kitchen-2', KITCHEN_SESSION_ID, 3000);
-		seedSessionGeneration(db, 'hall-1', HALL_SESSION_ID, 2000);
+		await seedSessionGeneration(db, 'kitchen-1', KITCHEN_SESSION_ID, 1000);
+		await seedSessionGeneration(db, 'kitchen-2', KITCHEN_SESSION_ID, 3000);
+		await seedSessionGeneration(db, 'hall-1', HALL_SESSION_ID, 2000);
 
 		const response = await call(
 			{ pubkey: 'pubkey-1' },
@@ -365,7 +373,7 @@ describe('DELETE /api/generated-images', () => {
 	it('deletes the authenticated user image from S3 and D1', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		await seedGeneratedImage(db, 'image-1', 'user-1', 1000);
 		const uploadsBucket = bucket();
 
 		const response = await callDelete({ pubkey: 'pubkey-1' }, platform(db), { id: 'image-1' });
@@ -383,7 +391,7 @@ describe('DELETE /api/generated-images', () => {
 	it('retains media referenced by a light settings job', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		await seedGeneratedImage(db, 'image-1', 'user-1', 1000);
 		const image = await db
 			.prepare('SELECT result_media_id FROM generations WHERE id = ?')
 			.bind('image-1')
@@ -412,7 +420,7 @@ describe('DELETE /api/generated-images', () => {
 	it('retains media referenced by a repaint job', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		await seedGeneratedImage(db, 'image-1', 'user-1', 1000);
 		const image = await db
 			.prepare('SELECT result_media_id FROM generations WHERE id = ?')
 			.bind('image-1')
@@ -451,7 +459,7 @@ describe('DELETE /api/generated-images', () => {
 	it('retains media when a reference is added immediately before the deletion batch', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		await seedGeneratedImage(db, 'image-1', 'user-1', 1000);
 		const image = await db
 			.prepare('SELECT result_media_id FROM generations WHERE id = ?')
 			.bind('image-1')
@@ -496,8 +504,8 @@ describe('DELETE /api/generated-images', () => {
 	it('keeps S3 media referenced by another generation', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
-		seedGenerationFixture(db, {
+		await seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		await seedGenerationFixture(createDb(db), {
 			id: 'image-2',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/image-2.webp',
@@ -522,7 +530,7 @@ describe('DELETE /api/generated-images', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
-		seedGeneratedImage(db, 'image-2', 'user-2', 1000);
+		await seedGeneratedImage(db, 'image-2', 'user-2', 1000);
 		const uploadsBucket = bucket();
 
 		const response = await callDelete({ pubkey: 'pubkey-1' }, platform(db), { id: 'image-2' });
@@ -539,7 +547,7 @@ describe('DELETE /api/generated-images', () => {
 	it('keeps the committed D1 deletion when S3 deletion fails', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		await seedGeneratedImage(db, 'image-1', 'user-1', 1000);
 		const image = await db
 			.prepare('SELECT result_media_id FROM generations WHERE id = ?')
 			.bind('image-1')
@@ -597,7 +605,7 @@ describe('GET /api/generated-images/[id]', () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedUser(db, 'user-2', 'pubkey-2');
-		seedGeneratedImage(db, 'image-2', 'user-2', 1000);
+		await seedGeneratedImage(db, 'image-2', 'user-2', 1000);
 
 		const response = await callDetail({ pubkey: 'pubkey-1' }, platform(db), 'image-2');
 
@@ -616,7 +624,7 @@ describe('GET /api/generated-images/[id]', () => {
 	it('resolves the result and source images and a null snapshot for a row recorded without one', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		seedGeneratedImage(db, 'image-1', 'user-1', 1000);
+		await seedGeneratedImage(db, 'image-1', 'user-1', 1000);
 
 		const response = await callDetail({ pubkey: 'pubkey-1' }, platform(db), 'image-1');
 		const result = (await response.json()) as GeneratedImageDetailResponse;
@@ -638,8 +646,8 @@ describe('GET /api/generated-images/[id]', () => {
 	it('returns what the generation cost and the balance it left', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
-		seedGenerationFixture(db, {
+		await setBucketUrl(createDb(db), TEST_S3_BUCKET.name, 'https://cdn.example.test');
+		await seedGenerationFixture(createDb(db), {
 			id: 'image-1',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/image-1.webp',
@@ -659,9 +667,9 @@ describe('GET /api/generated-images/[id]', () => {
 	it('resolves the snapshot and every media key its reference images point to', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
-		seedMedia(db, 'https://cdn.example.test/reference.jpg');
-		seedGenerationFixture(db, {
+		await setBucketUrl(createDb(db), TEST_S3_BUCKET.name, 'https://cdn.example.test');
+		await seedMedia(createDb(db), 'https://cdn.example.test/reference.jpg');
+		await seedGenerationFixture(createDb(db), {
 			id: 'image-1',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/image-1.webp',
@@ -693,8 +701,8 @@ describe('GET /api/generated-images/[id]', () => {
 	it('drops only the unresolved reference image, keeping the rest of the snapshot', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', 'pubkey-1');
-		setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
-		seedGenerationFixture(db, {
+		await setBucketUrl(createDb(db), TEST_S3_BUCKET.name, 'https://cdn.example.test');
+		await seedGenerationFixture(createDb(db), {
 			id: 'image-1',
 			userId: 'user-1',
 			url: 'https://cdn.example.test/image-1.webp',
@@ -747,7 +755,7 @@ describe('GET /api/generated-images/sessions', () => {
 		seedUser(db, 'user-1', 'pubkey-1');
 		seedSession(db, PROJECT_ID, KITCHEN_SESSION_ID, 'Kitchen');
 		seedSession(db, PROJECT_ID, HALL_SESSION_ID, 'Hall');
-		seedSessionGeneration(db, 'kitchen-1', KITCHEN_SESSION_ID, 1000);
+		await seedSessionGeneration(db, 'kitchen-1', KITCHEN_SESSION_ID, 1000);
 
 		const response = await callSessions({ pubkey: 'pubkey-1' }, platform(db));
 

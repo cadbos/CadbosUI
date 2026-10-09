@@ -15,6 +15,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { ResourceDetailResponse, ResourcesResponse, SessionUser } from '$lib/api/contract';
+import { createDb } from '$lib/server/db';
 import { mediaKey } from '$lib/server/media';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
@@ -60,12 +61,12 @@ function callDetail(user: SessionUser | null, key: string): ReturnType<typeof GE
 	} as ResourceDetailEvent);
 }
 
-beforeEach(() => {
+beforeEach(async () => {
 	db = makeD1();
-	setBucketUrl(db, TEST_S3_BUCKET.name, 'https://cdn.example.test');
+	await setBucketUrl(createDb(db), TEST_S3_BUCKET.name, 'https://cdn.example.test');
 	seedUser('user-1', 'pubkey-1');
 	seedUser('user-2', 'pubkey-2');
-	seedGeneration(db, {
+	await seedGeneration(createDb(db), {
 		id: 'render-1',
 		userId: 'user-1',
 		url: 'https://cdn.example.test/render-1.webp',

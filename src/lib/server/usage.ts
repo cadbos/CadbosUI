@@ -13,9 +13,10 @@
  */
 
 import { dev } from '$app/environment';
+import { sql } from 'drizzle-orm';
 import type { SessionUser } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
-import { getDb } from '$lib/server/auth/repository';
+import { getDb } from '$lib/server/db';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 
 export async function authorizeUsageViewer(
@@ -25,9 +26,8 @@ export async function authorizeUsageViewer(
 	if (dev && user.pubkey === DEMO_PUBKEY) {
 		return apiError(500, 'account_error', 'Account record not found');
 	}
-	const admin = await getDb(platform)
-		.prepare('SELECT 1 AS found FROM admins a JOIN users u ON u.id = a.user_id WHERE u.pubkey = ?')
-		.bind(user.pubkey)
-		.first<{ found: number }>();
+	const admin = await getDb(platform).get<{ found: number }>(
+		sql`SELECT 1 AS found FROM admins a JOIN users u ON u.id = a.user_id WHERE u.pubkey = ${user.pubkey}`
+	);
 	return admin ? null : apiError(403, 'forbidden', 'Admin access required');
 }

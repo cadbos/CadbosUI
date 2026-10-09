@@ -23,9 +23,9 @@ import type {
 	RequestFormSnapshot
 } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
-import { getDb } from '$lib/server/auth/repository';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
+import { getDb } from '$lib/server/db';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { getGenerationDetailForUser } from '$lib/server/generations';
 import { mediaAccessById, mediaAccessByKeyBatch } from '$lib/server/media-access';

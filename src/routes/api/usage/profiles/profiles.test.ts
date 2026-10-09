@@ -73,7 +73,7 @@ describe('POST /api/usage/profiles', () => {
 	it('validates the requested pubkeys', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY);
-		seedAdmin(db, 'admin');
+		await seedAdmin(db, 'admin');
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, db, { pubkeys: ['not-a-pubkey'] });
 
@@ -83,7 +83,7 @@ describe('POST /api/usage/profiles', () => {
 	it('returns name and picture without relay metadata', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY);
-		seedAdmin(db, 'admin');
+		await seedAdmin(db, 'admin');
 		fetchNostrProfile.mockResolvedValue({
 			name: 'Alice',
 			picture: 'https://avatar.example/alice.png',

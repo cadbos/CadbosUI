@@ -13,17 +13,16 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { D1Database } from '@cloudflare/workers-types';
 import {
 	completeRepaintJob,
 	createRepaintJob,
 	failRepaintJob,
 	getRepaintJob
 } from '$lib/server/repaint-jobs';
-import { makeD1 } from '$lib/server/testing/d1-shim';
+import { makeDb, type TestDatabase } from '$lib/server/testing/d1-shim';
 import { seedManagedMedia } from '$lib/server/testing/generation-fixtures';
 
-function seedAccount(db: D1Database): void {
+function seedAccount(db: TestDatabase): void {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind('user-1', 'pubkey-1', 1)
 		.run();
@@ -44,10 +43,10 @@ function seedAccount(db: D1Database): void {
 
 describe('repaint jobs', () => {
 	it('stores media references and atomically records a completed generation', async () => {
-		const db = makeD1();
+		const db = makeDb();
 		seedAccount(db);
-		const sceneMediaId = seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
-		const outputMediaId = seedManagedMedia(db, 'edits/job-1.png', 'b'.repeat(64));
+		const sceneMediaId = await seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
+		const outputMediaId = await seedManagedMedia(db, 'edits/job-1.png', 'b'.repeat(64));
 
 		const created = await createRepaintJob(db, {
 			id: 'job-1',
@@ -146,9 +145,9 @@ describe('repaint jobs', () => {
 	});
 
 	it('fails a processing job with an error code and completed timestamp', async () => {
-		const db = makeD1();
+		const db = makeDb();
 		seedAccount(db);
-		const sceneMediaId = seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
+		const sceneMediaId = await seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
 		await createRepaintJob(db, {
 			id: 'job-1',
 			userId: 'user-1',
@@ -180,9 +179,9 @@ describe('repaint jobs', () => {
 	});
 
 	it('rejects a color that is not a lowercase #rrggbb hex', async () => {
-		const db = makeD1();
+		const db = makeDb();
 		seedAccount(db);
-		const sceneMediaId = seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
+		const sceneMediaId = await seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
 
 		await expect(
 			createRepaintJob(db, {

@@ -73,7 +73,7 @@ describe('GET /api/usage/totals', () => {
 	it('returns platform-wide totals for an admin', async () => {
 		const db = makeD1();
 		seedUser(db, 'admin', ADMIN_PUBKEY);
-		seedAdmin(db, 'admin');
+		await seedAdmin(db, 'admin');
 		seedUser(db, 'user-1', 'pubkey-1');
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db));

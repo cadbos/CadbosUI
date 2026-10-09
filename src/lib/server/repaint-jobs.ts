@@ -12,8 +12,9 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
+import { sql } from 'drizzle-orm';
 import type { RequestFormSnapshot } from '$lib/api/contract';
+import type { Database } from '$lib/server/db';
 
 export type RepaintJobStatus = 'processing' | 'completed' | 'failed';
 
@@ -79,7 +80,7 @@ function toRepaintJob(row: RepaintJobRow): RepaintJob {
 }
 
 export async function createRepaintJob(
-	db: D1Database,
+	db: Database,
 	input: {
 		id: string;
 		userId: string;
@@ -94,52 +95,29 @@ export async function createRepaintJob(
 		formSnapshot?: RequestFormSnapshot;
 	}
 ): Promise<RepaintJob> {
-	await db
-		.prepare(
-			'INSERT INTO repaint_jobs ' +
-				'(id, user_id, comfy_prompt_id, scene_media_id, session_id, target, color, cost, status, created_at, updated_at, upload_queue_sec, form_snapshot) ' +
-				"VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'processing', ?, ?, ?, ?)"
-		)
-		.bind(
-			input.id,
-			input.userId,
-			input.comfyPromptId,
-			input.sceneMediaId,
-			input.sessionId,
-			input.target,
-			input.color,
-			input.cost,
-			input.createdAt,
-			input.createdAt,
-			input.uploadQueueSec,
-			input.formSnapshot ? JSON.stringify(input.formSnapshot) : null
-		)
-		.run();
+	await db.run(sql`INSERT INTO repaint_jobs
+		(id, user_id, comfy_prompt_id, scene_media_id, session_id, target, color, cost, status, created_at, updated_at, upload_queue_sec, form_snapshot)
+		VALUES (${input.id}, ${input.userId}, ${input.comfyPromptId}, ${input.sceneMediaId}, ${input.sessionId}, ${input.target}, ${input.color}, ${input.cost}, 'processing', ${input.createdAt}, ${input.createdAt}, ${input.uploadQueueSec}, ${input.formSnapshot ? JSON.stringify(input.formSnapshot) : null})`);
 	const job = await getRepaintJob(db, input.userId, input.id);
 	if (!job) throw new Error('repaint job insert failed');
 	return job;
 }
 
 export async function getRepaintJob(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	id: string
 ): Promise<RepaintJob | null> {
-	const row = await db
-		.prepare(
-			'SELECT j.id, j.user_id, j.comfy_prompt_id, j.scene_media_id, j.session_id, ' +
-				'j.target, j.color, j.cost, j.status, j.output_media_id, ' +
-				'j.error_code, j.balance_after, j.created_at, j.updated_at, j.completed_at ' +
-				'FROM repaint_jobs j ' +
-				'WHERE j.id = ? AND j.user_id = ?'
-		)
-		.bind(id, userId)
-		.first<RepaintJobRow>();
+	const row =
+		await db.get<RepaintJobRow>(sql`SELECT j.id, j.user_id, j.comfy_prompt_id, j.scene_media_id, j.session_id,
+		j.target, j.color, j.cost, j.status, j.output_media_id,
+		j.error_code, j.balance_after, j.created_at, j.updated_at, j.completed_at
+		FROM repaint_jobs j WHERE j.id = ${id} AND j.user_id = ${userId}`);
 	return row ? toRepaintJob(row) : null;
 }
 
 export async function failRepaintJob(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	id: string,
 	errorCode: string,
@@ -148,21 +126,17 @@ export async function failRepaintJob(
 	executionSec: number,
 	downloadSec = 0
 ): Promise<RepaintJob> {
-	await db
-		.prepare(
-			"UPDATE repaint_jobs SET status = 'failed', error_code = ?, updated_at = ?, " +
-				'completed_at = ?, queue_wait_sec = ?, execution_sec = ?, download_sec = ? ' +
-				"WHERE id = ? AND user_id = ? AND status = 'processing'"
-		)
-		.bind(errorCode, completedAt, completedAt, queueWaitSec, executionSec, downloadSec, id, userId)
-		.run();
+	await db.run(sql`UPDATE repaint_jobs SET status = 'failed', error_code = ${errorCode},
+		updated_at = ${completedAt}, completed_at = ${completedAt}, queue_wait_sec = ${queueWaitSec},
+		execution_sec = ${executionSec}, download_sec = ${downloadSec}
+		WHERE id = ${id} AND user_id = ${userId} AND status = 'processing'`);
 	const job = await getRepaintJob(db, userId, id);
 	if (!job) throw new Error('repaint job not found');
 	return job;
 }
 
 export async function completeRepaintJob(
-	db: D1Database,
+	db: Database,
 	userId: string,
 	id: string,
 	outputMediaId: number,
@@ -172,66 +146,28 @@ export async function completeRepaintJob(
 	downloadSec: number,
 	reuploadSec: number
 ): Promise<RepaintJob> {
-	const results = await db.batch<RepaintDeductionSnapshotRow>([
-		db
-			.prepare(
-				'SELECT c.balance AS available_balance, j.cost FROM credits c ' +
-					'JOIN repaint_jobs j ON j.user_id = c.user_id ' +
-					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
-			)
-			.bind(id, userId),
-		db
-			.prepare(
-				'UPDATE credits SET balance = MAX(balance - ' +
-					"(SELECT cost FROM repaint_jobs WHERE id = ? AND user_id = ? AND status = 'processing'), " +
-					'0), ' +
-					'updated_at = ? WHERE user_id = ? AND EXISTS ' +
-					"(SELECT 1 FROM repaint_jobs WHERE id = ? AND user_id = ? AND status = 'processing')"
-			)
-			.bind(id, userId, completedAt, userId, id, userId),
-		db
-			.prepare(
-				'INSERT INTO generations ' +
-					'(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id, ' +
-					'comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot) ' +
-					"SELECT j.id, j.user_id, ?, j.scene_media_id, j.target, 'repaint', j.cost, c.balance, ?, j.session_id, " +
-					'j.upload_queue_sec, ?, ?, ?, ?, j.form_snapshot ' +
-					'FROM repaint_jobs j JOIN credits c ON c.user_id = j.user_id ' +
-					"WHERE j.id = ? AND j.user_id = ? AND j.status = 'processing'"
-			)
-			.bind(
-				outputMediaId,
-				completedAt,
-				queueWaitSec,
-				executionSec,
-				downloadSec,
-				reuploadSec,
-				id,
-				userId
-			),
-		db
-			.prepare(
-				"UPDATE repaint_jobs SET status = 'completed', output_media_id = ?, " +
-					'balance_after = (SELECT balance FROM credits WHERE user_id = ?), updated_at = ?, completed_at = ?, ' +
-					'queue_wait_sec = ?, execution_sec = ?, download_sec = ?, reupload_sec = ? ' +
-					"WHERE id = ? AND user_id = ? AND status = 'processing' " +
-					'AND EXISTS (SELECT 1 FROM credits WHERE user_id = ?)'
-			)
-			.bind(
-				outputMediaId,
-				userId,
-				completedAt,
-				completedAt,
-				queueWaitSec,
-				executionSec,
-				downloadSec,
-				reuploadSec,
-				id,
-				userId,
-				userId
-			)
+	const [snapshotRows] = await db.batch([
+		db.all<RepaintDeductionSnapshotRow>(sql`SELECT c.balance AS available_balance, j.cost FROM credits c
+			JOIN repaint_jobs j ON j.user_id = c.user_id
+			WHERE j.id = ${id} AND j.user_id = ${userId} AND j.status = 'processing'`),
+		db.run(sql`UPDATE credits SET balance = MAX(balance -
+			(SELECT cost FROM repaint_jobs WHERE id = ${id} AND user_id = ${userId} AND status = 'processing'), 0),
+			updated_at = ${completedAt} WHERE user_id = ${userId} AND EXISTS
+			(SELECT 1 FROM repaint_jobs WHERE id = ${id} AND user_id = ${userId} AND status = 'processing')`),
+		db.run(sql`INSERT INTO generations
+			(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id,
+			comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot)
+			SELECT j.id, j.user_id, ${outputMediaId}, j.scene_media_id, j.target, 'repaint', j.cost, c.balance, ${completedAt}, j.session_id,
+			j.upload_queue_sec, ${queueWaitSec}, ${executionSec}, ${downloadSec}, ${reuploadSec}, j.form_snapshot
+			FROM repaint_jobs j JOIN credits c ON c.user_id = j.user_id
+			WHERE j.id = ${id} AND j.user_id = ${userId} AND j.status = 'processing'`),
+		db.run(sql`UPDATE repaint_jobs SET status = 'completed', output_media_id = ${outputMediaId},
+			balance_after = (SELECT balance FROM credits WHERE user_id = ${userId}), updated_at = ${completedAt}, completed_at = ${completedAt},
+			queue_wait_sec = ${queueWaitSec}, execution_sec = ${executionSec}, download_sec = ${downloadSec}, reupload_sec = ${reuploadSec}
+			WHERE id = ${id} AND user_id = ${userId} AND status = 'processing'
+			AND EXISTS (SELECT 1 FROM credits WHERE user_id = ${userId})`)
 	]);
-	const snapshot = results[0]?.results[0];
+	const snapshot = snapshotRows[0];
 	if (snapshot && snapshot.available_balance < snapshot.cost) {
 		console.warn('Repaint credit deduction exceeded available balance:', {
 			jobId: id
