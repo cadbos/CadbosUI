@@ -18,7 +18,8 @@ before the Change Date. See LICENSE for complete terms.
 	import { formatCredit } from '$lib/utils';
 
 	type Props =
-		| { kind: 'count' | 'currency' | 'size'; value: number | null }
+		| { kind: 'count'; value: number | null }
+		| { kind: 'currency' | 'size'; value: number | null; showUnit?: boolean }
 		| { kind: 'countWithSize'; value: number; bytes: number | null };
 
 	let props: Props = $props();
@@ -27,14 +28,18 @@ before the Change Date. See LICENSE for complete terms.
 
 	function formatNumber(value: number, maximumFractionDigits: number): string {
 		const parts = new Intl.NumberFormat('en-US', { maximumFractionDigits }).formatToParts(value);
-		return parts.map((part) => (part.type === 'group' ? ' ' : part.value)).join('');
+		const groupSeparator = parts.some((part) => part.type === 'decimal') ? ',' : ' ';
+		return parts.map((part) => (part.type === 'group' ? groupSeparator : part.value)).join('');
 	}
 
-	function formatSize(bytes: number | null): string {
+	function formatSize(bytes: number | null, showUnit = true): string {
 		if (bytes === null) return t('usage.emptyValue');
 
 		const value = bytes / 1024 ** 2;
 		const maximumFractionDigits = 1;
+		const number = formatNumber(value, maximumFractionDigits);
+		if (!showUnit) return number;
+
 		const parts = new Intl.NumberFormat(getLocale(), {
 			style: 'unit',
 			unit: 'megabyte',
@@ -43,7 +48,6 @@ before the Change Date. See LICENSE for complete terms.
 		}).formatToParts(value);
 		const firstNumberPart = parts.findIndex((part) => numericPartTypes.has(part.type));
 		const lastNumberPart = parts.findLastIndex((part) => numericPartTypes.has(part.type));
-		const number = formatNumber(value, maximumFractionDigits);
 		return (
 			parts
 				.slice(0, firstNumberPart)
@@ -67,9 +71,10 @@ before the Change Date. See LICENSE for complete terms.
 		if (props.value === null) return t('usage.emptyValue');
 		if (props.kind === 'currency') {
 			const amount = formatCredit(currency.convert(props.value));
-			return `${currency.symbol} ${amount.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+			const formattedAmount = amount.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+			return props.showUnit === false ? formattedAmount : `${currency.symbol} ${formattedAmount}`;
 		}
-		if (props.kind === 'size') return formatSize(props.value);
+		if (props.kind === 'size') return formatSize(props.value, props.showUnit);
 		return formatNumber(props.value, 0);
 	}
 </script>

@@ -19,6 +19,7 @@ before the Change Date. See LICENSE for complete terms.
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
+	import { currency } from '$lib/state/currency.svelte';
 	import { usage } from '$lib/state/usage.svelte';
 	import UsageNumber from './UsageNumber.svelte';
 
@@ -75,6 +76,15 @@ before the Change Date. See LICENSE for complete terms.
 			formatter.formatToParts(new Date()).find((part) => part.type === 'timeZoneName')?.value ??
 			timeZone
 		);
+	}
+
+	function formatSizeUnit(): string {
+		const parts = new Intl.NumberFormat(getLocale(), {
+			style: 'unit',
+			unit: 'megabyte',
+			unitDisplay: 'short'
+		}).formatToParts(1);
+		return parts.find((part) => part.type === 'unit')!.value;
 	}
 
 	function markPictureFailed(pubkey: string): void {
@@ -253,17 +263,27 @@ before the Change Date. See LICENSE for complete terms.
 					<thead>
 						<tr>
 							<th scope="col">{t('usage.column.user')}</th>
-							<th scope="col" class="numeric-column">{t('usage.column.balance')}</th>
-							<th scope="col" class="numeric-column">{t('usage.column.totalDeposit')}</th>
+							<th scope="col" class="numeric-column"
+								>{t('usage.column.balance')}, {currency.symbol}</th
+							>
+							<th scope="col" class="numeric-column"
+								>{t('usage.column.totalDeposit')}, {currency.symbol}</th
+							>
 							<th scope="col">{t('usage.column.lastDepositAt')}</th>
 							<th scope="col" class="numeric-column">{t('usage.column.projectCount')}</th>
 							<th scope="col" class="numeric-column">{t('usage.column.sessionCount')}</th>
 							<th scope="col" class="numeric-column">{t('usage.column.generationCount')}</th>
 							<th scope="col" class="numeric-column">{t('usage.column.sourceCount')}</th>
-							<th scope="col" class="numeric-column">{t('usage.column.sourceBytes')}</th>
+							<th scope="col" class="numeric-column"
+								>{t('usage.column.sourceBytes')}, {formatSizeUnit()}</th
+							>
 							<th scope="col" class="numeric-column">{t('usage.column.referenceCount')}</th>
-							<th scope="col" class="numeric-column">{t('usage.column.referenceBytes')}</th>
-							<th scope="col" class="numeric-column">{t('usage.column.totalSpend')}</th>
+							<th scope="col" class="numeric-column"
+								>{t('usage.column.referenceBytes')}, {formatSizeUnit()}</th
+							>
+							<th scope="col" class="numeric-column"
+								>{t('usage.column.totalSpend')}, {currency.symbol}</th
+							>
 							<th scope="col" title={timeZoneFullName}
 								>{t('usage.column.latestSpendAt')}, {timeZoneAbbreviation}</th
 							>
@@ -300,9 +320,11 @@ before the Change Date. See LICENSE for complete terms.
 										>
 									</span>
 								</th>
-								<td class="numeric-column"><UsageNumber kind="currency" value={user.balance} /></td>
 								<td class="numeric-column"
-									><UsageNumber kind="currency" value={user.totalDeposit} /></td
+									><UsageNumber kind="currency" value={user.balance} showUnit={false} /></td
+								>
+								<td class="numeric-column"
+									><UsageNumber kind="currency" value={user.totalDeposit} showUnit={false} /></td
 								>
 								<td>{formatTimestamp(user.lastDepositAt)}</td>
 								<td class="numeric-column"
@@ -316,15 +338,17 @@ before the Change Date. See LICENSE for complete terms.
 								>
 								<td class="numeric-column"><UsageNumber kind="count" value={user.sourceCount} /></td
 								>
-								<td class="numeric-column"><UsageNumber kind="size" value={user.sourceBytes} /></td>
+								<td class="numeric-column"
+									><UsageNumber kind="size" value={user.sourceBytes} showUnit={false} /></td
+								>
 								<td class="numeric-column"
 									><UsageNumber kind="count" value={user.referenceCount} /></td
 								>
 								<td class="numeric-column"
-									><UsageNumber kind="size" value={user.referenceBytes} /></td
+									><UsageNumber kind="size" value={user.referenceBytes} showUnit={false} /></td
 								>
 								<td class="numeric-column"
-									><UsageNumber kind="currency" value={user.totalSpend} /></td
+									><UsageNumber kind="currency" value={user.totalSpend} showUnit={false} /></td
 								>
 								<td>{formatTimestamp(user.latestSpendAt)}</td>
 							</tr>
