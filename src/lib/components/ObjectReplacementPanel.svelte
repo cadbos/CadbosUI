@@ -35,6 +35,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { logBoundaryError } from '$lib/utils';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
 
+	const INITIAL_REGION = { x: 0.3, y: 0.3, width: 0.4, height: 0.4 } as const;
 	const MAX_TRANSIENT_FAILURES = 5;
 	const DEFAULT_POLL_DELAY_MS = 2_000;
 	const MAX_POLL_DELAY_MS = 30_000;
@@ -342,7 +343,12 @@ before the Change Date. See LICENSE for complete terms.
 			}
 			const result = await parseJobResponse(response);
 			if (result.status !== 'processing') throw new Error('invalid_response');
-			request.setActiveObjectReplacementJob(result.id, sourceRender, instruction);
+			request.setActiveObjectReplacementJob(
+				result.id,
+				sourceRender,
+				instruction,
+				body.formSnapshot
+			);
 			if (
 				navigatedAwayWhileSubmitting ||
 				!isEditToolRoute(page.route.id, page.url.searchParams, 'object-replacement')
@@ -463,7 +469,33 @@ before the Change Date. See LICENSE for complete terms.
 
 	<ModeHint field="objectReplacement" text={request.objectReplacementObject} />
 
-	{#if isAuthenticated && validationKey && jobId === null}
+	<div class="region-section">
+		<span class="section-label">{t('objectReplacement.region.label')}</span>
+		<p class="region-hint">{t('objectReplacement.region.hint')}</p>
+		{#if request.activeObjectReplacementRegion()}
+			<button
+				type="button"
+				class="secondary-btn"
+				disabled={formLocked}
+				onclick={() => request.setObjectReplacementRegion(null)}
+			>
+				{t('objectReplacement.region.clear')}
+			</button>
+		{:else}
+			<button
+				type="button"
+				class="secondary-btn"
+				disabled={formLocked || !request.hasWorkingImage()}
+				onclick={() => request.setObjectReplacementRegion(INITIAL_REGION)}
+			>
+				{t('objectReplacement.region.select')}
+			</button>
+		{/if}
+	</div>
+
+	{#if !isAuthenticated}
+		<p class="auth-hint">{t('objectReplacement.signInToApply')}</p>
+	{:else if validationKey && jobId === null}
 		<p class="validation-hint">{t(validationKey)}</p>
 	{/if}
 
@@ -516,6 +548,25 @@ before the Change Date. See LICENSE for complete terms.
 		flex-direction: column;
 		gap: 0.5rem;
 		font-size: 0.875rem;
+		color: var(--color-muted-strong);
+	}
+
+	.region-section {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.375rem;
+	}
+
+	.section-label {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--color-muted-strong);
+	}
+
+	.region-hint {
+		margin: 0;
+		font-size: 0.8125rem;
 		color: var(--color-muted-strong);
 	}
 

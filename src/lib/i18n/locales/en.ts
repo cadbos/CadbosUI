@@ -547,6 +547,13 @@ export const en = {
 	'objectReplacement.objectHint':
 		'Describe the existing object precisely so the model can find it.',
 	'objectReplacement.objectPlaceholder': 'for example: gray sofa by the window',
+	'objectReplacement.region.label': 'Area',
+	'objectReplacement.region.hint':
+		'Optional. Drag on the picture to confine replacement to one area. It helps when several objects fit the name.',
+	'objectReplacement.region.select': 'Select area',
+	'objectReplacement.region.clear': 'Clear area',
+	'objectReplacement.region.boxLabel':
+		'Selected area. Arrow keys move it, Shift with arrow keys resizes it, Delete clears it.',
 	'objectReplacement.scale': 'Object size',
 	'objectReplacement.scaleSmaller': 'Smaller',
 	'objectReplacement.scaleAsShown': 'As shown',

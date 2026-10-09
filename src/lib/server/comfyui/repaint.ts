@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { RepaintRegion } from '$lib/repaint-region';
+import type { ImageRegion } from '$lib/image-region';
 import workflowTemplate from '$lib/server/repaint-workflow-api.json';
 import {
 	ComfyUiError,
@@ -34,7 +34,7 @@ export interface QueueRepaintRequest {
 	target: string;
 	scene: RepaintImage;
 	swatch: RepaintImage;
-	region?: RepaintRegion | undefined;
+	region?: ImageRegion | undefined;
 	signal?: AbortSignal | undefined;
 }
 
@@ -65,7 +65,7 @@ function repaintWorkflow(
 	scene: ComfyImageDescriptor,
 	swatch: ComfyImageDescriptor,
 	target: string,
-	region: RepaintRegion | undefined
+	region: ImageRegion | undefined
 ): ComfyWorkflow {
 	const workflow = structuredClone(workflowTemplate) as ComfyWorkflow;
 	// Picture 1 (node 42) is the scene and fixes the output size; picture 2

@@ -319,6 +319,15 @@ describe('POST /api/object-replacement', () => {
 		expect(invalid.status).toBe(400);
 		expect(integration.submit).not.toHaveBeenCalled();
 		expect(consoleWarn).not.toHaveBeenCalled();
+		for (const region of [
+			{ x: 0.8, y: 0, width: 0.5, height: 0.5 },
+			{ x: 0, y: 0, width: 0.01, height: 0.5 },
+			{ x: 0, y: 0, width: 0.5, height: 0.5, rotation: 1 }
+		]) {
+			const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), { region });
+			expect(response.status).toBe(400);
+		}
+		expect(integration.submit).not.toHaveBeenCalled();
 	});
 
 	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
@@ -421,7 +430,8 @@ describe('POST /api/object-replacement', () => {
 			{
 				image: expect.stringContaining('/scene.jpg?'),
 				referenceImage: expect.stringContaining('/reference.jpg?'),
-				replacementObject: requestBody.replacementObject
+				replacementObject: requestBody.replacementObject,
+				region: undefined
 			},
 			'https://cadbos.example',
 			id
@@ -431,6 +441,20 @@ describe('POST /api/object-replacement', () => {
 			cost: 3.5,
 			status: 'processing'
 		});
+	});
+
+	it('forwards a valid selected area to the provider submission', async () => {
+		const db = makeD1();
+		seedUser(db, 12);
+		const region = { x: 0.1, y: 0.2, width: 0.3, height: 0.4 };
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), { region });
+		expect(response.status).toBe(202);
+		expect(integration.submit).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ region }),
+			'https://cadbos.example',
+			expect.any(String)
+		);
 	});
 
 	it.each([

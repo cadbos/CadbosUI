@@ -48,6 +48,7 @@ export const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	styleNegativePrompt: '',
 	objectReplacementObject: '',
 	objectReplacementScale: 1,
+	objectReplacementRegion: null,
 	textureReplacementSurface: '',
 	textureReplacementMasked: false,
 	lightSettingsPresetIds: [],

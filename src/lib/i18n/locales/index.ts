@@ -523,6 +523,11 @@ export interface Dictionary {
 	'objectReplacement.objectLabel': string;
 	'objectReplacement.objectHint': string;
 	'objectReplacement.objectPlaceholder': string;
+	'objectReplacement.region.label': string;
+	'objectReplacement.region.hint': string;
+	'objectReplacement.region.select': string;
+	'objectReplacement.region.clear': string;
+	'objectReplacement.region.boxLabel': string;
 	'objectReplacement.scale': string;
 	'objectReplacement.scaleSmaller': string;
 	'objectReplacement.scaleAsShown': string;

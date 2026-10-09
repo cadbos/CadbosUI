@@ -13,6 +13,7 @@
  */
 
 import workflowTemplate from '$lib/server/object-replacement-workflow.json';
+import type { ImageRegion } from '$lib/image-region';
 import {
 	ComfyUiError,
 	type ComfyDownloadedImage,
@@ -32,6 +33,7 @@ export interface ObjectReplacementRequest {
 	clientId?: string | undefined;
 	reference: ObjectReplacementImage;
 	replacementObject: string;
+	region?: ImageRegion | undefined;
 	scene: ObjectReplacementImage;
 	signal?: AbortSignal | undefined;
 	pollIntervalMs?: number | undefined;
@@ -55,7 +57,7 @@ function setWorkflowInput(
 	nodeId: string,
 	classType: string,
 	input: string,
-	value: string
+	value: string | number
 ): void {
 	const node = workflow[nodeId];
 	if (!node || node.class_type !== classType || !(input in node.inputs)) {
@@ -71,12 +73,19 @@ function setWorkflowInput(
 function objectReplacementWorkflow(
 	scene: ComfyImageDescriptor,
 	reference: ComfyImageDescriptor,
-	replacementObject: string
+	replacementObject: string,
+	region: ImageRegion | undefined
 ): ComfyWorkflow {
 	const workflow = structuredClone(workflowTemplate) as ComfyWorkflow;
 	setWorkflowInput(workflow, '1', 'LoadImage', 'image', uploadedImagePath(scene));
 	setWorkflowInput(workflow, '2', 'LoadImage', 'image', uploadedImagePath(reference));
 	setWorkflowInput(workflow, '19', 'PrimitiveString', 'value', replacementObject);
+	if (region) {
+		setWorkflowInput(workflow, '200', 'PrimitiveFloat', 'value', region.x);
+		setWorkflowInput(workflow, '201', 'PrimitiveFloat', 'value', region.y);
+		setWorkflowInput(workflow, '202', 'PrimitiveFloat', 'value', region.width);
+		setWorkflowInput(workflow, '203', 'PrimitiveFloat', 'value', region.height);
+	}
 	const outputNode = workflow[FINAL_OUTPUT_NODE_ID];
 	if (!outputNode || outputNode.class_type !== 'SaveImage') {
 		throw new ComfyUiError(
@@ -143,7 +152,7 @@ export async function queueObjectReplacement(
 		},
 		{ signal: request.signal }
 	);
-	const workflow = objectReplacementWorkflow(scene, reference, replacementObject);
+	const workflow = objectReplacementWorkflow(scene, reference, replacementObject, request.region);
 	return client.queueWorkflow(workflow, { clientId: request.clientId, signal: request.signal });
 }
 

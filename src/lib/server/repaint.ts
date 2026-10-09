@@ -20,7 +20,7 @@ import {
 	type ComfyDownloadedImage
 } from '$lib/server/comfyui';
 import { imageExtensionFromMime } from '$lib/image-mime';
-import type { RepaintRegion } from '$lib/repaint-region';
+import type { ImageRegion } from '$lib/image-region';
 import { colorSwatchPng } from '$lib/server/color-swatch';
 import { downloadRemoteImage } from '$lib/server/remote-image';
 
@@ -71,7 +71,7 @@ export async function cancelRepaint(
 
 export async function submitRepaint(
 	platform: App.Platform | undefined,
-	request: { image: string; target: string; color: string; region?: RepaintRegion | undefined },
+	request: { image: string; target: string; color: string; region?: ImageRegion | undefined },
 	applicationOrigin: string,
 	jobId: string
 ): Promise<string> {

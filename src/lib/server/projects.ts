@@ -363,6 +363,7 @@ function toPublicFormSnapshot(
 		styleNegativePrompt: snapshot.styleNegativePrompt,
 		objectReplacementObject: snapshot.objectReplacementObject,
 		objectReplacementScale: snapshot.objectReplacementScale,
+		objectReplacementRegion: snapshot.objectReplacementRegion,
 		textureReplacementSurface: snapshot.textureReplacementSurface,
 		textureReplacementMasked: snapshot.textureReplacementMasked,
 		lightSettingsPresetIds: snapshot.lightSettingsPresetIds,

@@ -986,13 +986,22 @@ before the Change Date. See LICENSE for complete terms.
 							{/snippet}
 						</svelte:boundary>
 					{:else if mode === 'edit' && !request.currentRender}
-						<ImageUpload selectRegion={activeEditTool === 'repaint'} />
+						<ImageUpload
+							regionTool={activeEditTool === 'repaint' || activeEditTool === 'object-replacement'
+								? activeEditTool
+								: undefined}
+						/>
 					{:else if mode === 'edit' && request.currentRender}
 						<section aria-label={t('render.result')}>
 							<svelte:boundary
 								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
 							>
-								<RenderResult selectRegion={activeEditTool === 'repaint'} />
+								<RenderResult
+									regionTool={activeEditTool === 'repaint' ||
+									activeEditTool === 'object-replacement'
+										? activeEditTool
+										: undefined}
+								/>
 								{#snippet failed(_error: unknown, reset: () => void)}
 									<p class="boundary-failed">{t('boundary.failed')}</p>
 									<button type="button" class="boundary-retry" onclick={reset}>

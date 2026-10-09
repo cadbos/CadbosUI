@@ -124,6 +124,132 @@
 			"title": "Target object"
 		}
 	},
+	"200": {
+		"inputs": {
+			"value": 0
+		},
+		"class_type": "PrimitiveFloat",
+		"_meta": {
+			"title": "Region x (fraction)"
+		}
+	},
+	"201": {
+		"inputs": {
+			"value": 0
+		},
+		"class_type": "PrimitiveFloat",
+		"_meta": {
+			"title": "Region y (fraction)"
+		}
+	},
+	"202": {
+		"inputs": {
+			"value": 1
+		},
+		"class_type": "PrimitiveFloat",
+		"_meta": {
+			"title": "Region width (fraction)"
+		}
+	},
+	"203": {
+		"inputs": {
+			"value": 1
+		},
+		"class_type": "PrimitiveFloat",
+		"_meta": {
+			"title": "Region height (fraction)"
+		}
+	},
+	"204": {
+		"inputs": {
+			"image": ["53", 0]
+		},
+		"class_type": "GetImageSize",
+		"_meta": {
+			"title": "Working image size"
+		}
+	},
+	"205": {
+		"inputs": {
+			"value": "a*b",
+			"a": ["200", 0],
+			"b": ["204", 0]
+		},
+		"class_type": "SimpleMath+",
+		"_meta": {
+			"title": "Region x (px)"
+		}
+	},
+	"206": {
+		"inputs": {
+			"value": "a*b",
+			"a": ["201", 0],
+			"b": ["204", 1]
+		},
+		"class_type": "SimpleMath+",
+		"_meta": {
+			"title": "Region y (px)"
+		}
+	},
+	"207": {
+		"inputs": {
+			"value": "a*b",
+			"a": ["202", 0],
+			"b": ["204", 0]
+		},
+		"class_type": "SimpleMath+",
+		"_meta": {
+			"title": "Region width (px)"
+		}
+	},
+	"208": {
+		"inputs": {
+			"value": "a*b",
+			"a": ["203", 0],
+			"b": ["204", 1]
+		},
+		"class_type": "SimpleMath+",
+		"_meta": {
+			"title": "Region height (px)"
+		}
+	},
+	"210": {
+		"inputs": {
+			"image": ["53", 0],
+			"width": ["207", 0],
+			"height": ["208", 0],
+			"x": ["205", 0],
+			"y": ["206", 0]
+		},
+		"class_type": "ImageCrop",
+		"_meta": {
+			"title": "Crop working image to region"
+		}
+	},
+	"211": {
+		"inputs": {
+			"value": 0,
+			"width": ["204", 0],
+			"height": ["204", 1]
+		},
+		"class_type": "SolidMask",
+		"_meta": {
+			"title": "Empty working-image mask"
+		}
+	},
+	"212": {
+		"inputs": {
+			"x": ["205", 0],
+			"y": ["206", 0],
+			"operation": "add",
+			"destination": ["211", 0],
+			"source": ["84", 0]
+		},
+		"class_type": "MaskComposite",
+		"_meta": {
+			"title": "Place region detection on the scene"
+		}
+	},
 	"153:147": {
 		"inputs": {
 			"clip_name": "Qwen3VL-4B-Instruct-Q8_0.gguf",
@@ -343,7 +469,7 @@
 			"threshold": 0.35,
 			"sam_model": ["58", 0],
 			"grounding_dino_model": ["57", 0],
-			"image": ["53", 0]
+			"image": ["210", 0]
 		},
 		"class_type": "GroundingDinoSAMSegment (segment anything)",
 		"_meta": {
@@ -360,7 +486,7 @@
 			"lerp_alpha": 1,
 			"decay_factor": 1,
 			"fill_holes": true,
-			"mask": ["84", 0]
+			"mask": ["212", 0]
 		},
 		"class_type": "GrowMaskWithBlur",
 		"_meta": {
@@ -384,7 +510,7 @@
 			"y": 0,
 			"operation": "subtract",
 			"destination": ["61", 0],
-			"source": ["84", 0]
+			"source": ["212", 0]
 		},
 		"class_type": "MaskComposite",
 		"_meta": {
@@ -528,7 +654,7 @@
 			"y": 0,
 			"operation": "subtract",
 			"destination": ["86", 0],
-			"source": ["84", 0]
+			"source": ["212", 0]
 		},
 		"class_type": "MaskComposite",
 		"_meta": {
@@ -585,7 +711,7 @@
 			"threshold": 0.5,
 			"depth_margin": 0.02,
 			"masks": ["73", 1],
-			"reference": ["84", 0],
+			"reference": ["212", 0],
 			"depth": ["105", 0]
 		},
 		"class_type": "MaskFilterByOverlap",
