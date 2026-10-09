@@ -22,7 +22,7 @@
 			"upscale_method": "lanczos",
 			"megapixels": 1,
 			"resolution_steps": 1,
-			"image": ["210", 0]
+			"image": ["1", 0]
 		},
 		"class_type": "ImageScaleToTotalPixels",
 		"_meta": {
@@ -108,7 +108,7 @@
 	"17": {
 		"inputs": {
 			"filename_prefix": "obj-replace-v23",
-			"images": ["222", 0]
+			"images": ["68", 0]
 		},
 		"class_type": "SaveImage",
 		"_meta": {
@@ -125,71 +125,130 @@
 		}
 	},
 	"200": {
-		"inputs": { "value": 0 },
+		"inputs": {
+			"value": 0
+		},
 		"class_type": "PrimitiveFloat",
-		"_meta": { "title": "Region x (fraction)" }
+		"_meta": {
+			"title": "Region x (fraction)"
+		}
 	},
 	"201": {
-		"inputs": { "value": 0 },
+		"inputs": {
+			"value": 0
+		},
 		"class_type": "PrimitiveFloat",
-		"_meta": { "title": "Region y (fraction)" }
+		"_meta": {
+			"title": "Region y (fraction)"
+		}
 	},
 	"202": {
-		"inputs": { "value": 1 },
+		"inputs": {
+			"value": 1
+		},
 		"class_type": "PrimitiveFloat",
-		"_meta": { "title": "Region width (fraction)" }
+		"_meta": {
+			"title": "Region width (fraction)"
+		}
 	},
 	"203": {
-		"inputs": { "value": 1 },
+		"inputs": {
+			"value": 1
+		},
 		"class_type": "PrimitiveFloat",
-		"_meta": { "title": "Region height (fraction)" }
+		"_meta": {
+			"title": "Region height (fraction)"
+		}
 	},
 	"204": {
-		"inputs": { "image": ["1", 0] },
+		"inputs": {
+			"image": ["53", 0]
+		},
 		"class_type": "GetImageSize",
-		"_meta": { "title": "Scene size" }
+		"_meta": {
+			"title": "Working image size"
+		}
 	},
 	"205": {
-		"inputs": { "value": "a*b", "a": ["200", 0], "b": ["204", 0] },
+		"inputs": {
+			"value": "a*b",
+			"a": ["200", 0],
+			"b": ["204", 0]
+		},
 		"class_type": "SimpleMath+",
-		"_meta": { "title": "Region x (px)" }
+		"_meta": {
+			"title": "Region x (px)"
+		}
 	},
 	"206": {
-		"inputs": { "value": "a*b", "a": ["201", 0], "b": ["204", 1] },
+		"inputs": {
+			"value": "a*b",
+			"a": ["201", 0],
+			"b": ["204", 1]
+		},
 		"class_type": "SimpleMath+",
-		"_meta": { "title": "Region y (px)" }
+		"_meta": {
+			"title": "Region y (px)"
+		}
 	},
 	"207": {
-		"inputs": { "value": "a*b", "a": ["202", 0], "b": ["204", 0] },
+		"inputs": {
+			"value": "a*b",
+			"a": ["202", 0],
+			"b": ["204", 0]
+		},
 		"class_type": "SimpleMath+",
-		"_meta": { "title": "Region width (px)" }
+		"_meta": {
+			"title": "Region width (px)"
+		}
 	},
 	"208": {
-		"inputs": { "value": "a*b", "a": ["203", 0], "b": ["204", 1] },
+		"inputs": {
+			"value": "a*b",
+			"a": ["203", 0],
+			"b": ["204", 1]
+		},
 		"class_type": "SimpleMath+",
-		"_meta": { "title": "Region height (px)" }
+		"_meta": {
+			"title": "Region height (px)"
+		}
 	},
 	"210": {
 		"inputs": {
-			"image": ["1", 0],
+			"image": ["53", 0],
 			"width": ["207", 0],
 			"height": ["208", 0],
 			"x": ["205", 0],
 			"y": ["206", 0]
 		},
 		"class_type": "ImageCrop",
-		"_meta": { "title": "Crop scene to region" }
+		"_meta": {
+			"title": "Crop working image to region"
+		}
 	},
-	"222": {
+	"211": {
 		"inputs": {
-			"destination": ["1", 0],
-			"source": ["68", 0],
+			"value": 0,
+			"width": ["204", 0],
+			"height": ["204", 1]
+		},
+		"class_type": "SolidMask",
+		"_meta": {
+			"title": "Empty working-image mask"
+		}
+	},
+	"212": {
+		"inputs": {
 			"x": ["205", 0],
 			"y": ["206", 0],
-			"resize_source": false
+			"operation": "add",
+			"destination": ["211", 0],
+			"source": ["84", 0]
 		},
-		"class_type": "ImageCompositeMasked",
-		"_meta": { "title": "Paste region into scene" }
+		"class_type": "MaskComposite",
+		"_meta": {
+			"title": "Place region detection on the scene"
+		}
 	},
 	"153:147": {
 		"inputs": {
@@ -275,7 +334,7 @@
 			"background_color": "#FFFFFF",
 			"image1": ["1", 0],
 			"image2": ["2", 0],
-			"image3": ["222", 0]
+			"image3": ["68", 0]
 		},
 		"class_type": "AILab_ImageStitch",
 		"_meta": {
@@ -410,7 +469,7 @@
 			"threshold": 0.35,
 			"sam_model": ["58", 0],
 			"grounding_dino_model": ["57", 0],
-			"image": ["53", 0]
+			"image": ["210", 0]
 		},
 		"class_type": "GroundingDinoSAMSegment (segment anything)",
 		"_meta": {
@@ -427,7 +486,7 @@
 			"lerp_alpha": 1,
 			"decay_factor": 1,
 			"fill_holes": true,
-			"mask": ["84", 0]
+			"mask": ["212", 0]
 		},
 		"class_type": "GrowMaskWithBlur",
 		"_meta": {
@@ -451,7 +510,7 @@
 			"y": 0,
 			"operation": "subtract",
 			"destination": ["61", 0],
-			"source": ["84", 0]
+			"source": ["212", 0]
 		},
 		"class_type": "MaskComposite",
 		"_meta": {
@@ -501,7 +560,7 @@
 	},
 	"66": {
 		"inputs": {
-			"image": ["210", 0]
+			"image": ["1", 0]
 		},
 		"class_type": "GetImageSize",
 		"_meta": {
@@ -531,7 +590,7 @@
 			"x": 0,
 			"y": 0,
 			"resize_source": false,
-			"destination": ["210", 0],
+			"destination": ["1", 0],
 			"source": ["67", 0],
 			"mask": ["67", 3]
 		},
@@ -595,7 +654,7 @@
 			"y": 0,
 			"operation": "subtract",
 			"destination": ["86", 0],
-			"source": ["84", 0]
+			"source": ["212", 0]
 		},
 		"class_type": "MaskComposite",
 		"_meta": {
@@ -652,7 +711,7 @@
 			"threshold": 0.5,
 			"depth_margin": 0.02,
 			"masks": ["73", 1],
-			"reference": ["84", 0],
+			"reference": ["212", 0],
 			"depth": ["105", 0]
 		},
 		"class_type": "MaskFilterByOverlap",
