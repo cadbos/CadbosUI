@@ -576,6 +576,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.lightbox-close {
 		position: absolute;
+		z-index: 1;
 		top: -0.75rem;
 		right: -0.75rem;
 		display: flex;
