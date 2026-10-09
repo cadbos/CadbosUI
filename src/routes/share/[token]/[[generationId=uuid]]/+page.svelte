@@ -14,6 +14,8 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { X } from '@lucide/svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type {
 		GenerationKind,
@@ -30,8 +32,10 @@ before the Change Date. See LICENSE for complete terms.
 	import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 	import { createRevealTimers } from '$lib/reveal-on-timeout';
 	import { shareViewer } from '$lib/state/share-viewer.svelte';
+	import { logBoundaryError } from '$lib/utils';
 
 	const token = $derived(page.params.token);
+	const generationId = $derived(page.params.generationId);
 	const generationCount = $derived(
 		shareViewer.project?.sessions.reduce((sum, session) => sum + session.generations.length, 0) ?? 0
 	);
@@ -169,22 +173,32 @@ before the Change Date. See LICENSE for complete terms.
 		return rows;
 	}
 
-	let lightbox = $state<{ generationId: string; alt: string } | null>(null);
 	const lightboxImage = $derived.by(() => {
-		const selected = lightbox;
-		if (!selected || !shareViewer.project) return null;
-		const generation = shareViewer.project.sessions
-			.flatMap((session) => session.generations)
-			.find((candidate) => candidate.id === selected.generationId);
-		return generation ? { url: generation.image.url, alt: selected.alt } : null;
+		const id = generationId;
+		const project = shareViewer.project;
+		if (!id || !project) return null;
+		for (const session of project.sessions) {
+			const index = session.generations.findIndex((generation) => generation.id === id);
+			const generation = session.generations[index];
+			if (!generation) continue;
+			return {
+				url: generation.image.url,
+				alt: ti('share.generationAlt', { order: index + 1, title: sessionTitle(session) })
+			};
+		}
+		return null;
 	});
 	const settingsRows = $derived(
 		shareViewer.generationDetail ? formatSettingsRows(shareViewer.generationDetail) : []
 	);
 
 	$effect(() => {
-		void shareViewer.load(token);
-		return () => shareViewer.clear();
+		const currentToken = token;
+		void shareViewer.load(currentToken);
+		return () => {
+			shareViewer.clear();
+			shareViewer.clearGenerationDetail();
+		};
 	});
 
 	function formatDate(timestamp: number): string {
@@ -215,15 +229,48 @@ before the Change Date. See LICENSE for complete terms.
 		};
 	}
 
-	function openLightbox(generationId: string, alt: string): void {
-		lightbox = { generationId, alt };
-		void shareViewer.loadGenerationDetail(token, generationId);
+	let openedFromList = false;
+
+	function openLightbox(id: string): void {
+		const replaceState = generationId !== undefined;
+		if (!replaceState) openedFromList = true;
+		void goto(resolve('/share/[token]/[[generationId=uuid]]', { token, generationId: id }), {
+			noScroll: true,
+			replaceState
+		}).catch((error: unknown) => logBoundaryError('sharePage.openGeneration', error));
 	}
 
 	function closeLightbox(): void {
-		lightbox = null;
-		shareViewer.clearGenerationDetail();
+		if (openedFromList) {
+			openedFromList = false;
+			history.back();
+			return;
+		}
+		void goto(resolve('/share/[token]/[[generationId=uuid]]', { token }), {
+			replaceState: true,
+			noScroll: true
+		}).catch((error: unknown) => logBoundaryError('sharePage.closeGeneration', error));
 	}
+
+	$effect(() => {
+		const id = generationId;
+		const image = lightboxImage;
+		const currentToken = token;
+		if (!id || shareViewer.status !== 'ready' || image || !shareViewer.project) return;
+		void goto(resolve('/share/[token]/[[generationId=uuid]]', { token: currentToken }), {
+			replaceState: true,
+			noScroll: true
+		}).catch((error: unknown) => logBoundaryError('sharePage.unknownGeneration', error));
+	});
+
+	$effect(() => {
+		const id = generationId;
+		const image = lightboxImage;
+		const currentToken = token;
+		if (!id || !image) return;
+		void shareViewer.loadGenerationDetail(currentToken, id);
+		return () => shareViewer.clearGenerationDetail();
+	});
 </script>
 
 {#snippet shareSessionSkeleton()}
@@ -321,7 +368,7 @@ before the Change Date. See LICENSE for complete terms.
 													order: index + 1,
 													title: sessionTitle(session)
 												})}
-												onclick={() => openLightbox(generation.id, alt)}
+												onclick={() => openLightbox(generation.id)}
 											>
 												<BlurFillImage
 													src={generation.image.url}

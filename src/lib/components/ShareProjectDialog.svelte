@@ -14,10 +14,10 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { X } from '@lucide/svelte';
-	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { t } from '$lib/i18n/index.svelte';
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
+	import { shareProjectPath } from '$lib/share-path';
 	import { projectShare } from '$lib/state/project-share.svelte';
 	import { logBoundaryError, openModal } from '$lib/utils';
 
@@ -105,7 +105,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function shareUrl(token: string): string {
-		return `${page.url.origin}${resolve('/share/[token]', { token })}`;
+		return `${page.url.origin}${shareProjectPath(token)}`;
 	}
 
 	async function copyShareLink(token: string): Promise<void> {
