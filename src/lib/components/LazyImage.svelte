@@ -24,6 +24,7 @@ before the Change Date. See LICENSE for complete terms.
 		fetchPriority?: 'high' | 'low' | 'auto';
 		draggable?: boolean;
 		class?: string;
+		imgClass?: string;
 		decorative?: boolean;
 		bleed?: boolean;
 		onReady?: (image: HTMLImageElement) => void;
@@ -37,6 +38,7 @@ before the Change Date. See LICENSE for complete terms.
 		fetchPriority,
 		draggable = true,
 		class: className = '',
+		imgClass = '',
 		decorative = false,
 		bleed = false,
 		onReady,
@@ -87,6 +89,7 @@ before the Change Date. See LICENSE for complete terms.
 			fetchpriority={fetchPriority}
 			draggable={draggable ? 'true' : 'false'}
 			aria-hidden={decorative ? 'true' : undefined}
+			class={imgClass}
 			class:failed
 			{@attach watch}
 		/>

@@ -135,6 +135,7 @@ before the Change Date. See LICENSE for complete terms.
 				<LazyImage
 					src={imageUrl}
 					alt={t('render.generate')}
+					imgClass="output"
 					loading="eager"
 					fetchPriority="high"
 					onReady={rememberImageSize}
