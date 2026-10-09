@@ -32,6 +32,8 @@ before the Change Date. See LICENSE for complete terms.
 	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import { toolsPanel } from '$lib/state/tools-panel.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import ImageSkeleton from '$lib/components/ImageSkeleton.svelte';
+	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import RenderResult from '$lib/components/RenderResult.svelte';
 	import EditPanel from '$lib/components/EditPanel.svelte';
 	import MaskEditor from '$lib/components/MaskEditor.svelte';
@@ -780,7 +782,16 @@ before the Change Date. See LICENSE for complete terms.
 			</div>
 
 			{#if urlTargetStatus === 'loading'}
-				<p class="url-target-status" role="status">{t('workspace.urlTarget.loading')}</p>
+				<div
+					class="url-target-skeleton"
+					role="status"
+					aria-label={t('workspace.urlTarget.loading')}
+				>
+					<span class="url-target-frame" aria-hidden="true">
+						<ImageSkeleton />
+					</span>
+					<SkeletonBlock width="12rem" height="0.8rem" />
+				</div>
 			{:else if urlTargetStatus === 'failed'}
 				<div class="url-target-status" role="alert">
 					<p>{t('workspace.urlTarget.failed')}</p>
@@ -1409,6 +1420,25 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 0.75rem;
 		color: var(--color-muted);
 		text-align: center;
+	}
+
+	.url-target-skeleton {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+		width: min(100%, 40rem);
+		margin: 1.5rem auto;
+	}
+
+	.url-target-frame {
+		position: relative;
+		display: block;
+		width: 100%;
+		aspect-ratio: 16 / 9;
+		overflow: hidden;
+		border-radius: var(--radius);
+		background: var(--color-skeleton);
 	}
 
 	.url-target-status p {

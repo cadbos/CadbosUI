@@ -18,6 +18,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { uploadResultSchema } from '$lib/api/contract';
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import RegionSelector from '$lib/components/RegionSelector.svelte';
+	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { normalizeImageContentType } from '$lib/image-mime';
 	import {
@@ -482,7 +483,12 @@ before the Change Date. See LICENSE for complete terms.
 				aria-label={dropButtonLabel}
 			>
 				{#if uploading}
-					<span class="uploading-text">{t('upload.uploading')}</span>
+					<span class="sk-upload" aria-hidden="true">
+						<SkeletonBlock width="2.5rem" height="2.5rem" radius="999px" />
+						<SkeletonBlock width="8rem" height="0.9rem" />
+						<SkeletonBlock width="11rem" height="0.75rem" />
+					</span>
+					<span class="visually-hidden">{t('upload.uploading')}</span>
 				{:else}
 					<svg
 						class="upload-icon"
@@ -629,9 +635,11 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-muted-strong);
 	}
 
-	.uploading-text {
-		font-size: 0.9375rem;
-		color: var(--color-muted-strong);
+	.sk-upload {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.45rem;
 	}
 
 	.image-wrapper {
@@ -792,8 +800,7 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 0.6875rem;
 	}
 
-	.compact .drop-subtitle,
-	.compact .uploading-text {
+	.compact .drop-subtitle {
 		display: none;
 	}
 

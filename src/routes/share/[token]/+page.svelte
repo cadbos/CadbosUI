@@ -22,8 +22,10 @@ before the Change Date. See LICENSE for complete terms.
 		ShareGenerationDetailResponse
 	} from '$lib/api/contract';
 	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
+	import ImageSkeleton from '$lib/components/ImageSkeleton.svelte';
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import ProjectStats from '$lib/components/ProjectStats.svelte';
+	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 	import { shareViewer } from '$lib/state/share-viewer.svelte';
@@ -32,6 +34,12 @@ before the Change Date. See LICENSE for complete terms.
 	const generationCount = $derived(
 		shareViewer.project?.sessions.reduce((sum, session) => sum + session.generations.length, 0) ?? 0
 	);
+	let settledThumbs = $state<string[]>([]);
+
+	function settleThumb(id: string): void {
+		if (settledThumbs.includes(id)) return;
+		settledThumbs = [...settledThumbs, id];
+	}
 
 	const OUTPUT_FORMAT_LABELS: Record<PublicFormSnapshot['outputFormat'], string> = {
 		webp: 'WebP',
@@ -197,6 +205,23 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
+{#snippet shareSessionSkeleton()}
+	<li class="session-card" aria-hidden="true">
+		<span class="session-body">
+			<SkeletonBlock width="58%" height="0.95rem" />
+			<SkeletonBlock width="42%" height="0.75rem" />
+			<SkeletonBlock width="36%" height="0.75rem" />
+		</span>
+		<span class="generations-grid">
+			{#each [0, 1, 2] as thumb (thumb)}
+				<span class="generation-thumb">
+					<ImageSkeleton />
+				</span>
+			{/each}
+		</span>
+	</li>
+{/snippet}
+
 <svelte:head>
 	<title>{shareViewer.project?.title ?? t('share.title')}</title>
 	<meta name="robots" content="noindex, nofollow" />
@@ -204,7 +229,17 @@ before the Change Date. See LICENSE for complete terms.
 
 <main class="share-page" aria-labelledby="share-title">
 	{#if shareViewer.status === 'loading'}
-		<p class="status">{t('share.loading')}</p>
+		<section class="share-shell" aria-busy="true" aria-label={t('share.loading')}>
+			<header class="share-header">
+				<SkeletonBlock width="14rem" height="1.6rem" />
+				<SkeletonBlock width="10rem" height="0.75rem" />
+			</header>
+			<ul class="sessions-grid">
+				{#each [0, 1] as slot (slot)}
+					{@render shareSessionSkeleton()}
+				{/each}
+			</ul>
+		</section>
 	{:else if shareViewer.status === 'not-found'}
 		<p class="status error" role="alert">{t('share.notFound')}</p>
 	{:else if shareViewer.status === 'error'}
@@ -223,22 +258,33 @@ before the Change Date. See LICENSE for complete terms.
 				<ul class="sessions-grid">
 					{#each project.sessions as session (session.id)}
 						{@const forkedFrom = parentTitle(session, project.sessions)}
+						{@const ready =
+							session.generations.length === 0 ||
+							session.generations.every((generation) => settledThumbs.includes(generation.id))}
 						<li class="session-card">
-							<div class="session-body">
-								<span class="session-title">{sessionTitle(session)}</span>
-								{#if forkedFrom}
-									<span class="session-forked"
-										>{ti('share.sessionForkedFrom', { title: forkedFrom })}</span
+							{#if ready}
+								<div class="session-body">
+									<span class="session-title">{sessionTitle(session)}</span>
+									{#if forkedFrom}
+										<span class="session-forked"
+											>{ti('share.sessionForkedFrom', { title: forkedFrom })}</span
+										>
+									{/if}
+									<ProjectStats
+										generationCount={session.generations.length}
+										--project-stats-font-size="0.75rem"
+									/>
+									<span class="session-updated"
+										>{ti('share.sessionUpdatedAt', { date: formatDate(session.updatedAt) })}</span
 									>
-								{/if}
-								<ProjectStats
-									generationCount={session.generations.length}
-									--project-stats-font-size="0.75rem"
-								/>
-								<span class="session-updated"
-									>{ti('share.sessionUpdatedAt', { date: formatDate(session.updatedAt) })}</span
-								>
-							</div>
+								</div>
+							{:else}
+								<div class="session-body" aria-hidden="true">
+									<SkeletonBlock width="58%" height="0.95rem" />
+									<SkeletonBlock width="42%" height="0.75rem" />
+									<SkeletonBlock width="36%" height="0.75rem" />
+								</div>
+							{/if}
 							{#if session.generations.length > 0}
 								<ul class="generations-grid" aria-label={t('share.generationsLabel')}>
 									{#each session.generations as generation, index (generation.id)}
@@ -256,7 +302,11 @@ before the Change Date. See LICENSE for complete terms.
 												})}
 												onclick={() => openLightbox(generation.id, alt)}
 											>
-												<BlurFillImage src={generation.image.url} {alt} />
+												<BlurFillImage
+													src={generation.image.url}
+													{alt}
+													onSettled={() => settleThumb(generation.id)}
+												/>
 											</button>
 										</li>
 									{/each}
@@ -291,7 +341,13 @@ before the Change Date. See LICENSE for complete terms.
 				<LazyImage src={image.url} alt={image.alt} loading="eager" fetchPriority="high" />
 				<div class="lightbox-settings" aria-live="polite">
 					{#if shareViewer.generationDetailStatus === 'loading'}
-						<p class="status">{t('share.settingsLoading')}</p>
+						<div class="sk-lines" aria-hidden="true">
+							<SkeletonBlock width="40%" height="0.9rem" />
+							<SkeletonBlock height="0.75rem" />
+							<SkeletonBlock width="88%" height="0.75rem" />
+							<SkeletonBlock width="72%" height="0.75rem" />
+						</div>
+						<p class="visually-hidden" aria-live="polite">{t('share.settingsLoading')}</p>
 					{:else if shareViewer.generationDetailStatus === 'error'}
 						<p class="status error" role="alert">{t('share.settingsFailed')}</p>
 					{:else if shareViewer.generationDetailStatus === 'ready'}
@@ -406,13 +462,14 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.generation-thumb {
+		position: relative;
 		display: block;
 		width: 100%;
 		aspect-ratio: 4 / 3;
 		padding: 0;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-sm);
-		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
+		background: var(--color-skeleton);
 		overflow: hidden;
 		cursor: zoom-in;
 		transition: border-color 0.15s;
@@ -433,6 +490,12 @@ before the Change Date. See LICENSE for complete terms.
 		clip: rect(0, 0, 0, 0);
 		white-space: nowrap;
 		border: 0;
+	}
+
+	.sk-lines {
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
 	}
 
 	.lightbox-dialog {

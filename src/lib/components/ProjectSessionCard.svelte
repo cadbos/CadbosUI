@@ -17,6 +17,7 @@ before the Change Date. See LICENSE for complete terms.
 	import type { ProjectSessionRecord } from '$lib/api/contract';
 	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
 	import ProjectStats from '$lib/components/ProjectStats.svelte';
+	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
 
 	interface Props {
@@ -44,6 +45,8 @@ before the Change Date. See LICENSE for complete terms.
 		session.title.trim() !== '' ? session.title : t('projects.detail.sessionUntitled')
 	);
 	const latest = $derived(session.generations[0]);
+	let settledThumbUrl = $state<string | null>(null);
+	const cardReady = $derived(!latest || settledThumbUrl === latest.image.url);
 
 	function openModal(dialog: HTMLDialogElement): () => void {
 		dialog.showModal();
@@ -97,69 +100,85 @@ before the Change Date. See LICENSE for complete terms.
 			<BlurFillImage
 				src={latest.image.url}
 				alt={ti('projects.detail.sessionThumbnailAlt', { title: displayTitle })}
+				onSettled={() => (settledThumbUrl = latest.image.url)}
 			/>
 		</span>
 	{/if}
-	<div class="session-body">
-		<form class="session-rename-form" onsubmit={saveTitle}>
-			<label class="visually-hidden" for={`session-title-${session.id}`}
-				>{t('projects.detail.sessionRenameLabel')}</label
-			>
-			<input
-				id={`session-title-${session.id}`}
-				type="text"
-				maxlength="200"
-				placeholder={t('projects.detail.sessionUntitled')}
-				bind:value={titleDraft}
-				disabled={renaming}
+	{#if cardReady}
+		<div class="session-body">
+			<form class="session-rename-form" onsubmit={saveTitle}>
+				<label class="visually-hidden" for={`session-title-${session.id}`}
+					>{t('projects.detail.sessionRenameLabel')}</label
+				>
+				<input
+					id={`session-title-${session.id}`}
+					type="text"
+					maxlength="200"
+					placeholder={t('projects.detail.sessionUntitled')}
+					bind:value={titleDraft}
+					disabled={renaming}
+				/>
+				<button
+					type="submit"
+					class="session-rename-save"
+					disabled={renaming || titleDraft.trim() === '' || titleDraft.trim() === session.title}
+				>
+					{renaming
+						? t('projects.detail.sessionRenameSaving')
+						: t('projects.detail.sessionRenameSave')}
+				</button>
+			</form>
+			{#if renameError}
+				<p class="status error" role="alert">{renameError}</p>
+			{/if}
+
+			{#if forkedFromTitle}
+				<span class="session-forked"
+					>{ti('projects.detail.sessionForkedFrom', { title: forkedFromTitle })}</span
+				>
+			{/if}
+			<ProjectStats
+				generationCount={session.generations.length}
+				--project-stats-font-size="0.75rem"
 			/>
-			<button
-				type="submit"
-				class="session-rename-save"
-				disabled={renaming || titleDraft.trim() === '' || titleDraft.trim() === session.title}
+			<span class="session-updated"
+				>{ti('projects.detail.sessionUpdatedAt', { date: formatDate(session.updatedAt) })}</span
 			>
-				{renaming
-					? t('projects.detail.sessionRenameSaving')
-					: t('projects.detail.sessionRenameSave')}
-			</button>
-		</form>
-		{#if renameError}
-			<p class="status error" role="alert">{renameError}</p>
-		{/if}
 
-		{#if forkedFromTitle}
-			<span class="session-forked"
-				>{ti('projects.detail.sessionForkedFrom', { title: forkedFromTitle })}</span
-			>
-		{/if}
-		<ProjectStats
-			generationCount={session.generations.length}
-			--project-stats-font-size="0.75rem"
-		/>
-		<span class="session-updated"
-			>{ti('projects.detail.sessionUpdatedAt', { date: formatDate(session.updatedAt) })}</span
-		>
-
-		<div class="session-actions">
-			<button
-				type="button"
-				class="session-continue"
-				aria-label={ti('projects.detail.sessionContinueAria', { title: displayTitle })}
-				onclick={oncontinue}
-			>
-				{t('projects.detail.sessionContinue')}
-			</button>
-			<button
-				type="button"
-				class="session-delete"
-				aria-label={ti('projects.detail.sessionDeleteAria', { title: displayTitle })}
-				disabled={archiving}
-				onclick={requestDelete}
-			>
-				<Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
-			</button>
+			<div class="session-actions">
+				<button
+					type="button"
+					class="session-continue"
+					aria-label={ti('projects.detail.sessionContinueAria', { title: displayTitle })}
+					onclick={oncontinue}
+				>
+					{t('projects.detail.sessionContinue')}
+				</button>
+				<button
+					type="button"
+					class="session-delete"
+					aria-label={ti('projects.detail.sessionDeleteAria', { title: displayTitle })}
+					disabled={archiving}
+					onclick={requestDelete}
+				>
+					<Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
+				</button>
+			</div>
 		</div>
-	</div>
+	{:else}
+		<div class="session-body" aria-hidden="true">
+			<span class="sk-title-row">
+				<SkeletonBlock grow height="2.25rem" radius="var(--radius-sm)" />
+				<SkeletonBlock width="4.5rem" height="2.25rem" radius="var(--radius-sm)" />
+			</span>
+			<SkeletonBlock width="46%" height="0.75rem" />
+			<SkeletonBlock width="38%" height="0.75rem" />
+			<span class="sk-title-row">
+				<SkeletonBlock width="8rem" height="2.25rem" radius="var(--radius-sm)" />
+				<SkeletonBlock width="2.25rem" height="2.25rem" radius="var(--radius-sm)" />
+			</span>
+		</div>
+	{/if}
 
 	{#if deleteConfirmOpen}
 		<dialog
@@ -209,10 +228,16 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.session-thumb {
+		position: relative;
 		display: block;
 		aspect-ratio: 4 / 3;
 		overflow: hidden;
-		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
+		background: var(--color-skeleton);
+	}
+
+	.sk-title-row {
+		display: flex;
+		gap: 0.375rem;
 	}
 
 	.session-body {

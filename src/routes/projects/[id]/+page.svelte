@@ -20,6 +20,8 @@ before the Change Date. See LICENSE for complete terms.
 	import type { ProjectSessionRecord } from '$lib/api/contract';
 	import ProjectSessionCard from '$lib/components/ProjectSessionCard.svelte';
 	import ProjectStats from '$lib/components/ProjectStats.svelte';
+	import ImageSkeleton from '$lib/components/ImageSkeleton.svelte';
+	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { projectDetail } from '$lib/state/project-detail.svelte';
 	import { projectShare } from '$lib/state/project-share.svelte';
@@ -204,6 +206,26 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
+{#snippet sessionCardSkeleton()}
+	<li class="session-skeleton" aria-hidden="true">
+		<span class="session-skeleton-thumb">
+			<ImageSkeleton />
+		</span>
+		<span class="session-skeleton-body">
+			<span class="sk-title-row">
+				<SkeletonBlock grow height="2.25rem" radius="var(--radius-sm)" />
+				<SkeletonBlock width="4.5rem" height="2.25rem" radius="var(--radius-sm)" />
+			</span>
+			<SkeletonBlock width="46%" height="0.75rem" />
+			<SkeletonBlock width="38%" height="0.75rem" />
+			<span class="sk-title-row">
+				<SkeletonBlock width="8rem" height="2.25rem" radius="var(--radius-sm)" />
+				<SkeletonBlock width="2.25rem" height="2.25rem" radius="var(--radius-sm)" />
+			</span>
+		</span>
+	</li>
+{/snippet}
+
 <svelte:head>
 	<title>{projectDetail.project?.title ?? t('projects.title')}</title>
 </svelte:head>
@@ -212,7 +234,26 @@ before the Change Date. See LICENSE for complete terms.
 	<a class="back-link" href={resolve('/projects', {})}>{t('projects.detail.back')}</a>
 
 	{#if projectDetail.status === 'loading'}
-		<p class="status">{t('projects.detail.loading')}</p>
+		<section class="project-shell" aria-busy="true" aria-label={t('projects.detail.loading')}>
+			<header class="project-header">
+				<div class="header-row">
+					<SkeletonBlock grow height="2.5rem" radius="var(--radius)" />
+					<SkeletonBlock width="8rem" height="2.5rem" radius="var(--radius)" />
+				</div>
+				<SkeletonBlock width="10rem" height="0.75rem" />
+			</header>
+			<section class="sessions-section">
+				<div class="section-heading">
+					<SkeletonBlock width="8rem" height="1.15rem" />
+					<SkeletonBlock width="9rem" height="2.25rem" radius="var(--radius)" />
+				</div>
+				<ul class="sessions-grid">
+					{#each [0, 1, 2] as slot (slot)}
+						{@render sessionCardSkeleton()}
+					{/each}
+				</ul>
+			</section>
+		</section>
 	{:else if projectDetail.status === 'not-found'}
 		<p class="status error" role="alert">{t('projects.detail.notFound')}</p>
 	{:else if projectDetail.status === 'error'}
@@ -564,6 +605,34 @@ before the Change Date. See LICENSE for complete terms.
 		padding: 0;
 		margin: 0;
 		list-style: none;
+	}
+
+	.session-skeleton {
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
+		background: color-mix(in srgb, var(--color-background) 72%, var(--color-surface));
+	}
+
+	.session-skeleton-thumb {
+		position: relative;
+		display: block;
+		aspect-ratio: 4 / 3;
+		background: var(--color-skeleton);
+	}
+
+	.session-skeleton-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding: 0.75rem;
+	}
+
+	.sk-title-row {
+		display: flex;
+		gap: 0.375rem;
 	}
 
 	.share-status {

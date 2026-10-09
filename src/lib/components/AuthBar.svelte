@@ -22,6 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { dismissable, logBoundaryError } from '$lib/utils';
 	import LazyImage from './LazyImage.svelte';
+	import SkeletonBlock from './SkeletonBlock.svelte';
 	import QrCode from './QrCode.svelte';
 	import CurrencySwitcher from './CurrencySwitcher.svelte';
 	import HintIcon from './HintIcon.svelte';
@@ -251,9 +252,17 @@ before the Change Date. See LICENSE for complete terms.
 					</div>
 				</div>
 			{:else if auth.status === 'connecting'}
-				<p class="restoring" role="status">{t('auth.connecting')}</p>
+				<div class="sk-lines" aria-hidden="true">
+					<SkeletonBlock width="10rem" height="0.8rem" />
+					<SkeletonBlock width="7rem" height="0.8rem" />
+				</div>
+				<p class="visually-hidden" role="status">{t('auth.connecting')}</p>
 			{:else if auth.status === 'restoring'}
-				<p class="restoring" role="status">{t('auth.restoring')}</p>
+				<div class="sk-lines" aria-hidden="true">
+					<SkeletonBlock width="11rem" height="0.8rem" />
+					<SkeletonBlock width="8rem" height="0.8rem" />
+				</div>
+				<p class="visually-hidden" role="status">{t('auth.restoring')}</p>
 			{:else}
 				<p class="notice">{t('auth.signIn')}</p>
 				<button type="button" onclick={() => auth.loginNip07()}>
@@ -515,10 +524,10 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 0.9rem;
 	}
 
-	.restoring {
-		margin: 0;
-		color: var(--color-muted);
-		font-size: 0.9rem;
+	.sk-lines {
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
 	}
 
 	.demo-btn {

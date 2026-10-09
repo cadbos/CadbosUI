@@ -43,6 +43,8 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/api/contract';
 	import BlurFillImage from '$lib/components/BlurFillImage.svelte';
 	import HintLabel from '$lib/components/HintLabel.svelte';
+	import ImageSkeleton from '$lib/components/ImageSkeleton.svelte';
+	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import {
@@ -124,6 +126,18 @@ before the Change Date. See LICENSE for complete terms.
 	let restoringId = $state<string | null>(null);
 	let restoreFailedId = $state<string | null>(null);
 	let promptCandidate = $state<PromptCandidate | null>(null);
+	let sceneParts = $state<Record<string, { source: boolean; result: boolean }>>({});
+
+	function settleScene(id: string, part: 'source' | 'result'): void {
+		const current = sceneParts[id] ?? { source: false, result: false };
+		if (current[part]) return;
+		sceneParts = { ...sceneParts, [id]: { ...current, [part]: true } };
+	}
+
+	function sceneReady(id: string): boolean {
+		const parts = sceneParts[id];
+		return parts?.source === true && parts?.result === true;
+	}
 	const anyModalOpen = $derived(
 		deleteCandidate !== null || restoreConfirmCandidate !== null || promptCandidate !== null
 	);
@@ -575,6 +589,20 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
+{#snippet sceneSkeleton()}
+	<div aria-hidden="true">
+		<SkeletonBlock width="9rem" height="0.75rem" />
+		<div class="scene-flow">
+			<span class="image-frame"><ImageSkeleton /></span>
+			<span class="flow-middle">
+				<SkeletonBlock width="4rem" height="0.75rem" />
+				<SkeletonBlock width="5.5rem" height="1.75rem" radius="var(--radius-sm)" />
+			</span>
+			<span class="image-frame"><ImageSkeleton /></span>
+		</div>
+	</div>
+{/snippet}
+
 {#snippet columnHeader(label: TranslationKey, hint: TranslationKey)}
 	<span class="column-title">
 		<HintLabel text={t(label)} hint={t(hint)} />
@@ -690,7 +718,11 @@ before the Change Date. See LICENSE for complete terms.
 
 		<div class="drawer-content">
 			{#if generatedImages.status === 'loading'}
-				<p class="status">{t('generatedImages.loading')}</p>
+				<ul class="list" aria-busy="true" aria-label={t('generatedImages.loading')}>
+					{#each [0, 1, 2] as slot (slot)}
+						<li class="scene-card">{@render sceneSkeleton()}</li>
+					{/each}
+				</ul>
 			{:else if generatedImages.status === 'error' && generatedImages.images.length === 0}
 				<p class="status error" role="alert">{t('generatedImages.failed')}</p>
 			{:else if generatedImages.images.length === 0}
@@ -736,27 +768,32 @@ before the Change Date. See LICENSE for complete terms.
 					{#each generatedImages.images as image (image.id)}
 						{const date = generatedDate(image.createdAt)}
 						{const Icon = generationKindIcons[image.kind]}
+						{const ready = sceneReady(image.id)}
 						<li class="scene-card">
-							<div class="scene-meta">
-								<time class="date" datetime={date.datetime} aria-label={date.ariaLabel}>
-									<span>{date.dateLabel}</span>
-									<span>{date.timeLabel}</span>
-								</time>
-								{#if image.session}
-									<span class="session-label">{sessionLabel(image.session)}</span>
+							{#if ready}
+								<div class="scene-meta">
+									<time class="date" datetime={date.datetime} aria-label={date.ariaLabel}>
+										<span>{date.dateLabel}</span>
+										<span>{date.timeLabel}</span>
+									</time>
+									{#if image.session}
+										<span class="session-label">{sessionLabel(image.session)}</span>
+									{/if}
+								</div>
+								{#if !milestones}
+									<button
+										type="button"
+										class="record-delete-button"
+										disabled={generatedImages.deletingIds.has(image.id)}
+										aria-label={ti('generatedImages.delete', { order: image.number })}
+										title={ti('generatedImages.delete', { order: image.number })}
+										onclick={() => requestDelete(image.id, image.number)}
+									>
+										<Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
+									</button>
 								{/if}
-							</div>
-							{#if !milestones}
-								<button
-									type="button"
-									class="record-delete-button"
-									disabled={generatedImages.deletingIds.has(image.id)}
-									aria-label={ti('generatedImages.delete', { order: image.number })}
-									title={ti('generatedImages.delete', { order: image.number })}
-									onclick={() => requestDelete(image.id, image.number)}
-								>
-									<Trash2 size={16} strokeWidth={1.8} aria-hidden="true" />
-								</button>
+							{:else}
+								<SkeletonBlock width="9rem" height="0.75rem" />
 							{/if}
 
 							<div class="scene-flow">
@@ -765,89 +802,97 @@ before the Change Date. See LICENSE for complete terms.
 										<BlurFillImage
 											src={image.source.url}
 											alt={ti('generatedImages.sourceImageAlt', { order: image.number })}
+											onSettled={() => settleScene(image.id, 'source')}
 										/>
-										{#if !milestones && image.iteration === 1}
+										{#if ready && !milestones && image.iteration === 1}
 											<span class="source-badge">{t('generatedImages.sourceBadge')}</span>
 										{/if}
-										<div class="actions">
-											{#if image.sourceGeneration && image.sourceGeneration.kind !== 'upscale'}
-												<button
-													type="button"
-													class="icon-button"
-													disabled={restoringId !== null}
-													aria-label={ti('generatedImages.restoreSource', {
-														order: image.number
-													})}
-													title={ti('generatedImages.restoreSource', { order: image.number })}
-													onclick={() => restoreSource(image)}
-												>
-													{#if restoringId === image.sourceGeneration.id}
-														<span class="spinner" aria-hidden="true"></span>
-													{:else}
+										{#if ready}
+											<div class="actions">
+												{#if image.sourceGeneration && image.sourceGeneration.kind !== 'upscale'}
+													<button
+														type="button"
+														class="icon-button"
+														disabled={restoringId !== null}
+														aria-label={ti('generatedImages.restoreSource', {
+															order: image.number
+														})}
+														title={ti('generatedImages.restoreSource', { order: image.number })}
+														onclick={() => restoreSource(image)}
+													>
+														{#if restoringId === image.sourceGeneration.id}
+															<span class="spinner" aria-hidden="true"></span>
+														{:else}
+															<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
+														{/if}
+													</button>
+												{:else}
+													<button
+														type="button"
+														class="icon-button"
+														aria-label={ti('generatedImages.useSource', { order: image.number })}
+														title={ti('generatedImages.useSource', { order: image.number })}
+														onclick={() => useImage(image.source.key, image.kind)}
+													>
 														<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
-													{/if}
-												</button>
-											{:else}
-												<button
-													type="button"
+													</button>
+												{/if}
+												<a
+													href={resolve('/api/media/[bucket]/[...filename]', {
+														bucket: image.source.key.slice(0, image.source.key.indexOf('/')),
+														filename: image.source.key.slice(image.source.key.indexOf('/') + 1)
+													})}
+													download={downloadFilename(image.source.url, `${image.id}-source`)}
 													class="icon-button"
-													aria-label={ti('generatedImages.useSource', { order: image.number })}
-													title={ti('generatedImages.useSource', { order: image.number })}
-													onclick={() => useImage(image.source.key, image.kind)}
+													aria-label={ti('generatedImages.downloadSource', { order: image.number })}
+													title={ti('generatedImages.downloadSource', { order: image.number })}
 												>
-													<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
-												</button>
-											{/if}
-											<a
-												href={resolve('/api/media/[bucket]/[...filename]', {
-													bucket: image.source.key.slice(0, image.source.key.indexOf('/')),
-													filename: image.source.key.slice(image.source.key.indexOf('/') + 1)
-												})}
-												download={downloadFilename(image.source.url, `${image.id}-source`)}
-												class="icon-button"
-												aria-label={ti('generatedImages.downloadSource', { order: image.number })}
-												title={ti('generatedImages.downloadSource', { order: image.number })}
-											>
-												<Download size={17} strokeWidth={1.8} aria-hidden="true" />
-											</a>
-										</div>
+													<Download size={17} strokeWidth={1.8} aria-hidden="true" />
+												</a>
+											</div>
+										{/if}
 									</div>
 								</div>
 
 								<div class="flow-middle">
-									{#if milestones}
-										{#if image.iteration !== null}
+									{#if ready}
+										{#if milestones}
+											{#if image.iteration !== null}
+												<div
+													class="flow-kind"
+													role="img"
+													aria-label={ti('generatedImages.generationCount', {
+														count: image.iteration
+													})}
+													data-tooltip={ti('generatedImages.generationCount', {
+														count: image.iteration
+													})}
+												>
+													<span class="iteration-count" aria-hidden="true">{image.iteration}</span>
+												</div>
+											{/if}
+										{:else}
 											<div
 												class="flow-kind"
 												role="img"
-												aria-label={ti('generatedImages.generationCount', {
-													count: image.iteration
-												})}
-												data-tooltip={ti('generatedImages.generationCount', {
-													count: image.iteration
-												})}
+												aria-label={t(generationKindKeys[image.kind])}
+												data-tooltip={t(generationKindKeys[image.kind])}
 											>
-												<span class="iteration-count" aria-hidden="true">{image.iteration}</span>
+												<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
 											</div>
+											<button
+												type="button"
+												class="prompt-button"
+												aria-label={ti('generatedImages.showPromptLabel', { order: image.number })}
+												onclick={() => void showPrompt(image.id, image.number)}
+											>
+												<MessageSquareText size={14} strokeWidth={1.8} aria-hidden="true" />
+												{t('generatedImages.showPrompt')}
+											</button>
 										{/if}
 									{:else}
-										<div
-											class="flow-kind"
-											role="img"
-											aria-label={t(generationKindKeys[image.kind])}
-											data-tooltip={t(generationKindKeys[image.kind])}
-										>
-											<Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-										</div>
-										<button
-											type="button"
-											class="prompt-button"
-											aria-label={ti('generatedImages.showPromptLabel', { order: image.number })}
-											onclick={() => void showPrompt(image.id, image.number)}
-										>
-											<MessageSquareText size={14} strokeWidth={1.8} aria-hidden="true" />
-											{t('generatedImages.showPrompt')}
-										</button>
+										<SkeletonBlock width="4rem" height="0.75rem" />
+										<SkeletonBlock width="5.5rem" height="1.75rem" radius="var(--radius-sm)" />
 									{/if}
 								</div>
 
@@ -856,61 +901,69 @@ before the Change Date. See LICENSE for complete terms.
 										<BlurFillImage
 											src={image.image.url}
 											alt={ti('generatedImages.resultImageAlt', { order: image.number })}
+											onSettled={() => settleScene(image.id, 'result')}
 										/>
-										<div class="actions">
-											{#if image.kind === 'upscale'}
-												<!-- Upscale has no restorable form settings (see
+										{#if ready}
+											<div class="actions">
+												{#if image.kind === 'upscale'}
+													<!-- Upscale has no restorable form settings (see
 												destinationForGenerationKind), so this is the only way
 												to pick up its result as the new starting image. -->
-												<button
-													type="button"
+													<button
+														type="button"
+														class="icon-button"
+														aria-label={ti('generatedImages.useResult', { order: image.number })}
+														title={ti('generatedImages.useResult', { order: image.number })}
+														onclick={() => useImage(image.image.key, image.kind)}
+													>
+														<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
+													</button>
+												{:else}
+													<button
+														type="button"
+														class="icon-button"
+														disabled={restoringId !== null}
+														aria-label={ti('generatedImages.restore', { order: image.number })}
+														title={ti('generatedImages.restore', { order: image.number })}
+														onclick={() => void requestRestore(image.id, image.kind, image.number)}
+													>
+														{#if restoringId === image.id}
+															<span class="spinner" aria-hidden="true"></span>
+														{:else}
+															<History size={17} strokeWidth={1.8} aria-hidden="true" />
+														{/if}
+													</button>
+												{/if}
+												<a
+													href={resolve('/api/media/[bucket]/[...filename]', {
+														bucket: image.image.key.slice(0, image.image.key.indexOf('/')),
+														filename: image.image.key.slice(image.image.key.indexOf('/') + 1)
+													})}
+													download={downloadFilename(image.image.url, image.id)}
 													class="icon-button"
-													aria-label={ti('generatedImages.useResult', { order: image.number })}
-													title={ti('generatedImages.useResult', { order: image.number })}
-													onclick={() => useImage(image.image.key, image.kind)}
+													aria-label={ti('generatedImages.download', { order: image.number })}
+													title={ti('generatedImages.download', { order: image.number })}
 												>
-													<Pencil size={17} strokeWidth={1.8} aria-hidden="true" />
-												</button>
-											{:else}
-												<button
-													type="button"
-													class="icon-button"
-													disabled={restoringId !== null}
-													aria-label={ti('generatedImages.restore', { order: image.number })}
-													title={ti('generatedImages.restore', { order: image.number })}
-													onclick={() => void requestRestore(image.id, image.kind, image.number)}
-												>
-													{#if restoringId === image.id}
-														<span class="spinner" aria-hidden="true"></span>
-													{:else}
-														<History size={17} strokeWidth={1.8} aria-hidden="true" />
-													{/if}
-												</button>
-											{/if}
-											<a
-												href={resolve('/api/media/[bucket]/[...filename]', {
-													bucket: image.image.key.slice(0, image.image.key.indexOf('/')),
-													filename: image.image.key.slice(image.image.key.indexOf('/') + 1)
-												})}
-												download={downloadFilename(image.image.url, image.id)}
-												class="icon-button"
-												aria-label={ti('generatedImages.download', { order: image.number })}
-												title={ti('generatedImages.download', { order: image.number })}
-											>
-												<Download size={17} strokeWidth={1.8} aria-hidden="true" />
-											</a>
-										</div>
+													<Download size={17} strokeWidth={1.8} aria-hidden="true" />
+												</a>
+											</div>
+										{/if}
 									</div>
 								</div>
 							</div>
 						</li>
 					{/each}
+					{#if generatedImages.loadingMore}
+						{#each [0, 1] as slot (`more-${slot}`)}
+							<li class="scene-card">{@render sceneSkeleton()}</li>
+						{/each}
+					{/if}
 				</ul>
 
 				{#if generatedImages.hasMore}
 					<div class="load-more-sentinel" {@attach observeLoadMore}>
 						{#if generatedImages.loadingMore}
-							<p class="status" aria-live="polite">{t('generatedImages.loadingMore')}</p>
+							<p class="visually-hidden" aria-live="polite">{t('generatedImages.loadingMore')}</p>
 						{/if}
 					</div>
 				{/if}
@@ -988,7 +1041,12 @@ before the Change Date. See LICENSE for complete terms.
 			</button>
 		</header>
 		{#if promptCandidate.status === 'loading'}
-			<p aria-live="polite">{t('generatedImages.promptLoading')}</p>
+			<div class="sk-lines" aria-hidden="true">
+				<SkeletonBlock height="0.8rem" />
+				<SkeletonBlock width="92%" height="0.8rem" />
+				<SkeletonBlock width="64%" height="0.8rem" />
+			</div>
+			<p class="visually-hidden" aria-live="polite">{t('generatedImages.promptLoading')}</p>
 		{:else if promptCandidate.status === 'error'}
 			<p class="warning" role="alert">{t('generatedImages.promptFailed')}</p>
 		{:else if promptCandidate.prompt === ''}
@@ -1654,6 +1712,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	.prompt-dialog {
 		width: min(100% - 2rem, 36rem);
+	}
+
+	.sk-lines {
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
 	}
 
 	.prompt-dialog-header {
