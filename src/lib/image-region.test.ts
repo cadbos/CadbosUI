@@ -13,20 +13,20 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { REPAINT_REGION_MIN_SIZE, repaintRegionSchema } from '$lib/repaint-region';
+import { IMAGE_REGION_MIN_SIZE, imageRegionSchema } from '$lib/image-region';
 
-describe('repaintRegionSchema', () => {
+describe('imageRegionSchema', () => {
 	it('accepts a region inside the scene, including one reaching its edges', () => {
-		expect(repaintRegionSchema.safeParse({ x: 0.1, y: 0.2, width: 0.3, height: 0.4 }).success).toBe(
+		expect(imageRegionSchema.safeParse({ x: 0.1, y: 0.2, width: 0.3, height: 0.4 }).success).toBe(
 			true
 		);
-		expect(repaintRegionSchema.safeParse({ x: 0, y: 0, width: 1, height: 1 }).success).toBe(true);
+		expect(imageRegionSchema.safeParse({ x: 0, y: 0, width: 1, height: 1 }).success).toBe(true);
 	});
 
 	it('tolerates floating-point error at the far edge', () => {
-		expect(
-			repaintRegionSchema.safeParse({ x: 0.7, y: 0, width: 0.1 + 0.2, height: 1 }).success
-		).toBe(true);
+		expect(imageRegionSchema.safeParse({ x: 0.7, y: 0, width: 0.1 + 0.2, height: 1 }).success).toBe(
+			true
+		);
 	});
 
 	it('rejects a region that sticks out of the scene or starts outside it', () => {
@@ -36,20 +36,20 @@ describe('repaintRegionSchema', () => {
 			{ x: -0.1, y: 0, width: 0.5, height: 0.5 },
 			{ x: 1.1, y: 0, width: 0.5, height: 0.5 }
 		]) {
-			expect(repaintRegionSchema.safeParse(region).success).toBe(false);
+			expect(imageRegionSchema.safeParse(region).success).toBe(false);
 		}
 	});
 
 	it('rejects a side thinner than the minimum and any unknown field', () => {
-		const thin = REPAINT_REGION_MIN_SIZE / 2;
-		expect(repaintRegionSchema.safeParse({ x: 0, y: 0, width: thin, height: 0.5 }).success).toBe(
+		const thin = IMAGE_REGION_MIN_SIZE / 2;
+		expect(imageRegionSchema.safeParse({ x: 0, y: 0, width: thin, height: 0.5 }).success).toBe(
 			false
 		);
-		expect(repaintRegionSchema.safeParse({ x: 0, y: 0, width: 0.5, height: thin }).success).toBe(
+		expect(imageRegionSchema.safeParse({ x: 0, y: 0, width: 0.5, height: thin }).success).toBe(
 			false
 		);
 		expect(
-			repaintRegionSchema.safeParse({ x: 0, y: 0, width: 0.5, height: 0.5, rotation: 1 }).success
+			imageRegionSchema.safeParse({ x: 0, y: 0, width: 0.5, height: 0.5, rotation: 1 }).success
 		).toBe(false);
 	});
 });

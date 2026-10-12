@@ -1110,6 +1110,7 @@ describe('toObjectReplacementRequest', () => {
 		mediaKey: '103',
 		mime: 'image/webp'
 	};
+	const region = { x: 0.1, y: 0.2, width: 0.3, height: 0.4 };
 
 	it('reports every required field when the form is empty', async () => {
 		expect(request.validateObjectReplacement()).toEqual({
@@ -1131,6 +1132,58 @@ describe('toObjectReplacementRequest', () => {
 			sessionId: AC9_SESSION_ID,
 			formSnapshot: request.captureFormSnapshot('replace-object')
 		});
+	});
+
+	it('sends its selected area separately from repaint and records it in the snapshot', async () => {
+		request.setImage(AC9_IMAGE);
+		request.setObjectReferenceImage(objectReference);
+		request.setObjectReplacementObject('sofa');
+		request.setRepaintRegion({ x: 0.5, y: 0.5, width: 0.2, height: 0.2 });
+		expect((await request.toObjectReplacementRequest())?.region).toBeUndefined();
+
+		request.setObjectReplacementRegion(region);
+		const body = await request.toObjectReplacementRequest();
+		expect(body?.region).toEqual(region);
+		expect(body?.formSnapshot?.objectReplacementRegion).toEqual(region);
+		expect(request.activeRepaintRegion()).toEqual({
+			x: 0.5,
+			y: 0.5,
+			width: 0.2,
+			height: 0.2
+		});
+		request.setObjectReplacementRegion(null);
+		expect(request.activeRepaintRegion()).not.toBeNull();
+	});
+
+	it('validates the area and stops using it after the working image changes', () => {
+		request.setImage(AC9_IMAGE);
+		expect(() => request.setObjectReplacementRegion({ ...region, width: 1 })).toThrow();
+		request.setObjectReplacementRegion(region);
+		expect(request.activeObjectReplacementRegion()).toEqual(region);
+		request.setCurrentRender({ id: 'render-1', outputKey: '201', cost: 1, balance: 9, ts: 0 });
+		expect(request.activeObjectReplacementRegion()).toBeNull();
+	});
+
+	it('keeps a local image selection through its upload', async () => {
+		request.setPendingImage(new File(['bytes'], 'room.jpg', { type: 'image/jpeg' }));
+		request.setObjectReplacementRegion(region);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						image: {
+							key: mediaKey(TEST_S3_BUCKET.name, 'uploaded-room.webp'),
+							url: '/api/media/test-media/uploaded-room.webp'
+						},
+						mime: 'image/webp',
+						size: 1234
+					})
+			})
+		);
+		await request.resolveWorkingImageKey();
+		expect(request.activeObjectReplacementRegion()).toEqual(region);
 	});
 
 	it('uses the latest result and falls back to the room photo', async () => {
@@ -1207,7 +1260,7 @@ describe('toObjectReplacementRequest', () => {
 		expect(request.activeObjectReplacementJobId).toBe('123e4567-e89b-42d3-a456-426614174000');
 	});
 
-	it('retains an immutable source snapshot and instruction for the accepted job', () => {
+	it('retains the submitted form and source when the canvas changes before job acceptance', async () => {
 		const source: RenderResult = {
 			id: 'source-render',
 			outputKey: '201',
@@ -1215,12 +1268,20 @@ describe('toObjectReplacementRequest', () => {
 			balance: 19,
 			ts: 1
 		};
+		request.setImage(AC9_IMAGE);
+		request.setObjectReferenceImage(objectReference);
+		request.setObjectReplacementObject('gray sofa');
+		request.setObjectReplacementRegion(region);
+		const body = await request.toObjectReplacementRequest();
+		if (!body) throw new Error('expected an object replacement request');
+		request.setCurrentRender(source);
+		expect(request.activeObjectReplacementRegion()).toBeNull();
 		request.setActiveObjectReplacementJob(
 			'123e4567-e89b-42d3-a456-426614174000',
 			source,
-			'gray sofa'
+			body.replacementObject,
+			body.formSnapshot
 		);
-		const formSnapshot = request.activeObjectReplacementJob?.formSnapshot;
 		source.outputKey = '999';
 		request.setObjectReplacementObject('changed after submission');
 
@@ -1234,8 +1295,11 @@ describe('toObjectReplacementRequest', () => {
 				balance: 19,
 				ts: 1
 			},
-			formSnapshot
+			formSnapshot: body.formSnapshot
 		});
+		expect(request.activeObjectReplacementJob?.formSnapshot?.objectReplacementRegion).toEqual(
+			region
+		);
 	});
 });
 

@@ -13,24 +13,24 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { t } from '$lib/i18n/index.svelte';
-	import { REPAINT_REGION_MIN_SIZE, type RepaintRegion } from '$lib/repaint-region';
+	import { IMAGE_REGION_MIN_SIZE, type ImageRegion } from '$lib/image-region';
 
 	interface Props {
-		region: RepaintRegion | null;
+		region: ImageRegion | null;
 		// The picture's own size: the layer fits itself to the part of its
 		// container the (letterboxed) picture occupies, so the region's fractions
 		// are fractions of the picture, not of the container.
 		naturalWidth: number;
 		naturalHeight: number;
-		onchange: (region: RepaintRegion | null) => void;
+		boxLabel: string;
+		onchange: (region: ImageRegion | null) => void;
 	}
 
 	type Corner = 'nw' | 'ne' | 'sw' | 'se';
 	type Gesture =
 		| { kind: 'draw'; startX: number; startY: number }
-		| { kind: 'move'; offsetX: number; offsetY: number; origin: RepaintRegion }
-		| { kind: 'resize'; corner: Corner; origin: RepaintRegion };
+		| { kind: 'move'; offsetX: number; offsetY: number; origin: ImageRegion }
+		| { kind: 'resize'; corner: Corner; origin: ImageRegion };
 	interface Point {
 		x: number;
 		y: number;
@@ -39,9 +39,9 @@ before the Change Date. See LICENSE for complete terms.
 	const CORNERS: readonly Corner[] = ['nw', 'ne', 'sw', 'se'];
 	const KEY_STEP = 0.01;
 
-	let { region, naturalWidth, naturalHeight, onchange }: Props = $props();
+	let { region, naturalWidth, naturalHeight, boxLabel, onchange }: Props = $props();
 	let surface: HTMLDivElement | null = null;
-	let draft = $state<RepaintRegion | null>(null);
+	let draft = $state<ImageRegion | null>(null);
 	let gesture: Gesture | null = null;
 
 	const shown = $derived(draft ?? region);
@@ -68,7 +68,7 @@ before the Change Date. See LICENSE for complete terms.
 		};
 	}
 
-	function between(a: Point, b: Point): RepaintRegion {
+	function between(a: Point, b: Point): ImageRegion {
 		return {
 			x: Math.min(a.x, b.x),
 			y: Math.min(a.y, b.y),
@@ -79,12 +79,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	// Keeps a side no shorter than the minimum by growing it within [0, 1].
 	function span(start: number, length: number): [number, number] {
-		if (length >= REPAINT_REGION_MIN_SIZE) return [start, length];
-		const grown = Math.min(start, 1 - REPAINT_REGION_MIN_SIZE);
-		return [grown, REPAINT_REGION_MIN_SIZE];
+		if (length >= IMAGE_REGION_MIN_SIZE) return [start, length];
+		const grown = Math.min(start, 1 - IMAGE_REGION_MIN_SIZE);
+		return [grown, IMAGE_REGION_MIN_SIZE];
 	}
 
-	function opposite(origin: RepaintRegion, corner: Corner): Point {
+	function opposite(origin: ImageRegion, corner: Corner): Point {
 		return {
 			x: corner === 'nw' || corner === 'sw' ? origin.x + origin.width : origin.x,
 			y: corner === 'nw' || corner === 'ne' ? origin.y + origin.height : origin.y
@@ -146,8 +146,8 @@ before the Change Date. See LICENSE for complete terms.
 		gesture = null;
 		if (
 			finished &&
-			finished.width >= REPAINT_REGION_MIN_SIZE &&
-			finished.height >= REPAINT_REGION_MIN_SIZE
+			finished.width >= IMAGE_REGION_MIN_SIZE &&
+			finished.height >= IMAGE_REGION_MIN_SIZE
 		) {
 			onchange(finished);
 		}
@@ -172,8 +172,8 @@ before the Change Date. See LICENSE for complete terms.
 		if (event.shiftKey) {
 			onchange({
 				...region,
-				width: clamp(region.width + dx, REPAINT_REGION_MIN_SIZE, 1 - region.x),
-				height: clamp(region.height + dy, REPAINT_REGION_MIN_SIZE, 1 - region.y)
+				width: clamp(region.width + dx, IMAGE_REGION_MIN_SIZE, 1 - region.x),
+				height: clamp(region.height + dy, IMAGE_REGION_MIN_SIZE, 1 - region.y)
 			});
 		} else {
 			onchange({
@@ -205,7 +205,7 @@ before the Change Date. See LICENSE for complete terms.
 				style:top="{shown.y * 100}%"
 				style:width="{shown.width * 100}%"
 				style:height="{shown.height * 100}%"
-				aria-label={t('repaint.region.boxLabel')}
+				aria-label={boxLabel}
 				onpointerdown={startMove}
 				onkeydown={keydown}
 			>

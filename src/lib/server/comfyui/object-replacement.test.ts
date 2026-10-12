@@ -140,6 +140,30 @@ describe('runObjectReplacement', () => {
 		expect(queuedWorkflow?.['11'].inputs.image2).toEqual(['4', 0]);
 		expect(queuedWorkflow?.['153:152'].inputs.string_b).toEqual(['19', 0]);
 		expect(queuedWorkflow?.['26'].inputs.replace).toEqual(['108', 0]);
+		expect(queuedWorkflow?.['3']?.inputs.image).toEqual(['1', 0]);
+		expect(queuedWorkflow?.['210']).toMatchObject({
+			class_type: 'ImageCrop',
+			inputs: {
+				image: ['53', 0],
+				x: ['205', 0],
+				y: ['206', 0],
+				width: ['207', 0],
+				height: ['208', 0]
+			}
+		});
+		expect(queuedWorkflow?.['59']?.inputs.image).toEqual(['210', 0]);
+		expect(queuedWorkflow?.['212']).toMatchObject({
+			class_type: 'MaskComposite',
+			inputs: {
+				destination: ['211', 0],
+				source: ['84', 0],
+				x: ['205', 0],
+				y: ['206', 0],
+				operation: 'add'
+			}
+		});
+		expect(queuedWorkflow?.['60']?.inputs.mask).toEqual(['212', 0]);
+		expect(queuedWorkflow?.['68']?.inputs.destination).toEqual(['1', 0]);
 		expect(queuedWorkflow?.['17']).toEqual({
 			inputs: { filename_prefix: 'obj-replace-v23', images: ['68', 0] },
 			class_type: 'SaveImage',
@@ -275,5 +299,23 @@ describe('object replacement polling', () => {
 			queueNumber: 2
 		});
 		expect(client.waitForCompletion).not.toHaveBeenCalled();
+	});
+
+	it('passes the selected region coordinates to the workflow', async () => {
+		const client = mockClient();
+		vi.mocked(client.uploadImage)
+			.mockResolvedValueOnce(sceneUpload)
+			.mockResolvedValueOnce(referenceUpload);
+		vi.mocked(client.queueWorkflow).mockResolvedValue({ promptId: 'prompt-1', queueNumber: 2 });
+
+		await queueObjectReplacement(client, {
+			...request(),
+			region: { x: 0.12, y: 0.23, width: 0.34, height: 0.45 }
+		});
+
+		const queuedWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
+		expect(['200', '201', '202', '203'].map((id) => queuedWorkflow?.[id]?.inputs.value)).toEqual([
+			0.12, 0.23, 0.34, 0.45
+		]);
 	});
 });

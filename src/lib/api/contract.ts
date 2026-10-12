@@ -13,7 +13,7 @@
  */
 
 import { z } from 'zod';
-import type { RepaintRegion } from '$lib/repaint-region';
+import type { ImageRegion } from '$lib/image-region';
 
 // Shared client↔server wire types (no secrets). The server proxy normalizes
 // external-service responses to these shapes, so the client never depends on
@@ -95,6 +95,7 @@ export interface RequestFormSnapshot {
 	styleReferenceImage?: ImageInput;
 	objectReplacementObject: string;
 	objectReplacementScale: number;
+	objectReplacementRegion: ImageRegion | null;
 	objectReferenceImage?: ImageInput;
 	textureReplacementSurface: string;
 	textureReplacementMasked: boolean;
@@ -107,7 +108,7 @@ export interface RequestFormSnapshot {
 	// Lowercase `#rrggbb` ($lib/repaint-colors).
 	repaintColor: string;
 	// Null when the repaint was not confined to a region.
-	repaintRegion: RepaintRegion | null;
+	repaintRegion: ImageRegion | null;
 }
 
 // Managed image identity plus its stable, cacheable /api/media link.
@@ -258,6 +259,7 @@ export interface ObjectReplacementRequest {
 	imageKey: string;
 	referenceImageKey: string;
 	replacementObject: string;
+	region?: ImageRegion;
 	sessionId: string;
 	formSnapshot?: RequestFormSnapshot;
 }
@@ -325,7 +327,7 @@ export interface RepaintRequest {
 	imageKey: string;
 	target: string;
 	color: string;
-	region?: RepaintRegion;
+	region?: ImageRegion;
 	sessionId: string;
 	formSnapshot?: RequestFormSnapshot;
 }

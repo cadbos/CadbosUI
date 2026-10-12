@@ -55,6 +55,7 @@ function formSnapshot(overrides: Partial<RequestFormSnapshot> = {}): RequestForm
 		styleNegativePrompt: '',
 		objectReplacementObject: '',
 		objectReplacementScale: 1,
+		objectReplacementRegion: null,
 		textureReplacementSurface: '',
 		textureReplacementMasked: false,
 		lightSettingsPresetIds: [],

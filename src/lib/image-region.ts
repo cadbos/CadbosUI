@@ -14,22 +14,22 @@
 
 import { z } from 'zod';
 
-// The smallest side of a repaint region, as a fraction of the scene's side.
+// The smallest side of an image region, as a fraction of the scene's side.
 // Anything thinner cannot hold an object the segmenter could find.
-export const REPAINT_REGION_MIN_SIZE = 0.02;
+export const IMAGE_REGION_MIN_SIZE = 0.02;
 
 // Tolerance for the fractions' floating-point sums reaching the scene's edge.
 const EDGE_TOLERANCE = 1e-6;
 
-// The part of the scene the repaint is confined to, as fractions of the
+// The part of the scene an edit is confined to, as fractions of the
 // scene's width and height measured from its top-left corner. Fractions keep
 // the region independent of the resolution the scene is stored or processed at.
-export const repaintRegionSchema = z
+export const imageRegionSchema = z
 	.strictObject({
 		x: z.number().min(0).max(1),
 		y: z.number().min(0).max(1),
-		width: z.number().min(REPAINT_REGION_MIN_SIZE).max(1),
-		height: z.number().min(REPAINT_REGION_MIN_SIZE).max(1)
+		width: z.number().min(IMAGE_REGION_MIN_SIZE).max(1),
+		height: z.number().min(IMAGE_REGION_MIN_SIZE).max(1)
 	})
 	.refine(
 		(region) =>
@@ -38,4 +38,4 @@ export const repaintRegionSchema = z
 		{ message: 'Region extends beyond the scene' }
 	);
 
-export type RepaintRegion = z.infer<typeof repaintRegionSchema>;
+export type ImageRegion = z.infer<typeof imageRegionSchema>;
