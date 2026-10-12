@@ -17,10 +17,12 @@ before the Change Date. See LICENSE for complete terms.
 	import { dev } from '$app/environment';
 	import { resolve } from '$app/paths';
 	import { npubEncode } from 'nostr-tools/nip19';
+	import { readRememberedAccountKey } from '$lib/nostr/local-key';
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { dismissable, logBoundaryError } from '$lib/utils';
+	import AccountSetup from './AccountSetup.svelte';
 	import LazyImage from './LazyImage.svelte';
 	import SkeletonBlock from './SkeletonBlock.svelte';
 	import QrCode from './QrCode.svelte';
@@ -70,6 +72,27 @@ before the Change Date. See LICENSE for complete terms.
 			// Clipboard unavailable (denied permission / insecure context): leave the
 			// connect panel untouched so the user can still scan or copy manually.
 		}
+	}
+
+	let setupOpen = $state(false);
+	let deviceKeyReady = $state(false);
+
+	function refreshDeviceKey(): void {
+		deviceKeyReady = readRememberedAccountKey() !== null;
+	}
+
+	function closeSetup(): void {
+		setupOpen = false;
+		refreshDeviceKey();
+	}
+
+	async function loginWithDeviceKey(): Promise<void> {
+		const secretKey = readRememberedAccountKey();
+		if (!secretKey) {
+			deviceKeyReady = false;
+			return;
+		}
+		await auth.loginWithSecretKey(secretKey);
 	}
 
 	let npubCopied = $state(false);
@@ -124,7 +147,10 @@ before the Change Date. See LICENSE for complete terms.
 				class="auth-trigger"
 				aria-expanded={profileOpen}
 				aria-controls="auth-panel"
-				onclick={() => (profileState = profileOpen ? 'closed' : 'open')}
+				onclick={() => {
+					if (!profileOpen) refreshDeviceKey();
+					profileState = profileOpen ? 'closed' : 'open';
+				}}
 			>
 				{#if auth.nostrProfile?.picture}
 					<LazyImage
@@ -265,6 +291,14 @@ before the Change Date. See LICENSE for complete terms.
 				<p class="visually-hidden" role="status">{t('auth.restoring')}</p>
 			{:else}
 				<p class="notice">{t('auth.signIn')}</p>
+				{#if deviceKeyReady}
+					<button type="button" onclick={() => void loginWithDeviceKey()}>
+						{t('auth.setup.deviceLogin')}
+					</button>
+				{/if}
+				<button type="button" onclick={() => (setupOpen = true)}>
+					{t('auth.setup.open')}
+				</button>
 				<button type="button" onclick={() => auth.loginNip07()}>
 					{t('auth.login.nip07')}
 				</button>
@@ -318,6 +352,9 @@ before the Change Date. See LICENSE for complete terms.
 				<ThemeToggle />
 			</div>
 		</div>
+		{#if setupOpen}
+			<AccountSetup replacing={deviceKeyReady} onClose={closeSetup} />
+		{/if}
 	</div>
 </div>
 
