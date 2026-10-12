@@ -40,7 +40,7 @@ before the Change Date. See LICENSE for complete terms.
 	let { children }: { children: Snippet } = $props();
 
 	// Standalone pages outside the workspace (e.g. '/usage') must not mount it.
-	// The root route is the workspace with no mode selected; a mode route is
+	// The root route is the landing, with no mode selected; a mode route is
 	// selected only once the user opens it.
 	const showWorkspace = $derived(isWorkspaceRoute(page.route.id));
 	const showHealthWarning = $derived(

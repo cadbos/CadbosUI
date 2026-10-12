@@ -13,9 +13,9 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <!--
-	The workspace root: no mode is selected until the user picks one. This
-	route only registers the URL and restores the app title. The UI is
-	<Workspace /> in the root layout, which stays mounted across navigation.
+	The workspace root: the landing, until the user picks a mode. This route
+	only registers the URL and restores the app title. The UI is <Workspace />
+	in the root layout, which stays mounted across navigation.
 -->
 
 <script lang="ts">

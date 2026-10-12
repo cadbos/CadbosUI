@@ -17,6 +17,7 @@ import type { Dictionary } from '$lib/i18n/locales';
 export const ru = {
 	'app.title': 'ИИ – дизайн',
 	'app.subtitle': 'Создавайте и редактируйте интерьеры и экстерьеры по фото и описанию.',
+	'home.landing': 'Главная',
 	'language.switcher.label': 'Язык интерфейса',
 	'language.ru': 'Русский',
 	'language.en': 'English',
@@ -171,7 +172,6 @@ export const ru = {
 	'toolsPanel.expand': 'Показать панель инструментов',
 	'toolsPanel.resizeHandle': 'Изменить ширину панели инструментов',
 	'toolsPanel.sizePreset': 'Изменить размер панели инструментов',
-	'toolsPanel.chooseMode': 'Выберите, с чего начать.',
 	'toolbar.previousGeneration': 'Предыдущая генерация',
 	'toolbar.nextGeneration': 'Следующая генерация',
 	'toolbar.compare': 'Сравнить до/после',
