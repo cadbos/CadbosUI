@@ -66,8 +66,8 @@ pnpm exec playwright install chromium
 
 ## Configuration
 
-Copy `.env.example` to `.env` only when you need to override the optional commit and
-release URL templates used by the version page:
+Copy `.env.example` to `.env` for local Worker credentials or to override the optional
+commit and release URL templates used by the version page:
 
 ```sh
 cp .env.example .env
@@ -85,6 +85,13 @@ environment variables. Their authoritative definitions are in
   handed to render services; the default is 10800, and valid values range from 1
   through 604800
 - `ARCHAI_API_URL` and the `ARCHAI_API_KEY` secret — archAI server integration
+- `ROBOKASSA_LOGIN`, `ROBOKASSA_PASSWORD1`, `ROBOKASSA_PASSWORD2`,
+  `ROBOKASSA_TEST_PASSWORD1`, and `ROBOKASSA_TEST_PASSWORD2` — Robokassa merchant
+  credentials; all five are configured as Worker secrets in each deployment
+- `ROBOKASSA_IS_TEST` — optional Robokassa mode switch; defaults to `true` and accepts
+  only `true` or `false`. Set `false` explicitly for production payments
+- `ROBOKASSA_HASH_ALGORITHM` — optional signature algorithm (`md5`, `sha256`, or
+  `sha512`); defaults to `md5` and must match the merchant's Robokassa setting
 - `COMFYUI_BASE_URL` — private VPC service binding for ComfyUI
 - `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_GRAPHQL_URL`, and the
   `CLOUDFLARE_ANALYTICS_API_TOKEN` secret — account-wide D1 usage metrics for health checks
@@ -100,8 +107,9 @@ environment variables. Their authoritative definitions are in
 
 Never place provider credentials in `.env` variables exposed to the client. Production
 secrets, including the S3 credentials, must be configured through Cloudflare;
-`wrangler.jsonc` documents the expected variable and secret names. Apply the checked-in D1
-migrations before using a new database:
+`wrangler.jsonc` documents the expected variable and secret names.
+
+Apply the checked-in D1 migrations before using a new database:
 
 ```sh
 pnpm exec wrangler d1 migrations apply DB --local
