@@ -43,6 +43,8 @@ before the Change Date. See LICENSE for complete terms.
 	let copied = $state(false);
 	let downloaded = $state(false);
 	let acknowledged = $state(false);
+	let rememberOnDevice = $state(false);
+	let rememberError = $state<string | null>(null);
 	let copyError = $state<string | null>(null);
 	let attempted = $state(false);
 
@@ -58,6 +60,8 @@ before the Change Date. See LICENSE for complete terms.
 		copied = false;
 		downloaded = false;
 		acknowledged = false;
+		rememberOnDevice = false;
+		rememberError = null;
 		copyError = null;
 		attempted = false;
 		step = 'keys';
@@ -68,6 +72,8 @@ before the Change Date. See LICENSE for complete terms.
 		copied = false;
 		downloaded = false;
 		acknowledged = false;
+		rememberOnDevice = false;
+		rememberError = null;
 		copyError = null;
 		step = 'intro';
 	}
@@ -108,7 +114,11 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function finish(): Promise<void> {
 		if (!pair || !canFinish) return;
-		rememberAccountKey(pair.secretKey);
+		rememberError = null;
+		if (rememberOnDevice && !rememberAccountKey(pair.secretKey)) {
+			rememberError = t('auth.setup.rememberFailed');
+			return;
+		}
 		attempted = true;
 		await auth.loginWithSecretKey(pair.secretKey);
 		if (auth.status === 'authenticated') onClose();
@@ -141,9 +151,6 @@ before the Change Date. See LICENSE for complete terms.
 		<section class="step">
 			<h3>{t('auth.setup.introTitle')}</h3>
 			<p>{t('auth.setup.intro')}</p>
-			{#if replacing}
-				<p class="replace" role="status">{t('auth.setup.replace')}</p>
-			{/if}
 			<button type="button" onclick={revealKeys}>{t('auth.setup.createKeys')}</button>
 		</section>
 	{:else if pair}
@@ -182,6 +189,16 @@ before the Change Date. See LICENSE for complete terms.
 				<input type="checkbox" bind:checked={acknowledged} />
 				<span>{t('auth.setup.ack')}</span>
 			</label>
+			<label class="ack">
+				<input type="checkbox" bind:checked={rememberOnDevice} />
+				<span>{t('auth.setup.remember')}</span>
+			</label>
+			{#if replacing && rememberOnDevice}
+				<p class="replace" role="status">{t('auth.setup.replace')}</p>
+			{/if}
+			{#if rememberError}
+				<p class="error" role="alert">{rememberError}</p>
+			{/if}
 			{#if setupError}
 				<p class="error" role="alert">{t(errorKeys[setupError])}</p>
 			{/if}

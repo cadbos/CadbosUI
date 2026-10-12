@@ -127,6 +127,9 @@ export const en = {
 	'auth.setup.copyFailed':
 		'Could not copy. Select the key and copy it yourself, or download the file.',
 	'auth.setup.download': 'Download file',
+	'auth.setup.remember': 'Remember the key in this browser',
+	'auth.setup.rememberFailed':
+		'Could not save the key in this browser. Clear the checkbox and sign in with the file you already saved.',
 	'auth.setup.ack': 'I saved the secret key outside this browser',
 	'auth.setup.finish': 'Sign in with this key',
 	'auth.setup.back': 'Back',

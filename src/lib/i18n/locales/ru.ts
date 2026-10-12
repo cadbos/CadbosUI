@@ -127,6 +127,9 @@ export const ru = {
 	'auth.setup.copiedSecret': 'Секретный ключ скопирован',
 	'auth.setup.copyFailed': 'Не удалось скопировать. Выделите ключ вручную или скачайте файл.',
 	'auth.setup.download': 'Скачать файл',
+	'auth.setup.remember': 'Запомнить ключ в этом браузере',
+	'auth.setup.rememberFailed':
+		'Не удалось сохранить ключ в этом браузере. Снимите отметку и войдите с уже сохранённым файлом.',
 	'auth.setup.ack': 'Я сохранил секретный ключ вне этого браузера',
 	'auth.setup.finish': 'Войти с этим ключом',
 	'auth.setup.back': 'Назад',

@@ -122,6 +122,8 @@ export interface Dictionary {
 	'auth.setup.copiedSecret': string;
 	'auth.setup.copyFailed': string;
 	'auth.setup.download': string;
+	'auth.setup.remember': string;
+	'auth.setup.rememberFailed': string;
 	'auth.setup.ack': string;
 	'auth.setup.finish': string;
 	'auth.setup.back': string;
