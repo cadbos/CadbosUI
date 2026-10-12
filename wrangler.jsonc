@@ -62,6 +62,15 @@
 	// CLOUDFLARE_ANALYTICS_API_TOKEN (Account Analytics Read permission)
 	// S3_ACCESS_KEY_ID
 	// S3_SECRET_ACCESS_KEY
+	// ROBOKASSA_LOGIN
+	// ROBOKASSA_PASSWORD1
+	// ROBOKASSA_PASSWORD2
+	// ROBOKASSA_TEST_PASSWORD1
+	// ROBOKASSA_TEST_PASSWORD2
+	//
+	// Optional Worker variables configured per environment in Cloudflare:
+	// ROBOKASSA_IS_TEST (defaults to true; set false for live mode)
+	// ROBOKASSA_HASH_ALGORITHM (md5, sha256, or sha512; defaults to md5)
 	//
 	// Generation access itself is controlled in D1, not an env var: an account
 	// can render/edit only once an admin inserts a row for it into the `credits`
