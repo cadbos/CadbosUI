@@ -108,15 +108,12 @@ export const ru = {
 	'auth.login.nip07': 'Расширение Nostr',
 	'auth.login.nip46': 'Nostr Connect (QR)',
 	'auth.setup.open': 'Создать аккаунт',
-	'auth.setup.deviceLogin': 'Войти ключом этого браузера',
 	'auth.setup.close': 'Закрыть',
 	'auth.setup.title': 'Новый аккаунт',
 	'auth.setup.progress': 'Шаг {current} из {total}',
 	'auth.setup.introTitle': 'Ключи создаются здесь',
 	'auth.setup.intro':
 		'Пара ключей появится только в этом браузере. Публичный ключ — это аккаунт. Секретный ключ — единственный вход. Cadbos его не хранит и не восстановит, поэтому на следующем шаге его нужно сохранить у себя.',
-	'auth.setup.replace':
-		'В этом браузере уже есть ключ. Новый заменит его только здесь. Прежний аккаунт откроется файлом, который вы сохраняли раньше.',
 	'auth.setup.createKeys': 'Создать ключи',
 	'auth.setup.keysTitle': 'Сохраните секретный ключ',
 	'auth.setup.publicLabel': 'Публичный ключ',
@@ -127,9 +124,6 @@ export const ru = {
 	'auth.setup.copiedSecret': 'Секретный ключ скопирован',
 	'auth.setup.copyFailed': 'Не удалось скопировать. Выделите ключ вручную или скачайте файл.',
 	'auth.setup.download': 'Скачать файл',
-	'auth.setup.remember': 'Запомнить ключ в этом браузере',
-	'auth.setup.rememberFailed':
-		'Не удалось сохранить ключ в этом браузере. Снимите отметку и войдите с уже сохранённым файлом.',
 	'auth.setup.ack': 'Я сохранил секретный ключ вне этого браузера',
 	'auth.setup.finish': 'Войти с этим ключом',
 	'auth.setup.back': 'Назад',

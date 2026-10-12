@@ -106,13 +106,11 @@ export interface Dictionary {
 	'auth.login.nip07': string;
 	'auth.login.nip46': string;
 	'auth.setup.open': string;
-	'auth.setup.deviceLogin': string;
 	'auth.setup.close': string;
 	'auth.setup.title': string;
 	'auth.setup.progress': string;
 	'auth.setup.introTitle': string;
 	'auth.setup.intro': string;
-	'auth.setup.replace': string;
 	'auth.setup.createKeys': string;
 	'auth.setup.keysTitle': string;
 	'auth.setup.publicLabel': string;
@@ -122,8 +120,6 @@ export interface Dictionary {
 	'auth.setup.copiedSecret': string;
 	'auth.setup.copyFailed': string;
 	'auth.setup.download': string;
-	'auth.setup.remember': string;
-	'auth.setup.rememberFailed': string;
 	'auth.setup.ack': string;
 	'auth.setup.finish': string;
 	'auth.setup.back': string;

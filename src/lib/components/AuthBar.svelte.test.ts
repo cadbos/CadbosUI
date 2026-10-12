@@ -110,7 +110,6 @@ function mockFetch(
 }
 
 beforeEach(() => {
-	localStorage.removeItem('cadbos.localAccountKey');
 	auth.status = 'anonymous';
 	auth.user = null;
 	auth.credit = null;
@@ -517,77 +516,17 @@ it('creates an account only after the secret key is saved', async () => {
 	await userEvent.click(
 		screen.getByRole('checkbox', { name: 'Я сохранил секретный ключ вне этого браузера' })
 	);
-	await userEvent.click(screen.getByRole('checkbox', { name: 'Запомнить ключ в этом браузере' }));
 	await expect.element(finish).toBeEnabled();
 	await userEvent.click(finish);
 
 	await expect.element(screen.getByRole('button', { name: 'Выйти' })).toBeVisible();
 	expect(signedPubkey).toBe(pubkey);
 	expect(auth.pubkey).toBe(pubkey);
-	expect(localStorage.getItem('cadbos.localAccountKey')).toHaveLength(64);
-});
-
-it('signs in with the remembered key after logging out', async () => {
-	let signedPubkey = '';
-	mockFetch((init) => {
-		const header = new Headers(init?.headers).get('authorization') ?? '';
-		const bytes = Uint8Array.from(atob(header.slice('Nostr '.length)), (char) =>
-			char.charCodeAt(0)
-		);
-		const event = JSON.parse(new TextDecoder().decode(bytes)) as { pubkey?: string };
-		signedPubkey = event.pubkey ?? '';
-		return Response.json({ user: { pubkey: signedPubkey } });
-	});
-
-	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Гость' }).click();
-	await screen.getByRole('button', { name: 'Создать аккаунт' }).click();
-	await userEvent.click(screen.getByRole('button', { name: 'Создать ключи' }));
-	const nsec = screen.getByText(/^nsec1/).element().textContent ?? '';
-	const decoded = decode(nsec);
-	expect(decoded.type).toBe('nsec');
-	if (decoded.type !== 'nsec') return;
-	const pubkey = getPublicKey(decoded.data);
-
-	await userEvent.click(screen.getByRole('button', { name: 'Скачать файл' }));
-	await userEvent.click(
-		screen.getByRole('checkbox', { name: 'Я сохранил секретный ключ вне этого браузера' })
-	);
-	await userEvent.click(screen.getByRole('checkbox', { name: 'Запомнить ключ в этом браузере' }));
-	await userEvent.click(screen.getByRole('button', { name: 'Войти с этим ключом' }));
-	await expect.element(screen.getByRole('button', { name: 'Выйти' })).toBeVisible();
+	expect(localStorage.getItem('cadbos.localAccountKey')).toBeNull();
 
 	await userEvent.click(screen.getByRole('button', { name: 'Выйти' }));
-	await userEvent.click(screen.getByRole('button', { name: 'Войти ключом этого браузера' }));
-
-	await expect.element(screen.getByRole('button', { name: 'Выйти' })).toBeVisible();
-	expect(auth.pubkey).toBe(pubkey);
-	expect(signedPubkey).toBe(pubkey);
-});
-
-it('warns before replacing a remembered key and leaves it when remembering is declined', async () => {
-	const existing = 'ab'.repeat(32);
-	localStorage.setItem('cadbos.localAccountKey', existing);
-	mockFetch(() => Response.json({ user: { pubkey: 'cd'.repeat(32) } }));
-
-	const screen = render(AuthBar);
-	await screen.getByRole('button', { name: 'Гость' }).click();
-	await screen.getByRole('button', { name: 'Создать аккаунт' }).click();
-	await userEvent.click(screen.getByRole('button', { name: 'Создать ключи' }));
-
-	const warning = screen.getByText(
-		'В этом браузере уже есть ключ. Новый заменит его только здесь. Прежний аккаунт откроется файлом, который вы сохраняли раньше.'
-	);
-	await expect.element(warning).not.toBeInTheDocument();
-	await userEvent.click(screen.getByRole('checkbox', { name: 'Запомнить ключ в этом браузере' }));
-	await expect.element(warning).toBeVisible();
-
-	await userEvent.click(screen.getByRole('checkbox', { name: 'Запомнить ключ в этом браузере' }));
-	await userEvent.click(screen.getByRole('button', { name: 'Скачать файл' }));
-	await userEvent.click(
-		screen.getByRole('checkbox', { name: 'Я сохранил секретный ключ вне этого браузера' })
-	);
-	await userEvent.click(screen.getByRole('button', { name: 'Войти с этим ключом' }));
-	await expect.element(screen.getByRole('button', { name: 'Выйти' })).toBeVisible();
-	expect(localStorage.getItem('cadbos.localAccountKey')).toBe(existing);
+	await expect.element(screen.getByRole('button', { name: 'Создать аккаунт' })).toBeVisible();
+	await expect
+		.element(screen.getByRole('button', { name: 'Войти ключом этого браузера' }))
+		.not.toBeInTheDocument();
 });

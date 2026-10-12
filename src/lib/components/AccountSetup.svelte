@@ -20,17 +20,15 @@ before the Change Date. See LICENSE for complete terms.
 		ACCOUNT_KEY_FILENAME,
 		createAccountKey,
 		formatAccountKeyFile,
-		rememberAccountKey,
 		type AccountKeyPair
 	} from '$lib/nostr/local-key';
 	import { logBoundaryError } from '$lib/utils';
 
 	interface Props {
-		replacing: boolean;
 		onClose: () => void;
 	}
 
-	let { replacing, onClose }: Props = $props();
+	let { onClose }: Props = $props();
 
 	const errorKeys: Record<AuthError, TranslationKey> = {
 		extension_missing: 'auth.error.extensionMissing',
@@ -43,8 +41,6 @@ before the Change Date. See LICENSE for complete terms.
 	let copied = $state(false);
 	let downloaded = $state(false);
 	let acknowledged = $state(false);
-	let rememberOnDevice = $state(false);
-	let rememberError = $state<string | null>(null);
 	let copyError = $state<string | null>(null);
 	let attempted = $state(false);
 
@@ -60,8 +56,6 @@ before the Change Date. See LICENSE for complete terms.
 		copied = false;
 		downloaded = false;
 		acknowledged = false;
-		rememberOnDevice = false;
-		rememberError = null;
 		copyError = null;
 		attempted = false;
 		step = 'keys';
@@ -72,8 +66,6 @@ before the Change Date. See LICENSE for complete terms.
 		copied = false;
 		downloaded = false;
 		acknowledged = false;
-		rememberOnDevice = false;
-		rememberError = null;
 		copyError = null;
 		step = 'intro';
 	}
@@ -114,11 +106,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	async function finish(): Promise<void> {
 		if (!pair || !canFinish) return;
-		rememberError = null;
-		if (rememberOnDevice && !rememberAccountKey(pair.secretKey)) {
-			rememberError = t('auth.setup.rememberFailed');
-			return;
-		}
 		attempted = true;
 		await auth.loginWithSecretKey(pair.secretKey);
 		if (auth.status === 'authenticated') onClose();
@@ -189,16 +176,6 @@ before the Change Date. See LICENSE for complete terms.
 				<input type="checkbox" bind:checked={acknowledged} />
 				<span>{t('auth.setup.ack')}</span>
 			</label>
-			<label class="ack">
-				<input type="checkbox" bind:checked={rememberOnDevice} />
-				<span>{t('auth.setup.remember')}</span>
-			</label>
-			{#if replacing && rememberOnDevice}
-				<p class="replace" role="status">{t('auth.setup.replace')}</p>
-			{/if}
-			{#if rememberError}
-				<p class="error" role="alert">{rememberError}</p>
-			{/if}
 			{#if setupError}
 				<p class="error" role="alert">{t(errorKeys[setupError])}</p>
 			{/if}
@@ -302,15 +279,6 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-muted-strong);
 		font-size: 0.9375rem;
 		line-height: 1.5;
-	}
-
-	.replace {
-		padding: 0.75rem 0.875rem;
-		border-radius: var(--radius-sm);
-		background: var(--color-warning-bg);
-		color: var(--color-warning-text);
-		font-size: 0.875rem;
-		line-height: 1.45;
 	}
 
 	.key-slip {

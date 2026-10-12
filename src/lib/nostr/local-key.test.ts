@@ -15,23 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import { decode } from 'nostr-tools/nip19';
 import { getPublicKey } from 'nostr-tools/pure';
-import {
-	ACCOUNT_KEY_STORAGE,
-	createAccountKey,
-	formatAccountKeyFile,
-	readRememberedAccountKey,
-	rememberAccountKey
-} from './local-key';
-
-function memoryStorage(): Pick<Storage, 'getItem' | 'setItem'> {
-	const values = new Map<string, string>();
-	return {
-		getItem: (key) => values.get(key) ?? null,
-		setItem: (key, value) => {
-			values.set(key, value);
-		}
-	};
-}
+import { createAccountKey, formatAccountKeyFile } from './local-key';
 
 describe('local account key', () => {
 	it('creates a key pair the public key is derived from', () => {
@@ -58,31 +42,5 @@ describe('local account key', () => {
 		expect(text).toContain('npub1example');
 		expect(text).toContain('nsec1example');
 		expect(text).toContain('Cadbos не может его восстановить.');
-	});
-
-	it('remembers a key on this browser and ignores a damaged record', () => {
-		const storage = memoryStorage();
-		const pair = createAccountKey();
-		expect(readRememberedAccountKey(storage)).toBeNull();
-		expect(rememberAccountKey(pair.secretKey, storage)).toBe(true);
-		const restored = readRememberedAccountKey(storage);
-		expect(restored).not.toBeNull();
-		expect(Array.from(restored ?? [])).toEqual(Array.from(pair.secretKey));
-
-		storage.setItem(ACCOUNT_KEY_STORAGE, 'zz');
-		expect(readRememberedAccountKey(storage)).toBeNull();
-	});
-
-	it('returns failure when storage cannot be read or written', () => {
-		const storage: Pick<Storage, 'getItem' | 'setItem'> = {
-			getItem: () => {
-				throw new Error('blocked');
-			},
-			setItem: () => {
-				throw new Error('blocked');
-			}
-		};
-		expect(rememberAccountKey(createAccountKey().secretKey, storage)).toBe(false);
-		expect(readRememberedAccountKey(storage)).toBeNull();
 	});
 });

@@ -107,15 +107,12 @@ export const en = {
 	'auth.login.nip07': 'Nostr extension',
 	'auth.login.nip46': 'Nostr Connect (QR)',
 	'auth.setup.open': 'Create account',
-	'auth.setup.deviceLogin': 'Sign in with the key on this browser',
 	'auth.setup.close': 'Close',
 	'auth.setup.title': 'New account',
 	'auth.setup.progress': 'Step {current} of {total}',
 	'auth.setup.introTitle': 'Keys are created here',
 	'auth.setup.intro':
 		'The key pair is created in this browser. The public key is the account. The secret key is the only way in. Cadbos does not store it and cannot restore it, so the next step is to save it somewhere you control.',
-	'auth.setup.replace':
-		'This browser already has a key. A new one replaces it only here. The previous account stays available from the file you saved before.',
 	'auth.setup.createKeys': 'Create keys',
 	'auth.setup.keysTitle': 'Save the secret key',
 	'auth.setup.publicLabel': 'Public key',
@@ -127,9 +124,6 @@ export const en = {
 	'auth.setup.copyFailed':
 		'Could not copy. Select the key and copy it yourself, or download the file.',
 	'auth.setup.download': 'Download file',
-	'auth.setup.remember': 'Remember the key in this browser',
-	'auth.setup.rememberFailed':
-		'Could not save the key in this browser. Clear the checkbox and sign in with the file you already saved.',
 	'auth.setup.ack': 'I saved the secret key outside this browser',
 	'auth.setup.finish': 'Sign in with this key',
 	'auth.setup.back': 'Back',
