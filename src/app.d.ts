@@ -59,6 +59,13 @@ declare global {
 				LIGHT_SETTINGS_COST?: string;
 				FLUX_KONTEXT_EDIT_COST?: string;
 				REPAINT_COST?: string;
+				ROBOKASSA_LOGIN: string;
+				ROBOKASSA_PASSWORD1: string;
+				ROBOKASSA_PASSWORD2: string;
+				ROBOKASSA_TEST_PASSWORD1: string;
+				ROBOKASSA_TEST_PASSWORD2: string;
+				ROBOKASSA_IS_TEST?: string;
+				ROBOKASSA_HASH_ALGORITHM?: string;
 				S3_ACCESS_KEY_ID: string;
 				S3_SECRET_ACCESS_KEY: string;
 				S3_UPLOADS_BUCKET_NAME?: string;
