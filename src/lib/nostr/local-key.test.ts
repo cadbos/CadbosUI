@@ -64,12 +64,25 @@ describe('local account key', () => {
 		const storage = memoryStorage();
 		const pair = createAccountKey();
 		expect(readRememberedAccountKey(storage)).toBeNull();
-		rememberAccountKey(pair.secretKey, storage);
+		expect(rememberAccountKey(pair.secretKey, storage)).toBe(true);
 		const restored = readRememberedAccountKey(storage);
 		expect(restored).not.toBeNull();
 		expect(Array.from(restored ?? [])).toEqual(Array.from(pair.secretKey));
 
 		storage.setItem(ACCOUNT_KEY_STORAGE, 'zz');
+		expect(readRememberedAccountKey(storage)).toBeNull();
+	});
+
+	it('returns failure when storage cannot be read or written', () => {
+		const storage: Pick<Storage, 'getItem' | 'setItem'> = {
+			getItem: () => {
+				throw new Error('blocked');
+			},
+			setItem: () => {
+				throw new Error('blocked');
+			}
+		};
+		expect(rememberAccountKey(createAccountKey().secretKey, storage)).toBe(false);
 		expect(readRememberedAccountKey(storage)).toBeNull();
 	});
 });
