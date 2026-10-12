@@ -253,12 +253,12 @@ const ROOT_SESSION_URL = new RegExp(
 	`/\\?project=${PROJECT_A}&session=${SESSION_A}&generation=${GENERATION_A}$`
 );
 
-async function expectNoModeSelected(page: Page): Promise<void> {
+async function expectLanding(page: Page): Promise<void> {
 	await Promise.all([
-		expect(page.locator('#mode-tab-render')).toHaveAttribute('aria-selected', 'false'),
-		expect(page.locator('#mode-tab-edit')).toHaveAttribute('aria-selected', 'false'),
-		expect(page.locator('#mode-tab-styleTransfer')).toHaveAttribute('aria-selected', 'false'),
-		expect(page.getByText('Выберите, с чего начать.')).toBeVisible()
+		expect(page.getByRole('button', { name: 'Создание' })).toBeVisible(),
+		expect(page.getByRole('button', { name: 'Редактирование' })).toBeVisible(),
+		expect(page.getByRole('button', { name: 'Миграция стиля' })).toBeVisible(),
+		expect(page.getByRole('tab', { name: 'Создание' })).toHaveCount(0)
 	]);
 }
 
@@ -283,15 +283,16 @@ test('the logo keeps the open project in the address without selecting a mode', 
 	await page.locator('.brand').click();
 
 	await expect(page).toHaveURL(ROOT_SESSION_URL);
-	await expectNoModeSelected(page);
-	await expect(page.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
+	await expectLanding(page);
+	await expect(page.getByRole('tab', { name: 'Living room' })).toHaveCount(0);
 
-	await page.locator('#mode-tab-render').click();
+	await page.getByRole('button', { name: 'Создание' }).click();
 	await expect(page).toHaveURL(
 		new RegExp(
 			`/create/interior\\?view=chat&format=webp&project=${PROJECT_A}&session=${SESSION_A}&generation=${GENERATION_A}$`
 		)
 	);
+	await expect(page.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
 });
 
 test('a reopened tab writes the restored project into the address without selecting a mode', async ({
@@ -327,7 +328,9 @@ test('a reopened tab writes the restored project into the address without select
 	await page.goto('/');
 
 	await expect(page).toHaveURL(ROOT_SESSION_URL);
-	await expectNoModeSelected(page);
+	await expectLanding(page);
+
+	await page.getByRole('button', { name: 'Создание' }).click();
 	await expect(page.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',

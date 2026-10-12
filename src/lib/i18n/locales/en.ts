@@ -17,6 +17,7 @@ import type { Dictionary } from '$lib/i18n/locales';
 export const en = {
 	'app.title': 'AI Design',
 	'app.subtitle': 'Create and edit interiors and exteriors from a photo and description.',
+	'home.landing': 'Home',
 	'language.switcher.label': 'Interface language',
 	'language.ru': 'Русский',
 	'language.en': 'English',
@@ -170,7 +171,6 @@ export const en = {
 	'toolsPanel.expand': 'Show the tools panel',
 	'toolsPanel.resizeHandle': 'Resize the tools panel',
 	'toolsPanel.sizePreset': 'Change the tools panel size',
-	'toolsPanel.chooseMode': 'Choose where to start.',
 	'toolbar.previousGeneration': 'Previous generation',
 	'toolbar.nextGeneration': 'Next generation',
 	'toolbar.compare': 'Compare before/after',

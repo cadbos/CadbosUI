@@ -29,6 +29,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import FloatingToolsPanel from '$lib/components/FloatingToolsPanel.svelte';
+	import HomeLanding from '$lib/components/HomeLanding.svelte';
 	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import { toolsPanel } from '$lib/state/tools-panel.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
@@ -83,18 +84,12 @@ before the Change Date. See LICENSE for complete terms.
 	import { createTabController, logBoundaryError } from '$lib/utils';
 
 	const modes = [
-		{ id: 'render', label: 'mode.render', description: 'render.panelDescription', icon: Sparkles },
-		{ id: 'edit', label: 'mode.edit', description: 'edit.panelDescription', icon: Pencil },
-		{
-			id: 'styleTransfer',
-			label: 'mode.styleTransfer',
-			description: 'styleTransfer.panelDescription',
-			icon: Palette
-		}
+		{ id: 'render', label: 'mode.render', icon: Sparkles },
+		{ id: 'edit', label: 'mode.edit', icon: Pencil },
+		{ id: 'styleTransfer', label: 'mode.styleTransfer', icon: Palette }
 	] satisfies {
 		id: Mode;
 		label: TranslationKey;
-		description: TranslationKey;
 		icon: typeof Sparkles;
 	}[];
 
@@ -233,6 +228,9 @@ before the Change Date. See LICENSE for complete terms.
 	// scratch tab, on a reload or a duplicated browser tab — and syncing that
 	// would overwrite the very link that's still being opened.
 	let urlTargetStatus = $state<'idle' | 'loading' | 'failed'>('idle');
+	// The workspace root is the landing. A project may still be open behind it
+	// (the logo link lands here without dropping tabs); choosing a mode resumes it.
+	const showLanding = $derived(mode === null && urlTargetStatus === 'idle');
 	// What Retry re-runs after a 'failed' target.
 	let retryUrlTarget: (() => Promise<void>) | null = null;
 
@@ -706,301 +704,228 @@ before the Change Date. See LICENSE for complete terms.
 	</div>
 {/snippet}
 
-<main class="page">
-	<div class="workspace-shell">
-		<div
-			class="workspace-main"
-			style:--tools-panel-width={toolsPanel.width !== null ? `${toolsPanel.width}px` : undefined}
-			style:--workspace-header-bottom={workspaceHeaderBottom !== null
-				? `${workspaceHeaderBottom}px`
-				: undefined}
-		>
-			<div class="workspace-header" {@attach measureWorkspaceHeader}>
-				{#if isAuthenticated}
-					<div class="workspace-row">
-						<a class="resources-button" href={resolve('/projects', {})}>
-							<FolderKanban size={18} strokeWidth={1.8} aria-hidden="true" />
-							<span>{t('projects.navLabel')}</span>
-						</a>
-						{#if showWorkspaceTabs}
-							<WorkspaceTabBar>
-								{#snippet activeActions()}
-									<button
-										{@attach (node) => {
-											shareTrigger = node as HTMLButtonElement;
-											return () => {
-												shareTrigger = null;
-											};
-										}}
-										type="button"
-										class="tab-share"
-										aria-expanded={shareOpen}
-										aria-label={t('workspace.shareButton')}
-										title={t('workspace.shareButton')}
-										onclick={() => (shareOpen = true)}
-									>
-										<Share2 size={18} strokeWidth={1.8} aria-hidden="true" />
-									</button>
-								{/snippet}
-							</WorkspaceTabBar>
-						{/if}
-						<button
-							{@attach (node) => {
-								scenesTrigger = node as HTMLButtonElement;
-								return () => {
-									scenesTrigger = null;
-								};
-							}}
-							type="button"
-							class="scenes-button"
-							aria-expanded={scenesOpen}
-							aria-controls="scenes-drawer"
-							onclick={openScenes}
-						>
-							<Images size={18} strokeWidth={1.8} aria-hidden="true" />
-							<span>{t('generatedImages.title')}</span>
-						</button>
-						<a class="resources-button" href={resolve('/resources', {})}>
-							<GalleryHorizontalEnd size={18} strokeWidth={1.8} aria-hidden="true" />
-							<span>{t('resources.title')}</span>
-						</a>
+{#if showLanding}
+	<HomeLanding />
+{:else}
+	<main class="page">
+		<div class="workspace-shell">
+			<div
+				class="workspace-main"
+				style:--tools-panel-width={toolsPanel.width !== null ? `${toolsPanel.width}px` : undefined}
+				style:--workspace-header-bottom={workspaceHeaderBottom !== null
+					? `${workspaceHeaderBottom}px`
+					: undefined}
+			>
+				<div class="workspace-header" {@attach measureWorkspaceHeader}>
+					{#if isAuthenticated}
+						<div class="workspace-row">
+							<a class="resources-button" href={resolve('/projects', {})}>
+								<FolderKanban size={18} strokeWidth={1.8} aria-hidden="true" />
+								<span>{t('projects.navLabel')}</span>
+							</a>
+							{#if showWorkspaceTabs}
+								<WorkspaceTabBar>
+									{#snippet activeActions()}
+										<button
+											{@attach (node) => {
+												shareTrigger = node as HTMLButtonElement;
+												return () => {
+													shareTrigger = null;
+												};
+											}}
+											type="button"
+											class="tab-share"
+											aria-expanded={shareOpen}
+											aria-label={t('workspace.shareButton')}
+											title={t('workspace.shareButton')}
+											onclick={() => (shareOpen = true)}
+										>
+											<Share2 size={18} strokeWidth={1.8} aria-hidden="true" />
+										</button>
+									{/snippet}
+								</WorkspaceTabBar>
+							{/if}
+							<button
+								{@attach (node) => {
+									scenesTrigger = node as HTMLButtonElement;
+									return () => {
+										scenesTrigger = null;
+									};
+								}}
+								type="button"
+								class="scenes-button"
+								aria-expanded={scenesOpen}
+								aria-controls="scenes-drawer"
+								onclick={openScenes}
+							>
+								<Images size={18} strokeWidth={1.8} aria-hidden="true" />
+								<span>{t('generatedImages.title')}</span>
+							</button>
+							<a class="resources-button" href={resolve('/resources', {})}>
+								<GalleryHorizontalEnd size={18} strokeWidth={1.8} aria-hidden="true" />
+								<span>{t('resources.title')}</span>
+							</a>
+						</div>
+					{/if}
+
+					{#if isAuthenticated && showSessionTabs}
+						<div class="workspace-row">
+							<a
+								class="resources-button"
+								href={resolve('/projects/[id]', { id: workspaceTabs.activeTabId })}
+							>
+								<Layers size={18} strokeWidth={1.8} aria-hidden="true" />
+								<span>{t('workspace.sessionsButton')}</span>
+							</a>
+							<SessionTabBar />
+						</div>
+					{/if}
+				</div>
+
+				{#if urlTargetStatus === 'loading'}
+					<div
+						class="url-target-skeleton"
+						role="status"
+						aria-label={t('workspace.urlTarget.loading')}
+					>
+						<span class="url-target-frame" aria-hidden="true">
+							<ImageSkeleton />
+						</span>
+						<SkeletonBlock width="12rem" height="0.8rem" />
+					</div>
+				{:else if urlTargetStatus === 'failed'}
+					<div class="url-target-status" role="alert">
+						<p>{t('workspace.urlTarget.failed')}</p>
+						<div class="url-target-actions">
+							<button type="button" class="boundary-retry" onclick={retryOpeningUrlTarget}>
+								{t('workspace.urlTarget.retry')}
+							</button>
+							<button type="button" class="boundary-retry" onclick={settleUrlTarget}>
+								{t('workspace.urlTarget.dismiss')}
+							</button>
+						</div>
 					</div>
 				{/if}
 
-				{#if isAuthenticated && showSessionTabs}
-					<div class="workspace-row">
-						<a
-							class="resources-button"
-							href={resolve('/projects/[id]', { id: workspaceTabs.activeTabId })}
-						>
-							<Layers size={18} strokeWidth={1.8} aria-hidden="true" />
-							<span>{t('workspace.sessionsButton')}</span>
-						</a>
-						<SessionTabBar />
-					</div>
-				{/if}
-			</div>
-
-			{#if urlTargetStatus === 'loading'}
-				<div
-					class="url-target-skeleton"
-					role="status"
-					aria-label={t('workspace.urlTarget.loading')}
-				>
-					<span class="url-target-frame" aria-hidden="true">
-						<ImageSkeleton />
-					</span>
-					<SkeletonBlock width="12rem" height="0.8rem" />
-				</div>
-			{:else if urlTargetStatus === 'failed'}
-				<div class="url-target-status" role="alert">
-					<p>{t('workspace.urlTarget.failed')}</p>
-					<div class="url-target-actions">
-						<button type="button" class="boundary-retry" onclick={retryOpeningUrlTarget}>
-							{t('workspace.urlTarget.retry')}
-						</button>
-						<button type="button" class="boundary-retry" onclick={settleUrlTarget}>
-							{t('workspace.urlTarget.dismiss')}
-						</button>
-					</div>
-				</div>
-			{/if}
-
-			<!-- Each mode keeps its own persistent canvas-layout (hidden via CSS, not
+				<!-- Each mode keeps its own persistent canvas-layout (hidden via CSS, not
 			     destroyed via {#if}) so that in-flight background work — the Object/
 			     Texture Replacement tools' async job polling in particular — survives
 			     switching away to another mode and back. All three share the same
 			     `.canvas-layout` shape so the workspace footprint never changes
-			     between modes. The root route is a fourth layout: the same canvas,
-			     with no mode tab selected and a chooser in the tools panel. -->
-			<div
-				class="canvas-layout"
-				class:reserve-panel-space={toolsPanelAtDefaultCorner}
-				hidden={mode !== null || urlTargetStatus !== 'idle'}
-			>
-				<div class="canvas-col">
-					{#if !request.currentRender}
-						<ImageUpload />
-					{:else}
-						<section aria-label={t('render.result')}>
-							<svelte:boundary
-								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
-							>
-								<RenderResult />
-								{#snippet failed(_error: unknown, reset: () => void)}
-									<p class="boundary-failed">{t('boundary.failed')}</p>
-									<button type="button" class="boundary-retry" onclick={reset}>
-										{t('boundary.retry')}
-									</button>
-								{/snippet}
-							</svelte:boundary>
-						</section>
-					{/if}
-				</div>
-
-				<FloatingToolsPanel active={mode === null} header={modeSwitcher}>
-					<div class="step-card">
-						<p class="panel-description">{t('toolsPanel.chooseMode')}</p>
-						<ul class="mode-clouds">
-							{#each modes as modeOption, index (modeOption.id)}
-								<li>
-									<button
-										type="button"
-										class="mode-cloud"
-										onclick={() => modeTabController.activate(index)}
-									>
-										<span class="mode-cloud-icon">
-											<modeOption.icon size={16} strokeWidth={1.8} aria-hidden="true" />
-										</span>
-										<span class="mode-cloud-copy">
-											<span class="mode-cloud-title">{t(modeOption.label)}</span>
-											<span class="mode-cloud-description">{t(modeOption.description)}</span>
-										</span>
-									</button>
-								</li>
-							{/each}
-						</ul>
+			     between modes. -->
+				<div
+					class="canvas-layout"
+					class:reserve-panel-space={toolsPanelAtDefaultCorner}
+					role="tabpanel"
+					id="mode-panel-render"
+					aria-labelledby="mode-tab-render"
+					tabindex="0"
+					hidden={mode !== 'render' || urlTargetStatus !== 'idle'}
+				>
+					<div class="canvas-col">
+						{#if mode === 'render' && !request.currentRender}
+							<ImageUpload />
+						{:else if mode === 'render' && request.currentRender}
+							<section aria-label={t('render.result')}>
+								<svelte:boundary
+									onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
+								>
+									<RenderResult />
+									{#snippet failed(_error: unknown, reset: () => void)}
+										<p class="boundary-failed">{t('boundary.failed')}</p>
+										<button type="button" class="boundary-retry" onclick={reset}>
+											{t('boundary.retry')}
+										</button>
+									{/snippet}
+								</svelte:boundary>
+							</section>
+						{/if}
 					</div>
-				</FloatingToolsPanel>
-			</div>
 
-			<div
-				class="canvas-layout"
-				class:reserve-panel-space={toolsPanelAtDefaultCorner}
-				role="tabpanel"
-				id="mode-panel-render"
-				aria-labelledby="mode-tab-render"
-				tabindex="0"
-				hidden={mode !== 'render' || urlTargetStatus !== 'idle'}
-			>
-				<div class="canvas-col">
-					{#if mode === 'render' && !request.currentRender}
-						<ImageUpload />
-					{:else if mode === 'render' && request.currentRender}
-						<section aria-label={t('render.result')}>
-							<svelte:boundary
-								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
-							>
-								<RenderResult />
-								{#snippet failed(_error: unknown, reset: () => void)}
-									<p class="boundary-failed">{t('boundary.failed')}</p>
-									<button type="button" class="boundary-retry" onclick={reset}>
-										{t('boundary.retry')}
-									</button>
-								{/snippet}
-							</svelte:boundary>
-						</section>
-					{/if}
-				</div>
+					<FloatingToolsPanel active={mode === 'render'} header={modeSwitcher}>
+						<div class="step-card">
+							<p class="panel-description">{t('render.panelDescription')}</p>
+							<div class="panel-section">
+								<h2 class="panel-heading">{t('render.sceneType.label')}</h2>
+								<div
+									class="scene-type-toggle"
+									role="tablist"
+									aria-label={t('render.sceneType.label')}
+								>
+									{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
+										<button
+											{@attach (node) => {
+												sceneTypeTabs[index] = node as HTMLElement;
+											}}
+											type="button"
+											role="tab"
+											aria-selected={request.sceneType === sceneTypeOption.id}
+											tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
+											class:active={request.sceneType === sceneTypeOption.id}
+											onclick={() => sceneTypeTabController.activate(index)}
+											onkeydown={sceneTypeTabController.onKeydown}
+										>
+											{t(sceneTypeOption.label)}
+										</button>
+									{/each}
+								</div>
+							</div>
 
-				<FloatingToolsPanel active={mode === 'render'} header={modeSwitcher}>
-					<div class="step-card">
-						<p class="panel-description">{t('render.panelDescription')}</p>
-						<div class="panel-section">
-							<h2 class="panel-heading">{t('render.sceneType.label')}</h2>
-							<div
-								class="scene-type-toggle"
-								role="tablist"
-								aria-label={t('render.sceneType.label')}
-							>
-								{#each sceneTypes as sceneTypeOption, index (sceneTypeOption.id)}
-									<button
-										{@attach (node) => {
-											sceneTypeTabs[index] = node as HTMLElement;
-										}}
-										type="button"
-										role="tab"
-										aria-selected={request.sceneType === sceneTypeOption.id}
-										tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
-										class:active={request.sceneType === sceneTypeOption.id}
-										onclick={() => sceneTypeTabController.activate(index)}
-										onkeydown={sceneTypeTabController.onKeydown}
+							<PromptViews
+								stepLabel="③"
+								headingKey="view.switcher.label"
+								optionalBadgeKey="render.optional"
+							/>
+
+							<div class="panel-section generate-section">
+								<label class="format-label">
+									<span class="format-text">{t('render.outputFormat')}</span>
+									<select
+										value={request.outputFormat}
+										onchange={(event) =>
+											request.setOutputFormat(event.currentTarget.value as OutputFormat)}
+										class="format-select"
 									>
-										{t(sceneTypeOption.label)}
-									</button>
-								{/each}
+										<option value="webp">WebP</option>
+										<option value="jpg">JPG</option>
+										<option value="png">PNG</option>
+										<option value="avif">AVIF</option>
+									</select>
+								</label>
+
+								<GenerateButton
+									label={t('render.generate')}
+									disabled={!canGenerate || !isAuthenticated}
+									busy={request.status === 'rendering'}
+									onclick={() => void generate()}
+								/>
+
+								{#if submitError}
+									<p class="submit-error" role="alert">{submitError}</p>
+								{/if}
 							</div>
 						</div>
+					</FloatingToolsPanel>
+				</div>
 
-						<PromptViews
-							stepLabel="③"
-							headingKey="view.switcher.label"
-							optionalBadgeKey="render.optional"
-						/>
-
-						<div class="panel-section generate-section">
-							<label class="format-label">
-								<span class="format-text">{t('render.outputFormat')}</span>
-								<select
-									value={request.outputFormat}
-									onchange={(event) =>
-										request.setOutputFormat(event.currentTarget.value as OutputFormat)}
-									class="format-select"
-								>
-									<option value="webp">WebP</option>
-									<option value="jpg">JPG</option>
-									<option value="png">PNG</option>
-									<option value="avif">AVIF</option>
-								</select>
-							</label>
-
-							<GenerateButton
-								label={t('render.generate')}
-								disabled={!canGenerate || !isAuthenticated}
-								busy={request.status === 'rendering'}
-								onclick={() => void generate()}
-							/>
-
-							{#if submitError}
-								<p class="submit-error" role="alert">{submitError}</p>
-							{/if}
-						</div>
-					</div>
-				</FloatingToolsPanel>
-			</div>
-
-			<div
-				class="canvas-layout"
-				class:reserve-panel-space={toolsPanelAtDefaultCorner}
-				role="tabpanel"
-				id="mode-panel-edit"
-				aria-labelledby="mode-tab-edit"
-				tabindex="0"
-				hidden={mode !== 'edit' || urlTargetStatus !== 'idle'}
-			>
-				<div class="canvas-col">
-					{#if showMaskOnCanvas}
-						<svelte:boundary
-							onerror={(error: unknown) => logBoundaryError('workspace.maskEditor', error)}
-						>
-							<MaskEditor
-								sourceUrl={request.workingImageUrl()}
-								sourceKey={request.workingImageKey()}
-								disabled={maskEditorLocked}
-							/>
-							{#snippet failed(_error: unknown, reset: () => void)}
-								<p class="boundary-failed">{t('boundary.failed')}</p>
-								<button type="button" class="boundary-retry" onclick={reset}>
-									{t('boundary.retry')}
-								</button>
-							{/snippet}
-						</svelte:boundary>
-					{:else if mode === 'edit' && !request.currentRender}
-						<ImageUpload
-							regionTool={activeEditTool === 'repaint' || activeEditTool === 'object-replacement'
-								? activeEditTool
-								: undefined}
-						/>
-					{:else if mode === 'edit' && request.currentRender}
-						<section aria-label={t('render.result')}>
+				<div
+					class="canvas-layout"
+					class:reserve-panel-space={toolsPanelAtDefaultCorner}
+					role="tabpanel"
+					id="mode-panel-edit"
+					aria-labelledby="mode-tab-edit"
+					tabindex="0"
+					hidden={mode !== 'edit' || urlTargetStatus !== 'idle'}
+				>
+					<div class="canvas-col">
+						{#if showMaskOnCanvas}
 							<svelte:boundary
-								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
+								onerror={(error: unknown) => logBoundaryError('workspace.maskEditor', error)}
 							>
-								<RenderResult
-									regionTool={activeEditTool === 'repaint' ||
-									activeEditTool === 'object-replacement'
-										? activeEditTool
-										: undefined}
+								<MaskEditor
+									sourceUrl={request.workingImageUrl()}
+									sourceKey={request.workingImageKey()}
+									disabled={maskEditorLocked}
 								/>
 								{#snippet failed(_error: unknown, reset: () => void)}
 									<p class="boundary-failed">{t('boundary.failed')}</p>
@@ -1009,80 +934,105 @@ before the Change Date. See LICENSE for complete terms.
 									</button>
 								{/snippet}
 							</svelte:boundary>
-						</section>
-					{/if}
+						{:else if mode === 'edit' && !request.currentRender}
+							<ImageUpload
+								regionTool={activeEditTool === 'repaint' || activeEditTool === 'object-replacement'
+									? activeEditTool
+									: undefined}
+							/>
+						{:else if mode === 'edit' && request.currentRender}
+							<section aria-label={t('render.result')}>
+								<svelte:boundary
+									onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
+								>
+									<RenderResult
+										regionTool={activeEditTool === 'repaint' ||
+										activeEditTool === 'object-replacement'
+											? activeEditTool
+											: undefined}
+									/>
+									{#snippet failed(_error: unknown, reset: () => void)}
+										<p class="boundary-failed">{t('boundary.failed')}</p>
+										<button type="button" class="boundary-retry" onclick={reset}>
+											{t('boundary.retry')}
+										</button>
+									{/snippet}
+								</svelte:boundary>
+							</section>
+						{/if}
+					</div>
+
+					<FloatingToolsPanel active={mode === 'edit'} header={modeSwitcher}>
+						<svelte:boundary
+							onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
+						>
+							<EditPanel />
+							{#snippet failed(_error: unknown, reset: () => void)}
+								<p class="boundary-failed">{t('boundary.failed')}</p>
+								<button type="button" class="boundary-retry" onclick={reset}>
+									{t('boundary.retry')}
+								</button>
+							{/snippet}
+						</svelte:boundary>
+					</FloatingToolsPanel>
 				</div>
 
-				<FloatingToolsPanel active={mode === 'edit'} header={modeSwitcher}>
-					<svelte:boundary
-						onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
-					>
-						<EditPanel />
-						{#snippet failed(_error: unknown, reset: () => void)}
-							<p class="boundary-failed">{t('boundary.failed')}</p>
-							<button type="button" class="boundary-retry" onclick={reset}>
-								{t('boundary.retry')}
-							</button>
-						{/snippet}
-					</svelte:boundary>
-				</FloatingToolsPanel>
-			</div>
+				<div
+					class="canvas-layout"
+					class:reserve-panel-space={toolsPanelAtDefaultCorner}
+					role="tabpanel"
+					id="mode-panel-styleTransfer"
+					aria-labelledby="mode-tab-styleTransfer"
+					tabindex="0"
+					hidden={mode !== 'styleTransfer' || urlTargetStatus !== 'idle'}
+				>
+					<div class="canvas-col">
+						{#if mode === 'styleTransfer' && !request.currentRender}
+							<ImageUpload />
+						{:else if mode === 'styleTransfer' && request.currentRender}
+							<section aria-label={t('render.result')}>
+								<svelte:boundary
+									onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
+								>
+									<RenderResult />
+									{#snippet failed(_error: unknown, reset: () => void)}
+										<p class="boundary-failed">{t('boundary.failed')}</p>
+										<button type="button" class="boundary-retry" onclick={reset}>
+											{t('boundary.retry')}
+										</button>
+									{/snippet}
+								</svelte:boundary>
+							</section>
+						{/if}
+					</div>
 
-			<div
-				class="canvas-layout"
-				class:reserve-panel-space={toolsPanelAtDefaultCorner}
-				role="tabpanel"
-				id="mode-panel-styleTransfer"
-				aria-labelledby="mode-tab-styleTransfer"
-				tabindex="0"
-				hidden={mode !== 'styleTransfer' || urlTargetStatus !== 'idle'}
-			>
-				<div class="canvas-col">
-					{#if mode === 'styleTransfer' && !request.currentRender}
-						<ImageUpload />
-					{:else if mode === 'styleTransfer' && request.currentRender}
-						<section aria-label={t('render.result')}>
-							<svelte:boundary
-								onerror={(error: unknown) => logBoundaryError('workspace.renderResult', error)}
-							>
-								<RenderResult />
-								{#snippet failed(_error: unknown, reset: () => void)}
-									<p class="boundary-failed">{t('boundary.failed')}</p>
-									<button type="button" class="boundary-retry" onclick={reset}>
-										{t('boundary.retry')}
-									</button>
-								{/snippet}
-							</svelte:boundary>
-						</section>
-					{/if}
+					<FloatingToolsPanel active={mode === 'styleTransfer'} header={modeSwitcher}>
+						<svelte:boundary
+							onerror={(error: unknown) => logBoundaryError('workspace.styleTransfer', error)}
+						>
+							<StyleTransferPanel />
+							{#snippet failed(_error: unknown, reset: () => void)}
+								<p class="boundary-failed">{t('boundary.failed')}</p>
+								<button type="button" class="boundary-retry" onclick={reset}>
+									{t('boundary.retry')}
+								</button>
+							{/snippet}
+						</svelte:boundary>
+					</FloatingToolsPanel>
 				</div>
-
-				<FloatingToolsPanel active={mode === 'styleTransfer'} header={modeSwitcher}>
-					<svelte:boundary
-						onerror={(error: unknown) => logBoundaryError('workspace.styleTransfer', error)}
-					>
-						<StyleTransferPanel />
-						{#snippet failed(_error: unknown, reset: () => void)}
-							<p class="boundary-failed">{t('boundary.failed')}</p>
-							<button type="button" class="boundary-retry" onclick={reset}>
-								{t('boundary.retry')}
-							</button>
-						{/snippet}
-					</svelte:boundary>
-				</FloatingToolsPanel>
 			</div>
 		</div>
-	</div>
 
-	{#if isAuthenticated}
-		<ScenesDrawer open={scenesOpen} onClose={closeScenes} />
-		<ShareProjectDialog
-			projectId={workspaceTabs.activeTabId}
-			open={shareOpen}
-			onClose={closeShare}
-		/>
-	{/if}
-</main>
+		{#if isAuthenticated}
+			<ScenesDrawer open={scenesOpen} onClose={closeScenes} />
+			<ShareProjectDialog
+				projectId={workspaceTabs.activeTabId}
+				open={shareOpen}
+				onClose={closeShare}
+			/>
+		{/if}
+	</main>
+{/if}
 
 <style>
 	.page {
@@ -1316,85 +1266,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	.mode-tabs:global(.icons-only) .mode-label {
 		display: none;
-	}
-
-	.mode-clouds {
-		display: flex;
-		flex-direction: column;
-		gap: 0.65rem;
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	.mode-cloud {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-		width: 100%;
-		margin: 0;
-		padding: 0.85rem 1rem;
-		font: inherit;
-		text-align: start;
-		color: inherit;
-		background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
-		border: 1px solid transparent;
-		border-radius: 1.75rem;
-		cursor: pointer;
-		transition:
-			background 0.15s,
-			border-color 0.15s,
-			color 0.15s,
-			box-shadow 0.15s;
-	}
-
-	.mode-cloud:hover {
-		background: var(--color-surface-hover);
-		border-color: var(--color-accent);
-		box-shadow: var(--shadow);
-	}
-
-	.mode-cloud:hover .mode-cloud-title,
-	.mode-cloud:hover .mode-cloud-description,
-	.mode-cloud:hover .mode-cloud-icon {
-		color: var(--color-accent-text);
-	}
-
-	.mode-cloud:focus-visible {
-		outline: 2px solid var(--color-accent);
-		outline-offset: 2px;
-	}
-
-	.mode-cloud-icon {
-		flex: 0 0 auto;
-		display: grid;
-		place-items: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: 999px;
-		background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
-		color: var(--color-accent-text);
-	}
-
-	.mode-cloud-copy {
-		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
-		min-width: 0;
-	}
-
-	.mode-cloud-title {
-		font-size: 0.8125rem;
-		font-weight: 600;
-		line-height: 1.3;
-		color: var(--color-text);
-	}
-
-	.mode-cloud-description {
-		font-size: 0.8125rem;
-		font-weight: 400;
-		line-height: 1.45;
-		color: var(--color-muted);
 	}
 
 	.canvas-layout {

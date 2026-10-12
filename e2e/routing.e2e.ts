@@ -43,17 +43,16 @@ async function authenticate(page: Page): Promise<void> {
 	});
 }
 
-test('root opens the workspace with no mode selected', async ({ page }) => {
+test('root opens the landing until a mode is chosen', async ({ page }) => {
 	await page.goto('/');
 	await expect(page).toHaveURL(/\/$/);
-	for (const name of ['Создание', 'Редактирование', 'Миграция стиля']) {
-		await expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'false');
+	await expect(page.getByRole('tab', { name: ru['mode.render'] })).toHaveCount(0);
+	for (const name of [ru['mode.render'], ru['mode.edit'], ru['mode.styleTransfer']]) {
+		await expect(page.getByRole('button', { name })).toBeVisible();
 	}
-	await expect(page.getByText('Выберите, с чего начать.')).toBeVisible();
-	await expect(page.locator('.mode-clouds')).toBeVisible();
-	await page.getByRole('tab', { name: 'Создание' }).click();
+	await page.getByRole('button', { name: ru['mode.render'] }).click();
 	await expect(page).toHaveURL(/\/create\/interior\?view=chat&format=webp$/);
-	await expect(page.getByRole('tab', { name: 'Создание' })).toHaveAttribute(
+	await expect(page.getByRole('tab', { name: ru['mode.render'] })).toHaveAttribute(
 		'aria-selected',
 		'true'
 	);
