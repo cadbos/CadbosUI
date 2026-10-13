@@ -214,6 +214,69 @@ Smoke-test sign-in, paid and zero-cost generations, Expenses, project restoratio
 and admin usage; check logs for billing and account lookup errors. A rollback must
 restore the database and application versions together.
 
+### Robokassa funding
+
+Invoices and account ledger balances use **USD cents**. On first checkout, the
+server reads the existing USD/RUB feed and freezes its normalized decimal rate,
+feed timestamp, RUB amount in kopecks, signed URL, test mode, and hash algorithm.
+Cadbos invoice IDs are UUIDs. Each Robokassa quote has a separate immutable numeric
+`inv_id`, generated server-side and linked through `invoice_id` to the Cadbos invoice.
+Callbacks and provider lookups use `inv_id`; the Cadbos API uses the UUID.
+Conversion uses exact decimal arithmetic and rounds half-up to the nearest kopeck:
+at 82.5 RUB/USD, one USD cent costs 83 kopecks. Quotes never expire automatically;
+repeated checkout returns the stored URL without requesting another rate. Quoted
+invoice ownership and amounts cannot change.
+
+The server-side client implements `PaymentProcessor<RobokassaProcessorData>`.
+`getInvoiceDetails(invoiceId)` returns the persisted USD invoice fields and typed
+`processorData`: the saved `quote` (including its numeric provider ID as the
+`invId` decimal string), verified callback `notification` (or `null`
+when absent), and a separate live `operation`. Operation status is `available`
+(with parsed provider details), `not-found`, `unavailable-for-test`, or
+`not-quoted`. Quoted production invoices use the SDK's `webService.opState` with
+production Password №2, the saved hash algorithm, and the injected fetch transport.
+Test and unquoted invoices return stored details without a provider request:
+[`OpStateExt` supports production payments only](https://docs.robokassa.ru/ru/xml-interfaces).
+Operation-not-found is an expected observation; authentication, transport, malformed
+responses, and other API failures reject the lookup with sanitized diagnostics.
+Raw XML is excluded from returned details. Lookups never change invoices, ledger
+entries, or stored notification data, even when provider state disagrees with local
+status. Only verified callbacks settle payments; callback handling lives in the
+internal Robokassa result handler and is absent from the payment client contract.
+
+Configure the merchant's **ResultURL** as
+`https://<application-host>/api/robokassa/result`, delivery method **GET**, before
+accepting payments. Keep SvelteKit CSRF protection enabled. ResultURL verifies
+Password №2 using each invoice's saved mode and hash algorithm; keep the matching
+credentials available when changing deployment defaults. Notifications are uncached;
+HEAD cannot settle a payment. See the [SDK verification documentation](https://github.com/robokassa/sdk-node#обработка-resulturl)
+and [notification settings](https://docs.robokassa.ru/ru/notifications-and-redirects).
+
+A verified RUB payment atomically creates one linked `top-up` credit for the full
+USD invoice amount. Fees are notification metadata and do not reduce the credit.
+Repeated or concurrent notifications return `OK{InvId}` after confirming the linked
+credit, preserving the first payment timestamp and metadata. SQL failures roll back
+settlement and return a retryable error. Funding never creates approval or changes
+`credits.enabled`, and never changes the provider-wallet `balances` table.
+Cancellation is local: it blocks further checkout reuse but cannot revoke a payment
+URL already issued by Robokassa. A verified payment after cancellation still settles;
+a paid invoice cannot be cancelled.
+
+Apply `0024_ledger_entries.sql`, `0025_invoices.sql`,
+`0026_create_prompt_translation.sql`, `0027_welcome_bonus_once.sql`, then
+`0028_robokassa_invoice_details.sql` with
+the coordinated ledger release procedure above. Smoke-test repeated test
+notifications: exactly one linked USD credit and unchanged approval. Validate the
+migration sequence in an isolated local database:
+
+```sh
+pnpm exec wrangler d1 migrations apply DB --local --persist-to /tmp/cadbos-robokassa-check
+pnpm exec wrangler d1 execute DB --local --persist-to /tmp/cadbos-robokassa-check --command 'PRAGMA foreign_key_check'
+```
+
+For transactions created during payment testing, see the
+[invoice UUID conversion procedure](docs/operations/invoice-uuid-conversion.md).
+
 ### Account funding and access
 
 `credits` owns approval and its `enabled` flag. User balances are the sum of ledger
