@@ -132,6 +132,8 @@ export const en = {
 	'auth.demo.login': 'Enter demo mode',
 	'auth.demo.badge': 'DEMO',
 	'auth.credit.balance': 'Balance: {balance}',
+	'auth.credit.requestTopUp': 'Request a top-up',
+	'auth.credit.requestTopUpDraft': '[beta] Balance top-up request',
 	'auth.credit.history': 'Spending history',
 	'auth.credit.historyEmpty': 'No transactions yet',
 	'upload.label': 'Room photo',

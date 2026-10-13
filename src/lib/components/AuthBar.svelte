@@ -14,12 +14,13 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { ArrowUpRight, Check, ChevronRight, Copy, LogOut, User } from '@lucide/svelte';
+	import { setLanguage, showNewMessage } from 'featurebase-js';
 	import { dev } from '$app/environment';
 	import { resolve } from '$app/paths';
 	import { npubEncode } from 'nostr-tools/nip19';
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
-	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { dismissable, logBoundaryError } from '$lib/utils';
 	import LazyImage from './LazyImage.svelte';
 	import SkeletonBlock from './SkeletonBlock.svelte';
@@ -28,6 +29,8 @@ before the Change Date. See LICENSE for complete terms.
 	import HintIcon from './HintIcon.svelte';
 	import LanguageSwitcher from './LanguageSwitcher.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
+
+	let { featurebaseAppId = null }: { featurebaseAppId?: string | null } = $props();
 
 	const errorKeys: Record<AuthError, TranslationKey> = {
 		extension_missing: 'auth.error.extensionMissing',
@@ -106,6 +109,12 @@ before the Change Date. See LICENSE for complete terms.
 	// fires the native 'change' event, which is what triggers the autosave below.
 	function commitOnEnter(event: KeyboardEvent): void {
 		if (event.key === 'Enter') (event.currentTarget as HTMLInputElement).blur();
+	}
+
+	function requestTopUp(): void {
+		setLanguage(getLocale());
+		showNewMessage(t('auth.credit.requestTopUpDraft'));
+		profileState = 'closed';
 	}
 </script>
 
@@ -307,6 +316,12 @@ before the Change Date. See LICENSE for complete terms.
 					</button>
 				{/if}
 			</div>
+
+			{#if auth.status === 'authenticated' && featurebaseAppId}
+				<button type="button" class="top-up-request" onclick={requestTopUp}>
+					{t('auth.credit.requestTopUp')}
+				</button>
+			{/if}
 
 			<p class="relay-count">
 				{ti('auth.profile.relayCount', { count: relayCount })}
@@ -605,6 +620,10 @@ before the Change Date. See LICENSE for complete terms.
 	.balance-link:focus-visible {
 		border-color: var(--color-accent);
 		background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+	}
+
+	.top-up-request {
+		width: 100%;
 	}
 
 	.airy-field {
