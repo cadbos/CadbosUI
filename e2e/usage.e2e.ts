@@ -27,7 +27,8 @@ async function mockAuthenticatedSession(page: Page): Promise<void> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null
 			})
 		});
 	});

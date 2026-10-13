@@ -39,6 +39,7 @@ async function authenticateWithExpenseHistory(
 			contentType: 'application/json',
 			body: JSON.stringify({
 				user: { pubkey: PK, firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null,
 				credit: {
 					balance: 8.5,
 					updatedAt: Date.now(),
