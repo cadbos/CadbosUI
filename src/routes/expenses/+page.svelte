@@ -246,7 +246,6 @@ before the Change Date. See LICENSE for complete terms.
 		min-width: 52rem;
 		padding: 0 0.75rem 0.5rem;
 		background: var(--color-surface);
-		border-bottom: 1px solid var(--color-border);
 	}
 
 	.expenses-columns-header span {
