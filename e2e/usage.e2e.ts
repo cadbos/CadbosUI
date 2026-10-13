@@ -255,6 +255,21 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	await expect(page.getByRole('cell', { name: '111,105.00' })).toBeVisible();
 });
 
+test('shows one centered error when the viewer is not an admin', async ({ page }) => {
+	await mockAuthenticatedSession(page);
+	await page.route('**/api/usage**', async (route) => {
+		await route.fulfill({ status: 403 });
+	});
+
+	await page.goto('/usage');
+
+	const alert = page.locator('.usage-shell').getByRole('alert');
+	await expect(alert).toHaveCount(1);
+	await expect(alert).toHaveText(ru['usage.failed']);
+	await expect(alert).toHaveCSS('text-align', 'center');
+	await expect(page.getByRole('region', { name: ru['usage.totals.title'] })).toHaveCount(0);
+});
+
 test('shows an error message when the wallet balance cannot be loaded', async ({ page }) => {
 	await mockAuthenticatedSession(page);
 	await page.route('**/api/usage**', async (route) => {

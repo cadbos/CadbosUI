@@ -361,6 +361,25 @@ it('never fetches or renders usage data while the auth store is not authenticate
 	expect(fetchMock).not.toHaveBeenCalled();
 });
 
+it('shows one centered error when every usage request is forbidden', async () => {
+	vi.stubGlobal(
+		'fetch',
+		vi.fn<typeof fetch>(() => Promise.resolve(new Response(null, { status: 403 })))
+	);
+
+	const screen = render(UsagePage, pageProps());
+	const alert = screen.getByRole('alert');
+
+	await expect.element(alert).toBeVisible();
+	await expect.element(alert).toHaveTextContent(t('usage.failed'));
+	expect(screen.getByRole('alert').elements()).toHaveLength(1);
+	expect(screen.getByRole('region', { name: t('usage.totals.title') }).elements()).toHaveLength(0);
+	expect(screen.getByText(t('usage.totals.failed')).elements()).toHaveLength(0);
+	expect(screen.getByText(t('usage.walletBalanceFailed')).elements()).toHaveLength(0);
+	expect(screen.getByText(t('usage.totals.d1Failed')).elements()).toHaveLength(0);
+	await expect.element(alert).toHaveStyle({ textAlign: 'center' });
+});
+
 it('renders an error state when usage cannot be loaded', async () => {
 	const fetchMock = vi.fn<typeof fetch>((input) => {
 		const url = String(input);

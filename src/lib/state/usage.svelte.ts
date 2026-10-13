@@ -81,9 +81,12 @@ export type WalletBalanceStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type UsageTotalsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 class UsageLoadError extends Error {
-	constructor(message: string) {
+	readonly status: number | null;
+
+	constructor(message: string, status: number | null = null) {
 		super(message);
 		this.name = 'UsageLoadError';
+		this.status = status;
 	}
 }
 
@@ -209,7 +212,7 @@ class UsageState {
 		signal: AbortSignal
 	): Promise<z.infer<typeof userUsageResponseSchema>> {
 		const response = await fetch(`/api/usage?offset=${offset}&size=${PAGE_SIZE}`, { signal });
-		if (!response.ok) throw new UsageLoadError('usage request failed');
+		if (!response.ok) throw new UsageLoadError('usage request failed', response.status);
 
 		const parsed = userUsageResponseSchema.safeParse(await response.json().catch(() => null));
 		if (!parsed.success) throw new UsageLoadError('usage response invalid');
@@ -244,7 +247,7 @@ class UsageState {
 			body: JSON.stringify({ pubkeys }),
 			signal
 		});
-		if (!response.ok) throw new UsageLoadError('usage profile request failed');
+		if (!response.ok) throw new UsageLoadError('usage profile request failed', response.status);
 
 		const parsed = usageProfilesResponseSchema.safeParse(await response.json().catch(() => null));
 		if (!parsed.success) throw new UsageLoadError('usage profile response invalid');
@@ -258,7 +261,7 @@ class UsageState {
 
 		try {
 			const response = await fetch('/api/usage/balance', { signal: controller.signal });
-			if (!response.ok) throw new UsageLoadError('wallet balance request failed');
+			if (!response.ok) throw new UsageLoadError('wallet balance request failed', response.status);
 
 			const parsed = walletBalanceResponseSchema.safeParse(await response.json().catch(() => null));
 			if (!parsed.success) throw new UsageLoadError('wallet balance response invalid');
@@ -268,6 +271,12 @@ class UsageState {
 			this.walletBalanceStatus = 'ready';
 		} catch (error) {
 			if (controller.signal.aborted) return;
+			if (this.#isAccessDenied(error)) {
+				this.walletBalance = null;
+				this.walletBalanceStatus = 'idle';
+				console.error('Wallet balance load failed:', error);
+				return;
+			}
 			this.walletBalance = null;
 			this.walletBalanceStatus = 'error';
 			console.error('Wallet balance load failed:', error);
@@ -283,7 +292,7 @@ class UsageState {
 
 		try {
 			const response = await fetch('/api/usage/totals', { signal: controller.signal });
-			if (!response.ok) throw new UsageLoadError('usage totals request failed');
+			if (!response.ok) throw new UsageLoadError('usage totals request failed', response.status);
 
 			const parsed = usageTotalsSchema.safeParse(await response.json().catch(() => null));
 			if (!parsed.success) throw new UsageLoadError('usage totals response invalid');
@@ -293,6 +302,12 @@ class UsageState {
 			this.totalsStatus = 'ready';
 		} catch (error) {
 			if (controller.signal.aborted) return;
+			if (this.#isAccessDenied(error)) {
+				this.totals = null;
+				this.totalsStatus = 'idle';
+				console.error('Usage totals load failed:', error);
+				return;
+			}
 			this.totals = null;
 			this.totalsStatus = 'error';
 			console.error('Usage totals load failed:', error);
@@ -311,7 +326,7 @@ class UsageState {
 				signal: controller.signal,
 				cache: 'no-store'
 			});
-			if (!response.ok) throw new UsageLoadError('D1 limits request failed');
+			if (!response.ok) throw new UsageLoadError('D1 limits request failed', response.status);
 
 			const parsed = d1DailyLimitsSchema.safeParse(await response.json().catch(() => null));
 			if (!parsed.success) throw new UsageLoadError('D1 limits response invalid');
@@ -321,6 +336,12 @@ class UsageState {
 			this.d1LimitsStatus = 'ready';
 		} catch (error) {
 			if (controller.signal.aborted) return;
+			if (this.#isAccessDenied(error)) {
+				this.d1Limits = null;
+				this.d1LimitsStatus = 'idle';
+				console.error('D1 limits load failed:', error);
+				return;
+			}
 			this.d1Limits = null;
 			this.d1LimitsStatus = 'error';
 			console.error('D1 limits load failed:', error);
@@ -336,6 +357,10 @@ class UsageState {
 
 		this.#nextOffset = page.pagination.hasMore ? page.pagination.offset + page.users.length : null;
 		this.hasMore = this.#nextOffset !== null;
+	}
+
+	#isAccessDenied(error: unknown): boolean {
+		return error instanceof UsageLoadError && error.status === 403;
 	}
 
 	#abortProfiles(): void {

@@ -407,6 +407,10 @@ before the Change Date. See LICENSE for complete terms.
 		margin: 0;
 	}
 
+	.usage-shell > .status {
+		text-align: center;
+	}
+
 	h1 {
 		color: var(--color-text);
 		font-size: clamp(1.375rem, 2vw, 1.75rem);
