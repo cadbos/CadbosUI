@@ -97,7 +97,7 @@ test('opens the localized Featurebase feedback widget', async ({ page }) => {
 
 test('opens a beta balance top-up request in Featurebase', async ({ page }) => {
 	await page.goto('/');
-	await expect(page.getByRole('button', { name: 'Запросить пополнение' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Пополнить' })).toHaveCount(0);
 
 	await page.route('**/auth/me', (route) =>
 		route.fulfill({
@@ -110,7 +110,15 @@ test('opens a beta balance top-up request in Featurebase', async ({ page }) => {
 	);
 	await page.reload();
 	await page.locator('.auth-trigger').click();
-	await page.getByRole('button', { name: 'Запросить пополнение' }).click();
+	await expect(page.getByLabel('Сумма, USD')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Пополнить' }).click();
+	await page.getByRole('button', { name: 'Отправить' }).click();
+	await expect(page.locator('#auth-panel').getByRole('alert')).toHaveText(
+		'Укажите сумму больше нуля.'
+	);
+
+	await page.getByLabel('Сумма, USD').fill('1250.5');
+	await page.getByRole('button', { name: 'Отправить' }).click();
 
 	await expect
 		.poll(() =>
@@ -120,7 +128,7 @@ test('opens a beta balance top-up request in Featurebase', async ({ page }) => {
 				return calls?.find(([action]) => action === 'showNewMessage')?.[1] ?? null;
 			})
 		)
-		.toBe('[beta] Заявка на пополнение баланса');
+		.toBe('[beta] Заявка на пополнение баланса: $ 1,250.50');
 });
 
 test('updates Featurebase identity when the user signs in and out', async ({ page }) => {

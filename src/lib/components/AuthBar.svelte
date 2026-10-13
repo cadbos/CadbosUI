@@ -46,6 +46,9 @@ before the Change Date. See LICENSE for complete terms.
 	let profileState = $state<'auto' | 'open' | 'closed'>('auto');
 	let savingProfile = $state(false);
 	let saveError = $state<string | null>(null);
+	let topUpOpen = $state(false);
+	let topUpAmount = $state('');
+	let topUpError = $state<string | null>(null);
 
 	const displayName = $derived(auth.nostrProfile?.name ?? shortNpub);
 	const missingCadbosName = $derived(
@@ -55,6 +58,12 @@ before the Change Date. See LICENSE for complete terms.
 	const profileOpen = $derived(
 		profileState === 'open' || (profileState === 'auto' && missingCadbosName)
 	);
+
+	$effect(() => {
+		if (profileOpen) return;
+		topUpOpen = false;
+		topUpError = null;
+	});
 
 	// Track which URI was copied so the hint resets automatically when a fresh
 	// connection (a different URI) is started.
@@ -111,9 +120,36 @@ before the Change Date. See LICENSE for complete terms.
 		if (event.key === 'Enter') (event.currentTarget as HTMLInputElement).blur();
 	}
 
-	function requestTopUp(): void {
+	function parseTopUpAmount(raw: string): number | null {
+		const trimmed = raw.trim();
+		if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null;
+		const amount = Number(trimmed);
+		if (!Number.isFinite(amount) || amount <= 0) return null;
+		return amount;
+	}
+
+	function formatTopUpUsd(amount: number): string {
+		const [whole, fraction] = amount.toFixed(2).split('.');
+		const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+		return `$ ${grouped}.${fraction}`;
+	}
+
+	function toggleTopUp(): void {
+		topUpOpen = !topUpOpen;
+		if (!topUpOpen) topUpError = null;
+	}
+
+	function requestTopUp(event: SubmitEvent): void {
+		event.preventDefault();
+		const amount = parseTopUpAmount(topUpAmount);
+		if (amount === null) {
+			topUpError = t('auth.credit.requestTopUpInvalid');
+			return;
+		}
+		topUpError = null;
 		setLanguage(getLocale());
-		showNewMessage(t('auth.credit.requestTopUpDraft'));
+		showNewMessage(ti('auth.credit.requestTopUpDraft', { amount: formatTopUpUsd(amount) }));
+		topUpAmount = '';
 		profileState = 'closed';
 	}
 </script>
@@ -303,6 +339,17 @@ before the Change Date. See LICENSE for complete terms.
 					>
 					<ChevronRight size={14} strokeWidth={1.8} aria-hidden="true" />
 				</a>
+				{#if auth.status === 'authenticated' && featurebaseAppId}
+					<button
+						type="button"
+						class="top-up-toggle"
+						aria-expanded={topUpOpen}
+						aria-controls="top-up-form"
+						onclick={toggleTopUp}
+					>
+						{t('auth.credit.requestTopUp')}
+					</button>
+				{/if}
 				{#if auth.status === 'authenticated'}
 					<button
 						type="button"
@@ -317,10 +364,23 @@ before the Change Date. See LICENSE for complete terms.
 				{/if}
 			</div>
 
-			{#if auth.status === 'authenticated' && featurebaseAppId}
-				<button type="button" class="top-up-request" onclick={requestTopUp}>
-					{t('auth.credit.requestTopUp')}
-				</button>
+			{#if topUpOpen}
+				<form id="top-up-form" class="top-up-form" onsubmit={requestTopUp}>
+					<input
+						id="top-up-amount"
+						class="airy-input top-up-amount"
+						inputmode="decimal"
+						autocomplete="off"
+						spellcheck="false"
+						placeholder="0.00"
+						aria-label={t('auth.credit.requestTopUpAmount')}
+						bind:value={topUpAmount}
+					/>
+					<button type="submit">{t('auth.credit.requestTopUpSubmit')}</button>
+					{#if topUpError}
+						<p class="error" role="alert">{topUpError}</p>
+					{/if}
+				</form>
 			{/if}
 
 			<p class="relay-count">
@@ -622,8 +682,28 @@ before the Change Date. See LICENSE for complete terms.
 		background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
 	}
 
-	.top-up-request {
-		width: 100%;
+	.top-up-toggle {
+		flex: 0 0 auto;
+		padding: 0 0.65rem;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		white-space: nowrap;
+	}
+
+	.top-up-form {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: var(--space-1);
+		align-items: center;
+	}
+
+	.top-up-form .error {
+		grid-column: 1 / -1;
+	}
+
+	.top-up-amount {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.airy-field {
