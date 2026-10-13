@@ -32,6 +32,7 @@ async function authenticate(page: Page): Promise<void> {
 			contentType: 'application/json',
 			body: JSON.stringify({
 				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null,
 				credit: { balance: 20, updatedAt: 0, history: [] }
 			})
 		});
