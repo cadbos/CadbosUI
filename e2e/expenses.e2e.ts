@@ -26,7 +26,7 @@ const COMFY_GENERATION_ID = '00000000-0000-4000-8000-000000000704';
 const BEFORE_URL = '/api/media/test-media/before.webp';
 const AFTER_URL = '/api/media/test-media/after.webp';
 
-async function authenticateWithExpenseHistory(page: Page): Promise<void> {
+async function authenticateWithExpenseHistory(page: Page, queueWaitSec = 0): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -44,7 +44,7 @@ async function authenticateWithExpenseHistory(page: Page): Promise<void> {
 							kind: 'render',
 							createdAt: Date.UTC(2026, 0, 1),
 							comfyuiUploadQueueSec: 0,
-							comfyuiQueueWaitSec: 0,
+							comfyuiQueueWaitSec: queueWaitSec,
 							comfyuiExecutionSec: 0,
 							comfyuiDownloadSec: 0,
 							comfyuiReuploadSec: 0,
@@ -170,6 +170,45 @@ test('aligns duration header title with its icons and the other column titles', 
 	for (const title of alignment.otherTitles) {
 		expect(Math.abs(title.y - alignment.durationTitle.y)).toBeLessThanOrEqual(1);
 	}
+});
+
+test('keeps a long queue wait inside its duration column', async ({ page }) => {
+	await authenticateWithExpenseHistory(page, 123_456);
+	await page.goto('/expenses');
+
+	const row = page.locator('.history-entry').first();
+	await expect(row.locator('.duration-values .cell').first()).toHaveText('123456 с');
+
+	const layout = await page.evaluate(() => {
+		function centerX(element: Element): number {
+			const rect = element.getBoundingClientRect();
+			return rect.x + rect.width / 2;
+		}
+
+		const header = document.querySelector('.expenses-columns-header');
+		const entry = document.querySelector('.history-entry');
+		if (!header || !entry) throw new Error('Expenses row is missing');
+
+		const icons = [...header.querySelectorAll('.hint-icon')];
+		const values = [...entry.querySelectorAll('.duration-values .cell')];
+		const headerValue = header.querySelector('.value-cell');
+		const rowValue = entry.querySelector('.value-cell');
+		const headerAction = header.querySelector(':scope > span:last-child');
+		const rowAction = entry.querySelector(':scope > .cell:last-child');
+		if (!headerValue || !rowValue || !headerAction || !rowAction) {
+			throw new Error('Expenses columns are incomplete');
+		}
+
+		return {
+			durationShift: icons.map((icon, index) => Math.abs(centerX(icon) - centerX(values[index]!))),
+			valueShift: Math.abs(centerX(headerValue) - centerX(rowValue)),
+			actionShift: Math.abs(centerX(headerAction) - centerX(rowAction))
+		};
+	});
+
+	for (const shift of layout.durationShift) expect(shift).toBeLessThanOrEqual(1);
+	expect(layout.valueShift).toBeLessThanOrEqual(1);
+	expect(layout.actionShift).toBeLessThanOrEqual(1);
 });
 
 test('clicking an expense row opens its generation before/after in the workspace, anchored in the URL', async ({
