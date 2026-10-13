@@ -223,10 +223,7 @@ export interface Dictionary {
 	'auth.demo.badge': string;
 	'auth.credit.balance': string;
 	'auth.credit.requestTopUp': string;
-	'auth.credit.requestTopUpSubmit': string;
-	'auth.credit.requestTopUpAmount': string;
 	'auth.credit.requestTopUpDraft': string;
-	'auth.credit.requestTopUpInvalid': string;
 	'auth.credit.history': string;
 	'auth.credit.historyEmpty': string;
 	'upload.label': string;
