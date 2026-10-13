@@ -266,6 +266,7 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		flex-direction: column;
 		gap: 0.375rem;
+		min-width: 0;
 	}
 
 	.duration-group-label {
@@ -275,10 +276,19 @@ before the Change Date. See LICENSE for complete terms.
 
 	.duration-icons,
 	.duration-values {
-		display: flex;
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
 		align-items: center;
-		justify-content: space-between;
+		justify-items: center;
 		gap: 0.5rem;
+		min-width: 0;
+	}
+
+	.duration-values .cell {
+		width: 100%;
+		min-width: 0;
+		text-align: center;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.history-list {
