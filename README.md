@@ -169,6 +169,46 @@ Smoke-test sign-in, paid and zero-cost generations, Expenses, project restoratio
 and admin usage; check logs for billing and account lookup errors. A rollback must
 restore the database and application versions together.
 
+### Robokassa funding
+
+Invoices and account ledger balances use **USD cents**. On first checkout, the
+server reads the existing USD/RUB feed and freezes its normalized decimal rate,
+feed timestamp, RUB amount in kopecks, signed URL, test mode, and hash algorithm.
+Conversion uses exact decimal arithmetic and rounds half-up to the nearest kopeck:
+at 82.5 RUB/USD, one USD cent costs 83 kopecks. Quotes never expire automatically;
+repeated checkout returns the stored URL without requesting another rate. Quoted
+invoice ownership and amounts cannot change.
+
+Configure the merchant's **ResultURL** as
+`https://<application-host>/api/robokassa/result`, delivery method **GET**, before
+accepting payments. Keep SvelteKit CSRF protection enabled. ResultURL verifies
+Password №2 using each invoice's saved mode and hash algorithm; keep the matching
+credentials available when changing deployment defaults. Notifications are uncached;
+HEAD cannot settle a payment. See the [SDK verification documentation](https://github.com/robokassa/sdk-node#обработка-resulturl)
+and [notification settings](https://docs.robokassa.ru/ru/notifications-and-redirects).
+
+A verified RUB payment atomically creates one linked `top-up` credit for the full
+USD invoice amount. Fees are notification metadata and do not reduce the credit.
+Repeated or concurrent notifications return `OK{InvId}` after confirming the linked
+credit, preserving the first payment timestamp and metadata. SQL failures roll back
+settlement and return a retryable error. Funding never creates approval or changes
+`credits.enabled`, and never changes the provider-wallet `balances` table.
+Cancellation is local: it blocks further checkout reuse but cannot revoke a payment
+URL already issued by Robokassa. A verified payment after cancellation still settles;
+a paid invoice cannot be cancelled.
+
+Apply `0024_ledger_entries.sql`, `0025_invoices.sql`, then
+`0026_robokassa_invoice_details.sql` with the coordinated ledger release procedure
+above. Smoke-test repeated test notifications: exactly one linked USD credit and
+unchanged approval. For development, discard incompatible disposable local D1 state
+and reapply all migrations; never fabricate migration-history entries. To validate
+without touching development state:
+
+```sh
+pnpm exec wrangler d1 migrations apply DB --local --persist-to /tmp/cadbos-robokassa-rebase-check
+pnpm exec wrangler d1 execute DB --local --persist-to /tmp/cadbos-robokassa-rebase-check --command 'PRAGMA foreign_key_check'
+```
+
 ### Account funding and access
 
 `credits` owns approval and its `enabled` flag. User balances are the sum of ledger
