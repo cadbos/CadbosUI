@@ -27,7 +27,8 @@ async function mockAuthenticatedSession(page: Page): Promise<void> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null
 			})
 		});
 	});
@@ -39,6 +40,12 @@ async function mockAuthenticatedSession(page: Page): Promise<void> {
 		});
 	});
 }
+
+import { mockFeaturebase } from './featurebase';
+
+test.beforeEach(async ({ page }) => {
+	await mockFeaturebase(page);
+});
 
 test('links usage pubkeys to Primal in a new tab by default', async ({ page }) => {
 	await mockAuthenticatedSession(page);

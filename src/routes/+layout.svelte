@@ -14,8 +14,14 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { ArrowUpRight } from '@lucide/svelte';
-	import { onMount, type Snippet } from 'svelte';
+	import { onMount } from 'svelte';
 	import { scrollY } from 'svelte/reactivity/window';
+	import Featurebase, {
+		clearConfig,
+		destroyFeedback,
+		initFeedback,
+		shutdown
+	} from 'featurebase-js';
 	import '../app.css';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -23,7 +29,7 @@ before the Change Date. See LICENSE for complete terms.
 	import AuthBar from '$lib/components/AuthBar.svelte';
 	import GenerationOverlay from '$lib/components/GenerationOverlay.svelte';
 	import Workspace from '$lib/components/Workspace.svelte';
-	import { hydrateLocale, t } from '$lib/i18n/index.svelte';
+	import { getLocale, hydrateLocale, t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { status } from '$lib/state/status.svelte';
@@ -32,12 +38,15 @@ before the Change Date. See LICENSE for complete terms.
 	import { isWorkspaceRoute } from '$lib/state/url-state';
 	import { restorePersistedTabs } from '$lib/state/workspace-tabs.svelte';
 	import { logBoundaryError } from '$lib/utils';
+	import type { LayoutProps } from './$types';
 
 	// children() renders whichever leaf +page.svelte matched the URL — those are
 	// intentionally empty (see src/routes/create/[scene=scene]/+page.svelte): the
 	// workspace itself lives here, in the layout, so it stays mounted (and its
 	// UI state intact) while the user navigates between mode/scene routes.
-	let { children }: { children: Snippet } = $props();
+	let { children, data }: LayoutProps = $props();
+	let featurebaseReady = $state(false);
+	let configuredJwt: string | null = null;
 
 	// Standalone pages outside the workspace (e.g. '/usage') must not mount it.
 	// The root route is the landing, with no mode selected; a mode route is
@@ -72,8 +81,37 @@ before the Change Date. See LICENSE for complete terms.
 		return () => root.style.removeProperty('--app-chrome-height');
 	});
 
+	function initializeFeaturebase(featurebaseJwt: string | null, clearIdentity = false): void {
+		if (!data.featurebaseAppId) return;
+
+		destroyFeedback();
+		if (clearIdentity) {
+			shutdown();
+			clearConfig();
+		}
+
+		Featurebase({
+			appId: data.featurebaseAppId,
+			...(featurebaseJwt === null ? {} : { featurebaseJwt })
+		});
+		initFeedback({ theme: 'light', locale: getLocale() });
+		configuredJwt = featurebaseJwt;
+	}
+
+	$effect(() => {
+		const featurebaseJwt = auth.featurebaseJwt;
+		if (!featurebaseReady || featurebaseJwt === configuredJwt) return;
+		initializeFeaturebase(featurebaseJwt, featurebaseJwt === null);
+	});
+
 	onMount(() => {
-		auth.loadSession();
+		let disposed = false;
+
+		void auth.loadSession().then(() => {
+			if (disposed || !data.featurebaseAppId) return;
+			initializeFeaturebase(auth.featurebaseJwt);
+			featurebaseReady = true;
+		});
 		void status.checkOnce();
 		hydrateLocale();
 		theme.hydrate();
@@ -86,6 +124,15 @@ before the Change Date. See LICENSE for complete terms.
 			logBoundaryError('layout.restorePersistedTabs', error)
 		);
 		window.dispatchEvent(new CustomEvent('cadbos:client-ready'));
+
+		return () => {
+			disposed = true;
+			featurebaseReady = false;
+			if (!data.featurebaseAppId) return;
+			destroyFeedback();
+			shutdown();
+			clearConfig();
+		};
 	});
 </script>
 
