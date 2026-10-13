@@ -176,7 +176,7 @@ before the Change Date. See LICENSE for complete terms.
 		</div>
 	</a>
 	<div class="header-actions">
-		<AuthBar />
+		<AuthBar featurebaseAppId={data.featurebaseAppId} />
 	</div>
 </header>
 
