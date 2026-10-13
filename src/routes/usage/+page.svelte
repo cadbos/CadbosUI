@@ -530,7 +530,8 @@ before the Change Date. See LICENSE for complete terms.
 		padding: 0.75rem;
 		border-bottom: 1px solid var(--color-border);
 		text-align: left;
-		vertical-align: top;
+		vertical-align: middle;
+		line-height: 1;
 		white-space: nowrap;
 	}
 
@@ -547,6 +548,7 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-muted);
 		font-size: 0.75rem;
 		font-weight: 700;
+		line-height: 1;
 		text-transform: uppercase;
 	}
 
@@ -567,7 +569,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	.pubkey {
 		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-		vertical-align: middle;
 	}
 
 	.user-identity {

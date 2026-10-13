@@ -655,6 +655,16 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 	const drawer = page.getByRole('dialog', { name: 'Сцены' });
 	const steps = drawer.getByRole('list', { name: 'Итерации, сначала новые' });
 	await expect(steps.getByRole('listitem')).toHaveCount(2);
+	const scenesHeaderAlignment = await drawer.locator('.scene-columns-header').evaluate((header) => {
+		const title = header.querySelector('.column-title');
+		if (!title) throw new Error('Scene column title is missing');
+		const range = document.createRange();
+		range.selectNodeContents(title);
+		const text = range.getBoundingClientRect();
+		const box = header.getBoundingClientRect();
+		return Math.abs(text.top - box.top - (box.bottom - text.bottom));
+	});
+	expect(scenesHeaderAlignment).toBeLessThanOrEqual(1);
 	await expect(steps.getByRole('listitem').first()).toContainText('Квартира · Кухня');
 	// The session's first iteration marks its Base as the Source.
 	await expect(

@@ -253,6 +253,7 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 0.6875rem;
 		font-weight: 650;
 		letter-spacing: 0.045em;
+		line-height: 1;
 		white-space: nowrap;
 		text-transform: uppercase;
 	}

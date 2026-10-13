@@ -1318,7 +1318,7 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 0.6875rem;
 		font-weight: 650;
 		letter-spacing: 0.045em;
-		line-height: 1.3;
+		line-height: 1;
 		text-align: center;
 		text-transform: uppercase;
 	}
@@ -1436,7 +1436,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.date {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: 0.45rem;
 		color: var(--color-muted);
 		font-size: 0.75rem;

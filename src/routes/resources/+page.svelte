@@ -440,7 +440,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	.card-footer time {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: 0.45rem;
 		color: var(--color-muted);
 		font-size: 0.75rem;

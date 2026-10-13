@@ -281,6 +281,7 @@ before the Change Date. See LICENSE for complete terms.
 		font-weight: 500;
 		text-align: left;
 		vertical-align: middle;
+		line-height: 1;
 		white-space: nowrap;
 	}
 
@@ -289,6 +290,7 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-muted);
 		font-size: 0.75rem;
 		font-weight: 700;
+		line-height: 1;
 		text-transform: uppercase;
 	}
 
