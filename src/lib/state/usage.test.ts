@@ -184,6 +184,27 @@ describe('usage pagination', () => {
 		expect(usage.loadingMore).toBe(false);
 	});
 
+	it('shows one list error when every usage endpoint denies access', async () => {
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.stubGlobal(
+			'fetch',
+			vi.fn<typeof fetch>(() => Promise.resolve(new Response(null, { status: 403 })))
+		);
+
+		await usage.load();
+
+		await vi.waitFor(() => expect(consoleError).toHaveBeenCalledTimes(4));
+		expect(usage.status).toBe('error');
+		expect(usage.users).toEqual([]);
+		expect(usage.walletBalanceStatus).toBe('idle');
+		expect(usage.walletBalance).toBeNull();
+		expect(usage.totalsStatus).toBe('idle');
+		expect(usage.totals).toBeNull();
+		expect(usage.d1LimitsStatus).toBe('idle');
+		expect(usage.d1Limits).toBeNull();
+		consoleError.mockRestore();
+	});
+
 	it('surfaces invalid usage responses as load errors', async () => {
 		const fetchMock = vi.fn<typeof fetch>((input) => {
 			if (String(input) === '/api/usage/balance') return Promise.resolve(walletBalanceResponse());
