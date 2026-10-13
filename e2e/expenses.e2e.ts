@@ -170,6 +170,7 @@ test('aligns duration header title with its icons and the other column titles', 
 	for (const title of alignment.otherTitles) {
 		expect(Math.abs(title.y - alignment.durationTitle.y)).toBeLessThanOrEqual(1);
 	}
+	await expect(page.locator('.expenses-columns-header')).toHaveCSS('border-bottom-width', '0px');
 });
 
 test('keeps a long queue wait inside its duration column', async ({ page }) => {

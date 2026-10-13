@@ -186,6 +186,21 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 		.format(1536)
 		.replace(/1[\u00a0\u202f]536/, '1 536');
 	await expect(page.getByRole('cell', { name: '1 536', exact: true })).toBeVisible();
+	const usageRowAlignment = await user.evaluate((cell) => {
+		function textCenterY(element: Element): number {
+			const range = document.createRange();
+			range.selectNodeContents(element);
+			const rect = range.getBoundingClientRect();
+			return rect.y + rect.height / 2;
+		}
+
+		const avatar = cell.querySelector('img, .avatar');
+		const amount = cell.closest('tr')?.querySelector('td');
+		if (!avatar || !amount) throw new Error('Usage row is incomplete');
+		const avatarRect = avatar.getBoundingClientRect();
+		return Math.abs(avatarRect.y + avatarRect.height / 2 - textCenterY(amount));
+	});
+	expect(usageRowAlignment).toBeLessThanOrEqual(1);
 	const totals = page.getByRole('region', { name: ru['usage.totals.title'] });
 	await expect(totals).toContainText(`${ru['usage.totals.walletBalance']} $ 1,250.00`);
 	await expect(totals).toContainText(`${ru['usage.totals.deposits']} ${ru['usage.emptyValue']}`);
