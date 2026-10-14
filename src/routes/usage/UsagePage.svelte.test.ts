@@ -55,6 +55,7 @@ function user(
 }
 
 const TOTALS: UsageTotals = {
+	totalDeposit: 150,
 	userCount: 7,
 	projectCount: 11,
 	sessionCount: 23,
@@ -408,7 +409,7 @@ it('renders each pubkey as an npub explorer link that opens in a new tab', async
 	await expect.element(link).toBeVisible();
 	await expect.element(link).toHaveAttribute('href', `https://explorer.example/p/${npub}`);
 	await expect.element(link).toHaveAttribute('target', '_blank');
-	await expect.element(link).toHaveAttribute('rel', 'noopener noreferrer');
+	await expect.element(link).toHaveAttribute('rel', 'external noopener noreferrer');
 });
 
 it.each(['ru', 'en'] as const)('renders the platform totals for %s', async (locale) => {
@@ -420,7 +421,7 @@ it.each(['ru', 'en'] as const)('renders the platform totals for %s', async (loca
 
 	await expect.element(totals).toBeVisible();
 	const labels = [
-		`${t('usage.totals.deposits')} ${t('usage.emptyValue')}`,
+		`${t('usage.totals.deposits')} $ 150.00`,
 		`${t('usage.totals.spend')} $ 99.50`,
 		`${t('usage.totals.users')} 7`,
 		`${t('usage.totals.projects')} 11`,

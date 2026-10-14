@@ -52,7 +52,7 @@ export function textureReplacementCost(platform: App.Platform | undefined): numb
 	const configured = platform?.env?.TEXTURE_REPLACEMENT_COST?.trim();
 	if (!configured) return DEFAULT_TEXTURE_REPLACEMENT_COST;
 	const cost = Number(configured);
-	if (!Number.isFinite(cost) || cost <= 0) {
+	if (!Number.isFinite(cost) || cost < 0) {
 		throw new ComfyUiError(
 			'invalid_configuration',
 			'configuration',

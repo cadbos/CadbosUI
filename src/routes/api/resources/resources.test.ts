@@ -38,8 +38,9 @@ function platform(): App.Platform {
 	return { env: { DB: db, ...TEST_S3_ENV } } as unknown as App.Platform;
 }
 
-function seedUser(id: string, pubkey: string): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+async function seedUser(id: string, pubkey: string): Promise<void> {
+	await db
+		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
 		.run();
 }
@@ -64,8 +65,8 @@ function callDetail(user: SessionUser | null, key: string): ReturnType<typeof GE
 beforeEach(async () => {
 	db = makeD1();
 	await setBucketUrl(createDb(db), TEST_S3_BUCKET.name, 'https://cdn.example.test');
-	seedUser('user-1', 'pubkey-1');
-	seedUser('user-2', 'pubkey-2');
+	await seedUser('user-1', 'pubkey-1');
+	await seedUser('user-2', 'pubkey-2');
 	await seedGeneration(createDb(db), {
 		id: 'render-1',
 		userId: 'user-1',

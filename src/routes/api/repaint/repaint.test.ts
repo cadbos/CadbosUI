@@ -21,6 +21,7 @@ import { createDb } from '$lib/server/db';
 import { mediaKey, type Bucket } from '$lib/server/media';
 import { createRepaintJob, getRepaintJob } from '$lib/server/repaint-jobs';
 import { RemoteImageImportError } from '$lib/server/remote-image';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { setBucketUrl, TEST_S3_BUCKET } from '$lib/server/testing/generation-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
@@ -146,30 +147,36 @@ function sessionIdForPubkey(pubkey: string | undefined): string {
 	return (pubkey && SESSION_IDS[pubkey]) || FALLBACK_SESSION_ID;
 }
 
-function seedUser(db: D1Database, balance?: number, userId = 'user-1', pubkey = 'pubkey-1'): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+async function seedUser(
+	db: D1Database,
+	balance?: number,
+	userId = 'user-1',
+	pubkey = 'pubkey-1'
+): Promise<void> {
+	await db
+		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(userId, pubkey, Date.now())
 		.run();
 	if (balance !== undefined) {
-		db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-			.bind(userId, balance, Date.now())
-			.run();
+		await seedCredit(createDb(db), userId, balance);
 	}
 	const now = Date.now();
 	const projectId = `project-${userId}`;
-	db.prepare(
-		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
+	await db
+		.prepare(
+			'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+		)
 		.bind(projectId, userId, 'Test project', now, now)
 		.run();
-	db.prepare(
-		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
+	await db
+		.prepare(
+			'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+		)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
-	db.prepare(
-		"INSERT OR IGNORE INTO media (filename, bucket, checksum) VALUES ('scene.jpg', 1, '')"
-	).run();
+	await db
+		.prepare("INSERT OR IGNORE INTO media (filename, bucket, checksum) VALUES ('scene.jpg', 1, '')")
+		.run();
 }
 
 function bucket(): { put: ReturnType<typeof vi.fn> } {
@@ -284,7 +291,7 @@ describe('POST /api/repaint', () => {
 		expect(createRepaintJob).not.toHaveBeenCalled();
 		consoleWarn.mockClear();
 
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		for (const overrides of [
 			{ target: '' },
 			{ target: 'x'.repeat(201) },
@@ -303,7 +310,7 @@ describe('POST /api/repaint', () => {
 
 	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		const foreignSessionId = await seedForeignSession(createDb(db));
 
@@ -332,20 +339,20 @@ describe('POST /api/repaint', () => {
 	it('requires an approved account with enough credit for the snapshotted tariff', async () => {
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		const unapprovedDb = makeD1();
-		seedUser(unapprovedDb);
+		await seedUser(unapprovedDb);
 		expect((await callPost({ pubkey: 'pubkey-1' }, platform(unapprovedDb))).status).toBe(403);
 		expectSingleLog(consoleWarn.mock.calls.flat(), rejectionLog(403, 'generation_restricted'));
 		consoleWarn.mockClear();
 
 		const exhaustedDb = makeD1();
-		seedUser(exhaustedDb, 0);
+		await seedUser(exhaustedDb, 0);
 		expect((await callPost({ pubkey: 'pubkey-1' }, platform(exhaustedDb))).status).toBe(402);
 		expect(integration.submit).not.toHaveBeenCalled();
 	});
 
 	it('submits once and returns a persisted polling resource', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		integration.cost = 3.5;
 		const id = '123e4567-e89b-12d3-a456-426614174000' as ReturnType<typeof crypto.randomUUID>;
 		vi.spyOn(crypto, 'randomUUID').mockReturnValue(id);
@@ -378,7 +385,7 @@ describe('POST /api/repaint', () => {
 
 	it('passes a region to the workflow and leaves the whole scene otherwise', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		const region = { x: 0.68, y: 0.61, width: 0.14, height: 0.23 };
 
 		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), { region });
@@ -399,7 +406,7 @@ describe('POST /api/repaint', () => {
 		'maps %s submission failures without creating or charging a job',
 		async (code, expectedStatus, providerStatus) => {
 			const db = makeD1();
-			seedUser(db, 12);
+			await seedUser(db, 12);
 			integration.submit.mockRejectedValue(
 				new ComfyUiError(code, 'queue_workflow', 'private provider detail', {
 					status: providerStatus
@@ -431,7 +438,7 @@ describe('POST /api/repaint', () => {
 
 	it('logs remote-image fetch failures at the route boundary', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		integration.submit.mockRejectedValue(new RemoteImageImportError('remote_fetch_failed'));
 		vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -445,7 +452,7 @@ describe('POST /api/repaint', () => {
 
 	it('cancels the accepted prompt and logs job persistence failures without stored request data', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		jobStore.failNextCreate = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const requestPlatform = platform(db);
@@ -465,8 +472,8 @@ describe('POST /api/repaint', () => {
 
 	it('rejects a concurrent submission for the same account and isolates the guard by pubkey', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
-		seedUser(db, 12, 'user-2', 'pubkey-2');
+		await seedUser(db, 12);
+		await seedUser(db, 12, 'user-2', 'pubkey-2');
 		let resolveSubmission!: (promptId: string) => void;
 		integration.submit.mockImplementationOnce(
 			() =>
@@ -492,7 +499,7 @@ describe('POST /api/repaint', () => {
 
 	it('rate-limits repeated paid submissions for one account', async () => {
 		const db = makeD1();
-		seedUser(db, 100);
+		await seedUser(db, 100);
 		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 		integration.submit.mockImplementation(
 			async () => `prompt-${integration.submit.mock.calls.length}`
@@ -510,8 +517,9 @@ describe('POST /api/repaint', () => {
 describe('GET /api/repaint/[id]', () => {
 	it('hides missing jobs and jobs owned by another account', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
-		db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+		await seedUser(db, 12);
+		await db
+			.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 			.bind('user-2', 'pubkey-2', Date.now())
 			.run();
 		await seedJob(db);
@@ -522,7 +530,7 @@ describe('GET /api/repaint/[id]', () => {
 
 	it('returns a retryable processing response without charging', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 
 		const response = await callGet({ pubkey: 'pubkey-1' }, platform(db), 'job-1');
@@ -535,7 +543,7 @@ describe('GET /api/repaint/[id]', () => {
 
 	it('finalizes and charges a completed result exactly once across concurrent polls', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 		integration.poll.mockResolvedValue(completedResult());
 		const uploadsBucket = bucket();
@@ -572,7 +580,9 @@ describe('GET /api/repaint/[id]', () => {
 			}
 		]);
 		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
+			.prepare(
+				"SELECT COALESCE(SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END), 0) / 100.0 AS balance FROM ledger_entries WHERE user_id = ?"
+			)
 			.bind('user-1')
 			.first<{ balance: number }>();
 		const generations = await db
@@ -585,7 +595,7 @@ describe('GET /api/repaint/[id]', () => {
 
 	it('returns stored terminal results without polling ComfyUI again', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 		integration.poll.mockResolvedValue(completedResult());
 		const requestPlatform = platform(db);
@@ -600,7 +610,7 @@ describe('GET /api/repaint/[id]', () => {
 
 	it('marks provider execution failures terminal without charging', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 		integration.poll.mockRejectedValue(
 			new ComfyUiError('execution_failed', 'workflow', 'private provider detail')
@@ -615,7 +625,9 @@ describe('GET /api/repaint/[id]', () => {
 			error: { code: 'repaint_failed', message: 'Repaint failed' }
 		});
 		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
+			.prepare(
+				"SELECT COALESCE(SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END), 0) / 100.0 AS balance FROM ledger_entries WHERE user_id = ?"
+			)
 			.bind('user-1')
 			.first<{ balance: number }>();
 		expect(credit?.balance).toBe(12);
@@ -623,7 +635,7 @@ describe('GET /api/repaint/[id]', () => {
 
 	it('reports a target the segmenter could not find without charging', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db);
 		integration.poll.mockRejectedValue(
 			new ComfyUiError('target_not_found', 'workflow', 'Repaint target not found in the scene')
@@ -637,7 +649,9 @@ describe('GET /api/repaint/[id]', () => {
 			error: { code: 'repaint_target_not_found', message: 'Repaint failed' }
 		});
 		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
+			.prepare(
+				"SELECT COALESCE(SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END), 0) / 100.0 AS balance FROM ledger_entries WHERE user_id = ?"
+			)
 			.bind('user-1')
 			.first<{ balance: number }>();
 		expect(credit?.balance).toBe(12);
@@ -645,7 +659,7 @@ describe('GET /api/repaint/[id]', () => {
 
 	it('times out only after checking ComfyUI for a completed result', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		await seedJob(db, Date.now() - 11 * 60_000);
 
 		const response = await callGet({ pubkey: 'pubkey-1' }, platform(db), 'job-1');

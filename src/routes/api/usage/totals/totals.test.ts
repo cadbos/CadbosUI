@@ -22,8 +22,9 @@ import { GET } from './+server';
 
 const ADMIN_PUBKEY = 'admin-pubkey';
 
-function seedUser(db: D1Database, id: string, pubkey: string): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+async function seedUser(db: D1Database, id: string, pubkey: string): Promise<void> {
+	await db
+		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, 1000)
 		.run();
 }
@@ -47,7 +48,7 @@ describe('GET /api/usage/totals', () => {
 
 	it('returns 403 for authenticated non-admin users', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 
 		const response = await call({ pubkey: 'pubkey-1' }, platform(db));
 
@@ -72,9 +73,9 @@ describe('GET /api/usage/totals', () => {
 
 	it('returns platform-wide totals for an admin', async () => {
 		const db = makeD1();
-		seedUser(db, 'admin', ADMIN_PUBKEY);
+		await seedUser(db, 'admin', ADMIN_PUBKEY);
 		await seedAdmin(db, 'admin');
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db));
 		const result = (await response.json()) as UsageTotals;
@@ -89,7 +90,8 @@ describe('GET /api/usage/totals', () => {
 			sourceBytes: null,
 			referenceCount: 0,
 			referenceBytes: null,
-			totalSpend: 0
+			totalSpend: 0,
+			totalDeposit: 0
 		});
 	});
 });

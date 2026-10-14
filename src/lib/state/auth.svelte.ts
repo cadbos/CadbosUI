@@ -58,9 +58,10 @@ const sessionUserSchema = z.object({
 });
 const creditTransactionSchema = z.object({
 	id: z.string(),
+	generationId: z.uuid().nullable(),
 	amount: z.number(),
 	balanceAfter: z.number(),
-	kind: z.enum(generationKinds),
+	kind: z.enum(generationKinds).nullable(),
 	createdAt: z.number(),
 	comfyuiUploadQueueSec: z.number(),
 	comfyuiQueueWaitSec: z.number(),
@@ -121,8 +122,11 @@ export type AuthStatus = 'restoring' | 'anonymous' | 'connecting' | 'authenticat
 export type AuthError = 'extension_missing' | 'rejected' | 'failed';
 
 class AuthFlowError extends Error {
-	constructor(readonly code: AuthError) {
+	readonly code: AuthError;
+
+	constructor(code: AuthError) {
 		super(code);
+		this.code = code;
 	}
 }
 

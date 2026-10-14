@@ -382,6 +382,7 @@ export const en = {
 	'expenses.column.action': 'Action',
 	'expenses.duration.seconds': '{seconds} s',
 	'expenses.emptyValue': '—',
+	'expenses.generationCharge': 'Generation charge',
 	'health.warning':
 		'Some functionality is unavailable because of a failure on third-party services. For more information visit',
 	'health.statusPage': 'status page',

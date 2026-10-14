@@ -45,8 +45,9 @@ const {
 	DELETE: revokeShare
 } = await import('./[id]/share/+server');
 
-function seedUser(db: D1Database, id: string, pubkey: string): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+async function seedUser(db: D1Database, id: string, pubkey: string): Promise<void> {
+	await db
+		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
 		.run();
 }
@@ -75,8 +76,8 @@ const owner = { pubkey: 'pubkey-1' };
 const intruder = { pubkey: 'pubkey-2' };
 
 async function seedTwoUsers(db: D1Database): Promise<void> {
-	seedUser(db, 'user-1', owner.pubkey);
-	seedUser(db, 'user-2', intruder.pubkey);
+	await seedUser(db, 'user-1', owner.pubkey);
+	await seedUser(db, 'user-2', intruder.pubkey);
 }
 
 describe('POST /api/projects', () => {
@@ -94,7 +95,7 @@ describe('POST /api/projects', () => {
 
 	it('creates a project owned by the authenticated user', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', owner.pubkey);
+		await seedUser(db, 'user-1', owner.pubkey);
 
 		const response = await createProject({
 			request: new Request('https://cadbos.example/api/projects', {
@@ -444,7 +445,7 @@ describe('PATCH /api/projects/[id]/sessions/[sessionId]', () => {
 describe('DELETE /api/projects/[id]/sessions/[sessionId]', () => {
 	it('archives only when owned, hides the session from the project detail, and 404s on a repeat', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', owner.pubkey);
+		await seedUser(db, 'user-1', owner.pubkey);
 		const createResponse = await createProject({
 			request: new Request('https://cadbos.example/api/projects', {
 				method: 'POST',

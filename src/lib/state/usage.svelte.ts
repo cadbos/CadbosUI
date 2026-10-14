@@ -58,6 +58,7 @@ const walletBalanceResponseSchema = z.object({
 });
 
 const usageTotalsSchema = z.object({
+	totalDeposit: z.number(),
 	userCount: z.number().int().min(0),
 	projectCount: z.number().int().min(0),
 	sessionCount: z.number().int().min(0),

@@ -52,7 +52,7 @@ export function fluxKontextEditCost(platform: App.Platform | undefined): number 
 	const configured = platform?.env?.FLUX_KONTEXT_EDIT_COST?.trim();
 	if (!configured) return DEFAULT_FLUX_KONTEXT_EDIT_COST;
 	const cost = Number(configured);
-	if (!Number.isFinite(cost) || cost <= 0) {
+	if (!Number.isFinite(cost) || cost < 0) {
 		throw new ComfyUiError(
 			'invalid_configuration',
 			'configuration',

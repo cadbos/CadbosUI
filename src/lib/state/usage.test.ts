@@ -75,6 +75,7 @@ function walletBalanceResponse(balance = 0): Response {
 }
 
 const TOTALS: UsageTotals = {
+	totalDeposit: 150,
 	userCount: 5,
 	projectCount: 4,
 	sessionCount: 9,

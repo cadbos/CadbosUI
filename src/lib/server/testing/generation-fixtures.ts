@@ -15,6 +15,7 @@
 import { sql } from 'drizzle-orm';
 import type { RequestFormSnapshot } from '$lib/api/contract';
 import type { Database } from '$lib/server/db';
+import { ledgerAmountSql } from '$lib/server/ledger';
 import { DEFAULT_UPLOADS_BUCKET_NAME, type Bucket } from '$lib/server/media';
 
 interface BucketRow {
@@ -118,9 +119,41 @@ export async function seedGeneration(
 ): Promise<void> {
 	const resultMediaId = await seedMedia(db, input.url, input.resultChecksum);
 	const sourceMediaId = await seedMedia(db, input.sourceUrl, input.sourceChecksum);
-	await db.run(
-		sql`INSERT INTO generations
-			(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id, form_snapshot)
-			VALUES (${input.id}, ${input.userId}, ${resultMediaId}, ${sourceMediaId}, ${input.prompt ?? 'cozy'}, ${input.kind ?? 'render'}, ${input.amount ?? 1}, ${input.balanceAfter ?? 10}, ${input.createdAt}, ${input.sessionId ?? null}, ${input.formSnapshot ? JSON.stringify(input.formSnapshot) : null})`
-	);
+	await seedGenerationRecord(db, { ...input, resultMediaId, sourceMediaId });
+}
+
+export async function seedGenerationRecord(
+	db: Database,
+	input: {
+		id: string;
+		userId: string;
+		resultMediaId: number;
+		sourceMediaId: number;
+		referenceMediaId?: number;
+		createdAt: number;
+		sessionId?: string | null;
+		prompt?: string;
+		kind?: string;
+		amount?: number;
+		balanceAfter?: number;
+		formSnapshot?: RequestFormSnapshot;
+	}
+): Promise<void> {
+	const amount = ledgerAmountSql(input.amount ?? 1);
+	await db.batch([
+		db.run(sql`INSERT INTO ledger_entries (user_id, amount, entry_side, reason, created_at)
+			SELECT ${input.userId}, ABS(delta), CASE WHEN delta > 0 THEN 'credit' ELSE 'debit' END,
+				'historical-reconciliation', ${input.createdAt}
+			FROM (SELECT ${Math.round((input.balanceAfter ?? 10) * 100)} + ${amount} -
+				COALESCE(SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END), 0) AS delta
+				FROM ledger_entries WHERE user_id = ${input.userId}) WHERE delta <> 0`),
+		db.run(sql`INSERT INTO ledger_entries (user_id, amount, entry_side, reason, created_at)
+			VALUES (${input.userId}, ${amount}, 'debit', 'generation-charge', ${input.createdAt})`),
+		db.run(sql`INSERT INTO generations
+			(id, user_id, result_media_id, source_media_id, reference_media_id, prompt, kind, ledger_entry_id, created_at, session_id, form_snapshot)
+			SELECT ${input.id}, ${input.userId}, ${input.resultMediaId}, ${input.sourceMediaId}, ${input.referenceMediaId ?? null},
+				${input.prompt ?? 'cozy'}, ${input.kind ?? 'render'}, l.id, ${input.createdAt}, ${input.sessionId ?? null},
+				${input.formSnapshot ? JSON.stringify(input.formSnapshot) : null}
+			FROM ledger_entries l WHERE l.id = last_insert_rowid() AND changes() = 1 AND l.user_id = ${input.userId}`)
+	]);
 }

@@ -21,14 +21,13 @@ import {
 } from '$lib/server/repaint-jobs';
 import { makeDb, type TestDatabase } from '$lib/server/testing/d1-shim';
 import { seedManagedMedia } from '$lib/server/testing/generation-fixtures';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 
-function seedAccount(db: TestDatabase): void {
+async function seedAccount(db: TestDatabase): Promise<void> {
 	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind('user-1', 'pubkey-1', 1)
 		.run();
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-		.bind('user-1', 12, 1)
-		.run();
+	await seedCredit(db, 'user-1', 12);
 	db.prepare(
 		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
 	)
@@ -44,7 +43,7 @@ function seedAccount(db: TestDatabase): void {
 describe('repaint jobs', () => {
 	it('stores media references and atomically records a completed generation', async () => {
 		const db = makeDb();
-		seedAccount(db);
+		await seedAccount(db);
 		const sceneMediaId = await seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
 		const outputMediaId = await seedManagedMedia(db, 'edits/job-1.png', 'b'.repeat(64));
 
@@ -146,7 +145,7 @@ describe('repaint jobs', () => {
 
 	it('fails a processing job with an error code and completed timestamp', async () => {
 		const db = makeDb();
-		seedAccount(db);
+		await seedAccount(db);
 		const sceneMediaId = await seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
 		await createRepaintJob(db, {
 			id: 'job-1',
@@ -180,7 +179,7 @@ describe('repaint jobs', () => {
 
 	it('rejects a color that is not a lowercase #rrggbb hex', async () => {
 		const db = makeDb();
-		seedAccount(db);
+		await seedAccount(db);
 		const sceneMediaId = await seedManagedMedia(db, 'scene.jpg', 'a'.repeat(64));
 
 		await expect(

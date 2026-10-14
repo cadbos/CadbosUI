@@ -18,12 +18,11 @@ import type { Database } from '$lib/server/db';
 import { completeLightSettingsJob, createLightSettingsJob } from '$lib/server/light-settings-jobs';
 import { makeDb } from '$lib/server/testing/d1-shim';
 import { seedManagedMedia } from '$lib/server/testing/generation-fixtures';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 
 async function seedAccount(db: Database): Promise<void> {
 	await db.run(sql`INSERT INTO users (id, pubkey, created_at) VALUES ('user-1', 'pubkey-1', 1)`);
-	await db.run(
-		sql`INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES ('user-1', 12, 1, 1)`
-	);
+	await seedCredit(db, 'user-1', 12);
 	await db.run(
 		sql`INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES ('project-1', 'user-1', 'Test project', 1, 1)`
 	);

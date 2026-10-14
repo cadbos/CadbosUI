@@ -24,6 +24,7 @@ import {
 	getFluxKontextEditJob
 } from '$lib/server/flux-kontext-edit-jobs';
 import { RemoteImageImportError } from '$lib/server/remote-image';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedManagedMedia,
@@ -160,24 +161,25 @@ async function seedUser(
 	userId = 'user-1',
 	pubkey = 'pubkey-1'
 ): Promise<void> {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+	await db
+		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(userId, pubkey, Date.now())
 		.run();
 	if (balance !== undefined) {
-		db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-			.bind(userId, balance, Date.now())
-			.run();
+		await seedCredit(createDb(db), userId, balance);
 	}
 	const now = Date.now();
 	const projectId = `project-${userId}`;
-	db.prepare(
-		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
+	await db
+		.prepare(
+			'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+		)
 		.bind(projectId, userId, 'Test project', now, now)
 		.run();
-	db.prepare(
-		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
+	await db
+		.prepare(
+			'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+		)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
 	await seedManagedMedia(createDb(db), 'scene.jpg');
@@ -489,7 +491,8 @@ describe('GET /api/edit/[id]', () => {
 	it('hides missing jobs and jobs owned by another account', async () => {
 		const db = makeD1();
 		await seedUser(db, 12);
-		db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+		await db
+			.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 			.bind('user-2', 'pubkey-2', Date.now())
 			.run();
 		await seedJob(db);
@@ -550,7 +553,9 @@ describe('GET /api/edit/[id]', () => {
 			}
 		]);
 		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
+			.prepare(
+				"SELECT COALESCE(SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END), 0) / 100.0 AS balance FROM ledger_entries WHERE user_id = ?"
+			)
 			.bind('user-1')
 			.first<{ balance: number }>();
 		const generations = await db
@@ -593,7 +598,9 @@ describe('GET /api/edit/[id]', () => {
 			error: { code: 'edit_failed', message: 'Edit failed' }
 		});
 		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
+			.prepare(
+				"SELECT COALESCE(SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END), 0) / 100.0 AS balance FROM ledger_entries WHERE user_id = ?"
+			)
 			.bind('user-1')
 			.first<{ balance: number }>();
 		expect(credit?.balance).toBe(12);

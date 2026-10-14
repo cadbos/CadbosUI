@@ -384,6 +384,7 @@ export const ru = {
 	'expenses.column.action': 'Действие',
 	'expenses.duration.seconds': '{seconds} с',
 	'expenses.emptyValue': '—',
+	'expenses.generationCharge': 'Списание за генерацию',
 	'health.warning': 'Некоторые функции недоступны из-за сбоя сторонних сервисов. Подробнее на',
 	'health.statusPage': 'странице состояния',
 	'status.title': 'Состояние сервисов',

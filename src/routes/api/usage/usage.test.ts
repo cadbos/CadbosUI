@@ -17,6 +17,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser, UserUsageResponse } from '$lib/api/contract';
 import { createDb } from '$lib/server/db';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { seedGeneration as seedGenerationFixture } from '$lib/server/testing/generation-fixtures';
 import { seedAdmin } from '$lib/server/testing/session-fixtures';
@@ -24,16 +25,25 @@ import { GET } from './+server';
 
 const ADMIN_PUBKEY = 'admin-pubkey';
 
-function seedUser(db: D1Database, id: string, pubkey: string, createdAt: number): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+async function seedUser(
+	db: D1Database,
+	id: string,
+	pubkey: string,
+	createdAt: number
+): Promise<void> {
+	await db
+		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, createdAt)
 		.run();
 }
 
-function grantAccess(db: D1Database, userId: string, balance: number, updatedAt: number): void {
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-		.bind(userId, balance, updatedAt)
-		.run();
+async function grantAccess(
+	db: D1Database,
+	userId: string,
+	balance: number,
+	updatedAt: number
+): Promise<void> {
+	await seedCredit(createDb(db), userId, balance, 1, updatedAt);
 }
 
 async function seedGeneration(
@@ -41,7 +51,8 @@ async function seedGeneration(
 	id: string,
 	userId: string,
 	amount: number,
-	createdAt: number
+	createdAt: number,
+	balanceAfter = 10
 ): Promise<void> {
 	await seedGenerationFixture(createDb(db), {
 		id,
@@ -50,6 +61,7 @@ async function seedGeneration(
 		sourceUrl: 'https://cdn.example.test/source.jpg',
 		sourceChecksum: '1'.repeat(64),
 		amount,
+		balanceAfter,
 		createdAt
 	});
 }
@@ -88,7 +100,7 @@ describe('GET /api/usage', () => {
 
 	it('returns 403 for authenticated non-admin users', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1', 1000);
+		await seedUser(db, 'user-1', 'pubkey-1', 1000);
 
 		const response = await call({ pubkey: 'pubkey-1' }, platform(db));
 		const result = await response.json();
@@ -104,7 +116,7 @@ describe('GET /api/usage', () => {
 
 	it('rejects unknown search params', async () => {
 		const db = makeD1();
-		seedUser(db, 'admin', ADMIN_PUBKEY, 1000);
+		await seedUser(db, 'admin', ADMIN_PUBKEY, 1000);
 		await seedAdmin(db, 'admin');
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db), '?userId=user-1');
@@ -114,7 +126,7 @@ describe('GET /api/usage', () => {
 
 	it('rejects invalid pagination params', async () => {
 		const db = makeD1();
-		seedUser(db, 'admin', ADMIN_PUBKEY, 1000);
+		await seedUser(db, 'admin', ADMIN_PUBKEY, 1000);
 		await seedAdmin(db, 'admin');
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db), '?offset=-1&size=0');
@@ -124,10 +136,10 @@ describe('GET /api/usage', () => {
 
 	it('uses default pagination params', async () => {
 		const db = makeD1();
-		seedUser(db, 'admin', ADMIN_PUBKEY, 10_000);
+		await seedUser(db, 'admin', ADMIN_PUBKEY, 10_000);
 		await seedAdmin(db, 'admin');
 		for (let index = 0; index < 20; index += 1) {
-			seedUser(db, `user-${index}`, `pubkey-${index}`, 1000 + index);
+			await seedUser(db, `user-${index}`, `pubkey-${index}`, 1000 + index);
 		}
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db));
@@ -141,9 +153,9 @@ describe('GET /api/usage', () => {
 
 	it('applies offset and size search params', async () => {
 		const db = makeD1();
-		seedUser(db, 'oldest', 'oldest-pubkey', 1000);
-		seedUser(db, 'middle', 'middle-pubkey', 2000);
-		seedUser(db, 'admin', ADMIN_PUBKEY, 3000);
+		await seedUser(db, 'oldest', 'oldest-pubkey', 1000);
+		await seedUser(db, 'middle', 'middle-pubkey', 2000);
+		await seedUser(db, 'admin', ADMIN_PUBKEY, 3000);
 		await seedAdmin(db, 'admin');
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db), '?offset=1&size=2');
@@ -156,13 +168,13 @@ describe('GET /api/usage', () => {
 
 	it('returns all-user usage aggregates', async () => {
 		const db = makeD1();
-		seedUser(db, 'admin', ADMIN_PUBKEY, 3000);
+		await seedUser(db, 'admin', ADMIN_PUBKEY, 3000);
 		await seedAdmin(db, 'admin');
-		seedUser(db, 'user-1', 'pubkey-1', 2000);
-		seedUser(db, 'user-2', 'pubkey-2', 1000);
-		grantAccess(db, 'user-1', 7.5, 4000);
-		await seedGeneration(db, 'generation-1', 'user-1', 1.25, 5000);
-		await seedGeneration(db, 'generation-2', 'user-1', 2.75, 6000);
+		await seedUser(db, 'user-1', 'pubkey-1', 2000);
+		await seedUser(db, 'user-2', 'pubkey-2', 1000);
+		await grantAccess(db, 'user-1', 11.5, 4000);
+		await seedGeneration(db, 'generation-1', 'user-1', 1.25, 5000, 10.25);
+		await seedGeneration(db, 'generation-2', 'user-1', 2.75, 6000, 7.5);
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db), '?size=10');
 		const result = (await response.json()) as UserUsageResponse;
@@ -187,8 +199,8 @@ describe('GET /api/usage', () => {
 			{
 				pubkey: 'pubkey-1',
 				balance: 7.5,
-				totalDeposit: 0,
-				lastDepositAt: null,
+				totalDeposit: 11.5,
+				lastDepositAt: 4000,
 				projectCount: 0,
 				sessionCount: 0,
 				generationCount: 2,
@@ -219,9 +231,9 @@ describe('GET /api/usage', () => {
 
 	it('accepts an admin among several admins', async () => {
 		const db = makeD1();
-		seedUser(db, 'other-admin', 'other-pubkey', 1000);
+		await seedUser(db, 'other-admin', 'other-pubkey', 1000);
 		await seedAdmin(db, 'other-admin');
-		seedUser(db, 'admin', ADMIN_PUBKEY, 1000);
+		await seedUser(db, 'admin', ADMIN_PUBKEY, 1000);
 		await seedAdmin(db, 'admin');
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db));
@@ -231,9 +243,9 @@ describe('GET /api/usage', () => {
 
 	it('returns 403 once the admin row is removed', async () => {
 		const db = makeD1();
-		seedUser(db, 'admin', ADMIN_PUBKEY, 1000);
+		await seedUser(db, 'admin', ADMIN_PUBKEY, 1000);
 		await seedAdmin(db, 'admin');
-		db.prepare('DELETE FROM admins WHERE user_id = ?').bind('admin').run();
+		await db.prepare('DELETE FROM admins WHERE user_id = ?').bind('admin').run();
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db));
 

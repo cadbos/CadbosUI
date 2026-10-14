@@ -22,7 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { openGenerationInWorkspace } from '$lib/state/open-generation';
 	import { logBoundaryError } from '$lib/utils';
 
-	const generationKindKeys: Record<CreditTransaction['kind'], TranslationKey> = {
+	const generationKindKeys: Record<NonNullable<CreditTransaction['kind']>, TranslationKey> = {
 		render: 'generatedImages.kind.render',
 		edit: 'generatedImages.kind.edit',
 		'style-transfer': 'generatedImages.kind.styleTransfer',
@@ -61,17 +61,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	let openError = $state<string | null>(null);
 
-	// Opens the workspace on the exact generation this expense row paid for
-	// (see open-generation.ts). One that no longer resolves, or whose
-	// session/project has since been archived, surfaces openError instead of
-	// silently doing nothing — the underlying record is still real billed
-	// history, so the row itself stays in the list; only the "open it"
-	// affordance can fail.
 	async function openGeneration(entry: CreditTransaction): Promise<void> {
-		if (!entry.projectId || !entry.sessionId) return;
+		if (!entry.generationId || entry.kind === null || !entry.projectId || !entry.sessionId) return;
 		openError = null;
 		try {
-			if (!(await openGenerationInWorkspace(entry.id))) openError = t('expenses.openFailed');
+			if (!(await openGenerationInWorkspace(entry.generationId)))
+				openError = t('expenses.openFailed');
 		} catch (error) {
 			openError = t('expenses.openFailed');
 			logBoundaryError('expensesPage.openGeneration', error);
@@ -119,7 +114,7 @@ before the Change Date. See LICENSE for complete terms.
 					<ul class="history-list" aria-label={t('auth.credit.history')}>
 						{#each credit.history as entry (entry.id)}
 							<li>
-								{#if entry.projectId && entry.sessionId}
+								{#if entry.generationId && entry.kind !== null && entry.projectId && entry.sessionId}
 									<button type="button" class="history-entry" onclick={() => openGeneration(entry)}>
 										<span class="cell">{formatDate(entry.createdAt)}</span>
 										<span class="cell">{formatTime(entry.createdAt)}</span>
@@ -169,7 +164,13 @@ before the Change Date. See LICENSE for complete terms.
 											>
 										</div>
 										<span class="cell value-cell">{currency.format(entry.amount)}</span>
-										<span class="cell">{t(generationKindKeys[entry.kind])}</span>
+										<span class="cell"
+											>{t(
+												entry.kind === null
+													? 'expenses.generationCharge'
+													: generationKindKeys[entry.kind]
+											)}</span
+										>
 									</span>
 								{/if}
 							</li>

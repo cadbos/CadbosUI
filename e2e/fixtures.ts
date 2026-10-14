@@ -31,6 +31,14 @@ const HEALTHY_SNAPSHOT: HealthSnapshot = {
 
 export const test = base.extend({
 	page: async ({ page }, use) => {
+		await page.route('**/api/exchange-rate', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ rubPerUsd: 90, asOf: '2026-10-14T00:00:00.000Z' })
+			});
+		});
+
 		await page.route('**/healthz', async (route) => {
 			await route.fulfill({
 				status: 200,

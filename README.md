@@ -77,7 +77,7 @@ Runtime integrations use Cloudflare bindings and variables rather than client-si
 environment variables. Their authoritative definitions are in
 [`wrangler.jsonc`](wrangler.jsonc) and [`src/app.d.ts`](src/app.d.ts):
 
-- `DB` — D1 database for users, sessions, admins, credits, and generation records
+- `DB` — D1 database for users, sessions, admins, ledger entries, access approval, and generation records
 - `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` — private S3-compatible image storage
 - `MEDIA_CACHE_TTL_SECONDS` — optional browser cache lifetime of `/api/media` images in
   seconds; the default is 31536000, and valid values range from 1 through 31536000
@@ -119,7 +119,7 @@ pnpm exec wrangler d1 execute DB --remote --command \
   "INSERT INTO admins (user_id) SELECT id FROM users WHERE pubkey = '<pubkey>'"
 ```
 
-`migrations/0022_admins.sql` documents the revoke and list queries.
+`migrations/0023_admins.sql` documents the revoke and list queries.
 
 Before serving application traffic, provision the uploads bucket in `buckets` under the name
 `cadbos-uploads`. Set `url` to the full bucket-scoped S3 API endpoint and `region` to its
@@ -132,6 +132,75 @@ The configured target is Cloudflare Workers with Static Assets. The adapter, D1 
 S3 storage configuration and the private VPC service are represented in `wrangler.jsonc`; deployment
 therefore requires access to the Cadbos Cloudflare resources and provider credentials. A
 successful `pnpm build` writes the Worker bundle to `.svelte-kit/cloudflare`.
+
+### Ledger release
+
+Migration `0024_ledger_entries.sql` converts stored balances and generation charges
+to immutable entries in integer cents and indexes historical balance reads.
+Only generations reference their ledger entries; jobs retain completion-balance
+snapshots without debit references. The ledger stores balance changes and reasons
+without references back to operations. Deleting a generation leaves its debit intact.
+Coordinate the application release with this migration: stop all
+generation requests, let processing jobs finish, record existing per-user balances
+and generation counts, apply the migration, and deploy the ledger-aware application
+before reopening traffic. The previous application cannot read the schema after 0024.
+Follow [Cloudflare's migration procedure](https://developers.cloudflare.com/d1/reference/migrations/).
+
+Zero-cost generations migrate to linked zero-cent debits without changing their
+historical balances. All ledger credits and debits accept nonnegative integer
+cents. Exact zero remains zero; positive sub-cent generation costs retain the
+one-cent minimum. Charges from completed jobs whose generation history was deleted
+migrate to standalone debits using their stored cost, balance and completion time without
+recreating deleted generation rows. Migration 0024 rejects negative or unsafe amounts
+and conflicting completed-job accounting. Never delete history or substitute charges
+to satisfy validation; investigate any migration failure before reopening traffic.
+
+Check `PRAGMA foreign_key_check`, verify each generation has a matching user-owned debit,
+and compare per-user ledger sums with the pre-migration balances rounded to cents.
+Smoke-test sign-in, paid and zero-cost generations, Expenses, project restoration,
+and admin usage; check logs for billing and account lookup errors. A rollback must
+restore the database and application versions together.
+
+### Account funding and access
+
+`credits` owns approval and its `enabled` flag. User balances are the sum of ledger
+credits minus debits; the separate `balances` table mirrors the shared provider wallet.
+Use the following SQL with `wrangler d1 execute DB --local --command` for local operations,
+or intentionally select `--remote` for production. Resolve the internal user ID first:
+
+```sql
+SELECT id FROM users WHERE pubkey = '<pubkey>';
+```
+
+Approve or re-enable that account, then add funding as a separate entry. The example
+adds 12.00 in the application's existing currency units:
+
+```sql
+INSERT INTO credits (user_id, enabled) VALUES ('<user_id>', 1)
+ON CONFLICT (user_id) DO UPDATE SET enabled = 1;
+
+INSERT INTO ledger_entries (user_id, amount, entry_side, reason)
+VALUES ('<user_id>', 1200, 'credit', 'top-up');
+```
+
+Each funding insert is a separate top-up; repeat it only when another top-up is intended.
+Revoke access with `UPDATE credits SET enabled = 0 WHERE user_id = '<user_id>'`.
+For a balance correction, append a positive integer amount with side `credit` or `debit`
+and reason `balance-correction`; never update or delete ledger entries. A credit correction
+counts as funding in usage metrics. Opening balances count as funding too; inferred
+`historical-reconciliation` credits are excluded from deposit totals.
+
+```sql
+SELECT COALESCE(SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END), 0)
+       / 100.0 AS balance
+FROM ledger_entries WHERE user_id = '<user_id>';
+```
+
+Expense history and lifetime spend count debits with reason `generation-charge`,
+including charges for deleted images. A row can be safely deleted from `generations`
+as long as its referenced ledger row remains intact. Expense rows use ledger IDs
+for stable identity and expose generation details only while that generation exists. Balance snapshots follow ledger ID order, so later funding or
+backdated entries do not rewrite the balance returned for an earlier generation.
 
 ## Development guidance
 
