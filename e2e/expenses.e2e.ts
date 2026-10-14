@@ -16,6 +16,7 @@ import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
 import { ru } from '$lib/i18n/locales/ru';
+import { mockFeaturebase } from './featurebase';
 import { media } from './helpers/media';
 
 const PK = '0'.repeat(64);
@@ -33,6 +34,7 @@ async function authenticateWithExpenseHistory(page: Page, queueWaitSec = 0): Pro
 			contentType: 'application/json',
 			body: JSON.stringify({
 				user: { pubkey: PK, firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null,
 				credit: {
 					balance: 8.5,
 					updatedAt: Date.now(),
@@ -111,6 +113,26 @@ async function mockGenerationDetail(page: Page): Promise<void> {
 		});
 	});
 }
+
+test('opens a beta balance top-up request from the expenses page', async ({ page }) => {
+	await mockFeaturebase(page);
+	await page.goto('/expenses');
+	await expect(page.getByRole('button', { name: ru['auth.credit.requestTopUp'] })).toHaveCount(0);
+
+	await authenticateWithExpenseHistory(page);
+	await page.reload();
+	await page.getByRole('button', { name: ru['auth.credit.requestTopUp'] }).click();
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (window as Window & { __featurebaseCalls?: [string, string?][] })
+					.__featurebaseCalls;
+				return calls?.find(([action]) => action === 'showNewMessage')?.[1] ?? null;
+			})
+		)
+		.toBe(ru['auth.credit.requestTopUpDraft']);
+});
 
 test('groups generation durations and describes each duration column', async ({ page }) => {
 	await authenticateWithExpenseHistory(page);

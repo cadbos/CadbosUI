@@ -130,6 +130,8 @@ export interface Dictionary {
 	'auth.demo.login': string;
 	'auth.demo.badge': string;
 	'auth.credit.balance': string;
+	'auth.credit.requestTopUp': string;
+	'auth.credit.requestTopUpDraft': string;
 	'auth.credit.history': string;
 	'auth.credit.historyEmpty': string;
 	'upload.label': string;
@@ -373,12 +375,14 @@ export interface Dictionary {
 	'status.service.assets': string;
 	'status.service.comfyui': string;
 	'status.service.d1': string;
+	'status.service.featurebase': string;
 	'status.service.nostr': string;
 	'status.service.s3': string;
 	'status.hint.archai': string;
 	'status.hint.assets': string;
 	'status.hint.comfyui': string;
 	'status.hint.d1': string;
+	'status.hint.featurebase': string;
 	'status.hint.nostr': string;
 	'status.hint.s3': string;
 	'version.title': string;

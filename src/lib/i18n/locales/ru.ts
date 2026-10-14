@@ -133,6 +133,8 @@ export const ru = {
 	'auth.demo.login': 'Войти в демо-режиме',
 	'auth.demo.badge': 'DEMO',
 	'auth.credit.balance': 'Баланс: {balance}',
+	'auth.credit.requestTopUp': 'Пополнить',
+	'auth.credit.requestTopUpDraft': '[beta] Заявка на пополнение баланса',
 	'auth.credit.history': 'История трат',
 	'auth.credit.historyEmpty': 'Пока нет операций',
 	'upload.label': 'Фото комнаты',
@@ -385,6 +387,7 @@ export const ru = {
 	'status.service.assets': 'Статические ресурсы',
 	'status.service.comfyui': 'ComfyUI',
 	'status.service.d1': 'База данных D1',
+	'status.service.featurebase': 'Featurebase',
 	'status.service.nostr': 'Ретрансляторы Nostr',
 	'status.service.s3': 'Хранилище S3',
 	'status.hint.archai': 'Обеспечивает «Создание», «Миграцию стиля» и «Улучшение 4K».',
@@ -394,6 +397,8 @@ export const ru = {
 		'Обеспечивает «Изменение с объектами», «Замену объекта», «Замену текстуры», «Перекраску» и «Управление освещением».',
 	'status.hint.d1':
 		'Хранит аккаунты, историю расходов, баланс и «Сцены» (историю ваших генераций).',
+	'status.hint.featurebase':
+		'Обеспечивает обратную связь, поддержку и запросы на пополнение баланса в бета-версии.',
 	'status.hint.nostr':
 		'Отвечает за вход («Войти») через расширение Nostr или Nostr Connect. Не связано с числом релеев в вашем профиле (см. «Релеев» в шапке).',
 	'status.hint.s3': 'Хранит загруженное вами фото комнаты и сгенерированные изображения.',

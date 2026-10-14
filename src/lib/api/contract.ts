@@ -152,6 +152,7 @@ export const healthSnapshotSchema = z
 				assets: serviceHealthSchema,
 				comfyui: serviceHealthSchema,
 				d1: serviceHealthSchema,
+				featurebase: serviceHealthSchema,
 				nostr: nostrHealthSchema,
 				s3: serviceHealthSchema
 			})
@@ -682,6 +683,11 @@ export interface SessionUser {
 	lastName?: string;
 }
 
+export interface AuthResponse {
+	user: SessionUser;
+	featurebaseJwt: string | null;
+}
+
 export interface ProfileUpdateRequest {
 	firstName?: string | null;
 	lastName?: string | null;
@@ -756,8 +762,7 @@ export interface CreditInfo {
 }
 
 // GET /auth/me → 401 when no session; 503 with Retry-After when session storage is unavailable.
-export interface MeResponse {
-	user: SessionUser;
+export interface MeResponse extends AuthResponse {
 	credit?: CreditInfo;
 }
 

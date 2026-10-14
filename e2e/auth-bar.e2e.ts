@@ -28,6 +28,7 @@ async function restoreApprovedSession(page: Page, credit?: CreditInfo): Promise<
 					firstName: 'Ada',
 					lastName: 'Lovelace'
 				},
+				featurebaseJwt: null,
 				credit
 			})
 		});
@@ -146,7 +147,8 @@ test('restores the existing session after authentication storage recovers', asyn
 					pubkey: '0'.repeat(64),
 					firstName: 'Ada',
 					lastName: 'Lovelace'
-				}
+				},
+				featurebaseJwt: null
 			})
 		});
 	});

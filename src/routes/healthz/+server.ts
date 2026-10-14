@@ -33,6 +33,7 @@ const DEFAULT_HEALTH_CACHE_TTL_SECONDS = 30;
 const HEALTH_PROBE_TIMEOUT_MS = 10_000;
 const COMFYUI_SYSTEM_STATS_URL = 'http://localhost:8188/system_stats';
 const STATIC_ASSET_URL = 'https://assets.internal/favicon.svg';
+const FEATUREBASE_ORGANIZATION_URL = 'https://do.featurebase.app/v1/organization/by-id/';
 
 interface HealthCache {
 	match(request: Request): Promise<Response | undefined>;
@@ -149,7 +150,7 @@ async function collectHealthSnapshot(
 	fetcher: typeof fetch
 ): Promise<HealthSnapshot> {
 	const env = platform?.env;
-	const [archai, assets, comfyui, d1, nostr, s3] = await Promise.all([
+	const [archai, assets, comfyui, d1, featurebase, nostr, s3] = await Promise.all([
 		probe(async () => {
 			if (!env?.ARCHAI_API_KEY || !env.ARCHAI_API_URL) return false;
 			await getWalletBalance(platform);
@@ -178,6 +179,24 @@ async function collectHealthSnapshot(
 			return response.ok && isRecord(await response.json());
 		}),
 		probeD1(env, fetcher),
+		probe(async () => {
+			const appId = env?.FEATUREBASE_APP_ID?.trim();
+			if (!appId) return false;
+			const response = await fetcher(
+				`${FEATUREBASE_ORGANIZATION_URL}${encodeURIComponent(appId)}`,
+				{
+					signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS)
+				}
+			);
+			if (!response.ok) return false;
+			const organization: unknown = await response.json();
+			return (
+				isRecord(organization) &&
+				organization.success !== false &&
+				typeof organization.slug === 'string' &&
+				organization.slug.length > 0
+			);
+		}),
 		probeNostr(fetcher),
 		probe(async () => {
 			if (!env?.DB) return false;
@@ -187,7 +206,7 @@ async function collectHealthSnapshot(
 			);
 		})
 	]);
-	const services = { archai, assets, comfyui, d1, nostr, s3 };
+	const services = { archai, assets, comfyui, d1, featurebase, nostr, s3 };
 	return {
 		status: Object.values(services).every((service) => service.status === 'healthy')
 			? 'healthy'

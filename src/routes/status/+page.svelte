@@ -22,7 +22,15 @@ before the Change Date. See LICENSE for complete terms.
 
 	type ServiceKey = keyof HealthSnapshot['services'];
 
-	const serviceKeys: ServiceKey[] = ['archai', 'assets', 'comfyui', 'd1', 'nostr', 's3'];
+	const serviceKeys: ServiceKey[] = [
+		'archai',
+		'assets',
+		'comfyui',
+		'd1',
+		'featurebase',
+		'nostr',
+		's3'
+	];
 
 	onMount(() => {
 		status.startPolling();
@@ -97,7 +105,7 @@ before the Change Date. See LICENSE for complete terms.
 			<div class="summary">
 				<div>
 					<span class="summary-label">{t('status.overall')}</span>
-					<span class:healthy={snapshot.status === 'healthy'} class="health-badge">
+					<span class={['health-badge', { healthy: snapshot.status === 'healthy' }]}>
 						{healthLabel(snapshot.status)}
 					</span>
 				</div>
@@ -134,7 +142,7 @@ before the Change Date. See LICENSE for complete terms.
 									</span>
 								</th>
 								<td>
-									<span class:healthy={service.status === 'healthy'} class="health-badge">
+									<span class={['health-badge', { healthy: service.status === 'healthy' }]}>
 										{healthLabel(service.status)}
 									</span>
 								</td>

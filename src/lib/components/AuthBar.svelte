@@ -20,6 +20,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { requestBalanceTopUp } from '$lib/request-balance-top-up';
 	import { dismissable, logBoundaryError } from '$lib/utils';
 	import LazyImage from './LazyImage.svelte';
 	import SkeletonBlock from './SkeletonBlock.svelte';
@@ -28,6 +29,8 @@ before the Change Date. See LICENSE for complete terms.
 	import HintIcon from './HintIcon.svelte';
 	import LanguageSwitcher from './LanguageSwitcher.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
+
+	let { featurebaseAppId = null }: { featurebaseAppId?: string | null } = $props();
 
 	const errorKeys: Record<AuthError, TranslationKey> = {
 		extension_missing: 'auth.error.extensionMissing',
@@ -106,6 +109,11 @@ before the Change Date. See LICENSE for complete terms.
 	// fires the native 'change' event, which is what triggers the autosave below.
 	function commitOnEnter(event: KeyboardEvent): void {
 		if (event.key === 'Enter') (event.currentTarget as HTMLInputElement).blur();
+	}
+
+	function requestTopUp(): void {
+		requestBalanceTopUp();
+		profileState = 'closed';
 	}
 </script>
 
@@ -294,10 +302,16 @@ before the Change Date. See LICENSE for complete terms.
 					>
 					<ChevronRight size={14} strokeWidth={1.8} aria-hidden="true" />
 				</a>
+				{#if auth.status === 'authenticated' && featurebaseAppId}
+					<button type="button" class="top-up" onclick={requestTopUp}>
+						{t('auth.credit.requestTopUp')}
+					</button>
+				{/if}
 				{#if auth.status === 'authenticated'}
 					<button
 						type="button"
 						class="logout-button"
+						data-testid="logout-button"
 						title={t('auth.logout')}
 						onclick={() => auth.logout()}
 					>
@@ -604,6 +618,28 @@ before the Change Date. See LICENSE for complete terms.
 	.balance-link:focus-visible {
 		border-color: var(--color-accent);
 		background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+	}
+
+	.top-up {
+		display: inline-flex;
+		flex: 0 0 auto;
+		align-items: center;
+		justify-content: center;
+		padding: 0 0.7rem;
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		font-size: 0.8125rem;
+		font-weight: 600;
+		white-space: nowrap;
+	}
+
+	.top-up:hover,
+	.top-up:focus-visible {
+		color: var(--color-text);
+		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+		border-color: var(--color-accent);
 	}
 
 	.airy-field {

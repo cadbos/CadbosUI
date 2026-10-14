@@ -21,17 +21,19 @@ import { getDb } from '$lib/server/db';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getCredit, getUserIdByPubkey } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
+import { createFeaturebaseJwt } from '$lib/server/featurebase';
 import { listCreditHistory } from '$lib/server/generations';
 
 export const GET: RequestHandler = async ({ locals, platform }) => {
 	if (!locals.user) {
 		return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 	}
+	const featurebaseJwt = createFeaturebaseJwt(locals.user, platform?.env.FEATUREBASE_JWT_SECRET);
 
 	// The demo session bypasses D1 entirely (hooks.server.ts) — no approved-account
 	// balance to show; real sessions are always backed by a D1 user row.
 	if (dev && locals.user.pubkey === DEMO_PUBKEY) {
-		return json({ user: locals.user } satisfies MeResponse);
+		return json({ user: locals.user, featurebaseJwt } satisfies MeResponse);
 	}
 
 	// Present only for an admin-approved account (a `credits` row) — absent for
@@ -68,7 +70,7 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 		return accountLookupUnavailableResponse();
 	}
 
-	return json({ user: locals.user, credit } satisfies MeResponse);
+	return json({ user: locals.user, featurebaseJwt, credit } satisfies MeResponse);
 };
 
 function accountLookupUnavailableResponse(): Response {
