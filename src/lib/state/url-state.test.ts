@@ -13,6 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { defaultPhotoAdjustments } from '$lib/photo-adjustments';
 import {
 	RequestState,
 	type RenderResult,
@@ -74,6 +75,8 @@ describe('workspace root leaves every mode unselected', () => {
 		expect(routeIdToMode('/create/interior')).toBe('render');
 		expect(routeIdToMode('/edit')).toBe('edit');
 		expect(routeIdToMode('/style-transfer/interior')).toBe('styleTransfer');
+		expect(routeIdToMode('/photo-processing')).toBe('photoProcessing');
+		expect(isWorkspaceRoute('/photo-processing')).toBe(true);
 		expect(routeIdToMode('/usage')).toBeNull();
 		expect(isWorkspaceRoute('/usage')).toBe(false);
 	});
@@ -125,6 +128,65 @@ describe('renderOrigin (keeps mode/tool in sync with undo/redo)', () => {
 	it('has no known origin for an upscale — applied from a toolbar shared by every mode', () => {
 		expect(renderOrigin(render({ editOp: { type: 'upscale', instruction: '' } }))).toBeUndefined();
 	});
+
+	it('restores photo processing for its saved edits and upscales made in that mode', () => {
+		expect(renderOrigin(render({ editOp: { type: 'photo-processing', instruction: '' } }))).toEqual(
+			{
+				mode: 'photoProcessing'
+			}
+		);
+		expect(
+			renderOrigin(
+				render({ sourceMode: 'photoProcessing', editOp: { type: 'upscale', instruction: '' } })
+			)
+		).toEqual({
+			mode: 'photoProcessing'
+		});
+	});
+});
+
+describe('photo processing URL state', () => {
+	it('round-trips settings and output format without including image access', () => {
+		const state = new RequestState();
+		const settings = { ...defaultPhotoAdjustments(), exposure: 24, saturation: -12, grain: 18 };
+		state.setPhotoAdjustments(settings);
+		state.setOutputFormat('png');
+		state.setImage({ mediaKey: 'private/source.png' });
+		const url = new URL(buildShareUrl('photoProcessing', state), 'https://cadbos.test');
+		expect(url.pathname).toBe('/photo-processing');
+		expect(url.searchParams.get('format')).toBe('png');
+		expect(JSON.parse(url.searchParams.get('adjustments') ?? 'null')).toEqual(settings);
+		expect(url.searchParams.has('image')).toBe(false);
+		const restored = new RequestState();
+		applyShareParams('photoProcessing', undefined, url.searchParams, restored);
+		expect(restored.photoAdjustments).toEqual(settings);
+		expect(restored.outputFormat).toBe('png');
+		expect(restored.image).toBeUndefined();
+	});
+
+	it('omits neutral settings from the URL and defaults absent settings to zero', () => {
+		const state = new RequestState();
+		expect(buildShareUrl('photoProcessing', state)).toBe('/photo-processing?format=webp');
+		state.setPhotoAdjustment('exposure', 30);
+		applyShareParams('photoProcessing', undefined, new URLSearchParams(), state);
+		expect(state.photoAdjustments).toEqual(defaultPhotoAdjustments());
+	});
+
+	it.each([
+		'{',
+		'<script>alert(1)</script>',
+		JSON.stringify({ ...defaultPhotoAdjustments(), exposure: 101 }),
+		JSON.stringify({ ...defaultPhotoAdjustments(), grain: -1 }),
+		JSON.stringify({ ...defaultPhotoAdjustments(), contrast: 0.5 }),
+		JSON.stringify({ ...defaultPhotoAdjustments(), unknownControl: 50 }),
+		JSON.stringify({ exposure: 20 }),
+		' '.repeat(2049)
+	])('resets malformed, incomplete or oversized settings %#', (adjustments) => {
+		const state = new RequestState();
+		state.setPhotoAdjustment('exposure', 30);
+		applyShareParams('photoProcessing', undefined, new URLSearchParams({ adjustments }), state);
+		expect(state.photoAdjustments).toEqual(defaultPhotoAdjustments());
+	});
 });
 
 describe('generation history destinations', () => {
@@ -142,8 +204,12 @@ describe('generation history destinations', () => {
 			subTab: { reference: 'photorealistic' }
 		});
 		expect(destinationForGenerationKind('upscale')).toEqual({
-			mode: 'edit',
-			subTab: { tool: 'freeform' }
+			mode: 'photoProcessing',
+			subTab: {}
+		});
+		expect(destinationForGenerationKind('photo-processing')).toEqual({
+			mode: 'photoProcessing',
+			subTab: {}
 		});
 		expect(destinationForGenerationKind('object-replacement')).toEqual({
 			mode: 'edit',
