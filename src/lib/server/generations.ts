@@ -573,21 +573,23 @@ interface ResourceImageRow {
 	roles: string;
 }
 
-function sourceUses(userId: string): ReturnType<typeof sql> {
-	return sql`SELECT used.media_id, used.created_at, 'source' AS role FROM (
-		SELECT g.source_media_id AS media_id, MAX(g.created_at) AS created_at FROM generations g
-		WHERE g.user_id = ${userId} GROUP BY g.source_media_id) used
+function sourceUses(userId?: string): ReturnType<typeof sql> {
+	return sql`SELECT used.user_id, used.media_id, used.created_at, 'source' AS role FROM (
+		SELECT g.user_id, g.source_media_id AS media_id, MAX(g.created_at) AS created_at FROM generations g
+		WHERE ${userId === undefined ? sql`1 = 1` : sql`g.user_id = ${userId}`}
+		GROUP BY g.user_id, g.source_media_id) used
 		JOIN media source_media ON source_media.id = used.media_id
 		WHERE source_media.checksum != ''
 		AND NOT EXISTS (SELECT 1 FROM generations produced WHERE produced.result_media_id = used.media_id)`;
 }
 
-function referenceUses(userId: string): ReturnType<typeof sql> {
-	return sql`SELECT g.reference_media_id AS media_id, g.created_at,
+function referenceUses(userId?: string): ReturnType<typeof sql> {
+	return sql`SELECT g.user_id, g.reference_media_id AS media_id, g.created_at,
 		CASE g.kind WHEN 'style-transfer' THEN 'style-reference'
 		WHEN 'object-replacement' THEN 'object-reference'
 		ELSE 'texture-reference' END AS role FROM generations g
-		WHERE g.user_id = ${userId} AND g.reference_media_id IS NOT NULL
+		WHERE ${userId === undefined ? sql`1 = 1` : sql`g.user_id = ${userId}`}
+		AND g.reference_media_id IS NOT NULL
 		AND g.kind IN ('style-transfer', 'object-replacement', 'texture-replacement')`;
 }
 
@@ -774,22 +776,11 @@ function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
 	};
 }
 
-// Each count is pre-aggregated per user in its own subquery, then LEFT JOINed
-// onto `users` one-row-per-user — never a single flat multi-table LEFT JOIN,
-// which would fan out across projects/sessions/generations/reference jobs and
-// corrupt every COUNT/SUM here. `sourceCount` counts each distinct
-// generations.source_media_id once per user, however many generations reused
-// it. `referenceCount` counts each distinct (user, media) pair of
-// reference_media_id across
-// object_replacement_jobs, texture_replacement_jobs and generations
-// (style-transfer references, migration 0019).
-// `sourceBytes`/`referenceBytes` are storage totals: each distinct media counts
-// once however often it is reused, and media whose size is unknown (NULL, rows
-// from before sizes were recorded) contribute nothing. A user with no known
-// size at all gets NULL rather than 0, so unknown is never shown as empty.
-const REFERENCE_PAIRS_SQL = sql`SELECT user_id, reference_media_id FROM object_replacement_jobs
-	UNION SELECT user_id, reference_media_id FROM texture_replacement_jobs
-	UNION SELECT user_id, reference_media_id FROM generations WHERE reference_media_id IS NOT NULL`;
+const RESOURCE_PAIRS_SQL = sql`source_resources AS (
+	SELECT DISTINCT user_id, media_id FROM (${sourceUses()})
+), reference_resources AS (
+	SELECT DISTINCT user_id, media_id FROM (${referenceUses()})
+)`;
 
 export async function listUserUsage(
 	db: Database,
@@ -797,11 +788,12 @@ export async function listUserUsage(
 	size: number
 ): Promise<UserUsagePage> {
 	const rows = await db.all<UserUsageRow>(
-		sql`SELECT u.pubkey, COALESCE(c.balance, 0) AS balance,
+		sql`WITH ${RESOURCE_PAIRS_SQL}
+			SELECT u.pubkey, COALESCE(c.balance, 0) AS balance,
 			COALESCE(pr.project_count, 0) AS project_count,
 			COALESCE(ps.session_count, 0) AS session_count,
 			COALESCE(g.generation_count, 0) AS generation_count,
-			COALESCE(g.source_count, 0) AS source_count, sb.source_bytes,
+			COALESCE(sources.source_count, 0) AS source_count, sources.source_bytes,
 			COALESCE(refs.reference_count, 0) AS reference_count, refs.reference_bytes,
 			COALESCE(g.total_spend, 0) AS total_spend, g.latest_spend_at
 			FROM users u
@@ -811,14 +803,14 @@ export async function listUserUsage(
 			LEFT JOIN (SELECT p.user_id, COUNT(*) AS session_count FROM project_sessions s
 			JOIN projects p ON p.id = s.project_id GROUP BY p.user_id) ps ON ps.user_id = u.id
 			LEFT JOIN (SELECT user_id, COUNT(*) AS generation_count,
-			COUNT(DISTINCT source_media_id) AS source_count, COALESCE(SUM(amount), 0) AS total_spend,
+			COALESCE(SUM(amount), 0) AS total_spend,
 			MAX(created_at) AS latest_spend_at FROM generations GROUP BY user_id) g
 			ON g.user_id = u.id
-			LEFT JOIN (SELECT s.user_id, SUM(m.size) AS source_bytes FROM
-			(SELECT DISTINCT user_id, source_media_id FROM generations) s
-			JOIN media m ON m.id = s.source_media_id GROUP BY s.user_id) sb ON sb.user_id = u.id
-			LEFT JOIN (SELECT r.user_id, COUNT(*) AS reference_count, SUM(m.size) AS reference_bytes FROM (
-			${REFERENCE_PAIRS_SQL}) r JOIN media m ON m.id = r.reference_media_id GROUP BY r.user_id) refs
+			LEFT JOIN (SELECT s.user_id, COUNT(*) AS source_count, SUM(m.size) AS source_bytes
+			FROM source_resources s JOIN media m ON m.id = s.media_id
+			GROUP BY s.user_id) sources ON sources.user_id = u.id
+			LEFT JOIN (SELECT r.user_id, COUNT(*) AS reference_count, SUM(m.size) AS reference_bytes
+			FROM reference_resources r JOIN media m ON m.id = r.media_id GROUP BY r.user_id) refs
 			ON refs.user_id = u.id
 			ORDER BY u.created_at DESC, u.id DESC LIMIT ${size + 1} OFFSET ${offset}`
 	);
@@ -844,16 +836,17 @@ interface UsageTotalsRow {
 // per-user rules, so each total equals the sum of its column in the table.
 export async function getUsageTotals(db: Database): Promise<UsageTotals> {
 	const row = await db.get<UsageTotalsRow>(
-		sql`SELECT (SELECT COUNT(*) FROM users) AS user_count,
+		sql`WITH ${RESOURCE_PAIRS_SQL}
+			SELECT (SELECT COUNT(*) FROM users) AS user_count,
 			(SELECT COUNT(*) FROM projects) AS project_count,
 			(SELECT COUNT(*) FROM project_sessions) AS session_count,
 			(SELECT COUNT(*) FROM generations) AS generation_count,
-			(SELECT COUNT(*) FROM (SELECT DISTINCT user_id, source_media_id FROM generations
-			WHERE user_id IS NOT NULL AND source_media_id IS NOT NULL)) AS source_count,
-			(SELECT SUM(m.size) FROM (SELECT DISTINCT user_id, source_media_id FROM generations) s
-			JOIN media m ON m.id = s.source_media_id) AS source_bytes,
-			(SELECT COUNT(*) FROM (${REFERENCE_PAIRS_SQL}) r JOIN media m ON m.id = r.reference_media_id) AS reference_count,
-			(SELECT SUM(m.size) FROM (${REFERENCE_PAIRS_SQL}) r JOIN media m ON m.id = r.reference_media_id) AS reference_bytes,
+			(SELECT COUNT(*) FROM source_resources) AS source_count,
+			(SELECT SUM(m.size) FROM source_resources s
+			JOIN media m ON m.id = s.media_id) AS source_bytes,
+			(SELECT COUNT(*) FROM reference_resources) AS reference_count,
+			(SELECT SUM(m.size) FROM reference_resources r
+			JOIN media m ON m.id = r.media_id) AS reference_bytes,
 			(SELECT COALESCE(SUM(amount), 0) FROM generations) AS total_spend`
 	);
 	if (!row) throw new Error('usage totals query returned no row');
