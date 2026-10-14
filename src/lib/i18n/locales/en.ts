@@ -432,6 +432,7 @@ export const en = {
 	'status.service.assets': 'Static assets',
 	'status.service.comfyui': 'ComfyUI',
 	'status.service.d1': 'D1 database',
+	'status.service.featurebase': 'Featurebase',
 	'status.service.nostr': 'Nostr relays',
 	'status.service.s3': 'S3 storage',
 	'status.service.workersAi': 'Workers AI',
@@ -442,6 +443,8 @@ export const en = {
 		'Provides Object changes, Object replacement, Texture replacement, Recolor, and Lighting control.',
 	'status.hint.d1':
 		'Stores accounts, Spending history, Balance, and Scenes (your generation history).',
+	'status.hint.featurebase':
+		'Provides feedback, support, and balance top-up requests during the beta.',
 	'status.hint.nostr':
 		'Handles Sign in, via Nostr extension or Nostr Connect. Unrelated to the relay count shown in your profile (see "Relays" in the header).',
 	'status.hint.s3': 'Stores the room photo you upload and the images Cadbos generates.',
