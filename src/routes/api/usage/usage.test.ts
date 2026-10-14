@@ -48,6 +48,7 @@ async function seedGeneration(
 		userId,
 		url: `https://cdn.example.test/${id}.webp`,
 		sourceUrl: 'https://cdn.example.test/source.jpg',
+		sourceChecksum: '1'.repeat(64),
 		amount,
 		createdAt
 	});
