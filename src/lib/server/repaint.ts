@@ -54,7 +54,7 @@ export function repaintCost(platform: App.Platform | undefined): number {
 	const configured = platform?.env?.REPAINT_COST?.trim();
 	if (!configured) return DEFAULT_REPAINT_COST;
 	const cost = Number(configured);
-	if (!Number.isFinite(cost) || cost <= 0) {
+	if (!Number.isFinite(cost) || cost < 0) {
 		throw new ComfyUiError('invalid_configuration', 'configuration', 'Invalid repaint cost');
 	}
 	return cost;

@@ -648,6 +648,7 @@ export interface UsageTotals {
 	referenceCount: number;
 	referenceBytes: number | null;
 	totalSpend: number;
+	totalDeposit: number;
 }
 
 export interface D1DailyLimits {
@@ -724,19 +725,12 @@ export interface WalletBalanceResponse {
 	balance: number;
 }
 
-// A single deduction from an approved account's own limit (see CreditInfo
-// below). `amount` is the operation's provider-reported or configured charge.
-// `id` is stable for list rendering — createdAt can collide across concurrent calls.
-// `id` doubles as the underlying generations.id — the same id a project
-// session's own generation list (SessionGenerationRecord) uses, so a client
-// can resolve one back to the other. `sessionId`/`projectId` are null only for
-// the — post-Module-11-backfill, essentially unreachable — case of a
-// generation with no session attached.
 export interface CreditTransaction {
 	id: string;
+	generationId: string | null;
 	amount: number;
 	balanceAfter: number;
-	kind: GenerationKind;
+	kind: GenerationKind | null;
 	createdAt: number;
 	comfyuiUploadQueueSec: number;
 	comfyuiQueueWaitSec: number;

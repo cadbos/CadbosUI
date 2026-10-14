@@ -15,6 +15,7 @@
 import { beforeEach, describe, it, expect } from 'vitest';
 import { sql } from 'drizzle-orm';
 import type { Database } from '$lib/server/db';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 import { makeDb } from '$lib/server/testing/d1-shim';
 import {
 	getCredit,
@@ -46,9 +47,7 @@ async function grantAccess(
 	balance: number,
 	enabled: 0 | 1 = 1
 ): Promise<void> {
-	await db.run(
-		sql`INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (${userId}, ${balance}, ${Date.now()}, ${enabled})`
-	);
+	await seedCredit(db, userId, balance, enabled, Date.now());
 }
 
 let db: Database;

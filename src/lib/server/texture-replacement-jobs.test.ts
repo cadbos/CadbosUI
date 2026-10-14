@@ -21,12 +21,11 @@ import {
 } from '$lib/server/texture-replacement-jobs';
 import { makeDb } from '$lib/server/testing/d1-shim';
 import { seedManagedMedia } from '$lib/server/testing/generation-fixtures';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 
 async function seedAccount(db: Database): Promise<void> {
 	await db.run(sql`INSERT INTO users (id, pubkey, created_at) VALUES ('user-1', 'pubkey-1', 1)`);
-	await db.run(
-		sql`INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES ('user-1', 1, 1, 1)`
-	);
+	await seedCredit(db, 'user-1', 1);
 	await db.run(
 		sql`INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES ('project-1', 'user-1', 'Test project', 1, 1)`
 	);
@@ -36,7 +35,7 @@ async function seedAccount(db: Database): Promise<void> {
 }
 
 describe('texture replacement jobs', () => {
-	it('clamps completion spending at zero and warns', async () => {
+	it('records the full charge below zero and warns', async () => {
 		const db = makeDb();
 		await seedAccount(db);
 		const sceneMediaId = await seedManagedMedia(db, 'scene.jpg');
@@ -68,26 +67,24 @@ describe('texture replacement jobs', () => {
 			1
 		);
 
-		expect(job).toMatchObject({ status: 'completed', balanceAfter: 0, cost: 2 });
+		expect(job).toMatchObject({ status: 'completed', balanceAfter: -1, cost: 2 });
 		const credit = await db.get<{ balance: number }>(
-			sql`SELECT balance FROM credits WHERE user_id = 'user-1'`
+			sql`SELECT SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END) / 100.0 AS balance FROM ledger_entries WHERE user_id = 'user-1'`
 		);
 		const generation = await db.get<{
 			amount: number;
-			balance_after: number;
 			comfyui_upload_queue_sec: number;
 			comfyui_queue_wait_sec: number;
 			comfyui_execution_sec: number;
 			comfyui_download_sec: number;
 			comfyui_reupload_sec: number;
 		}>(
-			sql`SELECT amount, balance_after, comfyui_upload_queue_sec, comfyui_queue_wait_sec,
-				comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec FROM generations WHERE id = 'job-1'`
+			sql`SELECT l.amount / 100.0 AS amount, comfyui_upload_queue_sec, comfyui_queue_wait_sec,
+				comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec FROM generations g JOIN ledger_entries l ON l.id = g.ledger_entry_id WHERE g.id = 'job-1'`
 		);
-		expect(credit?.balance).toBe(0);
+		expect(credit?.balance).toBe(-1);
 		expect(generation).toEqual({
 			amount: 2,
-			balance_after: 0,
 			comfyui_upload_queue_sec: 3,
 			comfyui_queue_wait_sec: 5,
 			comfyui_execution_sec: 10,

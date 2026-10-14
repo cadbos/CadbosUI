@@ -92,6 +92,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 					sourceBytes: 1.5 * 1024 * 1024 * 1024,
 					referenceCount: 0,
 					referenceBytes: null,
+					totalDeposit: 2000,
 					totalSpend: 1234.5
 				})
 			});
@@ -121,7 +122,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 					{
 						pubkey,
 						balance: 1234.5,
-						totalDeposit: 0,
+						totalDeposit: 1500,
 						lastDepositAt: null,
 						projectCount: 1234,
 						sessionCount: 1,
@@ -135,8 +136,8 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 					},
 					{
 						pubkey: pubkeyWithoutPicture,
-						balance: 0,
-						totalDeposit: 0,
+						balance: -15,
+						totalDeposit: 500,
 						lastDepositAt: null,
 						projectCount: 1,
 						sessionCount: 1,
@@ -203,7 +204,13 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	expect(usageRowAlignment).toBeLessThanOrEqual(1);
 	const totals = page.getByRole('region', { name: ru['usage.totals.title'] });
 	await expect(totals).toContainText(`${ru['usage.totals.walletBalance']} $ 1,250.00`);
-	await expect(totals).toContainText(`${ru['usage.totals.deposits']} ${ru['usage.emptyValue']}`);
+	await expect(totals).toContainText(`${ru['usage.totals.deposits']} $ 2,000.00`);
+	await expect(
+		user.locator('..').getByRole('cell', { name: '1,500.00', exact: true })
+	).toBeVisible();
+	await expect(
+		userWithoutPicture.locator('..').getByRole('cell', { name: '-15.00', exact: true })
+	).toBeVisible();
 	await expect(totals).toContainText(`${ru['usage.totals.spend']} $ 1,234.50`);
 	await expect(totals).toContainText(`${ru['usage.totals.users']} 1 200`);
 	await expect(page.getByRole('cell', { name: '1,234.50' })).toBeVisible();
@@ -252,7 +259,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	await expect(userWithoutPicture.locator('.avatar')).toHaveText('B');
 	await expect(link).toHaveAttribute('href', `https://primal.net/profile/${npub}`);
 	await expect(link).toHaveAttribute('target', '_blank');
-	await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+	await expect(link).toHaveAttribute('rel', 'external noopener noreferrer');
 
 	await page.locator('.auth-trigger').click();
 	const languageSwitcher = page.getByRole('group', { name: ru['language.switcher.label'] });
@@ -351,6 +358,7 @@ test('keeps platform totals visible when D1 analytics is unavailable', async ({ 
 					sourceBytes: null,
 					referenceCount: 7,
 					referenceBytes: null,
+					totalDeposit: 25,
 					totalSpend: 12.5
 				})
 			});

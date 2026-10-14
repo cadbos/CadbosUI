@@ -52,7 +52,7 @@ export function lightSettingsCost(platform: App.Platform | undefined): number {
 	const configured = platform?.env?.LIGHT_SETTINGS_COST?.trim();
 	if (!configured) return DEFAULT_LIGHT_SETTINGS_COST;
 	const cost = Number(configured);
-	if (!Number.isFinite(cost) || cost <= 0) {
+	if (!Number.isFinite(cost) || cost < 0) {
 		throw new ComfyUiError('invalid_configuration', 'configuration', 'Invalid light settings cost');
 	}
 	return cost;

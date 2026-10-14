@@ -16,23 +16,28 @@ import { describe, expect, it } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { MeResponse, SessionUser } from '$lib/api/contract';
 import { createDb } from '$lib/server/db';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import { seedGeneration } from '$lib/server/testing/generation-fixtures';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { GET } from './+server';
 
-function seedUser(db: D1Database, id: string, pubkey: string): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+async function seedUser(db: D1Database, id: string, pubkey: string): Promise<void> {
+	await db
+		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
 		.run();
 }
 
 // The admin's manual approval step (migrations/0005) — no auto-provisioning
 // exists anymore.
-function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
-		.bind(userId, balance, Date.now(), enabled)
-		.run();
+async function grantAccess(
+	db: D1Database,
+	userId: string,
+	balance: number,
+	enabled: 0 | 1 = 1
+): Promise<void> {
+	await seedCredit(createDb(db), userId, balance, enabled, Date.now());
 }
 
 type MeEvent = Parameters<typeof GET>[0];
@@ -79,7 +84,7 @@ describe('GET /auth/me — generation access control', () => {
 
 	it('omits credit for an account no admin has approved', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
+		await seedUser(db, 'user-1', pubkey);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
 		const result = (await response.json()) as MeResponse;
@@ -88,8 +93,8 @@ describe('GET /auth/me — generation access control', () => {
 
 	it('returns the admin-chosen balance for an approved account', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		await seedUser(db, 'user-1', pubkey);
+		await grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
 		const result = (await response.json()) as MeResponse;
@@ -99,8 +104,8 @@ describe('GET /auth/me — generation access control', () => {
 
 	it('still shows balance/history for an account the admin has since disabled', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12, 0);
+		await seedUser(db, 'user-1', pubkey);
+		await grantAccess(db, 'user-1', 12, 0);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
 		const result = (await response.json()) as MeResponse;
@@ -109,8 +114,8 @@ describe('GET /auth/me — generation access control', () => {
 
 	it('includes spend history for an approved account', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 5);
+		await seedUser(db, 'user-1', pubkey);
+		await grantAccess(db, 'user-1', 5);
 		await seedGeneration(createDb(db), {
 			id: 'tx-1',
 			userId: 'user-1',

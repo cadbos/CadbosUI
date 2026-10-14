@@ -17,6 +17,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 import { mediaKey } from '$lib/server/media';
 import { createDb } from '$lib/server/db';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedManagedMedia,
@@ -76,19 +77,22 @@ const { POST } = await import('./+server');
 const TEST_SESSION_ID = '00000000-0000-4000-8000-000000000001';
 
 async function seedUser(db: D1Database, id: string, pubkey: string): Promise<void> {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+	await db
+		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
 		.run();
 	const now = Date.now();
 	const projectId = `project-${id}`;
-	db.prepare(
-		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
+	await db
+		.prepare(
+			'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+		)
 		.bind(projectId, id, 'Test project', now, now)
 		.run();
-	db.prepare(
-		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
+	await db
+		.prepare(
+			'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+		)
 		.bind(TEST_SESSION_ID, projectId, 'Test session', now, now)
 		.run();
 	await seedManagedMedia(createDb(db));
@@ -97,10 +101,13 @@ async function seedUser(db: D1Database, id: string, pubkey: string): Promise<voi
 // The admin's manual approval step (migrations/0005) — no auto-provisioning
 // exists anymore, so every test that expects a render to succeed must grant
 // access first.
-function grantAccess(db: D1Database, userId: string, balance: number, enabled: 0 | 1 = 1): void {
-	db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
-		.bind(userId, balance, Date.now(), enabled)
-		.run();
+async function grantAccess(
+	db: D1Database,
+	userId: string,
+	balance: number,
+	enabled: 0 | 1 = 1
+): Promise<void> {
+	await seedCredit(createDb(db), userId, balance, enabled, Date.now());
 }
 
 type RenderEvent = Parameters<typeof POST>[0];
@@ -147,7 +154,7 @@ describe('POST /api/render — billing', () => {
 	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
 		const db = makeD1();
 		await seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		await grantAccess(db, 'user-1', 12);
 		const foreignSessionId = await seedForeignSession(createDb(db));
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, {
@@ -162,7 +169,7 @@ describe('POST /api/render — billing', () => {
 	it('mirrors the real archAI balance server-side without ever exposing it to the client', async () => {
 		const db = makeD1();
 		await seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		await grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
@@ -181,7 +188,7 @@ describe('POST /api/render — billing', () => {
 	it('records the generated image, source and prompt against the authenticated profile', async () => {
 		const db = makeD1();
 		await seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12);
+		await grantAccess(db, 'user-1', 12);
 
 		const response = await call({ pubkey: 'pubkey-1' }, { env: { DB: db } } as App.Platform, body);
 		expect(response.status).toBe(200);
@@ -225,7 +232,7 @@ describe('POST /api/render — billing', () => {
 	it('overwrites the mirrored archAI balance rather than accumulating it across calls', async () => {
 		const db = makeD1();
 		await seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		await grantAccess(db, 'user-1', 12);
 
 		await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 		await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
@@ -240,7 +247,7 @@ describe('POST /api/render — billing', () => {
 	it('still returns the completed, already-charged render if recordGeneration fails', async () => {
 		const db = makeD1();
 		await seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12);
+		await grantAccess(db, 'user-1', 12);
 		generationsMock.failNextRecordGeneration = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -268,7 +275,7 @@ describe('POST /api/render — billing', () => {
 	it('still returns the completed, already-charged render if recording the balance fails', async () => {
 		const db = makeD1();
 		await seedUser(db, 'user-1', 'pubkey-1');
-		grantAccess(db, 'user-1', 12);
+		await grantAccess(db, 'user-1', 12);
 		billingMock.failNextRecordBalance = true;
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -294,7 +301,7 @@ describe('POST /api/render — billing', () => {
 	it('never falls back to the raw archAI balance if recordGeneration and the getCredit fallback both fail', async () => {
 		const db = makeD1();
 		await seedUser(db, 'user-1', pubkey);
-		grantAccess(db, 'user-1', 12);
+		await grantAccess(db, 'user-1', 12);
 		generationsMock.failNextRecordGeneration = true;
 		billingMock.failNextGetCredit = true;
 
@@ -338,7 +345,7 @@ describe('POST /api/render — billing', () => {
 		it('blocks an account the admin disabled, even with balance remaining', async () => {
 			const db = makeD1();
 			await seedUser(db, 'user-1', pubkey);
-			grantAccess(db, 'user-1', 5, 0);
+			await grantAccess(db, 'user-1', 5, 0);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(403);
@@ -349,14 +356,16 @@ describe('POST /api/render — billing', () => {
 		it('allows and deducts the real archAI cost for an approved, enabled account', async () => {
 			const db = makeD1();
 			await seedUser(db, 'user-1', pubkey);
-			grantAccess(db, 'user-1', 12);
+			await grantAccess(db, 'user-1', 12);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(200);
 			const result = (await response.json()) as { cost: number };
 
 			const creditRow = await db
-				.prepare('SELECT balance FROM credits WHERE user_id = ?')
+				.prepare(
+					"SELECT COALESCE(SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END), 0) / 100.0 AS balance FROM ledger_entries WHERE user_id = ?"
+				)
 				.bind('user-1')
 				.first<{ balance: number }>();
 			expect(creditRow?.balance).toBe(12 - result.cost);
@@ -365,7 +374,7 @@ describe('POST /api/render — billing', () => {
 		it('blocks generation once an approved account exhausts its balance', async () => {
 			const db = makeD1();
 			await seedUser(db, 'user-1', pubkey);
-			grantAccess(db, 'user-1', 0);
+			await grantAccess(db, 'user-1', 0);
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(402);
@@ -376,7 +385,7 @@ describe('POST /api/render — billing', () => {
 		it('returns a clean 500 instead of crashing if the credits table is missing (unapplied migration)', async () => {
 			const db = makeD1();
 			await seedUser(db, 'user-1', pubkey);
-			db.prepare('DROP TABLE credits').run();
+			await db.prepare('DROP TABLE credits').run();
 
 			const response = await call({ pubkey }, { env: { DB: db } } as App.Platform, body);
 			expect(response.status).toBe(500);

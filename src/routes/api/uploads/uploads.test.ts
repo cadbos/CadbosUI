@@ -115,8 +115,9 @@ async function storedSize(
 	return row?.size;
 }
 
-function seedUser(db: ReturnType<typeof makeD1>, id: string, pubkey: string): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+async function seedUser(db: ReturnType<typeof makeD1>, id: string, pubkey: string): Promise<void> {
+	await db
+		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
 		.run();
 }
@@ -157,7 +158,7 @@ describe('POST /api/uploads remote import', () => {
 
 	it('imports a valid HTTPS URL through the S3 upload path', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
 			new Response('image-bytes', { headers: { 'content-type': 'image/webp' } })
 		);
@@ -277,7 +278,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 
 	it('reuses an existing stored-upload source_url instead of writing to S3', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const hash = await sha256Hex('image-bytes');
 		await seedGenerationWithSource(db, 'a', 'user-1', `${UPLOADS_URL}/existing.webp`, hash);
 		const bucket = { put: vi.fn(async () => undefined) };
@@ -303,7 +304,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 
 	it('fills the size of a reused upload that predates size tracking', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const hash = await sha256Hex('image-bytes');
 		await seedGenerationWithSource(db, 'a', 'user-1', `${UPLOADS_URL}/existing.webp`, hash);
 		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -324,7 +325,7 @@ describe('POST /api/uploads dedup (non-demo, D1-backed)', () => {
 
 	it('does not reuse a matching-hash source_url that points outside the uploads bucket', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const hash = await sha256Hex('image-bytes');
 		// A render/edit call can use generation output media as its source,
 		// so a hash match here isn't necessarily a stored upload — reusing it as
@@ -365,7 +366,7 @@ describe('POST /api/uploads multipart file', () => {
 
 	it('stores the uploaded file and persists its byte size', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const bucket = { put: vi.fn(async () => undefined) };
 
 		const response = await callMultipart(

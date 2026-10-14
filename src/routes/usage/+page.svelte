@@ -13,6 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { onMount, untrack } from 'svelte';
 	import { npubEncode } from 'nostr-tools/nip19';
 	import type { PageProps } from './$types';
 	import LazyImage from '$lib/components/LazyImage.svelte';
@@ -25,28 +26,24 @@ before the Change Date. See LICENSE for complete terms.
 
 	let { data }: PageProps = $props();
 
-	let loadMoreSentinel = $state<HTMLElement | null>(null);
 	let failedPicturePubkeys = $state<string[]>([]);
-	let timeZone = $derived('UTC');
-	$effect(() => {
+	let timeZone = $state('UTC');
+	onMount(() => {
 		timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 	});
 	let timeZoneAbbreviation = $derived(formatTimeZoneName('short'));
 	let timeZoneFullName = $derived(formatTimeZoneName('long'));
 
-	$effect(() => {
+	function loadUsage(): (() => void) | undefined {
 		// Wait for the shared auth store, not just the session cookie, so the
 		// header's sign-in indicator and this page's data never disagree (the
 		// header alone showing "Гость" must not coexist with a loaded table).
 		if (auth.status !== 'authenticated') return;
-		void usage.load();
+		untrack(() => void usage.load());
 		return () => usage.clear();
-	});
+	}
 
-	$effect(() => {
-		const sentinel = loadMoreSentinel;
-		if (!sentinel || !usage.hasMore) return;
-
+	function observeLoadMore(sentinel: HTMLElement): () => void {
 		const observer = new IntersectionObserver(
 			(entries) => {
 				if (entries.some((entry) => entry.isIntersecting)) void usage.loadMore();
@@ -56,7 +53,7 @@ before the Change Date. See LICENSE for complete terms.
 		observer.observe(sentinel);
 
 		return () => observer.disconnect();
-	});
+	}
 
 	function formatTimestamp(timestamp: number | null): string {
 		if (timestamp === null) return t('usage.emptyValue');
@@ -105,7 +102,7 @@ before the Change Date. See LICENSE for complete terms.
 	<title>{t('usage.title')}</title>
 </svelte:head>
 
-<main class="usage-page" aria-labelledby="usage-title">
+<main class="usage-page" aria-labelledby="usage-title" {@attach loadUsage}>
 	<section class="usage-shell">
 		<header class="usage-header">
 			<h1 id="usage-title">{t('usage.title')}</h1>
@@ -130,7 +127,7 @@ before the Change Date. See LICENSE for complete terms.
 					{#if usage.totalsStatus === 'ready' && usage.totals !== null}
 						<div>
 							<dt>{t('usage.totals.deposits')}</dt>
-							<dd><UsageNumber kind="count" value={null} /></dd>
+							<dd><UsageNumber kind="currency" value={usage.totals.totalDeposit} /></dd>
 						</div>
 						<div>
 							<dt>{t('usage.totals.spend')}</dt>
@@ -316,7 +313,7 @@ before the Change Date. See LICENSE for complete terms.
 										<a
 											href={data.pubkeyViewer.replaceAll('{}', npub)}
 											target="_blank"
-											rel="noopener noreferrer">{npub}</a
+											rel="external noopener noreferrer">{npub}</a
 										>
 									</span>
 								</th>
@@ -362,7 +359,7 @@ before the Change Date. See LICENSE for complete terms.
 				</table>
 			</div>
 			{#if usage.hasMore}
-				<div bind:this={loadMoreSentinel} class="load-more-sentinel">
+				<div {@attach observeLoadMore} class="load-more-sentinel">
 					{#if usage.loadingMore}
 						<p class="visually-hidden" aria-live="polite">{t('usage.loadingMore')}</p>
 					{/if}

@@ -24,6 +24,7 @@ import {
 } from '$lib/server/object-replacement-jobs';
 import { RemoteImageImportError } from '$lib/server/remote-image';
 import { createDb } from '$lib/server/db';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedManagedMedia,
@@ -170,24 +171,25 @@ async function seedUser(
 	userId = 'user-1',
 	pubkey = 'pubkey-1'
 ): Promise<void> {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+	await db
+		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(userId, pubkey, Date.now())
 		.run();
 	if (balance !== undefined) {
-		db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-			.bind(userId, balance, Date.now())
-			.run();
+		await seedCredit(createDb(db), userId, balance);
 	}
 	const now = Date.now();
 	const projectId = `project-${userId}`;
-	db.prepare(
-		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
+	await db
+		.prepare(
+			'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+		)
 		.bind(projectId, userId, 'Test project', now, now)
 		.run();
-	db.prepare(
-		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
+	await db
+		.prepare(
+			'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+		)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
 	const drizzleDb = createDb(db);
@@ -277,6 +279,7 @@ async function seedJob(rawDb: D1Database, createdAt = Date.now()): Promise<void>
 }
 
 beforeEach(() => {
+	vi.mocked(createObjectReplacementJob).mockClear();
 	integration.cancel.mockReset().mockResolvedValue(undefined);
 	integration.cost = 2;
 	integration.costError = null;
@@ -453,7 +456,7 @@ describe('POST /api/object-replacement', () => {
 
 	it('forwards a valid selected area to the provider submission', async () => {
 		const db = makeD1();
-		seedUser(db, 12);
+		await seedUser(db, 12);
 		const region = { x: 0.1, y: 0.2, width: 0.3, height: 0.4 };
 		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), { region });
 		expect(response.status).toBe(202);
@@ -499,7 +502,9 @@ describe('POST /api/object-replacement', () => {
 				.prepare('SELECT COUNT(*) AS count FROM object_replacement_jobs')
 				.first<{ count: number }>();
 			const credit = await db
-				.prepare('SELECT balance FROM credits WHERE user_id = ?')
+				.prepare(
+					"SELECT COALESCE(SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END), 0) / 100.0 AS balance FROM ledger_entries WHERE user_id = ?"
+				)
 				.bind('user-1')
 				.first<{ balance: number }>();
 			expect(count?.count).toBe(0);
@@ -703,7 +708,8 @@ describe('GET /api/object-replacement/[id]', () => {
 	it('hides missing jobs and jobs owned by another account', async () => {
 		const db = makeD1();
 		await seedUser(db, 12);
-		db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+		await db
+			.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 			.bind('user-2', 'pubkey-2', Date.now())
 			.run();
 		await seedJob(db);
@@ -767,7 +773,9 @@ describe('GET /api/object-replacement/[id]', () => {
 			}
 		]);
 		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
+			.prepare(
+				"SELECT COALESCE(SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END), 0) / 100.0 AS balance FROM ledger_entries WHERE user_id = ?"
+			)
 			.bind('user-1')
 			.first<{ balance: number }>();
 		const generations = await db
@@ -810,7 +818,9 @@ describe('GET /api/object-replacement/[id]', () => {
 			error: { code: 'object_replacement_failed', message: 'Object replacement failed' }
 		});
 		const credit = await db
-			.prepare('SELECT balance FROM credits WHERE user_id = ?')
+			.prepare(
+				"SELECT COALESCE(SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END), 0) / 100.0 AS balance FROM ledger_entries WHERE user_id = ?"
+			)
 			.bind('user-1')
 			.first<{ balance: number }>();
 		expect(credit?.balance).toBe(12);

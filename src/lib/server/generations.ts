@@ -35,6 +35,7 @@ import {
 } from '$lib/api/contract';
 import { formSnapshotSchema } from '$lib/server/api';
 import type { Database } from '$lib/server/db';
+import { ledgerAmountSql, ledgerBalanceSql } from '$lib/server/ledger';
 
 function isGenerationKind(kind: string): kind is GenerationKind {
 	return generationKinds.some((candidate) => candidate === kind);
@@ -135,7 +136,7 @@ export interface RecordGenerationInput {
 	// assertSessionOwnedByUser) before this is called — this function trusts it.
 	sessionId: string;
 	prompt: string;
-	kind: CreditTransaction['kind'];
+	kind: GenerationKind;
 	amount: number;
 	archaiRenderSec: number;
 	archaiDownloadSec: number;
@@ -157,24 +158,6 @@ export interface RecordedGeneration extends Balance {
 	id: string;
 }
 
-// Deducts the real cost archAI charged (not a fixed fee) and records the
-// resulting image/prompt against it in one D1 batch (a single transaction),
-// so a failure between the two can never leave the ledger and the image
-// history out of sync. Called exactly once, only after a confirmed
-// successful archAI response — the caller must never call this before the
-// call, or on failure.
-//
-// The balance check in the route happens before the (slow) archAI call, not
-// atomically with this deduction — two concurrent requests for the same
-// account can each pass that check and both land here, taking balance below
-// zero. Left unguarded on purpose: the ledger must reflect what archAI
-// actually charged, so silently refusing to record a real, already-paid
-// deduction here would make the spend history wrong. For a small number of
-// manually-approved accounts this is an accepted soft cap, not a hard one.
-//
-// The insert reads `balance` back from `credits` itself (rather than the
-// UPDATE's RETURNING value) because batched statements can't pass results to
-// each other — only to the caller, after the whole batch has committed.
 export async function recordGeneration(
 	db: Database,
 	userId: string,
@@ -182,21 +165,26 @@ export async function recordGeneration(
 ): Promise<RecordedGeneration> {
 	const now = Date.now();
 	const id = crypto.randomUUID();
-	const [updateRows] = await db.batch([
-		db.all<BalanceRow>(
-			sql`UPDATE credits SET balance = balance - ${input.amount}, updated_at = ${now} WHERE user_id = ${userId}
-				RETURNING balance, updated_at`
+	const [, , balanceRows] = await db.batch([
+		db.run(
+			sql`INSERT INTO ledger_entries (user_id, amount, entry_side, reason, created_at)
+				SELECT user_id, ${ledgerAmountSql(input.amount)}, 'debit', 'generation-charge', ${now}
+				FROM credits WHERE user_id = ${userId}`
 		),
 		db.run(
 			sql`INSERT INTO generations
-				(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id,
+				(id, user_id, result_media_id, source_media_id, prompt, kind, ledger_entry_id, created_at, session_id,
 				archai_render_sec, archai_download_sec, archai_reupload_sec, form_snapshot, reference_media_id)
-				SELECT ${id}, ${userId}, ${input.resultMediaId}, ${input.sourceMediaId}, ${input.prompt}, ${input.kind}, ${input.amount}, balance, ${now}, ${input.sessionId},
+				SELECT ${id}, ${userId}, ${input.resultMediaId}, ${input.sourceMediaId}, ${input.prompt}, ${input.kind}, l.id, ${now}, ${input.sessionId},
 				${input.archaiRenderSec}, ${input.archaiDownloadSec}, ${input.archaiReuploadSec}, ${input.formSnapshot ? JSON.stringify(input.formSnapshot) : null}, ${input.referenceMediaId ?? null}
-				FROM credits WHERE user_id = ${userId}`
+				FROM ledger_entries l WHERE l.id = last_insert_rowid() AND changes() = 1 AND l.user_id = ${userId} AND l.entry_side = 'debit'`
+		),
+		db.all<BalanceRow>(
+			sql`SELECT ${ledgerBalanceSql(userId, sql`l.id`)} AS balance, l.created_at AS updated_at
+				FROM generations g JOIN ledger_entries l ON l.id = g.ledger_entry_id WHERE g.id = ${id} AND g.user_id = ${userId}`
 		)
 	]);
-	const row = updateRows[0];
+	const row = balanceRows[0];
 	if (!row) throw new Error('credit deduction failed: no credit row for user');
 
 	return { id, ...toBalance(row) };
@@ -214,13 +202,24 @@ export async function recordPhotoProcessing(
 ): Promise<RecordedGeneration> {
 	const id = crypto.randomUUID();
 	const now = Date.now();
-	const rows = await db.all<BalanceRow>(sql`INSERT INTO generations
-  (id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id,
-   archai_render_sec, archai_download_sec, archai_reupload_sec, form_snapshot)
-  VALUES (${id}, ${userId}, ${input.resultMediaId}, ${input.sourceMediaId}, 'photo processing', 'photo-processing', 0,
-   COALESCE((SELECT balance FROM credits WHERE user_id = ${userId}), 0), ${now}, ${input.sessionId},
-   0, 0, 0, ${JSON.stringify(input.formSnapshot)})
-  RETURNING balance_after AS balance, created_at AS updated_at`);
+	const [, , rows] = await db.batch([
+		db.run(
+			sql`INSERT INTO ledger_entries (user_id, amount, entry_side, reason, created_at)
+				VALUES (${userId}, 0, 'debit', 'generation-charge', ${now})`
+		),
+		db.run(
+			sql`INSERT INTO generations
+				(id, user_id, result_media_id, source_media_id, prompt, kind, ledger_entry_id, created_at, session_id,
+				archai_render_sec, archai_download_sec, archai_reupload_sec, form_snapshot)
+				SELECT ${id}, ${userId}, ${input.resultMediaId}, ${input.sourceMediaId}, 'photo processing', 'photo-processing', l.id,
+				${now}, ${input.sessionId}, 0, 0, 0, ${JSON.stringify(input.formSnapshot)}
+				FROM ledger_entries l WHERE l.id = last_insert_rowid() AND changes() = 1 AND l.user_id = ${userId} AND l.entry_side = 'debit'`
+		),
+		db.all<BalanceRow>(
+			sql`SELECT ${ledgerBalanceSql(userId, sql`l.id`)} AS balance, l.created_at AS updated_at
+				FROM generations g JOIN ledger_entries l ON l.id = g.ledger_entry_id WHERE g.id = ${id} AND g.user_id = ${userId}`
+		)
+	]);
 	const row = rows[0];
 	if (!row) throw new Error('Photo processing history insert returned no row');
 	return { id, ...toBalance(row) };
@@ -343,9 +342,10 @@ export async function getGenerationDetailForUser(
 ): Promise<GenerationDetail | null> {
 	const row = await db.get<GenerationDetailRow>(
 		sql`SELECT g.id, g.source_media_id, g.result_media_id, g.prompt, g.kind, g.created_at,
-			g.amount, g.balance_after, g.form_snapshot, ps.id AS session_id, ps.title AS session_title,
+			${ledgerBalanceSql(sql`g.user_id`, sql`l.id`)} AS balance_after, l.amount / 100.0 AS amount, g.form_snapshot, ps.id AS session_id, ps.title AS session_title,
 			p.id AS project_id, p.title AS project_title
 			FROM generations g
+			JOIN ledger_entries l ON l.id = g.ledger_entry_id AND l.user_id = g.user_id
 			LEFT JOIN project_sessions ps ON ps.id = g.session_id AND ps.archived_at IS NULL
 			LEFT JOIN projects p ON p.id = ps.project_id AND p.user_id = g.user_id
 			AND p.archived_at IS NULL
@@ -771,6 +771,8 @@ export async function listResourceGenerations(
 interface UserUsageRow {
 	pubkey: string;
 	balance: number;
+	total_deposit: number;
+	last_deposit_at: number | null;
 	project_count: number;
 	session_count: number;
 	generation_count: number;
@@ -786,8 +788,8 @@ function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
 	return {
 		pubkey: row.pubkey,
 		balance: row.balance,
-		totalDeposit: 0,
-		lastDepositAt: null,
+		totalDeposit: row.total_deposit,
+		lastDepositAt: row.last_deposit_at,
 		projectCount: row.project_count,
 		sessionCount: row.session_count,
 		generationCount: row.generation_count,
@@ -813,22 +815,26 @@ export async function listUserUsage(
 ): Promise<UserUsagePage> {
 	const rows = await db.all<UserUsageRow>(
 		sql`WITH ${RESOURCE_PAIRS_SQL}
-			SELECT u.pubkey, COALESCE(c.balance, 0) AS balance,
+			SELECT u.pubkey, COALESCE(l.balance, 0) AS balance, COALESCE(l.total_deposit, 0) AS total_deposit, l.last_deposit_at,
 			COALESCE(pr.project_count, 0) AS project_count,
 			COALESCE(ps.session_count, 0) AS session_count,
 			COALESCE(g.generation_count, 0) AS generation_count,
 			COALESCE(sources.source_count, 0) AS source_count, sources.source_bytes,
 			COALESCE(refs.reference_count, 0) AS reference_count, refs.reference_bytes,
-			COALESCE(g.total_spend, 0) AS total_spend, g.latest_spend_at
+			COALESCE(l.total_spend, 0) AS total_spend, l.latest_spend_at
 			FROM users u
-			LEFT JOIN credits c ON c.user_id = u.id
+			LEFT JOIN (SELECT user_id,
+				SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END) / 100.0 AS balance,
+				SUM(CASE WHEN entry_side = 'credit' AND reason IS NOT 'historical-reconciliation' THEN amount ELSE 0 END) / 100.0 AS total_deposit,
+				MAX(CASE WHEN entry_side = 'credit' AND reason IS NOT 'historical-reconciliation' THEN created_at END) AS last_deposit_at,
+				SUM(CASE WHEN entry_side = 'debit' AND reason = 'generation-charge' THEN amount ELSE 0 END) / 100.0 AS total_spend,
+				MAX(CASE WHEN entry_side = 'debit' AND reason = 'generation-charge' THEN created_at END) AS latest_spend_at
+				FROM ledger_entries GROUP BY user_id) l ON l.user_id = u.id
 			LEFT JOIN (SELECT user_id, COUNT(*) AS project_count FROM projects GROUP BY user_id) pr
 			ON pr.user_id = u.id
 			LEFT JOIN (SELECT p.user_id, COUNT(*) AS session_count FROM project_sessions s
 			JOIN projects p ON p.id = s.project_id GROUP BY p.user_id) ps ON ps.user_id = u.id
-			LEFT JOIN (SELECT user_id, COUNT(*) AS generation_count,
-			COALESCE(SUM(amount), 0) AS total_spend,
-			MAX(created_at) AS latest_spend_at FROM generations GROUP BY user_id) g
+			LEFT JOIN (SELECT user_id, COUNT(*) AS generation_count FROM generations GROUP BY user_id) g
 			ON g.user_id = u.id
 			LEFT JOIN (SELECT s.user_id, COUNT(*) AS source_count, SUM(m.size) AS source_bytes
 			FROM source_resources s JOIN media m ON m.id = s.media_id
@@ -854,6 +860,7 @@ interface UsageTotalsRow {
 	reference_count: number;
 	reference_bytes: number | null;
 	total_spend: number;
+	total_deposit: number;
 }
 
 // Platform-wide counterpart of listUserUsage: every figure follows the same
@@ -871,7 +878,8 @@ export async function getUsageTotals(db: Database): Promise<UsageTotals> {
 			(SELECT COUNT(*) FROM reference_resources) AS reference_count,
 			(SELECT SUM(m.size) FROM reference_resources r
 			JOIN media m ON m.id = r.media_id) AS reference_bytes,
-			(SELECT COALESCE(SUM(amount), 0) FROM generations) AS total_spend`
+			(SELECT COALESCE(SUM(amount), 0) / 100.0 FROM ledger_entries WHERE entry_side = 'debit' AND reason = 'generation-charge') AS total_spend,
+			(SELECT COALESCE(SUM(amount), 0) / 100.0 FROM ledger_entries WHERE entry_side = 'credit' AND reason IS NOT 'historical-reconciliation') AS total_deposit`
 	);
 	if (!row) throw new Error('usage totals query returned no row');
 	return {
@@ -883,15 +891,17 @@ export async function getUsageTotals(db: Database): Promise<UsageTotals> {
 		sourceBytes: row.source_bytes,
 		referenceCount: row.reference_count,
 		referenceBytes: row.reference_bytes,
-		totalSpend: row.total_spend
+		totalSpend: row.total_spend,
+		totalDeposit: row.total_deposit
 	};
 }
 
 interface CreditTransactionRow {
 	id: string;
+	generation_id: string | null;
 	amount: number;
 	balance_after: number;
-	kind: string;
+	kind: string | null;
 	created_at: number;
 	comfyui_upload_queue_sec: number;
 	comfyui_queue_wait_sec: number;
@@ -905,11 +915,14 @@ interface CreditTransactionRow {
 	project_id: string | null;
 }
 
-function toCreditTransaction(row: CreditTransactionRow): CreditTransaction | null {
-	const kind = generationKindForRow(row.id, row.kind);
-	if (kind === null) return null;
+function toCreditTransaction(row: CreditTransactionRow): CreditTransaction {
+	const kind =
+		row.kind === null || row.generation_id === null
+			? null
+			: generationKindForRow(row.generation_id, row.kind);
 	return {
 		id: row.id,
+		generationId: row.generation_id,
 		amount: row.amount,
 		balanceAfter: row.balance_after,
 		kind,
@@ -932,24 +945,26 @@ export async function listCreditHistory(
 	userId: string,
 	limit = 50
 ): Promise<CreditTransaction[]> {
-	// rowid as a tiebreaker: two deductions within the same millisecond would
-	// otherwise sort arbitrarily on created_at alone. LEFT JOIN (not INNER):
-	// generations.session_id is nullable at the DB level (migrations/0011), so
-	// a row without one must still appear in the history, just without a
-	// session/project to link it to.
-	const { items } = await collectValidRows(
-		(chunkLimit, rawOffset) =>
-			db.all<CreditTransactionRow>(
-				sql`SELECT g.id, g.amount, g.balance_after, g.kind, g.created_at,
-					g.comfyui_upload_queue_sec, g.comfyui_queue_wait_sec, g.comfyui_execution_sec,
-					g.comfyui_download_sec, g.comfyui_reupload_sec,
-					g.archai_render_sec, g.archai_download_sec, g.archai_reupload_sec,
-					g.session_id, ps.project_id FROM generations g
-					LEFT JOIN project_sessions ps ON ps.id = g.session_id
-					WHERE g.user_id = ${userId} ORDER BY g.created_at DESC, g.rowid DESC LIMIT ${chunkLimit} OFFSET ${rawOffset}`
-			),
-		toCreditTransaction,
-		limit
+	const rows = await db.all<CreditTransactionRow>(
+		sql`WITH entries AS (
+			SELECT id, user_id, amount, entry_side, reason, created_at,
+				SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END)
+					OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) / 100.0 AS balance_after
+			FROM ledger_entries WHERE user_id = ${userId}
+        ) SELECT CAST(l.id AS TEXT) AS id, g.id AS generation_id, l.amount / 100.0 AS amount, l.balance_after, g.kind, l.created_at,
+			COALESCE(g.comfyui_upload_queue_sec, 0) AS comfyui_upload_queue_sec,
+			COALESCE(g.comfyui_queue_wait_sec, 0) AS comfyui_queue_wait_sec,
+			COALESCE(g.comfyui_execution_sec, 0) AS comfyui_execution_sec,
+			COALESCE(g.comfyui_download_sec, 0) AS comfyui_download_sec,
+			COALESCE(g.comfyui_reupload_sec, 0) AS comfyui_reupload_sec,
+			COALESCE(g.archai_render_sec, 0) AS archai_render_sec,
+			COALESCE(g.archai_download_sec, 0) AS archai_download_sec,
+			COALESCE(g.archai_reupload_sec, 0) AS archai_reupload_sec,
+			g.session_id, ps.project_id FROM entries l
+			LEFT JOIN generations g ON g.ledger_entry_id = l.id AND g.user_id = l.user_id
+			LEFT JOIN project_sessions ps ON ps.id = g.session_id
+			WHERE l.entry_side = 'debit' AND l.reason = 'generation-charge'
+			ORDER BY l.created_at DESC, l.id DESC LIMIT ${limit}`
 	);
-	return items.slice(0, limit);
+	return rows.map(toCreditTransaction);
 }

@@ -23,10 +23,16 @@ const PROJECT_ID = '00000000-0000-4000-8000-000000000700';
 const SESSION_ID = '00000000-0000-4000-8000-000000000701';
 const GENERATION_ID = '00000000-0000-4000-8000-000000000702';
 const COMFY_GENERATION_ID = '00000000-0000-4000-8000-000000000704';
+const LEDGER_ID = '101';
+const COMFY_LEDGER_ID = '102';
 const BEFORE_URL = '/api/media/test-media/before.webp';
 const AFTER_URL = '/api/media/test-media/after.webp';
 
-async function authenticateWithExpenseHistory(page: Page, queueWaitSec = 0): Promise<void> {
+async function authenticateWithExpenseHistory(
+	page: Page,
+	queueWaitSec = 0,
+	amount = 1.5
+): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -38,8 +44,9 @@ async function authenticateWithExpenseHistory(page: Page, queueWaitSec = 0): Pro
 					updatedAt: Date.now(),
 					history: [
 						{
-							id: GENERATION_ID,
-							amount: 1.5,
+							id: LEDGER_ID,
+							generationId: GENERATION_ID,
+							amount,
 							balanceAfter: 8.5,
 							kind: 'render',
 							createdAt: Date.UTC(2026, 0, 1),
@@ -55,7 +62,8 @@ async function authenticateWithExpenseHistory(page: Page, queueWaitSec = 0): Pro
 							projectId: PROJECT_ID
 						},
 						{
-							id: COMFY_GENERATION_ID,
+							id: COMFY_LEDGER_ID,
+							generationId: COMFY_GENERATION_ID,
 							amount: 1.5,
 							balanceAfter: 7,
 							kind: 'render',
@@ -85,7 +93,7 @@ async function authenticateWithExpenseHistory(page: Page, queueWaitSec = 0): Pro
 	});
 }
 
-async function mockGenerationDetail(page: Page): Promise<void> {
+async function mockGenerationDetail(page: Page, amount = 1.5): Promise<void> {
 	await page.route(`**/api/generated-images/${GENERATION_ID}`, async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -95,7 +103,7 @@ async function mockGenerationDetail(page: Page): Promise<void> {
 				prompt: '',
 				kind: 'render',
 				createdAt: Date.UTC(2026, 0, 1),
-				amount: 1.5,
+				amount,
 				balanceAfter: 8.5,
 				image: media(2, AFTER_URL),
 				source: media(1, BEFORE_URL),
@@ -111,6 +119,28 @@ async function mockGenerationDetail(page: Page): Promise<void> {
 		});
 	});
 }
+
+test('shows a free generation with an unchanged balance and restores its result', async ({
+	page
+}) => {
+	await authenticateWithExpenseHistory(page, 0, 0);
+	await mockGenerationDetail(page, 0);
+	await page.goto('/expenses');
+
+	const entry = page.locator('button.history-entry');
+	await expect(entry.locator('.value-cell')).toHaveText('0.00 $');
+	await page.locator('.auth-trigger').click();
+	await expect(page.locator('.balance-link')).toContainText('8.50 $');
+	await page.locator('.auth-trigger').click();
+	await entry.click();
+
+	await expect(page).toHaveURL(new RegExp(`generation=${GENERATION_ID}`));
+	const compareButton = page.getByRole('button', { name: 'Сравнить до/после' });
+	await expect(compareButton).toBeEnabled();
+	await compareButton.click();
+	await expect(page.getByAltText('После', { exact: true })).toHaveAttribute('src', AFTER_URL);
+	await expect(page.getByAltText('До', { exact: true })).toHaveAttribute('src', BEFORE_URL);
+});
 
 test('groups generation durations and describes each duration column', async ({ page }) => {
 	await authenticateWithExpenseHistory(page);
@@ -219,7 +249,9 @@ test('clicking an expense row opens its generation before/after in the workspace
 	await mockGenerationDetail(page);
 	await page.goto('/expenses');
 
+	const detailRequest = page.waitForRequest(`**/api/generated-images/${GENERATION_ID}`);
 	await page.locator('button.history-entry').click();
+	await detailRequest;
 
 	await expect(page).toHaveURL(new RegExp(`project=${PROJECT_ID}`));
 	await expect(page).toHaveURL(new RegExp(`session=${SESSION_ID}`));
@@ -295,4 +327,58 @@ test('surfaces an error and stays on the expenses page when the row’s generati
 
 	await expect(page.getByRole('alert')).toBeVisible();
 	await expect(page).toHaveURL('/expenses');
+});
+
+test('retains deleted generation charges without an open action and shows a negative ledger balance', async ({
+	page
+}) => {
+	await authenticateWithExpenseHistory(page);
+	await page.route('**/auth/me', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				user: { pubkey: PK, firstName: 'Ada', lastName: 'Lovelace' },
+				credit: {
+					balance: -1.5,
+					updatedAt: Date.UTC(2026, 0, 1),
+					history: [
+						{
+							id: LEDGER_ID,
+							generationId: null,
+							amount: 3.5,
+							balanceAfter: -1.5,
+							kind: null,
+							createdAt: Date.UTC(2026, 0, 1),
+							comfyuiUploadQueueSec: 0,
+							comfyuiQueueWaitSec: 0,
+							comfyuiExecutionSec: 0,
+							comfyuiDownloadSec: 0,
+							comfyuiReuploadSec: 0,
+							archaiRenderSec: 0,
+							archaiDownloadSec: 0,
+							archaiReuploadSec: 0,
+							sessionId: null,
+							projectId: null
+						}
+					]
+				}
+			})
+		});
+	});
+	await page.goto('/expenses');
+
+	const entry = page.locator('.history-entry');
+	await expect(entry).toHaveCount(1);
+	await expect(entry).toContainText(ru['expenses.generationCharge']);
+	await expect(entry.locator('.value-cell')).toHaveText('3.50 $');
+	await expect(entry.locator('.duration-values .cell')).toHaveText(['—', '—', '—']);
+	await expect(page.locator('button.history-entry')).toHaveCount(0);
+	await page.locator('.auth-trigger').click();
+	await expect(page.locator('.balance-link')).toContainText('-1.50 $');
+
+	const languageSwitcher = page.getByRole('group', { name: ru['language.switcher.label'] });
+	await languageSwitcher.getByRole('button', { name: 'ru' }).click();
+	await languageSwitcher.getByRole('button', { name: ru['language.en'] }).click();
+	await expect(entry).toContainText('Generation charge');
 });

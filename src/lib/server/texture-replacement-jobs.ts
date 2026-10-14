@@ -15,6 +15,7 @@
 import { sql } from 'drizzle-orm';
 import type { RequestFormSnapshot } from '$lib/api/contract';
 import type { Database } from '$lib/server/db';
+import { ledgerAmountSql, ledgerBalanceSql } from '$lib/server/ledger';
 
 export type TextureReplacementJobStatus = 'processing' | 'completed' | 'failed';
 
@@ -153,28 +154,29 @@ export async function completeTextureReplacementJob(
 ): Promise<TextureReplacementJob> {
 	const [snapshotRows] = await db.batch([
 		db.all<TextureReplacementDeductionSnapshotRow>(
-			sql`SELECT c.balance AS available_balance, j.cost FROM credits c
+			sql`SELECT ${ledgerBalanceSql(userId)} AS available_balance, ${ledgerAmountSql(sql`j.cost`)} / 100.0 AS cost FROM credits c
 				JOIN texture_replacement_jobs j ON j.user_id = c.user_id
 				WHERE j.id = ${id} AND j.user_id = ${userId} AND j.status = 'processing'`
 		),
 		db.run(
-			sql`UPDATE credits SET balance = MAX(balance -
-				(SELECT cost FROM texture_replacement_jobs WHERE id = ${id} AND user_id = ${userId} AND status = 'processing'), 0),
-				updated_at = ${completedAt} WHERE user_id = ${userId} AND EXISTS
-				(SELECT 1 FROM texture_replacement_jobs WHERE id = ${id} AND user_id = ${userId} AND status = 'processing')`
-		),
-		db.run(
-			sql`INSERT INTO generations
-				(id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id,
-				comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot, reference_media_id)
-				SELECT j.id, j.user_id, ${outputMediaId}, j.scene_media_id, j.replacement_surface, 'texture-replacement', j.cost, c.balance, ${completedAt}, j.session_id,
-				j.upload_queue_sec, ${queueWaitSec}, ${executionSec}, ${downloadSec}, ${reuploadSec}, j.form_snapshot, j.reference_media_id
+			sql`INSERT INTO ledger_entries (user_id, amount, entry_side, reason, created_at)
+				SELECT j.user_id, ${ledgerAmountSql(sql`j.cost`)}, 'debit', 'generation-charge', ${completedAt}
 				FROM texture_replacement_jobs j JOIN credits c ON c.user_id = j.user_id
 				WHERE j.id = ${id} AND j.user_id = ${userId} AND j.status = 'processing'`
 		),
 		db.run(
+			sql`INSERT INTO generations
+				(id, user_id, result_media_id, source_media_id, prompt, kind, ledger_entry_id, created_at, session_id,
+				comfyui_upload_queue_sec, comfyui_queue_wait_sec, comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot, reference_media_id)
+				SELECT j.id, j.user_id, ${outputMediaId}, j.scene_media_id, j.replacement_surface, 'texture-replacement', l.id, ${completedAt}, j.session_id,
+				j.upload_queue_sec, ${queueWaitSec}, ${executionSec}, ${downloadSec}, ${reuploadSec}, j.form_snapshot, j.reference_media_id
+				FROM texture_replacement_jobs j JOIN ledger_entries l ON l.id = last_insert_rowid() AND changes() = 1 AND l.user_id = j.user_id AND l.entry_side = 'debit'
+				WHERE j.id = ${id} AND j.user_id = ${userId} AND j.status = 'processing'`
+		),
+		db.run(
 			sql`UPDATE texture_replacement_jobs SET status = 'completed', output_media_id = ${outputMediaId},
-				balance_after = (SELECT balance FROM credits WHERE user_id = ${userId}), updated_at = ${completedAt}, completed_at = ${completedAt},
+				balance_after = ${ledgerBalanceSql(userId)},
+				updated_at = ${completedAt}, completed_at = ${completedAt},
 				queue_wait_sec = ${queueWaitSec}, execution_sec = ${executionSec}, download_sec = ${downloadSec}, reupload_sec = ${reuploadSec}
 				WHERE id = ${id} AND user_id = ${userId} AND status = 'processing'
 				AND EXISTS (SELECT 1 FROM credits WHERE user_id = ${userId})`

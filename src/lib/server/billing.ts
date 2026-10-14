@@ -26,6 +26,7 @@
 import { sql } from 'drizzle-orm';
 import type { Balance } from '$lib/api/contract';
 import type { Database } from '$lib/server/db';
+import { ledgerBalanceSql } from '$lib/server/ledger';
 
 export async function getUserIdByPubkey(db: Database, pubkey: string): Promise<string | null> {
 	const row = await db.get<{ id: string }>(sql`SELECT id FROM users WHERE pubkey = ${pubkey}`);
@@ -59,13 +60,6 @@ export async function recordBalance(
 	return toBalance(row);
 }
 
-// Generation access control (security requirement, not a billing nicety): by
-// default nobody can render/edit — an account can only generate once an admin
-// manually inserts a `credits` row for it (via `wrangler d1 execute`, keyed by
-// the internal user id — see the workflow note in migrations/0005). The
-// `enabled` flag lets the admin revoke access without losing the row's
-// balance/history; `balance` is whatever limit the admin chose for that
-// account, not a fixed constant.
 export interface CreditAccess extends Balance {
 	enabled: boolean;
 }
@@ -84,7 +78,9 @@ function toCreditAccess(row: CreditRow): CreditAccess {
 // that as "not allowed to generate", not "unlimited".
 export async function getCredit(db: Database, userId: string): Promise<CreditAccess | null> {
 	const row = await db.get<CreditRow>(
-		sql`SELECT balance, updated_at, enabled FROM credits WHERE user_id = ${userId}`
+		sql`SELECT ${ledgerBalanceSql(userId)} AS balance,
+			COALESCE((SELECT created_at FROM ledger_entries WHERE user_id = ${userId} ORDER BY id DESC LIMIT 1), 0) AS updated_at,
+			enabled FROM credits WHERE user_id = ${userId}`
 	);
 	return row ? toCreditAccess(row) : null;
 }

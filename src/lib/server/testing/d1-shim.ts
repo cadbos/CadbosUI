@@ -38,6 +38,7 @@ interface SyncStatement {
 }
 
 interface TestBinding extends D1Database {
+	close: () => void;
 	prepareSync: (query: string) => SyncStatement;
 }
 
@@ -94,6 +95,7 @@ export function makeD1(): D1Database {
 		args
 	});
 	return {
+		close: () => db.close(),
 		prepare: (sql: string) => stmt(sql),
 		prepareSync: (query: string) => syncStmt(query),
 		// Mirrors D1's batch(): every statement commits or rolls back together.
@@ -118,4 +120,8 @@ export function makeD1(): D1Database {
 export function makeDb(): TestDatabase {
 	const binding = makeD1() as TestBinding;
 	return Object.assign(createDb(binding), { prepare: binding.prepareSync });
+}
+
+export function closeD1(binding: D1Database): void {
+	(binding as TestBinding).close();
 }

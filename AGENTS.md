@@ -33,6 +33,12 @@ SvelteKit.
   logs must stay sanitized and never include secrets or private user data.
 - **Single source of truth state.** One `.svelte.ts` store owns the data; views are
   projections. The final prompt is `$derived`, never imperatively synced.
+- **Ledger migration policy.** Migration 0024 preserves zero-cost generations as
+  linked, immutable zero-cent debits. Ledger credits and debits accept nonnegative
+  integer cents; exact zero stays zero, while positive sub-cent generation costs
+  retain the one-cent minimum. Never delete history or substitute charges to
+  satisfy validation. Follow the
+  [README's ledger release procedure](README.md#ledger-release).
 - **License headers.** New or modified Cadbos source files must carry the
   appropriate header from [docs/license-headers](docs/license-headers). Do not add
   headers to documentation, generated files, lockfiles, vendored files, binary

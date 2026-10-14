@@ -27,6 +27,7 @@ import {
 	TEST_S3_BUCKET,
 	TEST_S3_ENV
 } from '$lib/server/testing/generation-fixtures';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 import { seedForeignSession } from '$lib/server/testing/session-fixtures';
 import { uploadImageBytes } from '$lib/server/uploads';
 
@@ -58,7 +59,8 @@ interface SavedRow {
 	result_filename: string;
 	kind: string;
 	amount: number;
-	balance_after: number;
+	entry_side: string;
+	reason: string;
 	session_id: string;
 	form_snapshot: string;
 }
@@ -81,11 +83,7 @@ async function seedUser(db: D1Database, balance?: number): Promise<void> {
 		)
 		.bind(SESSION_ID, 'photo-project', 'Photo session', now, now)
 		.run();
-	if (balance !== undefined)
-		await db
-			.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, ?)')
-			.bind(USER_ID, balance, now, 0)
-			.run();
+	if (balance !== undefined) await seedCredit(createDb(db), USER_ID, balance, 0, now);
 	await seedManagedMedia(createDb(db));
 }
 
@@ -276,11 +274,12 @@ describe('POST /api/photo-processing', () => {
 		expect(uploadImageBytes).not.toHaveBeenCalled();
 	});
 
-	it.each([12.5, 0, undefined])(
+	it.each([12.5, 0, -1, undefined])(
 		'saves source, result and settings for free with credit balance %s',
 		async (balance) => {
 			const db = makeD1();
 			await seedUser(db, balance);
+			const ledgerBefore = await db.prepare('SELECT * FROM ledger_entries ORDER BY id').all();
 			const response = await call(db);
 			expect(response.status).toBe(200);
 			const result = (await response.json()) as RenderResponse;
@@ -296,7 +295,8 @@ describe('POST /api/photo-processing', () => {
 			const row = await db
 				.prepare(
 					'SELECT g.id, g.user_id, source.filename AS source_filename, result.filename AS result_filename, ' +
-						'g.kind, g.amount, g.balance_after, g.session_id, g.form_snapshot FROM generations g ' +
+						'g.kind, l.amount, l.entry_side, l.reason, g.session_id, g.form_snapshot FROM generations g ' +
+						'JOIN ledger_entries l ON l.id = g.ledger_entry_id AND l.user_id = g.user_id ' +
 						'JOIN media source ON source.id = g.source_media_id ' +
 						'JOIN media result ON result.id = g.result_media_id WHERE g.id = ?'
 				)
@@ -309,15 +309,27 @@ describe('POST /api/photo-processing', () => {
 				result_filename: RESULT_FILENAME,
 				kind: 'photo-processing',
 				amount: 0,
-				balance_after: balance ?? 0,
+				entry_side: 'debit',
+				reason: 'generation-charge',
 				session_id: SESSION_ID
 			});
 			expect(JSON.parse(row?.form_snapshot ?? 'null')).toEqual(SNAPSHOT);
 			const credits = await db
-				.prepare('SELECT balance, enabled FROM credits WHERE user_id = ?')
+				.prepare('SELECT enabled FROM credits WHERE user_id = ?')
 				.bind(USER_ID)
-				.first<{ balance: number; enabled: number }>();
-			expect(credits).toEqual(balance === undefined ? null : { balance, enabled: 0 });
+				.first<{ enabled: number }>();
+			expect(credits).toEqual(balance === undefined ? null : { enabled: 0 });
+			const { results: ledgerAfter } = await db
+				.prepare('SELECT * FROM ledger_entries ORDER BY id')
+				.all();
+			expect(ledgerAfter).toHaveLength(ledgerBefore.results.length + 1);
+			expect(ledgerAfter.slice(0, -1)).toEqual(ledgerBefore.results);
+			expect(ledgerAfter.at(-1)).toMatchObject({
+				user_id: USER_ID,
+				amount: 0,
+				entry_side: 'debit',
+				reason: 'generation-charge'
+			});
 			expect(uploadImageBytes).toHaveBeenCalledTimes(1);
 			const storedBytes = vi.mocked(uploadImageBytes).mock.calls[0][2];
 			expect(Buffer.from(storedBytes)).toEqual(PNG_BYTES);
@@ -327,6 +339,7 @@ describe('POST /api/photo-processing', () => {
 	it('surfaces a storage failure and does not write a successful history entry', async () => {
 		const db = makeD1();
 		await seedUser(db, 12);
+		const ledgerBefore = await db.prepare('SELECT * FROM ledger_entries ORDER BY id').all();
 		vi.mocked(uploadImageBytes).mockRejectedValueOnce(new Error('private upload failure'));
 		const logger = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		try {
@@ -337,6 +350,9 @@ describe('POST /api/photo-processing', () => {
 			expect(await db.prepare('SELECT COUNT(*) AS count FROM generations').first()).toEqual({
 				count: 0
 			});
+			expect(await db.prepare('SELECT * FROM ledger_entries ORDER BY id').all()).toEqual(
+				ledgerBefore
+			);
 		} finally {
 			logger.mockRestore();
 		}

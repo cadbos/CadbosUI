@@ -95,100 +95,104 @@ async function uploadInputs(page: Page, sceneBuffer?: Buffer): Promise<void> {
 	]);
 }
 
-test('submits two uploaded images, polls the job, and promotes the completed result', async ({
-	page
-}) => {
-	await authenticate(page);
-	await page.goto('/edit?tool=object-replacement');
-	await uploadInputs(page);
+for (const balance of [18, -1]) {
+	test(`submits two uploaded images, polls the job, and promotes the completed result (balance ${balance})`, async ({
+		page
+	}) => {
+		await authenticate(page);
+		await page.goto('/edit?tool=object-replacement');
+		await uploadInputs(page);
 
-	let submittedBody: unknown;
-	let polls = 0;
-	await page.route('**/api/object-replacement', async (route) => {
-		submittedBody = route.request().postDataJSON();
-		await route.fulfill({
-			status: 202,
-			contentType: 'application/json',
-			headers: { location: `/api/object-replacement/${JOB_ID}` },
-			body: JSON.stringify({ id: JOB_ID, status: 'processing' })
+		let submittedBody: unknown;
+		let polls = 0;
+		await page.route('**/api/object-replacement', async (route) => {
+			submittedBody = route.request().postDataJSON();
+			await route.fulfill({
+				status: 202,
+				contentType: 'application/json',
+				headers: { location: `/api/object-replacement/${JOB_ID}` },
+				body: JSON.stringify({ id: JOB_ID, status: 'processing' })
+			});
 		});
-	});
-	await page.route(`**/api/object-replacement/${JOB_ID}`, async (route) => {
-		polls += 1;
-		if (polls === 1) {
+		await page.route(`**/api/object-replacement/${JOB_ID}`, async (route) => {
+			polls += 1;
+			if (polls === 1) {
+				await route.fulfill({
+					status: 200,
+					contentType: 'application/json',
+					headers: { 'retry-after': '0' },
+					body: JSON.stringify({ id: JOB_ID, status: 'processing' })
+				});
+				return;
+			}
 			await route.fulfill({
 				status: 200,
 				contentType: 'application/json',
-				headers: { 'retry-after': '0' },
-				body: JSON.stringify({ id: JOB_ID, status: 'processing' })
+				body: JSON.stringify({
+					id: JOB_ID,
+					status: 'completed',
+					output: media(3, '/api/media/test-media/replaced.webp'),
+					cost: 2,
+					balance
+				})
 			});
-			return;
-		}
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				id: JOB_ID,
-				status: 'completed',
-				output: media(3, '/api/media/test-media/replaced.webp'),
-				cost: 2,
-				balance: 18
-			})
 		});
+
+		const panel = page.locator('#edit-tool-panel-object-replacement');
+		await panel.getByLabel(/Точно опишите существующий объект/).fill('  серый диван у окна  ');
+		await panel.getByRole('button', { name: 'Заменить объект' }).click();
+
+		await expect(page).toHaveURL(new RegExp(`job=${JOB_ID}`));
+		await expect(panel.locator('.job-status')).toContainText('Заменяем объект');
+		await expect(page.locator('.result:visible img.output')).toHaveAttribute(
+			'src',
+			'/api/media/test-media/replaced.webp',
+			{ timeout: 10_000 }
+		);
+		await expect(panel.locator('.job-success')).toHaveText('Замена объекта завершена.');
+		await expect(page.locator('.result:visible').getByText('Стоимость: 2.00')).toBeVisible();
+		await expect(
+			page.locator('.result:visible').getByText(`Баланс: ${balance.toFixed(2)}`)
+		).toBeVisible();
+		await expect.poll(() => polls).toBe(2);
+		expect(submittedBody).toEqual({
+			imageKey: mediaKey(1),
+			referenceImageKey: mediaKey(2),
+			replacementObject: 'серый диван у окна',
+			sessionId: E2E_SESSION_ID,
+			formSnapshot: expect.any(Object)
+		});
+
+		await page.getByRole('tab', { name: 'Редактирование' }).click();
+		// Compare falls back to the originally uploaded photo as "before" even
+		// without an edit chain, so it's enabled as soon as a result exists.
+		await expect(page.getByRole('button', { name: 'Сравнить до/после' })).toBeEnabled();
+		await page.getByRole('tab', { name: /Замена объекта/ }).click();
+		await expect(page).toHaveURL(new RegExp(`job=${JOB_ID}`));
+
+		// A completed job must not lock the form (the reference-image "change"
+		// control included) — the user should be free to tweak the reference or
+		// the description and submit another replacement right away instead of
+		// being forced through "Новая замена" first.
+		await expect(panel.getByRole('button', { name: 'Выбрать референс объекта' })).toBeEnabled();
+
+		await panel.getByRole('button', { name: 'Новая замена' }).click();
+		await expect(page).not.toHaveURL(/job=/);
+		// "Новая замена" clears job tracking only — the settings that produced the
+		// current result (reference image, description, scale) stay exactly as
+		// they are, so the user can adjust and resubmit instead of starting over.
+		await expect(panel.getByLabel(/Точно опишите существующий объект/)).toHaveValue(
+			'  серый диван у окна  '
+		);
+		await expect(panel.getByRole('button', { name: 'Выбрать референс объекта' })).toBeEnabled();
+
+		// Choosing another reference drops the current one and returns to the
+		// reference picker, focused, ready for a file, a drop or a link.
+		await panel.getByRole('button', { name: 'Выбрать референс объекта' }).click();
+		await expect(panel.getByRole('button', { name: 'Выбрать референс объекта' })).toHaveCount(0);
+		await expect(panel.getByRole('button', { name: /^Референс нового объекта/ })).toBeFocused();
 	});
-
-	const panel = page.locator('#edit-tool-panel-object-replacement');
-	await panel.getByLabel(/Точно опишите существующий объект/).fill('  серый диван у окна  ');
-	await panel.getByRole('button', { name: 'Заменить объект' }).click();
-
-	await expect(page).toHaveURL(new RegExp(`job=${JOB_ID}`));
-	await expect(panel.locator('.job-status')).toContainText('Заменяем объект');
-	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
-		'src',
-		'/api/media/test-media/replaced.webp',
-		{ timeout: 10_000 }
-	);
-	await expect(panel.locator('.job-success')).toHaveText('Замена объекта завершена.');
-	await expect(page.locator('.result:visible').getByText('Стоимость: 2.00')).toBeVisible();
-	await expect(page.locator('.result:visible').getByText('Баланс: 18.00')).toBeVisible();
-	await expect.poll(() => polls).toBe(2);
-	expect(submittedBody).toEqual({
-		imageKey: mediaKey(1),
-		referenceImageKey: mediaKey(2),
-		replacementObject: 'серый диван у окна',
-		sessionId: E2E_SESSION_ID,
-		formSnapshot: expect.any(Object)
-	});
-
-	await page.getByRole('tab', { name: 'Редактирование' }).click();
-	// Compare falls back to the originally uploaded photo as "before" even
-	// without an edit chain, so it's enabled as soon as a result exists.
-	await expect(page.getByRole('button', { name: 'Сравнить до/после' })).toBeEnabled();
-	await page.getByRole('tab', { name: /Замена объекта/ }).click();
-	await expect(page).toHaveURL(new RegExp(`job=${JOB_ID}`));
-
-	// A completed job must not lock the form (the reference-image "change"
-	// control included) — the user should be free to tweak the reference or
-	// the description and submit another replacement right away instead of
-	// being forced through "Новая замена" first.
-	await expect(panel.getByRole('button', { name: 'Выбрать референс объекта' })).toBeEnabled();
-
-	await panel.getByRole('button', { name: 'Новая замена' }).click();
-	await expect(page).not.toHaveURL(/job=/);
-	// "Новая замена" clears job tracking only — the settings that produced the
-	// current result (reference image, description, scale) stay exactly as
-	// they are, so the user can adjust and resubmit instead of starting over.
-	await expect(panel.getByLabel(/Точно опишите существующий объект/)).toHaveValue(
-		'  серый диван у окна  '
-	);
-	await expect(panel.getByRole('button', { name: 'Выбрать референс объекта' })).toBeEnabled();
-
-	// Choosing another reference drops the current one and returns to the
-	// reference picker, focused, ready for a file, a drop or a link.
-	await panel.getByRole('button', { name: 'Выбрать референс объекта' }).click();
-	await expect(panel.getByRole('button', { name: 'Выбрать референс объекта' })).toHaveCount(0);
-	await expect(panel.getByRole('button', { name: /^Референс нового объекта/ })).toBeFocused();
-});
+}
 
 test('submits an adjusted area and clears it independently', async ({ page }) => {
 	await authenticate(page);

@@ -280,7 +280,8 @@ it('loads approved-account credit after sign-in', async () => {
 		updatedAt: Date.now(),
 		history: [
 			{
-				id: 'txn-1',
+				id: '101',
+				generationId: '00000000-0000-4000-8000-000000000001',
 				amount: 0.06,
 				balanceAfter: 4.9399999999999995,
 				kind: 'object-replacement' as const,
@@ -321,7 +322,8 @@ it('restores a texture-replacement entry in credit state', async () => {
 					updatedAt: Date.now(),
 					history: [
 						{
-							id: 'txn-2',
+							id: '102',
+							generationId: '00000000-0000-4000-8000-000000000002',
 							amount: 1.2,
 							balanceAfter: 10,
 							kind: 'texture-replacement',

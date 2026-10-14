@@ -422,6 +422,7 @@ export interface Dictionary {
 	'expenses.column.action': string;
 	'expenses.duration.seconds': string;
 	'expenses.emptyValue': string;
+	'expenses.generationCharge': string;
 	'health.warning': string;
 	'health.statusPage': string;
 	'status.title': string;

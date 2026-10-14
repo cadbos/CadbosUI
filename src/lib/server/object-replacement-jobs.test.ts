@@ -24,6 +24,7 @@ import {
 } from '$lib/server/object-replacement-jobs';
 import { makeDb } from '$lib/server/testing/d1-shim';
 import { seedManagedMedia } from '$lib/server/testing/generation-fixtures';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 
 const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	promptFragments: [],
@@ -51,9 +52,7 @@ const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 
 async function seedAccount(db: Database, balance = 12): Promise<void> {
 	await db.run(sql`INSERT INTO users (id, pubkey, created_at) VALUES ('user-1', 'pubkey-1', 1)`);
-	await db.run(
-		sql`INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES ('user-1', ${balance}, 1, 1)`
-	);
+	await seedCredit(db, 'user-1', balance);
 	await db.run(
 		sql`INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES ('project-1', 'user-1', 'Test project', 1, 1)`
 	);
@@ -117,8 +116,8 @@ describe('object replacement jobs', () => {
 
 		expect(job).toMatchObject({ status: 'completed', balanceAfter: 10, cost: 2 });
 		const generation = await db.get<{ form_snapshot: string | null } & Record<string, unknown>>(
-			sql`SELECT id, kind, amount, balance_after, comfyui_upload_queue_sec, comfyui_queue_wait_sec,
-				comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot FROM generations WHERE id = 'job-1'`
+			sql`SELECT g.id, g.kind, l.amount / 100.0 AS amount, comfyui_upload_queue_sec, comfyui_queue_wait_sec,
+				comfyui_execution_sec, comfyui_download_sec, comfyui_reupload_sec, form_snapshot FROM generations g JOIN ledger_entries l ON l.id = g.ledger_entry_id WHERE g.id = 'job-1'`
 		);
 		expect(JSON.parse(generation!.form_snapshot!)).toEqual(TEST_FORM_SNAPSHOT);
 		const generationWithoutSnapshot = { ...generation! };
@@ -127,7 +126,6 @@ describe('object replacement jobs', () => {
 			id: 'job-1',
 			kind: 'object-replacement',
 			amount: 2,
-			balance_after: 10,
 			comfyui_upload_queue_sec: 3,
 			comfyui_queue_wait_sec: 5,
 			comfyui_execution_sec: 10,
@@ -177,16 +175,16 @@ describe('object replacement jobs', () => {
 		expect(first.balanceAfter).toBe(10);
 		expect(second.balanceAfter).toBe(10);
 		const credit = await db.get<{ balance: number }>(
-			sql`SELECT balance FROM credits WHERE user_id = 'user-1'`
+			sql`SELECT SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END) / 100.0 AS balance FROM ledger_entries WHERE user_id = 'user-1'`
 		);
 		const count = await db.get<{ count: number }>(
-			sql`SELECT COUNT(*) AS count FROM generations WHERE id = 'job-1'`
+			sql`SELECT COUNT(*) AS count FROM generations g JOIN ledger_entries l ON l.id = g.ledger_entry_id WHERE g.id = 'job-1'`
 		);
 		expect(credit?.balance).toBe(10);
 		expect(count?.count).toBe(1);
 	});
 
-	it('clamps concurrent completion spending at zero and warns once', async () => {
+	it('records full concurrent charges below zero and warns once', async () => {
 		const db = makeDb();
 		await seedAccount(db, 3);
 		await seedJob(db, 'job-1');
@@ -201,17 +199,17 @@ describe('object replacement jobs', () => {
 		]);
 		await completeObjectReplacementJob(db, 'user-1', 'job-2', secondOutputMediaId, 22, 7, 12, 4, 3);
 
-		expect(jobs.map((job) => job.balanceAfter).sort()).toEqual([0, 1]);
+		expect(jobs.map((job) => job.balanceAfter).sort()).toEqual([-1, 1]);
 		const credit = await db.get<{ balance: number }>(
-			sql`SELECT balance FROM credits WHERE user_id = 'user-1'`
+			sql`SELECT SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END) / 100.0 AS balance FROM ledger_entries WHERE user_id = 'user-1'`
 		);
-		const generations = await db.all<{ id: string; amount: number; balance_after: number }>(
-			sql`SELECT id, amount, balance_after FROM generations WHERE user_id = 'user-1' ORDER BY id`
+		const generations = await db.all<{ id: string; amount: number }>(
+			sql`SELECT g.id, l.amount / 100.0 AS amount FROM generations g JOIN ledger_entries l ON l.id = g.ledger_entry_id WHERE g.user_id = 'user-1' ORDER BY g.id`
 		);
-		expect(credit?.balance).toBe(0);
+		expect(credit?.balance).toBe(-1);
 		expect(generations).toEqual([
-			{ id: 'job-1', amount: 2, balance_after: 1 },
-			{ id: 'job-2', amount: 2, balance_after: 0 }
+			{ id: 'job-1', amount: 2 },
+			{ id: 'job-2', amount: 2 }
 		]);
 		expect(warning).toHaveBeenCalledOnce();
 		expect(warning).toHaveBeenCalledWith(
@@ -241,7 +239,7 @@ describe('object replacement jobs', () => {
 			errorCode: 'object_replacement_failed'
 		});
 		const credit = await db.get<{ balance: number }>(
-			sql`SELECT balance FROM credits WHERE user_id = 'user-1'`
+			sql`SELECT SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END) / 100.0 AS balance FROM ledger_entries WHERE user_id = 'user-1'`
 		);
 		expect(credit?.balance).toBe(12);
 		const jobRow = await db.get<{ queue_wait_sec: number; execution_sec: number }>(

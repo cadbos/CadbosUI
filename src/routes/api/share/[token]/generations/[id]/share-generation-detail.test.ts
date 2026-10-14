@@ -26,8 +26,9 @@ import {
 
 const { GET: getSharedGenerationDetail } = await import('./+server');
 
-function seedUser(db: D1Database, id: string, pubkey: string): void {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+async function seedUser(db: D1Database, id: string, pubkey: string): Promise<void> {
+	await db
+		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
 		.run();
 }
@@ -50,7 +51,7 @@ function call(
 describe('GET /api/share/[token]/generations/[id]', () => {
 	it('returns the text settings for a generation in an actively-shared project — no auth required', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const project = await createProject(createDb(db), 'user-1', 'Living room');
 		const session = await createSession(createDb(db), 'user-1', project.id, 'Main thread');
 		await seedGenerationFixture(createDb(db), {
@@ -80,7 +81,7 @@ describe('GET /api/share/[token]/generations/[id]', () => {
 
 	it('returns 404 for an unknown generation id', async () => {
 		const db = makeD1();
-		seedUser(db, 'user-1', 'pubkey-1');
+		await seedUser(db, 'user-1', 'pubkey-1');
 		const project = await createProject(createDb(db), 'user-1', 'Living room');
 		const token = await issueShareToken(createDb(db), 'user-1', project.id);
 

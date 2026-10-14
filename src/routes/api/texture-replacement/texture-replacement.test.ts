@@ -17,6 +17,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { mediaKey } from '$lib/server/media';
 import { createDb } from '$lib/server/db';
+import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 import { makeD1 } from '$lib/server/testing/d1-shim';
 import {
 	seedManagedMedia,
@@ -93,24 +94,25 @@ async function seedUser(
 	pubkey = 'pubkey-1',
 	balance: number | null = 12
 ): Promise<void> {
-	db.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
+	await db
+		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
 		.bind(id, pubkey, Date.now())
 		.run();
 	if (balance !== null) {
-		db.prepare('INSERT INTO credits (user_id, balance, updated_at, enabled) VALUES (?, ?, ?, 1)')
-			.bind(id, balance, Date.now())
-			.run();
+		await seedCredit(createDb(db), id, balance);
 	}
 	const now = Date.now();
 	const projectId = `project-${id}`;
-	db.prepare(
-		'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
+	await db
+		.prepare(
+			'INSERT INTO projects (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+		)
 		.bind(projectId, id, 'Test project', now, now)
 		.run();
-	db.prepare(
-		'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-	)
+	await db
+		.prepare(
+			'INSERT INTO project_sessions (id, project_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+		)
 		.bind(sessionIdForPubkey(pubkey), projectId, 'Test session', now, now)
 		.run();
 	const drizzleDb = createDb(db);
@@ -230,7 +232,7 @@ describe('POST /api/texture-replacement', () => {
 		expect(jobs.create).not.toHaveBeenCalled();
 		const generation = await db
 			.prepare(
-				'SELECT g.id, g.kind, g.source_media_id, g.amount FROM generations g WHERE g.user_id = ?'
+				'SELECT g.id, g.kind, g.source_media_id, l.amount / 100.0 AS amount FROM generations g JOIN ledger_entries l ON l.id = g.ledger_entry_id WHERE g.user_id = ?'
 			)
 			.bind('user-1')
 			.first<{ id: string; kind: string; source_media_id: number; amount: number }>();
