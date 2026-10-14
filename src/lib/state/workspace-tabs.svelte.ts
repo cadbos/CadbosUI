@@ -52,10 +52,10 @@ function showGeneration(
 		cost: generation.amount,
 		balance: generation.balanceAfter,
 		...(formSnapshot ? { formSnapshot } : {}),
-		...(formSnapshot?.editOperationType === 'photo-processing'
+		...(formSnapshot?.editOperationType === 'photo-processing' ||
+		formSnapshot?.editOperationType === 'upscale'
 			? {
-					sourceMode: 'photoProcessing' as const,
-					editOp: { type: 'photo-processing' as const, instruction: '' }
+					editOp: { type: formSnapshot.editOperationType, instruction: '' }
 				}
 			: {}),
 		ts: generation.createdAt

@@ -65,7 +65,7 @@ export interface EditOperation {
 	instruction: string;
 }
 
-export const RENDER_SOURCE_MODES = ['render', 'styleTransfer', 'photoProcessing'] as const;
+export const RENDER_SOURCE_MODES = ['render', 'styleTransfer'] as const;
 export type RenderSourceMode = (typeof RENDER_SOURCE_MODES)[number];
 
 // RequestFormSnapshot itself lives in $lib/api/contract.ts (re-exported

@@ -2499,7 +2499,6 @@ describe('photo adjustment model', () => {
 			balance: 10,
 			ts: 1,
 			editOp: { type: 'photo-processing', instruction: '' },
-			sourceMode: 'photoProcessing',
 			formSnapshot: request.captureFormSnapshot('photo-processing')
 		});
 		request.setPhotoAdjustment('exposure', 40);
@@ -2511,7 +2510,6 @@ describe('photo adjustment model', () => {
 			balance: 10,
 			ts: 2,
 			editOp: { type: 'photo-processing', instruction: '' },
-			sourceMode: 'photoProcessing',
 			formSnapshot: request.captureFormSnapshot('photo-processing')
 		});
 		const copy = new RequestState();

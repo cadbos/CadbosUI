@@ -25,7 +25,7 @@ before the Change Date. See LICENSE for complete terms.
 		Paintbrush,
 		Pencil,
 		Replace,
-		SlidersHorizontal,
+		Aperture,
 		Sparkles,
 		Trash2,
 		X
@@ -79,7 +79,7 @@ before the Change Date. See LICENSE for complete terms.
 		edit: Pencil,
 		'style-transfer': Palette,
 		upscale: Hd,
-		'photo-processing': SlidersHorizontal,
+		'photo-processing': Aperture,
 		'object-replacement': Replace,
 		'texture-replacement': PaintRoller,
 		'light-settings': Lightbulb,

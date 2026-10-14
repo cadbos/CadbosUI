@@ -342,6 +342,7 @@ const FIELD_RULES: Record<ModeHintField, FieldRule> = {
 };
 
 const TOOL_LABELS: Record<ToolId, TranslationKey> = {
+	'photo-processing': 'mode.photoProcessing',
 	freeform: 'edit.tool.freeform',
 	'add-object': 'edit.tool.addObject',
 	'remove-object': 'edit.tool.removeObject',

@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Lightbulb, Paintbrush, PaintRoller, Pencil, Replace } from '@lucide/svelte';
+	import { Aperture, Lightbulb, Paintbrush, PaintRoller, Pencil, Replace } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -41,10 +41,13 @@ before the Change Date. See LICENSE for complete terms.
 	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import EditRemoveObjectTool from '$lib/components/EditRemoveObjectTool.svelte';
 	import LightSettingsPanel from '$lib/components/LightSettingsPanel.svelte';
+	import PhotoProcessingPanel from '$lib/components/PhotoProcessingPanel.svelte';
 	import ModeHint from '$lib/components/ModeHint.svelte';
 	import ObjectReplacementPanel from '$lib/components/ObjectReplacementPanel.svelte';
 	import RepaintPanel from '$lib/components/RepaintPanel.svelte';
 	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
+
+	let { active }: { active: boolean } = $props();
 
 	const MAX_TRANSIENT_FAILURES = 5;
 	const DEFAULT_POLL_DELAY_MS = 2_000;
@@ -107,7 +110,8 @@ before the Change Date. See LICENSE for complete terms.
 		{ id: 'object-replacement', label: 'mode.objectReplacement', Icon: Replace },
 		{ id: 'texture-replacement', label: 'mode.textureReplacement', Icon: PaintRoller },
 		{ id: 'repaint', label: 'edit.tool.repaint', Icon: Paintbrush },
-		{ id: 'light-settings', label: 'edit.tool.lightSettings', Icon: Lightbulb }
+		{ id: 'light-settings', label: 'edit.tool.lightSettings', Icon: Lightbulb },
+		{ id: 'photo-processing', label: 'mode.photoProcessing', Icon: Aperture }
 	];
 
 	// Only ever rendered in edit mode (see Workspace.svelte), so the URL's
@@ -132,7 +136,8 @@ before the Change Date. See LICENSE for complete terms.
 		activeTool === 'object-replacement' ||
 			activeTool === 'texture-replacement' ||
 			activeTool === 'light-settings' ||
-			activeTool === 'repaint'
+			activeTool === 'repaint' ||
+			activeTool === 'photo-processing'
 	);
 
 	$effect(() => {
@@ -478,7 +483,9 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <section class="edit-panel">
-	<p class="panel-description">{t('edit.panelDescription')}</p>
+	{#if activeTool !== 'photo-processing'}
+		<p class="panel-description">{t('edit.panelDescription')}</p>
+	{/if}
 
 	<div class="edit-body">
 		<div
@@ -501,7 +508,7 @@ before the Change Date. See LICENSE for complete terms.
 					aria-selected={selected}
 					aria-controls={`edit-tool-panel-${tool.id}`}
 					tabindex={index === railIndex ? 0 : -1}
-					class:active={selected}
+					class={{ active: selected }}
 					aria-label={t(tool.label)}
 					title={t(tool.label)}
 					onclick={() => toolTabs.activate(index)}
@@ -544,7 +551,7 @@ before the Change Date. See LICENSE for complete terms.
 									: index === objectToolIndex
 										? 0
 										: -1}
-								class:active={activeTool === objectTool.id}
+								class={{ active: activeTool === objectTool.id }}
 								aria-label={t(objectTool.hint)}
 								title={t(objectTool.hint)}
 								onclick={() => objectTabs.activate(index)}
@@ -645,6 +652,18 @@ before the Change Date. See LICENSE for complete terms.
 							{t('edit.retryStatus')}
 						</button>
 					{/if}
+				</div>
+			{/if}
+
+			{#if activeTool === 'photo-processing'}
+				<div
+					class="tool-panel"
+					role="tabpanel"
+					id="edit-tool-panel-photo-processing"
+					aria-labelledby="edit-tool-tab-photo-processing"
+					tabindex="0"
+				>
+					<PhotoProcessingPanel {active} />
 				</div>
 			{/if}
 

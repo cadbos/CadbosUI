@@ -1066,7 +1066,6 @@ export const ru = {
 	'photoProcessing.showOriginal': 'Показать оригинал',
 	'photoProcessing.save': 'Сохранить обработку',
 	'photoProcessing.saving': 'Сохраняем обработку…',
-	'photoProcessing.upscaleHint': 'Улучшение до 4K сохраняется отдельным шагом в истории.',
 	'photoProcessing.previewAlt': 'Предпросмотр обработки фото',
 	'photoProcessing.previewLoading': 'Обновляем предпросмотр…',
 	'photoProcessing.previewFailed':
@@ -1078,7 +1077,6 @@ export const ru = {
 		'Баланс исчерпан. Пополните его, чтобы улучшить фото до 4K.',
 	'photoProcessing.generationRestricted': 'Улучшение до 4K доступно для подтверждённых аккаунтов.',
 	'photoProcessing.signInToSave': 'Войдите, чтобы сохранить обработку.',
-	'photoProcessing.free': 'Без списания средств',
 	'photoProcessing.rateLimited': 'Слишком много запросов. Подождите минуту и повторите.',
 	'photoProcessing.adjustment.exposure': 'Экспозиция',
 	'photoProcessing.adjustment.contrast': 'Контраст',

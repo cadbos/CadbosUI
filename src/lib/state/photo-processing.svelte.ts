@@ -254,7 +254,7 @@ class PhotoProcessingState {
 					type: 'upscale',
 					instruction: t('toolbar.upscaleDone')
 				},
-				fromPhotoProcessing ? 'photoProcessing' : operation.sourceRender?.sourceMode
+				fromPhotoProcessing ? undefined : operation.sourceRender?.sourceMode
 			);
 			const owner = this.#owner(operation);
 			owner?.resetPhotoAdjustments();
@@ -351,19 +351,14 @@ class PhotoProcessingState {
 		body.append('formSnapshot', JSON.stringify(operation.formSnapshot));
 		const response = await fetch('/api/photo-processing', { method: 'POST', body });
 		const result = await this.#readResponse(response, 'photo_processing_failed');
-		return this.#apply(
-			operation,
-			result,
-			{ type: 'photo-processing', instruction: '' },
-			'photoProcessing'
-		);
+		return this.#apply(operation, result, { type: 'photo-processing', instruction: '' });
 	}
 
 	#apply(
 		operation: PhotoOperation,
 		result: RenderResponse,
 		editOp: RenderResult['editOp'],
-		sourceMode: RenderResult['sourceMode']
+		sourceMode?: RenderResult['sourceMode']
 	): boolean {
 		if (auth.pubkey !== operation.pubkey || auth.status !== 'authenticated') return false;
 		const render = renderResultFromResponse(result, {

@@ -35,7 +35,7 @@ import {
 import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 import { STYLE_PRESETS } from '$lib/style-presets';
 
-export type Mode = 'render' | 'edit' | 'styleTransfer' | 'photoProcessing';
+export type Mode = 'render' | 'edit' | 'styleTransfer';
 export type ViewId = 'chat' | 'keyValue' | 'graph';
 export type ToolId =
 	| 'freeform'
@@ -44,7 +44,8 @@ export type ToolId =
 	| 'light-settings'
 	| 'object-replacement'
 	| 'texture-replacement'
-	| 'repaint';
+	| 'repaint'
+	| 'photo-processing';
 export type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
 
 // The sub-tab shown within the current mode — at most one of these applies,
@@ -67,8 +68,7 @@ export interface WorkspaceDestination {
 const MODE_PATHS: Record<Mode, string> = {
 	render: '/create',
 	edit: '/edit',
-	styleTransfer: '/style-transfer',
-	photoProcessing: '/photo-processing'
+	styleTransfer: '/style-transfer'
 };
 
 const VIEW_SLUGS: Record<ViewId, string> = {
@@ -90,7 +90,8 @@ const TOOL_IDS: readonly ToolId[] = [
 	'light-settings',
 	'object-replacement',
 	'texture-replacement',
-	'repaint'
+	'repaint',
+	'photo-processing'
 ];
 const REFERENCE_TABS: readonly ReferenceTab[] = ['photorealistic', 'conceptual', 'custom'];
 
@@ -134,17 +135,12 @@ function slugToScene(param: string | undefined): SceneType {
 // has no mode selected until the user picks one; a route the workspace is
 // not mounted for is unselected too, rather than guessed as create.
 export function routeIdToMode(routeId: string | null): Mode | null {
-	if (routeId === '/photo-processing') return 'photoProcessing';
 	if (routeId?.startsWith('/edit')) return 'edit';
 	if (routeId?.startsWith('/style-transfer')) return 'styleTransfer';
 	if (routeId?.startsWith('/create')) return 'render';
 	return null;
 }
 
-// Every edit-panel tool tags its renders with a unique editOp.type (see
-// EDIT_OPERATION_TYPES) except 'upscale' — applied from RenderResult.svelte's
-// toolbar, which is shared by every mode, so it has no tool tab of its own
-// and is deliberately left out here.
 const EDIT_OP_TOOL: Partial<Record<EditOperationType, ToolId>> = {
 	freeform: 'freeform',
 	'add-object': 'add-object',
@@ -152,7 +148,8 @@ const EDIT_OP_TOOL: Partial<Record<EditOperationType, ToolId>> = {
 	'light-settings': 'light-settings',
 	'replace-object': 'object-replacement',
 	'change-surface-color': 'texture-replacement',
-	repaint: 'repaint'
+	repaint: 'repaint',
+	'photo-processing': 'photo-processing'
 };
 
 export interface RenderOrigin {
@@ -169,13 +166,11 @@ export interface RenderOrigin {
 // whichever step is on screen, rather than leaving the user looking at a
 // tool tab whose fields have nothing to do with what they're seeing.
 // Returns undefined for a step with no known origin (the synthetic
-// uploaded-photo root, an upscale, or a generation loaded from project
+// uploaded-photo root or a generation loaded from project
 // history before this field existed) — the caller leaves the current
 // mode/tool alone rather than guessing.
 export function renderOrigin(render: RenderResult | undefined): RenderOrigin | undefined {
 	if (!render) return undefined;
-	if (render.sourceMode === 'photoProcessing' || render.editOp?.type === 'photo-processing')
-		return { mode: 'photoProcessing' };
 	if (render.sourceMode === 'render') return { mode: 'render' };
 	if (render.sourceMode === 'styleTransfer') return { mode: 'styleTransfer' };
 	const tool = render.editOp ? EDIT_OP_TOOL[render.editOp.type] : undefined;
@@ -227,9 +222,9 @@ export function destinationForGenerationKind(
 		case 'repaint':
 			return { mode: 'edit', subTab: { tool: 'repaint' } };
 		case 'upscale':
-			return { mode: 'photoProcessing', subTab: {} };
+			return { mode: 'edit', subTab: { tool: 'photo-processing' } };
 		case 'photo-processing':
-			return { mode: 'photoProcessing', subTab: {} };
+			return { mode: 'edit', subTab: { tool: 'photo-processing' } };
 		case 'edit': {
 			const editOperationType = formSnapshot?.editOperationType;
 			const tool = editOperationType ? EDIT_OP_TOOL[editOperationType] : undefined;
@@ -247,7 +242,6 @@ export function destinationForGenerationKind(
 export function isWorkspaceRoute(routeId: string | null): boolean {
 	return (
 		routeId === '/' ||
-		routeId === '/photo-processing' ||
 		routeId?.startsWith('/create') === true ||
 		routeId?.startsWith('/edit') === true ||
 		routeId?.startsWith('/style-transfer') === true
@@ -262,9 +256,8 @@ export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): Sub
 	if (mode === 'render') return { view: slugToView(searchParams.get('view') ?? undefined) };
 	if (mode === 'edit') {
 		const tool = slugToTool(searchParams.get('tool') ?? undefined);
+		if (tool === 'photo-processing') return { tool };
 		const job = searchParams.get('job');
-		// Every edit-mode tool is job-backed now (freeform/add-object/remove-object
-		// share the Flux Kontext job, every other tool has its own).
 		return isJobId(job) ? { tool, job } : { tool };
 	}
 	if (mode === 'styleTransfer') {
@@ -336,21 +329,13 @@ function parseFragments(raw: string): ParsedFragment[] {
 // buildShareUrl itself produces.
 export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab = {}): string {
 	const path =
-		mode === 'photoProcessing'
-			? MODE_PATHS.photoProcessing
-			: mode === 'render'
-				? `${MODE_PATHS.render}/${request.sceneType}`
-				: mode === 'edit'
-					? MODE_PATHS.edit
-					: `${MODE_PATHS.styleTransfer}/${request.sceneType}`;
+		mode === 'render'
+			? `${MODE_PATHS.render}/${request.sceneType}`
+			: mode === 'edit'
+				? MODE_PATHS.edit
+				: `${MODE_PATHS.styleTransfer}/${request.sceneType}`;
 
 	const params = new URLSearchParams();
-
-	if (mode === 'photoProcessing') {
-		params.set('format', request.outputFormat);
-		if (hasPhotoAdjustments(request.photoAdjustments))
-			params.set('adjustments', JSON.stringify(request.photoAdjustments));
-	}
 
 	if (mode === 'render') {
 		params.set('view', viewToSlug(subTab.view ?? 'chat'));
@@ -372,7 +357,11 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 	if (mode === 'edit') {
 		const tool = subTab.tool ?? 'add-object';
 		params.set('tool', tool);
-		if (tool === 'object-replacement') {
+		if (tool === 'photo-processing') {
+			params.set('format', request.outputFormat);
+			if (hasPhotoAdjustments(request.photoAdjustments))
+				params.set('adjustments', JSON.stringify(request.photoAdjustments));
+		} else if (tool === 'object-replacement') {
 			if (request.objectReplacementObject.trim() !== '') {
 				params.set('object', request.objectReplacementObject);
 			}
@@ -567,17 +556,15 @@ export function applyShareParams(
 	searchParams: URLSearchParams,
 	request: RequestState
 ): void {
-	if (mode !== 'photoProcessing')
+	if (
+		!(mode === 'edit' && slugToTool(searchParams.get('tool') ?? undefined) === 'photo-processing')
+	)
 		request.setSceneType(mode === 'edit' ? 'interior' : slugToScene(sceneParam));
 
 	const format = searchParams.get('format');
 	request.setOutputFormat(
 		(OUTPUT_FORMATS as readonly string[]).includes(format ?? '') ? (format as OutputFormat) : 'webp'
 	);
-
-	if (mode === 'photoProcessing') {
-		request.setPhotoAdjustments(photoAdjustmentsFromSearch(searchParams));
-	}
 
 	if (mode === 'render') {
 		const prompt = searchParams.get('prompt');
@@ -591,7 +578,9 @@ export function applyShareParams(
 		request.setFragments(fragmentsRaw ? parseFragments(fragmentsRaw) : []);
 	} else if (mode === 'edit') {
 		const tool = slugToTool(searchParams.get('tool') ?? undefined);
-		if (tool === 'object-replacement') {
+		if (tool === 'photo-processing') {
+			request.setPhotoAdjustments(photoAdjustmentsFromSearch(searchParams));
+		} else if (tool === 'object-replacement') {
 			request.setObjectReplacementObject((searchParams.get('object') ?? '').slice(0, 200));
 			const job = searchParams.get('job');
 			request.setActiveObjectReplacementJobId(isJobId(job) ? job : undefined);

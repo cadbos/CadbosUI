@@ -13,7 +13,6 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { SlidersHorizontal } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { PathnameWithSearchOrHash } from '$app/types';
@@ -41,16 +40,10 @@ before the Change Date. See LICENSE for complete terms.
 			effect: 'mig',
 			label: 'mode.styleTransfer',
 			description: 'styleTransfer.panelDescription'
-		},
-		{
-			mode: 'photoProcessing',
-			effect: 'photo',
-			label: 'mode.photoProcessing',
-			description: 'photoProcessing.description'
 		}
 	] satisfies {
 		mode: Mode;
-		effect: 'cre' | 'edit' | 'mig' | 'photo';
+		effect: 'cre' | 'edit' | 'mig';
 		label: TranslationKey;
 		description: TranslationKey;
 	}[];
@@ -94,8 +87,6 @@ before the Change Date. See LICENSE for complete terms.
 							<path d="M4 20l1-4L16 5a2.1 2.1 0 013 3L8 19z" />
 							<path d="M14 7l3 3" />
 						</svg>
-					{:else if action.effect === 'photo'}
-						<SlidersHorizontal size={22} strokeWidth={1.7} aria-hidden="true" />
 					{:else}
 						<svg viewBox="0 0 24 24" aria-hidden="true">
 							<path
@@ -257,12 +248,6 @@ before the Change Date. See LICENSE for complete terms.
 		rotate: -1.5deg;
 	}
 
-	.cloud[data-m='photo'] {
-		left: 6%;
-		bottom: 10%;
-		rotate: 1.5deg;
-	}
-
 	@media (max-width: 820px) {
 		.clouds {
 			display: flex;
@@ -275,8 +260,7 @@ before the Change Date. See LICENSE for complete terms.
 
 		.cloud[data-m='cre'],
 		.cloud[data-m='edit'],
-		.cloud[data-m='mig'],
-		.cloud[data-m='photo'] {
+		.cloud[data-m='mig'] {
 			position: relative;
 			left: auto;
 			right: auto;

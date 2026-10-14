@@ -31,7 +31,6 @@ export interface Dictionary {
 	'photoProcessing.showOriginal': string;
 	'photoProcessing.save': string;
 	'photoProcessing.saving': string;
-	'photoProcessing.upscaleHint': string;
 	'photoProcessing.previewAlt': string;
 	'photoProcessing.previewLoading': string;
 	'photoProcessing.previewFailed': string;
@@ -40,7 +39,6 @@ export interface Dictionary {
 	'photoProcessing.insufficientCredit': string;
 	'photoProcessing.generationRestricted': string;
 	'photoProcessing.signInToSave': string;
-	'photoProcessing.free': string;
 	'photoProcessing.rateLimited': string;
 	'photoProcessing.adjustment.exposure': string;
 	'photoProcessing.adjustment.contrast': string;

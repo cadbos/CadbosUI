@@ -13,9 +13,10 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Eye, Hd, Image, RotateCcw, Save, SlidersHorizontal } from '@lucide/svelte';
+	import { Aperture, Eye, Hd, Image, RotateCcw } from '@lucide/svelte';
 
 	import LazyImage from '$lib/components/LazyImage.svelte';
+	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import {
 		PHOTO_ADJUSTMENT_GROUPS,
@@ -82,7 +83,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
-<section class="step-card photo-panel" aria-label={t('mode.photoProcessing')}>
+<section class="photo-panel" aria-label={t('mode.photoProcessing')}>
 	<div class="panel-intro">
 		<p class="panel-description">{t('photoProcessing.description')}</p>
 		<button
@@ -120,8 +121,7 @@ before the Change Date. See LICENSE for complete terms.
 							<Image size={22} aria-hidden="true" />
 						{/if}
 						{#if selectedPreset === preset.id}
-							<span class="preset-selected"><SlidersHorizontal size={11} aria-hidden="true" /></span
-							>
+							<span class="preset-selected"><Aperture size={11} aria-hidden="true" /></span>
 						{/if}
 					</span>
 					<span class="preset-name"
@@ -207,7 +207,7 @@ before the Change Date. See LICENSE for complete terms.
 		</div>
 	{/each}
 
-	<div class="save-section">
+	<div class="action-bar">
 		<label class="format-label">
 			<span>{t('render.outputFormat')}</span>
 			<select
@@ -221,53 +221,36 @@ before the Change Date. See LICENSE for complete terms.
 				<option value="avif">AVIF</option>
 			</select>
 		</label>
-		<div class="save-actions">
-			<button
-				type="button"
-				class={['compare-button icon-button', { active: photoProcessing.showOriginal }]}
-				aria-pressed={photoProcessing.showOriginal}
-				aria-label={t('photoProcessing.showOriginal')}
-				title={t('photoProcessing.showOriginal')}
-				disabled={!sourceUrl}
-				onclick={() => (photoProcessing.showOriginal = !photoProcessing.showOriginal)}
-			>
-				<Eye size={18} aria-hidden="true" />
-			</button>
-			<button
-				type="button"
-				class="save-button"
-				disabled={!photoProcessing.canSave}
-				aria-busy={photoProcessing.saving}
-				title={auth.status === 'authenticated'
-					? t('photoProcessing.save')
-					: t('photoProcessing.signInToSave')}
-				onclick={() => void photoProcessing.save()}
-			>
-				<Save size={16} aria-hidden="true" />
-				<span
-					>{photoProcessing.saving ? t('photoProcessing.saving') : t('photoProcessing.save')}</span
-				>
-			</button>
-		</div>
-		<span class="free-label">{t('photoProcessing.free')}</span>
-	</div>
-
-	<div class="upscale-section">
-		<div class="upscale-copy">
-			<Hd size={20} aria-hidden="true" />
-			<p>{t('photoProcessing.upscaleHint')}</p>
-		</div>
 		<button
 			type="button"
-			class="upscale-button"
+			class={['compare-button', 'icon-button', { active: photoProcessing.showOriginal }]}
+			aria-pressed={photoProcessing.showOriginal}
+			aria-label={t('photoProcessing.showOriginal')}
+			title={t('photoProcessing.showOriginal')}
+			disabled={!sourceUrl}
+			onclick={() => (photoProcessing.showOriginal = !photoProcessing.showOriginal)}
+		>
+			<Eye size={18} strokeWidth={1.8} aria-hidden="true" />
+		</button>
+		<button
+			type="button"
+			class="upscale-button icon-button"
+			aria-label={t('toolbar.upscale')}
 			disabled={!photoProcessing.canUpscale}
 			aria-busy={photoProcessing.upscaling}
 			title={auth.status === 'authenticated' ? t('toolbar.upscale') : t('toolbar.signInToUpscale')}
 			onclick={() => void photoProcessing.upscale(true)}
 		>
-			<Hd size={17} aria-hidden="true" />
-			<span>{t('toolbar.upscale')}</span>
+			<Hd size={18} strokeWidth={1.8} aria-hidden="true" />
 		</button>
+		<div class="save-trigger">
+			<GenerateButton
+				label={photoProcessing.saving ? t('photoProcessing.saving') : t('photoProcessing.save')}
+				disabled={!photoProcessing.canSave}
+				busy={photoProcessing.saving}
+				onclick={() => void photoProcessing.save()}
+			/>
+		</div>
 	</div>
 
 	{#if photoProcessing.error}
@@ -288,7 +271,6 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		flex-direction: column;
 		gap: 1.125rem;
-		padding: 1rem;
 		color: var(--color-text);
 		container-type: inline-size;
 	}
@@ -529,25 +511,27 @@ before the Change Date. See LICENSE for complete terms.
 		height: 2rem;
 	}
 
-	.save-section,
-	.upscale-section {
+	.action-bar {
 		display: flex;
-		flex-direction: column;
-		gap: 0.625rem;
-		padding-top: 0.875rem;
+		align-items: flex-end;
+		gap: 0.5rem;
+		padding-top: 1rem;
 		border-top: 1px solid var(--color-border);
 	}
-
 	.format-label {
 		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
+		flex: 1 1 auto;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.25rem;
+		min-width: 4rem;
 		color: var(--color-muted-strong);
 		font-size: 0.75rem;
 	}
-
 	.format-label select {
+		width: 100%;
+		max-width: 7rem;
+		height: 2.5rem;
 		padding: 0.25rem 0.5rem;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-sm);
@@ -555,82 +539,21 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-text);
 		font: inherit;
 	}
-
-	.save-actions {
-		display: flex;
-		gap: 0.5rem;
-	}
-
-	.free-label {
-		align-self: end;
-		color: var(--color-muted-strong);
-		font-size: 0.6875rem;
-	}
-
-	.compare-button {
-		width: 2.75rem;
-		height: 2.75rem;
+	.compare-button,
+	.upscale-button {
+		flex: 0 0 2.5rem;
+		width: 2.5rem;
+		height: 2.5rem;
 		border-color: var(--color-border);
 		background: var(--color-surface);
 	}
-
 	.compare-button.active {
 		border-color: var(--color-accent);
 		background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
 		color: var(--color-accent-text);
 	}
-
-	.save-button,
-	.upscale-button {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		min-height: 2.75rem;
-		padding: 0.625rem 0.875rem;
-		border: 1px solid var(--color-accent);
-		border-radius: var(--radius);
-		color: var(--color-accent-contrast);
-		background: var(--color-accent);
-		font: inherit;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		cursor: pointer;
-	}
-
-	.save-button {
-		flex: 1;
-	}
-
-	.upscale-button {
-		color: var(--color-accent-text);
-		background: var(--color-surface);
-	}
-
-	.save-button:hover:not(:disabled) {
-		filter: brightness(1.08);
-	}
-
-	.upscale-button:hover:not(:disabled) {
-		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
-	}
-
-	.upscale-copy {
-		display: flex;
-		align-items: center;
-		gap: 0.625rem;
-		color: var(--color-muted-strong);
-	}
-
-	.upscale-copy p {
-		margin: 0;
-		font-size: 0.75rem;
-		line-height: 1.4;
-	}
-
-	.upscale-copy :global(svg) {
-		flex-shrink: 0;
-		color: var(--color-accent-text);
+	.save-trigger {
+		flex: 0 0 3.5rem;
 	}
 
 	button:disabled,

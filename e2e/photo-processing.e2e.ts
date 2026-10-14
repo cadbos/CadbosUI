@@ -38,11 +38,16 @@ interface SavedSubmission {
 }
 
 function panel(page: Page): Locator {
-	return page.locator('#mode-panel-photoProcessing');
+	return page.locator('#mode-panel-edit');
 }
 
 function preview(page: Page): Locator {
 	return panel(page).getByRole('img', { name: ru['photoProcessing.previewAlt'] });
+}
+
+async function selectPhotoTool(page: Page): Promise<void> {
+	await page.getByRole('tab', { name: ru['mode.edit'], exact: true }).click();
+	await panel(page).getByRole('tab', { name: ru['mode.photoProcessing'], exact: true }).click();
 }
 
 async function pixels(image: Locator): Promise<number[]> {
@@ -105,7 +110,11 @@ async function mockPhotoWorkspace(page: Page, authenticated = true): Promise<voi
 }
 
 async function openPhoto(page: Page): Promise<void> {
-	await page.goto('/photo-processing');
+	await page.goto('/edit?tool=photo-processing');
+	await expect(page.getByRole('tab', { name: ru['mode.edit'], exact: true })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
 	await expect(page.getByRole('tab', { name: ru['mode.photoProcessing'] })).toHaveAttribute(
 		'aria-selected',
 		'true'
@@ -239,7 +248,7 @@ async function openTwoProjects(page: Page): Promise<Locator> {
 	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
 	const tabs = page.getByRole('navigation', { name: 'Открытые проекты' });
 	await tabs.getByRole('tab', { name: 'Living room', exact: true }).click();
-	await page.getByRole('tab', { name: ru['mode.photoProcessing'], exact: true }).click();
+	await selectPhotoTool(page);
 	await expect(preview(page)).toBeVisible();
 	return tabs;
 }
@@ -318,10 +327,10 @@ test('photo mode previews actual pixel changes, compares the original and suppor
 		fullPage: true
 	});
 
-	await page.getByRole('tab', { name: ru['mode.edit'], exact: true }).click();
+	await panel(page).getByRole('tab', { name: ru['edit.tool.repaint'], exact: true }).click();
 	await expect(page).toHaveURL(/\/edit\?/);
-	await page.getByRole('tab', { name: ru['mode.photoProcessing'], exact: true }).click();
-	await expect(page).toHaveURL(/\/photo-processing/);
+	await selectPhotoTool(page);
+	await expect(page).toHaveURL(/\/edit\?tool=photo-processing/);
 	await panel(page)
 		.getByRole('tab', { name: ru['photoProcessing.group.light'], exact: true })
 		.click();
@@ -379,7 +388,7 @@ test('PNG save exports changed full-resolution pixels for free and undo/redo res
 	await save.click();
 	await expect.poll(() => submissions.length).toBe(2);
 	await expect(save).toBeDisabled();
-	await page.getByRole('tab', { name: ru['mode.edit'], exact: true }).click();
+	await panel(page).getByRole('tab', { name: ru['edit.tool.repaint'], exact: true }).click();
 	await page.getByRole('button', { name: ru['toolbar.previousGeneration'], exact: true }).click();
 	await expect(
 		page.getByRole('tab', { name: ru['mode.photoProcessing'], exact: true })
@@ -600,7 +609,7 @@ test('a paid 4K result without a history id stays downloadable after its origina
 	await expect(tabs.getByRole('tab', { name: 'Living room', exact: true })).toHaveCount(0);
 	release?.();
 	await expect(page.getByText(ru['generationOverlay.upscale'], { exact: true })).toHaveCount(0);
-	await page.getByRole('tab', { name: ru['mode.photoProcessing'], exact: true }).click();
+	await selectPhotoTool(page);
 	await expect(
 		panel(page).getByRole('status').filter({ hasText: ru['photoProcessing.resultReady'] })
 	).toBeVisible();
@@ -633,9 +642,70 @@ test('photo mode remains usable on mobile without horizontal overflow', async ({
 	});
 	await page.getByRole('tab', { name: ru['mode.render'], exact: true }).click();
 	await expect(page).toHaveURL(/\/create\/interior/);
-	await page.getByRole('tab', { name: ru['mode.photoProcessing'], exact: true }).click();
-	await expect(page).toHaveURL(/\/photo-processing/);
+	await selectPhotoTool(page);
+	await expect(page).toHaveURL(/\/edit\?tool=photo-processing/);
 	await expect(
 		panel(page).getByRole('spinbutton', { name: ru['photoProcessing.adjustment.exposure'] })
 	).toHaveValue('22');
+});
+
+test('photo tool stays inside editing and its compact actions fit narrow and wide panels', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 1280, height: 900 });
+	await mockPhotoWorkspace(page);
+	await page.goto('/');
+	const landing = page.getByRole('navigation', { name: ru['mode.switcher.label'] });
+	await expect(landing.getByRole('button')).toHaveCount(3);
+	await expect(landing.getByRole('button', { name: ru['mode.photoProcessing'] })).toHaveCount(0);
+	await openPhoto(page);
+	const modes = page.getByRole('tablist', { name: ru['mode.switcher.label'] });
+	await expect(modes.getByRole('tab')).toHaveCount(3);
+	await expect(modes.getByRole('tab', { name: ru['mode.edit'], exact: true })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	await expect(modes.getByRole('tab', { name: ru['mode.photoProcessing'] })).toHaveCount(0);
+	await expect(panel(page).getByRole('tab', { name: ru['mode.photoProcessing'] })).toHaveAttribute(
+		'aria-controls',
+		'edit-tool-panel-photo-processing'
+	);
+	await expect(page.getByText('Без списания средств', { exact: true })).toHaveCount(0);
+	await expect(
+		page.getByText('Улучшение до 4K сохраняется отдельным шагом в истории.', { exact: true })
+	).toHaveCount(0);
+	const footer = panel(page).locator('.action-bar');
+	const save = footer.getByRole('button', { name: ru['photoProcessing.save'], exact: true });
+	const resize = panel(page).getByRole('slider', { name: ru['toolsPanel.resizeHandle'] });
+	for (const size of ['Home', 'End']) {
+		await resize.press(size);
+		await footer.scrollIntoViewIfNeeded();
+		await expect(save).toBeVisible();
+		expect(
+			await save.evaluate((element) => element.getBoundingClientRect().width)
+		).toBeLessThanOrEqual(56);
+		expect(await footer.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+			true
+		);
+		const bounds = await footer.boundingBox();
+		const buttons = await footer.locator('button').evaluateAll((elements) =>
+			elements.map((element) => ({
+				left: element.getBoundingClientRect().left,
+				right: element.getBoundingClientRect().right
+			}))
+		);
+		expect(bounds).not.toBeNull();
+		for (const button of buttons) {
+			expect(button.left).toBeGreaterThanOrEqual(bounds!.x - 1);
+			expect(button.right).toBeLessThanOrEqual(bounds!.x + bounds!.width + 1);
+		}
+		await page.screenshot({
+			path: `/private/tmp/cadbos-photo-actions-${size}.png`,
+			fullPage: true
+		});
+	}
+	await page.setViewportSize({ width: 390, height: 844 });
+	await footer.scrollIntoViewIfNeeded();
+	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+	await page.screenshot({ path: '/private/tmp/cadbos-photo-actions-mobile.png', fullPage: true });
 });

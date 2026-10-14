@@ -46,7 +46,7 @@ interface Item {
 	plant?: 1;
 }
 
-type HoverMode = 'cre' | 'edit' | 'mig' | 'photo';
+type HoverMode = 'cre' | 'edit' | 'mig';
 
 const PALETTES: Palette[] = [
 	{
@@ -214,7 +214,7 @@ const ITEMS: Item[] = [
 ];
 
 function isHoverMode(value: string | undefined): value is HoverMode {
-	return value === 'cre' || value === 'edit' || value === 'mig' || value === 'photo';
+	return value === 'cre' || value === 'edit' || value === 'mig';
 }
 
 function isPaletteKey(key: ColorKey): key is PaletteKey {
@@ -228,7 +228,7 @@ export function startHomeLanding(canvas: HTMLCanvasElement, clouds: HTMLElement)
 
 	const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 	const colorScheme = matchMedia('(prefers-color-scheme: dark)');
-	const hoverTarget = { cre: 0, edit: 0, mig: 0, photo: 0 };
+	const hoverTarget = { cre: 0, edit: 0, mig: 0 };
 	let width = 0;
 	let height = 0;
 	let cell = 40;
@@ -238,7 +238,6 @@ export function startHomeLanding(canvas: HTMLCanvasElement, clouds: HTMLElement)
 	let createMix = 0;
 	let editMix = 0;
 	let migrateMix = 0;
-	let photoMix = 0;
 	let elapsed = 0;
 	let sceneTime = 0;
 	const paletteIndex = 0;
@@ -322,11 +321,9 @@ export function startHomeLanding(canvas: HTMLCanvasElement, clouds: HTMLElement)
 			PALETTES[nextPaletteIndex][key],
 			revealAt(u)
 		);
-		const migrated =
-			migrateMix > 0.001
-				? mixColor(mixed, PALETTES[2][key], smooth(migrateMix * 1.7 - u * 0.7))
-				: mixed;
-		return migrated.map((channel) => Math.min(255, channel * (1 + photoMix * 0.12))) as Rgb;
+		return migrateMix > 0.001
+			? mixColor(mixed, PALETTES[2][key], smooth(migrateMix * 1.7 - u * 0.7))
+			: mixed;
 	}
 
 	function drawBox(part: Box, u: number, scale: number, alpha: number, lift: number): void {
@@ -678,7 +675,6 @@ export function startHomeLanding(canvas: HTMLCanvasElement, clouds: HTMLElement)
 		createMix += (hoverTarget.cre - createMix) * 0.08;
 		editMix += (hoverTarget.edit - editMix) * 0.08;
 		migrateMix += (hoverTarget.mig - migrateMix) * 0.045;
-		photoMix += (hoverTarget.photo - photoMix) * 0.045;
 		ctx.clearRect(0, 0, width, height);
 		ctx.globalAlpha = 1;
 		const sweep = sweepPosition();
