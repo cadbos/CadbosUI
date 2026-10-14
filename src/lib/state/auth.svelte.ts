@@ -27,7 +27,7 @@
 import { z } from 'zod';
 import { BunkerSigner, createNostrConnectURI } from 'nostr-tools/nip46';
 import { SimplePool } from 'nostr-tools/pool';
-import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
+import { finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { Event, EventTemplate } from 'nostr-tools/pure';
 import { generationKinds } from '$lib/api/contract';
 import type {
@@ -194,6 +194,22 @@ class AuthState {
 			this.#setAnonymous();
 		} finally {
 			if (this.#sessionLoadAbort === controller) this.#sessionLoadAbort = null;
+		}
+	}
+
+	async loginWithSecretKey(secretKey: Uint8Array): Promise<void> {
+		if (this.status === 'connecting') return;
+		this.#cancelSessionLoad();
+		this.error = null;
+		this.status = 'connecting';
+
+		try {
+			await this.#runLogin({
+				getPublicKey: () => Promise.resolve(getPublicKey(secretKey)),
+				signEvent: (event) => Promise.resolve(finalizeEvent(event, secretKey))
+			});
+		} catch (err) {
+			this.#fail(err instanceof AuthFlowError ? err.code : 'failed');
 		}
 	}
 

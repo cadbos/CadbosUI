@@ -21,6 +21,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { currency } from '$lib/state/currency.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { dismissable, logBoundaryError } from '$lib/utils';
+	import AccountSetup from './AccountSetup.svelte';
 	import LazyImage from './LazyImage.svelte';
 	import SkeletonBlock from './SkeletonBlock.svelte';
 	import QrCode from './QrCode.svelte';
@@ -70,6 +71,12 @@ before the Change Date. See LICENSE for complete terms.
 			// Clipboard unavailable (denied permission / insecure context): leave the
 			// connect panel untouched so the user can still scan or copy manually.
 		}
+	}
+
+	let setupOpen = $state(false);
+
+	function closeSetup(): void {
+		setupOpen = false;
 	}
 
 	let npubCopied = $state(false);
@@ -265,6 +272,9 @@ before the Change Date. See LICENSE for complete terms.
 				<p class="visually-hidden" role="status">{t('auth.restoring')}</p>
 			{:else}
 				<p class="notice">{t('auth.signIn')}</p>
+				<button type="button" onclick={() => (setupOpen = true)}>
+					{t('auth.setup.open')}
+				</button>
 				<button type="button" onclick={() => auth.loginNip07()}>
 					{t('auth.login.nip07')}
 				</button>
@@ -318,6 +328,9 @@ before the Change Date. See LICENSE for complete terms.
 				<ThemeToggle />
 			</div>
 		</div>
+		{#if setupOpen}
+			<AccountSetup onClose={closeSetup} />
+		{/if}
 	</div>
 </div>
 

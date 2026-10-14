@@ -15,6 +15,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { userEvent } from 'vitest/browser';
+import { decode } from 'nostr-tools/nip19';
 import {
 	finalizeEvent,
 	generateSecretKey,
@@ -481,4 +482,51 @@ it('cancelling after the signer connects but before verification stays anonymous
 	expect(auth.status).toBe('anonymous');
 	expect(auth.pubkey).toBeNull();
 	expect(verifyCalled).toBe(false);
+});
+
+it('creates an account only after the secret key is saved', async () => {
+	let signedPubkey = '';
+	mockFetch((init) => {
+		const header = new Headers(init?.headers).get('authorization') ?? '';
+		const bytes = Uint8Array.from(atob(header.slice('Nostr '.length)), (char) =>
+			char.charCodeAt(0)
+		);
+		const event = JSON.parse(new TextDecoder().decode(bytes)) as { pubkey?: string };
+		signedPubkey = event.pubkey ?? '';
+		return Response.json({ user: { pubkey: signedPubkey } });
+	});
+
+	const screen = render(AuthBar);
+	await screen.getByRole('button', { name: 'Гость' }).click();
+	await screen.getByRole('button', { name: 'Создать аккаунт' }).click();
+
+	expect(document.querySelector('dialog')).not.toBeNull();
+	await userEvent.click(screen.getByRole('button', { name: 'Создать ключи' }));
+
+	const nsec = screen.getByText(/^nsec1/).element().textContent ?? '';
+	const decoded = decode(nsec);
+	expect(decoded.type).toBe('nsec');
+	if (decoded.type !== 'nsec') return;
+	const pubkey = getPublicKey(decoded.data);
+
+	const finish = screen.getByRole('button', { name: 'Войти с этим ключом' });
+	await expect.element(finish).toBeDisabled();
+	await userEvent.click(screen.getByRole('button', { name: 'Скачать файл' }));
+	await expect.element(finish).toBeDisabled();
+	await userEvent.click(
+		screen.getByRole('checkbox', { name: 'Я сохранил секретный ключ вне этого браузера' })
+	);
+	await expect.element(finish).toBeEnabled();
+	await userEvent.click(finish);
+
+	await expect.element(screen.getByRole('button', { name: 'Выйти' })).toBeVisible();
+	expect(signedPubkey).toBe(pubkey);
+	expect(auth.pubkey).toBe(pubkey);
+	expect(localStorage.getItem('cadbos.localAccountKey')).toBeNull();
+
+	await userEvent.click(screen.getByRole('button', { name: 'Выйти' }));
+	await expect.element(screen.getByRole('button', { name: 'Создать аккаунт' })).toBeVisible();
+	await expect
+		.element(screen.getByRole('button', { name: 'Войти ключом этого браузера' }))
+		.not.toBeInTheDocument();
 });
