@@ -26,6 +26,7 @@ vi.mock('$lib/server/s3', () => ({ isS3BucketAvailable: storage.isS3BucketAvaila
 import { GET } from './+server';
 
 const NOW = new Date('2026-08-11T10:00:00.000Z');
+const FEATUREBASE_URL = 'https://do.featurebase.app/v1/organization/by-id/test-featurebase-app-id';
 const CLOUDFLARE_GRAPHQL_URL = 'https://api.cloudflare.com/client/v4/graphql';
 const D1_READ_LIMIT = 5_000_000;
 const D1_WRITE_LIMIT = 100_000;
@@ -74,6 +75,7 @@ function snapshot(status: HealthSnapshot['status'] = 'healthy'): HealthSnapshot 
 			assets: service(),
 			comfyui: service(),
 			d1: service(),
+			featurebase: service(),
 			nostr: { ...service(), reachable: 4, total: 4 },
 			s3: service(status === 'unhealthy' ? 'unhealthy' : 'healthy')
 		}
@@ -103,6 +105,7 @@ function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 			caches: cache,
 			env: {
 				ARCHAI_API_KEY: 'archai-key',
+				FEATUREBASE_APP_ID: 'test-featurebase-app-id',
 				ARCHAI_API_URL: 'https://archai.example.test',
 				ASSETS: { fetch: assetsFetch } as unknown as Fetcher,
 				COMFYUI_BASE_URL: { fetch: comfyuiFetch } as unknown as Fetcher,
@@ -152,6 +155,9 @@ function relayFetch(
 ): typeof fetch {
 	let requestCount = 0;
 	return vi.fn(async (input) => {
+		if (requestUrl(input) === FEATUREBASE_URL) {
+			return Response.json({ success: true, slug: 'cadbos-test' });
+		}
 		if (requestUrl(input) === CLOUDFLARE_GRAPHQL_URL) {
 			if (analytics.error !== undefined) throw analytics.error;
 			return Response.json(analytics.body ?? analyticsPayload(), {
@@ -173,6 +179,9 @@ interface DelayedRelayResponse {
 function delayedRelayFetch(responses: readonly DelayedRelayResponse[]): typeof fetch {
 	let requestCount = 0;
 	return vi.fn((input) => {
+		if (requestUrl(input) === FEATUREBASE_URL) {
+			return Response.json({ success: true, slug: 'cadbos-test' });
+		}
 		if (requestUrl(input) === CLOUDFLARE_GRAPHQL_URL) {
 			return Promise.resolve(Response.json(analyticsPayload()));
 		}
@@ -212,6 +221,54 @@ afterEach(() => {
 });
 
 describe('GET /healthz', () => {
+	it.each([
+		['HTTP failure', () => new Response(null, { status: 503 })],
+		['failed resolution', () => Response.json({ success: false, slug: 'cadbos-test' })],
+		['missing slug', () => Response.json({ success: true })],
+		['empty slug', () => Response.json({ success: true, slug: '' })],
+		['invalid JSON', () => new Response('invalid JSON')],
+		[
+			'request timeout',
+			() => {
+				throw new DOMException('timed out', 'TimeoutError');
+			}
+		]
+	] as const)('marks Featurebase unhealthy after %s', async (_, featurebaseResponse) => {
+		const healthy = healthyPlatform(fakeCache().storage);
+		const otherServices = relayFetch();
+		const fetcher = vi.fn(async (input, init) =>
+			requestUrl(input) === FEATUREBASE_URL ? featurebaseResponse() : otherServices(input, init)
+		) as typeof fetch;
+
+		const response = await callGet(healthy.platform, fetcher);
+
+		expect(response.status).toBe(503);
+		expect(await response.json()).toMatchObject({
+			status: 'unhealthy',
+			services: {
+				featurebase: { status: 'unhealthy', latencyMs: expect.any(Number) },
+				nostr: { status: 'healthy' }
+			}
+		});
+	});
+
+	it('trims and encodes the Featurebase app ID without sending credentials', async () => {
+		const healthy = healthyPlatform(fakeCache().storage);
+		healthy.platform.env.FEATUREBASE_APP_ID = '  app/id  ';
+		const otherServices = relayFetch();
+		const encodedUrl = 'https://do.featurebase.app/v1/organization/by-id/app%2Fid';
+		const fetcher = vi.fn(async (input, init) =>
+			requestUrl(input) === encodedUrl
+				? Response.json({ success: true, slug: 'cadbos-test' })
+				: otherServices(input, init)
+		) as typeof fetch;
+
+		const response = await callGet(healthy.platform, fetcher);
+
+		expect(response.status).toBe(200);
+		expect(fetcher).toHaveBeenCalledWith(encodedUrl, { signal: expect.any(AbortSignal) });
+	});
+
 	it('returns a cache hit without probing services', async () => {
 		const cache = fakeCache(cachedSnapshot());
 		const healthy = healthyPlatform(cache.storage);
@@ -289,6 +346,7 @@ describe('GET /healthz', () => {
 				assets: { status: 'healthy', latencyMs: expect.any(Number) },
 				comfyui: { status: 'healthy', latencyMs: expect.any(Number) },
 				d1: { status: 'healthy', latencyMs: expect.any(Number) },
+				featurebase: { status: 'healthy', latencyMs: expect.any(Number) },
 				nostr: {
 					status: 'healthy',
 					latencyMs: expect.any(Number),
@@ -307,7 +365,7 @@ describe('GET /healthz', () => {
 		expect(healthy.s3BucketExists).toHaveBeenCalledOnce();
 		expect(healthy.assetsFetch.mock.calls[0][0].url).toBe('https://assets.internal/favicon.svg');
 		expect(healthy.comfyuiFetch.mock.calls[0][0].url).toBe('http://localhost:8188/system_stats');
-		expect(fetcher).toHaveBeenCalledTimes(5);
+		expect(fetcher).toHaveBeenCalledTimes(6);
 	});
 
 	it.each([
@@ -442,7 +500,7 @@ describe('GET /healthz', () => {
 			status: 'unhealthy',
 			services: { d1: { status: 'unhealthy' } }
 		});
-		expect(fetcher).toHaveBeenCalledTimes(4);
+		expect(fetcher).toHaveBeenCalledTimes(5);
 		expect(warning).toHaveBeenCalledWith(
 			JSON.stringify({ event: 'd1_quota_configuration_invalid' })
 		);
@@ -509,7 +567,7 @@ describe('GET /healthz', () => {
 		expect(errorLog).toHaveBeenCalledTimes(2);
 	});
 
-	it.each(['archai', 'assets', 'comfyui', 'd1', 'nostr', 's3'] as const)(
+	it.each(['archai', 'assets', 'comfyui', 'd1', 'featurebase', 'nostr', 's3'] as const)(
 		'caches an unhealthy response when %s fails',
 		async (failedService) => {
 			const cache = fakeCache();
@@ -527,6 +585,9 @@ describe('GET /healthz', () => {
 					break;
 				case 'd1':
 					healthy.dbFirst.mockRejectedValue(new Error('D1 unavailable'));
+					break;
+				case 'featurebase':
+					delete healthy.platform.env.FEATUREBASE_APP_ID;
 					break;
 				case 'nostr':
 					fetcher = relayFetch(0);

@@ -35,6 +35,7 @@ function snapshot(
 			assets: { status: 'healthy', latencyMs: 13 },
 			comfyui: { status: 'healthy', latencyMs: 14 },
 			d1: { status: d1Status, latencyMs: 15 },
+			featurebase: { status: 'healthy', latencyMs: 18 },
 			nostr: { status: 'healthy', latencyMs: 16, reachable: 3, total: 4 },
 			s3: { status: s3Status, latencyMs: 17 }
 		}
@@ -105,6 +106,24 @@ test('presents a D1 quota failure as generic unhealthy status', async ({ page })
 	await expect(page.getByRole('row', { name: /База данных D1.*Не работает — —/s })).toBeVisible();
 	await expect(page.getByText(/лимит/i)).toHaveCount(0);
 	await expect(page.getByText(/строк/i)).toHaveCount(0);
+});
+
+test('shows Featurebase availability and updates it after a failure', async ({ page }) => {
+	const body = snapshot('healthy', FIRST_TIMESTAMP);
+	await mockHealth(page, { status: 200, body });
+	await page.goto('/status');
+
+	const row = page.getByRole('row', { name: /Featurebase/ });
+	await expect(row).toContainText('Работает');
+	await expect(row).toContainText('18 мс');
+
+	body.status = 'unhealthy';
+	body.services.featurebase.status = 'unhealthy';
+	await mockHealth(page, { status: 503, body });
+	await page.reload();
+
+	await expect(row).toContainText('Не работает');
+	await expect(row).not.toContainText('18 мс');
 });
 
 test('checks health once across client-side navigation', async ({ page }) => {

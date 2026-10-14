@@ -152,6 +152,7 @@ export const healthSnapshotSchema = z
 				assets: serviceHealthSchema,
 				comfyui: serviceHealthSchema,
 				d1: serviceHealthSchema,
+				featurebase: serviceHealthSchema,
 				nostr: nostrHealthSchema,
 				s3: serviceHealthSchema
 			})
