@@ -21,6 +21,7 @@ before the Change Date. See LICENSE for complete terms.
 		Palette,
 		Pencil,
 		Share2,
+		SlidersHorizontal,
 		Sparkles
 	} from '@lucide/svelte';
 	import { afterNavigate, goto } from '$app/navigation';
@@ -36,6 +37,8 @@ before the Change Date. See LICENSE for complete terms.
 	import ImageSkeleton from '$lib/components/ImageSkeleton.svelte';
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import RenderResult from '$lib/components/RenderResult.svelte';
+	import PhotoProcessingPanel from '$lib/components/PhotoProcessingPanel.svelte';
+	import PhotoProcessingPreview from '$lib/components/PhotoProcessingPreview.svelte';
 	import EditPanel from '$lib/components/EditPanel.svelte';
 	import MaskEditor from '$lib/components/MaskEditor.svelte';
 	import PromptViews from '$lib/components/PromptViews.svelte';
@@ -86,7 +89,8 @@ before the Change Date. See LICENSE for complete terms.
 	const modes = [
 		{ id: 'render', label: 'mode.render', icon: Sparkles },
 		{ id: 'edit', label: 'mode.edit', icon: Pencil },
-		{ id: 'styleTransfer', label: 'mode.styleTransfer', icon: Palette }
+		{ id: 'styleTransfer', label: 'mode.styleTransfer', icon: Palette },
+		{ id: 'photoProcessing', label: 'mode.photoProcessing', icon: SlidersHorizontal }
 	] satisfies {
 		id: Mode;
 		label: TranslationKey;
@@ -693,7 +697,7 @@ before the Change Date. See LICENSE for complete terms.
 				aria-label={t(modeOption.label)}
 				title={t(modeOption.label)}
 				tabindex={mode === modeOption.id || (mode === null && index === 0) ? 0 : -1}
-				class:active={mode === modeOption.id}
+				class={{ active: mode === modeOption.id }}
 				onclick={() => modeTabController.activate(index)}
 				onkeydown={modeTabController.onKeydown}
 			>
@@ -814,8 +818,7 @@ before the Change Date. See LICENSE for complete terms.
 			     `.canvas-layout` shape so the workspace footprint never changes
 			     between modes. -->
 				<div
-					class="canvas-layout"
-					class:reserve-panel-space={toolsPanelAtDefaultCorner}
+					class={['canvas-layout', { 'reserve-panel-space': toolsPanelAtDefaultCorner }]}
 					role="tabpanel"
 					id="mode-panel-render"
 					aria-labelledby="mode-tab-render"
@@ -861,7 +864,7 @@ before the Change Date. See LICENSE for complete terms.
 											role="tab"
 											aria-selected={request.sceneType === sceneTypeOption.id}
 											tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
-											class:active={request.sceneType === sceneTypeOption.id}
+											class={{ active: request.sceneType === sceneTypeOption.id }}
 											onclick={() => sceneTypeTabController.activate(index)}
 											onkeydown={sceneTypeTabController.onKeydown}
 										>
@@ -909,8 +912,7 @@ before the Change Date. See LICENSE for complete terms.
 				</div>
 
 				<div
-					class="canvas-layout"
-					class:reserve-panel-space={toolsPanelAtDefaultCorner}
+					class={['canvas-layout', { 'reserve-panel-space': toolsPanelAtDefaultCorner }]}
 					role="tabpanel"
 					id="mode-panel-edit"
 					aria-labelledby="mode-tab-edit"
@@ -978,8 +980,7 @@ before the Change Date. See LICENSE for complete terms.
 				</div>
 
 				<div
-					class="canvas-layout"
-					class:reserve-panel-space={toolsPanelAtDefaultCorner}
+					class={['canvas-layout', { 'reserve-panel-space': toolsPanelAtDefaultCorner }]}
 					role="tabpanel"
 					id="mode-panel-styleTransfer"
 					aria-labelledby="mode-tab-styleTransfer"
@@ -1011,6 +1012,49 @@ before the Change Date. See LICENSE for complete terms.
 							onerror={(error: unknown) => logBoundaryError('workspace.styleTransfer', error)}
 						>
 							<StyleTransferPanel />
+							{#snippet failed(_error: unknown, reset: () => void)}
+								<p class="boundary-failed">{t('boundary.failed')}</p>
+								<button type="button" class="boundary-retry" onclick={reset}>
+									{t('boundary.retry')}
+								</button>
+							{/snippet}
+						</svelte:boundary>
+					</FloatingToolsPanel>
+				</div>
+
+				<div
+					class={['canvas-layout', { 'reserve-panel-space': toolsPanelAtDefaultCorner }]}
+					role="tabpanel"
+					id="mode-panel-photoProcessing"
+					aria-labelledby="mode-tab-photoProcessing"
+					tabindex="0"
+					hidden={mode !== 'photoProcessing' || urlTargetStatus !== 'idle'}
+				>
+					<div class="canvas-col">
+						{#if mode === 'photoProcessing'}
+							{#if request.hasWorkingImage()}
+								<svelte:boundary
+									onerror={(error: unknown) => logBoundaryError('workspace.photoPreview', error)}
+								>
+									<PhotoProcessingPreview />
+									{#snippet failed(_error: unknown, reset: () => void)}
+										<p class="boundary-failed">{t('boundary.failed')}</p>
+										<button type="button" class="boundary-retry" onclick={reset}>
+											{t('boundary.retry')}
+										</button>
+									{/snippet}
+								</svelte:boundary>
+							{:else}
+								<ImageUpload />
+							{/if}
+						{/if}
+					</div>
+
+					<FloatingToolsPanel active={mode === 'photoProcessing'} header={modeSwitcher}>
+						<svelte:boundary
+							onerror={(error: unknown) => logBoundaryError('workspace.photoPanel', error)}
+						>
+							<PhotoProcessingPanel active={mode === 'photoProcessing'} />
 							{#snippet failed(_error: unknown, reset: () => void)}
 								<p class="boundary-failed">{t('boundary.failed')}</p>
 								<button type="button" class="boundary-retry" onclick={reset}>

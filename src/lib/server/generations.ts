@@ -202,6 +202,30 @@ export async function recordGeneration(
 	return { id, ...toBalance(row) };
 }
 
+export async function recordPhotoProcessing(
+	db: Database,
+	userId: string,
+	input: {
+		resultMediaId: number;
+		sourceMediaId: number;
+		sessionId: string;
+		formSnapshot: RequestFormSnapshot;
+	}
+): Promise<RecordedGeneration> {
+	const id = crypto.randomUUID();
+	const now = Date.now();
+	const rows = await db.all<BalanceRow>(sql`INSERT INTO generations
+  (id, user_id, result_media_id, source_media_id, prompt, kind, amount, balance_after, created_at, session_id,
+   archai_render_sec, archai_download_sec, archai_reupload_sec, form_snapshot)
+  VALUES (${id}, ${userId}, ${input.resultMediaId}, ${input.sourceMediaId}, 'photo processing', 'photo-processing', 0,
+   COALESCE((SELECT balance FROM credits WHERE user_id = ${userId}), 0), ${now}, ${input.sessionId},
+   0, 0, 0, ${JSON.stringify(input.formSnapshot)})
+  RETURNING balance_after AS balance, created_at AS updated_at`);
+	const row = rows[0];
+	if (!row) throw new Error('Photo processing history insert returned no row');
+	return { id, ...toBalance(row) };
+}
+
 export async function getGeneratedImageForUser(
 	db: Database,
 	userId: string,

@@ -116,7 +116,7 @@ export default defineConfig(({ mode }) => {
 						'img-src': ['self', 'blob:', 'data:', 'https:'],
 						'font-src': ['self'],
 						// `self` for our own endpoints; the NIP-46 rendezvous relays (wss://).
-						'connect-src': ['self', ...NOSTR_CONNECT_RELAYS],
+						'connect-src': ['self', 'blob:', ...NOSTR_CONNECT_RELAYS],
 						'object-src': ['none'],
 						'base-uri': ['self'],
 						'frame-ancestors': ['none'],

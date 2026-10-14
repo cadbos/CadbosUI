@@ -38,6 +38,11 @@ import { ADD_OBJECT_PRESETS } from '$lib/add-object-presets';
 import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 import { LIGHT_SETTINGS_FIXTURES, LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 import type { ModeHintTarget } from '$lib/mode-hints';
+import {
+	defaultPhotoAdjustments,
+	photoAdjustmentsSchema,
+	type PhotoAdjustments
+} from '$lib/photo-adjustments';
 import { DEFAULT_REPAINT_COLOR, REPAINT_COLOR_PATTERN } from '$lib/repaint-colors';
 import { imageRegionSchema, type ImageRegion } from '$lib/image-region';
 import { mediaAccess } from '$lib/state/media-access.svelte';
@@ -60,13 +65,7 @@ export interface EditOperation {
 	instruction: string;
 }
 
-// Which top-level mode produced a render that has no `editOp` of its own —
-// a plain "Создание" generation or a style-transfer result. Every other
-// mode/tool already has a unique `editOp.type` (see EDIT_OPERATION_TYPES),
-// so this only needs to cover the two that don't. Consumed by url-state.ts's
-// renderOrigin() to keep the active mode/tool in sync with whichever render
-// undo/redo is currently showing (see Workspace.svelte).
-export const RENDER_SOURCE_MODES = ['render', 'styleTransfer'] as const;
+export const RENDER_SOURCE_MODES = ['render', 'styleTransfer', 'photoProcessing'] as const;
 export type RenderSourceMode = (typeof RENDER_SOURCE_MODES)[number];
 
 // RequestFormSnapshot itself lives in $lib/api/contract.ts (re-exported
@@ -95,6 +94,7 @@ export interface RenderResult {
 	id: string;
 	recorded?: boolean;
 	outputKey: string;
+	sourceKey?: string;
 	cost: number;
 	balance: number;
 	parentId?: string;
@@ -196,6 +196,7 @@ export interface RequestJSON {
 	lightSettingsInstruction?: string;
 	repaintTarget?: string;
 	repaintColor?: string;
+	photoAdjustments?: PhotoAdjustments;
 	promptOverride: string | null;
 	currentRender?: RenderResult;
 	status: RequestStatus;
@@ -228,6 +229,7 @@ export interface NormalizedRequest {
 	repaintTarget: string;
 	repaintColor: string;
 	repaintRegion: ImageRegion | null;
+	photoAdjustments: PhotoAdjustments;
 	editPrompt: string;
 	addObjectInstruction: string;
 	removeObjectText: string;
@@ -345,13 +347,15 @@ export const requestFormSnapshotSchema = z.object({
 	// Absent for a snapshot recorded before the repaint tool existed.
 	repaintTarget: repaintTargetSchema.default(''),
 	repaintColor: repaintColorSchema.default(DEFAULT_REPAINT_COLOR),
-	repaintRegion: imageRegionSchema.nullable().default(null)
+	repaintRegion: imageRegionSchema.nullable().default(null),
+	photoAdjustments: photoAdjustmentsSchema.optional()
 });
 
 const renderResultSchema = z.object({
 	id: z.string().min(1),
 	recorded: z.boolean().optional(),
 	outputKey: z.string().min(1),
+	sourceKey: z.string().min(1).optional(),
 	cost: z.number(),
 	balance: z.number(),
 	parentId: z.string().optional(),
@@ -388,6 +392,7 @@ const requestJsonSchema = z
 		lightSettingsInstruction: lightSettingsInstructionSchema.default(''),
 		repaintTarget: repaintTargetSchema.default(''),
 		repaintColor: repaintColorSchema.default(DEFAULT_REPAINT_COLOR),
+		photoAdjustments: photoAdjustmentsSchema.default(defaultPhotoAdjustments),
 		promptOverride: z.string().nullable(),
 		currentRender: renderResultSchema.optional(),
 		status: z.enum(['idle', 'rendering', 'error'])
@@ -431,6 +436,7 @@ export interface UpdateFragmentPatch {
 
 export interface RenderResultFromResponseOptions {
 	parentId?: string;
+	sourceKey?: string;
 	editOp?: EditOperation;
 	sourceMode?: RenderSourceMode;
 	formSnapshot?: RequestFormSnapshot;
@@ -565,7 +571,8 @@ function cloneFormSnapshot(
 		lightSettingsInstruction: snapshot.lightSettingsInstruction,
 		repaintTarget: snapshot.repaintTarget,
 		repaintColor: snapshot.repaintColor,
-		repaintRegion: snapshot.repaintRegion ? { ...snapshot.repaintRegion } : null
+		repaintRegion: snapshot.repaintRegion ? { ...snapshot.repaintRegion } : null,
+		photoAdjustments: { ...(snapshot.photoAdjustments ?? defaultPhotoAdjustments()) }
 	};
 }
 
@@ -577,6 +584,7 @@ function cloneRenderResult(render: RenderResult | undefined): RenderResult | und
 		id: render.id,
 		...(render.recorded ? { recorded: true } : {}),
 		outputKey: render.outputKey,
+		...(render.sourceKey !== undefined ? { sourceKey: render.sourceKey } : {}),
 		cost: render.cost,
 		balance: render.balance,
 		...(render.parentId !== undefined ? { parentId: render.parentId } : {}),
@@ -682,6 +690,7 @@ export function renderResultFromResponse(
 		id: response.id ?? crypto.randomUUID(),
 		...(response.id !== undefined ? { recorded: true } : {}),
 		outputKey: mediaAccess.normalize(response.output).key,
+		sourceKey: opts?.sourceKey,
 		cost: response.cost,
 		balance: response.balance,
 		parentId: opts?.parentId,
@@ -828,6 +837,7 @@ export class RequestState {
 	// not part of toJSON()/fromJSON() or the URL.
 	#repaintRegion = $state.raw<{ region: ImageRegion; sourceKey: string | undefined } | null>(null);
 	activeRepaintJob = $state<ActiveRepaintJob | undefined>(undefined);
+	photoAdjustments = $state<PhotoAdjustments>(defaultPhotoAdjustments());
 	// Whether the currently displayed render is already the resolved result of a
 	// masked texture-replacement submission — Workspace.svelte reads this to know
 	// when to swap the canvas from the mask-drawing surface back to the render
@@ -1463,16 +1473,16 @@ export class RequestState {
 			lightSettingsInstruction: this.lightSettingsInstruction,
 			repaintTarget: this.repaintTarget,
 			repaintColor: this.repaintColor,
-			repaintRegion: this.activeRepaintRegion()
+			repaintRegion: this.activeRepaintRegion(),
+			photoAdjustments: { ...this.photoAdjustments }
 		};
 	}
 
-	// Restores the form to a past step's settings (FR-К6 undo/redo) — a no-op
-	// when the step predates this feature or has none (the synthetic
-	// original-photo root step, see #syntheticOriginalStep), leaving whatever
-	// the user currently has typed untouched rather than blanking it.
 	#applyFormSnapshot(snapshot: RequestFormSnapshot | undefined): void {
-		if (!snapshot) return;
+		if (!snapshot) {
+			this.resetPhotoAdjustments();
+			return;
+		}
 		this.promptFragments = cloneFragments(snapshot.promptFragments);
 		this.promptOverride = snapshot.promptOverride;
 		this.editPrompt = snapshot.editPrompt;
@@ -1497,6 +1507,7 @@ export class RequestState {
 		this.lightSettingsInstruction = snapshot.lightSettingsInstruction;
 		this.repaintTarget = snapshot.repaintTarget;
 		this.repaintColor = snapshot.repaintColor;
+		this.photoAdjustments = { ...(snapshot.photoAdjustments ?? defaultPhotoAdjustments()) };
 		// A past step's region was drawn on that step's source image, not on
 		// the one the form is being restored onto.
 		this.#repaintRegion = null;
@@ -1943,6 +1954,18 @@ export class RequestState {
 		};
 	}
 
+	setPhotoAdjustment(key: keyof PhotoAdjustments, value: number): void {
+		this.setPhotoAdjustments({ ...this.photoAdjustments, [key]: value });
+	}
+
+	setPhotoAdjustments(settings: PhotoAdjustments): void {
+		this.photoAdjustments = photoAdjustmentsSchema.parse(settings);
+	}
+
+	resetPhotoAdjustments(): void {
+		this.photoAdjustments = defaultPhotoAdjustments();
+	}
+
 	toJSON(): RequestJSON {
 		return {
 			id: this.id,
@@ -1969,6 +1992,7 @@ export class RequestState {
 			lightSettingsInstruction: this.lightSettingsInstruction,
 			repaintTarget: this.repaintTarget,
 			repaintColor: this.repaintColor,
+			photoAdjustments: { ...this.photoAdjustments },
 			promptOverride: this.promptOverride,
 			currentRender: cloneRenderResult(this.currentRender),
 			status: this.status
@@ -2010,6 +2034,7 @@ export class RequestState {
 		this.activeLightSettingsJob = undefined;
 		this.repaintTarget = parsed.repaintTarget;
 		this.repaintColor = parsed.repaintColor;
+		this.photoAdjustments = { ...parsed.photoAdjustments };
 		this.#repaintRegion = null;
 		this.activeRepaintJob = undefined;
 		this.activeFluxKontextEditJob = undefined;
@@ -2053,6 +2078,7 @@ export class RequestState {
 			repaintTarget: this.repaintTarget,
 			repaintColor: this.repaintColor,
 			repaintRegion: this.activeRepaintRegion(),
+			photoAdjustments: { ...this.photoAdjustments },
 			editPrompt: this.editPrompt,
 			addObjectInstruction: this.addObjectInstruction,
 			removeObjectText: this.removeObjectText,
@@ -2102,6 +2128,7 @@ export class RequestState {
 		this.activeLightSettingsJob = undefined;
 		this.repaintTarget = '';
 		this.repaintColor = DEFAULT_REPAINT_COLOR;
+		this.resetPhotoAdjustments();
 		this.#repaintRegion = null;
 		this.activeRepaintJob = undefined;
 		this.activeFluxKontextEditJob = undefined;
@@ -2183,6 +2210,7 @@ export class RequestState {
 		this.activeLightSettingsJob = cloneActiveLightSettingsJob(source.activeLightSettingsJob);
 		this.repaintTarget = source.repaintTarget;
 		this.repaintColor = source.repaintColor;
+		this.photoAdjustments = { ...source.photoAdjustments };
 		this.#repaintRegion = source.#repaintRegion
 			? { ...source.#repaintRegion, region: { ...source.#repaintRegion.region } }
 			: null;

@@ -12,6 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import type { PhotoAdjustments } from '$lib/photo-adjustments';
+
 import { z } from 'zod';
 import type { ImageRegion } from '$lib/image-region';
 
@@ -63,7 +65,8 @@ export const EDIT_OPERATION_TYPES = [
 	'remove-object',
 	'light-settings',
 	'repaint',
-	'upscale'
+	'upscale',
+	'photo-processing'
 ] as const;
 
 export type EditOperationType = (typeof EDIT_OPERATION_TYPES)[number];
@@ -76,6 +79,7 @@ export type EditOperationType = (typeof EDIT_OPERATION_TYPES)[number];
 // and the server-side request schemas (src/lib/server/api.ts) share one shape
 // without the server depending on Svelte-only modules.
 export interface RequestFormSnapshot {
+	photoAdjustments?: PhotoAdjustments;
 	promptFragments: PromptFragment[];
 	promptOverride: string | null;
 	editPrompt: string;
@@ -421,7 +425,8 @@ export const generationKinds = [
 	'object-replacement',
 	'texture-replacement',
 	'light-settings',
-	'repaint'
+	'repaint',
+	'photo-processing'
 ] as const;
 
 export type GenerationKind = (typeof generationKinds)[number];

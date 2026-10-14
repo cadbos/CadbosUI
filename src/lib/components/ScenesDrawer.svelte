@@ -25,6 +25,7 @@ before the Change Date. See LICENSE for complete terms.
 		Paintbrush,
 		Pencil,
 		Replace,
+		SlidersHorizontal,
 		Sparkles,
 		Trash2,
 		X
@@ -61,6 +62,7 @@ before the Change Date. See LICENSE for complete terms.
 		edit: 'generatedImages.kind.edit',
 		'style-transfer': 'generatedImages.kind.styleTransfer',
 		upscale: 'generatedImages.kind.upscale',
+		'photo-processing': 'generatedImages.kind.photo-processing',
 		'object-replacement': 'generatedImages.kind.objectReplacement',
 		'texture-replacement': 'generatedImages.kind.textureReplacement',
 		'light-settings': 'generatedImages.kind.lightSettings',
@@ -77,6 +79,7 @@ before the Change Date. See LICENSE for complete terms.
 		edit: Pencil,
 		'style-transfer': Palette,
 		upscale: Hd,
+		'photo-processing': SlidersHorizontal,
 		'object-replacement': Replace,
 		'texture-replacement': PaintRoller,
 		'light-settings': Lightbulb,
@@ -599,8 +602,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <dialog
 	id="scenes-drawer"
-	class="drawer"
-	class:resizing
+	class={['drawer', { resizing }]}
 	{@attach attachDrawer}
 	aria-labelledby="scenes-title"
 	style:--drawer-resized-width={width !== null ? `${width}px` : undefined}
@@ -657,8 +659,7 @@ before the Change Date. See LICENSE for complete terms.
 				{#each sceneViews as view (view)}
 					<button
 						type="button"
-						class="segment"
-						class:active={filter.view === view}
+						class={['segment', { active: filter.view === view }]}
 						aria-pressed={filter.view === view}
 						onclick={() => selectView(view)}
 					>

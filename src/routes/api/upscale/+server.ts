@@ -140,6 +140,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				sessionId: parsed.data.sessionId,
 				prompt: '4k upscale',
 				kind: 'upscale',
+				formSnapshot: parsed.data.formSnapshot,
 				amount: result.cost,
 				archaiRenderSec: result.renderSec,
 				archaiDownloadSec: result.downloadSec,

@@ -22,23 +22,27 @@ before the Change Date. See LICENSE for complete terms.
 		SquareSplitHorizontal
 	} from '@lucide/svelte';
 	import { resolve } from '$app/paths';
+	import type { Snippet } from 'svelte';
 	import CompareSlider from '$lib/components/CompareSlider.svelte';
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import RegionSelector from '$lib/components/RegionSelector.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
-	import { request, renderResultFromResponse } from '$lib/state/request.svelte';
+	import { request } from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
-	import { generatedImages } from '$lib/state/generated-images.svelte';
 	import { currency } from '$lib/state/currency.svelte';
-	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
+	import { photoProcessing } from '$lib/state/photo-processing.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
 
-	let { regionTool = undefined }: { regionTool?: 'repaint' | 'object-replacement' } = $props();
+	interface Props {
+		regionTool?: 'repaint' | 'object-replacement';
+		imagePreview?: Snippet;
+		photoProcessingMode?: boolean;
+	}
+
+	let { regionTool = undefined, imagePreview, photoProcessingMode = false }: Props = $props();
 
 	let comparing = $state(false);
 	let imageSize = $state<{ width: number; height: number } | null>(null);
-	let upscaling = $state(false);
-	let upscaleError = $state<string | null>(null);
 	let resetConfirmOpen = $state(false);
 
 	function rememberImageSize(image: HTMLImageElement): void {
@@ -69,6 +73,22 @@ before the Change Date. See LICENSE for complete terms.
 
 	const render = $derived(request.currentRender);
 	const imageUrl = $derived(render ? mediaAccess.get(render.outputKey)?.url : undefined);
+	const afterImageUrl = $derived(
+		photoProcessingMode
+			? photoProcessing.showOriginal
+				? photoProcessing.sourceUrl
+				: (photoProcessing.previewUrl ?? imageUrl)
+			: imageUrl
+	);
+	const downloadUrl = $derived(
+		render && !(photoProcessingMode && photoProcessing.hasChanges)
+			? resolve('/api/media/[bucket]/[...filename]', {
+					bucket: render.outputKey.slice(0, render.outputKey.indexOf('/')),
+					filename: render.outputKey.slice(render.outputKey.indexOf('/') + 1)
+				})
+			: undefined
+	);
+
 	// The originally uploaded photo is itself the root history step (FR-К6), so
 	// "before" is always the actual previous step — there's nothing to compare
 	// against only at that root step, where comparing is correctly disabled.
@@ -77,60 +97,29 @@ before the Change Date. See LICENSE for complete terms.
 	);
 	const canCompare = $derived(beforeImageUrl !== undefined);
 	const isAuthenticated = $derived(auth.status === 'authenticated');
-	// The render result doesn't carry its own format, so the current form setting
-	// is the best available signal for the download filename's extension.
-	const downloadName = $derived(`render.${request.outputFormat}`);
-
-	async function upscale(): Promise<void> {
-		if (!render || upscaling || !isAuthenticated) return;
-		// Snapshot the render being upscaled — request.currentRender can move on
-		// (undo/redo, a new edit) while this call is in flight, and the response
-		// must still attach to the chain it was actually requested against.
-		const sourceRender = render;
-		upscaling = true;
-		upscaleError = null;
-		const overlayId = generationOverlay.start('generationOverlay.upscale');
-		try {
-			const { sessionId } = await request.ensureProjectSession();
-			const response = await fetch('/api/upscale', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					imageKey: sourceRender.outputKey,
-					outputFormat: request.outputFormat,
-					sessionId
-				})
-			});
-			if (!response.ok) throw new Error('upscale failed');
-			const result = await response.json();
-			const newRender = renderResultFromResponse(result, {
-				parentId: sourceRender.id,
-				editOp: { type: 'upscale', instruction: t('toolbar.upscaleDone') }
-			});
-			request.applyEditResult(newRender);
-			void auth.refreshCredit();
-			if (auth.canLoadGeneratedImages) void generatedImages.load();
-		} catch {
-			upscaleError = t('toolbar.upscaleFailed');
-		} finally {
-			upscaling = false;
-			generationOverlay.stop(overlayId);
-		}
-	}
+	const downloadFormat = $derived.by(() => {
+		const extension = render?.outputKey.split('.').at(-1)?.toLowerCase();
+		return extension && ['png', 'webp', 'jpg', 'jpeg', 'avif'].includes(extension)
+			? extension
+			: (render?.formSnapshot?.outputFormat ?? request.outputFormat);
+	});
+	const downloadName = $derived(`render.${downloadFormat}`);
 </script>
 
-{#if render && imageUrl}
+{#if imagePreview || (render && imageUrl)}
 	<section class="result">
 		<div class="image-card">
-			{#if comparing && beforeImageUrl}
+			{#if comparing && beforeImageUrl && afterImageUrl}
 				<CompareSlider
 					beforeSrc={beforeImageUrl}
-					afterSrc={imageUrl}
+					afterSrc={afterImageUrl}
 					beforeAlt={t('toolbar.before')}
 					afterAlt={t('toolbar.after')}
 					handleLabel={t('toolbar.compare')}
 				/>
-			{:else}
+			{:else if imagePreview}
+				{@render imagePreview()}
+			{:else if imageUrl}
 				<LazyImage
 					src={imageUrl}
 					alt={t('render.generate')}
@@ -163,7 +152,7 @@ before the Change Date. See LICENSE for complete terms.
 				<button
 					type="button"
 					class="icon-btn"
-					disabled={!request.canUndoEdit}
+					disabled={!request.canUndoEdit || photoProcessing.busy}
 					aria-label={t('toolbar.previousGeneration')}
 					title={t('toolbar.previousGeneration')}
 					onclick={() => request.undoLastEdit()}
@@ -173,7 +162,7 @@ before the Change Date. See LICENSE for complete terms.
 				<button
 					type="button"
 					class="icon-btn"
-					disabled={!request.canRedoEdit}
+					disabled={!request.canRedoEdit || photoProcessing.busy}
 					aria-label={t('toolbar.nextGeneration')}
 					title={t('toolbar.nextGeneration')}
 					onclick={() => request.redoEdit()}
@@ -183,32 +172,33 @@ before the Change Date. See LICENSE for complete terms.
 
 				<span class="toolbar-sep" aria-hidden="true"></span>
 
-				<a
-					href={resolve('/api/media/[bucket]/[...filename]', {
-						bucket: render.outputKey.slice(0, render.outputKey.indexOf('/')),
-						filename: render.outputKey.slice(render.outputKey.indexOf('/') + 1)
-					})}
-					download={downloadName}
-					class="icon-btn"
-					aria-label={t('render.download')}
-					title={t('render.download')}
-				>
-					<Download size={16} strokeWidth={1.8} aria-hidden="true" />
-				</a>
+				{#if downloadUrl}
+					<a
+						href={downloadUrl}
+						download={downloadName}
+						class="icon-btn"
+						aria-label={t('render.download')}
+						title={t('render.download')}
+					>
+						<Download size={16} strokeWidth={1.8} aria-hidden="true" />
+					</a>
+				{/if}
 				<button
 					type="button"
 					class="icon-btn"
-					disabled={upscaling || !isAuthenticated}
+					disabled={photoProcessing.busy ||
+						!isAuthenticated ||
+						(photoProcessingMode && !photoProcessing.canUpscale)}
 					aria-label={t('toolbar.upscale')}
+					aria-busy={photoProcessing.upscaling}
 					title={isAuthenticated ? t('toolbar.upscale') : t('toolbar.signInToUpscale')}
-					onclick={() => void upscale()}
+					onclick={() => void photoProcessing.upscale(photoProcessingMode)}
 				>
 					<Hd size={16} strokeWidth={1.8} aria-hidden="true" />
 				</button>
 				<button
 					type="button"
-					class="icon-btn"
-					class:active={comparing}
+					class={['icon-btn', { active: comparing }]}
 					disabled={!canCompare}
 					aria-pressed={comparing}
 					aria-label={t('toolbar.compare')}
@@ -224,25 +214,28 @@ before the Change Date. See LICENSE for complete terms.
 					type="button"
 					class="icon-btn"
 					aria-label={t('toolbar.reset')}
+					disabled={photoProcessing.busy}
 					title={t('toolbar.reset')}
 					onclick={requestReset}
 				>
 					<ImagePlus size={16} strokeWidth={1.8} aria-hidden="true" />
 				</button>
 
-				{#if upscaleError}
-					<p class="toolbar-error" role="alert">{upscaleError}</p>
+				{#if photoProcessing.error && !photoProcessingMode}
+					<p class="toolbar-error" role="alert">{photoProcessing.error}</p>
 				{/if}
 			</div>
 		</div>
 
-		<div class="footer">
-			<div class="meta">
-				<span>{ti('render.cost', { cost: currency.format(render.cost) })}</span>
-				<span class="sep">·</span>
-				<span>{ti('render.balance', { balance: currency.format(render.balance) })}</span>
+		{#if render}
+			<div class="footer">
+				<div class="meta">
+					<span>{ti('render.cost', { cost: currency.format(render.cost) })}</span>
+					<span class="sep">·</span>
+					<span>{ti('render.balance', { balance: currency.format(render.balance) })}</span>
+				</div>
 			</div>
-		</div>
+		{/if}
 	</section>
 
 	{#if resetConfirmOpen}

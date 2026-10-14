@@ -13,6 +13,12 @@
  */
 
 import { z } from 'zod';
+import {
+	defaultPhotoAdjustments,
+	hasPhotoAdjustments,
+	photoAdjustmentsSchema,
+	type PhotoAdjustments
+} from '$lib/photo-adjustments';
 import { OUTPUT_FORMATS, type GenerationKind, type OutputFormat } from '$lib/api/contract';
 import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 import { DEFAULT_REPAINT_COLOR, REPAINT_COLOR_PATTERN } from '$lib/repaint-colors';
@@ -29,7 +35,7 @@ import {
 import { SCRATCH_TAB_ID, workspaceTabs } from '$lib/state/workspace-tabs.svelte';
 import { STYLE_PRESETS } from '$lib/style-presets';
 
-export type Mode = 'render' | 'edit' | 'styleTransfer';
+export type Mode = 'render' | 'edit' | 'styleTransfer' | 'photoProcessing';
 export type ViewId = 'chat' | 'keyValue' | 'graph';
 export type ToolId =
 	| 'freeform'
@@ -61,7 +67,8 @@ export interface WorkspaceDestination {
 const MODE_PATHS: Record<Mode, string> = {
 	render: '/create',
 	edit: '/edit',
-	styleTransfer: '/style-transfer'
+	styleTransfer: '/style-transfer',
+	photoProcessing: '/photo-processing'
 };
 
 const VIEW_SLUGS: Record<ViewId, string> = {
@@ -127,6 +134,7 @@ function slugToScene(param: string | undefined): SceneType {
 // has no mode selected until the user picks one; a route the workspace is
 // not mounted for is unselected too, rather than guessed as create.
 export function routeIdToMode(routeId: string | null): Mode | null {
+	if (routeId === '/photo-processing') return 'photoProcessing';
 	if (routeId?.startsWith('/edit')) return 'edit';
 	if (routeId?.startsWith('/style-transfer')) return 'styleTransfer';
 	if (routeId?.startsWith('/create')) return 'render';
@@ -166,6 +174,8 @@ export interface RenderOrigin {
 // mode/tool alone rather than guessing.
 export function renderOrigin(render: RenderResult | undefined): RenderOrigin | undefined {
 	if (!render) return undefined;
+	if (render.sourceMode === 'photoProcessing' || render.editOp?.type === 'photo-processing')
+		return { mode: 'photoProcessing' };
 	if (render.sourceMode === 'render') return { mode: 'render' };
 	if (render.sourceMode === 'styleTransfer') return { mode: 'styleTransfer' };
 	const tool = render.editOp ? EDIT_OP_TOOL[render.editOp.type] : undefined;
@@ -216,8 +226,11 @@ export function destinationForGenerationKind(
 			return { mode: 'edit', subTab: { tool: 'light-settings' } };
 		case 'repaint':
 			return { mode: 'edit', subTab: { tool: 'repaint' } };
-		case 'edit':
-		case 'upscale': {
+		case 'upscale':
+			return { mode: 'photoProcessing', subTab: {} };
+		case 'photo-processing':
+			return { mode: 'photoProcessing', subTab: {} };
+		case 'edit': {
 			const editOperationType = formSnapshot?.editOperationType;
 			const tool = editOperationType ? EDIT_OP_TOOL[editOperationType] : undefined;
 			return { mode: 'edit', subTab: { tool: tool ?? 'freeform' } };
@@ -234,6 +247,7 @@ export function destinationForGenerationKind(
 export function isWorkspaceRoute(routeId: string | null): boolean {
 	return (
 		routeId === '/' ||
+		routeId === '/photo-processing' ||
 		routeId?.startsWith('/create') === true ||
 		routeId?.startsWith('/edit') === true ||
 		routeId?.startsWith('/style-transfer') === true
@@ -322,13 +336,21 @@ function parseFragments(raw: string): ParsedFragment[] {
 // buildShareUrl itself produces.
 export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab = {}): string {
 	const path =
-		mode === 'render'
-			? `${MODE_PATHS.render}/${request.sceneType}`
-			: mode === 'edit'
-				? MODE_PATHS.edit
-				: `${MODE_PATHS.styleTransfer}/${request.sceneType}`;
+		mode === 'photoProcessing'
+			? MODE_PATHS.photoProcessing
+			: mode === 'render'
+				? `${MODE_PATHS.render}/${request.sceneType}`
+				: mode === 'edit'
+					? MODE_PATHS.edit
+					: `${MODE_PATHS.styleTransfer}/${request.sceneType}`;
 
 	const params = new URLSearchParams();
+
+	if (mode === 'photoProcessing') {
+		params.set('format', request.outputFormat);
+		if (hasPhotoAdjustments(request.photoAdjustments))
+			params.set('adjustments', JSON.stringify(request.photoAdjustments));
+	}
 
 	if (mode === 'render') {
 		params.set('view', viewToSlug(subTab.view ?? 'chat'));
@@ -510,6 +532,17 @@ export function generationAnchorFromSearch(searchParams: URLSearchParams): Gener
 	return { generationId, step: searchParams.get('step') === 'before' ? 'before' : 'result' };
 }
 
+function photoAdjustmentsFromSearch(searchParams: URLSearchParams): PhotoAdjustments {
+	const raw = searchParams.get('adjustments');
+	if (!raw || raw.length > 2048) return defaultPhotoAdjustments();
+	try {
+		const parsed = photoAdjustmentsSchema.safeParse(JSON.parse(raw));
+		return parsed.success ? parsed.data : defaultPhotoAdjustments();
+	} catch {
+		return defaultPhotoAdjustments();
+	}
+}
+
 // Reverse of buildShareUrl: applies every field explicitly (falling back to
 // defaults when a param/path segment is absent) so a given URL always maps to
 // the same request state. `sceneParam` is `page.params.scene` (present only
@@ -534,12 +567,17 @@ export function applyShareParams(
 	searchParams: URLSearchParams,
 	request: RequestState
 ): void {
-	request.setSceneType(mode === 'edit' ? 'interior' : slugToScene(sceneParam));
+	if (mode !== 'photoProcessing')
+		request.setSceneType(mode === 'edit' ? 'interior' : slugToScene(sceneParam));
 
 	const format = searchParams.get('format');
 	request.setOutputFormat(
 		(OUTPUT_FORMATS as readonly string[]).includes(format ?? '') ? (format as OutputFormat) : 'webp'
 	);
+
+	if (mode === 'photoProcessing') {
+		request.setPhotoAdjustments(photoAdjustmentsFromSearch(searchParams));
+	}
 
 	if (mode === 'render') {
 		const prompt = searchParams.get('prompt');
