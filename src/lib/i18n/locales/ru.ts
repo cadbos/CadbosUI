@@ -1086,7 +1086,7 @@ export const ru = {
 	'photoProcessing.adjustment.blacks': 'Чёрные',
 	'photoProcessing.adjustment.temperature': 'Температура',
 	'photoProcessing.adjustment.tint': 'Оттенок',
-	'photoProcessing.adjustment.vibrance': 'Сочность',
+	'photoProcessing.adjustment.vibrance': 'Красочность',
 	'photoProcessing.adjustment.saturation': 'Насыщенность',
 	'photoProcessing.adjustment.clarity': 'Чёткость',
 	'photoProcessing.adjustment.sharpness': 'Резкость',
