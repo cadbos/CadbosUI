@@ -28,7 +28,7 @@ export interface Dictionary {
 	'photoProcessing.group.effects': string;
 	'photoProcessing.reset': string;
 	'photoProcessing.resetAdjustment': string;
-	'photoProcessing.showOriginal': string;
+	'photoProcessing.saveAndUpscale': string;
 	'photoProcessing.save': string;
 	'photoProcessing.saving': string;
 	'photoProcessing.previewAlt': string;

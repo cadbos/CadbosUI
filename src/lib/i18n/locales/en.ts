@@ -1050,7 +1050,7 @@ export const en = {
 	'photoProcessing.group.effects': 'Effects',
 	'photoProcessing.reset': 'Reset adjustments',
 	'photoProcessing.resetAdjustment': 'Reset {name}',
-	'photoProcessing.showOriginal': 'Show original',
+	'photoProcessing.saveAndUpscale': 'Save and upscale to 4K',
 	'photoProcessing.save': 'Save adjustments',
 	'photoProcessing.saving': 'Saving adjustments…',
 	'photoProcessing.previewAlt': 'Photo adjustment preview',

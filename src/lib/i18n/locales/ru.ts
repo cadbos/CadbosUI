@@ -1063,7 +1063,7 @@ export const ru = {
 	'photoProcessing.group.effects': 'Эффекты',
 	'photoProcessing.reset': 'Сбросить настройки',
 	'photoProcessing.resetAdjustment': 'Сбросить: {name}',
-	'photoProcessing.showOriginal': 'Показать оригинал',
+	'photoProcessing.saveAndUpscale': 'Сохранить и улучшить до 4K',
 	'photoProcessing.save': 'Сохранить обработку',
 	'photoProcessing.saving': 'Сохраняем обработку…',
 	'photoProcessing.previewAlt': 'Предпросмотр обработки фото',

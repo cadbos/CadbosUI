@@ -73,7 +73,7 @@ class PhotoProcessingState {
 	previewUrl = $derived(this.previewImage?.src);
 	presetPreviewUrls = $state<Record<string, string>>({});
 	loading = $state(false);
-	showOriginal = $state(false);
+	upscaleOnSave = $state(false);
 	saving = $state(false);
 	upscaling = $state(false);
 	notice = $state<string | null>(null);

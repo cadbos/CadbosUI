@@ -74,11 +74,7 @@ before the Change Date. See LICENSE for complete terms.
 	const render = $derived(request.currentRender);
 	const imageUrl = $derived(render ? mediaAccess.get(render.outputKey)?.url : undefined);
 	const afterImageUrl = $derived(
-		photoProcessingMode
-			? photoProcessing.showOriginal
-				? photoProcessing.sourceUrl
-				: (photoProcessing.previewUrl ?? imageUrl)
-			: imageUrl
+		photoProcessingMode ? (photoProcessing.previewUrl ?? imageUrl) : imageUrl
 	);
 	const downloadUrl = $derived(
 		render && !(photoProcessingMode && photoProcessing.hasChanges)

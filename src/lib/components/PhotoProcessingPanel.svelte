@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { Aperture, Eye, Hd, Image, RotateCcw } from '@lucide/svelte';
+	import { Aperture, Image, RotateCcw } from '@lucide/svelte';
 
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import GenerateButton from '$lib/components/GenerateButton.svelte';
@@ -24,7 +24,6 @@ before the Change Date. See LICENSE for complete terms.
 		type PhotoAdjustmentKey,
 		type PhotoAdjustments
 	} from '$lib/photo-adjustments';
-	import { auth } from '$lib/state/auth.svelte';
 	import { photoProcessing } from '$lib/state/photo-processing.svelte';
 	import { request, type OutputFormat } from '$lib/state/request.svelte';
 	import { createTabController } from '$lib/utils';
@@ -79,7 +78,6 @@ before the Change Date. See LICENSE for complete terms.
 
 	function applyPreset(adjustments: PhotoAdjustments): void {
 		request.setPhotoAdjustments(adjustments);
-		photoProcessing.showOriginal = false;
 	}
 </script>
 
@@ -221,34 +219,31 @@ before the Change Date. See LICENSE for complete terms.
 				<option value="avif">AVIF</option>
 			</select>
 		</label>
-		<button
-			type="button"
-			class={['compare-button', 'icon-button', { active: photoProcessing.showOriginal }]}
-			aria-pressed={photoProcessing.showOriginal}
-			aria-label={t('photoProcessing.showOriginal')}
-			title={t('photoProcessing.showOriginal')}
-			disabled={!sourceUrl}
-			onclick={() => (photoProcessing.showOriginal = !photoProcessing.showOriginal)}
-		>
-			<Eye size={18} strokeWidth={1.8} aria-hidden="true" />
-		</button>
-		<button
-			type="button"
-			class="upscale-button icon-button"
-			aria-label={t('toolbar.upscale')}
-			disabled={!photoProcessing.canUpscale}
-			aria-busy={photoProcessing.upscaling}
-			title={auth.status === 'authenticated' ? t('toolbar.upscale') : t('toolbar.signInToUpscale')}
-			onclick={() => void photoProcessing.upscale(true)}
-		>
-			<Hd size={18} strokeWidth={1.8} aria-hidden="true" />
-		</button>
+		<label class="upscale-option">
+			<input
+				type="checkbox"
+				bind:checked={photoProcessing.upscaleOnSave}
+				disabled={controlsDisabled}
+			/>
+			<span>{t('toolbar.upscale')}</span>
+		</label>
 		<div class="save-trigger">
 			<GenerateButton
-				label={photoProcessing.saving ? t('photoProcessing.saving') : t('photoProcessing.save')}
-				disabled={!photoProcessing.canSave}
-				busy={photoProcessing.saving}
-				onclick={() => void photoProcessing.save()}
+				label={photoProcessing.busy
+					? t(photoProcessing.upscaling ? 'generationOverlay.upscale' : 'photoProcessing.saving')
+					: t(
+							photoProcessing.upscaleOnSave
+								? 'photoProcessing.saveAndUpscale'
+								: 'photoProcessing.save'
+						)}
+				disabled={photoProcessing.upscaleOnSave
+					? !photoProcessing.canUpscale
+					: !photoProcessing.canSave}
+				busy={photoProcessing.busy}
+				onclick={() =>
+					void (photoProcessing.upscaleOnSave
+						? photoProcessing.upscale(true)
+						: photoProcessing.save())}
 			/>
 		</div>
 	</div>
@@ -520,7 +515,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 	.format-label {
 		display: flex;
-		flex: 1 1 auto;
+		flex: 0 1 7rem;
 		flex-direction: column;
 		align-items: flex-start;
 		gap: 0.25rem;
@@ -539,18 +534,29 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-text);
 		font: inherit;
 	}
-	.compare-button,
-	.upscale-button {
-		flex: 0 0 2.5rem;
-		width: 2.5rem;
-		height: 2.5rem;
-		border-color: var(--color-border);
-		background: var(--color-surface);
+	.upscale-option {
+		display: flex;
+		align-items: center;
+		align-self: flex-end;
+		flex: 1 1 6rem;
+		gap: 0.375rem;
+		min-width: 0;
+		min-height: 2.5rem;
+		color: var(--color-text);
+		font-size: 0.75rem;
+		line-height: 1.35;
+		cursor: pointer;
 	}
-	.compare-button.active {
-		border-color: var(--color-accent);
-		background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
-		color: var(--color-accent-text);
+	.upscale-option input {
+		flex: 0 0 auto;
+		width: 1rem;
+		height: 1rem;
+		margin: 0;
+		accent-color: var(--color-accent);
+	}
+	.upscale-option span {
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 	.save-trigger {
 		flex: 0 0 3.5rem;

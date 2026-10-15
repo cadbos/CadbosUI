@@ -266,7 +266,7 @@ async function openTwoProjects(page: Page): Promise<Locator> {
 	return tabs;
 }
 
-test('photo mode previews actual pixel changes, compares the original and supports presets and keyboard tabs', async ({
+test('photo mode previews actual pixel changes and supports presets and keyboard tabs', async ({
 	page
 }) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
@@ -286,12 +286,7 @@ test('photo mode previews actual pixel changes, compares the original and suppor
 	expect(changed).not.toEqual(original);
 	expect(uploads).toBe(0);
 
-	const compare = panel(page).getByRole('button', { name: ru['photoProcessing.showOriginal'] });
-	await compare.click();
-	await expect(compare).toHaveAttribute('aria-pressed', 'true');
-	await expect.poll(() => pixels(preview(page))).toEqual(original);
-	await compare.click();
-	await expect.poll(() => pixels(preview(page))).toEqual(changed);
+	await expect(panel(page).locator('.compare-button')).toHaveCount(0);
 
 	await panel(page).getByRole('button', { name: ru['photoProcessing.reset'] }).click();
 	await expect(exposure).toHaveValue('0');
@@ -428,8 +423,15 @@ test('PNG save exports changed full-resolution pixels for free and undo/redo res
 	page
 }) => {
 	await mockPhotoWorkspace(page);
+	let upscales = 0;
+	page.on('request', (request) => {
+		if (request.url().endsWith('/api/upscale')) upscales++;
+	});
 	const submissions = await mockSaves(page);
 	await openPhoto(page);
+	await expect(
+		panel(page).getByRole('checkbox', { name: ru['toolbar.upscale'], exact: true })
+	).not.toBeChecked();
 	await panel(page).getByRole('combobox', { name: ru['render.outputFormat'] }).selectOption('png');
 	const exposure = panel(page).getByRole('spinbutton', {
 		name: ru['photoProcessing.adjustment.exposure']
@@ -494,6 +496,7 @@ test('PNG save exports changed full-resolution pixels for free and undo/redo res
 		.click();
 	await expect(exposure).toHaveValue('40');
 	await expect(page).toHaveURL(new RegExp(`generation=${submissions[1].id}`));
+	expect(upscales).toBe(0);
 });
 
 test('4K accepts the uploaded original and both panel and toolbar block duplicate requests', async ({
@@ -522,18 +525,26 @@ test('4K accepts the uploaded original and both panel and toolbar block duplicat
 		});
 	});
 	await openPhoto(page);
-	const buttons = panel(page).getByRole('button', { name: ru['toolbar.upscale'], exact: true });
-	await expect(buttons).toHaveCount(2);
-	await buttons.nth(1).click();
+	const toolbar = panel(page).getByRole('button', { name: ru['toolbar.upscale'], exact: true });
+	const checkbox = panel(page).getByRole('checkbox', { name: ru['toolbar.upscale'], exact: true });
+	const play = panel(page).locator('.save-trigger button');
+	await expect(toolbar).toHaveCount(1);
+	await expect(checkbox).not.toBeChecked();
+	await expect(play).toBeDisabled();
+	await checkbox.check();
+	expect(calls).toBe(0);
+	await expect(play).toBeEnabled();
+	await play.click();
 	await expect.poll(() => calls).toBe(1);
-	await expect(buttons.nth(0)).toBeDisabled();
-	await expect(buttons.nth(1)).toBeDisabled();
+	await expect(toolbar).toBeDisabled();
+	await expect(play).toBeDisabled();
+	await expect(checkbox).toBeDisabled();
 	expect(submitted).toMatchObject({
 		imageKey: mediaKey(SOURCE_FILENAME),
 		sessionId: E2E_SESSION_ID
 	});
 	complete?.();
-	await expect(buttons.nth(0)).toBeEnabled();
+	await expect(toolbar).toBeEnabled();
 	await expect(page).toHaveURL(/generation=00000000-0000-4000-8000-000000001529/);
 	expect(calls).toBe(1);
 });
@@ -561,9 +572,9 @@ test('4K saves pending adjustments first and sends the saved photo to upscale', 
 	await panel(page)
 		.getByRole('spinbutton', { name: ru['photoProcessing.adjustment.exposure'] })
 		.fill('30');
+	await panel(page).getByRole('checkbox', { name: ru['toolbar.upscale'], exact: true }).check();
 	await panel(page)
-		.getByRole('button', { name: ru['toolbar.upscale'], exact: true })
-		.nth(1)
+		.getByRole('button', { name: ru['photoProcessing.saveAndUpscale'], exact: true })
 		.click();
 	await expect(page).toHaveURL(/generation=00000000-0000-4000-8000-000000001530/);
 	expect(saves).toHaveLength(1);
@@ -592,34 +603,48 @@ test('guests can preview adjustments but cannot save or upscale', async ({ page 
 		panel(page).getByRole('button', { name: ru['photoProcessing.save'], exact: true })
 	).toBeDisabled();
 	const upscales = panel(page).getByRole('button', { name: ru['toolbar.upscale'], exact: true });
-	await expect(upscales.nth(0)).toBeDisabled();
-	await expect(upscales.nth(1)).toBeDisabled();
+	await expect(upscales).toHaveCount(1);
+	await expect(upscales).toBeDisabled();
+	await panel(page).getByRole('checkbox', { name: ru['toolbar.upscale'], exact: true }).check();
+	await expect(
+		panel(page).getByRole('button', { name: ru['photoProcessing.saveAndUpscale'], exact: true })
+	).toBeDisabled();
 	await expect(preview(page)).toHaveAttribute('src', /^blob:/);
 });
 
-test('a save failure keeps adjustments retryable and reports the server error', async ({
-	page
-}) => {
-	await mockPhotoWorkspace(page);
-	await page.route('**/api/photo-processing', async (route) => {
-		await route.fulfill({
-			status: 500,
-			contentType: 'application/json',
-			body: JSON.stringify({ error: { code: 'photo_processing_failed', message: 'Save failed' } })
+for (const upscale of [false, true]) {
+	test(`a save failure is retryable and blocks 4K when upscale is ${upscale}`, async ({ page }) => {
+		await mockPhotoWorkspace(page);
+		let upscaleCalls = 0;
+		page.on('request', (request) => {
+			if (request.url().endsWith('/api/upscale')) upscaleCalls++;
 		});
+		await page.route('**/api/photo-processing', async (route) => {
+			await route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: { code: 'photo_processing_failed', message: 'Save failed' } })
+			});
+		});
+		await openPhoto(page);
+		const exposure = panel(page).getByRole('spinbutton', {
+			name: ru['photoProcessing.adjustment.exposure']
+		});
+		await exposure.fill('20');
+		await panel(page)
+			.getByRole('checkbox', { name: ru['toolbar.upscale'], exact: true })
+			.setChecked(upscale);
+		const save = panel(page).locator('.save-trigger button');
+		await save.click();
+		await expect(panel(page).getByRole('alert')).toHaveText(
+			ru[upscale ? 'toolbar.upscaleFailed' : 'photoProcessing.saveFailed']
+		);
+		await expect(exposure).toHaveValue('20');
+		await expect(save).toBeEnabled();
+		await expect(page).not.toHaveURL(/generation=/);
+		expect(upscaleCalls).toBe(0);
 	});
-	await openPhoto(page);
-	const exposure = panel(page).getByRole('spinbutton', {
-		name: ru['photoProcessing.adjustment.exposure']
-	});
-	await exposure.fill('20');
-	const save = panel(page).getByRole('button', { name: ru['photoProcessing.save'], exact: true });
-	await save.click();
-	await expect(panel(page).getByRole('alert')).toHaveText(ru['photoProcessing.saveFailed']);
-	await expect(exposure).toHaveValue('20');
-	await expect(save).toBeEnabled();
-	await expect(page).not.toHaveURL(/generation=/);
-});
+}
 
 test('pending 4K attaches to its original project while a second project stays unchanged', async ({
 	page
@@ -645,9 +670,9 @@ test('pending 4K attaches to its original project while a second project stays u
 			})
 		});
 	});
+	await panel(page).getByRole('checkbox', { name: ru['toolbar.upscale'], exact: true }).check();
 	await panel(page)
-		.getByRole('button', { name: ru['toolbar.upscale'], exact: true })
-		.nth(1)
+		.getByRole('button', { name: ru['photoProcessing.saveAndUpscale'], exact: true })
 		.click();
 	await expect
 		.poll(() => submitted)
@@ -661,7 +686,6 @@ test('pending 4K attaches to its original project while a second project stays u
 		'href',
 		'/api/media/test-media/project-b.png'
 	);
-	await panel(page).getByRole('button', { name: ru['photoProcessing.showOriginal'] }).click();
 	await expect(preview(page)).toHaveAttribute('src', '/api/media/test-media/project-b.png');
 	await tabs.getByRole('tab', { name: 'Living room', exact: true }).click();
 	await expect(page).toHaveURL(/generation=00000000-0000-4000-8000-000000001547/);
@@ -694,9 +718,9 @@ test('a paid 4K result without a history id stays downloadable after its origina
 			})
 		});
 	});
+	await panel(page).getByRole('checkbox', { name: ru['toolbar.upscale'], exact: true }).check();
 	await panel(page)
-		.getByRole('button', { name: ru['toolbar.upscale'], exact: true })
-		.nth(1)
+		.getByRole('button', { name: ru['photoProcessing.saveAndUpscale'], exact: true })
 		.click();
 	await expect.poll(() => started).toBe(true);
 	await tabs

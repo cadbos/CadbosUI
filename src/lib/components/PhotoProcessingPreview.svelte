@@ -23,7 +23,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	const sourceUrl = $derived(photoProcessing.sourceUrl);
 	function displayImage(host: HTMLDivElement): () => void {
-		const readyImage = photoProcessing.showOriginal ? undefined : photoProcessing.previewImage;
+		const readyImage = photoProcessing.previewImage;
 		const source = sourceUrl;
 		const alt = t('photoProcessing.previewAlt');
 		let cancelled = false;
@@ -65,9 +65,6 @@ before the Change Date. See LICENSE for complete terms.
 			<div class="preview-image" {@attach displayImage}></div>
 			{#if !sourceUrl}
 				<ImageSkeleton />
-			{/if}
-			{#if photoProcessing.showOriginal}
-				<span class="preview-label">{t('photoProcessing.preset.original')}</span>
 			{/if}
 			<div class="preview-status" role="status" aria-live="polite">
 				{#if photoProcessing.loading && !photoProcessing.previewUrl}
