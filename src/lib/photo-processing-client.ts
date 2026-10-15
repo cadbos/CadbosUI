@@ -52,3 +52,52 @@ export async function processPhoto(
 		worker.postMessage({ image, settings, maxEdge, format } satisfies PhotoWorkerRequest);
 	});
 }
+
+export function createPhotoPreview(
+	url: string,
+	signal: AbortSignal
+): (settings: PhotoAdjustments) => Promise<Blob> {
+	const worker = new Worker(new URL('./photo-processing.worker.ts', import.meta.url), {
+		type: 'module'
+	});
+	let source: Promise<Blob> | undefined;
+	let initialized = false;
+	signal.addEventListener('abort', () => worker.terminate(), { once: true });
+	return async (settings): Promise<Blob> => {
+		signal.throwIfAborted();
+		let image: Blob | undefined;
+		if (!initialized) {
+			source ??= fetch(url, { signal }).then(async (response) => {
+				if (!response.ok) throw new Error('Photo source unavailable');
+				return response.blob();
+			});
+			image = await source;
+		}
+		signal.throwIfAborted();
+		return new Promise((resolve, reject) => {
+			const cleanup = (): void => {
+				signal.removeEventListener('abort', abort);
+				worker.onmessage = null;
+				worker.onerror = null;
+			};
+			const abort = (): void => {
+				cleanup();
+				reject(new DOMException('Photo processing cancelled', 'AbortError'));
+			};
+			worker.onmessage = (event: MessageEvent<PhotoWorkerResponse>): void => {
+				cleanup();
+				if ('error' in event.data) reject(new Error(event.data.error));
+				else {
+					initialized = true;
+					resolve(event.data.blob);
+				}
+			};
+			worker.onerror = (): void => {
+				cleanup();
+				reject(new Error('Photo worker failed'));
+			};
+			signal.addEventListener('abort', abort, { once: true });
+			worker.postMessage({ image, settings, maxEdge: 1600 } satisfies PhotoWorkerRequest);
+		});
+	};
+}

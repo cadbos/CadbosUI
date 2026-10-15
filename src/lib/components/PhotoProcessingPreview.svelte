@@ -16,7 +16,6 @@ before the Change Date. See LICENSE for complete terms.
 	import { onDestroy } from 'svelte';
 
 	import ImageSkeleton from '$lib/components/ImageSkeleton.svelte';
-	import LazyImage from '$lib/components/LazyImage.svelte';
 	import RenderResult from '$lib/components/RenderResult.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import { photoProcessing } from '$lib/state/photo-processing.svelte';
@@ -41,11 +40,12 @@ before the Change Date. See LICENSE for complete terms.
 	{#snippet imagePreview()}
 		<div class="preview" aria-busy={photoProcessing.loading}>
 			{#if imageUrl}
-				<LazyImage
+				<img
 					src={imageUrl}
 					alt={t('photoProcessing.previewAlt')}
 					loading="eager"
-					fetchPriority="high"
+					fetchpriority="high"
+					decoding="sync"
 				/>
 			{:else}
 				<ImageSkeleton />
@@ -54,7 +54,7 @@ before the Change Date. See LICENSE for complete terms.
 				<span class="preview-label">{t('photoProcessing.preset.original')}</span>
 			{/if}
 			<div class="preview-status" role="status" aria-live="polite">
-				{#if photoProcessing.loading}
+				{#if photoProcessing.loading && !photoProcessing.previewUrl}
 					<span class="preview-label">{t('photoProcessing.previewLoading')}</span>
 				{/if}
 			</div>
@@ -67,6 +67,13 @@ before the Change Date. See LICENSE for complete terms.
 		position: relative;
 		width: 100%;
 		height: 100%;
+	}
+
+	.preview > img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		display: block;
 	}
 
 	.preview-label {

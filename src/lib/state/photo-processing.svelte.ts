@@ -13,7 +13,7 @@
  */
 
 import { z } from 'zod';
-import { untrack } from 'svelte';
+import { tick, untrack } from 'svelte';
 import {
 	mediaAccessSchema,
 	type RenderResponse,
@@ -27,7 +27,7 @@ import {
 	PHOTO_PRESETS,
 	type PhotoAdjustments
 } from '$lib/photo-adjustments';
-import { processPhoto } from '$lib/photo-processing-client';
+import { createPhotoPreview, processPhoto } from '$lib/photo-processing-client';
 import { auth } from '$lib/state/auth.svelte';
 import { generatedImages } from '$lib/state/generated-images.svelte';
 import { generationOverlay } from '$lib/state/generation-overlay.svelte';
@@ -81,7 +81,9 @@ class PhotoProcessingState {
 	#previewError = $state<string | null>(null);
 	#previewAbort: AbortController | null = null;
 	#presetsAbort: AbortController | null = null;
-	#previewTimer: ReturnType<typeof setTimeout> | undefined;
+	#previewSettings: PhotoAdjustments | undefined;
+	#previewRenderer: ((settings: PhotoAdjustments) => Promise<Blob>) | undefined;
+	#previewRunning = false;
 	#previewSourceUrl: string | undefined;
 
 	busy = $derived(this.saving || this.upscaling);
@@ -111,46 +113,62 @@ class PhotoProcessingState {
 
 	preview(url: string | undefined, settings: PhotoAdjustments): void {
 		untrack(() => {
-			this.#previewAbort?.abort();
-			clearTimeout(this.#previewTimer);
-			this.#previewTimer = undefined;
+			if (url !== this.#previewSourceUrl || !hasPhotoAdjustments(settings)) this.clearPreview();
 			this.#previewError = null;
-			if (url !== this.#previewSourceUrl || !hasPhotoAdjustments(settings)) {
-				if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
-				this.previewUrl = undefined;
-			}
+			if (!url || !hasPhotoAdjustments(settings)) return;
 			this.#previewSourceUrl = url;
-			if (!url || !hasPhotoAdjustments(settings)) {
-				this.#previewAbort = null;
-				this.loading = false;
-				return;
+			this.#previewSettings = { ...settings };
+			if (!this.#previewAbort) {
+				this.#previewAbort = new AbortController();
+				this.#previewRenderer = createPhotoPreview(url, this.#previewAbort.signal);
 			}
-			const controller = new AbortController();
-			this.#previewAbort = controller;
-			this.loading = true;
-			const capturedSettings = { ...settings };
-			this.#previewTimer = setTimeout(() => {
-				this.#previewTimer = undefined;
-				void this.#renderPreview(url, capturedSettings, controller);
-			}, 100);
+			if (!this.#previewRunning && this.#previewRenderer)
+				void this.#renderPreview(this.#previewAbort, this.#previewRenderer);
 		});
 	}
 
 	async #renderPreview(
-		url: string,
-		settings: PhotoAdjustments,
-		controller: AbortController
+		controller: AbortController,
+		render: (settings: PhotoAdjustments) => Promise<Blob>
 	): Promise<void> {
+		this.#previewRunning = true;
+		this.loading = true;
 		try {
-			const blob = await processPhoto(url, settings, 1600, controller.signal);
-			if (controller.signal.aborted) return;
-			if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
-			this.previewUrl = URL.createObjectURL(blob);
+			while (this.#previewSettings && !controller.signal.aborted) {
+				const settings = this.#previewSettings;
+				this.#previewSettings = undefined;
+				const blob = await render(settings);
+				if (controller.signal.aborted) return;
+				const nextUrl = URL.createObjectURL(blob);
+				let displayed = false;
+				try {
+					const image = new Image();
+					image.src = nextUrl;
+					await image.decode();
+					if (controller.signal.aborted) return;
+					const previousUrl = this.previewUrl;
+					this.previewUrl = nextUrl;
+					displayed = true;
+					await tick();
+					if (previousUrl) URL.revokeObjectURL(previousUrl);
+				} finally {
+					if (!displayed) URL.revokeObjectURL(nextUrl);
+				}
+			}
 		} catch (error) {
 			if (controller.signal.aborted) return;
 			this.#previewError = this.#errorMessage(error, 'photoProcessing.previewFailed');
+			controller.abort();
+			this.#previewAbort = null;
+			this.#previewRenderer = undefined;
+			this.#previewSettings = undefined;
+			this.#previewRunning = false;
+			this.loading = false;
 		} finally {
-			if (this.#previewAbort === controller) this.loading = false;
+			if (this.#previewAbort === controller) {
+				this.#previewRunning = false;
+				this.loading = false;
+			}
 		}
 	}
 
@@ -158,8 +176,9 @@ class PhotoProcessingState {
 		this.#previewAbort?.abort();
 		this.#previewAbort = null;
 		this.#previewSourceUrl = undefined;
-		clearTimeout(this.#previewTimer);
-		this.#previewTimer = undefined;
+		this.#previewSettings = undefined;
+		this.#previewRenderer = undefined;
+		this.#previewRunning = false;
 		if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
 		this.previewUrl = undefined;
 		this.loading = false;

@@ -337,6 +337,63 @@ test('photo mode previews actual pixel changes, compares the original and suppor
 	await expect(exposure).toHaveValue('-5');
 });
 
+test('slider changes update continuously without hiding the previous preview', async ({ page }) => {
+	await mockPhotoWorkspace(page);
+	await openPhoto(page);
+	const original = await pixels(preview(page));
+	const slider = panel(page).getByRole('slider', {
+		name: ru['photoProcessing.adjustment.exposure'],
+		exact: true
+	});
+	const observed = await slider.evaluate(async (element: HTMLInputElement) => {
+		const container = document.querySelector('#mode-panel-edit .preview');
+		if (!container) throw new Error('Missing photo preview');
+		const sources = new Set<string>();
+		let hiddenFrames = 0;
+		let skeletons = 0;
+		const observer = new MutationObserver((records) => {
+			for (const record of records) {
+				for (const node of record.addedNodes) {
+					if (
+						node instanceof Element &&
+						(node.matches('.image-skeleton') || node.querySelector('.image-skeleton'))
+					)
+						skeletons++;
+				}
+			}
+		});
+		observer.observe(container, { childList: true, subtree: true });
+		const start = performance.now();
+		await new Promise<void>((resolve) => {
+			function frame(now: number): void {
+				const image = container?.querySelector('img');
+				if (!image || !image.naturalWidth || getComputedStyle(image).opacity === '0')
+					hiddenFrames++;
+				if (image?.complete && image.naturalWidth) sources.add(image.currentSrc);
+				element.value = String(10 + (Math.floor((now - start) / 25) % 60));
+				element.dispatchEvent(new Event('input', { bubbles: true }));
+				if (now - start < 1500) requestAnimationFrame(frame);
+				else resolve();
+			}
+			requestAnimationFrame(frame);
+		});
+		observer.disconnect();
+		return { updates: sources.size, hiddenFrames, skeletons };
+	});
+	expect(observed.updates).toBeGreaterThan(2);
+	expect(observed.hiddenFrames).toBe(0);
+	expect(observed.skeletons).toBe(0);
+	await slider.fill('50');
+	await expect(panel(page).locator('.preview')).toHaveAttribute('aria-busy', 'false');
+	const finalPixels = await pixels(preview(page));
+	expect(finalPixels).not.toEqual(original);
+	await panel(page).getByRole('button', { name: ru['photoProcessing.reset'] }).click();
+	await expect.poll(() => pixels(preview(page))).toEqual(original);
+	await slider.fill('50');
+	await expect(panel(page).locator('.preview')).toHaveAttribute('aria-busy', 'false');
+	expect(await pixels(preview(page))).toEqual(finalPixels);
+});
+
 test('PNG save exports changed full-resolution pixels for free and undo/redo restores photo settings', async ({
 	page
 }) => {
