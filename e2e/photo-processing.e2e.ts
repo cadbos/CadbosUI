@@ -346,6 +346,27 @@ test('photo mode previews actual pixel changes, compares the original and suppor
 	await expect(exposure).toHaveValue('-5');
 });
 
+test('reloading photo processing after adjusting an uploaded image keeps the route usable', async ({
+	page
+}) => {
+	const errors: string[] = [];
+	page.on('pageerror', (error) => errors.push(error.message));
+	await mockPhotoWorkspace(page);
+	await openPhoto(page);
+	await panel(page)
+		.getByRole('slider', { name: ru['photoProcessing.adjustment.exposure'], exact: true })
+		.fill('35');
+	await expect(panel(page).locator('.preview')).toHaveAttribute('aria-busy', 'false');
+	await expect(page).toHaveURL(/\/edit\?tool=photo-processing&format=webp&adjustments=/);
+	const response = await page.reload();
+	expect(response?.status()).toBe(200);
+	await expect(
+		page.getByRole('tab', { name: ru['mode.photoProcessing'], exact: true })
+	).toHaveAttribute('aria-selected', 'true');
+	await expect(panel(page).locator('input[type="file"]')).toBeAttached();
+	expect(errors).toEqual([]);
+});
+
 test('slider changes update continuously without hiding the previous preview', async ({ page }) => {
 	await mockPhotoWorkspace(page);
 	await openPhoto(page);

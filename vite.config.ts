@@ -76,6 +76,7 @@ export default defineConfig(({ mode }) => {
 	return {
 		define: {
 			__APP_BUILD_TIMESTAMP__: JSON.stringify(buildTimestamp),
+			__APP_COMMIT_SHA__: JSON.stringify(commitSha),
 			__APP_COMMIT_URL__: JSON.stringify(commitUrl),
 			__APP_IS_PREVIEW__: JSON.stringify(isPreview),
 			__APP_NAME__: JSON.stringify(packageMetadata.name),
@@ -100,7 +101,6 @@ export default defineConfig(({ mode }) => {
 						remoteBindings: process.env.PLAYWRIGHT_TEST === '1' ? false : undefined
 					}
 				}),
-				version: { name: commitSha },
 
 				csp: {
 					mode: 'auto',

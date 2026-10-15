@@ -14,6 +14,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { expect, test } from './fixtures';
+import { ru } from '$lib/i18n/locales/ru';
 
 import packageMetadata from '../package.json' with { type: 'json' };
 
@@ -68,4 +69,41 @@ test('/version remains outside the workspace', async ({ page }) => {
 
 	await expect(page).toHaveURL(/\/version$/);
 	await expect(page.getByRole('tab')).toHaveCount(0);
+});
+
+test('client deployment identity is independent of the source commit', async ({ request }) => {
+	const response = await request.get('/_app/version.json');
+	expect(response.status()).toBe(200);
+	const { version } = await response.json();
+	expect(version).toMatch(/^\d+$/);
+	expect(version).not.toBe(commitSha);
+});
+
+test('a missing route module after deployment recovers through full-page navigation', async ({
+	page
+}) => {
+	await page.goto('/create/interior');
+	await expect(page.getByRole('tab', { name: ru['mode.edit'], exact: true })).toBeVisible();
+	let failedModule = false;
+	let reloads = 0;
+	page.on('request', (request) => {
+		if (request.isNavigationRequest() && new URL(request.url()).pathname === '/edit') reloads++;
+	});
+	await page.route('**/_app/immutable/nodes/*.js', async (route) => {
+		if (!failedModule) {
+			failedModule = true;
+			await route.fulfill({ status: 404, contentType: 'text/plain', body: 'Not found' });
+		} else await route.continue();
+	});
+	await page.route('**/_app/version.json', async (route) => {
+		await route.fulfill({ json: { version: 'next-deployment' } });
+	});
+	await page.getByRole('tab', { name: ru['mode.edit'], exact: true }).click();
+	await expect(page).toHaveURL(/\/edit/);
+	await expect(page.getByRole('tab', { name: ru['mode.edit'], exact: true })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
+	expect(failedModule).toBe(true);
+	expect(reloads).toBe(1);
 });
