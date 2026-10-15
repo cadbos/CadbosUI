@@ -28,6 +28,7 @@ import {
 	buildAc9RequestJSON
 } from '$lib/state/request-fixtures';
 import { DEFAULT_REPAINT_COLOR } from '$lib/repaint-colors';
+import { defaultPhotoAdjustments } from '$lib/photo-adjustments';
 import { mediaAccess } from '$lib/state/media-access.svelte';
 import {
 	RequestImageUploadError,
@@ -233,6 +234,7 @@ describe('serialization', () => {
 			lightSettingsInstruction: '',
 			repaintTarget: '',
 			repaintColor: DEFAULT_REPAINT_COLOR,
+			photoAdjustments: defaultPhotoAdjustments(),
 			currentRender: undefined
 		});
 	});
@@ -2194,9 +2196,12 @@ describe('undo/redo restores the form settings used for each step (FR-К6)', () 
 	it('does not overwrite the form for a snapshot-less step, e.g. the synthetic uploaded-photo root', () => {
 		request.setImage({ mediaKey: '101' });
 		request.setFragments([{ text: 'Scandinavian living room' }]);
+		request.setPhotoAdjustment('exposure', 35);
 		request.setCurrentRender(render('gen-1'));
+		const snapshot = request.captureFormSnapshot();
 
 		request.undoLastEdit();
+		expect(request.captureFormSnapshot()).toEqual(snapshot);
 
 		expect(request.currentRender?.outputKey).toBe('101');
 		expect(request.promptFragments.map((fragment) => fragment.text)).toEqual([
@@ -2447,5 +2452,80 @@ describe('prefillFromModeHint', () => {
 		const state = new RequestState();
 		state.prefillFromModeHint({ mode: 'edit', tool: 'remove-object' }, 'убери диван');
 		expect(state.removeObjectText).toBe('');
+	});
+});
+
+describe('photo adjustment model', () => {
+	it('serializes independently, defaults old requests, and resets', () => {
+		request.setPhotoAdjustment('exposure', 30);
+		request.setPhotoAdjustment('grain', 12);
+		const serialized = request.toJSON();
+		const restored = new RequestState();
+		restored.fromJSON(serialized);
+		expect(restored.photoAdjustments).toEqual(request.photoAdjustments);
+		restored.setPhotoAdjustment('exposure', -20);
+		expect(request.photoAdjustments.exposure).toBe(30);
+		delete serialized.photoAdjustments;
+		restored.fromJSON(serialized);
+		expect(restored.photoAdjustments).toEqual(defaultPhotoAdjustments());
+		request.reset();
+		expect(request.photoAdjustments).toEqual(defaultPhotoAdjustments());
+	});
+
+	it('validates signed and positive adjustment ranges before changing state', () => {
+		expect(() => request.setPhotoAdjustment('contrast', 101)).toThrow();
+		expect(() => request.setPhotoAdjustment('bloom', -1)).toThrow();
+		expect(() => request.setPhotoAdjustment('saturation', 0.5)).toThrow();
+		expect(request.photoAdjustments).toEqual(defaultPhotoAdjustments());
+	});
+
+	it('keeps copied tab state and submission snapshots independent', () => {
+		request.setPhotoAdjustment('temperature', 25);
+		const captured = request.captureFormSnapshot('photo-processing');
+		const copied = new RequestState();
+		copied.copyFrom(request);
+		request.setPhotoAdjustment('temperature', -10);
+		expect(captured.photoAdjustments?.temperature).toBe(25);
+		expect(copied.photoAdjustments.temperature).toBe(25);
+		copied.resetPhotoAdjustments();
+		expect(request.photoAdjustments.temperature).toBe(-10);
+	});
+
+	it('restores each saved adjustment and its original source through undo and redo', () => {
+		request.setImage({ mediaKey: 'room' });
+		request.setPhotoAdjustment('exposure', 20);
+		request.applyEditResult({
+			id: 'photo-1',
+			outputKey: 'processed-1',
+			sourceKey: 'room',
+			cost: 0,
+			balance: 10,
+			ts: 1,
+			editOp: { type: 'photo-processing', instruction: '' },
+			formSnapshot: request.captureFormSnapshot('photo-processing')
+		});
+		request.setPhotoAdjustment('exposure', 40);
+		request.applyEditResult({
+			id: 'photo-2',
+			outputKey: 'processed-2',
+			sourceKey: 'room',
+			cost: 0,
+			balance: 10,
+			ts: 2,
+			editOp: { type: 'photo-processing', instruction: '' },
+			formSnapshot: request.captureFormSnapshot('photo-processing')
+		});
+		const copy = new RequestState();
+		copy.copyFrom(request);
+		copy.undoLastEdit();
+		expect(copy.photoAdjustments.exposure).toBe(20);
+		expect(copy.currentRender?.sourceKey).toBe('room');
+		copy.undoLastEdit();
+		expect(copy.photoAdjustments.exposure).toBe(20);
+		copy.redoEdit();
+		copy.redoEdit();
+		expect(copy.photoAdjustments.exposure).toBe(40);
+		expect(copy.currentRender?.sourceKey).toBe('room');
+		expect(request.currentRender?.id).toBe('photo-2');
 	});
 });

@@ -13,6 +13,7 @@
  */
 
 import { z } from 'zod';
+import { t } from '$lib/i18n/index.svelte';
 import type { ProjectSessionRecord } from '$lib/api/contract';
 import type { GeneratedImageDetail } from '$lib/state/generation-restore';
 import { fetchProjectDetail } from '$lib/state/project-detail.svelte';
@@ -47,9 +48,16 @@ function showGeneration(
 		id: generation.id,
 		recorded: true,
 		outputKey: generation.image.key,
+		sourceKey: generation.source.key,
 		cost: generation.amount,
 		balance: generation.balanceAfter,
 		...(formSnapshot ? { formSnapshot } : {}),
+		...(formSnapshot?.editOperationType === 'photo-processing' ||
+		formSnapshot?.editOperationType === 'upscale'
+			? {
+					editOp: { type: formSnapshot.editOperationType, instruction: '' }
+				}
+			: {}),
 		ts: generation.createdAt
 	});
 }
@@ -281,6 +289,34 @@ class WorkspaceTabsState {
 	// lose).
 	sessionState(sessionId: string): RequestState | undefined {
 		return sessionId === this.#liveKey ? request : this.#frozen.get(sessionId);
+	}
+
+	requestState(requestId: string): RequestState | undefined {
+		if (request.id === requestId) return request;
+		return [...this.#frozen.values()].find((state) => state.id === requestId);
+	}
+
+	attachCreatedSession(requestId: string, projectId: string, sessionId: string): void {
+		const owner = this.requestState(requestId);
+		if (!owner) return;
+		owner.setProjectSession(projectId, sessionId);
+		if (owner === request && this.#liveKey === SCRATCH_TAB_ID) {
+			this.adoptScratchSession(projectId, t('workspace.tabs.untitled'), sessionId, null);
+			return;
+		}
+		if (this.#frozen.get(SCRATCH_TAB_ID) !== owner) return;
+		this.#frozen.set(sessionId, owner);
+		this.#frozen.set(SCRATCH_TAB_ID, new RequestState());
+		this.tabs = [
+			...this.tabs,
+			{
+				id: projectId,
+				title: t('workspace.tabs.untitled'),
+				sessionTabs: [{ id: sessionId, title: null }],
+				activeSessionTabId: sessionId
+			}
+		];
+		this.#persist();
 	}
 
 	activate(tabId: string): void {

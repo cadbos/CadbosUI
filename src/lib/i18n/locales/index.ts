@@ -13,6 +13,59 @@
  */
 
 export interface Dictionary {
+	'photoProcessing.resultReady': string;
+	'photoProcessing.downloadResult': string;
+
+	'photoProcessing.savedToHistory': string;
+	'photoProcessing.operationSuperseded': string;
+
+	'mode.photoProcessing': string;
+	'generatedImages.kind.photo-processing': string;
+	'photoProcessing.description': string;
+	'photoProcessing.presets': string;
+	'photoProcessing.group.light': string;
+	'photoProcessing.group.color': string;
+	'photoProcessing.group.effects': string;
+	'photoProcessing.reset': string;
+	'photoProcessing.resetAdjustment': string;
+	'photoProcessing.saveAndUpscale': string;
+	'photoProcessing.save': string;
+	'photoProcessing.saving': string;
+	'photoProcessing.previewAlt': string;
+	'photoProcessing.previewLoading': string;
+	'photoProcessing.previewFailed': string;
+	'photoProcessing.downloadFailed': string;
+	'photoProcessing.saveFailed': string;
+	'photoProcessing.imageTooLarge': string;
+	'photoProcessing.insufficientCredit': string;
+	'photoProcessing.generationRestricted': string;
+	'photoProcessing.signInToSave': string;
+	'photoProcessing.rateLimited': string;
+	'photoProcessing.adjustment.exposure': string;
+	'photoProcessing.adjustment.contrast': string;
+	'photoProcessing.adjustment.highlights': string;
+	'photoProcessing.adjustment.shadows': string;
+	'photoProcessing.adjustment.whites': string;
+	'photoProcessing.adjustment.blacks': string;
+	'photoProcessing.adjustment.temperature': string;
+	'photoProcessing.adjustment.tint': string;
+	'photoProcessing.adjustment.vibrance': string;
+	'photoProcessing.adjustment.saturation': string;
+	'photoProcessing.adjustment.clarity': string;
+	'photoProcessing.adjustment.sharpness': string;
+	'photoProcessing.adjustment.vignette': string;
+	'photoProcessing.adjustment.dehaze': string;
+	'photoProcessing.adjustment.bloom': string;
+	'photoProcessing.adjustment.grain': string;
+	'photoProcessing.preset.original': string;
+	'photoProcessing.preset.clean': string;
+	'photoProcessing.preset.crispDay': string;
+	'photoProcessing.preset.warmDusk': string;
+	'photoProcessing.preset.brightRoom': string;
+	'photoProcessing.preset.tealOrange': string;
+	'photoProcessing.preset.vintage': string;
+	'photoProcessing.preset.dreamy': string;
+
 	'app.title': string;
 	'app.subtitle': string;
 	'home.landing': string;

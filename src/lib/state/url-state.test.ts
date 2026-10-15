@@ -13,6 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { defaultPhotoAdjustments } from '$lib/photo-adjustments';
 import {
 	RequestState,
 	type RenderResult,
@@ -74,6 +75,8 @@ describe('workspace root leaves every mode unselected', () => {
 		expect(routeIdToMode('/create/interior')).toBe('render');
 		expect(routeIdToMode('/edit')).toBe('edit');
 		expect(routeIdToMode('/style-transfer/interior')).toBe('styleTransfer');
+		expect(routeIdToMode('/photo-processing')).toBeNull();
+		expect(isWorkspaceRoute('/photo-processing')).toBe(false);
 		expect(routeIdToMode('/usage')).toBeNull();
 		expect(isWorkspaceRoute('/usage')).toBe(false);
 	});
@@ -125,6 +128,84 @@ describe('renderOrigin (keeps mode/tool in sync with undo/redo)', () => {
 	it('has no known origin for an upscale — applied from a toolbar shared by every mode', () => {
 		expect(renderOrigin(render({ editOp: { type: 'upscale', instruction: '' } }))).toBeUndefined();
 	});
+
+	it('restores photo processing for its saved edits', () => {
+		expect(renderOrigin(render({ editOp: { type: 'photo-processing', instruction: '' } }))).toEqual(
+			{
+				mode: 'edit',
+				tool: 'photo-processing'
+			}
+		);
+		expect(renderOrigin(render({ editOp: { type: 'upscale', instruction: '' } }))).toBeUndefined();
+	});
+});
+
+describe('photo processing URL state', () => {
+	it('recognizes photo processing as an edit sub-tab', () => {
+		expect(slugToTool('photo-processing')).toBe('photo-processing');
+		expect(subTabFromSearch('edit', new URLSearchParams({ tool: 'photo-processing' }))).toEqual({
+			tool: 'photo-processing'
+		});
+	});
+
+	it('round-trips settings and output format without including image access', () => {
+		const state = new RequestState();
+		const settings = { ...defaultPhotoAdjustments(), exposure: 24, saturation: -12, grain: 18 };
+		state.setPhotoAdjustments(settings);
+		state.setOutputFormat('png');
+		state.setImage({ mediaKey: 'private/source.png' });
+		const url = new URL(
+			buildShareUrl('edit', state, { tool: 'photo-processing' }),
+			'https://cadbos.test'
+		);
+		expect(url.pathname).toBe('/edit');
+		expect(url.searchParams.get('tool')).toBe('photo-processing');
+		expect(url.searchParams.get('format')).toBe('png');
+		expect(JSON.parse(url.searchParams.get('adjustments') ?? 'null')).toEqual(settings);
+		expect(url.searchParams.has('image')).toBe(false);
+		const restored = new RequestState();
+		applyShareParams('edit', undefined, url.searchParams, restored);
+		expect(restored.photoAdjustments).toEqual(settings);
+		expect(restored.outputFormat).toBe('png');
+		expect(restored.image).toBeUndefined();
+	});
+
+	it('keeps photo adjustments out of another edit tool’s URL', () => {
+		const state = new RequestState();
+		state.setPhotoAdjustment('exposure', 30);
+		expect(buildShareUrl('edit', state, { tool: 'repaint' })).not.toContain('adjustments=');
+	});
+
+	it('omits neutral settings from the URL and defaults absent settings to zero', () => {
+		const state = new RequestState();
+		expect(buildShareUrl('edit', state, { tool: 'photo-processing' })).toBe(
+			'/edit?tool=photo-processing&format=webp'
+		);
+		state.setPhotoAdjustment('exposure', 30);
+		applyShareParams('edit', undefined, new URLSearchParams({ tool: 'photo-processing' }), state);
+		expect(state.photoAdjustments).toEqual(defaultPhotoAdjustments());
+	});
+
+	it.each([
+		'{',
+		'<script>alert(1)</script>',
+		JSON.stringify({ ...defaultPhotoAdjustments(), exposure: 101 }),
+		JSON.stringify({ ...defaultPhotoAdjustments(), grain: -1 }),
+		JSON.stringify({ ...defaultPhotoAdjustments(), contrast: 0.5 }),
+		JSON.stringify({ ...defaultPhotoAdjustments(), unknownControl: 50 }),
+		JSON.stringify({ exposure: 20 }),
+		' '.repeat(2049)
+	])('resets malformed, incomplete or oversized settings %#', (adjustments) => {
+		const state = new RequestState();
+		state.setPhotoAdjustment('exposure', 30);
+		applyShareParams(
+			'edit',
+			undefined,
+			new URLSearchParams({ tool: 'photo-processing', adjustments }),
+			state
+		);
+		expect(state.photoAdjustments).toEqual(defaultPhotoAdjustments());
+	});
 });
 
 describe('generation history destinations', () => {
@@ -143,7 +224,11 @@ describe('generation history destinations', () => {
 		});
 		expect(destinationForGenerationKind('upscale')).toEqual({
 			mode: 'edit',
-			subTab: { tool: 'freeform' }
+			subTab: { tool: 'photo-processing' }
+		});
+		expect(destinationForGenerationKind('photo-processing')).toEqual({
+			mode: 'edit',
+			subTab: { tool: 'photo-processing' }
 		});
 		expect(destinationForGenerationKind('object-replacement')).toEqual({
 			mode: 'edit',

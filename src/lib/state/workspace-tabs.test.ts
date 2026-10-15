@@ -959,3 +959,63 @@ describe('restorePersistedTabs', () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });
+
+describe('workspaceTabs asynchronous ownership', () => {
+	it('locates the original request after switching and releases it when its session closes', () => {
+		workspaceTabs.resetAll();
+		workspaceTabs.openProject({
+			projectId: PROJECT_A,
+			projectTitle: 'A',
+			sessionId: SESSION_A1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_A, SESSION_A1)
+		});
+		const ownerId = request.id;
+		request.setPhotoAdjustment('contrast', 20);
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'B',
+			sessionId: SESSION_B1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_B, SESSION_B1)
+		});
+		const owner = workspaceTabs.requestState(ownerId);
+		expect(owner).not.toBe(request);
+		expect(owner?.photoAdjustments.contrast).toBe(20);
+		owner?.setPhotoAdjustment('contrast', 40);
+		expect(request.photoAdjustments.contrast).toBe(0);
+		workspaceTabs.activateSession(PROJECT_A, SESSION_A1);
+		expect(workspaceTabs.requestState(ownerId)).toBe(request);
+		expect(request.photoAdjustments.contrast).toBe(40);
+		workspaceTabs.close(PROJECT_A);
+		expect(workspaceTabs.requestState(ownerId)).toBeUndefined();
+	});
+
+	it('promotes a background scratch operation to its own session without switching the active tab', () => {
+		workspaceTabs.resetAll();
+		const scratchId = request.id;
+		request.setImage({ mediaKey: 'scratch-photo' });
+		request.setPhotoAdjustment('exposure', 25);
+		workspaceTabs.openProject({
+			projectId: PROJECT_B,
+			projectTitle: 'B',
+			sessionId: SESSION_B1,
+			sessionTitle: null,
+			initialize: (state) => state.setProjectSession(PROJECT_B, SESSION_B1)
+		});
+		const activeId = request.id;
+		workspaceTabs.attachCreatedSession(scratchId, PROJECT_A, SESSION_A1);
+		expect(workspaceTabs.activeTabId).toBe(PROJECT_B);
+		expect(request.id).toBe(activeId);
+		expect(request.sessionId).toBe(SESSION_B1);
+		const owner = workspaceTabs.requestState(scratchId);
+		expect(owner?.sessionId).toBe(SESSION_A1);
+		expect(owner?.photoAdjustments.exposure).toBe(25);
+		workspaceTabs.activateSession(PROJECT_A, SESSION_A1);
+		expect(request.id).toBe(scratchId);
+		expect(request.workingImageKey()).toBe('scratch-photo');
+		workspaceTabs.activate(SCRATCH_TAB_ID);
+		expect(request.hasWorkingImage()).toBe(false);
+		expect(request.photoAdjustments.exposure).toBe(0);
+	});
+});

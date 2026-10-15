@@ -76,6 +76,7 @@ export default defineConfig(({ mode }) => {
 	return {
 		define: {
 			__APP_BUILD_TIMESTAMP__: JSON.stringify(buildTimestamp),
+			__APP_COMMIT_SHA__: JSON.stringify(commitSha),
 			__APP_COMMIT_URL__: JSON.stringify(commitUrl),
 			__APP_IS_PREVIEW__: JSON.stringify(isPreview),
 			__APP_NAME__: JSON.stringify(packageMetadata.name),
@@ -100,7 +101,6 @@ export default defineConfig(({ mode }) => {
 						remoteBindings: process.env.PLAYWRIGHT_TEST === '1' ? false : undefined
 					}
 				}),
-				version: { name: commitSha },
 
 				csp: {
 					mode: 'auto',
@@ -116,7 +116,7 @@ export default defineConfig(({ mode }) => {
 						'img-src': ['self', 'blob:', 'data:', 'https:'],
 						'font-src': ['self'],
 						// `self` for our own endpoints; the NIP-46 rendezvous relays (wss://).
-						'connect-src': ['self', ...NOSTR_CONNECT_RELAYS],
+						'connect-src': ['self', 'blob:', ...NOSTR_CONNECT_RELAYS],
 						'object-src': ['none'],
 						'base-uri': ['self'],
 						'frame-ancestors': ['none'],

@@ -15,10 +15,9 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { ArrowUpRight } from '@lucide/svelte';
 
-	import { version as commitSha } from '$app/environment';
 	import { t } from '$lib/i18n/index.svelte';
 
-	const shortCommitSha = commitSha.slice(0, 7);
+	const shortCommitSha = __APP_COMMIT_SHA__.slice(0, 7);
 	const currentVersion = __APP_IS_PREVIEW__ ? shortCommitSha : __APP_VERSION__;
 	const currentVersionUrl = __APP_IS_PREVIEW__ ? __APP_COMMIT_URL__ : __APP_RELEASE_URL__;
 </script>

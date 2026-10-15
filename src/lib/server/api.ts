@@ -14,6 +14,7 @@
 
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
+import { photoAdjustmentsSchema } from '$lib/photo-adjustments';
 import {
 	EDIT_OPERATION_TYPES,
 	SCENE_TYPES,
@@ -74,6 +75,7 @@ const formSnapshotImage = z.union([
 // below keeps this shape honest against RequestFormSnapshot as that type
 // evolves.
 export const formSnapshotSchema = z.object({
+	photoAdjustments: photoAdjustmentsSchema.optional(),
 	promptFragments: z.array(formSnapshotPromptFragment).max(200),
 	promptOverride: z.string().nullable(),
 	editPrompt: z.string(),
@@ -143,12 +145,20 @@ export const styleTransferRequestSchema = z.union([
 	z.strictObject({ ...styleTransferBase, stylePresetId: z.string().trim().min(1) })
 ]);
 
-// upscale has no user-adjustable form settings beyond imageKey/outputFormat —
-// nothing meaningful to restore, so it carries no formSnapshot.
 export const upscaleRequestSchema = z.object({
+	formSnapshot,
 	imageKey: mediaKey,
 	outputFormat: outputFormat.optional(),
 	sessionId
+});
+
+export const photoProcessingRequestSchema = z.strictObject({
+	imageKey: mediaKey,
+	sessionId,
+	formSnapshot: formSnapshotSchema.extend({
+		photoAdjustments: photoAdjustmentsSchema,
+		editOperationType: z.literal('photo-processing')
+	})
 });
 
 export const objectReplacementRequestSchema = z.strictObject({

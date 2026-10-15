@@ -205,7 +205,7 @@ before the Change Date. See LICENSE for complete terms.
 		background: var(--landing-glow);
 	}
 
-	.ic svg {
+	.ic :global(svg) {
 		width: 22px;
 		height: 22px;
 		fill: none;

@@ -13,6 +13,12 @@
  */
 
 import { z } from 'zod';
+import {
+	defaultPhotoAdjustments,
+	hasPhotoAdjustments,
+	photoAdjustmentsSchema,
+	type PhotoAdjustments
+} from '$lib/photo-adjustments';
 import { OUTPUT_FORMATS, type GenerationKind, type OutputFormat } from '$lib/api/contract';
 import { LIGHT_SETTINGS_PRESETS } from '$lib/light-settings-presets';
 import { DEFAULT_REPAINT_COLOR, REPAINT_COLOR_PATTERN } from '$lib/repaint-colors';
@@ -38,7 +44,8 @@ export type ToolId =
 	| 'light-settings'
 	| 'object-replacement'
 	| 'texture-replacement'
-	| 'repaint';
+	| 'repaint'
+	| 'photo-processing';
 export type ReferenceTab = 'photorealistic' | 'conceptual' | 'custom';
 
 // The sub-tab shown within the current mode — at most one of these applies,
@@ -83,7 +90,8 @@ const TOOL_IDS: readonly ToolId[] = [
 	'light-settings',
 	'object-replacement',
 	'texture-replacement',
-	'repaint'
+	'repaint',
+	'photo-processing'
 ];
 const REFERENCE_TABS: readonly ReferenceTab[] = ['photorealistic', 'conceptual', 'custom'];
 
@@ -133,10 +141,6 @@ export function routeIdToMode(routeId: string | null): Mode | null {
 	return null;
 }
 
-// Every edit-panel tool tags its renders with a unique editOp.type (see
-// EDIT_OPERATION_TYPES) except 'upscale' — applied from RenderResult.svelte's
-// toolbar, which is shared by every mode, so it has no tool tab of its own
-// and is deliberately left out here.
 const EDIT_OP_TOOL: Partial<Record<EditOperationType, ToolId>> = {
 	freeform: 'freeform',
 	'add-object': 'add-object',
@@ -144,7 +148,8 @@ const EDIT_OP_TOOL: Partial<Record<EditOperationType, ToolId>> = {
 	'light-settings': 'light-settings',
 	'replace-object': 'object-replacement',
 	'change-surface-color': 'texture-replacement',
-	repaint: 'repaint'
+	repaint: 'repaint',
+	'photo-processing': 'photo-processing'
 };
 
 export interface RenderOrigin {
@@ -161,7 +166,7 @@ export interface RenderOrigin {
 // whichever step is on screen, rather than leaving the user looking at a
 // tool tab whose fields have nothing to do with what they're seeing.
 // Returns undefined for a step with no known origin (the synthetic
-// uploaded-photo root, an upscale, or a generation loaded from project
+// uploaded-photo root or a generation loaded from project
 // history before this field existed) — the caller leaves the current
 // mode/tool alone rather than guessing.
 export function renderOrigin(render: RenderResult | undefined): RenderOrigin | undefined {
@@ -216,8 +221,11 @@ export function destinationForGenerationKind(
 			return { mode: 'edit', subTab: { tool: 'light-settings' } };
 		case 'repaint':
 			return { mode: 'edit', subTab: { tool: 'repaint' } };
-		case 'edit':
-		case 'upscale': {
+		case 'upscale':
+			return { mode: 'edit', subTab: { tool: 'photo-processing' } };
+		case 'photo-processing':
+			return { mode: 'edit', subTab: { tool: 'photo-processing' } };
+		case 'edit': {
 			const editOperationType = formSnapshot?.editOperationType;
 			const tool = editOperationType ? EDIT_OP_TOOL[editOperationType] : undefined;
 			return { mode: 'edit', subTab: { tool: tool ?? 'freeform' } };
@@ -248,9 +256,8 @@ export function subTabFromSearch(mode: Mode, searchParams: URLSearchParams): Sub
 	if (mode === 'render') return { view: slugToView(searchParams.get('view') ?? undefined) };
 	if (mode === 'edit') {
 		const tool = slugToTool(searchParams.get('tool') ?? undefined);
+		if (tool === 'photo-processing') return { tool };
 		const job = searchParams.get('job');
-		// Every edit-mode tool is job-backed now (freeform/add-object/remove-object
-		// share the Flux Kontext job, every other tool has its own).
 		return isJobId(job) ? { tool, job } : { tool };
 	}
 	if (mode === 'styleTransfer') {
@@ -350,7 +357,11 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 	if (mode === 'edit') {
 		const tool = subTab.tool ?? 'add-object';
 		params.set('tool', tool);
-		if (tool === 'object-replacement') {
+		if (tool === 'photo-processing') {
+			params.set('format', request.outputFormat);
+			if (hasPhotoAdjustments(request.photoAdjustments))
+				params.set('adjustments', JSON.stringify(request.photoAdjustments));
+		} else if (tool === 'object-replacement') {
 			if (request.objectReplacementObject.trim() !== '') {
 				params.set('object', request.objectReplacementObject);
 			}
@@ -510,6 +521,17 @@ export function generationAnchorFromSearch(searchParams: URLSearchParams): Gener
 	return { generationId, step: searchParams.get('step') === 'before' ? 'before' : 'result' };
 }
 
+function photoAdjustmentsFromSearch(searchParams: URLSearchParams): PhotoAdjustments {
+	const raw = searchParams.get('adjustments');
+	if (!raw || raw.length > 2048) return defaultPhotoAdjustments();
+	try {
+		const parsed = photoAdjustmentsSchema.safeParse(JSON.parse(raw));
+		return parsed.success ? parsed.data : defaultPhotoAdjustments();
+	} catch {
+		return defaultPhotoAdjustments();
+	}
+}
+
 // Reverse of buildShareUrl: applies every field explicitly (falling back to
 // defaults when a param/path segment is absent) so a given URL always maps to
 // the same request state. `sceneParam` is `page.params.scene` (present only
@@ -534,7 +556,10 @@ export function applyShareParams(
 	searchParams: URLSearchParams,
 	request: RequestState
 ): void {
-	request.setSceneType(mode === 'edit' ? 'interior' : slugToScene(sceneParam));
+	if (
+		!(mode === 'edit' && slugToTool(searchParams.get('tool') ?? undefined) === 'photo-processing')
+	)
+		request.setSceneType(mode === 'edit' ? 'interior' : slugToScene(sceneParam));
 
 	const format = searchParams.get('format');
 	request.setOutputFormat(
@@ -553,7 +578,9 @@ export function applyShareParams(
 		request.setFragments(fragmentsRaw ? parseFragments(fragmentsRaw) : []);
 	} else if (mode === 'edit') {
 		const tool = slugToTool(searchParams.get('tool') ?? undefined);
-		if (tool === 'object-replacement') {
+		if (tool === 'photo-processing') {
+			request.setPhotoAdjustments(photoAdjustmentsFromSearch(searchParams));
+		} else if (tool === 'object-replacement') {
 			request.setObjectReplacementObject((searchParams.get('object') ?? '').slice(0, 200));
 			const job = searchParams.get('job');
 			request.setActiveObjectReplacementJobId(isJobId(job) ? job : undefined);

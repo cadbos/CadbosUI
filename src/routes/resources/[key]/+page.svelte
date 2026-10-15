@@ -38,6 +38,7 @@ before the Change Date. See LICENSE for complete terms.
 		'texture-replacement': 'generatedImages.kind.textureReplacement',
 		'light-settings': 'generatedImages.kind.lightSettings',
 		repaint: 'generatedImages.kind.repaint',
+		'photo-processing': 'generatedImages.kind.photo-processing',
 		upscale: 'generatedImages.kind.upscale'
 	};
 

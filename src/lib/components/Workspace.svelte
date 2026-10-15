@@ -36,6 +36,7 @@ before the Change Date. See LICENSE for complete terms.
 	import ImageSkeleton from '$lib/components/ImageSkeleton.svelte';
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import RenderResult from '$lib/components/RenderResult.svelte';
+	import PhotoProcessingPreview from '$lib/components/PhotoProcessingPreview.svelte';
 	import EditPanel from '$lib/components/EditPanel.svelte';
 	import MaskEditor from '$lib/components/MaskEditor.svelte';
 	import PromptViews from '$lib/components/PromptViews.svelte';
@@ -693,7 +694,7 @@ before the Change Date. See LICENSE for complete terms.
 				aria-label={t(modeOption.label)}
 				title={t(modeOption.label)}
 				tabindex={mode === modeOption.id || (mode === null && index === 0) ? 0 : -1}
-				class:active={mode === modeOption.id}
+				class={{ active: mode === modeOption.id }}
 				onclick={() => modeTabController.activate(index)}
 				onkeydown={modeTabController.onKeydown}
 			>
@@ -814,8 +815,7 @@ before the Change Date. See LICENSE for complete terms.
 			     `.canvas-layout` shape so the workspace footprint never changes
 			     between modes. -->
 				<div
-					class="canvas-layout"
-					class:reserve-panel-space={toolsPanelAtDefaultCorner}
+					class={['canvas-layout', { 'reserve-panel-space': toolsPanelAtDefaultCorner }]}
 					role="tabpanel"
 					id="mode-panel-render"
 					aria-labelledby="mode-tab-render"
@@ -861,7 +861,7 @@ before the Change Date. See LICENSE for complete terms.
 											role="tab"
 											aria-selected={request.sceneType === sceneTypeOption.id}
 											tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
-											class:active={request.sceneType === sceneTypeOption.id}
+											class={{ active: request.sceneType === sceneTypeOption.id }}
 											onclick={() => sceneTypeTabController.activate(index)}
 											onkeydown={sceneTypeTabController.onKeydown}
 										>
@@ -909,8 +909,7 @@ before the Change Date. See LICENSE for complete terms.
 				</div>
 
 				<div
-					class="canvas-layout"
-					class:reserve-panel-space={toolsPanelAtDefaultCorner}
+					class={['canvas-layout', { 'reserve-panel-space': toolsPanelAtDefaultCorner }]}
 					role="tabpanel"
 					id="mode-panel-edit"
 					aria-labelledby="mode-tab-edit"
@@ -918,7 +917,9 @@ before the Change Date. See LICENSE for complete terms.
 					hidden={mode !== 'edit' || urlTargetStatus !== 'idle'}
 				>
 					<div class="canvas-col">
-						{#if showMaskOnCanvas}
+						{#if mode === 'edit' && activeEditTool === 'photo-processing' && request.hasWorkingImage()}
+							<PhotoProcessingPreview />
+						{:else if showMaskOnCanvas}
 							<svelte:boundary
 								onerror={(error: unknown) => logBoundaryError('workspace.maskEditor', error)}
 							>
@@ -966,7 +967,7 @@ before the Change Date. See LICENSE for complete terms.
 						<svelte:boundary
 							onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
 						>
-							<EditPanel />
+							<EditPanel active={mode === 'edit'} />
 							{#snippet failed(_error: unknown, reset: () => void)}
 								<p class="boundary-failed">{t('boundary.failed')}</p>
 								<button type="button" class="boundary-retry" onclick={reset}>
@@ -978,8 +979,7 @@ before the Change Date. See LICENSE for complete terms.
 				</div>
 
 				<div
-					class="canvas-layout"
-					class:reserve-panel-space={toolsPanelAtDefaultCorner}
+					class={['canvas-layout', { 'reserve-panel-space': toolsPanelAtDefaultCorner }]}
 					role="tabpanel"
 					id="mode-panel-styleTransfer"
 					aria-labelledby="mode-tab-styleTransfer"
