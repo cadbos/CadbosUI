@@ -12,6 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { readFile } from 'node:fs/promises';
 import type { Locator, Page } from '@playwright/test';
 
 import type { RequestFormSnapshot } from '$lib/api/contract';
@@ -417,6 +418,85 @@ test('slider changes update continuously without hiding the previous preview', a
 	await slider.fill('50');
 	await expect(panel(page).locator('.preview')).toHaveAttribute('aria-busy', 'false');
 	expect(await pixels(preview(page))).toEqual(finalPixels);
+});
+
+test('an uploaded photo downloads with current adjustments at full resolution without saving or signing in', async ({
+	page
+}) => {
+	await mockPhotoWorkspace(page, false);
+	let submissions = 0;
+	page.on('request', (request) => {
+		if (/\/api\/(photo-processing|upscale|uploads)$/.test(request.url())) submissions++;
+	});
+	await page.goto('/edit?tool=photo-processing');
+	const source = await page.evaluate(() => {
+		const canvas = document.createElement('canvas');
+		canvas.width = 1920;
+		canvas.height = 1080;
+		const context = canvas.getContext('2d');
+		if (!context) throw new Error('Canvas is unavailable');
+		context.fillStyle = 'rgb(40, 53, 79)';
+		context.fillRect(0, 0, canvas.width, canvas.height);
+		return canvas.toDataURL('image/png').split(',')[1];
+	});
+	await panel(page)
+		.locator('input[type="file"]')
+		.setInputFiles({
+			name: 'large-photo.png',
+			mimeType: 'image/png',
+			buffer: Buffer.from(source, 'base64')
+		});
+	const downloadButton = panel(page).getByRole('button', {
+		name: ru['render.download'],
+		exact: true
+	});
+	await expect(downloadButton).toBeEnabled();
+	await panel(page).getByRole('checkbox', { name: ru['toolbar.upscale'], exact: true }).check();
+	await panel(page)
+		.getByRole('slider', { name: ru['photoProcessing.adjustment.exposure'], exact: true })
+		.fill('50');
+	await expect(panel(page).locator('.preview')).toHaveAttribute('aria-busy', 'false');
+	await expect(preview(page)).toHaveJSProperty('naturalWidth', 1600);
+	await panel(page).getByRole('combobox', { name: ru['render.outputFormat'] }).selectOption('png');
+	const pending = page.waitForEvent('download');
+	await downloadButton.click();
+	const download = await pending;
+	expect(download.suggestedFilename()).toMatch(/\.png$/);
+	const path = await download.path();
+	if (!path) throw new Error('Missing photo download');
+	const bytes = await readFile(path);
+	expect(bytes.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+	expect(bytes.readUInt32BE(16)).toBe(1920);
+	expect(bytes.readUInt32BE(20)).toBe(1080);
+	const pixel = await page.evaluate(async (data) => {
+		const image = await createImageBitmap(new Blob([new Uint8Array(data)], { type: 'image/png' }));
+		const canvas = document.createElement('canvas');
+		canvas.width = image.width;
+		canvas.height = image.height;
+		const context = canvas.getContext('2d');
+		if (!context) throw new Error('Canvas is unavailable');
+		context.drawImage(image, 0, 0);
+		image.close();
+		return Array.from(context.getImageData(0, 0, 1, 1).data);
+	}, Array.from(bytes));
+	expect(pixel).toEqual([80, 106, 158, 255]);
+	await expect(downloadButton).toBeEnabled();
+	await panel(page).getByRole('combobox', { name: ru['render.outputFormat'] }).selectOption('jpg');
+	const pendingJpeg = page.waitForEvent('download');
+	await downloadButton.click();
+	const jpeg = await pendingJpeg;
+	expect(jpeg.suggestedFilename()).toMatch(/\.jpg$/);
+	const jpegPath = await jpeg.path();
+	if (!jpegPath) throw new Error('Missing JPEG download');
+	expect((await readFile(jpegPath)).subarray(0, 3)).toEqual(Buffer.from([255, 216, 255]));
+	expect(submissions).toBe(0);
+	await expect(page).not.toHaveURL(/generation=/);
+	await expect(
+		panel(page).getByRole('spinbutton', {
+			name: ru['photoProcessing.adjustment.exposure'],
+			exact: true
+		})
+	).toHaveValue('50');
 });
 
 test('PNG save exports changed full-resolution pixels for free and undo/redo restores photo settings', async ({

@@ -178,6 +178,20 @@ before the Change Date. See LICENSE for complete terms.
 					>
 						<Download size={16} strokeWidth={1.8} aria-hidden="true" />
 					</a>
+				{:else if photoProcessingMode}
+					<button
+						type="button"
+						class="icon-btn"
+						aria-label={t('render.download')}
+						title={t('render.download')}
+						aria-busy={photoProcessing.downloading}
+						disabled={!photoProcessing.sourceUrl ||
+							photoProcessing.busy ||
+							photoProcessing.downloading}
+						onclick={() => void photoProcessing.download()}
+					>
+						<Download size={16} strokeWidth={1.8} aria-hidden="true" />
+					</button>
 				{/if}
 				<button
 					type="button"

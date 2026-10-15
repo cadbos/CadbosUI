@@ -34,6 +34,7 @@ export interface Dictionary {
 	'photoProcessing.previewAlt': string;
 	'photoProcessing.previewLoading': string;
 	'photoProcessing.previewFailed': string;
+	'photoProcessing.downloadFailed': string;
 	'photoProcessing.saveFailed': string;
 	'photoProcessing.imageTooLarge': string;
 	'photoProcessing.insufficientCredit': string;

@@ -1070,6 +1070,7 @@ export const ru = {
 	'photoProcessing.previewLoading': 'Обновляем предпросмотр…',
 	'photoProcessing.previewFailed':
 		'Не удалось обновить предпросмотр. Измените настройку, чтобы повторить.',
+	'photoProcessing.downloadFailed': 'Не удалось скачать обработанное фото. Попробуйте ещё раз.',
 	'photoProcessing.saveFailed': 'Не удалось сохранить обработку. Попробуйте ещё раз.',
 	'photoProcessing.imageTooLarge':
 		'Для обработки выберите фото до 20 Мп. Готовый файл должен быть меньше 32 МБ.',

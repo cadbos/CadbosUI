@@ -1056,6 +1056,7 @@ export const en = {
 	'photoProcessing.previewAlt': 'Photo adjustment preview',
 	'photoProcessing.previewLoading': 'Updating preview…',
 	'photoProcessing.previewFailed': 'Could not update the preview. Change an adjustment to retry.',
+	'photoProcessing.downloadFailed': 'Could not download the adjusted photo. Try again.',
 	'photoProcessing.saveFailed': 'Could not save adjustments. Try again.',
 	'photoProcessing.imageTooLarge':
 		'Choose a photo up to 20 MP. The processed file must be smaller than 32 MB.',

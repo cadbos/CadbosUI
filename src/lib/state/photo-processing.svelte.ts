@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { tick, untrack } from 'svelte';
 import {
 	mediaAccessSchema,
+	type OutputFormat,
 	type RenderResponse,
 	type RequestFormSnapshot
 } from '$lib/api/contract';
@@ -68,6 +69,21 @@ function sameAdjustments(left: PhotoAdjustments, right: PhotoAdjustments): boole
 	);
 }
 
+function photoOutputFormat(blob: Blob): OutputFormat {
+	switch (blob.type) {
+		case 'image/jpeg':
+			return 'jpg';
+		case 'image/png':
+			return 'png';
+		case 'image/avif':
+			return 'avif';
+		case 'image/webp':
+			return 'webp';
+		default:
+			throw new Error('Photo output format unavailable');
+	}
+}
+
 class PhotoProcessingState {
 	previewImage = $state.raw<HTMLImageElement | undefined>(undefined);
 	previewUrl = $derived(this.previewImage?.src);
@@ -76,6 +92,7 @@ class PhotoProcessingState {
 	upscaleOnSave = $state(false);
 	saving = $state(false);
 	upscaling = $state(false);
+	downloading = $state(false);
 	notice = $state<string | null>(null);
 	completedResultUrl = $state<string | null>(null);
 	#actionError = $state<string | null>(null);
@@ -228,6 +245,34 @@ class PhotoProcessingState {
 		this.presetPreviewUrls = {};
 	}
 
+	async download(): Promise<void> {
+		const source = this.sourceUrl;
+		if (!source || this.busy || this.downloading) return;
+		const settings = { ...request.photoAdjustments };
+		const format = request.outputFormat;
+		this.downloading = true;
+		this.#actionError = null;
+		try {
+			const blob = await processPhoto(source, settings, undefined, undefined, format);
+			const outputFormat = photoOutputFormat(blob);
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			try {
+				link.href = url;
+				link.download = `photo.${outputFormat}`;
+				document.body.append(link);
+				link.click();
+			} finally {
+				link.remove();
+				setTimeout(() => URL.revokeObjectURL(url), 60_000);
+			}
+		} catch (error) {
+			this.#actionError = this.#errorMessage(error, 'photoProcessing.downloadFailed');
+		} finally {
+			this.downloading = false;
+		}
+	}
+
 	async save(): Promise<void> {
 		if (!this.canSave) return;
 		const operation = this.#capture(true);
@@ -356,14 +401,7 @@ class PhotoProcessingState {
 			undefined,
 			operation.formSnapshot.outputFormat
 		);
-		const outputFormat =
-			blob.type === 'image/jpeg'
-				? 'jpg'
-				: blob.type === 'image/png'
-					? 'png'
-					: blob.type === 'image/avif'
-						? 'avif'
-						: 'webp';
+		const outputFormat = photoOutputFormat(blob);
 		operation.formSnapshot = { ...operation.formSnapshot, outputFormat };
 		if (blob.size > MAX_PROCESSED_PHOTO_SIZE) throw new Error('photo_processing_image_too_large');
 		await this.#prepare(operation);
