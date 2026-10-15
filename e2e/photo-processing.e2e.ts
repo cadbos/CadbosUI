@@ -255,7 +255,7 @@ async function openTwoProjects(page: Page): Promise<Locator> {
 
 test('photo mode previews actual pixel changes, compares the original and supports presets and keyboard tabs', async ({
 	page
-}) => {
+}, testInfo) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
 	await mockPhotoWorkspace(page);
 	let uploads = 0;
@@ -323,7 +323,7 @@ test('photo mode previews actual pixel changes, compares the original and suppor
 		.evaluate((element) => element.scrollTo(0, 0));
 	await page.evaluate(() => window.scrollTo(0, 0));
 	await page.screenshot({
-		path: '/private/tmp/cadbos-photo-processing-desktop.png',
+		path: testInfo.outputPath('photo-processing-desktop.png'),
 		fullPage: true
 	});
 
@@ -676,7 +676,9 @@ test('a paid 4K result without a history id stays downloadable after its origina
 	await expect(page).toHaveURL(new RegExp(`session=${SESSION_B}&generation=${GENERATION_B}`));
 });
 
-test('photo mode remains usable on mobile without horizontal overflow', async ({ page }) => {
+test('photo mode remains usable on mobile without horizontal overflow', async ({
+	page
+}, testInfo) => {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await mockPhotoWorkspace(page);
 	await openPhoto(page);
@@ -694,7 +696,7 @@ test('photo mode remains usable on mobile without horizontal overflow', async ({
 		.evaluate((element) => element.scrollTo(0, 0));
 	await page.evaluate(() => window.scrollTo(0, 0));
 	await page.screenshot({
-		path: '/private/tmp/cadbos-photo-processing-mobile.png',
+		path: testInfo.outputPath('photo-processing-mobile.png'),
 		fullPage: true
 	});
 	await page.getByRole('tab', { name: ru['mode.render'], exact: true }).click();
@@ -708,7 +710,7 @@ test('photo mode remains usable on mobile without horizontal overflow', async ({
 
 test('photo tool stays inside editing and its compact actions fit narrow and wide panels', async ({
 	page
-}) => {
+}, testInfo) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
 	await mockPhotoWorkspace(page);
 	await page.goto('/');
@@ -757,12 +759,12 @@ test('photo tool stays inside editing and its compact actions fit narrow and wid
 			expect(button.right).toBeLessThanOrEqual(bounds!.x + bounds!.width + 1);
 		}
 		await page.screenshot({
-			path: `/private/tmp/cadbos-photo-actions-${size}.png`,
+			path: testInfo.outputPath(`photo-actions-${size}.png`),
 			fullPage: true
 		});
 	}
 	await page.setViewportSize({ width: 390, height: 844 });
 	await footer.scrollIntoViewIfNeeded();
 	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-	await page.screenshot({ path: '/private/tmp/cadbos-photo-actions-mobile.png', fullPage: true });
+	await page.screenshot({ path: testInfo.outputPath('photo-actions-mobile.png'), fullPage: true });
 });

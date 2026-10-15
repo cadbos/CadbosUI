@@ -22,9 +22,32 @@ before the Change Date. See LICENSE for complete terms.
 	import { request } from '$lib/state/request.svelte';
 
 	const sourceUrl = $derived(photoProcessing.sourceUrl);
-	const imageUrl = $derived(
-		photoProcessing.showOriginal ? sourceUrl : (photoProcessing.previewUrl ?? sourceUrl)
-	);
+	function displayImage(host: HTMLDivElement): () => void {
+		const readyImage = photoProcessing.showOriginal ? undefined : photoProcessing.previewImage;
+		const source = sourceUrl;
+		const alt = t('photoProcessing.previewAlt');
+		let cancelled = false;
+		if (readyImage) {
+			readyImage.alt = alt;
+			host.replaceChildren(readyImage);
+		} else if (source) {
+			const image = new Image();
+			image.alt = alt;
+			image.fetchPriority = 'high';
+			image.src = source;
+			void image.decode().then(
+				() => {
+					if (!cancelled) host.replaceChildren(image);
+				},
+				(error: unknown) => {
+					if (!cancelled) photoProcessing.reportPreviewError(error);
+				}
+			);
+		}
+		return () => {
+			cancelled = true;
+		};
+	}
 
 	$effect(() => {
 		const source = sourceUrl;
@@ -39,15 +62,8 @@ before the Change Date. See LICENSE for complete terms.
 <RenderResult photoProcessingMode>
 	{#snippet imagePreview()}
 		<div class="preview" aria-busy={photoProcessing.loading}>
-			{#if imageUrl}
-				<img
-					src={imageUrl}
-					alt={t('photoProcessing.previewAlt')}
-					loading="eager"
-					fetchpriority="high"
-					decoding="sync"
-				/>
-			{:else}
+			<div class="preview-image" {@attach displayImage}></div>
+			{#if !sourceUrl}
 				<ImageSkeleton />
 			{/if}
 			{#if photoProcessing.showOriginal}
@@ -69,7 +85,12 @@ before the Change Date. See LICENSE for complete terms.
 		height: 100%;
 	}
 
-	.preview > img {
+	.preview-image {
+		width: 100%;
+		height: 100%;
+	}
+
+	.preview-image :global(img) {
 		width: 100%;
 		height: 100%;
 		object-fit: contain;

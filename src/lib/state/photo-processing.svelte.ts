@@ -69,7 +69,8 @@ function sameAdjustments(left: PhotoAdjustments, right: PhotoAdjustments): boole
 }
 
 class PhotoProcessingState {
-	previewUrl = $state<string | undefined>(undefined);
+	previewImage = $state.raw<HTMLImageElement | undefined>(undefined);
+	previewUrl = $derived(this.previewImage?.src);
 	presetPreviewUrls = $state<Record<string, string>>({});
 	loading = $state(false);
 	showOriginal = $state(false);
@@ -147,7 +148,7 @@ class PhotoProcessingState {
 					await image.decode();
 					if (controller.signal.aborted) return;
 					const previousUrl = this.previewUrl;
-					this.previewUrl = nextUrl;
+					this.previewImage = image;
 					displayed = true;
 					await tick();
 					if (previousUrl) URL.revokeObjectURL(previousUrl);
@@ -172,6 +173,10 @@ class PhotoProcessingState {
 		}
 	}
 
+	reportPreviewError(error: unknown): void {
+		this.#previewError = this.#errorMessage(error, 'photoProcessing.previewFailed');
+	}
+
 	clearPreview(): void {
 		this.#previewAbort?.abort();
 		this.#previewAbort = null;
@@ -180,7 +185,7 @@ class PhotoProcessingState {
 		this.#previewRenderer = undefined;
 		this.#previewRunning = false;
 		if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
-		this.previewUrl = undefined;
+		this.previewImage = undefined;
 		this.loading = false;
 	}
 
