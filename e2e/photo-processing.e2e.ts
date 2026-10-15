@@ -241,12 +241,25 @@ async function openTwoProjects(page: Page): Promise<Locator> {
 		});
 	}
 	await page.goto(`/projects/${PROJECT_A}`);
-	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
+	await page
+		.getByRole('button', {
+			name: ru['projects.detail.sessionContinueAria'].replace('{title}', 'Main thread')
+		})
+		.click();
 	await expect(page).toHaveURL(new RegExp(`session=${SESSION_A}`));
-	await page.getByRole('link', { name: 'Проекты', exact: true }).click();
-	await page.getByRole('link', { name: 'Открыть проект Kitchen', exact: false }).click();
-	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
-	const tabs = page.getByRole('navigation', { name: 'Открытые проекты' });
+	await page.getByRole('link', { name: ru['projects.navLabel'], exact: true }).click();
+	await page
+		.getByRole('link', {
+			name: ru['projects.openAria'].replace('{title}', 'Kitchen'),
+			exact: false
+		})
+		.click();
+	await page
+		.getByRole('button', {
+			name: ru['projects.detail.sessionContinueAria'].replace('{title}', 'Main thread')
+		})
+		.click();
+	const tabs = page.getByRole('navigation', { name: ru['workspace.tabs.label'] });
 	await tabs.getByRole('tab', { name: 'Living room', exact: true }).click();
 	await selectPhotoTool(page);
 	await expect(preview(page)).toBeVisible();
@@ -255,7 +268,7 @@ async function openTwoProjects(page: Page): Promise<Locator> {
 
 test('photo mode previews actual pixel changes, compares the original and supports presets and keyboard tabs', async ({
 	page
-}, testInfo) => {
+}) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
 	await mockPhotoWorkspace(page);
 	let uploads = 0;
@@ -322,10 +335,6 @@ test('photo mode previews actual pixel changes, compares the original and suppor
 		.locator('.panel-body')
 		.evaluate((element) => element.scrollTo(0, 0));
 	await page.evaluate(() => window.scrollTo(0, 0));
-	await page.screenshot({
-		path: testInfo.outputPath('photo-processing-desktop.png'),
-		fullPage: true
-	});
 
 	await panel(page).getByRole('tab', { name: ru['edit.tool.repaint'], exact: true }).click();
 	await expect(page).toHaveURL(/\/edit\?/);
@@ -440,6 +449,13 @@ test('PNG save exports changed full-resolution pixels for free and undo/redo res
 		'href',
 		submitted.outputUrl
 	);
+
+	await panel(page).getByRole('combobox', { name: ru['render.outputFormat'] }).selectOption('jpg');
+	await expect(panel(page).getByRole('link', { name: ru['render.download'] })).toHaveAttribute(
+		'download',
+		'render.png'
+	);
+	await panel(page).getByRole('combobox', { name: ru['render.outputFormat'] }).selectOption('png');
 
 	await exposure.fill('40');
 	await save.click();
@@ -662,7 +678,9 @@ test('a paid 4K result without a history id stays downloadable after its origina
 		.nth(1)
 		.click();
 	await expect.poll(() => started).toBe(true);
-	await tabs.getByRole('button', { name: 'Закрыть вкладку «Living room»' }).press('Enter');
+	await tabs
+		.getByRole('button', { name: ru['workspace.tabs.close'].replace('{title}', 'Living room') })
+		.press('Enter');
 	await expect(tabs.getByRole('tab', { name: 'Living room', exact: true })).toHaveCount(0);
 	release?.();
 	await expect(page.getByText(ru['generationOverlay.upscale'], { exact: true })).toHaveCount(0);
@@ -676,9 +694,7 @@ test('a paid 4K result without a history id stays downloadable after its origina
 	await expect(page).toHaveURL(new RegExp(`session=${SESSION_B}&generation=${GENERATION_B}`));
 });
 
-test('photo mode remains usable on mobile without horizontal overflow', async ({
-	page
-}, testInfo) => {
+test('photo mode remains usable on mobile without horizontal overflow', async ({ page }) => {
 	await page.setViewportSize({ width: 390, height: 844 });
 	await mockPhotoWorkspace(page);
 	await openPhoto(page);
@@ -695,10 +711,6 @@ test('photo mode remains usable on mobile without horizontal overflow', async ({
 		.locator('.panel-body')
 		.evaluate((element) => element.scrollTo(0, 0));
 	await page.evaluate(() => window.scrollTo(0, 0));
-	await page.screenshot({
-		path: testInfo.outputPath('photo-processing-mobile.png'),
-		fullPage: true
-	});
 	await page.getByRole('tab', { name: ru['mode.render'], exact: true }).click();
 	await expect(page).toHaveURL(/\/create\/interior/);
 	await selectPhotoTool(page);
@@ -710,7 +722,7 @@ test('photo mode remains usable on mobile without horizontal overflow', async ({
 
 test('photo tool stays inside editing and its compact actions fit narrow and wide panels', async ({
 	page
-}, testInfo) => {
+}) => {
 	await page.setViewportSize({ width: 1280, height: 900 });
 	await mockPhotoWorkspace(page);
 	await page.goto('/');
@@ -758,13 +770,8 @@ test('photo tool stays inside editing and its compact actions fit narrow and wid
 			expect(button.left).toBeGreaterThanOrEqual(bounds!.x - 1);
 			expect(button.right).toBeLessThanOrEqual(bounds!.x + bounds!.width + 1);
 		}
-		await page.screenshot({
-			path: testInfo.outputPath(`photo-actions-${size}.png`),
-			fullPage: true
-		});
 	}
 	await page.setViewportSize({ width: 390, height: 844 });
 	await footer.scrollIntoViewIfNeeded();
 	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-	await page.screenshot({ path: testInfo.outputPath('photo-actions-mobile.png'), fullPage: true });
 });

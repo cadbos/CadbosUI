@@ -1479,10 +1479,7 @@ export class RequestState {
 	}
 
 	#applyFormSnapshot(snapshot: RequestFormSnapshot | undefined): void {
-		if (!snapshot) {
-			this.resetPhotoAdjustments();
-			return;
-		}
+		if (!snapshot) return;
 		this.promptFragments = cloneFragments(snapshot.promptFragments);
 		this.promptOverride = snapshot.promptOverride;
 		this.editPrompt = snapshot.editPrompt;

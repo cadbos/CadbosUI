@@ -2196,9 +2196,12 @@ describe('undo/redo restores the form settings used for each step (FR-К6)', () 
 	it('does not overwrite the form for a snapshot-less step, e.g. the synthetic uploaded-photo root', () => {
 		request.setImage({ mediaKey: '101' });
 		request.setFragments([{ text: 'Scandinavian living room' }]);
+		request.setPhotoAdjustment('exposure', 35);
 		request.setCurrentRender(render('gen-1'));
+		const snapshot = request.captureFormSnapshot();
 
 		request.undoLastEdit();
+		expect(request.captureFormSnapshot()).toEqual(snapshot);
 
 		expect(request.currentRender?.outputKey).toBe('101');
 		expect(request.promptFragments.map((fragment) => fragment.text)).toEqual([
@@ -2518,7 +2521,7 @@ describe('photo adjustment model', () => {
 		expect(copy.photoAdjustments.exposure).toBe(20);
 		expect(copy.currentRender?.sourceKey).toBe('room');
 		copy.undoLastEdit();
-		expect(copy.photoAdjustments).toEqual(defaultPhotoAdjustments());
+		expect(copy.photoAdjustments.exposure).toBe(20);
 		copy.redoEdit();
 		copy.redoEdit();
 		expect(copy.photoAdjustments.exposure).toBe(40);

@@ -101,9 +101,9 @@ before the Change Date. See LICENSE for complete terms.
 		const extension = render?.outputKey.split('.').at(-1)?.toLowerCase();
 		return extension && ['png', 'webp', 'jpg', 'jpeg', 'avif'].includes(extension)
 			? extension
-			: (render?.formSnapshot?.outputFormat ?? request.outputFormat);
+			: render?.formSnapshot?.outputFormat;
 	});
-	const downloadName = $derived(`render.${downloadFormat}`);
+	const downloadName = $derived(downloadFormat ? `render.${downloadFormat}` : 'render');
 </script>
 
 {#if imagePreview || (render && imageUrl)}

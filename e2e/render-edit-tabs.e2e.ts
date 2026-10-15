@@ -119,7 +119,10 @@ async function readUrlHistory(page: Page): Promise<string[]> {
 	return page.evaluate(() => (window as unknown as { __urlHistory: string[] }).__urlHistory);
 }
 
-async function mockProjectWithGeneration(page: Page): Promise<void> {
+async function mockProjectWithGeneration(
+	page: Page,
+	sourceKey: string | number = 1
+): Promise<void> {
 	await page.route(`**/api/projects/${E2E_PROJECT_ID}`, async (route) => {
 		if (route.request().method() !== 'GET') return route.fallback();
 		await route.fulfill({
@@ -143,7 +146,7 @@ async function mockProjectWithGeneration(page: Page): Promise<void> {
 							{
 								id: E2E_GENERATION_ID,
 								image: media(2, '/api/media/test-media/after.webp'),
-								source: media(1, '/api/media/test-media/before.webp'),
+								source: media(sourceKey, '/api/media/test-media/before.webp'),
 								kind: 'render',
 								createdAt: Date.UTC(2026, 0, 1),
 								amount: 1.5,
@@ -169,7 +172,7 @@ async function mockProjectWithGeneration(page: Page): Promise<void> {
 				amount: 1.5,
 				balanceAfter: 8.5,
 				image: media(2, '/api/media/test-media/after.webp'),
-				source: media(1, '/api/media/test-media/before.webp'),
+				source: media(sourceKey, '/api/media/test-media/before.webp'),
 				formSnapshot: null,
 				session: {
 					projectId: E2E_PROJECT_ID,
@@ -179,10 +182,33 @@ async function mockProjectWithGeneration(page: Page): Promise<void> {
 				},
 				media: [
 					media(2, '/api/media/test-media/after.webp'),
-					media(1, '/api/media/test-media/before.webp')
+					media(sourceKey, '/api/media/test-media/before.webp')
 				]
 			})
 		});
+	});
+}
+
+for (const [outputKey, filename] of [
+	['opaque-output-key', 'render'],
+	['output.unknown', 'render'],
+	['output.png', 'render.png']
+]) {
+	test(`download name for ${outputKey} follows the stored image rather than the form format`, async ({
+		page
+	}) => {
+		await authenticate(page);
+		await mockProjectWithGeneration(page, outputKey);
+		await page.goto(
+			`/create/interior?project=${E2E_PROJECT_ID}&session=${E2E_SESSION_ID}&generation=${E2E_GENERATION_ID}&format=avif`
+		);
+		const download = page.getByRole('link', { name: ru['render.download'], exact: true });
+		await expect(download).toHaveAttribute('download', 'render.webp');
+		await page.getByRole('combobox', { name: ru['render.outputFormat'] }).selectOption('jpg');
+		await expect(download).toHaveAttribute('download', 'render.webp');
+		await page.getByRole('button', { name: ru['toolbar.previousGeneration'], exact: true }).click();
+		await expect(download).toHaveAttribute('href', `/api/media/test-media/${outputKey}`);
+		await expect(download).toHaveAttribute('download', filename);
 	});
 }
 
