@@ -439,6 +439,7 @@ test('an uploaded photo downloads with current adjustments at full resolution wi
 		context.fillRect(0, 0, canvas.width, canvas.height);
 		return canvas.toDataURL('image/png').split(',')[1];
 	});
+	await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
 	await panel(page)
 		.locator('input[type="file"]')
 		.setInputFiles({
