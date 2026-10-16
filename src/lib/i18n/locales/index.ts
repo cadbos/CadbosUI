@@ -645,6 +645,12 @@ export interface Dictionary {
 	'textureReplacement.maskEditor.toolbar': string;
 	'textureReplacement.maskEditor.brush': string;
 	'textureReplacement.maskEditor.eraser': string;
+	'textureReplacement.maskEditor.lasso': string;
+	'textureReplacement.maskEditor.finishLasso': string;
+	'textureReplacement.maskEditor.undoPoint': string;
+	'textureReplacement.maskEditor.cancelLasso': string;
+	'textureReplacement.maskEditor.lassoHint': string;
+	'textureReplacement.maskEditor.lassoDraft': string;
 	'textureReplacement.maskEditor.brushSize': string;
 	'textureReplacement.maskEditor.clear': string;
 	'textureReplacement.maskEditor.sourceAlt': string;

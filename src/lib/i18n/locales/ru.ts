@@ -624,6 +624,14 @@ export const ru = {
 	'textureReplacement.maskEditor.toolbar': 'Инструменты рисования маски',
 	'textureReplacement.maskEditor.brush': 'Кисть',
 	'textureReplacement.maskEditor.eraser': 'Ластик',
+	'textureReplacement.maskEditor.lasso': 'Точечное лассо',
+	'textureReplacement.maskEditor.finishLasso': 'Замкнуть область',
+	'textureReplacement.maskEditor.undoPoint': 'Убрать точку',
+	'textureReplacement.maskEditor.cancelLasso': 'Отменить контур',
+	'textureReplacement.maskEditor.lassoHint':
+		'Отметьте углы области по точкам. Нажмите первую точку или «Замкнуть область» (Enter), чтобы закрасить её. Backspace — убрать точку, Esc — отменить контур.',
+	'textureReplacement.maskEditor.lassoDraft':
+		'Завершите или отмените контур перед сохранением маски.',
 	'textureReplacement.maskEditor.brushSize': 'Размер кисти',
 	'textureReplacement.maskEditor.clear': 'Очистить',
 	'textureReplacement.maskEditor.sourceAlt': 'Исходная сцена для рисования маски',

@@ -414,3 +414,233 @@ test('does not navigate back after switching tools during submission', async ({ 
 	);
 	await expect(page).not.toHaveURL(/tool=texture-replacement/);
 });
+
+test('fills a polygon mask, preserves it across tools and exports only committed areas', async ({
+	page
+}) => {
+	await authenticate(page);
+	await page.goto('/edit?tool=texture-replacement');
+	const uploads = await uploadInputs(page);
+	const editor = page.locator('#mode-panel-edit .mask-editor');
+	const canvas = editor.locator('canvas');
+	await expect.poll(() => canvas.evaluate((node: HTMLCanvasElement) => node.width)).toBe(800);
+	await editor.getByRole('button', { name: 'Точечное лассо', exact: true }).click();
+	await canvas.scrollIntoViewIfNeeded();
+	const clickPoint = async (x: number, y: number): Promise<void> => {
+		await canvas.scrollIntoViewIfNeeded();
+		const bounds = await canvas.boundingBox();
+		if (!bounds) throw new Error('Mask canvas has no visible bounds');
+		await page.mouse.click(bounds.x + bounds.width * x, bounds.y + bounds.height * y);
+	};
+	const save = editor.getByRole('button', { name: 'Сохранить маску', exact: true });
+	await clickPoint(0.2, 0.2);
+	await clickPoint(0.8, 0.2);
+	await expect(save).toBeDisabled();
+	await clickPoint(0.8, 0.8);
+	await clickPoint(0.2, 0.8);
+	await expect(editor.locator('.brush-cursor')).toBeHidden();
+	await expect(save).toBeDisabled();
+	await clickPoint(0.2, 0.2);
+	await expect(save).toBeEnabled();
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		save.click()
+	]);
+	await expect(editor.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
+	const maskPng = uploads.maskPng();
+	if (!maskPng) throw new Error('The generated polygon mask PNG was not captured');
+	const samples = await page.evaluate(async (base64) => {
+		const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+		const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+		const output = document.createElement('canvas');
+		output.width = bitmap.width;
+		output.height = bitmap.height;
+		const context = output.getContext('2d');
+		if (!context) throw new Error('Canvas 2D context is unavailable');
+		context.drawImage(bitmap, 0, 0);
+		bitmap.close();
+		return [
+			Array.from(context.getImageData(400, 300, 1, 1).data),
+			Array.from(context.getImageData(40, 30, 1, 1).data)
+		];
+	}, maskPng.toString('base64'));
+	expect(samples).toEqual([
+		[255, 255, 255, 255],
+		[0, 0, 0, 255]
+	]);
+	await clickPoint(0.35, 0.35);
+	await clickPoint(0.45, 0.35);
+	await canvas.press('Escape');
+	await expect(save).toBeEnabled();
+	await expect(editor.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
+	await clickPoint(0.35, 0.35);
+	await editor.getByRole('button', { name: 'Кисть', exact: true }).click();
+	await expect(save).toBeEnabled();
+	await editor.getByRole('button', { name: 'Ластик', exact: true }).click();
+	await clickPoint(0.5, 0.5);
+	await expect(editor.getByText('Сохраните маску после рисования.')).toBeVisible();
+	const alpha = await canvas.evaluate(
+		(node: HTMLCanvasElement) => node.getContext('2d')?.getImageData(400, 300, 1, 1).data[3]
+	);
+	expect(alpha).toBe(0);
+});
+
+test('edits and cancels lasso drafts and clears completed masks', async ({ page }) => {
+	await authenticate(page);
+	await page.goto('/edit?tool=texture-replacement');
+	await uploadInputs(page);
+	const editor = page.locator('#mode-panel-edit .mask-editor');
+	const canvas = editor.locator('canvas');
+	await expect.poll(() => canvas.evaluate((node: HTMLCanvasElement) => node.width)).toBe(800);
+	await editor.getByRole('button', { name: 'Точечное лассо', exact: true }).click();
+	const finish = editor.getByRole('button', { name: 'Замкнуть область', exact: true });
+	const undo = editor.getByRole('button', { name: 'Убрать точку', exact: true });
+	const cancel = editor.getByRole('button', { name: 'Отменить контур', exact: true });
+	const clear = editor.getByRole('button', { name: 'Очистить', exact: true });
+	const save = editor.getByRole('button', { name: 'Сохранить маску', exact: true });
+	const clickPoint = async (x: number, y: number): Promise<void> => {
+		await canvas.scrollIntoViewIfNeeded();
+		const bounds = await canvas.boundingBox();
+		if (!bounds) throw new Error('Mask canvas has no visible bounds');
+		await page.mouse.click(bounds.x + bounds.width * x, bounds.y + bounds.height * y);
+	};
+	await expect(finish).toBeDisabled();
+	await expect(undo).toBeDisabled();
+	await clickPoint(0.2, 0.2);
+	await clickPoint(0.8, 0.2);
+	await clickPoint(0.8, 0.8);
+	await expect(finish).toBeEnabled();
+	await undo.click();
+	await expect(editor.locator('.lasso-preview circle')).toHaveCount(2);
+	await expect(finish).toBeDisabled();
+	await canvas.press('Backspace');
+	await expect(editor.locator('.lasso-preview circle')).toHaveCount(1);
+	await cancel.click();
+	await expect(editor.locator('.lasso-preview')).toHaveCount(0);
+	await expect(save).toBeDisabled();
+	await clickPoint(0.2, 0.2);
+	await clickPoint(0.8, 0.2);
+	await clickPoint(0.8, 0.8);
+	await finish.click();
+	await expect(editor.locator('.lasso-preview')).toHaveCount(0);
+	await expect(save).toBeEnabled();
+	await expect(editor.getByText('Сохраните маску после рисования.')).toBeVisible();
+	await clickPoint(0.35, 0.35);
+	await clear.click();
+	await expect(editor.locator('.lasso-preview')).toHaveCount(0);
+	await expect(save).toBeDisabled();
+	await expect(clear).toBeDisabled();
+	const hasPixels = await canvas.evaluate((node: HTMLCanvasElement) => {
+		const context = node.getContext('2d');
+		if (!context) throw new Error('Canvas 2D context is unavailable');
+		return context.getImageData(0, 0, node.width, node.height).data.some((value) => value !== 0);
+	});
+	expect(hasPixels).toBe(false);
+});
+
+test.describe('touch lasso', () => {
+	test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+	test('closes a polygon by tapping its first point', async ({ page }) => {
+		await authenticate(page);
+		await page.goto('/edit?tool=texture-replacement');
+		await uploadInputs(page);
+		const editor = page.locator('#mode-panel-edit .mask-editor');
+		const canvas = editor.locator('canvas');
+		await expect.poll(() => canvas.evaluate((node: HTMLCanvasElement) => node.width)).toBe(800);
+		await editor.getByRole('button', { name: 'Точечное лассо', exact: true }).tap();
+		const tapPoint = async (x: number, y: number): Promise<void> => {
+			await canvas.scrollIntoViewIfNeeded();
+			const bounds = await canvas.boundingBox();
+			if (!bounds) throw new Error('Mask canvas has no visible bounds');
+			await page.touchscreen.tap(bounds.x + bounds.width * x, bounds.y + bounds.height * y);
+		};
+		await tapPoint(0.2, 0.2);
+		await tapPoint(0.8, 0.2);
+		await tapPoint(0.8, 0.8);
+		await expect(editor.getByRole('button', { name: 'Сохранить маску' })).toBeDisabled();
+		await tapPoint(0.2, 0.2);
+		await expect(editor.locator('.lasso-preview')).toHaveCount(0);
+		await expect(editor.getByRole('button', { name: 'Сохранить маску' })).toBeEnabled();
+		await expect(editor.locator('.brush-cursor')).toBeHidden();
+	});
+});
+
+test('keeps empty lasso drafts editable and preserves a saved mask after an empty contour', async ({
+	page
+}) => {
+	await authenticate(page);
+	await page.goto('/edit?tool=texture-replacement');
+	await uploadInputs(page);
+	const editor = page.locator('#mode-panel-edit .mask-editor');
+	const canvas = editor.locator('canvas');
+	await expect.poll(() => canvas.evaluate((node: HTMLCanvasElement) => node.width)).toBe(800);
+	await editor.getByRole('button', { name: 'Точечное лассо', exact: true }).click();
+	const finish = editor.getByRole('button', { name: 'Замкнуть область', exact: true });
+	const cancel = editor.getByRole('button', { name: 'Отменить контур', exact: true });
+	const save = editor.getByRole('button', { name: 'Сохранить маску', exact: true });
+	const clickPoint = async (x: number, y: number): Promise<void> => {
+		await canvas.scrollIntoViewIfNeeded();
+		const bounds = await canvas.boundingBox();
+		if (!bounds) throw new Error('Mask canvas has no visible bounds');
+		await canvas.click({ position: { x: bounds.width * x, y: bounds.height * y } });
+	};
+	const canvasData = (): Promise<string> =>
+		canvas.evaluate((node: HTMLCanvasElement) => node.toDataURL());
+	const blankMask = await canvasData();
+	await clickPoint(0.3, 0.5);
+	await clickPoint(0.5, 0.5);
+	await clickPoint(0.7, 0.5);
+	await finish.click();
+	await expect(editor.locator('.lasso-preview circle')).toHaveCount(3);
+	await expect(save).toBeDisabled();
+	expect(await canvasData()).toBe(blankMask);
+	await clickPoint(0.7, 0.8);
+	await finish.click();
+	await expect(editor.locator('.lasso-preview')).toHaveCount(0);
+	await expect(save).toBeEnabled();
+	await Promise.all([
+		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+		save.click()
+	]);
+	await expect(editor.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
+	const savedMask = await canvasData();
+	await clickPoint(0.3, 0.4);
+	await clickPoint(0.5, 0.4);
+	await clickPoint(0.7, 0.4);
+	await finish.click();
+	await expect(editor.locator('.lasso-preview circle')).toHaveCount(3);
+	await expect(save).toBeDisabled();
+	expect(await canvasData()).toBe(savedMask);
+	await cancel.click();
+	await expect(editor.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
+	await expect(save).toBeEnabled();
+});
+
+test('fills a crossing lasso contour with drawable area', async ({ page }) => {
+	await authenticate(page);
+	await page.goto('/edit?tool=texture-replacement');
+	await uploadInputs(page);
+	const editor = page.locator('#mode-panel-edit .mask-editor');
+	const canvas = editor.locator('canvas');
+	await expect.poll(() => canvas.evaluate((node: HTMLCanvasElement) => node.width)).toBe(800);
+	await editor.getByRole('button', { name: 'Точечное лассо', exact: true }).click();
+	for (const [x, y] of [
+		[0.3, 0.3],
+		[0.7, 0.7],
+		[0.3, 0.7],
+		[0.7, 0.3]
+	]) {
+		await canvas.scrollIntoViewIfNeeded();
+		const bounds = await canvas.boundingBox();
+		if (!bounds) throw new Error('Mask canvas has no visible bounds');
+		await canvas.click({ position: { x: bounds.width * x, y: bounds.height * y } });
+	}
+	await canvas.press('Enter');
+	await expect(editor.locator('.lasso-preview')).toHaveCount(0);
+	await expect(editor.getByRole('button', { name: 'Сохранить маску', exact: true })).toBeEnabled();
+	const alpha = await canvas.evaluate(
+		(node: HTMLCanvasElement) => node.getContext('2d')?.getImageData(400, 210, 1, 1).data[3]
+	);
+	expect(alpha).toBe(255);
+});

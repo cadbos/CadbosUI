@@ -22,7 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	const MAX_UPLOAD_SIZE = 8 * 1024 * 1024;
 	const MAX_CANVAS_DIMENSION = 2048;
-	type DrawingTool = 'brush' | 'eraser';
+	type DrawingTool = 'brush' | 'eraser' | 'lasso';
 
 	interface Props {
 		sourceUrl?: string;
@@ -56,25 +56,38 @@ before the Change Date. See LICENSE for complete terms.
 	let fallbackUploading = $state(false);
 	let errorKey = $state<TranslationKey | null>(null);
 	let brushCursor = $state<BrushCursor | null>(null);
+	let lassoPoints = $state<Point[]>([]);
+	let lassoHover = $state<Point | null>(null);
+	let canvasWidth = $state(1);
+	let canvasHeight = $state(1);
 	let previousPoint: Point | null = null;
 	let activePointerId: number | null = null;
 	let initializedSource: number | string | undefined;
 	const sourceIdentity = $derived(sourceKey ?? sourceUrl);
 	const maskReady = $derived(request.textureMaskMatchesSource());
 	const editorBusy = $derived(uploading || fallbackUploading);
-	const canSave = $derived(canvasReady && hasMarks && !editorBusy && !disabled);
+	const hasLassoDraft = $derived(lassoPoints.length > 0);
+	const canSave = $derived(canvasReady && hasMarks && !hasLassoDraft && !editorBusy && !disabled);
+	const lassoOutline = $derived(lassoPoints.map((point) => `${point.x},${point.y}`).join(' '));
+	const lassoPreview = $derived(
+		lassoHover && hasLassoDraft ? `${lassoOutline} ${lassoHover.x},${lassoHover.y}` : lassoOutline
+	);
 	const brushCursorWidth = $derived(brushCursor ? brushSize * brushCursor.canvasToCssScaleX : 0);
 	const brushCursorHeight = $derived(brushCursor ? brushSize * brushCursor.canvasToCssScaleY : 0);
 	const brushCursorVisible = $derived(
-		brushCursor !== null && canvasReady && !disabled && !editorBusy
+		tool !== 'lasso' && brushCursor !== null && canvasReady && !disabled && !editorBusy
 	);
 
 	function attachCanvas(node: HTMLCanvasElement): () => void {
 		canvas = node;
 		canvasReady = false;
+		lassoPoints = [];
+		lassoHover = null;
 		brushCursor = null;
 		return () => {
 			canvas = null;
+			canvasReady = false;
+			cancelLasso();
 			brushCursor = null;
 		};
 	}
@@ -87,6 +100,7 @@ before the Change Date. See LICENSE for complete terms.
 		const drawingContext = context();
 		if (drawingContext && canvas) drawingContext.clearRect(0, 0, canvas.width, canvas.height);
 		hasMarks = false;
+		cancelLasso();
 		drawing = false;
 		previousPoint = null;
 		activePointerId = null;
@@ -111,6 +125,8 @@ before the Change Date. See LICENSE for complete terms.
 		) {
 			canvas.width = width;
 			canvas.height = height;
+			canvasWidth = width;
+			canvasHeight = height;
 			initializedSource = sourceIdentity;
 			resetDrawing();
 		}
@@ -137,7 +153,14 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function updateBrushCursor(event: PointerEvent): void {
-		if (event.pointerType === 'touch' || disabled || editorBusy || !canvasReady || !canvas) {
+		if (
+			tool === 'lasso' ||
+			event.pointerType === 'touch' ||
+			disabled ||
+			editorBusy ||
+			!canvasReady ||
+			!canvas
+		) {
 			brushCursor = null;
 			return;
 		}
@@ -165,6 +188,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	function hideBrushCursor(): void {
 		brushCursor = null;
+		lassoHover = null;
 	}
 
 	function configureStroke(drawingContext: CanvasRenderingContext2D): void {
@@ -188,6 +212,88 @@ before the Change Date. See LICENSE for complete terms.
 		drawingContext.fill();
 	}
 
+	function cancelLasso(): void {
+		lassoPoints = [];
+		lassoHover = null;
+	}
+
+	function selectTool(nextTool: DrawingTool): void {
+		if (tool === nextTool) return;
+		cancelLasso();
+		brushCursor = null;
+		tool = nextTool;
+	}
+
+	function finishLasso(): void {
+		if (lassoPoints.length < 3 || disabled || editorBusy || !canvasReady) return;
+		const drawingContext = context();
+		if (!drawingContext || !canvas) return;
+		const polygonCanvas = document.createElement('canvas');
+		polygonCanvas.width = canvas.width;
+		polygonCanvas.height = canvas.height;
+		const polygonContext = polygonCanvas.getContext('2d');
+		if (!polygonContext) return;
+		polygonContext.fillStyle = '#ff00ff';
+		polygonContext.beginPath();
+		polygonContext.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+		for (const point of lassoPoints.slice(1)) polygonContext.lineTo(point.x, point.y);
+		polygonContext.closePath();
+		polygonContext.fill();
+		const pixels = polygonContext.getImageData(
+			0,
+			0,
+			polygonCanvas.width,
+			polygonCanvas.height
+		).data;
+		let hasArea = false;
+		for (let index = 3; index < pixels.length; index += 4) {
+			if (pixels[index] >= 128) {
+				hasArea = true;
+				break;
+			}
+		}
+		if (!hasArea) return;
+		drawingContext.globalCompositeOperation = 'source-over';
+		drawingContext.drawImage(polygonCanvas, 0, 0);
+		hasMarks = true;
+		invalidateSavedMask();
+		cancelLasso();
+	}
+
+	function undoLassoPoint(): void {
+		lassoPoints = lassoPoints.slice(0, -1);
+	}
+
+	function handleLassoKey(event: KeyboardEvent): void {
+		if (tool !== 'lasso' || !hasLassoDraft || disabled || editorBusy) return;
+		if (event.key === 'Enter') finishLasso();
+		else if (event.key === 'Escape') cancelLasso();
+		else if (event.key === 'Backspace' || event.key === 'Delete') undoLassoPoint();
+		else return;
+		event.preventDefault();
+		event.stopPropagation();
+	}
+
+	function addLassoPoint(point: Point, event: PointerEvent): void {
+		if (!canvas) return;
+		const first = lassoPoints[0];
+		const bounds = canvas.getBoundingClientRect();
+		if (
+			lassoPoints.length >= 3 &&
+			Math.hypot(
+				((point.x - first.x) / canvas.width) * bounds.width,
+				((point.y - first.y) / canvas.height) * bounds.height
+			) <= (event.pointerType === 'touch' ? 20 : 10)
+		) {
+			finishLasso();
+			return;
+		}
+		const last = lassoPoints.at(-1);
+		if (last && last.x === point.x && last.y === point.y) return;
+		lassoPoints = [...lassoPoints, point];
+		lassoHover = null;
+	}
+
 	function beginDrawing(event: PointerEvent): void {
 		updateBrushCursor(event);
 		if (
@@ -196,6 +302,7 @@ before the Change Date. See LICENSE for complete terms.
 			!canvasReady ||
 			!canvas ||
 			!event.isPrimary ||
+			event.button !== 0 ||
 			activePointerId !== null
 		)
 			return;
@@ -203,6 +310,11 @@ before the Change Date. See LICENSE for complete terms.
 		const point = pointFor(event);
 		const drawingContext = context();
 		if (!point || !drawingContext) return;
+		canvas.focus({ preventScroll: true });
+		if (tool === 'lasso') {
+			addLassoPoint(point, event);
+			return;
+		}
 		invalidateSavedMask();
 		drawing = true;
 		activePointerId = event.pointerId;
@@ -214,6 +326,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	function handlePointerMove(event: PointerEvent): void {
 		updateBrushCursor(event);
+		if (tool === 'lasso' && !disabled && !editorBusy && canvasReady) {
+			lassoHover = pointFor(event);
+		}
 		continueDrawing(event);
 	}
 
@@ -243,6 +358,7 @@ before the Change Date. See LICENSE for complete terms.
 		if (!drawingContext || !canvas || disabled || editorBusy) return;
 		drawingContext.clearRect(0, 0, canvas.width, canvas.height);
 		hasMarks = false;
+		cancelLasso();
 		invalidateSavedMask();
 	}
 
@@ -373,45 +489,90 @@ before the Change Date. See LICENSE for complete terms.
 			<div class="tool-group">
 				<button
 					type="button"
-					class:active={tool === 'brush'}
+					class={{ active: tool === 'brush' }}
 					aria-pressed={tool === 'brush'}
 					disabled={disabled || editorBusy}
-					onclick={() => (tool = 'brush')}
+					onclick={() => selectTool('brush')}
 				>
 					{t('textureReplacement.maskEditor.brush')}
 				</button>
 				<button
 					type="button"
-					class:active={tool === 'eraser'}
+					class={{ active: tool === 'eraser' }}
 					aria-pressed={tool === 'eraser'}
 					disabled={disabled || editorBusy}
-					onclick={() => (tool = 'eraser')}
+					onclick={() => selectTool('eraser')}
 				>
 					{t('textureReplacement.maskEditor.eraser')}
 				</button>
-			</div>
-			<label class="brush-size">
-				<span>{t('textureReplacement.maskEditor.brushSize')}</span>
-				<input
-					type="range"
-					min="8"
-					max="160"
-					step="4"
-					value={brushSize}
+				<button
+					type="button"
+					class={{ active: tool === 'lasso' }}
+					aria-pressed={tool === 'lasso'}
 					disabled={disabled || editorBusy}
-					oninput={(event) => (brushSize = brushSizeValue(event))}
-				/>
-				<output>{brushSize}</output>
-			</label>
+					onclick={() => selectTool('lasso')}
+				>
+					{t('textureReplacement.maskEditor.lasso')}
+				</button>
+			</div>
+			{#if tool !== 'lasso'}
+				<label class="brush-size">
+					<span>{t('textureReplacement.maskEditor.brushSize')}</span>
+					<input
+						type="range"
+						min="8"
+						max="160"
+						step="4"
+						value={brushSize}
+						disabled={disabled || editorBusy}
+						oninput={(event) => (brushSize = brushSizeValue(event))}
+					/>
+					<output>{brushSize}</output>
+				</label>
+			{:else}
+				<div class="lasso-actions">
+					<button
+						type="button"
+						disabled={lassoPoints.length < 3 || disabled || editorBusy}
+						onclick={finishLasso}
+					>
+						{t('textureReplacement.maskEditor.finishLasso')}
+					</button>
+					<button
+						type="button"
+						disabled={!hasLassoDraft || disabled || editorBusy}
+						onclick={undoLassoPoint}
+					>
+						{t('textureReplacement.maskEditor.undoPoint')}
+					</button>
+					<button
+						type="button"
+						disabled={!hasLassoDraft || disabled || editorBusy}
+						onclick={cancelLasso}
+					>
+						{t('textureReplacement.maskEditor.cancelLasso')}
+					</button>
+				</div>
+			{/if}
 			<div class="editor-actions">
-				<button type="button" disabled={!hasMarks || disabled || editorBusy} onclick={clearMask}>
+				<button
+					type="button"
+					disabled={(!hasMarks && !hasLassoDraft) || disabled || editorBusy}
+					onclick={clearMask}
+				>
 					{t('textureReplacement.maskEditor.clear')}
 				</button>
 			</div>
 		</div>
 
+		{#if tool === 'lasso'}
+			<p id="mask-editor-lasso-hint" class="lasso-hint">
+				{t('textureReplacement.maskEditor.lassoHint')}
+			</p>
+		{/if}
+
 		{#key sourceIdentity}
-			<div class:disabled={disabled || editorBusy} class="drawing-stage">
+			<div class={['drawing-stage', { disabled: disabled || editorBusy, lasso: tool === 'lasso' }]}>
 				<LazyImage
 					src={sourceUrl}
 					alt={t('textureReplacement.maskEditor.sourceAlt')}
@@ -423,7 +584,11 @@ before the Change Date. See LICENSE for complete terms.
 				<canvas
 					{@attach attachCanvas}
 					aria-label={t('textureReplacement.maskEditor.canvasLabel')}
-					aria-describedby="mask-editor-upload-alternative"
+					aria-describedby={tool === 'lasso'
+						? 'mask-editor-lasso-hint mask-editor-upload-alternative'
+						: 'mask-editor-upload-alternative'}
+					tabindex="0"
+					onkeydown={handleLassoKey}
 					onpointerdown={beginDrawing}
 					onpointerenter={updateBrushCursor}
 					onpointermove={handlePointerMove}
@@ -432,10 +597,22 @@ before the Change Date. See LICENSE for complete terms.
 					onpointercancel={stopDrawing}
 					onlostpointercapture={stopDrawing}
 				></canvas>
+				{#if tool === 'lasso' && hasLassoDraft && canvasReady}
+					<svg
+						class="lasso-preview"
+						viewBox="0 0 {canvasWidth} {canvasHeight}"
+						preserveAspectRatio="none"
+						aria-hidden="true"
+					>
+						<polyline points={lassoPreview} />
+						{#each lassoPoints as point, index (index)}
+							<circle cx={point.x} cy={point.y} r="0.7%" class={{ first: index === 0 }} />
+						{/each}
+					</svg>
+				{/if}
 				{#if brushCursor && brushCursorVisible}
 					<div
-						class="brush-cursor"
-						class:eraser={tool === 'eraser'}
+						class={['brush-cursor', { eraser: tool === 'eraser' }]}
 						data-tool={tool}
 						aria-hidden="true"
 						style:left="{brushCursor.x}px"
@@ -464,6 +641,8 @@ before the Change Date. See LICENSE for complete terms.
 	<div class="save-status" role="status" aria-live="polite" aria-atomic="true">
 		{#if uploading}
 			<span>{t('textureReplacement.maskEditor.saving')}</span>
+		{:else if hasLassoDraft}
+			<span>{t('textureReplacement.maskEditor.lassoDraft')}</span>
 		{:else if maskReady}
 			<span>{t('textureReplacement.maskEditor.saved')}</span>
 		{:else if hasMarks}
@@ -540,9 +719,11 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.tool-group,
-	.editor-actions {
+	.editor-actions,
+	.lasso-actions {
 		display: inline-flex;
 		gap: 0.375rem;
+		flex-wrap: wrap;
 	}
 
 	.toolbar button,
@@ -623,6 +804,50 @@ before the Change Date. See LICENSE for complete terms.
 		cursor: none;
 		filter: drop-shadow(0 0 2px #000);
 		touch-action: none;
+	}
+
+	.drawing-stage.lasso canvas {
+		cursor: crosshair;
+	}
+
+	.drawing-stage canvas:focus-visible {
+		outline: 3px solid var(--color-accent);
+		outline-offset: -3px;
+	}
+
+	.lasso-hint {
+		margin: 0;
+		color: var(--color-muted-strong);
+		font-size: 0.8125rem;
+		line-height: 1.45;
+	}
+
+	.lasso-preview {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+		filter: drop-shadow(0 0 2px #000);
+	}
+
+	.lasso-preview polyline {
+		fill: none;
+		stroke: #fff;
+		stroke-width: 2px;
+		vector-effect: non-scaling-stroke;
+	}
+
+	.lasso-preview circle {
+		fill: #ff00ff;
+		stroke: #fff;
+		stroke-width: 2px;
+		vector-effect: non-scaling-stroke;
+	}
+
+	.lasso-preview circle.first {
+		fill: #fff;
+		stroke: #ff00ff;
 	}
 
 	.drawing-stage.disabled canvas {
@@ -707,7 +932,7 @@ before the Change Date. See LICENSE for complete terms.
 		.tool-group,
 		.editor-actions {
 			display: grid;
-			grid-template-columns: 1fr 1fr;
+			grid-template-columns: repeat(3, 1fr);
 			margin-left: 0;
 		}
 

@@ -439,6 +439,7 @@ test('an uploaded photo downloads with current adjustments at full resolution wi
 		context.fillRect(0, 0, canvas.width, canvas.height);
 		return canvas.toDataURL('image/png').split(',')[1];
 	});
+	await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
 	await panel(page)
 		.locator('input[type="file"]')
 		.setInputFiles({
@@ -843,6 +844,43 @@ test('photo mode remains usable on mobile without horizontal overflow', async ({
 	await expect(
 		panel(page).getByRole('spinbutton', { name: ru['photoProcessing.adjustment.exposure'] })
 	).toHaveValue('22');
+});
+
+test('mode navigation waits for the destination without the previous mode URL sync cancelling it', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.clock.install();
+	await page.clock.pauseAt(new Date());
+	await mockPhotoWorkspace(page);
+	await page.goto('/edit?tool=photo-processing');
+	await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
+	await expect(
+		panel(page).getByRole('tab', { name: ru['mode.photoProcessing'], exact: true })
+	).toHaveAttribute('aria-selected', 'true');
+	let chunkPending = false;
+	let releaseChunk: (() => void) | undefined;
+	const chunkGate = new Promise<void>((resolve) => {
+		releaseChunk = resolve;
+	});
+	await page.route(
+		'**/_app/immutable/nodes/*.js',
+		async (route) => {
+			chunkPending = true;
+			await chunkGate;
+			await route.continue();
+		},
+		{ times: 1 }
+	);
+	await page.getByRole('tab', { name: ru['mode.render'], exact: true }).click();
+	await expect.poll(() => chunkPending).toBe(true);
+	await page.clock.runFor(450);
+	releaseChunk?.();
+	await expect(page).toHaveURL(/\/create\/interior/);
+	await expect(page.getByRole('tab', { name: ru['mode.render'], exact: true })).toHaveAttribute(
+		'aria-selected',
+		'true'
+	);
 });
 
 test('photo tool stays inside editing and its compact actions fit narrow and wide panels', async ({

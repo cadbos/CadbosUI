@@ -624,6 +624,14 @@ export const en = {
 	'textureReplacement.maskEditor.toolbar': 'Mask drawing tools',
 	'textureReplacement.maskEditor.brush': 'Brush',
 	'textureReplacement.maskEditor.eraser': 'Eraser',
+	'textureReplacement.maskEditor.lasso': 'Polygon lasso',
+	'textureReplacement.maskEditor.finishLasso': 'Close area',
+	'textureReplacement.maskEditor.undoPoint': 'Undo point',
+	'textureReplacement.maskEditor.cancelLasso': 'Cancel outline',
+	'textureReplacement.maskEditor.lassoHint':
+		'Click the corners of the area. Click the first point or Close area (Enter) to fill it. Backspace removes a point; Esc cancels the outline.',
+	'textureReplacement.maskEditor.lassoDraft':
+		'Finish or cancel the outline before saving the mask.',
 	'textureReplacement.maskEditor.brushSize': 'Brush size',
 	'textureReplacement.maskEditor.clear': 'Clear',
 	'textureReplacement.maskEditor.sourceAlt': 'Source scene for drawing the mask',
