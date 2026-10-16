@@ -227,14 +227,34 @@ before the Change Date. See LICENSE for complete terms.
 	function finishLasso(): void {
 		if (lassoPoints.length < 3 || disabled || editorBusy || !canvasReady) return;
 		const drawingContext = context();
-		if (!drawingContext) return;
+		if (!drawingContext || !canvas) return;
+		const polygonCanvas = document.createElement('canvas');
+		polygonCanvas.width = canvas.width;
+		polygonCanvas.height = canvas.height;
+		const polygonContext = polygonCanvas.getContext('2d');
+		if (!polygonContext) return;
+		polygonContext.fillStyle = '#ff00ff';
+		polygonContext.beginPath();
+		polygonContext.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+		for (const point of lassoPoints.slice(1)) polygonContext.lineTo(point.x, point.y);
+		polygonContext.closePath();
+		polygonContext.fill();
+		const pixels = polygonContext.getImageData(
+			0,
+			0,
+			polygonCanvas.width,
+			polygonCanvas.height
+		).data;
+		let hasArea = false;
+		for (let index = 3; index < pixels.length; index += 4) {
+			if (pixels[index] >= 128) {
+				hasArea = true;
+				break;
+			}
+		}
+		if (!hasArea) return;
 		drawingContext.globalCompositeOperation = 'source-over';
-		drawingContext.fillStyle = '#ff00ff';
-		drawingContext.beginPath();
-		drawingContext.moveTo(lassoPoints[0].x, lassoPoints[0].y);
-		for (const point of lassoPoints.slice(1)) drawingContext.lineTo(point.x, point.y);
-		drawingContext.closePath();
-		drawingContext.fill();
+		drawingContext.drawImage(polygonCanvas, 0, 0);
 		hasMarks = true;
 		invalidateSavedMask();
 		cancelLasso();
