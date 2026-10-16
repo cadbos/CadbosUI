@@ -26,7 +26,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { PathnameWithSearchOrHash } from '$app/types';
-	import { page } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import FloatingToolsPanel from '$lib/components/FloatingToolsPanel.svelte';
 	import HomeLanding from '$lib/components/HomeLanding.svelte';
@@ -456,7 +456,7 @@ before the Change Date. See LICENSE for complete terms.
 	// syncing would replace the link being opened with whatever is on screen
 	// in the meantime.
 	$effect(() => {
-		if (!hydrated || urlTargetStatus !== 'idle') return;
+		if (!hydrated || urlTargetStatus !== 'idle' || navigating.to !== null) return;
 		const activeMode = mode;
 		const activeProjectId =
 			workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
@@ -464,6 +464,7 @@ before the Change Date. See LICENSE for complete terms.
 		const generationAnchor = request.generationAnchor;
 		if (activeMode !== null) buildShareUrl(activeMode, request);
 		const timer = setTimeout(() => {
+			if (navigating.to !== null) return;
 			const currentSearch = new URLSearchParams(window.location.search);
 			const base =
 				activeMode === null
