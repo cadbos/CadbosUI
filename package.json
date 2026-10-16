@@ -52,6 +52,7 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "^1.23.0",
+		"@robokassa/sdk": "^1.0.0",
 		"@xyflow/svelte": "^1.6.1",
 		"bits-ui": "^2.18.1",
 		"clsx": "^2.1.1",
