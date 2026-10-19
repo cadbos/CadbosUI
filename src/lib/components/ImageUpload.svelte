@@ -676,7 +676,6 @@ before the Change Date. See LICENSE for complete terms.
 		border: 0;
 	}
 	.image-overlay {
-		pointer-events: none;
 		position: absolute;
 		inset: 0;
 		display: flex;
@@ -692,7 +691,6 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.image-actions {
-		pointer-events: auto;
 		pointer-events: auto;
 		display: flex;
 		align-items: center;
