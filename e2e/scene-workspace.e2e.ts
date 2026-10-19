@@ -222,35 +222,37 @@ test('mobile shows financial values through one disclosure without page overflow
 	await expectNoPageOverflow(page);
 });
 
-test('scene actions can move by pointer and keyboard, remain reachable after resize and reset', async ({
+test('plain action drag icon moves the panel, stays reachable and matches tools corners', async ({
 	page
 }) => {
 	await page.setViewportSize({ width: 1280, height: 720 });
 	await openScene(page);
-	const handle = page.getByRole('button', { name: ru['toolbar.move'], exact: true });
+	const actions = page.getByRole('toolbar', { name: ru['toolbar.move'], exact: true });
+	const handle = actions.locator('.drag-handle');
+	await expect(page.getByRole('button', { name: ru['toolbar.move'], exact: true })).toHaveCount(0);
+	await expect(
+		page.getByRole('button', { name: 'Вернуть панель действий на место', exact: true })
+	).toHaveCount(0);
+	const tools = page.locator('.floating-tools-panel:visible .panel-bar');
+	expect(await actions.evaluate((node) => getComputedStyle(node).borderTopLeftRadius)).toBe(
+		await tools.evaluate((node) => getComputedStyle(node).borderTopLeftRadius)
+	);
 	const original = await handle.boundingBox();
-	if (!original) throw new Error('Scene actions drag handle is missing');
+	if (!original) throw new Error('Scene actions drag icon is missing');
 	await page.mouse.move(original.x + original.width / 2, original.y + original.height / 2);
 	await page.mouse.down();
 	await page.mouse.move(1100, 600, { steps: 8 });
 	await page.mouse.up();
 	const moved = await handle.boundingBox();
-	if (!moved) throw new Error('Moved scene actions drag handle is missing');
+	if (!moved) throw new Error('Moved scene actions drag icon is missing');
 	expect(moved.y).toBeGreaterThan(original.y + 50);
 	await page.setViewportSize({ width: 800, height: 500 });
-	const fullscreen = page.getByRole('button', { name: ru['toolbar.fullscreen'], exact: true });
-	const edge = await fullscreen.boundingBox();
+	const edge = await page
+		.getByRole('button', { name: ru['toolbar.fullscreen'], exact: true })
+		.boundingBox();
 	if (!edge) throw new Error('Moved scene actions are missing after resize');
 	expect(edge.x + edge.width).toBeLessThanOrEqual(801);
 	expect(edge.y + edge.height).toBeLessThanOrEqual(501);
-	await page.getByRole('button', { name: ru['toolbar.resetPosition'], exact: true }).click();
-	const reset = await handle.boundingBox();
-	if (!reset) throw new Error('Reset scene actions drag handle is missing');
-	await handle.focus();
-	await page.keyboard.press('ArrowDown');
-	await expect.poll(async () => (await handle.boundingBox())?.y).toBeGreaterThan(reset.y);
-	await page.getByRole('button', { name: ru['toolbar.resetPosition'], exact: true }).click();
-	await expect.poll(async () => (await handle.boundingBox())?.y).toBe(reset.y);
 });
 
 test('narrow mobile fullscreen retains both tool panels and a visible scene', async ({

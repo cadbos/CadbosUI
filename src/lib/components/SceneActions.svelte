@@ -22,7 +22,6 @@ before the Change Date. See LICENSE for complete terms.
 		Maximize,
 		Minimize,
 		Move,
-		RotateCcw,
 		SquareSplitHorizontal
 	} from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
@@ -60,7 +59,7 @@ before the Change Date. See LICENSE for complete terms.
 	);
 	let drag: { x: number; y: number; originX: number; originY: number } | null = null;
 	function startDrag(event: PointerEvent): void {
-		if (event.button !== 0) return;
+		if (event.button !== 0 || !(event.target as Element).closest('.drag-handle')) return;
 		const rect = panel.getBoundingClientRect();
 		drag = { x: event.clientX, y: event.clientY, originX: rect.x, originY: rect.y };
 		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
@@ -76,6 +75,7 @@ before the Change Date. See LICENSE for complete terms.
 		drag = null;
 	}
 	function moveByKeyboard(event: KeyboardEvent): void {
+		if (event.target !== event.currentTarget) return;
 		const directions: Record<string, [number, number]> = {
 			ArrowLeft: [-16, 0],
 			ArrowRight: [16, 0],
@@ -141,6 +141,14 @@ before the Change Date. See LICENSE for complete terms.
 
 <div
 	class={['toolbar', { detached: placed !== null, fullscreen: sceneView.fullscreen }]}
+	role="toolbar"
+	tabindex="0"
+	aria-label={t('toolbar.move')}
+	onpointerdown={startDrag}
+	onpointermove={moveDrag}
+	onpointerup={endDrag}
+	onpointercancel={endDrag}
+	onkeydown={moveByKeyboard}
 	{@attach (node) => {
 		panel = node;
 	}}
@@ -149,24 +157,7 @@ before the Change Date. See LICENSE for complete terms.
 	style:left={placed ? `${placed.x}px` : undefined}
 	style:top={placed ? `${placed.y}px` : undefined}
 >
-	<button
-		type="button"
-		class="icon-btn drag-handle"
-		aria-label={t('toolbar.move')}
-		title={t('toolbar.move')}
-		onpointerdown={startDrag}
-		onpointermove={moveDrag}
-		onpointerup={endDrag}
-		onpointercancel={endDrag}
-		onkeydown={moveByKeyboard}><Move size={16} aria-hidden="true" /></button
-	>
-	<button
-		type="button"
-		class="icon-btn"
-		aria-label={t('toolbar.resetPosition')}
-		title={t('toolbar.resetPosition')}
-		onclick={() => setPosition(null)}><RotateCcw size={16} aria-hidden="true" /></button
-	>
+	<span class="drag-handle" title={t('toolbar.move')} aria-hidden="true"><Move size={16} /></span>
 	<button
 		type="button"
 		class="icon-btn"
@@ -299,7 +290,7 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 0.375rem;
 		padding: 0.375rem;
 		border: 1px solid var(--color-border);
-		border-radius: 999px;
+		border-radius: var(--radius-lg);
 		background: var(--color-surface);
 		box-shadow: var(--shadow-lg);
 		flex-wrap: wrap;
@@ -317,6 +308,12 @@ before the Change Date. See LICENSE for complete terms.
 		max-width: calc(100vw - 2rem);
 	}
 	.drag-handle {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 2rem;
+		flex: 0 0 auto;
 		touch-action: none;
 		cursor: move;
 	}

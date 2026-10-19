@@ -1497,7 +1497,7 @@ before the Change Date. See LICENSE for complete terms.
 		inset: 0;
 		z-index: 30;
 		height: 100dvh;
-		padding: 0;
+		padding: 1rem;
 		background: var(--color-background);
 		--workspace-header-bottom: 0px;
 	}

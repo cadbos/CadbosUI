@@ -18,7 +18,6 @@ export const ru = {
 	'toolbar.fullscreen': 'На весь экран',
 	'toolbar.exitFullscreen': 'Выйти из полноэкранного режима',
 	'toolbar.move': 'Переместить панель действий',
-	'toolbar.resetPosition': 'Вернуть панель действий на место',
 	'render.finances': 'Стоимость и баланс',
 	'app.title': 'ИИ – дизайн',
 	'app.subtitle': 'Создавайте и редактируйте интерьеры и экстерьеры по фото и описанию.',
