@@ -14,6 +14,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { uploadResultSchema } from '$lib/api/contract';
+	import SceneViewport from '$lib/components/SceneViewport.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -58,11 +59,7 @@ before the Change Date. See LICENSE for complete terms.
 	let brushCursor = $state<BrushCursor | null>(null);
 	let lassoPoints = $state<Point[]>([]);
 	let lassoHover = $state<Point | null>(null);
-	let viewportWidth = $state(0);
-	let viewportHeight = $state(0);
 	let imageRatio = $state(1);
-	const stageWidth = $derived(Math.min(viewportWidth, viewportHeight * imageRatio));
-	const stageHeight = $derived(stageWidth / imageRatio);
 	let canvasWidth = $state(1);
 	let canvasHeight = $state(1);
 	let previousPoint: Point | null = null;
@@ -185,10 +182,10 @@ before the Change Date. See LICENSE for complete terms.
 			return;
 		}
 		brushCursor = {
-			x,
-			y,
-			canvasToCssScaleX: bounds.width / canvas.width,
-			canvasToCssScaleY: bounds.height / canvas.height
+			x: (x * canvas.clientWidth) / bounds.width,
+			y: (y * canvas.clientHeight) / bounds.height,
+			canvasToCssScaleX: canvas.clientWidth / canvas.width,
+			canvasToCssScaleY: canvas.clientHeight / canvas.height
 		};
 	}
 
@@ -622,63 +619,76 @@ before the Change Date. See LICENSE for complete terms.
 		</details>
 	</div>
 	{#if sourceUrl}
-		<div class="drawing-space" bind:clientWidth={viewportWidth} bind:clientHeight={viewportHeight}>
-			{#key sourceIdentity}
-				<div
-					class={['drawing-stage', { disabled: disabled || editorBusy, lasso: tool === 'lasso' }]}
-					style:width={`${stageWidth}px`}
-					style:height={`${stageHeight}px`}
-				>
-					<LazyImage
-						src={sourceUrl}
-						alt={t('textureReplacement.maskEditor.sourceAlt')}
-						loading="eager"
-						fetchPriority="high"
-						onReady={initializeCanvas}
-						onError={sourceLoadFailed}
-					/>
-					<canvas
-						{@attach attachCanvas}
-						aria-label={t('textureReplacement.maskEditor.canvasLabel')}
-						aria-describedby={tool === 'lasso'
-							? 'mask-editor-lasso-hint mask-editor-upload-alternative'
-							: 'mask-editor-upload-alternative'}
-						tabindex="0"
-						onkeydown={handleLassoKey}
-						onpointerdown={beginDrawing}
-						onpointerenter={updateBrushCursor}
-						onpointermove={handlePointerMove}
-						onpointerleave={hideBrushCursor}
-						onpointerup={stopDrawing}
-						onpointercancel={stopDrawing}
-						onlostpointercapture={stopDrawing}
-					></canvas>
-					{#if tool === 'lasso' && hasLassoDraft && canvasReady}
-						<svg
-							class="lasso-preview"
-							viewBox="0 0 {canvasWidth} {canvasHeight}"
-							preserveAspectRatio="none"
-							aria-hidden="true"
-						>
-							<polyline points={lassoPreview} />
-							{#each lassoPoints as point, index (index)}
-								<circle cx={point.x} cy={point.y} r="0.7%" class={{ first: index === 0 }} />
-							{/each}
-						</svg>
-					{/if}
-					{#if brushCursor && brushCursorVisible}
+		<div class="drawing-space">
+			<SceneViewport
+				source={sourceKey ?? request.pendingImagePreviewUrl ?? sourceUrl}
+				{imageRatio}
+				interactive
+				reserveControls
+			>
+				{#snippet children(viewport)}
+					{@const stageWidth = Math.min(viewport.width, viewport.height * imageRatio)}
+					{#key sourceIdentity}
 						<div
-							class={['brush-cursor', { eraser: tool === 'eraser' }]}
-							data-tool={tool}
-							aria-hidden="true"
-							style:left="{brushCursor.x}px"
-							style:top="{brushCursor.y}px"
-							style:width="{brushCursorWidth}px"
-							style:height="{brushCursorHeight}px"
-						></div>
-					{/if}
-				</div>
-			{/key}
+							class={[
+								'drawing-stage',
+								{ disabled: disabled || editorBusy, lasso: tool === 'lasso' }
+							]}
+							style:width={`${stageWidth}px`}
+							style:height={`${stageWidth / imageRatio}px`}
+						>
+							<LazyImage
+								src={sourceUrl}
+								alt={t('textureReplacement.maskEditor.sourceAlt')}
+								loading="eager"
+								fetchPriority="high"
+								onReady={initializeCanvas}
+								onError={sourceLoadFailed}
+							/>
+							<canvas
+								{@attach attachCanvas}
+								aria-label={t('textureReplacement.maskEditor.canvasLabel')}
+								aria-describedby={tool === 'lasso'
+									? 'mask-editor-lasso-hint mask-editor-upload-alternative'
+									: 'mask-editor-upload-alternative'}
+								tabindex="0"
+								onkeydown={handleLassoKey}
+								onpointerdown={beginDrawing}
+								onpointerenter={updateBrushCursor}
+								onpointermove={handlePointerMove}
+								onpointerleave={hideBrushCursor}
+								onpointerup={stopDrawing}
+								onpointercancel={stopDrawing}
+								onlostpointercapture={stopDrawing}
+							></canvas>
+							{#if tool === 'lasso' && hasLassoDraft && canvasReady}
+								<svg
+									class="lasso-preview"
+									viewBox="0 0 {canvasWidth} {canvasHeight}"
+									preserveAspectRatio="none"
+									aria-hidden="true"
+								>
+									<polyline points={lassoPreview} />
+									{#each lassoPoints as point, index (index)}
+										<circle cx={point.x} cy={point.y} r="0.7%" class={{ first: index === 0 }} />
+									{/each}
+								</svg>
+							{/if}
+							{#if brushCursor && brushCursorVisible}
+								<div
+									class={['brush-cursor', { eraser: tool === 'eraser' }]}
+									data-tool={tool}
+									aria-hidden="true"
+									style:left="{brushCursor.x}px"
+									style:top="{brushCursor.y}px"
+									style:width="{brushCursorWidth}px"
+									style:height="{brushCursorHeight}px"
+								></div>
+							{/if}
+						</div>
+					{/key}
+				{/snippet}
+			</SceneViewport>
 		</div>
 	{/if}
 </div>

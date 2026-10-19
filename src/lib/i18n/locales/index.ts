@@ -13,6 +13,14 @@
  */
 
 export interface Dictionary {
+	'scene.panMode': string;
+	'scene.zoomIn': string;
+	'scene.zoomOut': string;
+	'scene.zoom': string;
+	'scene.fit': string;
+	'scene.pan': string;
+	'scene.panHint': string;
+
 	'toolbar.fullscreen': string;
 	'toolbar.exitFullscreen': string;
 	'toolbar.move': string;

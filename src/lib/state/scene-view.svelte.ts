@@ -15,6 +15,25 @@
 import { tick } from 'svelte';
 
 class SceneViewState {
+	zoom = $state(100);
+	panX = $state(0);
+	panY = $state(0);
+	#source: string | undefined;
+
+	showSource(source: string | undefined): void {
+		if (this.#source === source) return;
+		this.#source = source;
+		this.setZoom(100);
+	}
+
+	setZoom(value: number): void {
+		this.zoom = Math.min(400, Math.max(25, value));
+		if (this.zoom <= 100) {
+			this.panX = 0;
+			this.panY = 0;
+		}
+	}
+
 	fullscreen = $state(false);
 	comparing = $state(false);
 	actionsHeight = $state(0);

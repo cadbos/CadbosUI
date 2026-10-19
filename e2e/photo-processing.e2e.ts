@@ -959,6 +959,12 @@ test('toolbar HD upscales an original upload before any render and exposes its c
 		});
 	});
 	await openPhoto(page);
+	const originalBounds = await preview(page).boundingBox();
+	if (!originalBounds) throw new Error('Original photo preview missing');
+	await page.getByRole('button', { name: ru['scene.zoomIn'], exact: true }).click();
+	await expect
+		.poll(async () => (await preview(page).boundingBox())?.width)
+		.toBeGreaterThan(originalBounds.width * 1.2);
 	const hd = page.getByRole('button', { name: ru['toolbar.upscale'], exact: true });
 	await expect(hd).toBeEnabled();
 	await hd.click();

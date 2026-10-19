@@ -15,6 +15,7 @@
 import type { Page, Route } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { ru } from '$lib/i18n/locales/ru';
 import { media, mediaKey } from './helpers/media';
 import {
 	E2E_PROJECT_ID,
@@ -651,7 +652,7 @@ for (const viewport of [
 ]) {
 	test(`portrait mask stage fits ${viewport.width}px and preserves natural drawing coordinates after resize`, async ({
 		page
-	}) => {
+	}, testInfo) => {
 		await page.setViewportSize(viewport);
 		await authenticate(page);
 		await page.goto('/edit?tool=texture-replacement');
@@ -662,6 +663,12 @@ for (const viewport of [
 		);
 		await expect(drawing).toHaveJSProperty('width', 600);
 		async function assertStageFits(): Promise<void> {
+			await expect
+				.poll(async () => {
+					const current = await drawing.boundingBox();
+					return current ? current.y + current.height : Number.POSITIVE_INFINITY;
+				})
+				.toBeLessThanOrEqual((page.viewportSize()?.height ?? 0) + 1);
 			const bounds = await drawing.boundingBox();
 			if (!bounds) throw new Error('Mask drawing stage is missing');
 			expect(bounds.width).toBeGreaterThan(0);
@@ -684,11 +691,84 @@ for (const viewport of [
 			await page.mouse.up();
 		}
 		await assertStageFits();
+		const handAtFit = page.getByRole('button', { name: ru['scene.panMode'], exact: true });
+		await handAtFit.click();
+		const fitBounds = await drawing.boundingBox();
+		if (!fitBounds) throw new Error('Fitted mask stage missing');
+		await page.mouse.click(fitBounds.x + fitBounds.width / 2, fitBounds.y + fitBounds.height / 2);
+		expect(
+			await drawing.evaluate(
+				(node: HTMLCanvasElement) => node.getContext('2d')?.getImageData(300, 500, 1, 1).data[3]
+			)
+		).toBe(0);
+		await handAtFit.click();
+		for (let step = 0; step < 4; step++)
+			await page.getByRole('button', { name: ru['scene.zoomIn'], exact: true }).click();
+		await expect(page.getByRole('slider', { name: ru['scene.zoom'], exact: true })).toHaveValue(
+			'200'
+		);
+		const zoomedDrawing = await drawing.boundingBox();
+		if (!zoomedDrawing) throw new Error('Zoomed mask drawing stage missing');
+		await page.mouse.move(
+			zoomedDrawing.x + zoomedDrawing.width / 2,
+			zoomedDrawing.y + zoomedDrawing.height / 2
+		);
+		const cursor = editor.locator('.brush-cursor');
+		await expect(cursor).toBeVisible();
+		const cursorBounds = await cursor.boundingBox();
+		if (!cursorBounds) throw new Error('Zoomed mask cursor missing');
+		expect(cursorBounds.width).toBeCloseTo((48 * zoomedDrawing.width) / 600, 0);
+		expect(cursorBounds.x + cursorBounds.width / 2).toBeCloseTo(
+			zoomedDrawing.x + zoomedDrawing.width / 2,
+			0
+		);
+		await page.getByRole('button', { name: ru['scene.fit'], exact: true }).click();
+		await page.getByRole('button', { name: ru['scene.zoomIn'], exact: true }).click();
+		await expect(page.getByRole('slider', { name: ru['scene.zoom'], exact: true })).toHaveValue(
+			'125'
+		);
 		await mark(0.25);
+		await page.getByRole('button', { name: ru['scene.fit'], exact: true }).click();
 		await page.getByRole('button', { name: 'На весь экран', exact: true }).click();
 		await assertStageFits();
 		await page.setViewportSize({ width: viewport.width + 100, height: viewport.height + 80 });
 		await assertStageFits();
+		const editorBounds = await editor.boundingBox();
+		if (!editorBounds) throw new Error('Fullscreen mask editor is missing');
+		expect(editorBounds.x).toBeGreaterThan(0);
+		expect(editorBounds.x + editorBounds.width).toBeLessThan(page.viewportSize()?.width ?? 0);
+		await testInfo.attach('fullscreen-mask', {
+			body: await page.screenshot({ path: testInfo.outputPath('fullscreen-mask.png') }),
+			contentType: 'image/png'
+		});
+		await page.getByRole('button', { name: ru['scene.zoomIn'], exact: true }).click();
+		const spaceBounds = await drawing.boundingBox();
+		if (!spaceBounds) throw new Error('Mask drawing area missing before Space panning');
+		await page.keyboard.down('Space');
+		await page.mouse.move(
+			spaceBounds.x + spaceBounds.width / 2,
+			spaceBounds.y + spaceBounds.height / 2
+		);
+		await page.mouse.down();
+		await page.mouse.move(
+			spaceBounds.x + spaceBounds.width / 2 + 12,
+			spaceBounds.y + spaceBounds.height / 2 + 12,
+			{ steps: 5 }
+		);
+		await page.mouse.up();
+		await page.keyboard.up('Space');
+		await expect(page.getByRole('slider', { name: ru['scene.zoom'], exact: true })).toHaveValue(
+			'125'
+		);
+		expect(
+			await drawing.evaluate(
+				(node: HTMLCanvasElement) => node.getContext('2d')?.getImageData(300, 500, 1, 1).data[3]
+			)
+		).toBe(0);
+		const pan = page.getByRole('button', { name: ru['scene.panMode'], exact: true });
+		await pan.focus();
+		await pan.press('ArrowLeft');
+		await pan.press('ArrowUp');
 		await mark(0.75);
 		await Promise.all([
 			page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
@@ -724,6 +804,10 @@ for (const viewport of [
 			second: [255, 255, 255, 255],
 			untouched: [0, 0, 0, 255]
 		});
+		await page.getByRole('button', { name: ru['scene.fit'], exact: true }).click();
+		await expect(page.getByRole('slider', { name: ru['scene.zoom'], exact: true })).toHaveValue(
+			'100'
+		);
 		await page.keyboard.press('Escape');
 		await assertStageFits();
 	});

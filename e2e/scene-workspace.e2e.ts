@@ -331,3 +331,77 @@ test('tool width preference survives viewport clamping and keyboard resize start
 	await expect(resize).toHaveAttribute('aria-valuenow', '944');
 	await expect.poll(async () => (await tools.boundingBox())?.width).toBe(944);
 });
+
+for (const viewport of [
+	{ width: 1280, height: 720 },
+	{ width: 390, height: 844 }
+]) {
+	test(`scene zoom controls fit bottom right at ${viewport.width}px and scale, pan and reset without page overflow`, async ({
+		page
+	}, testInfo) => {
+		await page.setViewportSize(viewport);
+		await openScene(page);
+		const zoom = page.getByRole('slider', { name: ru['scene.zoom'], exact: true });
+		const zoomIn = page.getByRole('button', { name: ru['scene.zoomIn'], exact: true });
+		const zoomOut = page.getByRole('button', { name: ru['scene.zoomOut'], exact: true });
+		await expect(zoom).toHaveValue('100');
+		const bounds = await zoom.boundingBox();
+		if (!bounds) throw new Error('Scene zoom slider is missing');
+		expect(bounds.x + bounds.width).toBeGreaterThan(viewport.width / 2);
+		expect(bounds.y).toBeGreaterThan(viewport.height / 2);
+		const original = await sceneImage(page).boundingBox();
+		if (!original) throw new Error('Scene image is missing');
+		await zoomIn.click();
+		await expect(zoom).toHaveValue('125');
+		await expect
+			.poll(async () => (await sceneImage(page).boundingBox())?.width)
+			.toBeGreaterThan(original.width * 1.2);
+		await zoom.focus();
+		await zoom.press('End');
+		await expect(zoom).toHaveValue('400');
+		await expect(zoomIn).toBeDisabled();
+		await zoom.press('Home');
+		await expect(zoom).toHaveValue('25');
+		await expect(zoomOut).toBeDisabled();
+		await zoom.press('ArrowRight');
+		await expect(zoom).toHaveValue('50');
+		await zoom.press('End');
+		const plane = page.locator('.scene-viewport:visible .scene-plane');
+		const before = await plane.boundingBox();
+		const pan = page.getByRole('button', { name: ru['scene.panMode'], exact: true });
+		await pan.focus();
+		await pan.press('ArrowRight');
+		await expect.poll(async () => (await plane.boundingBox())?.x).not.toBe(before?.x);
+		await expectNoPageOverflow(page);
+		await testInfo.attach('scene-zoom', {
+			body: await page.screenshot({ path: testInfo.outputPath('scene-zoom.png') }),
+			contentType: 'image/png'
+		});
+		await page.getByRole('button', { name: ru['toolbar.fullscreen'], exact: true }).click();
+		await expect(zoom).toHaveValue('400');
+		await expectNoPageOverflow(page);
+		await page.getByRole('button', { name: ru['scene.fit'], exact: true }).click();
+		await expect(zoom).toHaveValue('100');
+		await page.keyboard.press('Escape');
+		await expect
+			.poll(async () => (await sceneImage(page).boundingBox())?.width)
+			.toBeCloseTo(original.width, 0);
+	});
+}
+
+test('comparison shares the current scene zoom with both images', async ({ page }) => {
+	await openScene(page);
+	await page.getByRole('button', { name: ru['scene.zoomIn'], exact: true }).click();
+	const zoom = page.getByRole('slider', { name: ru['scene.zoom'], exact: true });
+	await expect(zoom).toHaveValue('125');
+	const output = await sceneImage(page).boundingBox();
+	if (!output) throw new Error('Scene output missing');
+	await page.getByRole('button', { name: ru['toolbar.compare'], exact: true }).click();
+	await expect(zoom).toHaveValue('125');
+	for (const name of [ru['toolbar.before'], ru['toolbar.after']]) {
+		const image = page.getByRole('img', { name, exact: true });
+		await expect(image).toBeVisible();
+		await expect.poll(async () => (await image.boundingBox())?.width).toBeCloseTo(output.width, 0);
+	}
+	await expectNoPageOverflow(page);
+});

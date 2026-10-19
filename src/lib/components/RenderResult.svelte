@@ -15,6 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { sceneView } from '$lib/state/scene-view.svelte';
 	import type { Snippet } from 'svelte';
+	import SceneViewport from '$lib/components/SceneViewport.svelte';
 	import CompareSlider from '$lib/components/CompareSlider.svelte';
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import RegionSelector from '$lib/components/RegionSelector.svelte';
@@ -24,12 +25,18 @@ before the Change Date. See LICENSE for complete terms.
 	import { mediaAccess } from '$lib/state/media-access.svelte';
 
 	interface Props {
+		naturalRatio?: number;
 		regionTool?: 'repaint' | 'object-replacement';
 		imagePreview?: Snippet;
 		photoProcessingMode?: boolean;
 	}
 
-	let { regionTool = undefined, imagePreview, photoProcessingMode = false }: Props = $props();
+	let {
+		regionTool = undefined,
+		imagePreview,
+		photoProcessingMode = false,
+		naturalRatio
+	}: Props = $props();
 
 	let imageSize = $state<{ width: number; height: number } | null>(null);
 	function rememberImageSize(image: HTMLImageElement): void {
@@ -51,44 +58,51 @@ before the Change Date. See LICENSE for complete terms.
 {#if imagePreview || (render && imageUrl)}
 	<section class="result">
 		<div class="image-card">
-			{#if sceneView.comparing && beforeImageUrl && afterImageUrl}
-				<CompareSlider
-					beforeSrc={beforeImageUrl}
-					afterSrc={afterImageUrl}
-					beforeAlt={t('toolbar.before')}
-					afterAlt={t('toolbar.after')}
-					handleLabel={t('toolbar.compare')}
-				/>
-			{:else if imagePreview}
-				{@render imagePreview()}
-			{:else if imageUrl}
-				<LazyImage
-					src={imageUrl}
-					alt={t('render.generate')}
-					imgClass="output"
-					loading="eager"
-					fetchPriority="high"
-					onReady={rememberImageSize}
-				/>
-				{#if regionTool && imageSize}
-					<RegionSelector
-						region={regionTool === 'repaint'
-							? request.activeRepaintRegion()
-							: request.activeObjectReplacementRegion()}
-						naturalWidth={imageSize.width}
-						naturalHeight={imageSize.height}
-						boxLabel={t(
-							regionTool === 'repaint'
-								? 'repaint.region.boxLabel'
-								: 'objectReplacement.region.boxLabel'
-						)}
-						onchange={(region) =>
-							regionTool === 'repaint'
-								? request.setRepaintRegion(region)
-								: request.setObjectReplacementRegion(region)}
+			<SceneViewport
+				source={request.workingImageKey() ?? request.pendingImagePreviewUrl}
+				imageRatio={naturalRatio ?? (imageSize ? imageSize.width / imageSize.height : undefined)}
+				interactive={Boolean(regionTool) || sceneView.comparing}
+				reserveControls={Boolean(regionTool)}
+			>
+				{#if sceneView.comparing && beforeImageUrl && afterImageUrl}
+					<CompareSlider
+						beforeSrc={beforeImageUrl}
+						afterSrc={afterImageUrl}
+						beforeAlt={t('toolbar.before')}
+						afterAlt={t('toolbar.after')}
+						handleLabel={t('toolbar.compare')}
 					/>
+				{:else if imagePreview}
+					{@render imagePreview()}
+				{:else if imageUrl}
+					<LazyImage
+						src={imageUrl}
+						alt={t('render.generate')}
+						imgClass="output"
+						loading="eager"
+						fetchPriority="high"
+						onReady={rememberImageSize}
+					/>
+					{#if regionTool && imageSize}
+						<RegionSelector
+							region={regionTool === 'repaint'
+								? request.activeRepaintRegion()
+								: request.activeObjectReplacementRegion()}
+							naturalWidth={imageSize.width}
+							naturalHeight={imageSize.height}
+							boxLabel={t(
+								regionTool === 'repaint'
+									? 'repaint.region.boxLabel'
+									: 'objectReplacement.region.boxLabel'
+							)}
+							onchange={(region) =>
+								regionTool === 'repaint'
+									? request.setRepaintRegion(region)
+									: request.setObjectReplacementRegion(region)}
+						/>
+					{/if}
 				{/if}
-			{/if}
+			</SceneViewport>
 		</div>
 	</section>
 {/if}

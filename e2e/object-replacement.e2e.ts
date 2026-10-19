@@ -16,6 +16,7 @@ import type { Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 import { expect, test } from './fixtures';
+import { ru } from '$lib/i18n/locales/ru';
 import { media, mediaKey } from './helpers/media';
 import {
 	E2E_PROJECT_ID,
@@ -150,9 +151,11 @@ for (const balance of [18, -1]) {
 			{ timeout: 10_000 }
 		);
 		await expect(panel.locator('.job-success')).toHaveText('Замена объекта завершена.');
-		await expect(page.locator('.result:visible').getByText('Стоимость: 2.00')).toBeVisible();
 		await expect(
-			page.locator('.result:visible').getByText(`Баланс: ${balance.toFixed(2)}`)
+			page.locator('.scene-finances .desktop').getByText('Стоимость: 2.00')
+		).toBeVisible();
+		await expect(
+			page.locator('.scene-finances .desktop').getByText(`Баланс: ${balance.toFixed(2)}`)
 		).toBeVisible();
 		await expect.poll(() => polls).toBe(2);
 		expect(submittedBody).toEqual({
@@ -209,6 +212,37 @@ test('submits an adjusted area and clears it independently', async ({ page }) =>
 	await select.click();
 	await box.focus();
 	await box.press('ArrowRight');
+	await page.getByRole('button', { name: ru['scene.zoomIn'], exact: true }).click();
+	await expect(page.getByRole('slider', { name: ru['scene.zoom'], exact: true })).toHaveValue(
+		'125'
+	);
+	const pan = page.getByRole('button', { name: ru['scene.panMode'], exact: true });
+	await pan.focus();
+	await pan.press('ArrowLeft');
+	const regionBeforePan = await box.getAttribute('style');
+	const panBounds = await box.boundingBox();
+	if (!panBounds) throw new Error('Region box missing before panning');
+	await page.mouse.move(panBounds.x + panBounds.width / 2, panBounds.y + panBounds.height / 2);
+	await page.mouse.down({ button: 'middle' });
+	await page.mouse.move(
+		panBounds.x + panBounds.width / 2 + 16,
+		panBounds.y + panBounds.height / 2 + 16,
+		{ steps: 5 }
+	);
+	await page.mouse.up({ button: 'middle' });
+	await expect(box).toHaveAttribute('style', regionBeforePan!);
+	const surface = page.locator('#mode-panel-edit .surface');
+	const surfaceBounds = await surface.boundingBox();
+	const boxBounds = await box.boundingBox();
+	if (!surfaceBounds || !boxBounds) throw new Error('Region selection surface missing');
+	await page.mouse.move(boxBounds.x + boxBounds.width / 2, boxBounds.y + boxBounds.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(
+		boxBounds.x + boxBounds.width / 2 + surfaceBounds.width * 0.1,
+		boxBounds.y + boxBounds.height / 2,
+		{ steps: 5 }
+	);
+	await page.mouse.up();
 
 	let submittedBody: unknown;
 	await page.route('**/api/object-replacement', async (route) => {
@@ -231,7 +265,12 @@ test('submits an adjusted area and clears it independently', async ({ page }) =>
 	await panel.getByLabel(/Точно опишите существующий объект/).fill('серый диван');
 	await panel.getByRole('button', { name: 'Заменить объект' }).click();
 	await expect(page).toHaveURL(new RegExp(`job=${JOB_ID}`));
-	const expectedRegion = { x: 0.31, y: 0.3, width: 0.4, height: 0.4 };
+	const expectedRegion = {
+		x: expect.closeTo(0.41, 2),
+		y: expect.closeTo(0.3, 2),
+		width: expect.closeTo(0.4, 2),
+		height: expect.closeTo(0.4, 2)
+	};
 	expect(submittedBody).toMatchObject({
 		region: expectedRegion,
 		formSnapshot: { objectReplacementRegion: expectedRegion }
