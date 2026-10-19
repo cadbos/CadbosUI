@@ -207,13 +207,14 @@ test('fullscreen keeps scene tools and restores focus and the active scene on ex
 	await openScene(page);
 	const enter = page.getByRole('button', { name: ru['toolbar.fullscreen'], exact: true });
 	const imageSource = await sceneImage(page).getAttribute('src');
+	if (imageSource === null) throw new Error('Scene image has no source');
 	await enter.click();
 	await expect(page.getByRole('navigation', { name: ru['workspace.tabs.label'] })).toBeHidden();
 	await expect(page.getByRole('link', { name: ru['resources.title'], exact: true })).toBeHidden();
 	const exit = page.getByRole('button', { name: ru['toolbar.exitFullscreen'], exact: true });
 	await expect(exit).toBeVisible();
 	await expect(page.getByRole('link', { name: ru['render.download'], exact: true })).toBeVisible();
-	await expect(sceneImage(page)).toHaveAttribute('src', imageSource!);
+	await expect(sceneImage(page)).toHaveAttribute('src', imageSource);
 	await expectNoPageOverflow(page);
 	await testInfo.attach('scene-fullscreen', {
 		body: await page.screenshot({ path: testInfo.outputPath('scene.png') }),
@@ -231,11 +232,11 @@ test('fullscreen keeps scene tools and restores focus and the active scene on ex
 			'true'
 		);
 		await expect(exit).toBeVisible();
-		await expect(sceneImage(page)).toHaveAttribute('src', imageSource!);
+		await expect(sceneImage(page)).toHaveAttribute('src', imageSource);
 	}
 	await page.keyboard.press('Escape');
 	await expect(enter).toBeFocused();
-	await expect(sceneImage(page)).toHaveAttribute('src', imageSource!);
+	await expect(sceneImage(page)).toHaveAttribute('src', imageSource);
 	await expect(page.getByRole('link', { name: ru['resources.title'], exact: true })).toBeVisible();
 	await enter.click();
 	await exit.click();
