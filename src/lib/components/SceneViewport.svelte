@@ -24,22 +24,14 @@ before the Change Date. See LICENSE for complete terms.
 		imageRatio?: number;
 		interactive?: boolean;
 		enabled?: boolean;
-		reserveControls?: boolean;
 	}
-	let {
-		children,
-		source,
-		imageRatio,
-		interactive = false,
-		enabled = true,
-		reserveControls = false
-	}: Props = $props();
+	let { children, source, imageRatio, interactive = false, enabled = true }: Props = $props();
 	let viewport: HTMLDivElement | null = null;
 	let panButton: HTMLButtonElement | null = null;
 	let width = $state(0);
 	let height = $state(0);
 	let controlsHeight = $state(40);
-	const contentHeight = $derived(Math.max(0, height - (reserveControls ? controlsHeight + 8 : 0)));
+	const contentHeight = $derived(Math.max(0, height - controlsHeight - 8));
 	let spacePressed = $state(false);
 	let panMode = $state(false);
 	let dragging = $state(false);
@@ -244,6 +236,9 @@ before the Change Date. See LICENSE for complete terms.
 		min-width: 0;
 		overflow: hidden;
 		touch-action: none;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-background);
 	}
 	.scene-viewport:focus-visible {
 		outline: 2px solid var(--color-accent);
@@ -258,9 +253,15 @@ before the Change Date. See LICENSE for complete terms.
 		position: relative;
 		display: grid;
 		place-items: center;
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: minmax(0, 1fr);
 		width: 100%;
 		height: 100%;
 		transform-origin: center;
+	}
+	.scene-plane > :global(*) {
+		min-width: 0;
+		min-height: 0;
 	}
 	.scene-viewport.panning {
 		cursor: grab;

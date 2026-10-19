@@ -62,7 +62,6 @@ before the Change Date. See LICENSE for complete terms.
 				source={request.workingImageKey() ?? request.pendingImagePreviewUrl}
 				imageRatio={naturalRatio ?? (imageSize ? imageSize.width / imageSize.height : undefined)}
 				interactive={Boolean(regionTool) || sceneView.comparing}
-				reserveControls={Boolean(regionTool)}
 			>
 				{#if sceneView.comparing && beforeImageUrl && afterImageUrl}
 					<CompareSlider
@@ -111,7 +110,6 @@ before the Change Date. See LICENSE for complete terms.
 	.result {
 		height: 100%;
 		min-height: 0;
-		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		background: var(--color-background);

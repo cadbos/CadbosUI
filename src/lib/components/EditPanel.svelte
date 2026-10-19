@@ -13,6 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { Aperture, Lightbulb, Paintbrush, PaintRoller, Pencil, Replace } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -47,7 +48,7 @@ before the Change Date. See LICENSE for complete terms.
 	import RepaintPanel from '$lib/components/RepaintPanel.svelte';
 	import TextureReplacementPanel from '$lib/components/TextureReplacementPanel.svelte';
 
-	let { active }: { active: boolean } = $props();
+	let { active, maskControls }: { active: boolean; maskControls?: Snippet } = $props();
 
 	const MAX_TRANSIENT_FAILURES = 5;
 	const DEFAULT_POLL_DELAY_MS = 2_000;
@@ -140,12 +141,13 @@ before the Change Date. See LICENSE for complete terms.
 			activeTool === 'photo-processing'
 	);
 
-	$effect(() => {
+	function retainOpenedTools(): void {
 		if (activeTool === 'object-replacement') objectReplacementOpened = true;
 		if (activeTool === 'texture-replacement') textureReplacementOpened = true;
 		if (activeTool === 'light-settings') lightSettingsOpened = true;
 		if (activeTool === 'repaint') repaintOpened = true;
-	});
+	}
+	$effect(retainOpenedTools);
 
 	function openTool(tool: ToolId): Promise<void> {
 		return goto(
@@ -725,6 +727,7 @@ before the Change Date. See LICENSE for complete terms.
 					<svelte:boundary
 						onerror={(err: unknown) => logBoundaryError('editPanel.textureReplacement', err)}
 					>
+						{@render maskControls?.()}
 						<TextureReplacementPanel />
 						{#snippet failed(_error: unknown, reset: () => void)}
 							<p class="error">{t('boundary.failed')}</p>

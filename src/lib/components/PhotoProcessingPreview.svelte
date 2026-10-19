@@ -84,16 +84,24 @@ before the Change Date. See LICENSE for complete terms.
 <style>
 	.preview {
 		position: relative;
+		min-width: 0;
+		min-height: 0;
 		width: 100%;
 		height: 100%;
 	}
 
 	.preview-image {
+		position: absolute;
+		inset: 0;
+		min-width: 0;
+		min-height: 0;
 		width: 100%;
 		height: 100%;
 	}
 
 	.preview-image :global(img) {
+		position: absolute;
+		inset: 0;
 		width: 100%;
 		height: 100%;
 		object-fit: contain;

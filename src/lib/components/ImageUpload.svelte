@@ -439,13 +439,12 @@ before the Change Date. See LICENSE for complete terms.
 	aria-label={controlLabel}
 >
 	{#if hasImage}
-		<div class="image-wrapper">
+		<div class={['image-wrapper', { 'scene-image': target === 'room' && !compact }]}>
 			<SceneViewport
 				enabled={target === 'room' && !compact}
 				source={request.workingImageKey() ?? request.pendingImagePreviewUrl}
 				imageRatio={imageSize ? imageSize.width / imageSize.height : undefined}
 				interactive={Boolean(regionTool)}
-				reserveControls={Boolean(regionTool)}
 			>
 				<LazyImage
 					class="preview"
@@ -673,6 +672,9 @@ before the Change Date. See LICENSE for complete terms.
 		resize: both;
 	}
 
+	.image-wrapper.scene-image {
+		border: 0;
+	}
 	.image-overlay {
 		pointer-events: none;
 		position: absolute;

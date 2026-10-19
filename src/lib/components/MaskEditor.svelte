@@ -13,6 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { onMount, type Snippet } from 'svelte';
 	import { uploadResultSchema } from '$lib/api/contract';
 	import SceneViewport from '$lib/components/SceneViewport.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
@@ -26,6 +27,7 @@ before the Change Date. See LICENSE for complete terms.
 	type DrawingTool = 'brush' | 'eraser' | 'lasso';
 
 	interface Props {
+		onControls: (controls: Snippet | undefined) => void;
 		sourceUrl?: string;
 		sourceKey?: string;
 		disabled?: boolean;
@@ -46,7 +48,12 @@ before the Change Date. See LICENSE for complete terms.
 		empty: boolean;
 	}
 
-	let { sourceUrl = undefined, sourceKey = undefined, disabled = false }: Props = $props();
+	let {
+		sourceUrl = undefined,
+		sourceKey = undefined,
+		disabled = false,
+		onControls
+	}: Props = $props();
 	let canvas = $state<HTMLCanvasElement | null>(null);
 	let tool = $state<DrawingTool>('brush');
 	let brushSize = $state(48);
@@ -476,9 +483,13 @@ before the Change Date. See LICENSE for complete terms.
 			? Number(event.currentTarget.value)
 			: brushSize;
 	}
+	onMount(() => {
+		onControls(controlsPanel);
+		return () => onControls(undefined);
+	});
 </script>
 
-<div class="mask-editor">
+{#snippet controlsPanel()}
 	<div class="mask-controls">
 		<div class="editor-heading">
 			<div>
@@ -618,13 +629,15 @@ before the Change Date. See LICENSE for complete terms.
 			/>
 		</details>
 	</div>
+{/snippet}
+
+<div class="mask-editor">
 	{#if sourceUrl}
 		<div class="drawing-space">
 			<SceneViewport
 				source={sourceKey ?? request.pendingImagePreviewUrl ?? sourceUrl}
 				{imageRatio}
 				interactive
-				reserveControls
 			>
 				{#snippet children(viewport)}
 					{@const stageWidth = Math.min(viewport.width, viewport.height * imageRatio)}
@@ -705,10 +718,8 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
-		flex: 0 1 auto;
 		min-height: 0;
-		max-height: 35%;
-		overflow: auto;
+		margin-bottom: 1rem;
 	}
 	.drawing-space {
 		flex: 1 1 0;

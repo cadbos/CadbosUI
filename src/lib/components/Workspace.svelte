@@ -28,7 +28,7 @@ before the Change Date. See LICENSE for complete terms.
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { navigating, page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, type Snippet } from 'svelte';
 	import { innerWidth } from 'svelte/reactivity/window';
 	import { sceneView } from '$lib/state/scene-view.svelte';
 	import SceneActions from '$lib/components/SceneActions.svelte';
@@ -112,6 +112,7 @@ before the Change Date. See LICENSE for complete terms.
 	let submitError = $state<string | null>(null);
 	let modeTabs = $state<(HTMLElement | null)[]>([]);
 	let sceneTypeTabs = $state<HTMLElement[]>([]);
+	let maskControls = $state<Snippet | undefined>(undefined);
 	let scenesOpen = $state(false);
 	let scenesTrigger: HTMLButtonElement | null = null;
 	let shareOpen = $state(false);
@@ -931,6 +932,9 @@ before the Change Date. See LICENSE for complete terms.
 								onerror={(error: unknown) => logBoundaryError('workspace.maskEditor', error)}
 							>
 								<MaskEditor
+									onControls={(controls) => {
+										maskControls = controls;
+									}}
 									sourceUrl={request.workingImageUrl()}
 									sourceKey={request.workingImageKey()}
 									disabled={maskEditorLocked}
@@ -974,7 +978,10 @@ before the Change Date. See LICENSE for complete terms.
 						<svelte:boundary
 							onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
 						>
-							<EditPanel active={mode === 'edit'} />
+							<EditPanel
+								active={mode === 'edit'}
+								maskControls={showMaskOnCanvas ? maskControls : undefined}
+							/>
 							{#snippet failed(_error: unknown, reset: () => void)}
 								<p class="boundary-failed">{t('boundary.failed')}</p>
 								<button type="button" class="boundary-retry" onclick={reset}>
@@ -1534,7 +1541,7 @@ before the Change Date. See LICENSE for complete terms.
 		}
 		.scene-active .canvas-col {
 			flex: 1 1 0;
-			min-height: calc(5rem + 2px);
+			min-height: calc(5rem + 52px);
 		}
 		.scene-active :global(.floating-tools-panel) {
 			flex: 0 1 35dvh;
@@ -1548,6 +1555,15 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 	@media (max-width: 440px) {
+		.scene-active .workspace-main,
+		.scene-active .workspace-header,
+		.scene-active .canvas-layout {
+			gap: 0.25rem;
+		}
+		.workspace-row,
+		.session-actions-row {
+			row-gap: 0.25rem;
+		}
 		.workspace-row {
 			flex-direction: row;
 			flex-wrap: wrap;
