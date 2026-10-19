@@ -95,13 +95,13 @@ function textureUploadFixture(route: Route): { key: string; url: string; mime: s
 	throw new Error('Upload request body does not match the texture replacement fixtures');
 }
 
-async function uploadInputs(page: Page): Promise<UploadCapture> {
+async function uploadInputs(page: Page, width = 800, height = 600): Promise<UploadCapture> {
 	let maskPng: Buffer | undefined;
 	await page.route('**/api/media/test-media/scene.webp', async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'image/svg+xml',
-			body: '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#d9d1c7"/></svg>'
+			body: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#d9d1c7"/></svg>`
 		});
 	});
 	await page.route('**/api/uploads', async (route) => {
@@ -118,7 +118,7 @@ async function uploadInputs(page: Page): Promise<UploadCapture> {
 				image: media(fixture.key, fixture.url),
 				mime: fixture.mime,
 				size: 1024,
-				dimensions: [800, 600]
+				dimensions: [width, height]
 			})
 		});
 	});
@@ -644,3 +644,87 @@ test('fills a crossing lasso contour with drawable area', async ({ page }) => {
 	);
 	expect(alpha).toBe(255);
 });
+
+for (const viewport of [
+	{ width: 1280, height: 650 },
+	{ width: 390, height: 844 }
+]) {
+	test(`portrait mask stage fits ${viewport.width}px and preserves natural drawing coordinates after resize`, async ({
+		page
+	}) => {
+		await page.setViewportSize(viewport);
+		await authenticate(page);
+		await page.goto('/edit?tool=texture-replacement');
+		const uploads = await uploadInputs(page, 600, 1000);
+		const editor = page.locator('#mode-panel-edit .canvas-col');
+		const drawing = editor.locator(
+			'canvas[aria-label="Область рисования маски поверх исходной сцены"]'
+		);
+		await expect(drawing).toHaveJSProperty('width', 600);
+		async function assertStageFits(): Promise<void> {
+			const bounds = await drawing.boundingBox();
+			if (!bounds) throw new Error('Mask drawing stage is missing');
+			expect(bounds.width).toBeGreaterThan(0);
+			expect(bounds.height).toBeGreaterThan(0);
+			expect(bounds.y).toBeGreaterThanOrEqual(0);
+			expect(bounds.y + bounds.height).toBeLessThanOrEqual((page.viewportSize()?.height ?? 0) + 1);
+			expect(bounds.width / bounds.height).toBeCloseTo(0.6, 2);
+			expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(
+				(page.viewportSize()?.height ?? 0) + 1
+			);
+		}
+		async function mark(fraction: number): Promise<void> {
+			const bounds = await drawing.boundingBox();
+			if (!bounds) throw new Error('Mask drawing stage is missing');
+			await page.mouse.move(
+				bounds.x + bounds.width * fraction,
+				bounds.y + bounds.height * fraction
+			);
+			await page.mouse.down();
+			await page.mouse.up();
+		}
+		await assertStageFits();
+		await mark(0.25);
+		await page.getByRole('button', { name: 'На весь экран', exact: true }).click();
+		await assertStageFits();
+		await page.setViewportSize({ width: viewport.width + 100, height: viewport.height + 80 });
+		await assertStageFits();
+		await mark(0.75);
+		await Promise.all([
+			page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+			editor.getByRole('button', { name: 'Сохранить маску', exact: true }).click()
+		]);
+		const png = uploads.maskPng();
+		if (!png) throw new Error('Saved portrait mask upload is missing');
+		const decoded = await page.evaluate(async (base64) => {
+			const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+			const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+			const output = document.createElement('canvas');
+			output.width = bitmap.width;
+			output.height = bitmap.height;
+			const context = output.getContext('2d');
+			if (!context) throw new Error('Mask decoding context unavailable');
+			context.drawImage(bitmap, 0, 0);
+			const sample = (x: number, y: number): number[] =>
+				Array.from(context.getImageData(x, y, 1, 1).data);
+			const result = {
+				width: bitmap.width,
+				height: bitmap.height,
+				first: sample(150, 250),
+				second: sample(450, 750),
+				untouched: sample(300, 500)
+			};
+			bitmap.close();
+			return result;
+		}, png.toString('base64'));
+		expect(decoded).toEqual({
+			width: 600,
+			height: 1000,
+			first: [255, 255, 255, 255],
+			second: [255, 255, 255, 255],
+			untouched: [0, 0, 0, 255]
+		});
+		await page.keyboard.press('Escape');
+		await assertStageFits();
+	});
+}
