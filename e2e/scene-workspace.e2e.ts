@@ -247,6 +247,14 @@ test('plain action drag icon moves the panel, stays reachable and matches tools 
 	if (!moved) throw new Error('Moved scene actions drag icon is missing');
 	expect(moved.y).toBeGreaterThan(original.y + 50);
 	await page.setViewportSize({ width: 800, height: 500 });
+	await expect
+		.poll(async () => {
+			const current = await page
+				.getByRole('button', { name: ru['toolbar.fullscreen'], exact: true })
+				.boundingBox();
+			return current ? current.x + current.width : Number.POSITIVE_INFINITY;
+		})
+		.toBeLessThanOrEqual(801);
 	const edge = await page
 		.getByRole('button', { name: ru['toolbar.fullscreen'], exact: true })
 		.boundingBox();
@@ -403,5 +411,184 @@ test('comparison shares the current scene zoom with both images', async ({ page 
 		await expect(image).toBeVisible();
 		await expect.poll(async () => (await image.boundingBox())?.width).toBeCloseTo(output.width, 0);
 	}
+	await expectNoPageOverflow(page);
+});
+
+for (const [shape, width, height] of [
+	['landscape', 2400, 1600],
+	['portrait', 1600, 2400]
+] as const) {
+	test(`large ${shape} image keeps real scale and pan across render, photo processing, repaint and mask`, async ({
+		page
+	}, testInfo) => {
+		await page.setViewportSize({ width: 1280, height: 800 });
+		await openScene(page, width, height);
+		const zoom = page.getByRole('slider', { name: ru['scene.zoom'], exact: true });
+		const viewport = page.locator('.scene-viewport:visible');
+		async function paintedImage(
+			image: Locator
+		): Promise<{ x: number; y: number; width: number; height: number }> {
+			await expect(image).toHaveJSProperty('naturalWidth', width);
+			return image.evaluate((node: HTMLImageElement) => {
+				const bounds = node.getBoundingClientRect();
+				const style = getComputedStyle(node);
+				const scale =
+					style.objectFit === 'contain'
+						? Math.min(bounds.width / node.naturalWidth, bounds.height / node.naturalHeight)
+						: bounds.width / node.naturalWidth;
+				const paintedWidth = node.naturalWidth * scale;
+				const paintedHeight = node.naturalHeight * scale;
+				return {
+					x: bounds.x + (bounds.width - paintedWidth) / 2,
+					y: bounds.y + (bounds.height - paintedHeight) / 2,
+					width: paintedWidth,
+					height: paintedHeight
+				};
+			});
+		}
+		async function expectSameGeometry(
+			image: Locator,
+			expected: { x: number; y: number; width: number; height: number }
+		): Promise<void> {
+			await expect
+				.poll(async () => paintedImage(image))
+				.toMatchObject({
+					x: expect.closeTo(expected.x, 0),
+					y: expect.closeTo(expected.y, 0),
+					width: expect.closeTo(expected.width, 0),
+					height: expect.closeTo(expected.height, 0)
+				});
+		}
+		await page.evaluate(async () => {
+			for (let frame = 0; frame < 3; frame++)
+				await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+		});
+		const atFit = await paintedImage(sceneImage(page));
+		const viewportBounds = await viewport.boundingBox();
+		if (!viewportBounds) throw new Error('Scene viewport missing');
+		expect(atFit.width).toBeLessThanOrEqual(viewportBounds.width + 1);
+		expect(atFit.height).toBeLessThanOrEqual(viewportBounds.height + 1);
+		await zoom.press('Home');
+		for (let step = 0; step < 7; step++) await zoom.press('ArrowRight');
+		await expect(zoom).toHaveValue('200');
+		const atDouble = await paintedImage(sceneImage(page));
+		expect(atDouble.width).toBeCloseTo(atFit.width * 2, 0);
+		await page.getByRole('tab', { name: ru['mode.edit'], exact: true }).click();
+		await page.getByRole('tab', { name: ru['mode.photoProcessing'], exact: true }).click();
+		const photo = page.getByRole('img', { name: ru['photoProcessing.previewAlt'], exact: true });
+		await expect(page.locator('#mode-panel-edit .preview')).toHaveAttribute('aria-busy', 'false');
+		await expect(zoom).toHaveValue('200');
+		await expectSameGeometry(photo, atDouble);
+		const pointerBounds = await viewport.boundingBox();
+		if (!pointerBounds) throw new Error('Photo viewport missing before pointer panning');
+		await page.mouse.move(
+			pointerBounds.x + pointerBounds.width / 2,
+			pointerBounds.y + pointerBounds.height / 2
+		);
+		await page.mouse.down();
+		await page.mouse.move(
+			pointerBounds.x + pointerBounds.width / 2 + 20,
+			pointerBounds.y + pointerBounds.height / 2 + 20,
+			{ steps: 5 }
+		);
+		await page.mouse.up();
+		await expect
+			.poll(async () => (await paintedImage(photo))[shape === 'portrait' ? 'y' : 'x'])
+			.not.toBe(atDouble[shape === 'portrait' ? 'y' : 'x']);
+		const pan = page.getByRole('button', { name: ru['scene.panMode'], exact: true });
+		await pan.focus();
+		await pan.press(shape === 'portrait' ? 'ArrowDown' : 'ArrowRight');
+		await expect
+			.poll(async () => (await paintedImage(photo))[shape === 'portrait' ? 'y' : 'x'])
+			.not.toBe(atDouble[shape === 'portrait' ? 'y' : 'x']);
+		await page.getByRole('button', { name: ru['scene.fit'], exact: true }).click();
+		await expect(zoom).toHaveValue('100');
+		await expectSameGeometry(photo, atFit);
+		await page.getByRole('tab', { name: ru['edit.tool.repaint'], exact: true }).click();
+		await expect(zoom).toHaveValue('100');
+		await expectSameGeometry(sceneImage(page), atFit);
+		await expect(viewport).toHaveCSS('border-top-width', '1px');
+		await expect(viewport).toHaveCSS('border-top-style', 'solid');
+		await page.getByRole('button', { name: ru['repaint.region.select'], exact: true }).click();
+		const frame = page.getByRole('button', { name: ru['repaint.region.boxLabel'], exact: true });
+		await expect(frame).toBeVisible();
+		const frameBounds = await frame.boundingBox();
+		if (!frameBounds) throw new Error('Repaint selection frame missing');
+		expect(frameBounds.width).toBeCloseTo(atFit.width * 0.4, 0);
+		expect(frameBounds.height).toBeCloseTo(atFit.height * 0.4, 0);
+		await page.getByRole('tab', { name: /Замена текстуры/ }).click();
+		const mask = page.locator(
+			'#mode-panel-edit canvas[aria-label="Область рисования маски поверх исходной сцены"]'
+		);
+		await expect(mask).toHaveJSProperty(
+			'width',
+			Math.round(width * Math.min(1, 2048 / Math.max(width, height)))
+		);
+		await expect.poll(async () => (await mask.boundingBox())?.width).toBeCloseTo(atFit.width, 0);
+		await expect.poll(async () => (await mask.boundingBox())?.height).toBeCloseTo(atFit.height, 0);
+		await zoom.press('Home');
+		for (let step = 0; step < 7; step++) await zoom.press('ArrowRight');
+		await expect(zoom).toHaveValue('200');
+		await expect.poll(async () => (await mask.boundingBox())?.width).toBeCloseTo(atDouble.width, 0);
+		await expect
+			.poll(async () => (await mask.boundingBox())?.height)
+			.toBeCloseTo(atDouble.height, 0);
+		await expectNoPageOverflow(page);
+		await testInfo.attach(`large-${shape}`, {
+			body: await page.screenshot({ path: testInfo.outputPath(`large-${shape}.png`) }),
+			contentType: 'image/png'
+		});
+	});
+}
+
+test('large uploaded original and its photo-processing preview share the framed fit area', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await page.goto('/create/interior');
+	const png = await page.evaluate(() => {
+		const canvas = document.createElement('canvas');
+		canvas.width = 2400;
+		canvas.height = 1600;
+		const context = canvas.getContext('2d');
+		if (!context) throw new Error('Original fixture context missing');
+		context.fillStyle = '#a5b6c7';
+		context.fillRect(0, 0, canvas.width, canvas.height);
+		return canvas.toDataURL('image/png').split(',')[1];
+	});
+	await page.locator('#mode-panel-render input[type="file"]').setInputFiles({
+		name: 'large-original.png',
+		mimeType: 'image/png',
+		buffer: Buffer.from(png, 'base64')
+	});
+	const original = page.locator('#mode-panel-render .image-wrapper img');
+	await expect(original).toHaveJSProperty('naturalWidth', 2400);
+	const atFit = await original.evaluate((image: HTMLImageElement) => {
+		const bounds = image.getBoundingClientRect();
+		const scale = Math.min(bounds.width / image.naturalWidth, bounds.height / image.naturalHeight);
+		return { width: image.naturalWidth * scale, height: image.naturalHeight * scale };
+	});
+	const frame = page.locator('.scene-viewport:visible');
+	await expect(frame).toHaveCSS('border-top-width', '1px');
+	const fitBounds = await frame.boundingBox();
+	if (!fitBounds) throw new Error('Original scene frame missing');
+	expect(atFit.width).toBeLessThanOrEqual(fitBounds.width);
+	expect(atFit.height).toBeLessThanOrEqual(fitBounds.height);
+	await page.getByRole('tab', { name: ru['mode.edit'], exact: true }).click();
+	await page.getByRole('tab', { name: ru['mode.photoProcessing'], exact: true }).click();
+	const photo = page.getByRole('img', { name: ru['photoProcessing.previewAlt'], exact: true });
+	await expect(photo).toHaveJSProperty('naturalWidth', 2400);
+	await expect
+		.poll(async () =>
+			photo.evaluate((image: HTMLImageElement) => {
+				const bounds = image.getBoundingClientRect();
+				return (
+					Math.min(bounds.width / image.naturalWidth, bounds.height / image.naturalHeight) *
+					image.naturalWidth
+				);
+			})
+		)
+		.toBeCloseTo(atFit.width, 0);
+	await expect(frame).toHaveCSS('border-top-width', '1px');
 	await expectNoPageOverflow(page);
 });

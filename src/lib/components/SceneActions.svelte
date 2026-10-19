@@ -361,13 +361,18 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.toolbar-error {
+		position: absolute;
+		top: calc(100% + 0.5rem);
+		left: 0;
+		width: max-content;
+		max-width: min(24rem, 100%);
 		margin: 0;
 		padding: 0.25rem 0.625rem;
 		font-size: 0.8125rem;
-		white-space: nowrap;
+		white-space: normal;
 		color: var(--color-danger);
 		background: var(--color-danger-bg);
-		border-radius: 999px;
+		border-radius: var(--radius-sm);
 	}
 
 	.reset-confirm-dialog {
