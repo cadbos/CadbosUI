@@ -17,10 +17,12 @@ before the Change Date. See LICENSE for complete terms.
 	import { uploadResultSchema } from '$lib/api/contract';
 	import SceneViewport from '$lib/components/SceneViewport.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import CompareSlider from '$lib/components/CompareSlider.svelte';
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { request } from '$lib/state/request.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
+	import { sceneView } from '$lib/state/scene-view.svelte';
 
 	const MAX_UPLOAD_SIZE = 8 * 1024 * 1024;
 	const MAX_CANVAS_DIMENSION = 2048;
@@ -54,6 +56,10 @@ before the Change Date. See LICENSE for complete terms.
 		disabled = false,
 		onControls
 	}: Props = $props();
+	const beforeImageUrl = $derived(
+		request.previousRender ? mediaAccess.get(request.previousRender.outputKey)?.url : undefined
+	);
+	const comparing = $derived(sceneView.comparing && beforeImageUrl !== undefined);
 	let canvas = $state<HTMLCanvasElement | null>(null);
 	let tool = $state<DrawingTool>('brush');
 	let brushSize = $state(48);
@@ -665,6 +671,7 @@ before the Change Date. See LICENSE for complete terms.
 									? 'mask-editor-lasso-hint mask-editor-upload-alternative'
 									: 'mask-editor-upload-alternative'}
 								tabindex="0"
+								inert={comparing}
 								onkeydown={handleLassoKey}
 								onpointerdown={beginDrawing}
 								onpointerenter={updateBrushCursor}
@@ -686,6 +693,17 @@ before the Change Date. See LICENSE for complete terms.
 										<circle cx={point.x} cy={point.y} r="0.7%" class={{ first: index === 0 }} />
 									{/each}
 								</svg>
+							{/if}
+							{#if comparing && beforeImageUrl}
+								<div class="compare-overlay">
+									<CompareSlider
+										beforeSrc={beforeImageUrl}
+										afterSrc={sourceUrl}
+										beforeAlt={t('toolbar.before')}
+										afterAlt={t('toolbar.after')}
+										handleLabel={t('toolbar.compare')}
+									/>
+								</div>
 							{/if}
 							{#if brushCursor && brushCursorVisible}
 								<div
@@ -912,6 +930,13 @@ before the Change Date. See LICENSE for complete terms.
 
 	.drawing-stage.disabled canvas {
 		cursor: not-allowed;
+	}
+
+	.compare-overlay {
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		background: var(--color-surface);
 	}
 
 	.brush-cursor {

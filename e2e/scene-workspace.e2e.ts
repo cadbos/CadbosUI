@@ -137,6 +137,42 @@ async function expectNoPageOverflow(page: Page): Promise<void> {
 	);
 }
 
+test('comparison works over the mask editor and keeps the drawn mask', async ({ page }) => {
+	await openScene(page);
+	await page.getByRole('tab', { name: ru['mode.edit'], exact: true }).click();
+	await page.getByRole('tab', { name: /Замена текстуры/ }).click();
+	const mask = page.locator(
+		'#mode-panel-edit canvas[aria-label="Область рисования маски поверх исходной сцены"]'
+	);
+	await expect(mask).toBeVisible();
+	await expect
+		.poll(() => mask.evaluate((node: HTMLCanvasElement) => node.width))
+		.toBeGreaterThan(1);
+	const bounds = await mask.boundingBox();
+	if (!bounds) throw new Error('Mask canvas missing');
+	await page.mouse.move(bounds.x + bounds.width * 0.3, bounds.y + bounds.height * 0.5);
+	await page.mouse.down();
+	await page.mouse.move(bounds.x + bounds.width * 0.6, bounds.y + bounds.height * 0.5);
+	await page.mouse.up();
+	const painted = () =>
+		mask.evaluate((node: HTMLCanvasElement) =>
+			node
+				.getContext('2d')!
+				.getImageData(0, 0, node.width, node.height)
+				.data.some((value, index) => index % 4 === 3 && value > 0)
+		);
+	await expect.poll(painted).toBe(true);
+	const compare = page.getByRole('button', { name: ru['toolbar.compare'], exact: true });
+	await compare.click();
+	for (const name of [ru['toolbar.before'], ru['toolbar.after']]) {
+		await expect(page.getByRole('img', { name, exact: true })).toBeVisible();
+	}
+	await compare.click();
+	await expect(page.getByRole('img', { name: ru['toolbar.before'], exact: true })).toBeHidden();
+	await expect(mask).toBeVisible();
+	expect(await painted()).toBe(true);
+});
+
 for (const [shape, width, height] of [
 	['landscape', 1600, 900],
 	['portrait', 900, 1600]
