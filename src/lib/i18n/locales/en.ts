@@ -15,6 +15,11 @@
 import type { Dictionary } from '$lib/i18n/locales';
 
 export const en = {
+	'toolbar.fullscreen': 'Full screen',
+	'toolbar.exitFullscreen': 'Exit full screen',
+	'toolbar.move': 'Move scene actions',
+	'toolbar.resetPosition': 'Reset scene actions position',
+	'render.finances': 'Cost and balance',
 	'app.title': 'AI Design',
 	'app.subtitle': 'Create and edit interiors and exteriors from a photo and description.',
 	'home.landing': 'Home',

@@ -13,6 +13,12 @@
  */
 
 export interface Dictionary {
+	'toolbar.fullscreen': string;
+	'toolbar.exitFullscreen': string;
+	'toolbar.move': string;
+	'toolbar.resetPosition': string;
+	'render.finances': string;
+
 	'photoProcessing.resultReady': string;
 	'photoProcessing.downloadResult': string;
 

@@ -439,7 +439,7 @@ test('generating with the exterior scene type calls the exterior render route', 
 			};
 		});
 	expect(uploadViewportStyles).toEqual({
-		aspectRatio: '16 / 9',
+		aspectRatio: 'auto',
 		backgroundColor: 'rgb(245, 245, 247)',
 		objectFit: 'contain'
 	});

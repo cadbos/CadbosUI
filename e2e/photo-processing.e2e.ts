@@ -447,7 +447,7 @@ test('an uploaded photo downloads with current adjustments at full resolution wi
 			mimeType: 'image/png',
 			buffer: Buffer.from(source, 'base64')
 		});
-	const downloadButton = panel(page).getByRole('button', {
+	const downloadButton = page.getByRole('button', {
 		name: ru['render.download'],
 		exact: true
 	});
@@ -549,13 +549,13 @@ test('PNG save exports changed full-resolution pixels for free and undo/redo res
 	}, Array.from(submitted.bytes));
 	expect(savedPixel).toEqual([40, 53, 79, 255]);
 	await expect(page).toHaveURL(new RegExp(`generation=${submitted.id}`));
-	await expect(panel(page).getByRole('link', { name: ru['render.download'] })).toHaveAttribute(
+	await expect(page.getByRole('link', { name: ru['render.download'] })).toHaveAttribute(
 		'href',
 		submitted.outputUrl
 	);
 
 	await panel(page).getByRole('combobox', { name: ru['render.outputFormat'] }).selectOption('jpg');
-	await expect(panel(page).getByRole('link', { name: ru['render.download'] })).toHaveAttribute(
+	await expect(page.getByRole('link', { name: ru['render.download'] })).toHaveAttribute(
 		'download',
 		'render.png'
 	);
@@ -572,9 +572,7 @@ test('PNG save exports changed full-resolution pixels for free and undo/redo res
 	).toHaveAttribute('aria-selected', 'true');
 	await expect(exposure).toHaveValue('20');
 	await expect(page).toHaveURL(new RegExp(`generation=${submissions[0].id}`));
-	await panel(page)
-		.getByRole('button', { name: ru['toolbar.nextGeneration'], exact: true })
-		.click();
+	await page.getByRole('button', { name: ru['toolbar.nextGeneration'], exact: true }).click();
 	await expect(exposure).toHaveValue('40');
 	await expect(page).toHaveURL(new RegExp(`generation=${submissions[1].id}`));
 	expect(upscales).toBe(0);
@@ -606,7 +604,7 @@ test('4K accepts the uploaded original and both panel and toolbar block duplicat
 		});
 	});
 	await openPhoto(page);
-	const toolbar = panel(page).getByRole('button', { name: ru['toolbar.upscale'], exact: true });
+	const toolbar = page.getByRole('button', { name: ru['toolbar.upscale'], exact: true });
 	const checkbox = panel(page).getByRole('checkbox', { name: ru['toolbar.upscale'], exact: true });
 	const play = panel(page).locator('.save-trigger button');
 	await expect(toolbar).toHaveCount(1);
@@ -665,9 +663,7 @@ test('4K saves pending adjustments first and sends the saved photo to upscale', 
 		sessionId: E2E_SESSION_ID,
 		formSnapshot: { editOperationType: 'upscale', photoAdjustments: { exposure: 0 } }
 	});
-	await panel(page)
-		.getByRole('button', { name: ru['toolbar.previousGeneration'], exact: true })
-		.click();
+	await page.getByRole('button', { name: ru['toolbar.previousGeneration'], exact: true }).click();
 	await expect(
 		panel(page).getByRole('spinbutton', { name: ru['photoProcessing.adjustment.exposure'] })
 	).toHaveValue('30');
@@ -683,7 +679,7 @@ test('guests can preview adjustments but cannot save or upscale', async ({ page 
 	await expect(
 		panel(page).getByRole('button', { name: ru['photoProcessing.save'], exact: true })
 	).toBeDisabled();
-	const upscales = panel(page).getByRole('button', { name: ru['toolbar.upscale'], exact: true });
+	const upscales = page.getByRole('button', { name: ru['toolbar.upscale'], exact: true });
 	await expect(upscales).toHaveCount(1);
 	await expect(upscales).toBeDisabled();
 	await panel(page).getByRole('checkbox', { name: ru['toolbar.upscale'], exact: true }).check();
@@ -763,14 +759,14 @@ test('pending 4K attaches to its original project while a second project stays u
 	release?.();
 	await expect(page.getByText(ru['generationOverlay.upscale'], { exact: true })).toHaveCount(0);
 	await expect(page).toHaveURL(new RegExp(`session=${SESSION_B}&generation=${GENERATION_B}`));
-	await expect(panel(page).getByRole('link', { name: ru['render.download'] })).toHaveAttribute(
+	await expect(page.getByRole('link', { name: ru['render.download'] })).toHaveAttribute(
 		'href',
 		'/api/media/test-media/project-b.png'
 	);
 	await expect(preview(page)).toHaveAttribute('src', '/api/media/test-media/project-b.png');
 	await tabs.getByRole('tab', { name: 'Living room', exact: true }).click();
 	await expect(page).toHaveURL(/generation=00000000-0000-4000-8000-000000001547/);
-	await expect(panel(page).getByRole('link', { name: ru['render.download'] })).toHaveAttribute(
+	await expect(page.getByRole('link', { name: ru['render.download'] })).toHaveAttribute(
 		'href',
 		'/api/media/test-media/project-a-4k.png'
 	);
@@ -937,4 +933,48 @@ test('photo tool stays inside editing and its compact actions fit narrow and wid
 	await page.setViewportSize({ width: 390, height: 844 });
 	await footer.scrollIntoViewIfNeeded();
 	expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
+test('toolbar HD upscales an original upload before any render and exposes its charge', async ({
+	page
+}) => {
+	await mockPhotoWorkspace(page);
+	let calls = 0;
+	let submitted: Record<string, unknown> | undefined;
+	let complete: (() => void) | undefined;
+	const completion = new Promise<void>((resolve) => {
+		complete = resolve;
+	});
+	await page.route('**/api/upscale', async (route) => {
+		calls++;
+		submitted = route.request().postDataJSON() as Record<string, unknown>;
+		await completion;
+		await route.fulfill({
+			json: {
+				id: '00000000-0000-4000-8000-000000001531',
+				output: media('original-upscaled.png', '/api/media/test-media/original-upscaled.png'),
+				cost: 1,
+				balance: 9
+			}
+		});
+	});
+	await openPhoto(page);
+	const hd = page.getByRole('button', { name: ru['toolbar.upscale'], exact: true });
+	await expect(hd).toBeEnabled();
+	await hd.click();
+	await expect.poll(() => calls).toBe(1);
+	await expect(hd).toBeDisabled();
+	expect(submitted).toMatchObject({
+		imageKey: mediaKey(SOURCE_FILENAME),
+		sessionId: E2E_SESSION_ID
+	});
+	complete?.();
+	await expect(hd).toBeEnabled();
+	await expect(
+		page.getByRole('link', { name: ru['render.download'], exact: true })
+	).toHaveAttribute('href', '/api/media/test-media/original-upscaled.png');
+	await expect(page.locator('.scene-finances .desktop')).toContainText('Стоимость:');
+	await expect(page.locator('.scene-finances .desktop')).toContainText('1.00');
+	await expect(page.locator('.scene-finances .desktop')).toContainText('9.00');
+	expect(calls).toBe(1);
 });
