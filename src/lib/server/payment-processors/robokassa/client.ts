@@ -15,7 +15,8 @@
 import type { HashAlgorithm } from '@robokassa/sdk';
 import { sql } from 'drizzle-orm';
 
-import { getDb } from '$lib/server/db';
+import type { InvoiceCheckout } from '$lib/api/contract';
+import { getDb, type Database } from '$lib/server/db';
 import { getUsdRubRate } from '$lib/server/exchange-rate';
 import { quoteRubAmount } from './quote';
 import { DEFAULT_HASH_METHOD, sdkClient, type RobokassaSettings } from './sdk';
@@ -248,4 +249,24 @@ export function createRobokassaClient(
 	fetcher: typeof fetch = fetch
 ): PaymentProcessor<RobokassaProcessorData> {
 	return new RobokassaPaymentProcessor(platform, fetcher);
+}
+
+export async function getRobokassaCheckout(
+	db: Database,
+	invoiceId: string
+): Promise<InvoiceCheckout | null> {
+	const quote = await db.get<{
+		payment_url: string;
+		rub_amount_minor: number;
+		is_test: number;
+	}>(sql`SELECT payment_url, rub_amount_minor, is_test FROM robokassa_invoice_details
+		WHERE invoice_id = ${invoiceId}`);
+	return quote
+		? {
+				paymentUrl: quote.payment_url,
+				amountMinor: quote.rub_amount_minor,
+				currency: 'RUB',
+				isTest: quote.is_test === 1
+			}
+		: null;
 }

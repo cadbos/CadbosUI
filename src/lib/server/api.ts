@@ -29,6 +29,20 @@ export function apiError(status: number, code: string, message: string): Respons
 	return json({ error: { code, message } } satisfies ApiError, { status });
 }
 
+export const invoiceIdSchema = z
+	.string()
+	.regex(/^[1-9]\d{0,15}$/)
+	.refine((value) => Number.isSafeInteger(Number(value)));
+
+export const createInvoiceRequestSchema = z.strictObject({
+	id: invoiceIdSchema,
+	paymentProcessor: z.string().min(1).max(100),
+	amountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+	currency: z.literal('USD')
+});
+
+export const invoiceActionRequestSchema = z.strictObject({});
+
 const outputFormat = z.enum(['webp', 'jpg', 'png', 'avif']);
 const httpsImageUrl = z.url({ protocol: /^https$/ }).trim();
 const optionalText = z

@@ -27,7 +27,7 @@ export function quoteRubAmount(
 	const product = BigInt(usdCents) * numerator;
 	const rounded = (product * 2n + denominator) / (2n * denominator);
 	if (rounded <= 0n || rounded > BigInt(Number.MAX_SAFE_INTEGER))
-		throw new Error('RUB quote is outside payable limits');
+		throw new RangeError('RUB quote is outside payable limits');
 	const expanded = scale <= 0 ? numerator.toString() : digits.padStart(scale + 1, '0');
 	const decimal = scale <= 0 ? expanded : `${expanded.slice(0, -scale)}.${expanded.slice(-scale)}`;
 	const rubPerUsd = decimal.includes('.') ? decimal.replace(/0+$/, '').replace(/\.$/, '') : decimal;
