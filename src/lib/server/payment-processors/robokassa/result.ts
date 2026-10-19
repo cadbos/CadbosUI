@@ -21,7 +21,7 @@ import {
 import { sql } from 'drizzle-orm';
 
 import { getDb } from '$lib/server/db';
-import { sdkClient } from './sdk';
+import { resolveSdk } from './sdk';
 
 const MAX_WEBHOOK_QUERY_LENGTH = 16_384;
 
@@ -98,7 +98,9 @@ export async function handleRobokassaResult(
 		);
 		if (!quote) throw new Error('Robokassa invoice details are missing');
 		if (BigInt(quote.rub_amount_minor) !== amount) return invalidNotification();
-		const client = sdkClient(platform, quote);
+		if (quote.is_test === 1 && platform?.env.ROBOKASSA_IS_TEST !== 'true')
+			return invalidNotification();
+		const { client } = resolveSdk(platform, quote);
 		let notification: ReturnType<RobokassaClient['notification']['parseResultURL']>;
 		try {
 			notification = client.notification.parseResultURL(params);

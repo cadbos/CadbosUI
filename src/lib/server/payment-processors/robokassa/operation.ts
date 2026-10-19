@@ -15,7 +15,7 @@
 import { RobokassaApiError, RobokassaError, type OperationStateResponse } from '@robokassa/sdk';
 import { z } from 'zod';
 
-import { sdkClient, type RobokassaSettings } from './sdk';
+import { resolveSdk, type RobokassaSettings } from './sdk';
 
 const scalar = z.union([z.string(), z.number()]).transform(String);
 const resultSchema = z.object({
@@ -58,7 +58,7 @@ export async function getOperationDetails(
 	invId: number,
 	settings: RobokassaSettings
 ): Promise<RobokassaOperation> {
-	const client = sdkClient(platform, settings, fetcher);
+	const { client } = resolveSdk(platform, settings, fetcher);
 	let operation: OperationStateResponse;
 	try {
 		operation = await client.webService.opState(invId);
