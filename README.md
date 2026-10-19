@@ -230,6 +230,113 @@ pnpm exec wrangler d1 execute DB --local --persist-to /tmp/cadbos-robokassa-chec
 For transactions created during payment testing, see the
 [invoice UUID conversion procedure](docs/operations/invoice-uuid-conversion.md).
 
+### Client payment API
+
+The payment API uses the existing sign-in session cookie. Discover processors with
+`GET /api/payment-processors`; the response is
+`{ paymentProcessors: [{ id, invoiceCurrencies, paymentCurrencies }] }`.
+Only processors with valid server configuration are advertised. Currently
+Robokassa supports USD invoices paid in RUB. Discovery never contacts a provider.
+
+Create an invoice with `POST /api/invoices`:
+
+```json
+{
+	"id": "bf1d4d72-69a8-460c-b18e-a2adbd40151f",
+	"paymentProcessor": "robokassa",
+	"amountMinor": 1000,
+	"currency": "USD"
+}
+```
+
+Generate a UUID before the first request:
+
+```js
+const id = crypto.randomUUID();
+```
+
+Retain that UUID and its creation terms until the result is known. Reuse them after
+network failures or lost responses; do not generate another ID on every retry.
+Invoice API IDs must be valid UUID strings. Numeric Robokassa IDs are server-owned
+and never accepted as Cadbos invoice IDs. Amounts are positive safe integers in USD
+cents. No additional business funding cap is imposed.
+
+The `invoices.id` primary key provides creation deduplication. Creation returns `201`; matching
+retries return `200` with the current invoice, including after cancellation or
+payment. A reused ID with another owner, processor, or amount returns
+`409 invoice_conflict`, without disclosing existing invoice details. Only choose
+another ID after an explicit conflict; changing processor or amount also requires
+a new invoice.
+
+All successful invoice endpoints return:
+
+```ts
+{
+  id: string;
+  paymentProcessor: string;
+  amountMinor: number;
+  currency: 'USD';
+  status: 'open' | 'paid' | 'cancelled';
+  createdAt: number;
+  updatedAt: number;
+  paidAt: number | null;
+  checkout: {
+    paymentUrl: string;
+    amountMinor: number;
+    currency: string;
+    isTest: boolean;
+  } | null;
+}
+```
+
+Timestamps are epoch milliseconds. Checkout amounts use the payment currency's
+minor units (kopecks for RUB). Checkout is `null` before quoting and after
+cancellation or payment; internal ownership, ledger IDs, and callback metadata
+are not exposed.
+
+| Endpoint                           | Purpose                                                         |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `POST /api/invoices/[id]/checkout` | Obtain or reuse the stored processor's checkout.                |
+| `GET /api/invoices/[id]`           | Poll local invoice status without contacting the provider.      |
+| `POST /api/invoices/[id]/cancel`   | Cancel locally; repeating succeeds, paid invoices return `409`. |
+
+Every POST requires `Content-Type: application/json` and an `Origin` matching the
+application origin, in addition to the session cookie. Checkout and cancellation
+accept an empty JSON object `{}`; processor, amount, and other overrides are
+rejected. New invoices and checkout require an approved, enabled account, even
+when its balance is zero. Owners retain read, cancellation, and matching creation
+retry access after disablement. Missing and foreign invoices return `404` on
+read, checkout, and cancellation.
+
+The client flow is discovery, processor selection, creation, checkout, navigation
+to `checkout.paymentUrl`, and local status polling on return. Use bounded polling
+and allow resuming later while the invoice remains open. Refresh `/auth/me` after
+`paid` to display the updated account credit. Success/failure return pages must
+only resume checking; they never settle invoices or cancel them automatically.
+Configure merchant SuccessURL/FailURL to the client's return page using GET and
+use the retained invoice ID for the authenticated status lookup.
+
+Creation allows 10 requests per account per minute; checkout and cancellation
+each allow 30; discovery and status share a 60-read limit. All responses are
+uncached. Errors use `{ error: { code, message } }`: `400` invalid input,
+`401` authentication required, `403` access/origin denied, `404` invoice
+unavailable, `409` conflict, `429` rate limit, `503` dependency unavailable,
+or `500` unexpected failure. Rate limits include `Retry-After: 60`; retryable
+dependency failures include `Retry-After: 5`. Retry mutations using the same
+invoice ID and original terms.
+
+Register additional processors server-side using the existing payment processor
+interface, configuration validation, public currency capabilities, and a local
+checkout reader. Keep each provider's notification route separate. Read and
+cancellation remain available when Robokassa credentials are unavailable.
+
+Use an isolated test database and test credentials for development: test-mode
+callbacks also write ledger credits. Before accepting production payments,
+configure ResultURL as documented above, explicitly set
+`ROBOKASSA_IS_TEST=false`, and verify production credentials and hash settings.
+This API adds no migrations; the existing ledger and Robokassa migration order
+still applies.
+
 ### Account funding and access
 
 `credits` owns approval and its `enabled` flag. User balances are the sum of ledger

@@ -728,6 +728,38 @@ export interface WalletBalanceResponse {
 	balance: number;
 }
 
+export interface PaymentProcessorRecord {
+	id: string;
+	invoiceCurrencies: string[];
+	paymentCurrencies: string[];
+}
+
+export interface PaymentProcessorsResponse {
+	paymentProcessors: PaymentProcessorRecord[];
+}
+
+export interface CreateInvoiceRequest {
+	id: string;
+	paymentProcessor: string;
+	amountMinor: number;
+	currency: 'USD';
+}
+
+export interface InvoiceCheckout {
+	paymentUrl: string;
+	amountMinor: number;
+	currency: string;
+	isTest: boolean;
+}
+
+export interface InvoiceResponse extends CreateInvoiceRequest {
+	status: 'open' | 'paid' | 'cancelled';
+	createdAt: number;
+	updatedAt: number;
+	paidAt: number | null;
+	checkout: InvoiceCheckout | null;
+}
+
 export interface CreditTransaction {
 	id: string;
 	generationId: string | null;

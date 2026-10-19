@@ -16,10 +16,11 @@ import type { HashAlgorithm } from '@robokassa/sdk';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { getDb } from '$lib/server/db';
+import type { InvoiceCheckout } from '$lib/api/contract';
+import { getDb, type Database } from '$lib/server/db';
 import { getUsdRubRate } from '$lib/server/exchange-rate';
 import { quoteRubAmount } from './quote';
-import { DEFAULT_HASH_METHOD, sdkClient, type RobokassaSettings } from './sdk';
+import { resolveSdk, type RobokassaSettings } from './sdk';
 import { getOperationDetails, type RobokassaOperation } from './operation';
 import type {
 	CancellationOutcome,
@@ -123,9 +124,7 @@ class RobokassaPaymentProcessor implements PaymentProcessor<RobokassaProcessorDa
 		}
 
 		if (row.payment_url) return { url: row.payment_url };
-		const client = sdkClient(this.platform, undefined, this.fetcher);
-		const isTest = this.platform?.env.ROBOKASSA_IS_TEST !== 'false';
-		const hashAlgorithm = this.platform?.env.ROBOKASSA_HASH_ALGORITHM || DEFAULT_HASH_METHOD;
+		const { client, settings } = resolveSdk(this.platform, undefined, this.fetcher);
 		const rate = await getUsdRubRate(this.fetcher);
 		const quote = quoteRubAmount(invoice.amountMinor, rate.rubPerUsd);
 		const kopecks = BigInt(quote.amountMinor);
@@ -143,7 +142,7 @@ class RobokassaPaymentProcessor implements PaymentProcessor<RobokassaProcessorDa
 			});
 			const inserted = await db.get<{ payment_url: string }>(
 				sql`INSERT INTO robokassa_invoice_details (invoice_id, inv_id, payment_url, rub_amount_minor, rub_per_usd, rate_as_of, is_test, hash_algorithm)
-					SELECT id, ${Number(invId)}, ${paymentUrl}, ${quote.amountMinor}, ${quote.rubPerUsd}, ${Date.parse(rate.asOf)}, ${isTest ? 1 : 0}, ${hashAlgorithm}
+					SELECT id, ${Number(invId)}, ${paymentUrl}, ${quote.amountMinor}, ${quote.rubPerUsd}, ${Date.parse(rate.asOf)}, ${settings.is_test}, ${settings.hash_algorithm}
 					FROM invoices WHERE id = ${invoice.id} AND payment_processor = ${this.id}
 					AND amount_minor = ${invoice.amountMinor} AND currency = ${invoice.currency}
 					AND user_id = ${row.user_id} AND status = 'open'
@@ -263,4 +262,24 @@ export function createRobokassaClient(
 	fetcher: typeof fetch = fetch
 ): PaymentProcessor<RobokassaProcessorData> {
 	return new RobokassaPaymentProcessor(platform, fetcher);
+}
+
+export async function getRobokassaCheckout(
+	db: Database,
+	invoiceId: string
+): Promise<InvoiceCheckout | null> {
+	const quote = await db.get<{
+		payment_url: string;
+		rub_amount_minor: number;
+		is_test: number;
+	}>(sql`SELECT payment_url, rub_amount_minor, is_test FROM robokassa_invoice_details
+		WHERE invoice_id = ${invoiceId}`);
+	return quote
+		? {
+				paymentUrl: quote.payment_url,
+				amountMinor: quote.rub_amount_minor,
+				currency: 'RUB',
+				isTest: quote.is_test === 1
+			}
+		: null;
 }
