@@ -127,7 +127,6 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => modes.length,
 		getActiveIndex: () => modes.findIndex((m) => m.id === mode),
 		setActiveIndex: (index) => {
-			sceneView.exit();
 			// No sub-tab passed: switching modes has no "current" sub-tab to carry
 			// over from a different mode, so each mode opens on its own default.
 			// Pushes a history entry (unlike the sub-tab/settings navigations

@@ -188,6 +188,15 @@ test('fullscreen keeps scene tools and restores focus and the active scene on ex
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('dialog')).toBeHidden();
 	await expect(exit).toBeVisible();
+	for (const mode of ['mode.edit', 'mode.styleTransfer', 'mode.render'] as const) {
+		await page.getByRole('tab', { name: ru[mode], exact: true }).click();
+		await expect(page.getByRole('tab', { name: ru[mode], exact: true })).toHaveAttribute(
+			'aria-selected',
+			'true'
+		);
+		await expect(exit).toBeVisible();
+		await expect(sceneImage(page)).toHaveAttribute('src', imageSource!);
+	}
 	await page.keyboard.press('Escape');
 	await expect(enter).toBeFocused();
 	await expect(sceneImage(page)).toHaveAttribute('src', imageSource!);
