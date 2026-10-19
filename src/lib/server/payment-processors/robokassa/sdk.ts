@@ -14,7 +14,7 @@
 
 import { RobokassaClient, type HashAlgorithm } from '@robokassa/sdk';
 
-export const DEFAULT_HASH_METHOD = 'md5';
+const DEFAULT_HASH_METHOD = 'md5';
 const ALLOWED_HASH_METHODS: HashAlgorithm[] = [DEFAULT_HASH_METHOD, 'sha256', 'sha512'];
 
 export interface RobokassaSettings {
@@ -22,35 +22,49 @@ export interface RobokassaSettings {
 	hash_algorithm: HashAlgorithm;
 }
 
-export function sdkClient(
+function requiredCredential(name: string, value: string | undefined): string {
+	if (!value?.trim()) throw new Error(`${name} not configured`);
+	return value;
+}
+
+export function resolveSdk(
 	platform: App.Platform | undefined,
 	saved?: RobokassaSettings,
 	fetcher: typeof fetch = fetch
-): RobokassaClient {
+): { client: RobokassaClient; settings: RobokassaSettings } {
 	const env = platform?.env;
-	for (const name of [
-		'ROBOKASSA_LOGIN',
-		'ROBOKASSA_PASSWORD1',
-		'ROBOKASSA_PASSWORD2',
+	const login = requiredCredential('ROBOKASSA_LOGIN', env?.ROBOKASSA_LOGIN);
+	const password1 = requiredCredential('ROBOKASSA_PASSWORD1', env?.ROBOKASSA_PASSWORD1);
+	const password2 = requiredCredential('ROBOKASSA_PASSWORD2', env?.ROBOKASSA_PASSWORD2);
+	const testPassword1 = requiredCredential(
 		'ROBOKASSA_TEST_PASSWORD1',
-		'ROBOKASSA_TEST_PASSWORD2'
-	] as const) {
-		if (!env?.[name]?.trim()) throw new Error(`${name} not configured`);
-	}
+		env?.ROBOKASSA_TEST_PASSWORD1
+	);
+	const testPassword2 = requiredCredential(
+		'ROBOKASSA_TEST_PASSWORD2',
+		env?.ROBOKASSA_TEST_PASSWORD2
+	);
 	const mode = env?.ROBOKASSA_IS_TEST;
 	if (!saved && mode !== undefined && mode !== 'true' && mode !== 'false')
 		throw new Error('ROBOKASSA_IS_TEST must be true or false');
 	const hash = saved?.hash_algorithm ?? (env?.ROBOKASSA_HASH_ALGORITHM || DEFAULT_HASH_METHOD);
-	if (!(ALLOWED_HASH_METHODS as string[]).includes(hash))
-		throw new Error('ROBOKASSA_HASH_ALGORITHM must be md5, sha256, sha512');
-	return new RobokassaClient({
-		login: env!.ROBOKASSA_LOGIN!,
-		password1: env!.ROBOKASSA_PASSWORD1!,
-		password2: env!.ROBOKASSA_PASSWORD2!,
-		testPassword1: env!.ROBOKASSA_TEST_PASSWORD1!,
-		testPassword2: env!.ROBOKASSA_TEST_PASSWORD2!,
-		isTest: saved ? saved.is_test === 1 : mode !== 'false',
-		hashAlgorithm: hash as HashAlgorithm,
-		fetch: fetcher
-	});
+	const hashAlgorithm = ALLOWED_HASH_METHODS.find((method) => method === hash);
+	if (!hashAlgorithm) throw new Error('ROBOKASSA_HASH_ALGORITHM must be md5, sha256, sha512');
+	const settings: RobokassaSettings = {
+		is_test: (saved ? saved.is_test === 1 : mode !== 'false') ? 1 : 0,
+		hash_algorithm: hashAlgorithm
+	};
+	return {
+		client: new RobokassaClient({
+			login,
+			password1,
+			password2,
+			testPassword1,
+			testPassword2,
+			isTest: settings.is_test === 1,
+			hashAlgorithm: settings.hash_algorithm,
+			fetch: fetcher
+		}),
+		settings
+	};
 }
