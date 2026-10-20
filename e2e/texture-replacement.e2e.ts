@@ -15,6 +15,7 @@
 import type { Page, Route } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { ru } from '$lib/i18n/locales/ru';
 import { media, mediaKey } from './helpers/media';
 import {
 	E2E_PROJECT_ID,
@@ -95,13 +96,13 @@ function textureUploadFixture(route: Route): { key: string; url: string; mime: s
 	throw new Error('Upload request body does not match the texture replacement fixtures');
 }
 
-async function uploadInputs(page: Page): Promise<UploadCapture> {
+async function uploadInputs(page: Page, width = 800, height = 600): Promise<UploadCapture> {
 	let maskPng: Buffer | undefined;
 	await page.route('**/api/media/test-media/scene.webp', async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'image/svg+xml',
-			body: '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#d9d1c7"/></svg>'
+			body: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#d9d1c7"/></svg>`
 		});
 	});
 	await page.route('**/api/uploads', async (route) => {
@@ -118,7 +119,7 @@ async function uploadInputs(page: Page): Promise<UploadCapture> {
 				image: media(fixture.key, fixture.url),
 				mime: fixture.mime,
 				size: 1024,
-				dimensions: [800, 600]
+				dimensions: [width, height]
 			})
 		});
 	});
@@ -185,12 +186,12 @@ async function drawAndSaveMask(page: Page): Promise<void> {
 		steps: 8
 	});
 	await page.mouse.up();
-	await expect(maskEditor.getByText('Сохраните маску после рисования.')).toBeVisible();
+	await expect(page.getByText('Сохраните маску после рисования.')).toBeVisible();
 	await Promise.all([
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
-		maskEditor.getByRole('button', { name: 'Сохранить маску' }).click()
+		page.getByRole('button', { name: 'Сохранить маску' }).click()
 	]);
-	await expect(maskEditor.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
+	await expect(page.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
 }
 
 test('draws a mask and applies the synchronous result without polling', async ({ page }) => {
@@ -232,7 +233,7 @@ test('draws a mask and applies the synchronous result without polling', async ({
 	expect(brushCursorBounds.height).toBeCloseTo((48 * canvasBounds.height) / 600, 0);
 	expect(brushCursorBounds.x + brushCursorBounds.width / 2).toBeCloseTo(cursorX, 0);
 	expect(brushCursorBounds.y + brushCursorBounds.height / 2).toBeCloseTo(cursorY, 0);
-	const brushSize = maskEditor.locator('.brush-size input[type="range"]');
+	const brushSize = page.locator('.brush-size input[type="range"]');
 	await brushSize.evaluate((element) => {
 		if (!(element instanceof HTMLInputElement))
 			throw new Error('Brush size control is unavailable');
@@ -244,12 +245,12 @@ test('draws a mask and applies the synchronous result without polling', async ({
 	if (!brushCursorBounds) throw new Error('Brush cursor has no visible bounds');
 	expect(brushCursorBounds.width).toBeCloseTo((160 * canvasBounds.width) / 800, 0);
 	expect(brushCursorBounds.height).toBeCloseTo((160 * canvasBounds.height) / 600, 0);
-	await maskEditor.getByRole('button', { name: 'Ластик' }).click();
+	await page.getByRole('button', { name: 'Ластик' }).click();
 	await canvas.hover({ position: { x: canvasBounds.width * 0.25, y: canvasBounds.height * 0.55 } });
 	await expect(brushCursor).toHaveClass(/eraser/);
 	await page.mouse.move(0, 0);
 	await expect(brushCursor).toBeHidden();
-	await maskEditor.getByRole('button', { name: 'Кисть' }).click();
+	await page.getByRole('button', { name: 'Кисть' }).click();
 	await brushSize.evaluate((element) => {
 		if (!(element instanceof HTMLInputElement))
 			throw new Error('Brush size control is unavailable');
@@ -424,7 +425,7 @@ test('fills a polygon mask, preserves it across tools and exports only committed
 	const editor = page.locator('#mode-panel-edit .mask-editor');
 	const canvas = editor.locator('canvas');
 	await expect.poll(() => canvas.evaluate((node: HTMLCanvasElement) => node.width)).toBe(800);
-	await editor.getByRole('button', { name: 'Точечное лассо', exact: true }).click();
+	await page.getByRole('button', { name: 'Точечное лассо', exact: true }).click();
 	await canvas.scrollIntoViewIfNeeded();
 	const clickPoint = async (x: number, y: number): Promise<void> => {
 		await canvas.scrollIntoViewIfNeeded();
@@ -432,7 +433,7 @@ test('fills a polygon mask, preserves it across tools and exports only committed
 		if (!bounds) throw new Error('Mask canvas has no visible bounds');
 		await page.mouse.click(bounds.x + bounds.width * x, bounds.y + bounds.height * y);
 	};
-	const save = editor.getByRole('button', { name: 'Сохранить маску', exact: true });
+	const save = page.getByRole('button', { name: 'Сохранить маску', exact: true });
 	await clickPoint(0.2, 0.2);
 	await clickPoint(0.8, 0.2);
 	await expect(save).toBeDisabled();
@@ -446,7 +447,7 @@ test('fills a polygon mask, preserves it across tools and exports only committed
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
 		save.click()
 	]);
-	await expect(editor.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
+	await expect(page.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
 	const maskPng = uploads.maskPng();
 	if (!maskPng) throw new Error('The generated polygon mask PNG was not captured');
 	const samples = await page.evaluate(async (base64) => {
@@ -472,13 +473,13 @@ test('fills a polygon mask, preserves it across tools and exports only committed
 	await clickPoint(0.45, 0.35);
 	await canvas.press('Escape');
 	await expect(save).toBeEnabled();
-	await expect(editor.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
+	await expect(page.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
 	await clickPoint(0.35, 0.35);
-	await editor.getByRole('button', { name: 'Кисть', exact: true }).click();
+	await page.getByRole('button', { name: 'Кисть', exact: true }).click();
 	await expect(save).toBeEnabled();
-	await editor.getByRole('button', { name: 'Ластик', exact: true }).click();
+	await page.getByRole('button', { name: 'Ластик', exact: true }).click();
 	await clickPoint(0.5, 0.5);
-	await expect(editor.getByText('Сохраните маску после рисования.')).toBeVisible();
+	await expect(page.getByText('Сохраните маску после рисования.')).toBeVisible();
 	const alpha = await canvas.evaluate(
 		(node: HTMLCanvasElement) => node.getContext('2d')?.getImageData(400, 300, 1, 1).data[3]
 	);
@@ -492,12 +493,12 @@ test('edits and cancels lasso drafts and clears completed masks', async ({ page 
 	const editor = page.locator('#mode-panel-edit .mask-editor');
 	const canvas = editor.locator('canvas');
 	await expect.poll(() => canvas.evaluate((node: HTMLCanvasElement) => node.width)).toBe(800);
-	await editor.getByRole('button', { name: 'Точечное лассо', exact: true }).click();
-	const finish = editor.getByRole('button', { name: 'Замкнуть область', exact: true });
-	const undo = editor.getByRole('button', { name: 'Убрать точку', exact: true });
-	const cancel = editor.getByRole('button', { name: 'Отменить контур', exact: true });
-	const clear = editor.getByRole('button', { name: 'Очистить', exact: true });
-	const save = editor.getByRole('button', { name: 'Сохранить маску', exact: true });
+	await page.getByRole('button', { name: 'Точечное лассо', exact: true }).click();
+	const finish = page.getByRole('button', { name: 'Замкнуть область', exact: true });
+	const undo = page.getByRole('button', { name: 'Убрать точку', exact: true });
+	const cancel = page.getByRole('button', { name: 'Отменить контур', exact: true });
+	const clear = page.getByRole('button', { name: 'Очистить', exact: true });
+	const save = page.getByRole('button', { name: 'Сохранить маску', exact: true });
 	const clickPoint = async (x: number, y: number): Promise<void> => {
 		await canvas.scrollIntoViewIfNeeded();
 		const bounds = await canvas.boundingBox();
@@ -524,7 +525,7 @@ test('edits and cancels lasso drafts and clears completed masks', async ({ page 
 	await finish.click();
 	await expect(editor.locator('.lasso-preview')).toHaveCount(0);
 	await expect(save).toBeEnabled();
-	await expect(editor.getByText('Сохраните маску после рисования.')).toBeVisible();
+	await expect(page.getByText('Сохраните маску после рисования.')).toBeVisible();
 	await clickPoint(0.35, 0.35);
 	await clear.click();
 	await expect(editor.locator('.lasso-preview')).toHaveCount(0);
@@ -548,7 +549,7 @@ test.describe('touch lasso', () => {
 		const editor = page.locator('#mode-panel-edit .mask-editor');
 		const canvas = editor.locator('canvas');
 		await expect.poll(() => canvas.evaluate((node: HTMLCanvasElement) => node.width)).toBe(800);
-		await editor.getByRole('button', { name: 'Точечное лассо', exact: true }).tap();
+		await page.getByRole('button', { name: 'Точечное лассо', exact: true }).tap();
 		const tapPoint = async (x: number, y: number): Promise<void> => {
 			await canvas.scrollIntoViewIfNeeded();
 			const bounds = await canvas.boundingBox();
@@ -558,10 +559,10 @@ test.describe('touch lasso', () => {
 		await tapPoint(0.2, 0.2);
 		await tapPoint(0.8, 0.2);
 		await tapPoint(0.8, 0.8);
-		await expect(editor.getByRole('button', { name: 'Сохранить маску' })).toBeDisabled();
+		await expect(page.getByRole('button', { name: 'Сохранить маску' })).toBeDisabled();
 		await tapPoint(0.2, 0.2);
 		await expect(editor.locator('.lasso-preview')).toHaveCount(0);
-		await expect(editor.getByRole('button', { name: 'Сохранить маску' })).toBeEnabled();
+		await expect(page.getByRole('button', { name: 'Сохранить маску' })).toBeEnabled();
 		await expect(editor.locator('.brush-cursor')).toBeHidden();
 	});
 });
@@ -575,10 +576,10 @@ test('keeps empty lasso drafts editable and preserves a saved mask after an empt
 	const editor = page.locator('#mode-panel-edit .mask-editor');
 	const canvas = editor.locator('canvas');
 	await expect.poll(() => canvas.evaluate((node: HTMLCanvasElement) => node.width)).toBe(800);
-	await editor.getByRole('button', { name: 'Точечное лассо', exact: true }).click();
-	const finish = editor.getByRole('button', { name: 'Замкнуть область', exact: true });
-	const cancel = editor.getByRole('button', { name: 'Отменить контур', exact: true });
-	const save = editor.getByRole('button', { name: 'Сохранить маску', exact: true });
+	await page.getByRole('button', { name: 'Точечное лассо', exact: true }).click();
+	const finish = page.getByRole('button', { name: 'Замкнуть область', exact: true });
+	const cancel = page.getByRole('button', { name: 'Отменить контур', exact: true });
+	const save = page.getByRole('button', { name: 'Сохранить маску', exact: true });
 	const clickPoint = async (x: number, y: number): Promise<void> => {
 		await canvas.scrollIntoViewIfNeeded();
 		const bounds = await canvas.boundingBox();
@@ -603,7 +604,7 @@ test('keeps empty lasso drafts editable and preserves a saved mask after an empt
 		page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
 		save.click()
 	]);
-	await expect(editor.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
+	await expect(page.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
 	const savedMask = await canvasData();
 	await clickPoint(0.3, 0.4);
 	await clickPoint(0.5, 0.4);
@@ -613,7 +614,7 @@ test('keeps empty lasso drafts editable and preserves a saved mask after an empt
 	await expect(save).toBeDisabled();
 	expect(await canvasData()).toBe(savedMask);
 	await cancel.click();
-	await expect(editor.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
+	await expect(page.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
 	await expect(save).toBeEnabled();
 });
 
@@ -624,7 +625,7 @@ test('fills a crossing lasso contour with drawable area', async ({ page }) => {
 	const editor = page.locator('#mode-panel-edit .mask-editor');
 	const canvas = editor.locator('canvas');
 	await expect.poll(() => canvas.evaluate((node: HTMLCanvasElement) => node.width)).toBe(800);
-	await editor.getByRole('button', { name: 'Точечное лассо', exact: true }).click();
+	await page.getByRole('button', { name: 'Точечное лассо', exact: true }).click();
 	for (const [x, y] of [
 		[0.3, 0.3],
 		[0.7, 0.7],
@@ -638,9 +639,178 @@ test('fills a crossing lasso contour with drawable area', async ({ page }) => {
 	}
 	await canvas.press('Enter');
 	await expect(editor.locator('.lasso-preview')).toHaveCount(0);
-	await expect(editor.getByRole('button', { name: 'Сохранить маску', exact: true })).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Сохранить маску', exact: true })).toBeEnabled();
 	const alpha = await canvas.evaluate(
 		(node: HTMLCanvasElement) => node.getContext('2d')?.getImageData(400, 210, 1, 1).data[3]
 	);
 	expect(alpha).toBe(255);
 });
+
+for (const viewport of [
+	{ width: 1280, height: 650 },
+	{ width: 390, height: 844 }
+]) {
+	test(`portrait mask stage fits ${viewport.width}px and preserves natural drawing coordinates after resize`, async ({
+		page
+	}, testInfo) => {
+		await page.setViewportSize(viewport);
+		await authenticate(page);
+		await page.goto('/edit?tool=texture-replacement');
+		const uploads = await uploadInputs(page, 600, 1000);
+		const editor = page.locator('#mode-panel-edit .canvas-col');
+		const drawing = editor.locator(
+			'canvas[aria-label="Область рисования маски поверх исходной сцены"]'
+		);
+		await expect(drawing).toHaveJSProperty('width', 600);
+		async function assertStageFits(): Promise<void> {
+			await expect
+				.poll(async () => {
+					const current = await drawing.boundingBox();
+					return current ? current.y + current.height : Number.POSITIVE_INFINITY;
+				})
+				.toBeLessThanOrEqual((page.viewportSize()?.height ?? 0) + 1);
+			const bounds = await drawing.boundingBox();
+			if (!bounds) throw new Error('Mask drawing stage is missing');
+			expect(bounds.width).toBeGreaterThan(0);
+			expect(bounds.height).toBeGreaterThan(0);
+			expect(bounds.y).toBeGreaterThanOrEqual(0);
+			expect(bounds.y + bounds.height).toBeLessThanOrEqual((page.viewportSize()?.height ?? 0) + 1);
+			expect(bounds.width / bounds.height).toBeCloseTo(0.6, 2);
+			expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(
+				(page.viewportSize()?.height ?? 0) + 1
+			);
+		}
+		async function mark(fraction: number): Promise<void> {
+			const bounds = await drawing.boundingBox();
+			if (!bounds) throw new Error('Mask drawing stage is missing');
+			await page.mouse.move(
+				bounds.x + bounds.width * fraction,
+				bounds.y + bounds.height * fraction
+			);
+			await page.mouse.down();
+			await page.mouse.up();
+		}
+		await assertStageFits();
+		const handAtFit = page.getByRole('button', { name: ru['scene.panMode'], exact: true });
+		await handAtFit.click();
+		const fitBounds = await drawing.boundingBox();
+		if (!fitBounds) throw new Error('Fitted mask stage missing');
+		await page.mouse.click(fitBounds.x + fitBounds.width / 2, fitBounds.y + fitBounds.height / 2);
+		expect(
+			await drawing.evaluate(
+				(node: HTMLCanvasElement) => node.getContext('2d')?.getImageData(300, 500, 1, 1).data[3]
+			)
+		).toBe(0);
+		await handAtFit.click();
+		for (let step = 0; step < 4; step++)
+			await page.getByRole('button', { name: ru['scene.zoomIn'], exact: true }).click();
+		await expect(page.getByRole('slider', { name: ru['scene.zoom'], exact: true })).toHaveValue(
+			'200'
+		);
+		const zoomedDrawing = await drawing.boundingBox();
+		if (!zoomedDrawing) throw new Error('Zoomed mask drawing stage missing');
+		await page.mouse.move(
+			zoomedDrawing.x + zoomedDrawing.width / 2,
+			zoomedDrawing.y + zoomedDrawing.height / 2
+		);
+		const cursor = editor.locator('.brush-cursor');
+		await expect(cursor).toBeVisible();
+		const cursorBounds = await cursor.boundingBox();
+		if (!cursorBounds) throw new Error('Zoomed mask cursor missing');
+		expect(cursorBounds.width).toBeCloseTo((48 * zoomedDrawing.width) / 600, 0);
+		expect(cursorBounds.x + cursorBounds.width / 2).toBeCloseTo(
+			zoomedDrawing.x + zoomedDrawing.width / 2,
+			0
+		);
+		await page.getByRole('button', { name: ru['scene.fit'], exact: true }).click();
+		await page.getByRole('button', { name: ru['scene.zoomIn'], exact: true }).click();
+		await expect(page.getByRole('slider', { name: ru['scene.zoom'], exact: true })).toHaveValue(
+			'125'
+		);
+		await mark(0.25);
+		await page.getByRole('button', { name: ru['scene.fit'], exact: true }).click();
+		await page.getByRole('button', { name: 'На весь экран', exact: true }).click();
+		await assertStageFits();
+		await page.setViewportSize({ width: viewport.width + 100, height: viewport.height + 80 });
+		await assertStageFits();
+		const editorBounds = await editor.boundingBox();
+		if (!editorBounds) throw new Error('Fullscreen mask editor is missing');
+		expect(editorBounds.x).toBeGreaterThan(0);
+		expect(editorBounds.x + editorBounds.width).toBeLessThan(page.viewportSize()?.width ?? 0);
+		await testInfo.attach('fullscreen-mask', {
+			body: await page.screenshot({ path: testInfo.outputPath('fullscreen-mask.png') }),
+			contentType: 'image/png'
+		});
+		await page.getByRole('button', { name: ru['scene.zoomIn'], exact: true }).click();
+		await page.getByRole('button', { name: ru['toolsPanel.collapse'], exact: true }).click();
+		const spaceBounds = await drawing.boundingBox();
+		if (!spaceBounds) throw new Error('Mask drawing area missing before Space panning');
+		await page.keyboard.down('Space');
+		await page.mouse.move(
+			spaceBounds.x + spaceBounds.width / 2,
+			spaceBounds.y + spaceBounds.height / 2
+		);
+		await page.mouse.down();
+		await page.mouse.move(
+			spaceBounds.x + spaceBounds.width / 2 + 12,
+			spaceBounds.y + spaceBounds.height / 2 + 12,
+			{ steps: 5 }
+		);
+		await page.mouse.up();
+		await page.keyboard.up('Space');
+		await expect(page.getByRole('slider', { name: ru['scene.zoom'], exact: true })).toHaveValue(
+			'125'
+		);
+		expect(
+			await drawing.evaluate(
+				(node: HTMLCanvasElement) => node.getContext('2d')?.getImageData(300, 500, 1, 1).data[3]
+			)
+		).toBe(0);
+		const pan = page.getByRole('button', { name: ru['scene.panMode'], exact: true });
+		await pan.focus();
+		await pan.press('ArrowLeft');
+		await pan.press('ArrowUp');
+		await mark(0.75);
+		await page.getByRole('button', { name: ru['toolsPanel.expand'], exact: true }).click();
+		await Promise.all([
+			page.waitForResponse((response) => response.url().includes('/api/uploads') && response.ok()),
+			page.getByRole('button', { name: 'Сохранить маску', exact: true }).click()
+		]);
+		const png = uploads.maskPng();
+		if (!png) throw new Error('Saved portrait mask upload is missing');
+		const decoded = await page.evaluate(async (base64) => {
+			const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+			const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+			const output = document.createElement('canvas');
+			output.width = bitmap.width;
+			output.height = bitmap.height;
+			const context = output.getContext('2d');
+			if (!context) throw new Error('Mask decoding context unavailable');
+			context.drawImage(bitmap, 0, 0);
+			const sample = (x: number, y: number): number[] =>
+				Array.from(context.getImageData(x, y, 1, 1).data);
+			const result = {
+				width: bitmap.width,
+				height: bitmap.height,
+				first: sample(150, 250),
+				second: sample(450, 750),
+				untouched: sample(300, 500)
+			};
+			bitmap.close();
+			return result;
+		}, png.toString('base64'));
+		expect(decoded).toEqual({
+			width: 600,
+			height: 1000,
+			first: [255, 255, 255, 255],
+			second: [255, 255, 255, 255],
+			untouched: [0, 0, 0, 255]
+		});
+		await page.getByRole('button', { name: ru['scene.fit'], exact: true }).click();
+		await expect(page.getByRole('slider', { name: ru['scene.zoom'], exact: true })).toHaveValue(
+			'100'
+		);
+		await page.keyboard.press('Escape');
+		await assertStageFits();
+	});
+}

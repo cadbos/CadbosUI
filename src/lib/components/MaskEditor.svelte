@@ -13,18 +13,23 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
+	import { onMount, type Snippet } from 'svelte';
 	import { uploadResultSchema } from '$lib/api/contract';
+	import SceneViewport from '$lib/components/SceneViewport.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
+	import CompareSlider from '$lib/components/CompareSlider.svelte';
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { request } from '$lib/state/request.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
+	import { sceneView } from '$lib/state/scene-view.svelte';
 
 	const MAX_UPLOAD_SIZE = 8 * 1024 * 1024;
 	const MAX_CANVAS_DIMENSION = 2048;
 	type DrawingTool = 'brush' | 'eraser' | 'lasso';
 
 	interface Props {
+		onControls: (controls: Snippet | undefined) => void;
 		sourceUrl?: string;
 		sourceKey?: string;
 		disabled?: boolean;
@@ -45,7 +50,16 @@ before the Change Date. See LICENSE for complete terms.
 		empty: boolean;
 	}
 
-	let { sourceUrl = undefined, sourceKey = undefined, disabled = false }: Props = $props();
+	let {
+		sourceUrl = undefined,
+		sourceKey = undefined,
+		disabled = false,
+		onControls
+	}: Props = $props();
+	const beforeImageUrl = $derived(
+		request.previousRender ? mediaAccess.get(request.previousRender.outputKey)?.url : undefined
+	);
+	const comparing = $derived(sceneView.comparing && beforeImageUrl !== undefined);
 	let canvas = $state<HTMLCanvasElement | null>(null);
 	let tool = $state<DrawingTool>('brush');
 	let brushSize = $state(48);
@@ -58,6 +72,7 @@ before the Change Date. See LICENSE for complete terms.
 	let brushCursor = $state<BrushCursor | null>(null);
 	let lassoPoints = $state<Point[]>([]);
 	let lassoHover = $state<Point | null>(null);
+	let imageRatio = $state(1);
 	let canvasWidth = $state(1);
 	let canvasHeight = $state(1);
 	let previousPoint: Point | null = null;
@@ -112,6 +127,7 @@ before the Change Date. See LICENSE for complete terms.
 			if (retry) queueMicrotask(() => initializeCanvas(image, false));
 			return;
 		}
+		imageRatio = image.naturalWidth / image.naturalHeight;
 		const scale = Math.min(
 			1,
 			MAX_CANVAS_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight)
@@ -179,10 +195,10 @@ before the Change Date. See LICENSE for complete terms.
 			return;
 		}
 		brushCursor = {
-			x,
-			y,
-			canvasToCssScaleX: bounds.width / canvas.width,
-			canvasToCssScaleY: bounds.height / canvas.height
+			x: (x * canvas.clientWidth) / bounds.width,
+			y: (y * canvas.clientHeight) / bounds.height,
+			canvasToCssScaleX: canvas.clientWidth / canvas.width,
+			canvasToCssScaleY: canvas.clientHeight / canvas.height
 		};
 	}
 
@@ -473,201 +489,262 @@ before the Change Date. See LICENSE for complete terms.
 			? Number(event.currentTarget.value)
 			: brushSize;
 	}
+	onMount(() => {
+		onControls(controlsPanel);
+		return () => onControls(undefined);
+	});
 </script>
 
-<div class="mask-editor">
-	<div class="editor-heading">
-		<div>
-			<h4>{t('textureReplacement.maskEditor.title')}</h4>
-			<p>{t('textureReplacement.maskEditor.hint')}</p>
-		</div>
-		<span class="required-badge">{t('textureReplacement.required')}</span>
-	</div>
-
-	{#if sourceUrl}
-		<div class="toolbar" role="toolbar" aria-label={t('textureReplacement.maskEditor.toolbar')}>
-			<div class="tool-group">
-				<button
-					type="button"
-					class={{ active: tool === 'brush' }}
-					aria-pressed={tool === 'brush'}
-					disabled={disabled || editorBusy}
-					onclick={() => selectTool('brush')}
-				>
-					{t('textureReplacement.maskEditor.brush')}
-				</button>
-				<button
-					type="button"
-					class={{ active: tool === 'eraser' }}
-					aria-pressed={tool === 'eraser'}
-					disabled={disabled || editorBusy}
-					onclick={() => selectTool('eraser')}
-				>
-					{t('textureReplacement.maskEditor.eraser')}
-				</button>
-				<button
-					type="button"
-					class={{ active: tool === 'lasso' }}
-					aria-pressed={tool === 'lasso'}
-					disabled={disabled || editorBusy}
-					onclick={() => selectTool('lasso')}
-				>
-					{t('textureReplacement.maskEditor.lasso')}
-				</button>
+{#snippet controlsPanel()}
+	<div class="mask-controls">
+		<div class="editor-heading">
+			<div>
+				<h4>{t('textureReplacement.maskEditor.title')}</h4>
+				<p>{t('textureReplacement.maskEditor.hint')}</p>
 			</div>
-			{#if tool !== 'lasso'}
-				<label class="brush-size">
-					<span>{t('textureReplacement.maskEditor.brushSize')}</span>
-					<input
-						type="range"
-						min="8"
-						max="160"
-						step="4"
-						value={brushSize}
+			<span class="required-badge">{t('textureReplacement.required')}</span>
+		</div>
+
+		{#if sourceUrl}
+			<div class="toolbar" role="toolbar" aria-label={t('textureReplacement.maskEditor.toolbar')}>
+				<div class="tool-group">
+					<button
+						type="button"
+						class={{ active: tool === 'brush' }}
+						aria-pressed={tool === 'brush'}
 						disabled={disabled || editorBusy}
-						oninput={(event) => (brushSize = brushSizeValue(event))}
-					/>
-					<output>{brushSize}</output>
-				</label>
-			{:else}
-				<div class="lasso-actions">
-					<button
-						type="button"
-						disabled={lassoPoints.length < 3 || disabled || editorBusy}
-						onclick={finishLasso}
+						onclick={() => selectTool('brush')}
 					>
-						{t('textureReplacement.maskEditor.finishLasso')}
+						{t('textureReplacement.maskEditor.brush')}
 					</button>
 					<button
 						type="button"
-						disabled={!hasLassoDraft || disabled || editorBusy}
-						onclick={undoLassoPoint}
+						class={{ active: tool === 'eraser' }}
+						aria-pressed={tool === 'eraser'}
+						disabled={disabled || editorBusy}
+						onclick={() => selectTool('eraser')}
 					>
-						{t('textureReplacement.maskEditor.undoPoint')}
+						{t('textureReplacement.maskEditor.eraser')}
 					</button>
 					<button
 						type="button"
-						disabled={!hasLassoDraft || disabled || editorBusy}
-						onclick={cancelLasso}
+						class={{ active: tool === 'lasso' }}
+						aria-pressed={tool === 'lasso'}
+						disabled={disabled || editorBusy}
+						onclick={() => selectTool('lasso')}
 					>
-						{t('textureReplacement.maskEditor.cancelLasso')}
+						{t('textureReplacement.maskEditor.lasso')}
 					</button>
 				</div>
+				{#if tool !== 'lasso'}
+					<label class="brush-size">
+						<span>{t('textureReplacement.maskEditor.brushSize')}</span>
+						<input
+							type="range"
+							min="8"
+							max="160"
+							step="4"
+							value={brushSize}
+							disabled={disabled || editorBusy}
+							oninput={(event) => (brushSize = brushSizeValue(event))}
+						/>
+						<output>{brushSize}</output>
+					</label>
+				{:else}
+					<div class="lasso-actions">
+						<button
+							type="button"
+							disabled={lassoPoints.length < 3 || disabled || editorBusy}
+							onclick={finishLasso}
+						>
+							{t('textureReplacement.maskEditor.finishLasso')}
+						</button>
+						<button
+							type="button"
+							disabled={!hasLassoDraft || disabled || editorBusy}
+							onclick={undoLassoPoint}
+						>
+							{t('textureReplacement.maskEditor.undoPoint')}
+						</button>
+						<button
+							type="button"
+							disabled={!hasLassoDraft || disabled || editorBusy}
+							onclick={cancelLasso}
+						>
+							{t('textureReplacement.maskEditor.cancelLasso')}
+						</button>
+					</div>
+				{/if}
+				<div class="editor-actions">
+					<button
+						type="button"
+						disabled={(!hasMarks && !hasLassoDraft) || disabled || editorBusy}
+						onclick={clearMask}
+					>
+						{t('textureReplacement.maskEditor.clear')}
+					</button>
+				</div>
+			</div>
+
+			{#if tool === 'lasso'}
+				<p id="mask-editor-lasso-hint" class="lasso-hint">
+					{t('textureReplacement.maskEditor.lassoHint')}
+				</p>
 			{/if}
-			<div class="editor-actions">
+
+			<div class="save-row">
 				<button
 					type="button"
-					disabled={(!hasMarks && !hasLassoDraft) || disabled || editorBusy}
-					onclick={clearMask}
+					class="save-button"
+					disabled={!canSave}
+					onclick={() => void saveMask()}
 				>
-					{t('textureReplacement.maskEditor.clear')}
+					{uploading
+						? t('textureReplacement.maskEditor.saving')
+						: t('textureReplacement.maskEditor.save')}
 				</button>
 			</div>
-		</div>
-
-		{#if tool === 'lasso'}
-			<p id="mask-editor-lasso-hint" class="lasso-hint">
-				{t('textureReplacement.maskEditor.lassoHint')}
-			</p>
+		{:else}
+			<p class="empty-state">{t('textureReplacement.maskEditor.sourceRequired')}</p>
 		{/if}
 
-		{#key sourceIdentity}
-			<div class={['drawing-stage', { disabled: disabled || editorBusy, lasso: tool === 'lasso' }]}>
-				<LazyImage
-					src={sourceUrl}
-					alt={t('textureReplacement.maskEditor.sourceAlt')}
-					loading="eager"
-					fetchPriority="high"
-					onReady={initializeCanvas}
-					onError={sourceLoadFailed}
-				/>
-				<canvas
-					{@attach attachCanvas}
-					aria-label={t('textureReplacement.maskEditor.canvasLabel')}
-					aria-describedby={tool === 'lasso'
-						? 'mask-editor-lasso-hint mask-editor-upload-alternative'
-						: 'mask-editor-upload-alternative'}
-					tabindex="0"
-					onkeydown={handleLassoKey}
-					onpointerdown={beginDrawing}
-					onpointerenter={updateBrushCursor}
-					onpointermove={handlePointerMove}
-					onpointerleave={hideBrushCursor}
-					onpointerup={stopDrawing}
-					onpointercancel={stopDrawing}
-					onlostpointercapture={stopDrawing}
-				></canvas>
-				{#if tool === 'lasso' && hasLassoDraft && canvasReady}
-					<svg
-						class="lasso-preview"
-						viewBox="0 0 {canvasWidth} {canvasHeight}"
-						preserveAspectRatio="none"
-						aria-hidden="true"
-					>
-						<polyline points={lassoPreview} />
-						{#each lassoPoints as point, index (index)}
-							<circle cx={point.x} cy={point.y} r="0.7%" class={{ first: index === 0 }} />
-						{/each}
-					</svg>
-				{/if}
-				{#if brushCursor && brushCursorVisible}
-					<div
-						class={['brush-cursor', { eraser: tool === 'eraser' }]}
-						data-tool={tool}
-						aria-hidden="true"
-						style:left="{brushCursor.x}px"
-						style:top="{brushCursor.y}px"
-						style:width="{brushCursorWidth}px"
-						style:height="{brushCursorHeight}px"
-					></div>
-				{/if}
-			</div>
-		{/key}
-
-		<div class="save-row">
-			<button type="button" class="save-button" disabled={!canSave} onclick={() => void saveMask()}>
-				{uploading
-					? t('textureReplacement.maskEditor.saving')
-					: t('textureReplacement.maskEditor.save')}
-			</button>
-		</div>
-	{:else}
-		<p class="empty-state">{t('textureReplacement.maskEditor.sourceRequired')}</p>
-	{/if}
-
-	{#if errorKey}
-		<p class="editor-error" role="alert">{t(errorKey)}</p>
-	{/if}
-	<div class="save-status" role="status" aria-live="polite" aria-atomic="true">
-		{#if uploading}
-			<span>{t('textureReplacement.maskEditor.saving')}</span>
-		{:else if hasLassoDraft}
-			<span>{t('textureReplacement.maskEditor.lassoDraft')}</span>
-		{:else if maskReady}
-			<span>{t('textureReplacement.maskEditor.saved')}</span>
-		{:else if hasMarks}
-			<span>{t('textureReplacement.maskEditor.unsaved')}</span>
+		{#if errorKey}
+			<p class="editor-error" role="alert">{t(errorKey)}</p>
 		{/if}
+		<div class="save-status" role="status" aria-live="polite" aria-atomic="true">
+			{#if uploading}
+				<span>{t('textureReplacement.maskEditor.saving')}</span>
+			{:else if hasLassoDraft}
+				<span>{t('textureReplacement.maskEditor.lassoDraft')}</span>
+			{:else if maskReady}
+				<span>{t('textureReplacement.maskEditor.saved')}</span>
+			{:else if hasMarks}
+				<span>{t('textureReplacement.maskEditor.unsaved')}</span>
+			{/if}
+		</div>
+
+		<details class="mask-upload">
+			<summary id="mask-editor-upload-alternative">
+				{t('textureReplacement.maskEditor.uploadAlternative')}
+			</summary>
+			<ImageUpload
+				target="textureMask"
+				requiredLabel="textureReplacement.required"
+				disabled={disabled || uploading || !sourceUrl}
+				onUploadingChange={(value) => (fallbackUploading = value)}
+			/>
+		</details>
 	</div>
+{/snippet}
 
-	<details class="mask-upload">
-		<summary id="mask-editor-upload-alternative">
-			{t('textureReplacement.maskEditor.uploadAlternative')}
-		</summary>
-		<ImageUpload
-			target="textureMask"
-			requiredLabel="textureReplacement.required"
-			disabled={disabled || uploading || !sourceUrl}
-			onUploadingChange={(value) => (fallbackUploading = value)}
-		/>
-	</details>
+<div class="mask-editor">
+	{#if sourceUrl}
+		<div class="drawing-space">
+			<SceneViewport
+				source={sourceKey ?? request.pendingImagePreviewUrl ?? sourceUrl}
+				{imageRatio}
+				interactive
+			>
+				{#snippet children(viewport)}
+					{@const stageWidth = Math.min(viewport.width, viewport.height * imageRatio)}
+					{#key sourceIdentity}
+						<div
+							class={[
+								'drawing-stage',
+								{ disabled: disabled || editorBusy, lasso: tool === 'lasso' }
+							]}
+							style:width={`${stageWidth}px`}
+							style:height={`${stageWidth / imageRatio}px`}
+						>
+							<LazyImage
+								src={sourceUrl}
+								alt={t('textureReplacement.maskEditor.sourceAlt')}
+								loading="eager"
+								fetchPriority="high"
+								onReady={initializeCanvas}
+								onError={sourceLoadFailed}
+							/>
+							<canvas
+								{@attach attachCanvas}
+								aria-label={t('textureReplacement.maskEditor.canvasLabel')}
+								aria-describedby={tool === 'lasso'
+									? 'mask-editor-lasso-hint mask-editor-upload-alternative'
+									: 'mask-editor-upload-alternative'}
+								tabindex="0"
+								inert={comparing}
+								onkeydown={handleLassoKey}
+								onpointerdown={beginDrawing}
+								onpointerenter={updateBrushCursor}
+								onpointermove={handlePointerMove}
+								onpointerleave={hideBrushCursor}
+								onpointerup={stopDrawing}
+								onpointercancel={stopDrawing}
+								onlostpointercapture={stopDrawing}
+							></canvas>
+							{#if tool === 'lasso' && hasLassoDraft && canvasReady}
+								<svg
+									class="lasso-preview"
+									viewBox="0 0 {canvasWidth} {canvasHeight}"
+									preserveAspectRatio="none"
+									aria-hidden="true"
+								>
+									<polyline points={lassoPreview} />
+									{#each lassoPoints as point, index (index)}
+										<circle cx={point.x} cy={point.y} r="0.7%" class={{ first: index === 0 }} />
+									{/each}
+								</svg>
+							{/if}
+							{#if comparing && beforeImageUrl}
+								<div class="compare-overlay">
+									<CompareSlider
+										beforeSrc={beforeImageUrl}
+										afterSrc={sourceUrl}
+										beforeAlt={t('toolbar.before')}
+										afterAlt={t('toolbar.after')}
+										handleLabel={t('toolbar.compare')}
+									/>
+								</div>
+							{/if}
+							{#if brushCursor && brushCursorVisible}
+								<div
+									class={['brush-cursor', { eraser: tool === 'eraser' }]}
+									data-tool={tool}
+									aria-hidden="true"
+									style:left="{brushCursor.x}px"
+									style:top="{brushCursor.y}px"
+									style:width="{brushCursorWidth}px"
+									style:height="{brushCursorHeight}px"
+								></div>
+							{/if}
+						</div>
+					{/key}
+				{/snippet}
+			</SceneViewport>
+		</div>
+	{/if}
 </div>
 
 <style>
 	.mask-editor {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: 0.75rem;
+		height: 100%;
+		min-height: 0;
+	}
+	.mask-controls {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		min-height: 0;
+		margin-bottom: 1rem;
+	}
+	.drawing-space {
+		flex: 1 1 0;
+		min-height: 0;
+		min-width: 0;
+		display: grid;
+		place-items: center;
 	}
 
 	.editor-heading {
@@ -775,14 +852,15 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.drawing-stage {
-		--image-height: auto;
-		--image-position: static;
-		--image-img-height: auto;
-		--image-min-height: 12rem;
+		--image-height: 100%;
+		--image-position: absolute;
+		--image-img-height: 100%;
+		--image-min-height: 0;
 		--image-fit: contain;
 		position: relative;
 		width: 100%;
-		border: 1.5px solid var(--color-muted-strong);
+		outline: 1.5px solid var(--color-muted-strong);
+		outline-offset: -1.5px;
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		background:
@@ -852,6 +930,13 @@ before the Change Date. See LICENSE for complete terms.
 
 	.drawing-stage.disabled canvas {
 		cursor: not-allowed;
+	}
+
+	.compare-overlay {
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		background: var(--color-surface);
 	}
 
 	.brush-cursor {

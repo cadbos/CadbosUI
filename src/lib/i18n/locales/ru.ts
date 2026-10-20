@@ -15,6 +15,18 @@
 import type { Dictionary } from '$lib/i18n/locales';
 
 export const ru = {
+	'scene.panMode': 'Режим перемещения',
+	'toolbar.fullscreen': 'На весь экран',
+	'toolbar.exitFullscreen': 'Выйти из полноэкранного режима',
+	'toolbar.move': 'Переместить панель действий',
+	'render.finances': 'Стоимость и баланс',
+	'scene.zoomIn': 'Увеличить масштаб',
+	'scene.zoomOut': 'Уменьшить масштаб',
+	'scene.zoom': 'Масштаб изображения',
+	'scene.fit': 'Вписать изображение',
+	'scene.pan': 'Переместить изображение',
+	'scene.panHint':
+		'Для перемещения используйте стрелки, среднюю кнопку мыши или пробел с перетаскиванием.',
 	'app.title': 'ИИ – дизайн',
 	'app.subtitle': 'Создавайте и редактируйте интерьеры и экстерьеры по фото и описанию.',
 	'home.landing': 'Главная',

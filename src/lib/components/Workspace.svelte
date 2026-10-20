@@ -28,10 +28,19 @@ before the Change Date. See LICENSE for complete terms.
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { navigating, page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { onDestroy, type Snippet } from 'svelte';
+	import { innerWidth } from 'svelte/reactivity/window';
+	import { sceneView } from '$lib/state/scene-view.svelte';
+	import SceneActions from '$lib/components/SceneActions.svelte';
+	import SceneFinances from '$lib/components/SceneFinances.svelte';
 	import FloatingToolsPanel from '$lib/components/FloatingToolsPanel.svelte';
 	import HomeLanding from '$lib/components/HomeLanding.svelte';
 	import GenerateButton from '$lib/components/GenerateButton.svelte';
-	import { toolsPanel } from '$lib/state/tools-panel.svelte';
+	import {
+		clampToolsPanelWidth,
+		TOOLS_PANEL_WIDTH,
+		toolsPanel
+	} from '$lib/state/tools-panel.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import ImageSkeleton from '$lib/components/ImageSkeleton.svelte';
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
@@ -103,6 +112,7 @@ before the Change Date. See LICENSE for complete terms.
 	let submitError = $state<string | null>(null);
 	let modeTabs = $state<(HTMLElement | null)[]>([]);
 	let sceneTypeTabs = $state<HTMLElement[]>([]);
+	let maskControls = $state<Snippet | undefined>(undefined);
 	let scenesOpen = $state(false);
 	let scenesTrigger: HTMLButtonElement | null = null;
 	let shareOpen = $state(false);
@@ -163,6 +173,12 @@ before the Change Date. See LICENSE for complete terms.
 	// drags it elsewhere or collapses it, the canvas reclaims the full width
 	// rather than keeping a permanent gap for a panel that's no longer there.
 	const toolsPanelAtDefaultCorner = $derived(toolsPanel.open && toolsPanel.position === null);
+	const toolsPanelWidth = $derived(
+		clampToolsPanelWidth(
+			(sceneView.fullscreen ? sceneView.toolsWidth : toolsPanel.width) ?? TOOLS_PANEL_WIDTH,
+			innerWidth.current ?? TOOLS_PANEL_WIDTH
+		)
+	);
 	const validation = $derived(request.validate());
 	const canGenerate = $derived(validation.valid && !submitting && request.status !== 'rendering');
 
@@ -183,22 +199,24 @@ before the Change Date. See LICENSE for complete terms.
 		request.textureMaskUploading || request.activeTextureReplacementJobId !== undefined
 	);
 
-	$effect(() => {
+	function loadSceneLibrary(): void {
 		if (auth.canLoadGeneratedImages) void generatedImages.load();
 		else generatedImages.clear();
-	});
+	}
+	$effect(loadSceneLibrary);
 
 	// The mask editor needs a real, stable server URL (not a local blob:
 	// preview) to draw on — see resolveWorkingImageKey().
 	// Entering masked mode resolves the deferred main-photo upload eagerly
 	// instead of waiting for the texture-replacement submit itself.
-	$effect(() => {
+	function prepareMaskSource(): void {
 		if (showMaskOnCanvas) {
 			request
 				.resolveWorkingImageKey()
 				.catch((error: unknown) => logBoundaryError('workspace.maskEditorSourceUpload', error));
 		}
-	});
+	}
+	$effect(prepareMaskSource);
 
 	function openScenes(): void {
 		scenesOpen = true;
@@ -417,58 +435,21 @@ before the Change Date. See LICENSE for complete terms.
 		hydrated = true;
 	});
 
-	// Keeps the URL in sync with the current mode/request so the address bar is
-	// always a shareable link for what's on screen. Debounced so typing in a
-	// prompt fragment doesn't rewrite the URL on every keystroke.
-	//
-	// The synchronous `buildShareUrl(mode, request)` call below (result
-	// discarded) exists purely so this effect *tracks* mode/request as
-	// dependencies and re-schedules the timer whenever they change — that's
-	// what makes the debounce reactive at all. The URL actually used to
-	// navigate is rebuilt fresh *inside* the timeout instead of reusing that
-	// value, for two reasons: the sub-tab (view/tool/reference) has no backing
-	// store field, so it can only be read off the current query string (a
-	// plain DOM read, not a reactive `page` read, so it can't turn this effect
-	// into a feedback loop with the `goto()` call below); and reusing a value
-	// computed up front would go stale if the user changes the sub-tab (e.g.
-	// clicks the Graph tab) while a request-field debounce from a moment
-	// earlier is still pending — the timer would then fire with the *old*
-	// sub-tab and clobber the switch by navigating back to it.
-	//
-	// activeProjectId/activeSessionId are read synchronously too (alongside
-	// the buildShareUrl call above), for the same dependency-tracking reason:
-	// switching workspace tabs is a workspaceTabs mutation that buildShareUrl
-	// itself never reads (see its own doc comment), so without reading them
-	// here directly, switching tabs wouldn't re-schedule this effect at all.
-	// On the root there is no mode to serialize — buildShareUrl is skipped so
-	// this effect cannot invent /create — but those same reads still run, so
-	// a project restored after a reload (or still open after the logo link
-	// lands on /) is written as /?project=&session=&generation= once it is
-	// on screen.
-	// generationAnchor rides along the same way, so the `?generation=`
-	// anchor (see request.svelte.ts) always names what's on screen — a stored
-	// generation, or with `step=before` the image one was made from — moving
-	// with every new generation, edit, undo and redo, so a reload or a
-	// duplicated browser tab reopens that exact step.
-	//
-	// Paused while the URL's own target is still loading or has failed (see
-	// urlTargetStatus): the workspace doesn't show that target yet, so
-	// syncing would replace the link being opened with whatever is on screen
-	// in the meantime.
-	$effect(() => {
+	const serializedRequest = $derived(mode === null ? '/' : buildShareUrl(mode, request));
+	function scheduleUrlSync(): (() => void) | undefined {
 		if (!hydrated || urlTargetStatus !== 'idle' || navigating.to !== null) return;
 		const activeMode = mode;
 		const activeProjectId =
 			workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
 		const activeSessionId = workspaceTabs.activeTab.activeSessionTabId ?? undefined;
 		const generationAnchor = request.generationAnchor;
-		if (activeMode !== null) buildShareUrl(activeMode, request);
+		const requestSearch = serializedRequest;
 		const timer = setTimeout(() => {
 			if (navigating.to !== null) return;
 			const currentSearch = new URLSearchParams(window.location.search);
 			const base =
 				activeMode === null
-					? '/'
+					? requestSearch
 					: buildShareUrl(activeMode, request, subTabFromSearch(activeMode, currentSearch));
 			const url = withProjectSession(base, activeProjectId, activeSessionId, generationAnchor);
 			if (`${window.location.pathname}${window.location.search}` !== url) {
@@ -480,7 +461,8 @@ before the Change Date. See LICENSE for complete terms.
 			}
 		}, 400);
 		return () => clearTimeout(timer);
-	});
+	}
+	$effect(scheduleUrlSync);
 
 	// ensureProjectSession() (request.svelte.ts) can lazily create a real
 	// project+session while the scratch tab is live (the first generation from
@@ -489,7 +471,7 @@ before the Change Date. See LICENSE for complete terms.
 	// live tab as scratch and never writes the new ids into the address bar.
 	// Promotes the scratch tab into a real project tab the moment that
 	// happens; a no-op once it already has (see adoptScratchSession).
-	$effect(() => {
+	function adoptProvisionedSession(): void {
 		if (workspaceTabs.activeTabId === SCRATCH_TAB_ID && request.projectId && request.sessionId) {
 			workspaceTabs.adoptScratchSession(
 				request.projectId,
@@ -498,7 +480,8 @@ before the Change Date. See LICENSE for complete terms.
 				null
 			);
 		}
-	});
+	}
+	$effect(adoptProvisionedSession);
 
 	// Keeps the active mode/tool in lockstep with whichever render undo/redo
 	// (RenderResult.svelte's toolbar) is currently showing. Each step's
@@ -510,7 +493,7 @@ before the Change Date. See LICENSE for complete terms.
 	// activeEditTool themselves — switching tabs by hand must never be
 	// mistaken for "the step changed" and snapped back.
 	let lastSyncedRenderId: string | undefined;
-	$effect(() => {
+	function syncRenderOrigin(): void {
 		if (!hydrated) return;
 		const renderId = request.currentRender?.id;
 		if (renderId === lastSyncedRenderId) return;
@@ -535,7 +518,8 @@ before the Change Date. See LICENSE for complete terms.
 				noScroll: true
 			}
 		).catch((error: unknown) => logBoundaryError('workspace.renderOriginSync', error));
-	});
+	}
+	$effect(syncRenderOrigin);
 
 	async function generate(): Promise<void> {
 		if (!canGenerate) return;
@@ -597,14 +581,6 @@ before the Change Date. See LICENSE for complete terms.
 	// The tab bar row toggling on/off changes that height, so it's measured
 	// live and published as a CSS var (--workspace-header-bottom, read by
 	// FloatingToolsPanel.svelte) rather than assuming a fixed size.
-	//
-	// getBoundingClientRect().bottom alone is viewport-relative — it shrinks
-	// as the page scrolls, which would drag a *fixed*-position panel up the
-	// screen on every scroll instead of leaving it where a floating panel
-	// belongs. Adding scrollY back converts it to the header's stable
-	// document-relative position, so the published value stays correct
-	// regardless of scroll offset at the moment a resize is observed (e.g.
-	// the tab bar appearing while the page happens to be scrolled).
 	let workspaceHeaderBottom = $state<number | null>(null);
 
 	function modeTabsLabelWidth(node: HTMLElement): number {
@@ -661,9 +637,16 @@ before the Change Date. See LICENSE for complete terms.
 		};
 	}
 
+	function sceneKeys(event: KeyboardEvent): void {
+		if (event.key === 'Escape' && sceneView.fullscreen && !document.querySelector('dialog[open]')) {
+			event.preventDefault();
+			sceneView.exit();
+		}
+	}
+	onDestroy(() => sceneView.exit());
 	function measureWorkspaceHeader(node: HTMLElement): () => void {
 		const update = () => {
-			workspaceHeaderBottom = node.getBoundingClientRect().bottom + window.scrollY;
+			workspaceHeaderBottom = node.getBoundingClientRect().bottom;
 		};
 		update();
 		const observer = new ResizeObserver(update);
@@ -671,6 +654,8 @@ before the Change Date. See LICENSE for complete terms.
 		return () => observer.disconnect();
 	}
 </script>
+
+<svelte:window onkeydown={sceneKeys} />
 
 {#snippet modeSwitcher()}
 	<div
@@ -709,79 +694,94 @@ before the Change Date. See LICENSE for complete terms.
 {#if showLanding}
 	<HomeLanding />
 {:else}
-	<main class="page">
+	<main
+		class={[
+			'page',
+			{ 'scene-active': request.hasWorkingImage(), 'scene-fullscreen': sceneView.fullscreen }
+		]}
+	>
 		<div class="workspace-shell">
 			<div
 				class="workspace-main"
-				style:--tools-panel-width={toolsPanel.width !== null ? `${toolsPanel.width}px` : undefined}
+				style:--tools-panel-width={`${toolsPanelWidth}px`}
+				style:--scene-actions-height={`${sceneView.actionsHeight}px`}
 				style:--workspace-header-bottom={workspaceHeaderBottom !== null
 					? `${workspaceHeaderBottom}px`
 					: undefined}
 			>
 				<div class="workspace-header" {@attach measureWorkspaceHeader}>
-					{#if isAuthenticated}
-						<div class="workspace-row">
-							<a class="resources-button" href={resolve('/projects', {})}>
-								<FolderKanban size={18} strokeWidth={1.8} aria-hidden="true" />
-								<span>{t('projects.navLabel')}</span>
-							</a>
-							{#if showWorkspaceTabs}
-								<WorkspaceTabBar>
-									{#snippet activeActions()}
-										<button
-											{@attach (node) => {
-												shareTrigger = node as HTMLButtonElement;
-												return () => {
-													shareTrigger = null;
-												};
-											}}
-											type="button"
-											class="tab-share"
-											aria-expanded={shareOpen}
-											aria-label={t('workspace.shareButton')}
-											title={t('workspace.shareButton')}
-											onclick={() => (shareOpen = true)}
-										>
-											<Share2 size={18} strokeWidth={1.8} aria-hidden="true" />
-										</button>
-									{/snippet}
-								</WorkspaceTabBar>
-							{/if}
-							<button
-								{@attach (node) => {
-									scenesTrigger = node as HTMLButtonElement;
-									return () => {
-										scenesTrigger = null;
-									};
-								}}
-								type="button"
-								class="scenes-button"
-								aria-expanded={scenesOpen}
-								aria-controls="scenes-drawer"
-								onclick={openScenes}
-							>
-								<Images size={18} strokeWidth={1.8} aria-hidden="true" />
-								<span>{t('generatedImages.title')}</span>
-							</button>
-							<a class="resources-button" href={resolve('/resources', {})}>
-								<GalleryHorizontalEnd size={18} strokeWidth={1.8} aria-hidden="true" />
-								<span>{t('resources.title')}</span>
-							</a>
-						</div>
-					{/if}
-
-					{#if isAuthenticated && showSessionTabs}
-						<div class="workspace-row">
-							<a
-								class="resources-button"
-								href={resolve('/projects/[id]', { id: workspaceTabs.activeTabId })}
-							>
-								<Layers size={18} strokeWidth={1.8} aria-hidden="true" />
-								<span>{t('workspace.sessionsButton')}</span>
-							</a>
-							<SessionTabBar />
-						</div>
-					{/if}
+					<div class="workspace-navigation" hidden={sceneView.fullscreen}>
+						{#if isAuthenticated}
+							<div class="workspace-row">
+								<a class="resources-button" href={resolve('/projects', {})}>
+									<FolderKanban size={18} strokeWidth={1.8} aria-hidden="true" />
+									<span>{t('projects.navLabel')}</span>
+								</a>
+								{#if showWorkspaceTabs}
+									<WorkspaceTabBar>
+										{#snippet activeActions()}
+											<button
+												{@attach (node) => {
+													shareTrigger = node as HTMLButtonElement;
+													return () => {
+														shareTrigger = null;
+													};
+												}}
+												type="button"
+												class="tab-share"
+												aria-expanded={shareOpen}
+												aria-label={t('workspace.shareButton')}
+												title={t('workspace.shareButton')}
+												onclick={() => (shareOpen = true)}
+											>
+												<Share2 size={18} strokeWidth={1.8} aria-hidden="true" />
+											</button>
+										{/snippet}
+									</WorkspaceTabBar>
+								{/if}
+								<button
+									{@attach (node) => {
+										scenesTrigger = node as HTMLButtonElement;
+										return () => {
+											scenesTrigger = null;
+										};
+									}}
+									type="button"
+									class="scenes-button"
+									aria-expanded={scenesOpen}
+									aria-controls="scenes-drawer"
+									onclick={openScenes}
+								>
+									<Images size={18} strokeWidth={1.8} aria-hidden="true" />
+									<span>{t('generatedImages.title')}</span>
+								</button>
+								<a class="resources-button" href={resolve('/resources', {})}>
+									<GalleryHorizontalEnd size={18} strokeWidth={1.8} aria-hidden="true" />
+									<span>{t('resources.title')}</span>
+								</a>
+							</div>
+						{/if}
+					</div>
+					<div class="session-actions-row">
+						{#if isAuthenticated && showSessionTabs}
+							<div class="workspace-row session-tabs" hidden={sceneView.fullscreen}>
+								<a
+									class="resources-button"
+									href={resolve('/projects/[id]', { id: workspaceTabs.activeTabId })}
+								>
+									<Layers size={18} strokeWidth={1.8} aria-hidden="true" />
+									<span>{t('workspace.sessionsButton')}</span>
+								</a>
+								<SessionTabBar />
+							</div>
+						{/if}
+						{#if request.hasWorkingImage()}
+							<SceneActions
+								photoProcessingMode={mode === 'edit' && activeEditTool === 'photo-processing'}
+							/>
+							<div class="scene-finances" hidden={sceneView.fullscreen}><SceneFinances /></div>
+						{/if}
+					</div>
 				</div>
 
 				{#if urlTargetStatus === 'loading'}
@@ -816,7 +816,10 @@ before the Change Date. See LICENSE for complete terms.
 			     `.canvas-layout` shape so the workspace footprint never changes
 			     between modes. -->
 				<div
-					class={['canvas-layout', { 'reserve-panel-space': toolsPanelAtDefaultCorner }]}
+					class={[
+						'canvas-layout',
+						{ 'reserve-panel-space': toolsPanelAtDefaultCorner && !sceneView.fullscreen }
+					]}
 					role="tabpanel"
 					id="mode-panel-render"
 					aria-labelledby="mode-tab-render"
@@ -910,7 +913,10 @@ before the Change Date. See LICENSE for complete terms.
 				</div>
 
 				<div
-					class={['canvas-layout', { 'reserve-panel-space': toolsPanelAtDefaultCorner }]}
+					class={[
+						'canvas-layout',
+						{ 'reserve-panel-space': toolsPanelAtDefaultCorner && !sceneView.fullscreen }
+					]}
 					role="tabpanel"
 					id="mode-panel-edit"
 					aria-labelledby="mode-tab-edit"
@@ -925,6 +931,9 @@ before the Change Date. See LICENSE for complete terms.
 								onerror={(error: unknown) => logBoundaryError('workspace.maskEditor', error)}
 							>
 								<MaskEditor
+									onControls={(controls) => {
+										maskControls = controls;
+									}}
 									sourceUrl={request.workingImageUrl()}
 									sourceKey={request.workingImageKey()}
 									disabled={maskEditorLocked}
@@ -968,7 +977,10 @@ before the Change Date. See LICENSE for complete terms.
 						<svelte:boundary
 							onerror={(error: unknown) => logBoundaryError('workspace.editPanel', error)}
 						>
-							<EditPanel active={mode === 'edit'} />
+							<EditPanel
+								active={mode === 'edit'}
+								maskControls={showMaskOnCanvas ? maskControls : undefined}
+							/>
 							{#snippet failed(_error: unknown, reset: () => void)}
 								<p class="boundary-failed">{t('boundary.failed')}</p>
 								<button type="button" class="boundary-retry" onclick={reset}>
@@ -980,7 +992,10 @@ before the Change Date. See LICENSE for complete terms.
 				</div>
 
 				<div
-					class={['canvas-layout', { 'reserve-panel-space': toolsPanelAtDefaultCorner }]}
+					class={[
+						'canvas-layout',
+						{ 'reserve-panel-space': toolsPanelAtDefaultCorner && !sceneView.fullscreen }
+					]}
 					role="tabpanel"
 					id="mode-panel-styleTransfer"
 					aria-labelledby="mode-tab-styleTransfer"
@@ -1036,6 +1051,11 @@ before the Change Date. See LICENSE for complete terms.
 {/if}
 
 <style>
+	.workspace-navigation[hidden],
+	.workspace-row[hidden],
+	.scene-finances[hidden] {
+		display: none;
+	}
 	.page {
 		min-height: calc(100dvh - var(--app-chrome-height, 0px));
 		padding: 2rem 1rem 4rem;
@@ -1415,6 +1435,143 @@ before the Change Date. See LICENSE for complete terms.
 		.scenes-button,
 		.resources-button {
 			padding-inline: 0.75rem;
+		}
+	}
+	.workspace-navigation {
+		width: 100%;
+	}
+	.session-actions-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		width: 100%;
+		min-width: 0;
+		flex-wrap: wrap;
+	}
+	.session-tabs {
+		flex: 1 1 12rem;
+		width: auto;
+		min-width: 0;
+	}
+	.scene-finances {
+		margin-left: auto;
+	}
+	.page.scene-active {
+		height: calc(100dvh - var(--app-chrome-height, 0px));
+		min-height: 0;
+		padding: 0.75rem 1rem;
+		gap: 0.75rem;
+	}
+	.scene-active .workspace-shell,
+	.scene-active .workspace-main {
+		height: 100%;
+		min-height: 0;
+	}
+	.scene-active .workspace-main {
+		gap: 0.75rem;
+	}
+	.scene-active .workspace-header {
+		gap: 0.75rem;
+		flex: 0 0 auto;
+	}
+	.scene-active .canvas-layout:not([hidden]) {
+		flex: 1 1 0;
+		min-height: 0;
+		align-items: stretch;
+	}
+	.scene-active .canvas-col {
+		min-height: 0;
+		overflow: auto;
+	}
+	.scene-active .canvas-col > :global(.upload.has-image) {
+		flex: 1;
+		min-height: 0;
+	}
+	.scene-active .canvas-col > :global(.upload.has-image .image-wrapper) {
+		height: 100%;
+		min-height: 0;
+		aspect-ratio: auto;
+		resize: none;
+		width: 100%;
+	}
+	.scene-active .canvas-col > section {
+		height: 100%;
+		min-height: 0;
+	}
+	.page.scene-fullscreen {
+		position: fixed;
+		inset: 0;
+		z-index: 30;
+		height: 100dvh;
+		padding: 1rem;
+		background: var(--color-background);
+		--workspace-header-bottom: 0px;
+	}
+	.scene-fullscreen .workspace-main {
+		max-width: none;
+		gap: 0;
+	}
+	.scene-fullscreen .workspace-shell {
+		max-width: none;
+	}
+	.scene-fullscreen .workspace-header {
+		height: 0;
+	}
+	.scene-fullscreen .canvas-layout {
+		padding: 0;
+	}
+	.scene-fullscreen :global(.floating-tools-panel) {
+		z-index: 35;
+	}
+	.scene-fullscreen :global(.floating-tools-panel.at-default-corner) {
+		top: calc(var(--scene-actions-height, 48px) + 2rem);
+		max-height: calc(100dvh - var(--scene-actions-height, 48px) - 3rem);
+	}
+	@media (max-width: 900px) {
+		.session-tabs {
+			flex: 1 1 0;
+			order: 0;
+		}
+		.scene-finances {
+			order: 1;
+		}
+		.session-actions-row > :global(.toolbar) {
+			order: 2;
+		}
+		.scene-active .canvas-col {
+			flex: 1 1 0;
+			min-height: calc(5rem + 52px);
+		}
+		.scene-active :global(.floating-tools-panel) {
+			flex: 0 1 35dvh;
+			min-height: 0;
+			max-height: min(35dvh, 100%);
+		}
+		.scene-fullscreen :global(.floating-tools-panel) {
+			position: fixed;
+			right: 1rem;
+			width: min(360px, calc(100vw - 2rem));
+		}
+	}
+	@media (max-width: 440px) {
+		.scene-active .workspace-main,
+		.scene-active .workspace-header,
+		.scene-active .canvas-layout {
+			gap: 0.25rem;
+		}
+		.workspace-row,
+		.session-actions-row {
+			row-gap: 0.25rem;
+		}
+		.workspace-row {
+			flex-direction: row;
+			flex-wrap: wrap;
+		}
+		.session-tabs {
+			flex-wrap: nowrap;
+		}
+		.page.scene-active:not(.scene-fullscreen) {
+			padding: 0.5rem;
 		}
 	}
 </style>

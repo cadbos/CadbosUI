@@ -22,6 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 	import favicon from '$lib/assets/favicon.svg';
 	import AuthBar from '$lib/components/AuthBar.svelte';
 	import GenerationOverlay from '$lib/components/GenerationOverlay.svelte';
+	import { sceneView } from '$lib/state/scene-view.svelte';
 	import Workspace from '$lib/components/Workspace.svelte';
 	import { hydrateLocale, t } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
@@ -57,20 +58,21 @@ before the Change Date. See LICENSE for complete terms.
 		appHeaderHeight +
 			Math.max(0, (showHealthWarning ? healthWarningHeight : 0) - (scrollY.current ?? 0))
 	);
-	setToolsPanelTopBoundary(() => appHeaderBottom);
+	setToolsPanelTopBoundary(() => (sceneView.fullscreen ? 0 : appHeaderBottom));
 
 	// Page content fills the viewport *below* the header and health warning
 	// (both sit in normal flow), so pages size their min-height against
 	// `100dvh - var(--app-chrome-height)`; a bare 100dvh would always overflow
 	// the viewport by the chrome's height and force a pointless scrollbar.
-	$effect(() => {
+	function publishAppChromeHeight(): () => void {
 		const root = document.documentElement;
 		root.style.setProperty(
 			'--app-chrome-height',
 			`${appHeaderHeight + (showHealthWarning ? healthWarningHeight : 0)}px`
 		);
 		return () => root.style.removeProperty('--app-chrome-height');
-	});
+	}
+	$effect(publishAppChromeHeight);
 
 	onMount(() => {
 		auth.loadSession();
@@ -97,7 +99,7 @@ before the Change Date. See LICENSE for complete terms.
 	<meta name="theme-color" content="#2f6f4f" />
 </svelte:head>
 
-{#if showHealthWarning}
+{#if showHealthWarning && !sceneView.fullscreen}
 	<div class="health-warning" role="alert" bind:offsetHeight={healthWarningHeight}>
 		<p>
 			{t('health.warning')}
@@ -109,7 +111,7 @@ before the Change Date. See LICENSE for complete terms.
 	</div>
 {/if}
 
-<header class="app-header" bind:offsetHeight={appHeaderHeight}>
+<header hidden={sceneView.fullscreen} class="app-header" bind:offsetHeight={appHeaderHeight}>
 	<a class="brand" href={resolve('/', {})}>
 		<img class="brand-mark" src={favicon} alt="" />
 		<div class="brand-copy">
@@ -131,6 +133,9 @@ before the Change Date. See LICENSE for complete terms.
 <GenerationOverlay />
 
 <style>
+	.app-header[hidden] {
+		display: none;
+	}
 	.health-warning {
 		width: 100%;
 		padding: 0.625rem clamp(1rem, 3vw, 2rem);

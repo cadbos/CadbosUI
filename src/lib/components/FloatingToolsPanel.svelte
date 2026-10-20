@@ -16,6 +16,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { onMount, type Snippet } from 'svelte';
 	import { innerHeight, innerWidth } from 'svelte/reactivity/window';
 	import { ChevronDown, ChevronUp, Move, MoveHorizontal, SlidersHorizontal } from '@lucide/svelte';
+	import { sceneView } from '$lib/state/scene-view.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import {
 		clampToolsPanelPosition,
@@ -35,25 +36,34 @@ before the Change Date. See LICENSE for complete terms.
 
 	let { active, children, header }: Props = $props();
 
+	const chosenPosition = $derived(
+		sceneView.fullscreen ? sceneView.toolsPosition : toolsPanel.position
+	);
+	const chosenWidth = $derived(sceneView.fullscreen ? sceneView.toolsWidth : toolsPanel.width);
+	const fittedWidth = $derived(
+		clampToolsPanelWidth(chosenWidth ?? TOOLS_PANEL_WIDTH, innerWidth.current ?? TOOLS_PANEL_WIDTH)
+	);
+	function updatePosition(x: number, y: number): void {
+		if (sceneView.fullscreen) sceneView.toolsPosition = { x, y };
+		else toolsPanel.updatePosition(x, y);
+	}
+	function updateWidth(width: number, persist = false): void {
+		if (sceneView.fullscreen) sceneView.toolsWidth = width;
+		else if (persist) toolsPanel.setWidth(width);
+		else toolsPanel.updateWidth(width);
+	}
 	const topBoundary = getToolsPanelTopBoundary();
 	const uid = $props.id();
 	const bodyId = `${uid}-body`;
 
 	let panelWidth = $state(TOOLS_PANEL_WIDTH);
 	let panelHeight = $state(0);
+	let panelBarHeight = $state(0);
 	// The actual reachable maximum — shared by aria-valuemax and the End-key
 	// branch below so the announced max always matches what End produces.
 	let maxWidth = $derived(
 		clampToolsPanelWidth(Number.MAX_SAFE_INTEGER, innerWidth.current ?? TOOLS_PANEL_WIDTH)
 	);
-
-	$effect(() => {
-		const viewport = innerWidth.current;
-		const chosen = toolsPanel.width;
-		if (viewport === undefined || chosen === null) return;
-		const fitted = clampToolsPanelWidth(chosen, viewport);
-		if (fitted !== chosen) toolsPanel.setWidth(fitted);
-	});
 
 	// Where the panel is actually drawn: the user's chosen position, kept
 	// inside the current viewport and below the app header. Derived rather
@@ -63,7 +73,7 @@ before the Change Date. See LICENSE for complete terms.
 	// position persisted under the header by an earlier session is rendered
 	// correctly without rewriting it. null = CSS-anchored default corner.
 	let position = $derived.by(() => {
-		const chosen = toolsPanel.position;
+		const chosen = chosenPosition;
 		if (chosen === null || innerWidth.current === undefined || innerHeight.current === undefined) {
 			return chosen;
 		}
@@ -71,7 +81,7 @@ before the Change Date. See LICENSE for complete terms.
 			chosen.x,
 			chosen.y,
 			panelWidth,
-			panelHeight,
+			Math.min(panelHeight, Math.max(panelBarHeight, innerHeight.current - chosen.y - 16)),
 			innerWidth.current,
 			innerHeight.current,
 			topBoundary()
@@ -122,7 +132,7 @@ before the Change Date. See LICENSE for complete terms.
 		// Not persisted here — pointermove fires far too often to justify a
 		// localStorage write on every event. The final position is persisted
 		// once the drag ends, in endDrag below.
-		toolsPanel.updatePosition(next.x, next.y);
+		updatePosition(next.x, next.y);
 	}
 
 	function endDrag(event: PointerEvent): boolean {
@@ -130,7 +140,7 @@ before the Change Date. See LICENSE for complete terms.
 		if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
 		const wasDrag = drag?.moved ?? false;
 		drag = null;
-		if (wasDrag) toolsPanel.persist();
+		if (wasDrag && !sceneView.fullscreen) toolsPanel.persist();
 		return wasDrag;
 	}
 
@@ -151,7 +161,7 @@ before the Change Date. See LICENSE for complete terms.
 	function placeWidth(nextWidth: number, persist: boolean): void {
 		const width = clampWidth(nextWidth);
 		const drawn = position;
-		if (drawn && toolsPanel.position !== null) {
+		if (drawn && chosenPosition !== null) {
 			const placed = clampToolsPanelPosition(
 				drawn.x,
 				drawn.y,
@@ -161,14 +171,13 @@ before the Change Date. See LICENSE for complete terms.
 				window.innerHeight,
 				topBoundary()
 			);
-			toolsPanel.updatePosition(placed.x, placed.y);
+			updatePosition(placed.x, placed.y);
 		}
-		if (persist) toolsPanel.setWidth(width);
-		else toolsPanel.updateWidth(width);
+		updateWidth(width, persist);
 	}
 
 	function cycleSizePreset(): void {
-		const current = toolsPanel.width ?? panelWidth;
+		const current = fittedWidth;
 		placeWidth(nextToolsPanelSizePreset(current, window.innerWidth), true);
 	}
 
@@ -190,21 +199,21 @@ before the Change Date. See LICENSE for complete terms.
 		// it. Once dragged to an explicit position it's anchored to its left
 		// edge (`left: var(--tools-panel-x)`) and grows rightward instead, like
 		// ScenesDrawer's drawer — so the sign flips.
-		const delta = toolsPanel.position === null ? -dx : dx;
+		const delta = chosenPosition === null ? -dx : dx;
 		placeWidth(resizeStartWidth + delta, false);
 	}
 
 	function onResizeHandlePointerUp(event: PointerEvent): void {
 		const target = event.currentTarget as HTMLElement;
 		if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
-		toolsPanel.persist();
+		if (!sceneView.fullscreen) toolsPanel.persist();
 	}
 
 	function onResizeHandleKeydown(event: KeyboardEvent): void {
 		// The stored width updates synchronously, unlike the measured one (a
 		// ResizeObserver lags a frame behind), so held-down arrow keys can't
 		// step from a stale value.
-		const current = toolsPanel.width ?? panelWidth;
+		const current = fittedWidth;
 		let next: number;
 		if (event.key === 'ArrowLeft') next = current - RESIZE_STEP;
 		else if (event.key === 'ArrowRight') next = current + RESIZE_STEP;
@@ -221,8 +230,11 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <div
-	class="floating-tools-panel"
-	class:at-default-corner={position === null}
+	class={[
+		'floating-tools-panel',
+		{ 'scene-fullscreen': sceneView.fullscreen, 'at-default-corner': position === null }
+	]}
+	style:--tools-panel-width={`${fittedWidth}px`}
 	style:--tools-panel-x={position ? `${position.x}px` : undefined}
 	style:--tools-panel-y={position ? `${position.y}px` : undefined}
 	bind:offsetWidth={panelWidth}
@@ -230,6 +242,7 @@ before the Change Date. See LICENSE for complete terms.
 >
 	<div
 		class="panel-bar"
+		bind:offsetHeight={panelBarHeight}
 		role="group"
 		aria-label={t('toolsPanel.title')}
 		onpointerdown={onBarPointerDown}
@@ -294,6 +307,12 @@ before the Change Date. See LICENSE for complete terms.
 </div>
 
 <style>
+	.floating-tools-panel.scene-fullscreen:not(.at-default-corner) {
+		left: var(--tools-panel-x);
+		top: var(--tools-panel-y);
+		right: auto;
+		max-height: calc(100dvh - var(--tools-panel-y) - 1rem);
+	}
 	.floating-tools-panel {
 		position: fixed;
 		z-index: var(--z-tools-panel);
@@ -421,6 +440,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.panel-body {
+		position: relative;
 		flex: 1 1 auto;
 		min-height: 0;
 		margin-top: 0.5rem;

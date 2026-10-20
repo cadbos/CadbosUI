@@ -21,6 +21,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { photoProcessing } from '$lib/state/photo-processing.svelte';
 	import { request } from '$lib/state/request.svelte';
 
+	let naturalRatio = $state<number | undefined>(undefined);
 	const sourceUrl = $derived(photoProcessing.sourceUrl);
 	function displayImage(host: HTMLDivElement): () => void {
 		const readyImage = photoProcessing.previewImage;
@@ -28,6 +29,7 @@ before the Change Date. See LICENSE for complete terms.
 		const alt = t('photoProcessing.previewAlt');
 		let cancelled = false;
 		if (readyImage) {
+			naturalRatio = readyImage.naturalWidth / readyImage.naturalHeight;
 			readyImage.alt = alt;
 			host.replaceChildren(readyImage);
 		} else if (source) {
@@ -37,7 +39,10 @@ before the Change Date. See LICENSE for complete terms.
 			image.src = source;
 			void image.decode().then(
 				() => {
-					if (!cancelled) host.replaceChildren(image);
+					if (!cancelled) {
+						naturalRatio = image.naturalWidth / image.naturalHeight;
+						host.replaceChildren(image);
+					}
 				},
 				(error: unknown) => {
 					if (!cancelled) photoProcessing.reportPreviewError(error);
@@ -49,17 +54,18 @@ before the Change Date. See LICENSE for complete terms.
 		};
 	}
 
-	$effect(() => {
+	function renderPreview(): void {
 		const source = sourceUrl;
 		const settings = { ...request.photoAdjustments };
 		if (!source) return;
 		photoProcessing.preview(source, settings);
-	});
+	}
+	$effect(renderPreview);
 
 	onDestroy(() => photoProcessing.clearPreview());
 </script>
 
-<RenderResult photoProcessingMode>
+<RenderResult photoProcessingMode {naturalRatio}>
 	{#snippet imagePreview()}
 		<div class="preview" aria-busy={photoProcessing.loading}>
 			<div class="preview-image" {@attach displayImage}></div>
@@ -78,16 +84,24 @@ before the Change Date. See LICENSE for complete terms.
 <style>
 	.preview {
 		position: relative;
+		min-width: 0;
+		min-height: 0;
 		width: 100%;
 		height: 100%;
 	}
 
 	.preview-image {
+		position: absolute;
+		inset: 0;
+		min-width: 0;
+		min-height: 0;
 		width: 100%;
 		height: 100%;
 	}
 
 	.preview-image :global(img) {
+		position: absolute;
+		inset: 0;
 		width: 100%;
 		height: 100%;
 		object-fit: contain;

@@ -15,6 +15,17 @@
 import type { Dictionary } from '$lib/i18n/locales';
 
 export const en = {
+	'scene.panMode': 'Pan mode',
+	'toolbar.fullscreen': 'Full screen',
+	'toolbar.exitFullscreen': 'Exit full screen',
+	'toolbar.move': 'Move scene actions',
+	'render.finances': 'Cost and balance',
+	'scene.zoomIn': 'Zoom in',
+	'scene.zoomOut': 'Zoom out',
+	'scene.zoom': 'Image zoom',
+	'scene.fit': 'Fit image',
+	'scene.pan': 'Pan image',
+	'scene.panHint': 'Pan using arrow keys, the middle mouse button, or Space and drag.',
 	'app.title': 'AI Design',
 	'app.subtitle': 'Create and edit interiors and exteriors from a photo and description.',
 	'home.landing': 'Home',

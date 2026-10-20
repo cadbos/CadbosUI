@@ -15,6 +15,7 @@
 import type { Locator, Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
+import { ru } from '$lib/i18n/locales/ru';
 import { media, mediaKey } from './helpers/media';
 import { mockProjectSessionRoutes } from './helpers/project-session-routes';
 import { mockSceneFilterOptions } from './helpers/scene-routes';
@@ -425,6 +426,10 @@ test('generating with the exterior scene type calls the exterior render route', 
 		.setInputFiles({ name: 'house.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
 	const uploadedImage = page.locator('#mode-panel-render .image-wrapper img');
 	await expect(uploadedImage).toHaveAttribute('src', /^blob:/);
+	await page.getByRole('button', { name: ru['scene.zoomIn'], exact: true }).click();
+	await expect(page.getByRole('slider', { name: ru['scene.zoom'], exact: true })).toHaveValue(
+		'125'
+	);
 	const uploadViewportStyles = await page
 		.locator('#mode-panel-render .image-wrapper')
 		.evaluate((viewport) => {
@@ -439,7 +444,7 @@ test('generating with the exterior scene type calls the exterior render route', 
 			};
 		});
 	expect(uploadViewportStyles).toEqual({
-		aspectRatio: '16 / 9',
+		aspectRatio: 'auto',
 		backgroundColor: 'rgb(245, 245, 247)',
 		objectFit: 'contain'
 	});

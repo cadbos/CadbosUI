@@ -16,6 +16,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { ImagePlus, Import } from '@lucide/svelte';
 	import { tick } from 'svelte';
 	import { uploadResultSchema } from '$lib/api/contract';
+	import SceneViewport from '$lib/components/SceneViewport.svelte';
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import RegionSelector from '$lib/components/RegionSelector.svelte';
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
@@ -427,11 +428,10 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <div
-	class="upload"
-	class:has-image={hasImage}
-	class:drag-over={dragOver}
-	class:has-error={error !== null}
-	class:compact
+	class={[
+		'upload',
+		{ 'has-image': hasImage, 'drag-over': dragOver, 'has-error': error !== null, compact }
+	]}
 	ondragover={onDragOver}
 	ondragleave={onDragLeave}
 	ondrop={onDrop}
@@ -439,33 +439,40 @@ before the Change Date. See LICENSE for complete terms.
 	aria-label={controlLabel}
 >
 	{#if hasImage}
-		<div class="image-wrapper">
-			<LazyImage
-				class="preview"
-				src={effectivePreviewUrl ?? imageUrl ?? ''}
-				alt={t(ariaLabelKey)}
-				loading="eager"
-				fetchPriority="high"
-				onReady={rememberImageSize}
-			/>
-			{#if regionTool && imageSize}
-				<RegionSelector
-					region={regionTool === 'repaint'
-						? request.activeRepaintRegion()
-						: request.activeObjectReplacementRegion()}
-					naturalWidth={imageSize.width}
-					naturalHeight={imageSize.height}
-					boxLabel={t(
-						regionTool === 'repaint'
-							? 'repaint.region.boxLabel'
-							: 'objectReplacement.region.boxLabel'
-					)}
-					onchange={(region) =>
-						regionTool === 'repaint'
-							? request.setRepaintRegion(region)
-							: request.setObjectReplacementRegion(region)}
+		<div class={['image-wrapper', { 'scene-image': target === 'room' && !compact }]}>
+			<SceneViewport
+				enabled={target === 'room' && !compact}
+				source={request.workingImageKey() ?? request.pendingImagePreviewUrl}
+				imageRatio={imageSize ? imageSize.width / imageSize.height : undefined}
+				interactive={Boolean(regionTool)}
+			>
+				<LazyImage
+					class="preview"
+					src={effectivePreviewUrl ?? imageUrl ?? ''}
+					alt={t(ariaLabelKey)}
+					loading="eager"
+					fetchPriority="high"
+					onReady={rememberImageSize}
 				/>
-			{/if}
+				{#if regionTool && imageSize}
+					<RegionSelector
+						region={regionTool === 'repaint'
+							? request.activeRepaintRegion()
+							: request.activeObjectReplacementRegion()}
+						naturalWidth={imageSize.width}
+						naturalHeight={imageSize.height}
+						boxLabel={t(
+							regionTool === 'repaint'
+								? 'repaint.region.boxLabel'
+								: 'objectReplacement.region.boxLabel'
+						)}
+						onchange={(region) =>
+							regionTool === 'repaint'
+								? request.setRepaintRegion(region)
+								: request.setObjectReplacementRegion(region)}
+					/>
+				{/if}
+			</SceneViewport>
 			<div class="image-overlay">
 				<div class="image-actions">
 					<button
@@ -665,6 +672,9 @@ before the Change Date. See LICENSE for complete terms.
 		resize: both;
 	}
 
+	.image-wrapper.scene-image {
+		border: 0;
+	}
 	.image-overlay {
 		position: absolute;
 		inset: 0;
