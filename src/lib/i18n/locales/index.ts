@@ -128,7 +128,6 @@ export interface Dictionary {
 	'view.comingSoon': string;
 	'view.chat.prompt': string;
 	'view.chat.placeholder': string;
-	'view.chat.hint': string;
 	'view.keyValue.label': string;
 	'view.keyValue.text': string;
 	'view.keyValue.addFragment': string;
@@ -240,6 +239,8 @@ export interface Dictionary {
 	'render.sceneType.exterior': string;
 	'render.generate': string;
 	'render.optional': string;
+	'render.autoEnhance.label': string;
+	'render.autoEnhance.hint': string;
 	'generation.signInToStart': string;
 	'generation.startHint': string;
 	'render.outputFormat': string;
@@ -342,6 +343,7 @@ export interface Dictionary {
 	'generatedImages.promptLoading': string;
 	'generatedImages.promptFailed': string;
 	'generatedImages.promptEmpty': string;
+	'generatedImages.promptAutoEnhance': string;
 	'generatedImages.promptClose': string;
 	'usage.title': string;
 	'usage.subtitle': string;

@@ -562,6 +562,76 @@ test('asks before replacing unsaved work in the restored session’s background 
 	await expect(page.getByLabel('Промпт чата')).toHaveValue('unsaved living room idea');
 });
 
+test('labels only Create generations as Auto-enhance in the prompt dialog', async ({ page }) => {
+	// Auto-enhance stays on in the form while the user moves on to Edit, so the
+	// edit's snapshot carries it too; the edit still had a real prompt.
+	const snapshot = { ...FORM_SNAPSHOT, autoEnhance: true };
+	const generations = [
+		{ id: GENERATION_ID, kind: 'edit', prompt: 'убери стул', number: 2 },
+		{ id: ADD_OBJECT_GENERATION_ID, kind: 'render', prompt: '', number: 1 }
+	];
+	await authenticate(page);
+	await page.route('**/api/generated-images**', async (route) => {
+		if (route.request().method() !== 'GET') return route.fallback();
+		const url = new URL(route.request().url());
+		const detail = generations.find((generation) =>
+			url.pathname.endsWith(`/api/generated-images/${generation.id}`)
+		);
+		if (detail) {
+			return route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					id: detail.id,
+					prompt: detail.prompt,
+					kind: detail.kind,
+					createdAt: Date.UTC(2026, 0, detail.number),
+					amount: 1,
+					balanceAfter: 9,
+					image: media(detail.number + 1, '/api/media/test-media/result.webp'),
+					source: media(1, '/api/media/test-media/scene.jpg'),
+					formSnapshot: snapshot,
+					session: null,
+					media: []
+				})
+			});
+		}
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				images: generations.map((generation) => ({
+					id: generation.id,
+					image: media(generation.number + 1, '/api/media/test-media/result.webp'),
+					source: media(1, '/api/media/test-media/scene.jpg'),
+					kind: generation.kind,
+					createdAt: Date.UTC(2026, 0, generation.number),
+					session: null,
+					iteration: null,
+					number: generation.number
+				})),
+				pagination: { offset: 0, size: 100, hasMore: false }
+			})
+		});
+	});
+	await mockSceneFilterOptions(page);
+
+	await page.goto('/create/interior?view=chat&format=webp');
+	await page.getByRole('button', { name: 'Сцены' }).click();
+	const drawer = page.getByRole('dialog', { name: 'Сцены' });
+
+	await drawer.getByRole('button', { name: 'Показать промпт сцены 2' }).click();
+	const editPrompt = page.getByRole('dialog', { name: 'Промпт сцены 2' });
+	await expect(editPrompt).toContainText('убери стул');
+	await expect(editPrompt).not.toContainText(ru['generatedImages.promptAutoEnhance']);
+	await editPrompt.getByRole('button', { name: 'Закрыть промпт' }).click();
+
+	await drawer.getByRole('button', { name: 'Показать промпт сцены 1' }).click();
+	await expect(page.getByRole('dialog', { name: 'Промпт сцены 1' })).toContainText(
+		ru['generatedImages.promptAutoEnhance']
+	);
+});
+
 test('narrows scenes to a project’s milestones and shows an iteration’s prompt', async ({
 	page
 }) => {

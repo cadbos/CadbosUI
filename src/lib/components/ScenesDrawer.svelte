@@ -379,7 +379,15 @@ before the Change Date. See LICENSE for complete terms.
 			const detail = await fetchGeneratedImageDetail(id);
 			if (!detail) throw new Error('generation not found');
 			if (promptCandidate?.id !== id) return;
-			promptCandidate = { id, order, status: 'ready', prompt: detail.prompt.trim() };
+			promptCandidate = {
+				id,
+				order,
+				status: 'ready',
+				prompt:
+					detail.kind === 'render' && detail.formSnapshot?.autoEnhance
+						? t('generatedImages.promptAutoEnhance')
+						: detail.prompt.trim()
+			};
 		} catch (error) {
 			logBoundaryError('scenesDrawer.showPrompt', error);
 			if (promptCandidate?.id === id) promptCandidate = { id, order, status: 'error', prompt: '' };

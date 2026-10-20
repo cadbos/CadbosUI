@@ -15,6 +15,8 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import type { Component } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { page } from '$app/state';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import ChatView from '$lib/components/ChatView.svelte';
@@ -29,12 +31,14 @@ before the Change Date. See LICENSE for complete terms.
 		stepLabel: string;
 		headingKey?: TranslationKey;
 		optionalBadgeKey?: TranslationKey;
+		disabled?: boolean;
 	}
 
 	let {
 		stepLabel,
 		headingKey = 'view.switcher.label',
-		optionalBadgeKey = undefined
+		optionalBadgeKey = undefined,
+		disabled = false
 	}: Props = $props();
 
 	const views: { id: ViewId; label: TranslationKey; component: Component }[] = [
@@ -56,17 +60,25 @@ before the Change Date. See LICENSE for complete terms.
 		itemCount: () => views.length,
 		getActiveIndex: () => activeIndex,
 		setActiveIndex: (index) => {
-			return goto(buildWorkspaceUrl('render', request, { view: views[index].id }), {
-				replaceState: true,
-				keepFocus: true,
-				noScroll: true
-			}).catch((error: unknown) => logBoundaryError('promptViews.viewNavigation', error));
+			return goto(
+				resolve(
+					buildWorkspaceUrl('render', request, {
+						view: views[index].id
+					}) as PathnameWithSearchOrHash,
+					{}
+				),
+				{
+					replaceState: true,
+					keepFocus: true,
+					noScroll: true
+				}
+			).catch((error: unknown) => logBoundaryError('promptViews.viewNavigation', error));
 		},
 		focusTab: (index) => tabs[index]?.focus()
 	});
 </script>
 
-<section class="prompt-views">
+<section class={['prompt-views', { disabled }]} inert={disabled}>
 	<div class="prompt-views-header">
 		<h2 class="panel-heading">{t(headingKey)}</h2>
 		{#if optionalBadgeKey}
@@ -87,7 +99,7 @@ before the Change Date. See LICENSE for complete terms.
 					aria-selected={activeIndex === index}
 					aria-controls={`panel-${view.id}-${stepLabel}`}
 					tabindex={activeIndex === index ? 0 : -1}
-					class:active={activeIndex === index}
+					class={{ active: activeIndex === index }}
 					onclick={() => viewTabs.activate(index)}
 					onkeydown={viewTabs.onKeydown}
 				>
@@ -129,6 +141,10 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
+	}
+
+	.prompt-views.disabled {
+		opacity: 0.5;
 	}
 
 	.prompt-views-header {

@@ -875,10 +875,26 @@ before the Change Date. See LICENSE for complete terms.
 								</div>
 							</div>
 
+							<div class="panel-section auto-enhance">
+								<label class="auto-enhance-toggle">
+									<input
+										type="checkbox"
+										checked={request.autoEnhance}
+										aria-describedby="auto-enhance-hint"
+										onchange={(event) => request.setAutoEnhance(event.currentTarget.checked)}
+									/>
+									<span>{t('render.autoEnhance.label')}</span>
+								</label>
+								<p id="auto-enhance-hint" class="auto-enhance-hint">
+									{t('render.autoEnhance.hint')}
+								</p>
+							</div>
+
 							<PromptViews
 								stepLabel="③"
 								headingKey="view.switcher.label"
 								optionalBadgeKey="render.optional"
+								disabled={request.autoEnhance}
 							/>
 
 							<div class="panel-section generate-section">
@@ -1369,6 +1385,34 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		flex-direction: column;
 		gap: 0.75rem;
+	}
+
+	.auto-enhance {
+		gap: 0.375rem;
+	}
+
+	.auto-enhance-toggle {
+		display: flex;
+		align-items: center;
+		align-self: flex-start;
+		gap: 0.625rem;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--color-text);
+		cursor: pointer;
+	}
+
+	.auto-enhance-toggle input {
+		width: 1rem;
+		height: 1rem;
+		margin: 0;
+		accent-color: var(--color-accent);
+	}
+
+	.auto-enhance-hint {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--color-muted-strong);
 	}
 
 	.scene-type-toggle {

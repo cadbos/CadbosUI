@@ -327,6 +327,7 @@ describe('projects repository', () => {
 				formSnapshot: {
 					promptFragments: TEST_FORM_SNAPSHOT.promptFragments,
 					promptOverride: TEST_FORM_SNAPSHOT.promptOverride,
+					autoEnhance: TEST_FORM_SNAPSHOT.autoEnhance,
 					editPrompt: TEST_FORM_SNAPSHOT.editPrompt,
 					addObjectInstruction: TEST_FORM_SNAPSHOT.addObjectInstruction,
 					removeObjectText: TEST_FORM_SNAPSHOT.removeObjectText,

@@ -326,6 +326,7 @@ function toPublicFormSnapshot(
 	return {
 		promptFragments: snapshot.promptFragments,
 		promptOverride: snapshot.promptOverride,
+		autoEnhance: snapshot.autoEnhance,
 		editPrompt: snapshot.editPrompt,
 		addObjectInstruction: snapshot.addObjectInstruction,
 		removeObjectText: snapshot.removeObjectText,

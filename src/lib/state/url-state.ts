@@ -340,6 +340,7 @@ export function buildShareUrl(mode: Mode, request: RequestState, subTab: SubTab 
 	if (mode === 'render') {
 		params.set('view', viewToSlug(subTab.view ?? 'chat'));
 		params.set('format', request.outputFormat);
+		if (request.autoEnhance) params.set('enhance', '1');
 
 		if (request.promptOverride !== null) {
 			params.set('prompt', request.promptOverride);
@@ -567,6 +568,7 @@ export function applyShareParams(
 	);
 
 	if (mode === 'render') {
+		request.setAutoEnhance(searchParams.get('enhance') === '1');
 		const prompt = searchParams.get('prompt');
 		if (prompt !== null) {
 			request.setPromptOverride(prompt);

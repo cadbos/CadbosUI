@@ -39,6 +39,7 @@ export const TEST_S3_BUCKET: Bucket = {
 export const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	promptFragments: [{ id: 'frag-1', text: 'cozy', order: 0 }],
 	promptOverride: null,
+	autoEnhance: false,
 	editPrompt: '',
 	addObjectInstruction: '',
 	removeObjectText: '',

@@ -82,6 +82,9 @@ export interface RequestFormSnapshot {
 	photoAdjustments?: PhotoAdjustments;
 	promptFragments: PromptFragment[];
 	promptOverride: string | null;
+	// Create mode's Auto-enhance: the render was sent without the user's
+	// prompt, leaving the result entirely to the render service.
+	autoEnhance: boolean;
 	editPrompt: string;
 	addObjectInstruction: string;
 	removeObjectText: string;
