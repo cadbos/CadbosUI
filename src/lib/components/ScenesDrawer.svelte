@@ -383,9 +383,10 @@ before the Change Date. See LICENSE for complete terms.
 				id,
 				order,
 				status: 'ready',
-				prompt: detail.formSnapshot?.autoEnhance
-					? t('generatedImages.promptAutoEnhance')
-					: detail.prompt.trim()
+				prompt:
+					detail.kind === 'render' && detail.formSnapshot?.autoEnhance
+						? t('generatedImages.promptAutoEnhance')
+						: detail.prompt.trim()
 			};
 		} catch (error) {
 			logBoundaryError('scenesDrawer.showPrompt', error);
