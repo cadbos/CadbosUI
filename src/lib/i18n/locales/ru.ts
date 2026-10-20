@@ -192,6 +192,9 @@ export const ru = {
 	'render.sceneType.exterior': 'Экстерьер',
 	'render.generate': 'Сгенерировать',
 	'render.optional': 'необязательно',
+	'render.autoEnhance.label': 'Автоулучшение',
+	'render.autoEnhance.hint':
+		'ИИ улучшит изображение на своё усмотрение — ваше описание не используется. Результат каждой генерации может отличаться.',
 	'generation.signInToStart': 'Войдите, чтобы запустить генерацию',
 	'generation.startHint': 'Запустить генерацию с помощью ИИ',
 	'render.outputFormat': 'Формат',
@@ -300,6 +303,7 @@ export const ru = {
 	'generatedImages.promptLoading': 'Загрузка промпта…',
 	'generatedImages.promptFailed': 'Не удалось загрузить промпт.',
 	'generatedImages.promptEmpty': 'Для этой генерации промпт не задавался.',
+	'generatedImages.promptAutoEnhance': 'Создано в режиме «Автоулучшение», без промпта.',
 	'generatedImages.promptClose': 'Закрыть промпт',
 	'usage.title': 'Использование',
 	'usage.subtitle': 'Балансы аккаунтов и траты на генерации по пользователям Cadbos.',

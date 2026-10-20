@@ -191,6 +191,9 @@ export const en = {
 	'render.sceneType.exterior': 'Exterior',
 	'render.generate': 'Generate',
 	'render.optional': 'optional',
+	'render.autoEnhance.label': 'Auto-enhance',
+	'render.autoEnhance.hint':
+		'AI enhances the image at its own discretion — your description is not used. Each generation may produce a different result.',
 	'generation.signInToStart': 'Sign in to start generation',
 	'generation.startHint': 'Start AI generation',
 	'render.outputFormat': 'Format',
@@ -300,6 +303,7 @@ export const en = {
 	'generatedImages.promptLoading': 'Loading prompt…',
 	'generatedImages.promptFailed': 'Could not load the prompt.',
 	'generatedImages.promptEmpty': 'This generation had no prompt.',
+	'generatedImages.promptAutoEnhance': 'Created with Auto-enhance, without a prompt.',
 	'generatedImages.promptClose': 'Close prompt',
 	'usage.title': 'Usage',
 	'usage.subtitle': 'Account balances and generation spend across Cadbos users.',

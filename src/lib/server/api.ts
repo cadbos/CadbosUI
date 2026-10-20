@@ -78,6 +78,8 @@ export const formSnapshotSchema = z.object({
 	photoAdjustments: photoAdjustmentsSchema.optional(),
 	promptFragments: z.array(formSnapshotPromptFragment).max(200),
 	promptOverride: z.string().nullable(),
+	// Absent from a snapshot recorded before Auto-enhance existed.
+	autoEnhance: z.boolean().default(false),
 	editPrompt: z.string(),
 	// Absent from a snapshot recorded before the Add object user prompt existed.
 	addObjectInstruction: z.string().max(500).default(''),

@@ -29,6 +29,7 @@ import { seedCredit } from '$lib/server/testing/ledger-fixtures';
 const TEST_FORM_SNAPSHOT: RequestFormSnapshot = {
 	promptFragments: [],
 	promptOverride: null,
+	autoEnhance: false,
 	editPrompt: '',
 	addObjectInstruction: '',
 	removeObjectText: '',

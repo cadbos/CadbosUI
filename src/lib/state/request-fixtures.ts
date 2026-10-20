@@ -98,6 +98,7 @@ export function buildAc9RequestJSON(): RequestJSON {
 		styleNegativePrompt: '',
 		objectReplacementObject: '',
 		promptOverride: null,
+		autoEnhance: false,
 		status: 'idle'
 	};
 }

@@ -210,6 +210,7 @@ describe('serialization', () => {
 		delete snapshot.textureMaskSourceKey;
 		delete snapshot.textureReplacementSurface;
 		delete snapshot.textureReplacementMasked;
+		delete snapshot.autoEnhance;
 
 		request.fromJSON(snapshot);
 
@@ -234,6 +235,7 @@ describe('serialization', () => {
 			lightSettingsInstruction: '',
 			repaintTarget: '',
 			repaintColor: DEFAULT_REPAINT_COLOR,
+			autoEnhance: false,
 			photoAdjustments: defaultPhotoAdjustments(),
 			currentRender: undefined
 		});
@@ -666,6 +668,20 @@ describe('toRenderRequest', () => {
 
 	it('returns null when invalid', async () => {
 		expect(await request.toRenderRequest()).toBeNull();
+	});
+
+	it('sends no prompt under Auto-enhance and keeps the typed prompt for when it is off', async () => {
+		applyAc9Fixture();
+		request.setAutoEnhance(true);
+
+		const body = await request.toRenderRequest();
+
+		expect(body?.prompt).toBe('');
+		expect(body?.formSnapshot?.autoEnhance).toBe(true);
+		expect(request.prompt).toBe(AC9_PROMPT);
+
+		request.setAutoEnhance(false);
+		expect((await request.toRenderRequest())?.prompt).toBe(AC9_PROMPT);
 	});
 
 	it('uploads a pending file lazily on submit and caches the result on image', async () => {
@@ -2281,7 +2297,8 @@ describe('restoreFormSnapshot (restoring a past generation from the server)', ()
 			...request.captureFormSnapshot(),
 			styleTransferPrompt: 'restored style prompt',
 			styleTransferStrength: 0.42,
-			lightSettingsInstruction: 'restored light instruction'
+			lightSettingsInstruction: 'restored light instruction',
+			autoEnhance: true
 		};
 		request.reset();
 		request.setProjectSession(AC9_PROJECT_ID, AC9_SESSION_ID);

@@ -45,6 +45,7 @@ function formSnapshot(overrides: Partial<RequestFormSnapshot> = {}): RequestForm
 	return {
 		promptFragments: [],
 		promptOverride: null,
+		autoEnhance: false,
 		editPrompt: '',
 		addObjectInstruction: '',
 		removeObjectText: '',
@@ -370,6 +371,33 @@ describe('object replacement edit URL state', () => {
 	it('recognizes the nested tool and removes the standalone workspace route', () => {
 		expect(slugToTool('object-replacement')).toBe('object-replacement');
 		expect(isWorkspaceRoute('/object-replacement')).toBe(false);
+	});
+});
+
+describe('create auto-enhance URL state', () => {
+	it('round-trips Auto-enhance alongside the typed prompt', () => {
+		const state = new RequestState();
+		state.setPromptOverride('scandinavian living room');
+		state.setAutoEnhance(true);
+
+		const url = new URL(buildShareUrl('render', state), 'https://cadbos.test');
+		expect(url.searchParams.get('enhance')).toBe('1');
+
+		const restored = new RequestState();
+		applyShareParams('render', undefined, url.searchParams, restored);
+
+		expect(restored.autoEnhance).toBe(true);
+		expect(restored.prompt).toBe('scandinavian living room');
+		expect(restored.renderPrompt).toBe('');
+	});
+
+	it('leaves Auto-enhance off when the URL does not ask for it', () => {
+		const state = new RequestState();
+		state.setAutoEnhance(true);
+
+		applyShareParams('render', undefined, new URLSearchParams(), state);
+
+		expect(state.autoEnhance).toBe(false);
 	});
 });
 

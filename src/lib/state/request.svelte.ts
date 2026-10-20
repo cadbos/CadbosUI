@@ -198,6 +198,7 @@ export interface RequestJSON {
 	repaintColor?: string;
 	photoAdjustments?: PhotoAdjustments;
 	promptOverride: string | null;
+	autoEnhance?: boolean;
 	currentRender?: RenderResult;
 	status: RequestStatus;
 }
@@ -235,6 +236,7 @@ export interface NormalizedRequest {
 	removeObjectText: string;
 	styleTransferPrompt: string;
 	prompt: string;
+	autoEnhance: boolean;
 }
 
 const outputFormatSchema = z.enum(OUTPUT_FORMATS);
@@ -320,6 +322,8 @@ const editOperationSchema = z.object({
 export const requestFormSnapshotSchema = z.object({
 	promptFragments: z.array(promptFragmentSchema),
 	promptOverride: z.string().nullable(),
+	// Absent for a snapshot recorded before Auto-enhance existed.
+	autoEnhance: z.boolean().default(false),
 	editPrompt: z.string(),
 	// Absent for a snapshot recorded before the Add object user prompt existed.
 	addObjectInstruction: addObjectInstructionSchema.default(''),
@@ -394,6 +398,7 @@ const requestJsonSchema = z
 		repaintColor: repaintColorSchema.default(DEFAULT_REPAINT_COLOR),
 		photoAdjustments: photoAdjustmentsSchema.default(defaultPhotoAdjustments),
 		promptOverride: z.string().nullable(),
+		autoEnhance: z.boolean().default(false),
 		currentRender: renderResultSchema.optional(),
 		status: z.enum(['idle', 'rendering', 'error'])
 	})
@@ -536,6 +541,7 @@ function cloneFormSnapshot(
 	return {
 		promptFragments: cloneFragments(snapshot.promptFragments),
 		promptOverride: snapshot.promptOverride,
+		autoEnhance: snapshot.autoEnhance,
 		editPrompt: snapshot.editPrompt,
 		addObjectInstruction: snapshot.addObjectInstruction,
 		removeObjectText: snapshot.removeObjectText,
@@ -845,6 +851,9 @@ export class RequestState {
 	// textureMaskUploading above.
 	textureReplacementResultReady = $state(false);
 	promptOverride = $state<string | null>(null);
+	// Create mode's Auto-enhance: the user's prompt stays untouched (so turning
+	// it off brings it back) but is not sent — see renderPrompt.
+	autoEnhance = $state(false);
 	// In-session render history (FR-К6): every generation and edit result produced
 	// this session is a step, navigable back/forth via undo/redo. Deliberately not
 	// part of toJSON()/fromJSON() — it's session UI state, not the request model.
@@ -853,6 +862,10 @@ export class RequestState {
 	status = $state<RequestStatus>('idle');
 
 	prompt = $derived.by(() => derivePrompt(this.promptOverride, this.promptFragments));
+
+	// What Create mode actually sends: nothing under Auto-enhance, so the
+	// render service enhances the image on its own.
+	renderPrompt = $derived(this.autoEnhance ? '' : this.prompt);
 
 	// The single source of truth for what gets sent to /api/light-settings:
 	// each selected preset's phrase (in click order), then the free-text
@@ -1142,6 +1155,10 @@ export class RequestState {
 
 	setOutputFormat(format: OutputFormat): void {
 		this.outputFormat = format;
+	}
+
+	setAutoEnhance(enabled: boolean): void {
+		this.autoEnhance = z.boolean().parse(enabled);
 	}
 
 	setSceneType(type: SceneType): void {
@@ -1442,6 +1459,7 @@ export class RequestState {
 		return {
 			promptFragments: cloneFragments(this.promptFragments),
 			promptOverride: this.promptOverride,
+			autoEnhance: this.autoEnhance,
 			editPrompt: this.editPrompt,
 			addObjectInstruction: this.addObjectInstruction,
 			removeObjectText: this.removeObjectText,
@@ -1482,6 +1500,7 @@ export class RequestState {
 		if (!snapshot) return;
 		this.promptFragments = cloneFragments(snapshot.promptFragments);
 		this.promptOverride = snapshot.promptOverride;
+		this.autoEnhance = snapshot.autoEnhance;
 		this.editPrompt = snapshot.editPrompt;
 		this.addObjectInstruction = snapshot.addObjectInstruction;
 		this.removeObjectText = snapshot.removeObjectText;
@@ -1824,7 +1843,7 @@ export class RequestState {
 		// settings attached to the request are what's on the form right now —
 		// not whatever the user has since typed while those were in flight.
 		const formSnapshot = this.captureFormSnapshot();
-		const prompt = this.prompt;
+		const prompt = this.renderPrompt;
 		const outputFormat = this.outputFormat;
 		const imageKey = await this.resolveWorkingImageKey();
 		if (!imageKey) return null;
@@ -1991,6 +2010,7 @@ export class RequestState {
 			repaintColor: this.repaintColor,
 			photoAdjustments: { ...this.photoAdjustments },
 			promptOverride: this.promptOverride,
+			autoEnhance: this.autoEnhance,
 			currentRender: cloneRenderResult(this.currentRender),
 			status: this.status
 		};
@@ -2036,6 +2056,7 @@ export class RequestState {
 		this.activeRepaintJob = undefined;
 		this.activeFluxKontextEditJob = undefined;
 		this.promptOverride = parsed.promptOverride;
+		this.autoEnhance = parsed.autoEnhance;
 		const restoredRender = cloneRenderResult(parsed.currentRender);
 		if (restoredRender) {
 			this.#seedHistory(restoredRender);
@@ -2080,7 +2101,8 @@ export class RequestState {
 			addObjectInstruction: this.addObjectInstruction,
 			removeObjectText: this.removeObjectText,
 			styleTransferPrompt: this.styleTransferPrompt,
-			prompt: this.prompt
+			prompt: this.prompt,
+			autoEnhance: this.autoEnhance
 		};
 	}
 
@@ -2130,6 +2152,7 @@ export class RequestState {
 		this.activeRepaintJob = undefined;
 		this.activeFluxKontextEditJob = undefined;
 		this.promptOverride = null;
+		this.autoEnhance = false;
 		this.#renderHistory = [];
 		this.#historyIndex = -1;
 		this.status = 'idle';
@@ -2213,6 +2236,7 @@ export class RequestState {
 			: null;
 		this.activeRepaintJob = cloneActiveRepaintJob(source.activeRepaintJob);
 		this.promptOverride = source.promptOverride;
+		this.autoEnhance = source.autoEnhance;
 		// currentRender/previousRender are derived from the history stack, not
 		// settable fields — copy the stack itself (deep-cloned, so neither
 		// instance's later edits alias the other's) to preserve full undo/redo

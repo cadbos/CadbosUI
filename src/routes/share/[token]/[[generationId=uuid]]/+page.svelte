@@ -94,8 +94,11 @@ before the Change Date. See LICENSE for complete terms.
 					.sort((a, b) => a.order - b.order)
 					.map((fragment) => fragment.text)
 					.join(' ');
-			if (prompt.trim() !== '')
+			if (snapshot.autoEnhance) {
+				rows.push({ label: t('share.settingsPrompt'), value: t('render.autoEnhance.label') });
+			} else if (prompt.trim() !== '') {
 				rows.push({ label: t('share.settingsPrompt'), value: prompt.trim() });
+			}
 			rows.push({
 				label: t('render.outputFormat'),
 				value: OUTPUT_FORMAT_LABELS[snapshot.outputFormat]
