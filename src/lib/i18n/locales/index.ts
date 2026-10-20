@@ -128,7 +128,6 @@ export interface Dictionary {
 	'view.comingSoon': string;
 	'view.chat.prompt': string;
 	'view.chat.placeholder': string;
-	'view.chat.hint': string;
 	'view.keyValue.label': string;
 	'view.keyValue.text': string;
 	'view.keyValue.addFragment': string;

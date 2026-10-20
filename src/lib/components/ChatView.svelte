@@ -30,9 +30,7 @@ before the Change Date. See LICENSE for complete terms.
 		bind:value={getPrompt, setPrompt}
 		rows="4"
 		aria-label={t('view.chat.prompt')}
-		aria-describedby="chat-hint"
 		placeholder={t('view.chat.placeholder')}></textarea>
-	<p class="hint" id="chat-hint">{t('view.chat.hint')}</p>
 </div>
 
 <style>
@@ -65,12 +63,6 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	textarea::placeholder {
-		color: var(--color-muted);
-	}
-
-	.hint {
-		margin: 0;
-		font-size: 0.8125rem;
 		color: var(--color-muted);
 	}
 </style>

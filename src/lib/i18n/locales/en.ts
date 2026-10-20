@@ -76,7 +76,6 @@ export const en = {
 	'view.comingSoon': 'coming soon',
 	'view.chat.prompt': 'Chat prompt',
 	'view.chat.placeholder': 'Modern Scandinavian style, warm tones, natural light…',
-	'view.chat.hint': 'Leave empty to auto-enhance your photo',
 	'view.keyValue.label': 'Label {order}',
 	'view.keyValue.text': 'Text {order}',
 	'view.keyValue.addFragment': 'Add fragment',

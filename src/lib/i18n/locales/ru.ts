@@ -78,7 +78,6 @@ export const ru = {
 	'view.comingSoon': 'в разработке',
 	'view.chat.prompt': 'Промпт чата',
 	'view.chat.placeholder': 'Скандинавский стиль, тёплые тона, натуральный свет…',
-	'view.chat.hint': 'Оставьте пустым для авто-улучшения фото',
 	'view.keyValue.label': 'Метка {order}',
 	'view.keyValue.text': 'Текст {order}',
 	'view.keyValue.addFragment': 'Добавить фрагмент',
