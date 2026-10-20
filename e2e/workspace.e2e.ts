@@ -50,6 +50,46 @@ function localTimeLabel(createdAt: number): string {
 	}).format(new Date(createdAt));
 }
 
+async function mockSignedInGeneration(page: Page): Promise<void> {
+	await page.route('**/auth/me', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+			})
+		});
+	});
+	await page.route('**/auth/nostr-profile', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ profile: { relays: [] } })
+		});
+	});
+	await page.route('**/api/generated-images**', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ images: [], pagination: { offset: 0, size: 100, hasMore: false } })
+		});
+	});
+	await mockSceneFilterOptions(page);
+	await page.route('**/api/uploads', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				image: media(1, '/api/media/test-media/facade.webp'),
+				mime: 'image/webp',
+				size: 1024,
+				dimensions: [800, 600]
+			})
+		});
+	});
+	await mockProjectSessionRoutes(page);
+}
+
 test('renders the workspace and switches views', async ({ page }) => {
 	await openCreate(page);
 	await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
@@ -356,43 +396,7 @@ test('navigates the Scene Type toggle with the keyboard', async ({ page }) => {
 test('generating with the exterior scene type calls the exterior render route', async ({
 	page
 }) => {
-	await page.route('**/auth/me', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
-			})
-		});
-	});
-	await page.route('**/auth/nostr-profile', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({ profile: { relays: [] } })
-		});
-	});
-	await page.route('**/api/generated-images**', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({ images: [], pagination: { offset: 0, size: 100, hasMore: false } })
-		});
-	});
-	await mockSceneFilterOptions(page);
-	await page.route('**/api/uploads', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				image: media(1, '/api/media/test-media/facade.webp'),
-				mime: 'image/webp',
-				size: 1024,
-				dimensions: [800, 600]
-			})
-		});
-	});
-	await mockProjectSessionRoutes(page);
+	await mockSignedInGeneration(page);
 	let calledExteriorRoute = false;
 	let capturedBody:
 		| { imageKey: string; prompt: string; outputFormat: string; sceneType?: string }
@@ -469,6 +473,58 @@ test('generating with the exterior scene type calls the exterior render route', 
 	await expect(downloadLink).toBeFocused();
 	expect(calledExteriorRoute).toBe(true);
 	expect(capturedBody?.sceneType).toBeUndefined();
+});
+
+test('Auto-enhance locks the prompt and generates without it', async ({ page }) => {
+	await mockSignedInGeneration(page);
+	const renderBodies: { prompt: string; formSnapshot?: { autoEnhance?: boolean } }[] = [];
+	await page.route('**/api/render', async (route) => {
+		renderBodies.push(
+			route.request().postDataJSON() as { prompt: string; formSnapshot?: { autoEnhance?: boolean } }
+		);
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: '00000000-0000-4000-8000-000000000202',
+				output: media(2, '/api/media/test-media/enhanced-render.webp'),
+				cost: 5,
+				balance: 95
+			})
+		});
+	});
+
+	await openCreate(page);
+	const prompt = 'Scandinavian style, warm natural light';
+	const chatPrompt = page.getByRole('textbox', { name: 'Промпт чата' });
+	await chatPrompt.fill(prompt);
+
+	const autoEnhance = page.getByRole('checkbox', { name: 'Автоулучшение' });
+	await expect(autoEnhance).toHaveAccessibleDescription(
+		'ИИ улучшит изображение на своё усмотрение — ваше описание не используется. Результат каждой генерации может отличаться.'
+	);
+	await autoEnhance.check();
+	await expect(page).toHaveURL(/[?&]enhance=1(&|$)/);
+	await chatPrompt.focus();
+	await expect(chatPrompt).not.toBeFocused();
+
+	await page
+		.locator('#mode-panel-render input[type="file"]')
+		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
+	await Promise.all([
+		page.waitForResponse((response) => response.url().endsWith('/api/render') && response.ok()),
+		page.getByRole('button', { name: 'Сгенерировать' }).click()
+	]);
+
+	expect(renderBodies).toHaveLength(1);
+	expect(renderBodies[0].prompt).toBe('');
+	expect(renderBodies[0].formSnapshot?.autoEnhance).toBe(true);
+
+	await autoEnhance.uncheck();
+	await expect(page).not.toHaveURL(/[?&]enhance=/);
+	await chatPrompt.focus();
+	await expect(chatPrompt).toBeFocused();
+	await expect(chatPrompt).toHaveValue(prompt);
 });
 
 test('serves security headers and a content security policy', async ({ request }) => {
