@@ -13,7 +13,8 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { ArrowDown, ArrowUp, Clock } from '@lucide/svelte';
+	import { ArrowDown, ArrowUp, Clock, Plus } from '@lucide/svelte';
+	import { resolve } from '$app/paths';
 	import type { CreditTransaction } from '$lib/api/contract';
 	import HintIcon from '$lib/components/HintIcon.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -81,7 +82,15 @@ before the Change Date. See LICENSE for complete terms.
 <main class="expenses-page" aria-labelledby="expenses-title">
 	<section class="expenses-shell">
 		<header class="expenses-header">
-			<h1 id="expenses-title">{t('expenses.title')}</h1>
+			<div class="title-row">
+				<h1 id="expenses-title">{t('expenses.title')}</h1>
+				{#if auth.status === 'authenticated' && auth.credit}
+					<a class="top-up-link" href={resolve('/top-up', {})}>
+						<Plus size={16} strokeWidth={2} aria-hidden="true" />
+						<span>{t('expenses.topUp')}</span>
+					</a>
+				{/if}
+			</div>
 			<p>{t('expenses.subtitle')}</p>
 			{#if openError}
 				<p class="status error" role="alert">{openError}</p>
@@ -212,6 +221,35 @@ before the Change Date. See LICENSE for complete terms.
 	.expenses-header p,
 	.status {
 		margin: 0;
+	}
+
+	.title-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+
+	.top-up-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.5rem 0.875rem;
+		color: var(--color-accent-contrast);
+		background: var(--color-accent);
+		border: 1px solid var(--color-accent);
+		border-radius: var(--radius);
+		font-size: 0.875rem;
+		font-weight: 650;
+		text-decoration: none;
+		white-space: nowrap;
+		transition: background 0.15s;
+	}
+
+	.top-up-link:hover,
+	.top-up-link:focus-visible {
+		background: var(--color-accent-hover);
 	}
 
 	h1 {

@@ -379,6 +379,23 @@ only resume checking; they never settle invoices or cancel them automatically.
 Configure merchant SuccessURL/FailURL to the client's return page using GET and
 use the retained invoice ID for the authenticated status lookup.
 
+### Top-up page
+
+Approved accounts top up at `/top-up`, linked from the profile panel next to the
+balance and from Expenses. The page lists every advertised processor that accepts
+USD invoices, shows an approximate payment-currency amount from the USD/RUB feed
+for RUB processors, then creates and checks out the invoice and shows the exact
+locked amount before the provider redirect. Invoice terms are kept per account
+in `localStorage` until the invoice is paid or cancelled, so reloads and returns
+reuse the same invoice ID.
+
+Set Robokassa **SuccessURL** and **FailURL** to `https://<application-host>/top-up`
+with method **GET**. The page reads `InvId`, strips the provider query from the
+address bar, and polls `GET /api/invoices/[id]` every 3 seconds for up to one
+minute; the user can check again, resume payment or cancel afterwards. Provider
+names and descriptions come from `src/routes/top-up/processor-labels.ts`; a new
+processor appears under its ID until labels are added there.
+
 Creation allows 10 requests per account per minute; checkout and cancellation
 each allow 30; discovery and status share a 60-read limit. All responses are
 uncached. Errors use `{ error: { code, message } }`: `400` invalid input,
