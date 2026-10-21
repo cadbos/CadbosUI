@@ -115,6 +115,10 @@ function mockUsageFetch(
 					writeLimit: 100_000
 				})
 			);
+		if (url === '/api/usage/workers-ai')
+			return Promise.resolve(
+				Response.json({ date: '2026-10-07', requests: 3, neurons: 2.5, neuronLimit: 10_000 })
+			);
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
 }
@@ -137,7 +141,7 @@ describe('usage pagination', () => {
 
 		await usage.load();
 
-		expect(fetchMock).toHaveBeenCalledTimes(5);
+		expect(fetchMock).toHaveBeenCalledTimes(6);
 		expect(fetchMock).toHaveBeenCalledWith('/api/usage?offset=0&size=20', {
 			signal: expect.any(AbortSignal)
 		});
@@ -175,7 +179,7 @@ describe('usage pagination', () => {
 		await usage.load();
 		await usage.loadMore();
 
-		expect(fetchMock).toHaveBeenCalledTimes(7);
+		expect(fetchMock).toHaveBeenCalledTimes(8);
 		expect(fetchMock).toHaveBeenCalledWith('/api/usage?offset=1&size=20', {
 			signal: expect.any(AbortSignal)
 		});
@@ -194,7 +198,7 @@ describe('usage pagination', () => {
 
 		await usage.load();
 
-		await vi.waitFor(() => expect(consoleError).toHaveBeenCalledTimes(4));
+		await vi.waitFor(() => expect(consoleError).toHaveBeenCalledTimes(5));
 		expect(usage.status).toBe('error');
 		expect(usage.users).toEqual([]);
 		expect(usage.walletBalanceStatus).toBe('idle');
@@ -203,6 +207,8 @@ describe('usage pagination', () => {
 		expect(usage.totals).toBeNull();
 		expect(usage.d1LimitsStatus).toBe('idle');
 		expect(usage.d1Limits).toBeNull();
+		expect(usage.workersAiUsageStatus).toBe('idle');
+		expect(usage.workersAiUsage).toBeNull();
 		consoleError.mockRestore();
 	});
 
@@ -334,6 +340,43 @@ describe('D1 limits', () => {
 		expect(consoleError).toHaveBeenCalledWith(
 			'D1 limits load failed:',
 			expect.objectContaining({ name: 'UsageLoadError', message: 'D1 limits response invalid' })
+		);
+		consoleError.mockRestore();
+	});
+});
+
+describe('Workers AI usage', () => {
+	it("loads today's Workers AI usage alongside the other totals", async () => {
+		vi.stubGlobal('fetch', mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)]));
+
+		await usage.load();
+
+		await vi.waitFor(() => expect(usage.workersAiUsageStatus).toBe('ready'));
+		expect(usage.workersAiUsage).toEqual({
+			date: '2026-10-07',
+			requests: 3,
+			neurons: 2.5,
+			neuronLimit: 10_000
+		});
+	});
+
+	it('reports a failed Workers AI usage request as an error', async () => {
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const fetchMock = mockUsageFetch([page([user(PUBKEY_ONE)], 0, false)]);
+		vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input) === '/api/usage/workers-ai') {
+				return Promise.resolve(new Response(null, { status: 503 }));
+			}
+			return fetchMock(input, init);
+		});
+
+		await usage.load();
+
+		await vi.waitFor(() => expect(usage.workersAiUsageStatus).toBe('error'));
+		expect(usage.workersAiUsage).toBeNull();
+		expect(consoleError).toHaveBeenCalledWith(
+			'Workers AI usage load failed:',
+			expect.objectContaining({ name: 'UsageLoadError', status: 503 })
 		);
 		consoleError.mockRestore();
 	});

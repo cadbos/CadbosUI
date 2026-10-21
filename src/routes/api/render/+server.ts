@@ -26,7 +26,7 @@ import {
 	recordBalance
 } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { renderInterior, type StoredRenderResponse } from '$lib/server/generation';
+import { renderInterior, type CreateRenderResponse } from '$lib/server/generation';
 import { recordGeneration } from '$lib/server/generations';
 import { getOrCreateMediaByKey, uploadsBucketName } from '$lib/server/media';
 import { mediaAccess, mediaLink, providerMediaBatch } from '$lib/server/media-access';
@@ -84,7 +84,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 	const sourceMedia = source?.get(parsed.data.imageKey)?.media;
 	const uploadsBucket = sourceMedia?.bucket;
 
-	let result: StoredRenderResponse;
+	let result: CreateRenderResponse;
 	try {
 		result = await renderInterior(platform, uploadsBucket, {
 			...parsed.data,
@@ -124,6 +124,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				sessionId: parsed.data.sessionId,
 				prompt: parsed.data.prompt,
 				kind: 'render',
+				archaiPrompt: result.archaiPrompt,
 				amount: result.cost,
 				archaiRenderSec: result.renderSec,
 				archaiDownloadSec: result.downloadSec,

@@ -109,7 +109,7 @@ before the Change Date. See LICENSE for complete terms.
 			<p>{t('usage.subtitle')}</p>
 		</header>
 
-		{#if usage.totalsStatus !== 'idle' || usage.walletBalanceStatus !== 'idle' || usage.d1LimitsStatus !== 'idle'}
+		{#if usage.totalsStatus !== 'idle' || usage.walletBalanceStatus !== 'idle' || usage.d1LimitsStatus !== 'idle' || usage.workersAiUsageStatus !== 'idle'}
 			<section class="totals" aria-labelledby="usage-totals-title">
 				<h2 id="usage-totals-title">{t('usage.totals.title')}</h2>
 				<dl>
@@ -174,17 +174,18 @@ before the Change Date. See LICENSE for complete terms.
 						<div>
 							<dt>{ti('usage.totals.d1RowsRead', { date: usage.d1Limits.date })}</dt>
 							<dd>
-								<span class="d1-quotient">
-									<span class="d1-used"
+								<span class="quota-quotient">
+									<span class="quota-used"
 										><UsageNumber kind="count" value={usage.d1Limits.rowsRead} /></span
 									>
-									<span class="d1-divider">{t('usage.totals.d1DivisionSign')}</span>
-									<span class="d1-limit"
+									<span class="quota-divider">{t('usage.totals.quotaDivisionSign')}</span>
+									<span class="quota-limit"
 										><UsageNumber kind="count" value={usage.d1Limits.readLimit} /></span
 									>
 								</span>
 								{#if usage.d1Limits.rowsRead >= usage.d1Limits.readLimit}
-									<span class="limit-reached" role="status">{t('usage.totals.d1LimitReached')}</span
+									<span class="limit-reached" role="status"
+										>{t('usage.totals.quotaLimitReached')}</span
 									>
 								{/if}
 							</dd>
@@ -192,20 +193,46 @@ before the Change Date. See LICENSE for complete terms.
 						<div>
 							<dt>{ti('usage.totals.d1RowsWritten', { date: usage.d1Limits.date })}</dt>
 							<dd>
-								<span class="d1-quotient">
-									<span class="d1-used"
+								<span class="quota-quotient">
+									<span class="quota-used"
 										><UsageNumber kind="count" value={usage.d1Limits.rowsWritten} /></span
 									>
-									<span class="d1-divider">{t('usage.totals.d1DivisionSign')}</span>
-									<span class="d1-limit"
+									<span class="quota-divider">{t('usage.totals.quotaDivisionSign')}</span>
+									<span class="quota-limit"
 										><UsageNumber kind="count" value={usage.d1Limits.writeLimit} /></span
 									>
 								</span>
 								{#if usage.d1Limits.rowsWritten >= usage.d1Limits.writeLimit}
-									<span class="limit-reached" role="status">{t('usage.totals.d1LimitReached')}</span
+									<span class="limit-reached" role="status"
+										>{t('usage.totals.quotaLimitReached')}</span
 									>
 								{/if}
 							</dd>
+						</div>
+					{/if}
+					{#if usage.workersAiUsageStatus === 'ready' && usage.workersAiUsage !== null}
+						<div>
+							<dt>{ti('usage.totals.workersAiNeurons', { date: usage.workersAiUsage.date })}</dt>
+							<dd>
+								<span class="quota-quotient">
+									<span class="quota-used"
+										><UsageNumber kind="count" value={usage.workersAiUsage.neurons} /></span
+									>
+									<span class="quota-divider">{t('usage.totals.quotaDivisionSign')}</span>
+									<span class="quota-limit"
+										><UsageNumber kind="count" value={usage.workersAiUsage.neuronLimit} /></span
+									>
+								</span>
+								{#if usage.workersAiUsage.neurons >= usage.workersAiUsage.neuronLimit}
+									<span class="limit-reached" role="status"
+										>{t('usage.totals.quotaLimitReached')}</span
+									>
+								{/if}
+							</dd>
+						</div>
+						<div>
+							<dt>{ti('usage.totals.workersAiRequests', { date: usage.workersAiUsage.date })}</dt>
+							<dd><UsageNumber kind="count" value={usage.workersAiUsage.requests} /></dd>
 						</div>
 					{/if}
 					{#if usage.totalsStatus === 'loading'}
@@ -224,6 +251,14 @@ before the Change Date. See LICENSE for complete terms.
 							</div>
 						{/each}
 					{/if}
+					{#if usage.workersAiUsageStatus === 'loading'}
+						{#each [0, 1] as slot (`workers-ai-${slot}`)}
+							<div aria-hidden="true">
+								<dt><SkeletonBlock width="80%" height="0.7rem" /></dt>
+								<dd><SkeletonBlock width="5rem" height="1rem" /></dd>
+							</div>
+						{/each}
+					{/if}
 				</dl>
 				{#if usage.totalsStatus === 'loading'}
 					<p class="visually-hidden">{t('usage.totals.loading')}</p>
@@ -234,6 +269,11 @@ before the Change Date. See LICENSE for complete terms.
 					<p class="visually-hidden">{t('usage.totals.d1Loading')}</p>
 				{:else if usage.d1LimitsStatus === 'error'}
 					<p class="status error" role="alert">{t('usage.totals.d1Failed')}</p>
+				{/if}
+				{#if usage.workersAiUsageStatus === 'loading'}
+					<p class="visually-hidden">{t('usage.totals.workersAiLoading')}</p>
+				{:else if usage.workersAiUsageStatus === 'error'}
+					<p class="status error" role="alert">{t('usage.totals.workersAiFailed')}</p>
 				{/if}
 			</section>
 		{/if}
@@ -476,28 +516,28 @@ before the Change Date. See LICENSE for complete terms.
 		font-weight: 500;
 	}
 
-	.totals .d1-quotient {
+	.totals .quota-quotient {
 		display: grid;
 		grid-template-columns: auto 1fr;
 		column-gap: 0.375rem;
 		font-variant-numeric: tabular-nums;
 	}
 
-	.totals .d1-used,
-	.totals .d1-limit {
+	.totals .quota-used,
+	.totals .quota-limit {
 		grid-column: 2;
 		text-align: right;
 	}
 
-	.totals .d1-used {
+	.totals .quota-used {
 		grid-row: 1;
 	}
 
-	.totals .d1-limit {
+	.totals .quota-limit {
 		grid-row: 2;
 	}
 
-	.totals .d1-divider {
+	.totals .quota-divider {
 		grid-column: 1;
 		grid-row: 1 / 3;
 		align-self: center;

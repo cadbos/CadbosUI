@@ -13,7 +13,13 @@
  */
 
 import { z } from 'zod';
-import type { D1DailyLimits, UsageProfile, UsageTotals, UserUsageRecord } from '$lib/api/contract';
+import type {
+	D1DailyLimits,
+	UsageProfile,
+	UsageTotals,
+	UserUsageRecord,
+	WorkersAiDailyUsage
+} from '$lib/api/contract';
 
 export type UsageStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -78,6 +84,13 @@ const d1DailyLimitsSchema = z.object({
 	writeLimit: z.number().int().positive()
 });
 
+const workersAiDailyUsageSchema = z.object({
+	date: z.iso.date(),
+	requests: z.number().int().nonnegative(),
+	neurons: z.number().nonnegative(),
+	neuronLimit: z.number().positive()
+});
+
 export type WalletBalanceStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type UsageTotalsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -104,11 +117,14 @@ class UsageState {
 	totalsStatus = $state<UsageTotalsStatus>('idle');
 	d1Limits = $state.raw<D1DailyLimits | null>(null);
 	d1LimitsStatus = $state<UsageTotalsStatus>('idle');
+	workersAiUsage = $state.raw<WorkersAiDailyUsage | null>(null);
+	workersAiUsageStatus = $state<UsageTotalsStatus>('idle');
 	#abort: AbortController | null = null;
 	#profileAborts = new Set<AbortController>();
 	#walletBalanceAbort: AbortController | null = null;
 	#totalsAbort: AbortController | null = null;
 	#d1LimitsAbort: AbortController | null = null;
+	#workersAiUsageAbort: AbortController | null = null;
 	#nextOffset: number | null = null;
 
 	async load(): Promise<void> {
@@ -117,6 +133,7 @@ class UsageState {
 		this.#walletBalanceAbort?.abort();
 		this.#totalsAbort?.abort();
 		this.#d1LimitsAbort?.abort();
+		this.#workersAiUsageAbort?.abort();
 		const controller = new AbortController();
 		this.#abort = controller;
 		this.status = 'loading';
@@ -131,10 +148,13 @@ class UsageState {
 		this.totalsStatus = 'idle';
 		this.d1Limits = null;
 		this.d1LimitsStatus = 'idle';
+		this.workersAiUsage = null;
+		this.workersAiUsageStatus = 'idle';
 
 		void this.#loadWalletBalance();
 		void this.#loadTotals();
 		void this.#loadD1Limits();
+		void this.#loadWorkersAiUsage();
 
 		try {
 			const page = await this.#fetchPage(0, controller.signal);
@@ -189,10 +209,12 @@ class UsageState {
 		this.#walletBalanceAbort?.abort();
 		this.#totalsAbort?.abort();
 		this.#d1LimitsAbort?.abort();
+		this.#workersAiUsageAbort?.abort();
 		this.#abort = null;
 		this.#walletBalanceAbort = null;
 		this.#totalsAbort = null;
 		this.#d1LimitsAbort = null;
+		this.#workersAiUsageAbort = null;
 		this.users = [];
 		this.profiles = {};
 		this.status = 'idle';
@@ -206,6 +228,8 @@ class UsageState {
 		this.totalsStatus = 'idle';
 		this.d1Limits = null;
 		this.d1LimitsStatus = 'idle';
+		this.workersAiUsage = null;
+		this.workersAiUsageStatus = 'idle';
 	}
 
 	async #fetchPage(
@@ -348,6 +372,42 @@ class UsageState {
 			console.error('D1 limits load failed:', error);
 		} finally {
 			if (this.#d1LimitsAbort === controller) this.#d1LimitsAbort = null;
+		}
+	}
+
+	async #loadWorkersAiUsage(): Promise<void> {
+		const controller = new AbortController();
+		this.#workersAiUsageAbort = controller;
+		this.workersAiUsageStatus = 'loading';
+
+		try {
+			const response = await fetch('/api/usage/workers-ai', {
+				signal: controller.signal,
+				cache: 'no-store'
+			});
+			if (!response.ok) {
+				throw new UsageLoadError('Workers AI usage request failed', response.status);
+			}
+
+			const parsed = workersAiDailyUsageSchema.safeParse(await response.json().catch(() => null));
+			if (!parsed.success) throw new UsageLoadError('Workers AI usage response invalid');
+
+			if (this.#workersAiUsageAbort !== controller) return;
+			this.workersAiUsage = parsed.data;
+			this.workersAiUsageStatus = 'ready';
+		} catch (error) {
+			if (controller.signal.aborted) return;
+			if (this.#isAccessDenied(error)) {
+				this.workersAiUsage = null;
+				this.workersAiUsageStatus = 'idle';
+				console.error('Workers AI usage load failed:', error);
+				return;
+			}
+			this.workersAiUsage = null;
+			this.workersAiUsageStatus = 'error';
+			console.error('Workers AI usage load failed:', error);
+		} finally {
+			if (this.#workersAiUsageAbort === controller) this.#workersAiUsageAbort = null;
 		}
 	}
 

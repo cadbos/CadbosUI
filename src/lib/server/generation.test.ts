@@ -22,6 +22,11 @@ const archai = vi.hoisted(() => ({
 	postStyleTransfer: vi.fn()
 }));
 const appEnvironment = vi.hoisted(() => ({ dev: true }));
+const translation = vi.hoisted(() => ({
+	translateCreatePrompt: vi.fn(
+		async (_platform: App.Platform | undefined, prompt: string) => prompt
+	)
+}));
 const storage = vi.hoisted(() => ({
 	putS3Object:
 		vi.fn<
@@ -36,6 +41,7 @@ const storage = vi.hoisted(() => ({
 }));
 
 vi.mock('$lib/server/archai', () => archai);
+vi.mock('$lib/server/prompt-translation', () => translation);
 vi.mock('$app/environment', () => ({
 	get dev() {
 		return appEnvironment.dev;
@@ -141,8 +147,52 @@ describe('renderInterior', () => {
 			balance: 24,
 			renderSec: expect.any(Number),
 			downloadSec: expect.any(Number),
-			reuploadSec: expect.any(Number)
+			reuploadSec: expect.any(Number),
+			archaiPrompt: 'cozy'
 		});
+	});
+
+	it('sends archAI the translated prompt and reports it', async () => {
+		mockDownloadedImage();
+		translation.translateCreatePrompt.mockResolvedValueOnce('Living room, chevron parquet');
+		archai.postRenderInterior.mockResolvedValue({
+			data: { output: 'https://example.test/a.jpg', cost: 1, balance: 24 }
+		});
+		const platform = withKey();
+
+		const result = await renderInterior(platform, TEST_S3_BUCKET, {
+			image: 'https://example.test/room.jpg',
+			prompt: 'Гостиная, паркет французская ёлка',
+			outputFormat: 'webp'
+		});
+
+		expect(translation.translateCreatePrompt).toHaveBeenCalledWith(
+			platform,
+			'Гостиная, паркет французская ёлка'
+		);
+		expect(archai.postRenderInterior.mock.calls[0][0].body).toEqual({
+			image: 'https://example.test/room.jpg',
+			outputFormat: 'webp',
+			prompt: 'Living room, chevron parquet'
+		});
+		expect(result.archaiPrompt).toBe('Living room, chevron parquet');
+	});
+
+	it('neither translates nor sends a prompt in Auto-enhance mode', async () => {
+		mockDownloadedImage();
+		archai.postRenderInterior.mockResolvedValue({
+			data: { output: 'https://example.test/a.jpg', cost: 1, balance: 24 }
+		});
+
+		const result = await renderInterior(withKey(), TEST_S3_BUCKET, {
+			image: 'https://example.test/room.jpg',
+			prompt: '',
+			outputFormat: 'webp'
+		});
+
+		expect(translation.translateCreatePrompt).not.toHaveBeenCalled();
+		expect(archai.postRenderInterior.mock.calls[0][0].body).not.toHaveProperty('prompt');
+		expect(result.archaiPrompt).toBeNull();
 	});
 
 	it('stores a string output URL and returns the bucket URL', async () => {

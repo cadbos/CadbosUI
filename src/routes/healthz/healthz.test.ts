@@ -13,7 +13,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CacheStorage, D1Database, Fetcher } from '@cloudflare/workers-types';
+import type { Ai, CacheStorage, D1Database, Fetcher } from '@cloudflare/workers-types';
 import type { HealthSnapshot } from '$lib/api/contract';
 import { TEST_S3_BUCKET } from '$lib/server/testing/generation-fixtures';
 
@@ -43,6 +43,7 @@ interface HealthyPlatform {
 	platform: App.Platform;
 	assetsFetch: ReturnType<typeof vi.fn>;
 	comfyuiFetch: ReturnType<typeof vi.fn>;
+	aiRun: ReturnType<typeof vi.fn>;
 	dbFirst: ReturnType<typeof vi.fn>;
 	s3BucketExists: ReturnType<typeof vi.fn>;
 }
@@ -75,7 +76,8 @@ function snapshot(status: HealthSnapshot['status'] = 'healthy'): HealthSnapshot 
 			comfyui: service(),
 			d1: service(),
 			nostr: { ...service(), reachable: 4, total: 4 },
-			s3: service(status === 'unhealthy' ? 'unhealthy' : 'healthy')
+			s3: service(status === 'unhealthy' ? 'unhealthy' : 'healthy'),
+			workersAi: service()
 		}
 	};
 }
@@ -90,13 +92,17 @@ function cachedSnapshot(status: 'healthy' | 'unhealthy' = 'healthy'): Response {
 function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 	const assetsFetch = vi.fn(async () => new Response('<svg/>', { status: 200 }));
 	const comfyuiFetch = vi.fn(async () => Response.json({ system: {} }));
+	const aiRun = vi.fn(async () => ({
+		choices: [{ message: { content: 'p' } }],
+		usage: { neurons: 0.2 }
+	}));
 	const dbFirst = vi.fn(async () => ({ healthy: 1 }));
 	const s3BucketExists = vi.fn(async () => true);
 	storage.isS3BucketAvailable.mockImplementation(async () => s3BucketExists());
 	const prepare = vi.fn((sql: string) =>
 		sql.includes('FROM buckets')
 			? { bind: () => ({ first: async () => TEST_S3_BUCKET }) }
-			: { bind: () => ({ first: dbFirst }) }
+			: { bind: () => ({ first: dbFirst, run: async () => ({ success: true, results: [] }) }) }
 	);
 	return {
 		platform: {
@@ -106,6 +112,7 @@ function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 				ARCHAI_API_URL: 'https://archai.example.test',
 				ASSETS: { fetch: assetsFetch } as unknown as Fetcher,
 				COMFYUI_BASE_URL: { fetch: comfyuiFetch } as unknown as Fetcher,
+				AI: { run: aiRun } as unknown as Ai,
 				DB: { prepare } as unknown as D1Database,
 				CLOUDFLARE_ACCOUNT_ID: 'account-id',
 				CLOUDFLARE_ANALYTICS_API_TOKEN: 'analytics-token',
@@ -117,6 +124,7 @@ function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 		} as unknown as App.Platform,
 		assetsFetch,
 		comfyuiFetch,
+		aiRun,
 		dbFirst,
 		s3BucketExists
 	};
@@ -295,7 +303,8 @@ describe('GET /healthz', () => {
 					reachable: 4,
 					total: 4
 				},
-				s3: { status: 'healthy', latencyMs: expect.any(Number) }
+				s3: { status: 'healthy', latencyMs: expect.any(Number) },
+				workersAi: { status: 'healthy', latencyMs: expect.any(Number) }
 			}
 		});
 		expect(cache.put).toHaveBeenCalledOnce();
@@ -307,6 +316,10 @@ describe('GET /healthz', () => {
 		expect(healthy.s3BucketExists).toHaveBeenCalledOnce();
 		expect(healthy.assetsFetch.mock.calls[0][0].url).toBe('https://assets.internal/favicon.svg');
 		expect(healthy.comfyuiFetch.mock.calls[0][0].url).toBe('http://localhost:8188/system_stats');
+		expect(healthy.aiRun).toHaveBeenCalledWith(
+			'@cf/qwen/qwen3-30b-a3b-fp8',
+			expect.objectContaining({ max_tokens: 1 })
+		);
 		expect(fetcher).toHaveBeenCalledTimes(5);
 	});
 
@@ -509,7 +522,7 @@ describe('GET /healthz', () => {
 		expect(errorLog).toHaveBeenCalledTimes(2);
 	});
 
-	it.each(['archai', 'assets', 'comfyui', 'd1', 'nostr', 's3'] as const)(
+	it.each(['archai', 'assets', 'comfyui', 'd1', 'nostr', 's3', 'workersAi'] as const)(
 		'caches an unhealthy response when %s fails',
 		async (failedService) => {
 			const cache = fakeCache();
@@ -533,6 +546,9 @@ describe('GET /healthz', () => {
 					break;
 				case 's3':
 					healthy.s3BucketExists.mockRejectedValue(new Error('S3 unavailable'));
+					break;
+				case 'workersAi':
+					healthy.aiRun.mockRejectedValue(new Error('Workers AI unavailable'));
 					break;
 			}
 

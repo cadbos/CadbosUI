@@ -160,7 +160,8 @@ export const healthSnapshotSchema = z
 				comfyui: serviceHealthSchema,
 				d1: serviceHealthSchema,
 				nostr: nostrHealthSchema,
-				s3: serviceHealthSchema
+				s3: serviceHealthSchema,
+				workersAi: serviceHealthSchema
 			})
 			.strict()
 	})
@@ -660,6 +661,15 @@ export interface D1DailyLimits {
 	rowsWritten: number;
 	readLimit: number;
 	writeLimit: number;
+}
+
+// GET /api/usage/workers-ai — today's (UTC) Workers AI calls and Neurons, as
+// recorded by this app, against the daily free allocation.
+export interface WorkersAiDailyUsage {
+	date: string;
+	requests: number;
+	neurons: number;
+	neuronLimit: number;
 }
 
 export interface UsageProfile {

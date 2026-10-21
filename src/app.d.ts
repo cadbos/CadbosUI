@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { D1Database, Fetcher } from '@cloudflare/workers-types';
+import type { Ai, D1Database, Fetcher } from '@cloudflare/workers-types';
 import type { SessionUser } from '$lib/api/contract';
 
 // See https://svelte.dev/docs/kit/types#app.d.ts
@@ -40,6 +40,9 @@ declare global {
 			env: {
 				DB: D1Database;
 				ASSETS?: Fetcher;
+				// Workers AI binding (wrangler.jsonc `ai`) — translates Create
+				// prompts to English before they reach archAI.
+				AI?: Ai;
 				ARCHAI_API_KEY: string;
 				ARCHAI_API_URL: string;
 				CLOUDFLARE_ACCOUNT_ID?: string;

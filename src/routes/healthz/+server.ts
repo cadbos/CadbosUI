@@ -28,6 +28,7 @@ import { getBucketByName, uploadsBucketName } from '$lib/server/media';
 import { isS3BucketAvailable } from '$lib/server/s3';
 import { createDb, getDb } from '$lib/server/db';
 import { getWalletBalance } from '$lib/server/wallet';
+import { runWorkersAiChat } from '$lib/server/workers-ai';
 
 const DEFAULT_HEALTH_CACHE_TTL_SECONDS = 30;
 const HEALTH_PROBE_TIMEOUT_MS = 10_000;
@@ -149,7 +150,7 @@ async function collectHealthSnapshot(
 	fetcher: typeof fetch
 ): Promise<HealthSnapshot> {
 	const env = platform?.env;
-	const [archai, assets, comfyui, d1, nostr, s3] = await Promise.all([
+	const [archai, assets, comfyui, d1, nostr, s3, workersAi] = await Promise.all([
 		probe(async () => {
 			if (!env?.ARCHAI_API_KEY || !env.ARCHAI_API_URL) return false;
 			await getWalletBalance(platform);
@@ -185,9 +186,19 @@ async function collectHealthSnapshot(
 				platform,
 				await getBucketByName(getDb(platform), uploadsBucketName(platform))
 			);
+		}),
+		// A one-token completion: the binding has no free health endpoint, and
+		// this costs a fraction of a Neuron, counted with Create's translations.
+		probe(async () => {
+			await runWorkersAiChat(platform, {
+				messages: [{ role: 'user', content: 'ping /no_think' }],
+				maxTokens: 1,
+				timeoutMs: HEALTH_PROBE_TIMEOUT_MS
+			});
+			return true;
 		})
 	]);
-	const services = { archai, assets, comfyui, d1, nostr, s3 };
+	const services = { archai, assets, comfyui, d1, nostr, s3, workersAi };
 	return {
 		status: Object.values(services).every((service) => service.status === 'healthy')
 			? 'healthy'

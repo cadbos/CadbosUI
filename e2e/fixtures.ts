@@ -25,7 +25,8 @@ const HEALTHY_SNAPSHOT: HealthSnapshot = {
 		comfyui: { status: 'healthy', latencyMs: 14 },
 		d1: { status: 'healthy', latencyMs: 15 },
 		nostr: { status: 'healthy', latencyMs: 16, reachable: 4, total: 4 },
-		s3: { status: 'healthy', latencyMs: 17 }
+		s3: { status: 'healthy', latencyMs: 17 },
+		workersAi: { status: 'healthy', latencyMs: 18 }
 	}
 };
 

@@ -36,7 +36,8 @@ function snapshot(
 			comfyui: { status: 'healthy', latencyMs: 14 },
 			d1: { status: d1Status, latencyMs: 15 },
 			nostr: { status: 'healthy', latencyMs: 16, reachable: 3, total: 4 },
-			s3: { status: s3Status, latencyMs: 17 }
+			s3: { status: s3Status, latencyMs: 17 },
+			workersAi: { status: 'healthy', latencyMs: 18 }
 		}
 	};
 }

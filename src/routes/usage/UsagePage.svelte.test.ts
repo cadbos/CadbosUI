@@ -20,7 +20,8 @@ import type {
 	UsageProfilesResponse,
 	UsageTotals,
 	UserUsageRecord,
-	UserUsageResponse
+	UserUsageResponse,
+	WorkersAiDailyUsage
 } from '$lib/api/contract';
 import { setLocale, t, ti, type Locale } from '$lib/i18n/index.svelte';
 import { auth } from '$lib/state/auth.svelte';
@@ -75,6 +76,13 @@ const D1_LIMITS: D1DailyLimits = {
 	writeLimit: 100_000
 };
 
+const WORKERS_AI_USAGE: WorkersAiDailyUsage = {
+	date: '2026-10-07',
+	requests: 1_204,
+	neurons: 431.5,
+	neuronLimit: 10_000
+};
+
 function page(users: UserUsageRecord[], offset: number, hasMore: boolean): UserUsageResponse {
 	return {
 		users,
@@ -108,6 +116,7 @@ function mockUsageFetch(
 		if (url === '/api/usage/balance') return Promise.resolve(Response.json({ balance: 0 }));
 		if (url === '/api/usage/totals') return Promise.resolve(Response.json(totals));
 		if (url === '/api/usage/d1-limits') return Promise.resolve(Response.json(d1Limits));
+		if (url === '/api/usage/workers-ai') return Promise.resolve(Response.json(WORKERS_AI_USAGE));
 		return Promise.resolve(new Response(null, { status: 404 }));
 	});
 }
@@ -437,17 +446,30 @@ it.each(['ru', 'en'] as const)('renders the platform totals for %s', async (loca
 	await expect.element(writeTerm).toBeVisible();
 	const readQuota = readTerm.element().parentElement!;
 	const writeQuota = writeTerm.element().parentElement!;
-	expect(readQuota.querySelector('.d1-used')?.textContent).toBe('5 000 000');
-	expect(readQuota.querySelector('.d1-limit')?.textContent).toBe('5 000 000');
-	expect(writeQuota.querySelector('.d1-used')?.textContent).toBe('100');
-	expect(writeQuota.querySelector('.d1-limit')?.textContent).toBe('100 000');
-	expect(readQuota.querySelector('.d1-divider')?.textContent).toBe(
-		t('usage.totals.d1DivisionSign')
+	expect(readQuota.querySelector('.quota-used')?.textContent).toBe('5 000 000');
+	expect(readQuota.querySelector('.quota-limit')?.textContent).toBe('5 000 000');
+	expect(writeQuota.querySelector('.quota-used')?.textContent).toBe('100');
+	expect(writeQuota.querySelector('.quota-limit')?.textContent).toBe('100 000');
+	expect(readQuota.querySelector('.quota-divider')?.textContent).toBe(
+		t('usage.totals.quotaDivisionSign')
 	);
-	expect(writeQuota.querySelector('.d1-divider')?.textContent).toBe(
-		t('usage.totals.d1DivisionSign')
+	expect(writeQuota.querySelector('.quota-divider')?.textContent).toBe(
+		t('usage.totals.quotaDivisionSign')
 	);
-	expect(readQuota.textContent).toContain(t('usage.totals.d1LimitReached'));
+	expect(readQuota.textContent).toContain(t('usage.totals.quotaLimitReached'));
+	const neuronsTerm = totals.getByText(
+		ti('usage.totals.workersAiNeurons', { date: WORKERS_AI_USAGE.date })
+	);
+	await expect.element(neuronsTerm).toBeVisible();
+	const neuronsQuota = neuronsTerm.element().parentElement!;
+	expect(neuronsQuota.querySelector('.quota-used')?.textContent).toBe('432');
+	expect(neuronsQuota.querySelector('.quota-limit')?.textContent).toBe('10 000');
+	expect(neuronsQuota.textContent).not.toContain(t('usage.totals.quotaLimitReached'));
+	await expect
+		.element(totals)
+		.toHaveTextContent(
+			`${ti('usage.totals.workersAiRequests', { date: WORKERS_AI_USAGE.date })} 1 204`
+		);
 });
 
 it.each(['ru', 'en'] as const)('shows full D1 counts without rounding for %s', async (locale) => {
@@ -475,11 +497,11 @@ it.each(['ru', 'en'] as const)('shows full D1 counts without rounding for %s', a
 	await expect.element(writeTerm).toBeVisible();
 	const readQuota = readTerm.element().parentElement!;
 	const writeQuota = writeTerm.element().parentElement!;
-	expect(readQuota.querySelector('.d1-used')?.textContent).toBe('1 250');
-	expect(readQuota.querySelector('.d1-limit')?.textContent).toBe('500 000');
-	expect(writeQuota.querySelector('.d1-used')?.textContent).toBe('523 400');
-	expect(writeQuota.querySelector('.d1-limit')?.textContent).toBe('500 001');
-	await expect.element(totals).toHaveTextContent(t('usage.totals.d1LimitReached'));
+	expect(readQuota.querySelector('.quota-used')?.textContent).toBe('1 250');
+	expect(readQuota.querySelector('.quota-limit')?.textContent).toBe('500 000');
+	expect(writeQuota.querySelector('.quota-used')?.textContent).toBe('523 400');
+	expect(writeQuota.querySelector('.quota-limit')?.textContent).toBe('500 001');
+	await expect.element(totals).toHaveTextContent(t('usage.totals.quotaLimitReached'));
 });
 
 it('keeps raw quota comparisons when rounded figures look equal', async () => {
@@ -506,11 +528,11 @@ it('keeps raw quota comparisons when rounded figures look equal', async () => {
 	await expect.element(writeTerm).toBeVisible();
 	const readQuota = readTerm.element().parentElement!;
 	const writeQuota = writeTerm.element().parentElement!;
-	expect(readQuota.querySelector('.d1-used')?.textContent).toBe('499 999');
-	expect(readQuota.querySelector('.d1-limit')?.textContent).toBe('500 000');
-	expect(writeQuota.querySelector('.d1-used')?.textContent).toBe('999');
-	expect(writeQuota.querySelector('.d1-limit')?.textContent).toBe('1 000');
-	expect(totals.getByText(t('usage.totals.d1LimitReached')).elements()).toHaveLength(0);
+	expect(readQuota.querySelector('.quota-used')?.textContent).toBe('499 999');
+	expect(readQuota.querySelector('.quota-limit')?.textContent).toBe('500 000');
+	expect(writeQuota.querySelector('.quota-used')?.textContent).toBe('999');
+	expect(writeQuota.querySelector('.quota-limit')?.textContent).toBe('1 000');
+	expect(totals.getByText(t('usage.totals.quotaLimitReached')).elements()).toHaveLength(0);
 });
 
 it('renders a totals error without hiding the table', async () => {
