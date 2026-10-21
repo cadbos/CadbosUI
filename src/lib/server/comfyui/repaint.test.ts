@@ -124,7 +124,7 @@ describe('queueRepaint', () => {
 		expect(workflowTemplate['62:45'].inputs.image).toEqual(['220', 1]);
 		expect(workflowTemplate['221'].inputs.inpainted_image).toEqual(['62:8', 0]);
 		expect(workflowTemplate['222'].inputs.destination).toEqual(['42', 0]);
-		expect(workflowTemplate['222'].inputs.source).toEqual(['221', 0]);
+		expect(workflowTemplate['222'].inputs.source).toEqual(['226', 0]);
 		expect(workflowTemplate['62:41'].inputs.image).toEqual(['46', 0]);
 		expect(workflowTemplate['62:66'].inputs.image).toEqual(['62:45', 0]);
 		expect(workflowTemplate['102:152'].inputs.string_b).toEqual(['101', 0]);
@@ -143,24 +143,74 @@ describe('queueRepaint', () => {
 		).toEqual([0, 0, 1, 1]);
 	});
 
-	it('confines the repaint to the region when one is given', async () => {
-		const client = mockClient();
-		vi.mocked(client.uploadImage)
-			.mockResolvedValueOnce(sceneUpload)
-			.mockResolvedValueOnce(swatchUpload);
-		vi.mocked(client.queueWorkflow).mockResolvedValue({ promptId: 'prompt-1', queueNumber: 2 });
+	it.each([
+		{ name: 'whole scene', region: undefined, expectedRegion: [0, 0, 1, 1] },
+		{
+			name: 'selected region',
+			region: { x: 0.68, y: 0.61, width: 0.14, height: 0.23 },
+			expectedRegion: [0.68, 0.61, 0.14, 0.23]
+		}
+	])(
+		'upscales and resizes the stitched repaint before pasting the $name',
+		async ({ region, expectedRegion }) => {
+			const client = mockClient();
+			vi.mocked(client.uploadImage)
+				.mockResolvedValueOnce(sceneUpload)
+				.mockResolvedValueOnce(swatchUpload);
+			vi.mocked(client.queueWorkflow).mockResolvedValue({ promptId: 'prompt-1', queueNumber: 2 });
 
-		await queueRepaint(client, {
-			...request(),
-			region: { x: 0.68, y: 0.61, width: 0.14, height: 0.23 }
-		});
+			await queueRepaint(client, {
+				...request(),
+				region
+			});
 
-		const queuedWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
-		expect(['200', '201', '202', '203'].map((id) => queuedWorkflow?.[id]?.inputs.value)).toEqual([
-			0.68, 0.61, 0.14, 0.23
-		]);
-		expect(workflowTemplate['200'].inputs.value).toBe(0);
-	});
+			const queuedWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
+			expect(['200', '201', '202', '203'].map((id) => queuedWorkflow?.[id]?.inputs.value)).toEqual(
+				expectedRegion
+			);
+			expect(queuedWorkflow?.['221']).toMatchObject({
+				class_type: 'InpaintStitchImproved',
+				inputs: { stitcher: ['220', 0], inpainted_image: ['62:8', 0] }
+			});
+			expect(queuedWorkflow?.['223']).toMatchObject({
+				class_type: 'GetImageSize',
+				inputs: { image: ['210', 0] }
+			});
+			expect(queuedWorkflow?.['224']).toMatchObject({
+				class_type: 'UpscaleModelLoader',
+				inputs: { model_name: 'RealESRGAN_x2.pth' }
+			});
+			expect(queuedWorkflow?.['225']).toMatchObject({
+				class_type: 'ImageUpscaleWithModel',
+				inputs: { upscale_model: ['224', 0], image: ['221', 0] }
+			});
+			expect(queuedWorkflow?.['226']).toMatchObject({
+				class_type: 'ImageResizeKJv2',
+				inputs: {
+					image: ['225', 0],
+					width: ['223', 0],
+					height: ['223', 1],
+					upscale_method: 'lanczos',
+					keep_proportion: 'stretch',
+					divisible_by: 1,
+					device: 'cpu'
+				}
+			});
+			expect(queuedWorkflow?.['222']?.class_type).toBe('ImageCompositeMasked');
+			expect(queuedWorkflow?.['222']?.inputs).toEqual({
+				destination: ['42', 0],
+				source: ['226', 0],
+				x: ['205', 0],
+				y: ['206', 0],
+				resize_source: false
+			});
+			expect(queuedWorkflow?.['100']).toMatchObject({
+				class_type: 'SaveImage',
+				inputs: { images: ['222', 0] }
+			});
+			expect(workflowTemplate['200'].inputs.value).toBe(0);
+		}
+	);
 
 	it('rejects an empty target before uploading', async () => {
 		const client = mockClient();
