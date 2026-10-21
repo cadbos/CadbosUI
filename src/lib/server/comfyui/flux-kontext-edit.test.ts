@@ -117,7 +117,7 @@ describe('runFluxKontextEdit', () => {
 		);
 		expect(queuedWorkflow?.['154'].inputs.text).toEqual(['153:150', 0]);
 		expect(queuedWorkflow?.['17']).toEqual({
-			inputs: { filename_prefix: 'FluxKontext_edit', images: ['16', 0] },
+			inputs: { filename_prefix: 'FluxKontext_edit', images: ['159', 0] },
 			class_type: 'SaveImage',
 			_meta: { title: 'Save Image' }
 		});
@@ -166,9 +166,43 @@ describe('runFluxKontextEdit', () => {
 			class_type: 'VAEDecode',
 			inputs: { samples: ['15', 0], vae: ['3', 0] }
 		});
+	});
+
+	it('upscales the decoded edit before restoring the original scene dimensions', async () => {
+		const client = mockClient();
+		vi.mocked(client.uploadImage).mockResolvedValueOnce(sceneUpload);
+		vi.mocked(client.queueWorkflow).mockResolvedValue({ promptId: 'prompt-1', queueNumber: 0 });
+
+		await queueFluxKontextEdit(client, request());
+
+		const queuedWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
+		expect(queuedWorkflow?.['156']).toMatchObject({
+			class_type: 'GetImageSize',
+			inputs: { image: ['4', 0] }
+		});
+		expect(queuedWorkflow?.['157']).toMatchObject({
+			class_type: 'UpscaleModelLoader',
+			inputs: { model_name: 'RealESRGAN_x2.pth' }
+		});
+		expect(queuedWorkflow?.['158']).toMatchObject({
+			class_type: 'ImageUpscaleWithModel',
+			inputs: { upscale_model: ['157', 0], image: ['16', 0] }
+		});
+		expect(queuedWorkflow?.['159']).toMatchObject({
+			class_type: 'ImageResizeKJv2',
+			inputs: {
+				image: ['158', 0],
+				width: ['156', 0],
+				height: ['156', 1],
+				upscale_method: 'lanczos',
+				keep_proportion: 'stretch',
+				divisible_by: 1,
+				device: 'cpu'
+			}
+		});
 		expect(queuedWorkflow?.['17']).toMatchObject({
 			class_type: 'SaveImage',
-			inputs: { filename_prefix: 'FluxKontext_edit', images: ['16', 0] }
+			inputs: { filename_prefix: 'FluxKontext_edit', images: ['159', 0] }
 		});
 	});
 
