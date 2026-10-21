@@ -350,6 +350,25 @@
 			"title": "Preview Image"
 		}
 	},
+	"33": {
+		"inputs": {
+			"model_name": "RealESRGAN_x2.pth"
+		},
+		"class_type": "UpscaleModelLoader",
+		"_meta": {
+			"title": "Load Upscale Model"
+		}
+	},
+	"34": {
+		"inputs": {
+			"upscale_model": ["33", 0],
+			"image": ["101", 0]
+		},
+		"class_type": "ImageUpscaleWithModel",
+		"_meta": {
+			"title": "Upscale Image (using Model)"
+		}
+	},
 	"39": {
 		"inputs": {
 			"unet_name": "qwen-image-edit-2511-Q6_K.gguf"
@@ -577,7 +596,7 @@
 			"crop_position": "center",
 			"divisible_by": 1,
 			"device": "cpu",
-			"image": ["101", 0],
+			"image": ["34", 0],
 			"mask": ["65", 0]
 		},
 		"class_type": "ImageResizeKJv2",
