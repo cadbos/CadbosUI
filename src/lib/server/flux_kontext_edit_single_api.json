@@ -127,7 +127,7 @@
 	"17": {
 		"inputs": {
 			"filename_prefix": "FluxKontext_edit",
-			"images": ["16", 0]
+			"images": ["159", 0]
 		},
 		"class_type": "SaveImage",
 		"_meta": {
@@ -151,6 +151,51 @@
 		"class_type": "PreviewAny",
 		"_meta": {
 			"title": "Preview as Text"
+		}
+	},
+	"156": {
+		"inputs": {
+			"image": ["4", 0]
+		},
+		"class_type": "GetImageSize",
+		"_meta": {
+			"title": "Original scene size"
+		}
+	},
+	"157": {
+		"inputs": {
+			"model_name": "RealESRGAN_x2.pth"
+		},
+		"class_type": "UpscaleModelLoader",
+		"_meta": {
+			"title": "Load Upscale Model"
+		}
+	},
+	"158": {
+		"inputs": {
+			"upscale_model": ["157", 0],
+			"image": ["16", 0]
+		},
+		"class_type": "ImageUpscaleWithModel",
+		"_meta": {
+			"title": "Upscale Image (using Model)"
+		}
+	},
+	"159": {
+		"inputs": {
+			"width": ["156", 0],
+			"height": ["156", 1],
+			"upscale_method": "lanczos",
+			"keep_proportion": "stretch",
+			"pad_color": "0, 0, 0",
+			"crop_position": "center",
+			"divisible_by": 1,
+			"device": "cpu",
+			"image": ["158", 0]
+		},
+		"class_type": "ImageResizeKJv2",
+		"_meta": {
+			"title": "Resize edit to original scene size"
 		}
 	},
 	"153:147": {
