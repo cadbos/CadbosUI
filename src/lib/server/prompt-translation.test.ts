@@ -56,6 +56,34 @@ describe('matchPromptGlossary', () => {
 		expect(matchPromptGlossary('в углу стоит новогодняя ёлка')).toEqual([]);
 	});
 
+	it.each([
+		'на стенке висит картина',
+		'акриловая картина над камином',
+		'на полу шкура тюленя',
+		'фасад дома из кирпича'
+	])('leaves everyday wording alone: %s', (prompt) => {
+		expect(matchPromptGlossary(prompt)).toEqual([]);
+	});
+
+	it('maps the acrylic stone countertop in both common cases', () => {
+		expect(matchPromptGlossary('столешница акриловый камень').map(({ term }) => term)).toEqual([
+			'акриловый камень'
+		]);
+		expect(matchPromptGlossary('столешница из акрилового камня').map(({ term }) => term)).toEqual([
+			'акрилового камня'
+		]);
+	});
+
+	it('tells enamel cabinet fronts apart from plain kitchen fronts', () => {
+		expect(matchPromptGlossary('кухня, фасады эмаль').map(({ term }) => term)).toEqual([
+			'фасады эмаль'
+		]);
+		expect(matchPromptGlossary('кухня, фасады из ЛДСП').map(({ term }) => term)).toEqual([
+			'кухонные фасады',
+			'ЛДСП'
+		]);
+	});
+
 	it('maps Versailles only when it names a parquet', () => {
 		expect(matchPromptGlossary('гостиная в стиле Версаль')).toEqual([]);
 		expect(matchPromptGlossary('пол — паркет Версаль').map(({ term }) => term)).toEqual([

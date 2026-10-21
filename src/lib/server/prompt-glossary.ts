@@ -29,6 +29,7 @@ export interface PromptGlossaryEntry {
 
 const HERRINGBONE = 'herringbone parquet, rectangular planks with square ends laid in a zigzag';
 const CHEVRON = 'chevron parquet, planks with angled ends meeting in a continuous V point';
+const ACRYLIC_STONE = 'solid surface (acrylic stone)';
 
 export const PROMPT_GLOSSARY: readonly PromptGlossaryEntry[] = [
 	{ term: 'английская ёлка', stems: ['английск', 'елк'], english: HERRINGBONE },
@@ -85,7 +86,75 @@ export const PROMPT_GLOSSARY: readonly PromptGlossaryEntry[] = [
 	},
 	{ term: 'честерфилд', stems: ['честерфилд'], english: 'Chesterfield' },
 	{ term: 'торшер', stems: ['торшер'], english: 'floor lamp' },
-	{ term: 'пуф', stems: ['пуф'], english: 'pouf' }
+	{ term: 'пуф', stems: ['пуф'], english: 'pouf' },
+	{
+		term: 'плитка кабанчик',
+		stems: ['кабанчик'],
+		english: 'subway tiles, small glossy rectangular tiles laid in a brick pattern'
+	},
+	{
+		term: 'плитка ёлочкой',
+		stems: ['плитк', 'елочк'],
+		english: 'tiles laid in a herringbone pattern'
+	},
+	{ term: 'керамогранит', stems: ['керамогранит'], english: 'porcelain tile' },
+	{ term: 'кварцвинил', stems: ['кварцвинил'], english: 'luxury vinyl plank flooring' },
+	{
+		term: 'наливной пол',
+		stems: ['наливн', 'пол'],
+		english: 'seamless self-levelling poured resin floor'
+	},
+	{
+		term: 'палубная укладка',
+		stems: ['палубн'],
+		english: 'planks laid in a straight staggered deck pattern'
+	},
+	{
+		term: 'вагонка',
+		stems: ['вагонк'],
+		english: 'tongue-and-groove wooden plank wall cladding'
+	},
+	{
+		term: 'натяжной потолок',
+		stems: ['натяжн', 'потол'],
+		english: 'stretch ceiling, a seamless smooth matte ceiling'
+	},
+	{
+		term: 'кухонные фасады',
+		stems: ['фасад', 'кухн'],
+		excludes: ['эмал'],
+		english: 'kitchen cabinet fronts'
+	},
+	{
+		term: 'фасады эмаль',
+		stems: ['фасад', 'эмал'],
+		english: 'cabinet fronts in smooth painted lacquer'
+	},
+	{ term: 'ЛДСП', stems: ['лдсп'], english: 'melamine-faced chipboard' },
+	{ term: 'акриловый камень', stems: ['акриловый камень'], english: ACRYLIC_STONE },
+	{ term: 'акрилового камня', stems: ['акрилов', 'камн'], english: ACRYLIC_STONE },
+	{ term: 'кварцевый агломерат', stems: ['кварцев', 'агломерат'], english: 'engineered quartz' },
+	{
+		term: 'унитаз-инсталляция',
+		stems: ['унитаз', 'инсталляц'],
+		english: 'wall-hung toilet with a concealed cistern'
+	},
+	{ term: 'тропический душ', stems: ['тропическ', 'душ'], english: 'rain shower head' },
+	{ term: 'полотенцесушитель', stems: ['полотенцесушител'], english: 'heated towel rail' },
+	{
+		term: 'мебельная стенка',
+		stems: ['мебельн', 'стенк'],
+		english: 'Soviet-style wall unit, a long run of cabinets with glass display shelves'
+	},
+	{ term: 'шкаф-купе', stems: ['купе'], english: 'built-in wardrobe with sliding doors' },
+	{ term: 'кушетка', stems: ['кушетк'], english: 'daybed' },
+	{ term: 'лоджия', stems: ['лоджи'], english: 'loggia, an enclosed glazed balcony' },
+	{ term: 'ротанг', stems: ['ротанг'], english: 'rattan' },
+	{ term: 'тюль', stems: ['тюл'], excludes: ['тюлен'], english: 'sheer white curtains' },
+	{ term: 'портьеры', stems: ['портьер'], english: 'heavy floor-length drapes' },
+	{ term: 'рогожка', stems: ['рогожк'], english: 'basket-weave upholstery fabric' },
+	{ term: 'экокожа', stems: ['экокож'], english: 'faux leather' },
+	{ term: 'капучино', stems: ['капучино'], english: 'cappuccino, a light milky coffee brown' }
 ];
 
 function normalized(text: string): string {
