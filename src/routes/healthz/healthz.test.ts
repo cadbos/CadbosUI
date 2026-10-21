@@ -92,17 +92,14 @@ function cachedSnapshot(status: 'healthy' | 'unhealthy' = 'healthy'): Response {
 function healthyPlatform(cache: CacheStorage, ttl?: string): HealthyPlatform {
 	const assetsFetch = vi.fn(async () => new Response('<svg/>', { status: 200 }));
 	const comfyuiFetch = vi.fn(async () => Response.json({ system: {} }));
-	const aiRun = vi.fn(async () => ({
-		choices: [{ message: { content: 'p' } }],
-		usage: { neurons: 0.2 }
-	}));
+	const aiRun = vi.fn(async () => ({ choices: [{ message: { content: 'p' } }] }));
 	const dbFirst = vi.fn(async () => ({ healthy: 1 }));
 	const s3BucketExists = vi.fn(async () => true);
 	storage.isS3BucketAvailable.mockImplementation(async () => s3BucketExists());
 	const prepare = vi.fn((sql: string) =>
 		sql.includes('FROM buckets')
 			? { bind: () => ({ first: async () => TEST_S3_BUCKET }) }
-			: { bind: () => ({ first: dbFirst, run: async () => ({ success: true, results: [] }) }) }
+			: { bind: () => ({ first: dbFirst }) }
 	);
 	return {
 		platform: {

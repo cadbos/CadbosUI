@@ -188,7 +188,7 @@ async function collectHealthSnapshot(
 			);
 		}),
 		// A one-token completion: the binding has no free health endpoint, and
-		// this costs a fraction of a Neuron, counted with Create's translations.
+		// this costs a fraction of a Neuron.
 		probe(async () => {
 			await runWorkersAiChat(platform, {
 				messages: [{ role: 'user', content: 'ping /no_think' }],

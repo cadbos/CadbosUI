@@ -13,21 +13,19 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Ai, D1Database } from '@cloudflare/workers-types';
-import { createDb } from '$lib/server/db';
+import type { Ai } from '@cloudflare/workers-types';
 import { matchPromptGlossary } from '$lib/server/prompt-glossary';
 import { translateCreatePrompt } from '$lib/server/prompt-translation';
-import { makeD1 } from '$lib/server/testing/d1-shim';
-import { getWorkersAiDailyUsage, WORKERS_AI_MODEL } from '$lib/server/workers-ai';
+import { WORKERS_AI_MODEL } from '$lib/server/workers-ai';
 
 const RUSSIAN_PROMPT = 'Гостиная, пол — паркет французская ёлка из дуба';
 
-function completion(content: string, neurons = 1.25): unknown {
-	return { choices: [{ message: { content } }], usage: { neurons } };
+function completion(content: string): unknown {
+	return { choices: [{ message: { content } }], usage: { neurons: 1.25 } };
 }
 
-function platformWith(run: ReturnType<typeof vi.fn>, db: D1Database = makeD1()): App.Platform {
-	return { env: { DB: db, AI: { run } as unknown as Ai } } as unknown as App.Platform;
+function platformWith(run: ReturnType<typeof vi.fn>): App.Platform {
+	return { env: { AI: { run } as unknown as Ai } } as unknown as App.Platform;
 }
 
 function userMessage(run: ReturnType<typeof vi.fn>): string {
@@ -102,13 +100,12 @@ describe('translateCreatePrompt', () => {
 		expect(run).not.toHaveBeenCalled();
 	});
 
-	it('translates with the matched glossary wording and records the Neurons used', async () => {
-		const db = makeD1();
+	it('translates with the matched glossary wording', async () => {
 		const run = vi.fn(async () =>
-			completion('Living room, floor of oak chevron parquet, planks with angled ends', 1.25)
+			completion('Living room, floor of oak chevron parquet, planks with angled ends')
 		);
 
-		const translated = await translateCreatePrompt(platformWith(run, db), RUSSIAN_PROMPT);
+		const translated = await translateCreatePrompt(platformWith(run), RUSSIAN_PROMPT);
 
 		expect(translated).toBe('Living room, floor of oak chevron parquet, planks with angled ends');
 		expect(run).toHaveBeenCalledWith(WORKERS_AI_MODEL, expect.objectContaining({ temperature: 0 }));
@@ -116,11 +113,6 @@ describe('translateCreatePrompt', () => {
 			'французская ёлка = chevron parquet, planks with angled ends meeting in a continuous V point'
 		);
 		expect(userMessage(run)).toContain(RUSSIAN_PROMPT);
-		expect(await getWorkersAiDailyUsage(createDb(db))).toMatchObject({
-			requests: 1,
-			neurons: 1.25,
-			neuronLimit: 10_000
-		});
 	});
 
 	it('strips reasoning tags and wrapping quotes from the model output', async () => {
@@ -178,7 +170,7 @@ describe('translateCreatePrompt', () => {
 
 	it('falls back to the original prompt when the Workers AI binding is missing', async () => {
 		const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		const platform = { env: { DB: makeD1() } } as unknown as App.Platform;
+		const platform = { env: {} } as unknown as App.Platform;
 
 		expect(await translateCreatePrompt(platform, RUSSIAN_PROMPT)).toBe(RUSSIAN_PROMPT);
 		expect(errorLog).toHaveBeenCalledWith(
@@ -186,39 +178,13 @@ describe('translateCreatePrompt', () => {
 		);
 	});
 
-	it('still records the call when Workers AI returns an unexpected shape', async () => {
-		vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-		const db = makeD1();
+	it('falls back to the original prompt when Workers AI returns an unexpected shape', async () => {
+		const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const run = vi.fn(async () => ({ response: 'Living room' }));
 
-		expect(await translateCreatePrompt(platformWith(run, db), RUSSIAN_PROMPT)).toBe(RUSSIAN_PROMPT);
-		expect(warning).toHaveBeenCalledWith(JSON.stringify({ event: 'workers_ai_usage_missing' }));
-		expect(await getWorkersAiDailyUsage(createDb(db))).toMatchObject({ requests: 1, neurons: 0 });
-	});
-});
-
-describe('getWorkersAiDailyUsage', () => {
-	it('sums every call of the current UTC day', async () => {
-		const db = makeD1();
-		const run = vi.fn(async () => completion('Bedroom', 0.5));
-		const platform = platformWith(run, db);
-
-		await translateCreatePrompt(platform, 'Спальня');
-		await translateCreatePrompt(platform, 'Спальня');
-
-		expect(await getWorkersAiDailyUsage(createDb(db))).toEqual({
-			date: new Date().toISOString().slice(0, 10),
-			requests: 2,
-			neurons: 1,
-			neuronLimit: 10_000
-		});
-	});
-
-	it('reports zero usage before the first call of the day', async () => {
-		expect(await getWorkersAiDailyUsage(createDb(makeD1()))).toMatchObject({
-			requests: 0,
-			neurons: 0
-		});
+		expect(await translateCreatePrompt(platformWith(run), RUSSIAN_PROMPT)).toBe(RUSSIAN_PROMPT);
+		expect(errorLog).toHaveBeenCalledWith(
+			JSON.stringify({ event: 'prompt_translation_failed', error: 'response' })
+		);
 	});
 });

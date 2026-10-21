@@ -663,8 +663,8 @@ export interface D1DailyLimits {
 	writeLimit: number;
 }
 
-// GET /api/usage/workers-ai — today's (UTC) Workers AI calls and Neurons, as
-// recorded by this app, against the daily free allocation.
+// GET /api/usage/workers-ai — today's (UTC) account-wide Workers AI requests
+// and Neurons from Cloudflare's analytics, against the daily free allocation.
 export interface WorkersAiDailyUsage {
 	date: string;
 	requests: number;

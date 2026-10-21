@@ -16,27 +16,18 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { apiError } from '$lib/server/api';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
-import { getDb } from '$lib/server/db';
 import { authorizeUsageViewer } from '$lib/server/usage';
-import { getWorkersAiDailyUsage } from '$lib/server/workers-ai';
+import { getWorkersAiDailyUsage } from '$lib/server/workers-ai-limits';
 
-export const GET: RequestHandler = async ({ platform, locals }) => {
+export const GET: RequestHandler = async ({ platform, locals, fetch }) => {
 	const user = locals.user;
 	if (!user) return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 
 	const authorization = await authorizeUsageViewer(platform, user);
 	if (authorization) return authorization;
 
-	try {
-		const usage = await getWorkersAiDailyUsage(getDb(platform));
-		return json(usage, { headers: { 'cache-control': 'private, no-store' } });
-	} catch (error) {
-		console.error(
-			JSON.stringify({
-				event: 'workers_ai_usage_read_failed',
-				error: error instanceof Error ? error.name : typeof error
-			})
-		);
+	const usage = await getWorkersAiDailyUsage(platform?.env, fetch);
+	if (!usage) {
 		const response = apiError(
 			503,
 			'workers_ai_usage_unavailable',
@@ -45,4 +36,5 @@ export const GET: RequestHandler = async ({ platform, locals }) => {
 		response.headers.set('cache-control', 'private, no-store');
 		return response;
 	}
+	return json(usage, { headers: { 'cache-control': 'private, no-store' } });
 };
