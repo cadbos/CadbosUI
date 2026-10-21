@@ -34,7 +34,9 @@ const chatCompletionSchema = z.object({
 });
 
 // Not an AbortSignal passed to `ai.run`: the local dev platform proxy cannot
-// serialize one across to workerd, so every call would fail there.
+// serialize one across to workerd, so every call would fail there. The race
+// only stops waiting — the call itself still runs to completion and is billed,
+// capped by its `max_tokens`.
 function withTimeout<T>(call: Promise<T>, timeoutMs: number): Promise<T> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const timeout = new Promise<never>((_, reject) => {

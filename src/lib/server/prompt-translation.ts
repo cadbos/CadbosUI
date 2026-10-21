@@ -24,6 +24,10 @@ import { runWorkersAiChat, WorkersAiError } from '$lib/server/workers-ai';
 
 const TRANSLATION_TIMEOUT_MS = 10_000;
 const MAX_OUTPUT_TOKENS = 400;
+// A translation longer than MAX_LENGTH_RATIO × the prompt plus MAX_LENGTH_SLACK
+// characters is the model adding its own text, not translating.
+const MAX_LENGTH_RATIO = 4;
+const MAX_LENGTH_SLACK = 400;
 const CYRILLIC = /[Ѐ-ӿ]/;
 
 const SYSTEM_PROMPT = [
@@ -54,7 +58,7 @@ function cleaned(output: string): string {
 function failure(prompt: string, translation: string): TranslationFailure | null {
 	if (!translation) return 'empty';
 	if (CYRILLIC.test(translation)) return 'cyrillic';
-	if (translation.length > prompt.length * 4 + 400) return 'too_long';
+	if (translation.length > prompt.length * MAX_LENGTH_RATIO + MAX_LENGTH_SLACK) return 'too_long';
 	return null;
 }
 
