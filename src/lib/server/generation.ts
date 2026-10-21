@@ -52,12 +52,12 @@ export interface StoredRenderResponse {
 	reuploadSec: number;
 }
 
-// A Create render also reports the prompt archAI actually received: the
-// English translation of a Russian prompt, the prompt unchanged when it needed
-// no translation or translation failed, or null when no prompt was sent
-// (Auto-enhance).
+// A Create render also reports the English translation it sent archAI in
+// place of the user's prompt — null when the prompt needed none, translation
+// failed, or no prompt was sent (Auto-enhance); archAI then got the prompt as
+// written.
 export interface CreateRenderResponse extends StoredRenderResponse {
-	archaiPrompt: string | null;
+	translatedPrompt: string | null;
 }
 
 // Provider error details (raw response text, internal ids) must stay server-side
@@ -207,7 +207,7 @@ export async function renderInterior(
 				renderSec: 0,
 				downloadSec: 0,
 				reuploadSec: 0,
-				archaiPrompt: params.prompt || null
+				translatedPrompt: null
 			};
 		}
 		generationFailed(
@@ -218,7 +218,10 @@ export async function renderInterior(
 	}
 	if (!bucket) generationFailed('render/interior', 'Render failed', 'bucket not configured');
 
-	const archaiPrompt = params.prompt ? await translateCreatePrompt(platform, params.prompt) : null;
+	const translatedPrompt = params.prompt
+		? await translateCreatePrompt(platform, params.prompt)
+		: null;
+	const prompt = translatedPrompt ?? params.prompt;
 	const result = await processRenderResult(
 		'render/interior',
 		'Render failed',
@@ -232,11 +235,11 @@ export async function renderInterior(
 					image: params.image,
 					outputFormat: params.outputFormat,
 					// Omit empty prompt — API treats its absence as Enhance mode.
-					...(archaiPrompt ? { prompt: archaiPrompt } : {})
+					...(prompt ? { prompt } : {})
 				}
 			})
 	);
-	return { ...result, archaiPrompt };
+	return { ...result, translatedPrompt };
 }
 
 export async function renderExterior(
@@ -258,7 +261,7 @@ export async function renderExterior(
 				renderSec: 0,
 				downloadSec: 0,
 				reuploadSec: 0,
-				archaiPrompt: params.prompt || null
+				translatedPrompt: null
 			};
 		}
 		generationFailed(
@@ -269,7 +272,10 @@ export async function renderExterior(
 	}
 	if (!bucket) generationFailed('render/exterior', 'Render failed', 'bucket not configured');
 
-	const archaiPrompt = params.prompt ? await translateCreatePrompt(platform, params.prompt) : null;
+	const translatedPrompt = params.prompt
+		? await translateCreatePrompt(platform, params.prompt)
+		: null;
+	const prompt = translatedPrompt ?? params.prompt;
 	const result = await processRenderResult(
 		'render/exterior',
 		'Render failed',
@@ -282,11 +288,11 @@ export async function renderExterior(
 				body: {
 					image: params.image,
 					outputFormat: params.outputFormat,
-					...(archaiPrompt ? { prompt: archaiPrompt } : {})
+					...(prompt ? { prompt } : {})
 				}
 			})
 	);
-	return { ...result, archaiPrompt };
+	return { ...result, translatedPrompt };
 }
 
 export async function styleTransferInterior(

@@ -124,7 +124,7 @@ export const POST: RequestHandler = async ({ request, platform, locals }) => {
 				sessionId: parsed.data.sessionId,
 				prompt: parsed.data.prompt,
 				kind: 'render',
-				archaiPrompt: result.archaiPrompt,
+				translatedPrompt: result.translatedPrompt,
 				amount: result.cost,
 				archaiRenderSec: result.renderSec,
 				archaiDownloadSec: result.downloadSec,

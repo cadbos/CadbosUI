@@ -12,10 +12,11 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
--- The prompt actually sent to archAI by a Create render (interior/exterior).
--- Create translates a Russian prompt to English through Workers AI before the
--- call (src/lib/server/prompt-translation.ts), so `prompt` keeps the user's
--- own text and this column keeps what archAI received — the untranslated
--- prompt when translation was skipped or failed. NULL for every other kind
--- and for rows written before this column existed.
-ALTER TABLE generations ADD COLUMN archai_prompt TEXT;
+-- The English translation a Create render (interior/exterior) sent archAI in
+-- place of the user's own prompt. Create translates a Russian prompt through
+-- Workers AI before the call (src/lib/server/prompt-translation.ts); `prompt`
+-- keeps the user's text. NULL when archAI received `prompt` as written: it
+-- needed no translation, translation failed, or no prompt was sent — so what
+-- archAI received is COALESCE(translated_prompt, prompt). Also NULL for every
+-- other kind and for rows written before this column existed.
+ALTER TABLE generations ADD COLUMN translated_prompt TEXT;

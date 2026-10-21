@@ -91,12 +91,10 @@ describe('matchPromptGlossary', () => {
 });
 
 describe('translateCreatePrompt', () => {
-	it('sends a prompt with no Cyrillic as is, without calling Workers AI', async () => {
+	it('leaves a prompt with no Cyrillic untranslated, without calling Workers AI', async () => {
 		const run = vi.fn();
 
-		expect(await translateCreatePrompt(platformWith(run), 'Cozy living room')).toBe(
-			'Cozy living room'
-		);
+		expect(await translateCreatePrompt(platformWith(run), 'Cozy living room')).toBeNull();
 		expect(run).not.toHaveBeenCalled();
 	});
 
@@ -127,23 +125,23 @@ describe('translateCreatePrompt', () => {
 		['empty', ''],
 		['cyrillic', 'Living room, паркет'],
 		['too_long', 'word '.repeat(400)]
-	])('falls back to the original prompt when the translation is %s', async (reason, output) => {
+	])('reports no translation when the output is %s', async (reason, output) => {
 		const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const run = vi.fn(async () => completion(output));
 
-		expect(await translateCreatePrompt(platformWith(run), RUSSIAN_PROMPT)).toBe(RUSSIAN_PROMPT);
+		expect(await translateCreatePrompt(platformWith(run), RUSSIAN_PROMPT)).toBeNull();
 		expect(errorLog).toHaveBeenCalledWith(
 			JSON.stringify({ event: 'prompt_translation_rejected', reason })
 		);
 	});
 
-	it('falls back to the original prompt and logs no user text when Workers AI fails', async () => {
+	it('reports no translation and logs no user text when Workers AI fails', async () => {
 		const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const run = vi.fn(async () => {
 			throw new TypeError('network down');
 		});
 
-		expect(await translateCreatePrompt(platformWith(run), RUSSIAN_PROMPT)).toBe(RUSSIAN_PROMPT);
+		expect(await translateCreatePrompt(platformWith(run), RUSSIAN_PROMPT)).toBeNull();
 		expect(errorLog).toHaveBeenCalledWith(
 			JSON.stringify({ event: 'prompt_translation_failed', error: 'TypeError' })
 		);
@@ -159,7 +157,7 @@ describe('translateCreatePrompt', () => {
 			const translation = translateCreatePrompt(platformWith(run), RUSSIAN_PROMPT);
 			await vi.advanceTimersByTimeAsync(10_000);
 
-			expect(await translation).toBe(RUSSIAN_PROMPT);
+			expect(await translation).toBeNull();
 			expect(errorLog).toHaveBeenCalledWith(
 				JSON.stringify({ event: 'prompt_translation_failed', error: 'timeout' })
 			);
@@ -168,21 +166,21 @@ describe('translateCreatePrompt', () => {
 		}
 	});
 
-	it('falls back to the original prompt when the Workers AI binding is missing', async () => {
+	it('reports no translation when the Workers AI binding is missing', async () => {
 		const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const platform = { env: {} } as unknown as App.Platform;
 
-		expect(await translateCreatePrompt(platform, RUSSIAN_PROMPT)).toBe(RUSSIAN_PROMPT);
+		expect(await translateCreatePrompt(platform, RUSSIAN_PROMPT)).toBeNull();
 		expect(errorLog).toHaveBeenCalledWith(
 			JSON.stringify({ event: 'prompt_translation_failed', error: 'unconfigured' })
 		);
 	});
 
-	it('falls back to the original prompt when Workers AI returns an unexpected shape', async () => {
+	it('reports no translation when Workers AI returns an unexpected shape', async () => {
 		const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 		const run = vi.fn(async () => ({ response: 'Living room' }));
 
-		expect(await translateCreatePrompt(platformWith(run), RUSSIAN_PROMPT)).toBe(RUSSIAN_PROMPT);
+		expect(await translateCreatePrompt(platformWith(run), RUSSIAN_PROMPT)).toBeNull();
 		expect(errorLog).toHaveBeenCalledWith(
 			JSON.stringify({ event: 'prompt_translation_failed', error: 'response' })
 		);

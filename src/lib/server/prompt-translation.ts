@@ -15,8 +15,9 @@
 // archAI follows English prompts far better than Russian ones (issue #260),
 // so Create translates a Russian prompt through Workers AI first, pinning the
 // glossary's wording for terms archAI misreads. Translation is best-effort:
-// on any failure the original prompt goes to archAI and the failure is
-// logged, so Create keeps working without Workers AI.
+// it resolves to null when the prompt needs none or translation fails (the
+// failure is logged), and the caller then sends the original prompt, so
+// Create keeps working without Workers AI.
 
 import { matchPromptGlossary } from '$lib/server/prompt-glossary';
 import { runWorkersAiChat, WorkersAiError } from '$lib/server/workers-ai';
@@ -65,8 +66,8 @@ function errorKind(error: unknown): string {
 export async function translateCreatePrompt(
 	platform: App.Platform | undefined,
 	prompt: string
-): Promise<string> {
-	if (!CYRILLIC.test(prompt)) return prompt;
+): Promise<string | null> {
+	if (!CYRILLIC.test(prompt)) return null;
 
 	try {
 		const translation = cleaned(
@@ -82,11 +83,11 @@ export async function translateCreatePrompt(
 		const reason = failure(prompt, translation);
 		if (reason) {
 			console.error(JSON.stringify({ event: 'prompt_translation_rejected', reason }));
-			return prompt;
+			return null;
 		}
 		return translation;
 	} catch (error) {
 		console.error(JSON.stringify({ event: 'prompt_translation_failed', error: errorKind(error) }));
-		return prompt;
+		return null;
 	}
 }

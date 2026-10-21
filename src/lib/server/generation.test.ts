@@ -24,7 +24,7 @@ const archai = vi.hoisted(() => ({
 const appEnvironment = vi.hoisted(() => ({ dev: true }));
 const translation = vi.hoisted(() => ({
 	translateCreatePrompt: vi.fn(
-		async (_platform: App.Platform | undefined, prompt: string) => prompt
+		async (_platform: App.Platform | undefined, _prompt: string): Promise<string | null> => null
 	)
 }));
 const storage = vi.hoisted(() => ({
@@ -131,6 +131,7 @@ describe('renderInterior', () => {
 		expect(archai.postRenderInterior.mock.calls[0][0].client.getConfig().baseUrl).toBe(
 			archaiApiUrl
 		);
+		expect(archai.postRenderInterior.mock.calls[0][0].body.prompt).toBe('cozy');
 		expect(String(fetch.mock.calls[0]?.[0])).toBe('https://example.test/a.jpg');
 		expect(fetch.mock.calls[0]?.[1]).toMatchObject({ redirect: 'manual' });
 		expect(fetch.mock.calls[0]?.[1]?.signal).toBeDefined();
@@ -148,7 +149,7 @@ describe('renderInterior', () => {
 			renderSec: expect.any(Number),
 			downloadSec: expect.any(Number),
 			reuploadSec: expect.any(Number),
-			archaiPrompt: 'cozy'
+			translatedPrompt: null
 		});
 	});
 
@@ -175,7 +176,7 @@ describe('renderInterior', () => {
 			outputFormat: 'webp',
 			prompt: 'Living room, chevron parquet'
 		});
-		expect(result.archaiPrompt).toBe('Living room, chevron parquet');
+		expect(result.translatedPrompt).toBe('Living room, chevron parquet');
 	});
 
 	it('neither translates nor sends a prompt in Auto-enhance mode', async () => {
@@ -192,7 +193,7 @@ describe('renderInterior', () => {
 
 		expect(translation.translateCreatePrompt).not.toHaveBeenCalled();
 		expect(archai.postRenderInterior.mock.calls[0][0].body).not.toHaveProperty('prompt');
-		expect(result.archaiPrompt).toBeNull();
+		expect(result.translatedPrompt).toBeNull();
 	});
 
 	it('stores a string output URL and returns the bucket URL', async () => {

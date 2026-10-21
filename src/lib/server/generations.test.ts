@@ -220,6 +220,47 @@ describe('recordGeneration', () => {
 		]);
 	});
 
+	it('keeps the English translation a Create render sent archAI next to the user prompt', async () => {
+		await seedUser(db, 'user-1', 'pubkey-1');
+		await grantAccess(db, 'user-1', 5);
+		const sessionId = await seedSession(db, 'user-1');
+		const sourceMediaId = seedMedia(db, 'https://cdn.example.test/room.jpg', HASH_1);
+		const base = {
+			sourceMediaId,
+			sessionId,
+			kind: 'render' as const,
+			amount: 1,
+			archaiRenderSec: 0,
+			archaiDownloadSec: 0,
+			archaiReuploadSec: 0
+		};
+
+		const translated = await recordGeneration(db, 'user-1', {
+			...base,
+			resultMediaId: seedMedia(db, 'https://cdn.example.test/a.webp', RESULT_HASH),
+			prompt: 'Гостиная, натяжной потолок',
+			translatedPrompt: 'Living room, stretch ceiling'
+		});
+		const untranslated = await recordGeneration(db, 'user-1', {
+			...base,
+			resultMediaId: seedMedia(db, 'https://cdn.example.test/b.webp', HASH_2),
+			prompt: 'Cozy living room',
+			translatedPrompt: null
+		});
+
+		const rows = await db.all<{ id: string; prompt: string; translated_prompt: string | null }>(
+			sql`SELECT id, prompt, translated_prompt FROM generations ORDER BY prompt`
+		);
+		expect(rows).toEqual([
+			{ id: untranslated.id, prompt: 'Cozy living room', translated_prompt: null },
+			{
+				id: translated.id,
+				prompt: 'Гостиная, натяжной потолок',
+				translated_prompt: 'Living room, stretch ceiling'
+			}
+		]);
+	});
+
 	it('isolates credit balances per user', async () => {
 		await seedUser(db, 'user-1', 'pubkey-1');
 		await seedUser(db, 'user-2', 'pubkey-2');
