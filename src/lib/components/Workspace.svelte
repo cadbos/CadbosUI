@@ -248,7 +248,9 @@ before the Change Date. See LICENSE for complete terms.
 	// would overwrite the very link that's still being opened.
 	let urlTargetStatus = $state<'idle' | 'loading' | 'failed'>('idle');
 	// The workspace root is the landing. A project may still be open behind it
-	// (the logo link lands here without dropping tabs); choosing a mode resumes it.
+	// (the logo link lands here without dropping tabs); choosing a mode resumes
+	// it. The root address never names that project: a link that does is
+	// opened in a mode instead (see openUrlTargetMode).
 	const showLanding = $derived(mode === null && urlTargetStatus === 'idle');
 	// What Retry re-runs after a 'failed' target.
 	let retryUrlTarget: (() => Promise<void>) | null = null;
@@ -329,7 +331,10 @@ before the Change Date. See LICENSE for complete terms.
 		try {
 			const params = await load();
 			if (epoch !== urlTargetEpoch) return;
-			if (params) workspaceTabs.openProject(params);
+			if (params) {
+				workspaceTabs.openProject(params);
+				if (mode === null) openUrlTargetMode();
+			}
 			urlTargetStatus = 'idle';
 		} catch (error) {
 			logBoundaryError('workspace.urlTarget', error);
@@ -337,6 +342,28 @@ before the Change Date. See LICENSE for complete terms.
 			urlTargetStatus = 'failed';
 			retryUrlTarget = () => trackUrlTarget(load);
 		}
+	}
+
+	// A root link to a project carries no mode, and the landing would hide
+	// what it points at. Opens the mode that produced the result on screen,
+	// or Create for a session that has none yet.
+	function openUrlTargetMode(): void {
+		const origin = renderOrigin(request.currentRender);
+		goto(
+			resolve(
+				buildWorkspaceUrl(
+					origin?.mode ?? 'render',
+					request,
+					origin?.tool ? { tool: origin.tool } : {}
+				) as PathnameWithSearchOrHash,
+				{}
+			),
+			{
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true
+			}
+		).catch((error: unknown) => logBoundaryError('workspace.urlTargetMode', error));
 	}
 
 	// Drops any in-flight or failed resolution — the URL no longer points at
@@ -369,6 +396,7 @@ before the Change Date. See LICENSE for complete terms.
 			sameGenerationAnchor(generationAnchorFromSearch(searchParams), request.generationAnchor);
 		if (!target || alreadyShown) {
 			settleUrlTarget();
+			if (alreadyShown && mode === null) openUrlTargetMode();
 			return Promise.resolve();
 		}
 		return trackUrlTarget(() => resolveUrlTarget(searchParams));
@@ -435,22 +463,20 @@ before the Change Date. See LICENSE for complete terms.
 		hydrated = true;
 	});
 
-	const serializedRequest = $derived(mode === null ? '/' : buildShareUrl(mode, request));
+	const serializedRequest = $derived(mode === null ? null : buildShareUrl(mode, request));
 	function scheduleUrlSync(): (() => void) | undefined {
 		if (!hydrated || urlTargetStatus !== 'idle' || navigating.to !== null) return;
 		const activeMode = mode;
+		// The landing shows no project, so the root address names none either.
+		if (activeMode === null || serializedRequest === null) return;
 		const activeProjectId =
 			workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
 		const activeSessionId = workspaceTabs.activeTab.activeSessionTabId ?? undefined;
 		const generationAnchor = request.generationAnchor;
-		const requestSearch = serializedRequest;
 		const timer = setTimeout(() => {
 			if (navigating.to !== null) return;
 			const currentSearch = new URLSearchParams(window.location.search);
-			const base =
-				activeMode === null
-					? requestSearch
-					: buildShareUrl(activeMode, request, subTabFromSearch(activeMode, currentSearch));
+			const base = buildShareUrl(activeMode, request, subTabFromSearch(activeMode, currentSearch));
 			const url = withProjectSession(base, activeProjectId, activeSessionId, generationAnchor);
 			if (`${window.location.pathname}${window.location.search}` !== url) {
 				goto(resolve(url as PathnameWithSearchOrHash, {}), {
