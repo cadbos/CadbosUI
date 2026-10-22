@@ -163,7 +163,41 @@ describe('runObjectReplacement', () => {
 			}
 		});
 		expect(queuedWorkflow?.['60']?.inputs.mask).toEqual(['212', 0]);
-		expect(queuedWorkflow?.['68']?.inputs.destination).toEqual(['1', 0]);
+		expect(queuedWorkflow?.['33']).toMatchObject({
+			class_type: 'UpscaleModelLoader',
+			inputs: { model_name: 'RealESRGAN_x2.pth' }
+		});
+		expect(queuedWorkflow?.['34']).toMatchObject({
+			class_type: 'ImageUpscaleWithModel',
+			inputs: { upscale_model: ['33', 0], image: ['101', 0] }
+		});
+		expect(queuedWorkflow?.['66']).toMatchObject({
+			class_type: 'GetImageSize',
+			inputs: { image: ['1', 0] }
+		});
+		expect(queuedWorkflow?.['67']).toMatchObject({
+			class_type: 'ImageResizeKJv2',
+			inputs: {
+				image: ['34', 0],
+				width: ['66', 0],
+				height: ['66', 1],
+				upscale_method: 'lanczos',
+				keep_proportion: 'stretch',
+				divisible_by: 1,
+				mask: ['65', 0]
+			}
+		});
+		expect(queuedWorkflow?.['68']).toMatchObject({
+			class_type: 'ImageCompositeMasked',
+			inputs: {
+				x: 0,
+				y: 0,
+				resize_source: false,
+				destination: ['1', 0],
+				source: ['67', 0],
+				mask: ['67', 3]
+			}
+		});
 		expect(queuedWorkflow?.['17']).toEqual({
 			inputs: { filename_prefix: 'obj-replace-v23', images: ['68', 0] },
 			class_type: 'SaveImage',

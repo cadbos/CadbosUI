@@ -310,7 +310,7 @@
 	"222": {
 		"inputs": {
 			"destination": ["42", 0],
-			"source": ["221", 0],
+			"source": ["226", 0],
 			"x": ["205", 0],
 			"y": ["206", 0],
 			"resize_source": false
@@ -318,6 +318,51 @@
 		"class_type": "ImageCompositeMasked",
 		"_meta": {
 			"title": "Paste region into scene"
+		}
+	},
+	"223": {
+		"inputs": {
+			"image": ["210", 0]
+		},
+		"class_type": "GetImageSize",
+		"_meta": {
+			"title": "Region size"
+		}
+	},
+	"224": {
+		"inputs": {
+			"model_name": "RealESRGAN_x2.pth"
+		},
+		"class_type": "UpscaleModelLoader",
+		"_meta": {
+			"title": "Load Upscale Model"
+		}
+	},
+	"225": {
+		"inputs": {
+			"upscale_model": ["224", 0],
+			"image": ["221", 0]
+		},
+		"class_type": "ImageUpscaleWithModel",
+		"_meta": {
+			"title": "Upscale Image (using Model)"
+		}
+	},
+	"226": {
+		"inputs": {
+			"width": ["223", 0],
+			"height": ["223", 1],
+			"upscale_method": "lanczos",
+			"keep_proportion": "stretch",
+			"pad_color": "0, 0, 0",
+			"crop_position": "center",
+			"divisible_by": 1,
+			"device": "cpu",
+			"image": ["225", 0]
+		},
+		"class_type": "ImageResizeKJv2",
+		"_meta": {
+			"title": "Resize repaint to region size"
 		}
 	},
 	"102:147": {
