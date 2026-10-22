@@ -249,9 +249,10 @@ test('closing a tab removes it and falls back to a neighboring project', async (
 	await expect(resultImage(page)).toHaveAttribute('src', '/api/media/test-media/living-room.webp');
 });
 
-const ROOT_SESSION_URL = new RegExp(
-	`/\\?project=${PROJECT_A}&session=${SESSION_A}&generation=${GENERATION_A}$`
-);
+const ROOT_URL = /\/$/;
+// Past Workspace.svelte's 400 ms URL-sync debounce, so a sync that would
+// write the project back into the root address has already run.
+const URL_SYNC_SETTLED_MS = 600;
 
 async function expectLanding(page: Page): Promise<void> {
 	await Promise.all([
@@ -262,7 +263,7 @@ async function expectLanding(page: Page): Promise<void> {
 	]);
 }
 
-test('the logo keeps the open project in the address without selecting a mode', async ({
+test('the logo clears the address and keeps the open project behind the landing', async ({
 	page
 }) => {
 	await authenticate(page);
@@ -282,8 +283,10 @@ test('the logo keeps the open project in the address without selecting a mode', 
 
 	await page.locator('.brand').click();
 
-	await expect(page).toHaveURL(ROOT_SESSION_URL);
 	await expectLanding(page);
+	await expect(page).toHaveURL(ROOT_URL);
+	await page.waitForTimeout(URL_SYNC_SETTLED_MS);
+	await expect(page).toHaveURL(ROOT_URL);
 	await expect(page.getByRole('tab', { name: 'Living room' })).toHaveCount(0);
 
 	await page.getByRole('button', { name: 'Создание' }).click();
@@ -295,7 +298,7 @@ test('the logo keeps the open project in the address without selecting a mode', 
 	await expect(page.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
 });
 
-test('a reopened tab writes the restored project into the address without selecting a mode', async ({
+test('a reopened tab restores the project behind the landing without naming it in the address', async ({
 	page
 }) => {
 	await authenticate(page);
@@ -327,8 +330,9 @@ test('a reopened tab writes the restored project into the address without select
 
 	await page.goto('/');
 
-	await expect(page).toHaveURL(ROOT_SESSION_URL);
 	await expectLanding(page);
+	await page.waitForTimeout(URL_SYNC_SETTLED_MS);
+	await expect(page).toHaveURL(ROOT_URL);
 
 	await page.getByRole('button', { name: 'Создание' }).click();
 	await expect(page.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
@@ -336,4 +340,56 @@ test('a reopened tab writes the restored project into the address without select
 		'src',
 		'/api/media/test-media/living-room.webp'
 	);
+});
+
+test('a root link to a generation opens it in its mode instead of the landing', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockProjectList(page, { [PROJECT_A]: 'Living room' });
+	await mockProjectDetail(
+		page,
+		PROJECT_A,
+		SESSION_A,
+		GENERATION_A,
+		'Living room',
+		'/api/media/test-media/living-room.webp'
+	);
+	await page.route(`**/api/generated-images/${GENERATION_A}`, async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: GENERATION_A,
+				prompt: 'scandinavian living room',
+				kind: 'render',
+				createdAt: Date.UTC(2026, 0, 1),
+				amount: 5,
+				balanceAfter: 95,
+				image: media(2, '/api/media/test-media/living-room.webp'),
+				source: media(1, '/api/media/test-media/room.jpg'),
+				formSnapshot: null,
+				session: {
+					projectId: PROJECT_A,
+					projectTitle: 'Living room',
+					sessionId: SESSION_A,
+					sessionTitle: 'Main thread'
+				},
+				media: [
+					media(2, '/api/media/test-media/living-room.webp'),
+					media(1, '/api/media/test-media/room.jpg')
+				]
+			})
+		});
+	});
+
+	await page.goto(`/?project=${PROJECT_A}&session=${SESSION_A}&generation=${GENERATION_A}`);
+
+	await expect(page).toHaveURL(
+		new RegExp(
+			`/create/interior\\?view=chat&format=webp&project=${PROJECT_A}&session=${SESSION_A}&generation=${GENERATION_A}$`
+		)
+	);
+	await expect(page.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
+	await expect(resultImage(page)).toHaveAttribute('src', '/api/media/test-media/living-room.webp');
 });
