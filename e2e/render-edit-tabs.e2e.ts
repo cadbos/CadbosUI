@@ -715,13 +715,14 @@ test('a completed freeform edit unlocks the form for the next edit on the same r
 	await authenticate(page);
 	await mockUpload(page);
 	await page.route('**/api/edit', async (route) => {
-		const body = route.request().postDataJSON() as { prompt: string };
+		const body = route.request().postDataJSON() as { imageKey: string; prompt: string };
 		const isFirst =
 			body.prompt ===
 			ru['edit.addObject.userPromptTemplate'].replace(
 				'{object}',
 				'Replace the sofa with an armchair'
 			);
+		expect(body.imageKey).toBe(mediaKey(isFirst ? 1 : 2));
 		const jobId = isFirst ? firstJobId : secondJobId;
 		await route.fulfill({
 			status: 202,

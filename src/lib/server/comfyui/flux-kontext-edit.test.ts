@@ -130,6 +130,48 @@ describe('runFluxKontextEdit', () => {
 		expect(client.downloadImage).toHaveBeenCalledWith(finalOutput, { signal: undefined });
 	});
 
+	it('resizes the full scene without cropping before encoding', async () => {
+		const client = mockClient();
+		vi.mocked(client.uploadImage).mockResolvedValueOnce(sceneUpload);
+		vi.mocked(client.queueWorkflow).mockResolvedValue({ promptId: 'prompt-1', queueNumber: 0 });
+
+		await queueFluxKontextEdit(client, request());
+
+		const queuedWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
+		expect(queuedWorkflow?.['6']).toMatchObject({
+			class_type: 'ImageResizeKJv2',
+			inputs: {
+				image: ['4', 0],
+				width: 1024,
+				height: 1024,
+				upscale_method: 'lanczos',
+				keep_proportion: 'total_pixels',
+				divisible_by: 16,
+				device: 'cpu'
+			}
+		});
+		expect(queuedWorkflow?.['8']).toMatchObject({
+			class_type: 'VAEEncode',
+			inputs: { pixels: ['6', 0], vae: ['3', 0] }
+		});
+		expect(queuedWorkflow?.['12']).toMatchObject({
+			class_type: 'ReferenceLatent',
+			inputs: { latent: ['8', 0] }
+		});
+		expect(queuedWorkflow?.['15']).toMatchObject({
+			class_type: 'KSampler',
+			inputs: { latent_image: ['8', 0] }
+		});
+		expect(queuedWorkflow?.['16']).toMatchObject({
+			class_type: 'VAEDecode',
+			inputs: { samples: ['15', 0], vae: ['3', 0] }
+		});
+		expect(queuedWorkflow?.['17']).toMatchObject({
+			class_type: 'SaveImage',
+			inputs: { filename_prefix: 'FluxKontext_edit', images: ['16', 0] }
+		});
+	});
+
 	it('keeps workflow state isolated across repeated runs', async () => {
 		const client = mockClient();
 		vi.mocked(client.uploadImage)

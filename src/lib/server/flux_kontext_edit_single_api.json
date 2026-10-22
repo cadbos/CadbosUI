@@ -41,11 +41,19 @@
 	},
 	"6": {
 		"inputs": {
+			"width": 1024,
+			"height": 1024,
+			"upscale_method": "lanczos",
+			"keep_proportion": "total_pixels",
+			"pad_color": "0, 0, 0",
+			"crop_position": "center",
+			"divisible_by": 16,
+			"device": "cpu",
 			"image": ["4", 0]
 		},
-		"class_type": "FluxKontextImageScale",
+		"class_type": "ImageResizeKJv2",
 		"_meta": {
-			"title": "FluxKontextImageScale"
+			"title": "Resize full scene for Kontext"
 		}
 	},
 	"8": {
