@@ -325,10 +325,14 @@ export const ru = {
 	'usage.totals.users': 'Зарегистрировано пользователей',
 	'usage.totals.d1RowsRead': 'Прочитано строк D1 · {date} UTC',
 	'usage.totals.d1RowsWritten': 'Записано строк D1 · {date} UTC',
-	'usage.totals.d1DivisionSign': '÷',
-	'usage.totals.d1LimitReached': 'Лимит достигнут',
+	'usage.totals.quotaDivisionSign': '÷',
+	'usage.totals.quotaLimitReached': 'Лимит достигнут',
 	'usage.totals.d1Loading': 'Загрузка лимитов D1…',
 	'usage.totals.d1Failed': 'Не удалось загрузить лимиты D1.',
+	'usage.totals.workersAiNeurons': 'Нейроны Workers AI · {date} UTC',
+	'usage.totals.workersAiRequests': 'Запросы к Workers AI · {date} UTC',
+	'usage.totals.workersAiLoading': 'Загрузка расхода Workers AI…',
+	'usage.totals.workersAiFailed': 'Не удалось загрузить расход Workers AI.',
 	'usage.loading': 'Загрузка использования…',
 	'usage.empty': 'Записей об использовании пока нет.',
 	'usage.failed': 'Не удалось загрузить использование.',
@@ -426,6 +430,7 @@ export const ru = {
 	'status.service.d1': 'База данных D1',
 	'status.service.nostr': 'Ретрансляторы Nostr',
 	'status.service.s3': 'Хранилище S3',
+	'status.service.workersAi': 'Workers AI',
 	'status.hint.archai': 'Обеспечивает «Создание», «Миграцию стиля» и «Улучшение 4K».',
 	'status.hint.assets':
 		'Отдаёт статические файлы самого приложения (JS, CSS, изображения интерфейса). Не связано с хранилищем S3 для загруженных пользователями изображений.',
@@ -436,6 +441,8 @@ export const ru = {
 	'status.hint.nostr':
 		'Отвечает за вход («Войти») через расширение Nostr или Nostr Connect. Не связано с числом релеев в вашем профиле (см. «Релеев» в шапке).',
 	'status.hint.s3': 'Хранит загруженное вами фото комнаты и сгенерированные изображения.',
+	'status.hint.workersAi':
+		'Переводит промпт «Создания» на английский перед отправкой в archAI. Если недоступен, промпт уходит без перевода.',
 	'version.title': 'Версия приложения',
 	'version.subtitle': 'Информация о выпуске и сборке этого развёртывания Cadbos.',
 	'version.current': 'Текущая версия',

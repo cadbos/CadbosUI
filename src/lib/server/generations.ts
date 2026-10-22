@@ -149,6 +149,10 @@ export interface RecordGenerationInput {
 	// style reference; undefined for a built-in preset and for kinds that
 	// take no reference.
 	referenceMediaId?: number;
+	// The English translation a Create render sent archAI in place of
+	// `prompt` (migrations/0026) — null when it sent `prompt` as written;
+	// undefined for every other kind.
+	translatedPrompt?: string | null;
 }
 
 // The stored generation's id alongside the caller's resulting balance — the
@@ -174,9 +178,9 @@ export async function recordGeneration(
 		db.run(
 			sql`INSERT INTO generations
 				(id, user_id, result_media_id, source_media_id, prompt, kind, ledger_entry_id, created_at, session_id,
-				archai_render_sec, archai_download_sec, archai_reupload_sec, form_snapshot, reference_media_id)
+				archai_render_sec, archai_download_sec, archai_reupload_sec, form_snapshot, reference_media_id, translated_prompt)
 				SELECT ${id}, ${userId}, ${input.resultMediaId}, ${input.sourceMediaId}, ${input.prompt}, ${input.kind}, l.id, ${now}, ${input.sessionId},
-				${input.archaiRenderSec}, ${input.archaiDownloadSec}, ${input.archaiReuploadSec}, ${input.formSnapshot ? JSON.stringify(input.formSnapshot) : null}, ${input.referenceMediaId ?? null}
+				${input.archaiRenderSec}, ${input.archaiDownloadSec}, ${input.archaiReuploadSec}, ${input.formSnapshot ? JSON.stringify(input.formSnapshot) : null}, ${input.referenceMediaId ?? null}, ${input.translatedPrompt ?? null}
 				FROM ledger_entries l WHERE l.id = last_insert_rowid() AND changes() = 1 AND l.user_id = ${userId} AND l.entry_side = 'debit'`
 		),
 		db.all<BalanceRow>(

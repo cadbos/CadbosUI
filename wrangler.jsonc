@@ -38,6 +38,13 @@
 			"migrations_dir": "migrations"
 		}
 	],
+	// Workers AI translates Create prompts to English before they reach archAI
+	// (src/lib/server/prompt-translation.ts). It always runs on Cloudflare, so
+	// local dev calls it too and spends the account's daily Neurons.
+	"ai": {
+		"binding": "AI",
+		"remote": true
+	},
 	// Worker variables configured per environment in Cloudflare:
 	// CLOUDFLARE_ACCOUNT_ID
 	// CLOUDFLARE_GRAPHQL_URL (optional, default https://api.cloudflare.com/client/v4/graphql)

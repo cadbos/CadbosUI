@@ -34,6 +34,7 @@ import {
 } from '$lib/server/mocks/fixtures';
 import { uploadGeneratedImageBytes } from '$lib/server/uploads';
 import { downloadRemoteImage, RemoteImageImportError } from '$lib/server/remote-image';
+import { translateCreatePrompt } from '$lib/server/prompt-translation';
 
 // И-MA-6 / И-MA-ED3: default sync-call timeout, shared by render and edit.
 const RENDER_TIMEOUT_MS = 120_000;
@@ -49,6 +50,14 @@ export interface StoredRenderResponse {
 	renderSec: number;
 	downloadSec: number;
 	reuploadSec: number;
+}
+
+// A Create render also reports the English translation it sent archAI in
+// place of the user's prompt — null when the prompt needed none, translation
+// failed, or no prompt was sent (Auto-enhance); archAI then got the prompt as
+// written.
+export interface CreateRenderResponse extends StoredRenderResponse {
+	translatedPrompt: string | null;
 }
 
 // Provider error details (raw response text, internal ids) must stay server-side
@@ -183,7 +192,7 @@ export async function renderInterior(
 	platform: App.Platform | undefined,
 	bucket: Bucket | undefined,
 	params: { image: string; prompt: string; outputFormat: OutputFormat }
-): Promise<StoredRenderResponse> {
+): Promise<CreateRenderResponse> {
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
@@ -197,7 +206,8 @@ export async function renderInterior(
 				outputSize: null,
 				renderSec: 0,
 				downloadSec: 0,
-				reuploadSec: 0
+				reuploadSec: 0,
+				translatedPrompt: null
 			};
 		}
 		generationFailed(
@@ -208,25 +218,35 @@ export async function renderInterior(
 	}
 	if (!bucket) generationFailed('render/interior', 'Render failed', 'bucket not configured');
 
-	return processRenderResult('render/interior', 'Render failed', platform, bucket, () =>
-		postRenderInterior({
-			client: requestClientFor(apiKey, apiUrl),
-			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
-			body: {
-				image: params.image,
-				outputFormat: params.outputFormat,
-				// Omit empty prompt — API treats its absence as Enhance mode.
-				...(params.prompt ? { prompt: params.prompt } : {})
-			}
-		})
+	const translatedPrompt = params.prompt
+		? await translateCreatePrompt(platform, params.prompt)
+		: null;
+	const prompt = translatedPrompt ?? params.prompt;
+	const result = await processRenderResult(
+		'render/interior',
+		'Render failed',
+		platform,
+		bucket,
+		() =>
+			postRenderInterior({
+				client: requestClientFor(apiKey, apiUrl),
+				signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+				body: {
+					image: params.image,
+					outputFormat: params.outputFormat,
+					// Omit empty prompt — API treats its absence as Enhance mode.
+					...(prompt ? { prompt } : {})
+				}
+			})
 	);
+	return { ...result, translatedPrompt };
 }
 
 export async function renderExterior(
 	platform: App.Platform | undefined,
 	bucket: Bucket | undefined,
 	params: { image: string; prompt: string; outputFormat: OutputFormat }
-): Promise<StoredRenderResponse> {
+): Promise<CreateRenderResponse> {
 	const apiKey = platform?.env?.ARCHAI_API_KEY;
 	const apiUrl = platform?.env?.ARCHAI_API_URL;
 
@@ -240,7 +260,8 @@ export async function renderExterior(
 				outputSize: null,
 				renderSec: 0,
 				downloadSec: 0,
-				reuploadSec: 0
+				reuploadSec: 0,
+				translatedPrompt: null
 			};
 		}
 		generationFailed(
@@ -251,17 +272,27 @@ export async function renderExterior(
 	}
 	if (!bucket) generationFailed('render/exterior', 'Render failed', 'bucket not configured');
 
-	return processRenderResult('render/exterior', 'Render failed', platform, bucket, () =>
-		postRenderExterior({
-			client: requestClientFor(apiKey, apiUrl),
-			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
-			body: {
-				image: params.image,
-				outputFormat: params.outputFormat,
-				...(params.prompt ? { prompt: params.prompt } : {})
-			}
-		})
+	const translatedPrompt = params.prompt
+		? await translateCreatePrompt(platform, params.prompt)
+		: null;
+	const prompt = translatedPrompt ?? params.prompt;
+	const result = await processRenderResult(
+		'render/exterior',
+		'Render failed',
+		platform,
+		bucket,
+		() =>
+			postRenderExterior({
+				client: requestClientFor(apiKey, apiUrl),
+				signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+				body: {
+					image: params.image,
+					outputFormat: params.outputFormat,
+					...(prompt ? { prompt } : {})
+				}
+			})
 	);
+	return { ...result, translatedPrompt };
 }
 
 export async function styleTransferInterior(

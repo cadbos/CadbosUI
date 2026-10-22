@@ -114,6 +114,20 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 			return;
 		}
 
+		if (new URL(route.request().url()).pathname === '/api/usage/workers-ai') {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					date: quotaDate,
+					requests: 120,
+					neurons: 431.5,
+					neuronLimit: 10_000
+				})
+			});
+			return;
+		}
+
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -213,6 +227,14 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	).toBeVisible();
 	await expect(totals).toContainText(`${ru['usage.totals.spend']} $ 1,234.50`);
 	await expect(totals).toContainText(`${ru['usage.totals.users']} 1 200`);
+	const neuronsQuota = totals
+		.getByText(ru['usage.totals.workersAiNeurons'].replace('{date}', quotaDate))
+		.locator('..');
+	await expect(neuronsQuota.locator('.quota-used')).toHaveText('432');
+	await expect(neuronsQuota.locator('.quota-limit')).toHaveText('10 000');
+	await expect(totals).toContainText(
+		`${ru['usage.totals.workersAiRequests'].replace('{date}', quotaDate)} 120`
+	);
 	await expect(page.getByRole('cell', { name: '1,234.50' })).toBeVisible();
 	await expect(page.getByRole('cell', { name: '1 234', exact: true })).toBeVisible();
 	await expect(
@@ -226,16 +248,16 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	const writeQuota = totals
 		.getByText(ru['usage.totals.d1RowsWritten'].replace('{date}', quotaDate))
 		.locator('..');
-	await expect(readQuota.locator('.d1-used')).toHaveText('5 000 000');
-	await expect(readQuota.locator('.d1-limit')).toHaveText('5 000 000');
-	await expect(writeQuota.locator('.d1-used')).toHaveText('100');
-	await expect(writeQuota.locator('.d1-limit')).toHaveText('100 000');
+	await expect(readQuota.locator('.quota-used')).toHaveText('5 000 000');
+	await expect(readQuota.locator('.quota-limit')).toHaveText('5 000 000');
+	await expect(writeQuota.locator('.quota-used')).toHaveText('100');
+	await expect(writeQuota.locator('.quota-limit')).toHaveText('100 000');
 	for (const quota of [readQuota, writeQuota]) {
-		await expect(quota.locator('.d1-divider')).toHaveText(ru['usage.totals.d1DivisionSign']);
-		const layout = await quota.locator('.d1-quotient').evaluate((element) => {
-			const used = element.querySelector('.d1-used')!.getBoundingClientRect();
-			const divider = element.querySelector('.d1-divider')!.getBoundingClientRect();
-			const limit = element.querySelector('.d1-limit')!.getBoundingClientRect();
+		await expect(quota.locator('.quota-divider')).toHaveText(ru['usage.totals.quotaDivisionSign']);
+		const layout = await quota.locator('.quota-quotient').evaluate((element) => {
+			const used = element.querySelector('.quota-used')!.getBoundingClientRect();
+			const divider = element.querySelector('.quota-divider')!.getBoundingClientRect();
+			const limit = element.querySelector('.quota-limit')!.getBoundingClientRect();
 			return {
 				rightEdgeDifference: Math.abs(used.right - limit.right),
 				dividerLeftOfValues: divider.right < Math.min(used.left, limit.left),
@@ -248,7 +270,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 		expect(layout.dividerLeftOfValues).toBe(true);
 		expect(layout.verticalCenterDifference).toBeLessThan(1);
 	}
-	await expect(readQuota).toContainText(ru['usage.totals.d1LimitReached']);
+	await expect(readQuota).toContainText(ru['usage.totals.quotaLimitReached']);
 	await expect(totals).toContainText(
 		`${ru['usage.totals.sources']} ${ru['usage.totals.countWithSize'].replace('{count}', '2').replace('{size}', sourceSize)}`
 	);
@@ -268,7 +290,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 	await expect(page.getByRole('heading', { name: 'Usage' })).toBeVisible();
 	await expect(page.getByRole('cell', { name: '1,234.50' })).toBeVisible();
 	await expect(page.getByRole('cell', { name: '1 234', exact: true })).toBeVisible();
-	await expect(page.locator('.d1-used').first()).toHaveText('5 000 000');
+	await expect(page.locator('.quota-used').first()).toHaveText('5 000 000');
 	await expect(page.getByRole('columnheader', { name: 'Sources size, MB' })).toBeVisible();
 	await expect(page.getByRole('cell', { name: '1 536', exact: true })).toBeVisible();
 	await page.locator('.currency-trigger').click();

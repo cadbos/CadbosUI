@@ -324,10 +324,14 @@ export const en = {
 	'usage.totals.users': 'Registered users',
 	'usage.totals.d1RowsRead': 'D1 rows read · {date} UTC',
 	'usage.totals.d1RowsWritten': 'D1 rows written · {date} UTC',
-	'usage.totals.d1DivisionSign': '÷',
-	'usage.totals.d1LimitReached': 'Limit reached',
+	'usage.totals.quotaDivisionSign': '÷',
+	'usage.totals.quotaLimitReached': 'Limit reached',
 	'usage.totals.d1Loading': 'Loading D1 limits…',
 	'usage.totals.d1Failed': 'Could not load D1 limits.',
+	'usage.totals.workersAiNeurons': 'Workers AI neurons · {date} UTC',
+	'usage.totals.workersAiRequests': 'Workers AI requests · {date} UTC',
+	'usage.totals.workersAiLoading': 'Loading Workers AI usage…',
+	'usage.totals.workersAiFailed': 'Could not load Workers AI usage.',
 	'usage.loading': 'Loading usage…',
 	'usage.empty': 'No usage records yet.',
 	'usage.failed': 'Could not load usage.',
@@ -424,6 +428,7 @@ export const en = {
 	'status.service.d1': 'D1 database',
 	'status.service.nostr': 'Nostr relays',
 	'status.service.s3': 'S3 storage',
+	'status.service.workersAi': 'Workers AI',
 	'status.hint.archai': 'Powers Create, Style transfer, and 4K enhancement.',
 	'status.hint.assets':
 		"Serves the app's own interface files (JS, CSS, images). Unrelated to the S3 storage used for user-uploaded images.",
@@ -434,6 +439,8 @@ export const en = {
 	'status.hint.nostr':
 		'Handles Sign in, via Nostr extension or Nostr Connect. Unrelated to the relay count shown in your profile (see "Relays" in the header).',
 	'status.hint.s3': 'Stores the room photo you upload and the images Cadbos generates.',
+	'status.hint.workersAi':
+		'Translates the Create prompt to English before it goes to archAI. When unavailable, the prompt is sent untranslated.',
 	'version.title': 'Application version',
 	'version.subtitle': 'Release and build information for this Cadbos deployment.',
 	'version.current': 'Current version',
