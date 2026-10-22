@@ -396,6 +396,7 @@ before the Change Date. See LICENSE for complete terms.
 			sameGenerationAnchor(generationAnchorFromSearch(searchParams), request.generationAnchor);
 		if (!target || alreadyShown) {
 			settleUrlTarget();
+			if (alreadyShown && mode === null) openUrlTargetMode();
 			return Promise.resolve();
 		}
 		return trackUrlTarget(() => resolveUrlTarget(searchParams));

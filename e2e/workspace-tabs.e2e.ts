@@ -298,6 +298,41 @@ test('the logo clears the address and keeps the open project behind the landing'
 	await expect(page.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
 });
 
+test('a root link to the project already behind the landing opens it in its mode', async ({
+	page
+}) => {
+	await authenticate(page);
+	await mockProjectList(page, { [PROJECT_A]: 'Living room' });
+	await mockProjectDetail(
+		page,
+		PROJECT_A,
+		SESSION_A,
+		GENERATION_A,
+		'Living room',
+		'/api/media/test-media/living-room.webp'
+	);
+
+	await page.goto(`/projects/${PROJECT_A}`);
+	await page.getByRole('button', { name: 'Продолжить сессию «Main thread»' }).click();
+	await expect(page).toHaveURL(new RegExp(`/create/interior\\?.*generation=${GENERATION_A}`));
+	await page.locator('.brand').click();
+	await expectLanding(page);
+
+	await page.evaluate((href) => {
+		const link = document.createElement('a');
+		link.href = href;
+		document.body.append(link);
+		link.click();
+	}, `/?project=${PROJECT_A}&session=${SESSION_A}&generation=${GENERATION_A}`);
+
+	await expect(page).toHaveURL(
+		new RegExp(
+			`/create/interior\\?view=chat&format=webp&project=${PROJECT_A}&session=${SESSION_A}&generation=${GENERATION_A}$`
+		)
+	);
+	await expect(page.getByRole('tab', { name: 'Living room', selected: true })).toBeVisible();
+});
+
 test('a reopened tab restores the project behind the landing without naming it in the address', async ({
 	page
 }) => {
