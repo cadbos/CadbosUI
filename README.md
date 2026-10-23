@@ -98,6 +98,24 @@ environment variables. Their authoritative definitions are in
   `FLUX_KONTEXT_EDIT_COST`, `REPAINT_COST`, and `HEALTH_CACHE_TTL_SECONDS` — optional
   operational settings
 
+Generation timeouts are optional runtime variables configured in Cloudflare (or
+`.dev.vars` for local development). Omit them to retain the defaults:
+
+| Variable                     | Default (milliseconds) | Applies to                                                                                       |
+| ---------------------------- | ---------------------: | ------------------------------------------------------------------------------------------------ |
+| `COMFYUI_JOB_TIMEOUT_MS`     |               `600000` | Repaint, general edit/object removal, object replacement, texture replacement, and lighting jobs |
+| `COMFYUI_REQUEST_TIMEOUT_MS` |               `120000` | ComfyUI submissions, status/output requests, and cancellation requests                           |
+| `RENDER_TIMEOUT_MS`          |               `120000` | archAI interior/exterior rendering, style transfer, masked texture replacement, and 4K upscaling |
+
+Values must be decimal integers from `1` through `2147483647`, without whitespace.
+Empty or invalid values cause configuration errors rather than using defaults.
+Job age includes queue time; status checks look for a completed result before
+applying the timeout. Changing the job timeout affects existing processing jobs
+on their next status check. A job timeout does not cancel ComfyUI execution.
+Browser status requests retain their 150-second timeout and retries; a longer
+server request timeout can cause browser retries before the server finishes.
+Other image download limits and retry policies are configured separately.
+
 Never place provider credentials in `.env` variables exposed to the client. Production
 secrets, including the S3 credentials, must be configured through Cloudflare;
 `wrangler.jsonc` documents the expected variable and secret names. Apply the checked-in D1

@@ -21,6 +21,7 @@ import { getDb } from '$lib/server/db';
 import { touchRateLimit } from '$lib/server/auth/rate-limit';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { assertGenerationAllowed, getUserIdByPubkey } from '$lib/server/billing';
+import { GenerationTimeoutConfigurationError } from '$lib/server/generation-timeouts';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import {
@@ -173,6 +174,10 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				id
 			);
 		} catch (error) {
+			if (error instanceof GenerationTimeoutConfigurationError) {
+				console.error(error.message);
+				return apiError(500, 'light_settings_failed', 'Light settings failed');
+			}
 			if (error instanceof RemoteImageImportError) return remoteImageError(error);
 			if (error instanceof ComfyUiError) {
 				const detail: FailureDetail = {

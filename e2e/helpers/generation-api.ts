@@ -29,13 +29,20 @@ export const USER_ID = 'generation-user';
 export const SESSION_ID = '00000000-0000-4000-8000-000000000001';
 
 interface GenerationApi {
+	env: App.Platform['env'];
 	db: D1Database;
 	request: APIRequestContext;
 	submissions: string[];
 }
 
-export const test = base.extend<{ generationApi: GenerationApi }>({
-	generationApi: async ({ playwright }, use) => {
+export const test = base.extend<{
+	generationApi: GenerationApi;
+	generationEnv: Partial<App.Platform['env']>;
+	comfyCompletion: 'after-first-poll' | 'pending' | 'completed';
+}>({
+	generationEnv: [{}, { option: true }],
+	comfyCompletion: ['after-first-poll', { option: true }],
+	generationApi: async ({ playwright, generationEnv, comfyCompletion }, use) => {
 		const db = makeD1();
 		const originalFetch = globalThis.fetch;
 		try {
@@ -84,16 +91,18 @@ export const test = base.extend<{ generationApi: GenerationApi }>({
 					if (request.method === 'GET' && url.pathname === '/history/free-job') {
 						historyReads += 1;
 						return Response.json(
-							historyReads === 1
+							comfyCompletion === 'pending' ||
+								(comfyCompletion === 'after-first-poll' && historyReads === 1)
 								? {}
 								: {
 										'free-job': {
 											status: { completed: true, status_str: 'success', messages: [] },
-											outputs: {
-												'17': {
-													images: [{ filename: 'result.png', subfolder: '', type: 'output' }]
-												}
-											}
+											outputs: Object.fromEntries(
+												['9', '17', '100'].map((node) => [
+													node,
+													{ images: [{ filename: 'result.png', subfolder: '', type: 'output' }] }
+												])
+											)
 										}
 									}
 						);
@@ -144,7 +153,8 @@ export const test = base.extend<{ generationApi: GenerationApi }>({
 					OBJECT_REPLACEMENT_COST: '0',
 					COMFYUI_BASE_URL: { fetch: externalFetch },
 					ARCHAI_API_KEY: 'test-archai-key',
-					ARCHAI_API_URL: 'https://archai.example.test'
+					ARCHAI_API_URL: 'https://archai.example.test',
+					...generationEnv
 				}
 			} as unknown as App.Platform;
 			const http = createServer((incoming, outgoing) => {
@@ -176,7 +186,7 @@ export const test = base.extend<{ generationApi: GenerationApi }>({
 					}
 				});
 				try {
-					await use({ db, request, submissions });
+					await use({ db, env: platform.env, request, submissions });
 				} finally {
 					await request.dispose();
 				}

@@ -20,12 +20,11 @@ import {
 	queueObjectReplacement,
 	type ComfyDownloadedImage
 } from '$lib/server/comfyui';
+import { comfyUiJobTimeout, comfyUiRequestTimeout } from '$lib/server/generation-timeouts';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import { downloadRemoteImage } from '$lib/server/remote-image';
 
 const DEFAULT_OBJECT_REPLACEMENT_COST = 0.03;
-const COMFYUI_REQUEST_TIMEOUT_MS = 120_000;
-export const OBJECT_REPLACEMENT_TIMEOUT_MS = 10 * 60_000;
 
 // Target of the COMFYUI_BASE_URL VPC Service binding (wrangler.jsonc), which
 // routes to ComfyUI's actual localhost:8188 on the VPS over the private tunnel.
@@ -68,7 +67,7 @@ export async function cancelObjectReplacement(
 	promptId: string
 ): Promise<void> {
 	await createClient(platform).cancelWorkflow(promptId, {
-		signal: AbortSignal.timeout(COMFYUI_REQUEST_TIMEOUT_MS)
+		signal: AbortSignal.timeout(comfyUiRequestTimeout(platform))
 	});
 }
 
@@ -83,12 +82,14 @@ export async function submitObjectReplacement(
 	applicationOrigin: string,
 	jobId: string
 ): Promise<string> {
+	const requestTimeoutMs = comfyUiRequestTimeout(platform);
+	comfyUiJobTimeout(platform);
 	const client = createClient(platform);
 	const [scene, reference] = await Promise.all([
 		downloadRemoteImage(request.image, applicationOrigin),
 		downloadRemoteImage(request.referenceImage, applicationOrigin)
 	]);
-	const signal = AbortSignal.timeout(COMFYUI_REQUEST_TIMEOUT_MS);
+	const signal = AbortSignal.timeout(requestTimeoutMs);
 	const queued = await queueObjectReplacement(client, {
 		clientId: jobId,
 		reference: {
@@ -119,6 +120,6 @@ export async function pollObjectReplacement(
 	return getObjectReplacementResult(
 		createClient(platform),
 		promptId,
-		AbortSignal.timeout(COMFYUI_REQUEST_TIMEOUT_MS)
+		AbortSignal.timeout(comfyUiRequestTimeout(platform))
 	);
 }

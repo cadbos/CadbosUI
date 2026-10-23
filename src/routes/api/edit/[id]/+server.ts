@@ -20,9 +20,13 @@ import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/db';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
+import {
+	comfyUiJobTimeout,
+	GenerationTimeoutConfigurationError
+} from '$lib/server/generation-timeouts';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
-import { FLUX_KONTEXT_EDIT_TIMEOUT_MS, pollFluxKontextEdit } from '$lib/server/flux-kontext-edit';
+import { pollFluxKontextEdit } from '$lib/server/flux-kontext-edit';
 import {
 	completeFluxKontextEditJob,
 	failFluxKontextEditJob,
@@ -88,9 +92,15 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (job.status !== 'processing') return responseForJob(job, db);
 
 	let result;
+	let jobTimeoutMs: number;
 	try {
+		jobTimeoutMs = comfyUiJobTimeout(platform);
 		result = await pollFluxKontextEdit(platform, job.comfyPromptId);
 	} catch (error) {
+		if (error instanceof GenerationTimeoutConfigurationError) {
+			console.error(error.message);
+			return apiError(500, 'edit_poll_failed', 'Edit status failed');
+		}
 		if (
 			error instanceof ComfyUiError &&
 			(error.code === 'execution_failed' || error.code === 'missing_output')
@@ -124,7 +134,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 
 	if (result === null) {
 		const now = Date.now();
-		if (now - job.createdAt >= FLUX_KONTEXT_EDIT_TIMEOUT_MS) {
+		if (now - job.createdAt >= jobTimeoutMs) {
 			job = await failFluxKontextEditJob(
 				db,
 				userId,
