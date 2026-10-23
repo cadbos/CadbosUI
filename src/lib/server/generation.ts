@@ -13,6 +13,7 @@
  */
 
 import { dev } from '$app/environment';
+import { renderTimeout } from '$lib/server/generation-timeouts';
 import { createClient } from '$lib/server/archai/client';
 import {
 	postChangeTextures,
@@ -36,8 +37,6 @@ import { uploadGeneratedImageBytes } from '$lib/server/uploads';
 import { downloadRemoteImage, RemoteImageImportError } from '$lib/server/remote-image';
 import { translateCreatePrompt } from '$lib/server/prompt-translation';
 
-// И-MA-6 / И-MA-ED3: default sync-call timeout, shared by render and edit.
-const RENDER_TIMEOUT_MS = 120_000;
 const MAX_GENERATED_IMAGE_SIZE = 32 * 1024 * 1024;
 const RETRY_DELAYS_MS = [0, 250, 1_000] as const;
 
@@ -230,7 +229,7 @@ export async function renderInterior(
 		() =>
 			postRenderInterior({
 				client: requestClientFor(apiKey, apiUrl),
-				signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+				signal: AbortSignal.timeout(renderTimeout(platform)),
 				body: {
 					image: params.image,
 					outputFormat: params.outputFormat,
@@ -284,7 +283,7 @@ export async function renderExterior(
 		() =>
 			postRenderExterior({
 				client: requestClientFor(apiKey, apiUrl),
-				signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+				signal: AbortSignal.timeout(renderTimeout(platform)),
 				body: {
 					image: params.image,
 					outputFormat: params.outputFormat,
@@ -336,7 +335,7 @@ export async function styleTransferInterior(
 	try {
 		result = await postStyleTransfer({
 			client: requestClientFor(apiKey, apiUrl),
-			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+			signal: AbortSignal.timeout(renderTimeout(platform)),
 			body: {
 				image: params.image,
 				referenceImage: params.referenceImage,
@@ -425,7 +424,7 @@ export async function replaceTexturesWithMask(
 		() =>
 			postChangeTextures({
 				client: requestClientFor(apiKey, apiUrl),
-				signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+				signal: AbortSignal.timeout(renderTimeout(platform)),
 				body: { image: params.image, referenceImage: params.referenceImage, mask: params.mask }
 			})
 	);
@@ -465,7 +464,7 @@ export async function upscale4k(
 	return processRenderResult('upscale-4k', 'Upscale failed', platform, bucket, () =>
 		postUpscale4K({
 			client: requestClientFor(apiKey, apiUrl),
-			signal: AbortSignal.timeout(RENDER_TIMEOUT_MS),
+			signal: AbortSignal.timeout(renderTimeout(platform)),
 			body: {
 				image: params.image,
 				...(params.outputFormat ? { outputFormat: params.outputFormat } : {})

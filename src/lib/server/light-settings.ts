@@ -19,12 +19,11 @@ import {
 	queueLightSettings,
 	type ComfyDownloadedImage
 } from '$lib/server/comfyui';
+import { comfyUiJobTimeout, comfyUiRequestTimeout } from '$lib/server/generation-timeouts';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import { downloadRemoteImage } from '$lib/server/remote-image';
 
 const DEFAULT_LIGHT_SETTINGS_COST = 0.03;
-const COMFYUI_REQUEST_TIMEOUT_MS = 120_000;
-export const LIGHT_SETTINGS_TIMEOUT_MS = 10 * 60_000;
 
 // Target of the COMFYUI_BASE_URL VPC Service binding (wrangler.jsonc), which
 // routes to ComfyUI's actual localhost:8188 on the VPS over the private tunnel.
@@ -63,7 +62,7 @@ export async function cancelLightSettings(
 	promptId: string
 ): Promise<void> {
 	await createClient(platform).cancelWorkflow(promptId, {
-		signal: AbortSignal.timeout(COMFYUI_REQUEST_TIMEOUT_MS)
+		signal: AbortSignal.timeout(comfyUiRequestTimeout(platform))
 	});
 }
 
@@ -73,9 +72,11 @@ export async function submitLightSettings(
 	applicationOrigin: string,
 	jobId: string
 ): Promise<string> {
+	const requestTimeoutMs = comfyUiRequestTimeout(platform);
+	comfyUiJobTimeout(platform);
 	const client = createClient(platform);
 	const scene = await downloadRemoteImage(request.image, applicationOrigin);
-	const signal = AbortSignal.timeout(COMFYUI_REQUEST_TIMEOUT_MS);
+	const signal = AbortSignal.timeout(requestTimeoutMs);
 	const queued = await queueLightSettings(client, {
 		clientId: jobId,
 		instruction: request.instruction,
@@ -101,6 +102,6 @@ export async function pollLightSettings(
 	return getLightSettingsResult(
 		createClient(platform),
 		promptId,
-		AbortSignal.timeout(COMFYUI_REQUEST_TIMEOUT_MS)
+		AbortSignal.timeout(comfyUiRequestTimeout(platform))
 	);
 }

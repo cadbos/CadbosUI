@@ -26,6 +26,7 @@ import {
 	getUserIdByPubkey,
 	recordBalance
 } from '$lib/server/billing';
+import { GenerationTimeoutConfigurationError } from '$lib/server/generation-timeouts';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { replaceTexturesWithMask, type StoredRenderResponse } from '$lib/server/generation';
@@ -240,6 +241,10 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				id
 			);
 		} catch (error) {
+			if (error instanceof GenerationTimeoutConfigurationError) {
+				console.error(error.message);
+				return apiError(500, 'texture_replacement_failed', 'Texture replacement failed');
+			}
 			if (error instanceof RemoteImageImportError) return remoteImageError(error);
 			if (error instanceof ComfyUiError) {
 				console.error('ComfyUI texture replacement submission failed:', {

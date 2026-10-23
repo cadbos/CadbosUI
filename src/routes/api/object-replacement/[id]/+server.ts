@@ -20,15 +20,16 @@ import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/db';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
+import {
+	comfyUiJobTimeout,
+	GenerationTimeoutConfigurationError
+} from '$lib/server/generation-timeouts';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import { getBucketByName, getOrCreateMediaByKey, uploadsBucketName } from '$lib/server/media';
 import { mediaAccessById } from '$lib/server/media-access';
-import {
-	OBJECT_REPLACEMENT_TIMEOUT_MS,
-	pollObjectReplacement
-} from '$lib/server/object-replacement';
+import { pollObjectReplacement } from '$lib/server/object-replacement';
 import {
 	completeObjectReplacementJob,
 	failObjectReplacementJob,
@@ -92,9 +93,15 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (job.status !== 'processing') return responseForJob(job, db);
 
 	let result;
+	let jobTimeoutMs: number;
 	try {
+		jobTimeoutMs = comfyUiJobTimeout(platform);
 		result = await pollObjectReplacement(platform, job.comfyPromptId);
 	} catch (error) {
+		if (error instanceof GenerationTimeoutConfigurationError) {
+			console.error(error.message);
+			return apiError(500, 'object_replacement_poll_failed', 'Object replacement status failed');
+		}
 		if (
 			error instanceof ComfyUiError &&
 			(error.code === 'execution_failed' || error.code === 'missing_output')
@@ -128,7 +135,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 
 	if (result === null) {
 		const now = Date.now();
-		if (now - job.createdAt >= OBJECT_REPLACEMENT_TIMEOUT_MS) {
+		if (now - job.createdAt >= jobTimeoutMs) {
 			job = await failObjectReplacementJob(
 				db,
 				userId,

@@ -62,6 +62,9 @@ declare global {
 				LIGHT_SETTINGS_COST?: string;
 				FLUX_KONTEXT_EDIT_COST?: string;
 				REPAINT_COST?: string;
+				COMFYUI_JOB_TIMEOUT_MS?: string;
+				COMFYUI_REQUEST_TIMEOUT_MS?: string;
+				RENDER_TIMEOUT_MS?: string;
 				S3_ACCESS_KEY_ID: string;
 				S3_SECRET_ACCESS_KEY: string;
 				S3_UPLOADS_BUCKET_NAME?: string;

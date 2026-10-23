@@ -20,15 +20,16 @@ import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/db';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
+import {
+	comfyUiJobTimeout,
+	GenerationTimeoutConfigurationError
+} from '$lib/server/generation-timeouts';
 import { ComfyUiError } from '$lib/server/comfyui';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import { getBucketByName, getOrCreateMediaByKey, uploadsBucketName } from '$lib/server/media';
 import { mediaAccessById } from '$lib/server/media-access';
-import {
-	pollTextureReplacement,
-	TEXTURE_REPLACEMENT_TIMEOUT_MS
-} from '$lib/server/texture-replacement';
+import { pollTextureReplacement } from '$lib/server/texture-replacement';
 import {
 	completeTextureReplacementJob,
 	failTextureReplacementJob,
@@ -92,9 +93,15 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (job.status !== 'processing') return responseForJob(job, db);
 
 	let result;
+	let jobTimeoutMs: number;
 	try {
+		jobTimeoutMs = comfyUiJobTimeout(platform);
 		result = await pollTextureReplacement(platform, job.comfyPromptId);
 	} catch (error) {
+		if (error instanceof GenerationTimeoutConfigurationError) {
+			console.error(error.message);
+			return apiError(500, 'texture_replacement_poll_failed', 'Texture replacement status failed');
+		}
 		if (
 			error instanceof ComfyUiError &&
 			(error.code === 'execution_failed' || error.code === 'missing_output')
@@ -132,7 +139,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 
 	if (result === null) {
 		const now = Date.now();
-		if (now - job.createdAt >= TEXTURE_REPLACEMENT_TIMEOUT_MS) {
+		if (now - job.createdAt >= jobTimeoutMs) {
 			job = await failTextureReplacementJob(
 				db,
 				userId,
