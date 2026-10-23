@@ -19,6 +19,8 @@ import { TEST_S3_BUCKET, TEST_S3_ENV } from '$lib/server/testing/generation-fixt
 const archai = vi.hoisted(() => ({
 	postChangeTextures: vi.fn(),
 	postRenderInterior: vi.fn(),
+	postRenderExterior: vi.fn(),
+	postUpscale4K: vi.fn(),
 	postStyleTransfer: vi.fn()
 }));
 const appEnvironment = vi.hoisted(() => ({ dev: true }));
@@ -52,8 +54,13 @@ vi.mock('$lib/server/s3', async (importOriginal) => ({
 	putS3Object: storage.putS3Object
 }));
 
-const { renderInterior, replaceTexturesWithMask, styleTransferInterior } =
-	await import('./generation');
+const {
+	renderInterior,
+	renderExterior,
+	replaceTexturesWithMask,
+	styleTransferInterior,
+	upscale4k
+} = await import('./generation');
 
 const withoutKey = { env: {} } as App.Platform;
 const archaiApiUrl = 'https://archai.example.test/v1';
@@ -446,3 +453,95 @@ describe('replaceTexturesWithMask', () => {
 		).rejects.toThrow(/^Texture replacement failed$/);
 	});
 });
+
+const timeoutOperations = [
+	{
+		name: 'interior render',
+		provider: archai.postRenderInterior,
+		call: (platform: App.Platform) =>
+			renderInterior(platform, TEST_S3_BUCKET, {
+				image: 'https://example.test/scene.png',
+				prompt: 'cozy',
+				outputFormat: 'png'
+			})
+	},
+	{
+		name: 'exterior render',
+		provider: archai.postRenderExterior,
+		call: (platform: App.Platform) =>
+			renderExterior(platform, TEST_S3_BUCKET, {
+				image: 'https://example.test/scene.png',
+				prompt: 'cozy',
+				outputFormat: 'png'
+			})
+	},
+	{
+		name: 'style transfer',
+		provider: archai.postStyleTransfer,
+		call: (platform: App.Platform) =>
+			styleTransferInterior(platform, TEST_S3_BUCKET, {
+				image: 'https://example.test/scene.png',
+				referenceImage: 'https://example.test/reference.png',
+				outputFormat: 'png'
+			})
+	},
+	{
+		name: 'masked texture replacement',
+		provider: archai.postChangeTextures,
+		call: (platform: App.Platform) =>
+			replaceTexturesWithMask(platform, TEST_S3_BUCKET, {
+				image: 'https://example.test/scene.png',
+				referenceImage: 'https://example.test/reference.png',
+				mask: 'https://example.test/mask.png'
+			})
+	},
+	{
+		name: '4K upscale',
+		provider: archai.postUpscale4K,
+		call: (platform: App.Platform) =>
+			upscale4k(platform, TEST_S3_BUCKET, { image: 'https://example.test/scene.png' })
+	}
+];
+
+for (const operation of timeoutOperations) {
+	describe(`${operation.name} timeout`, () => {
+		it.each([undefined, '240000'])(
+			'uses the default or configured request timeout (%s)',
+			async (value) => {
+				const timeout = vi.spyOn(AbortSignal, 'timeout');
+				operation.provider.mockRejectedValue(new Error('Provider unavailable'));
+				const configured = withKey();
+				configured.env.RENDER_TIMEOUT_MS = value;
+				await expect(operation.call(configured)).rejects.toThrow(/failed/i);
+				expect(timeout).toHaveBeenCalledWith(value === undefined ? 120_000 : 240_000);
+				expect(operation.provider).toHaveBeenCalledWith(
+					expect.objectContaining({ signal: expect.any(AbortSignal) })
+				);
+			}
+		);
+
+		it('aborts stalled generation at the configured deadline', async () => {
+			operation.provider.mockImplementation(
+				({ signal }: { signal: AbortSignal }) =>
+					new Promise((_resolve, reject) => {
+						signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+					})
+			);
+			const configured = withKey();
+			configured.env.RENDER_TIMEOUT_MS = '10';
+			await expect(operation.call(configured)).rejects.toThrow(/failed/i);
+			expect(operation.provider.mock.calls[0][0].signal.aborted).toBe(true);
+		});
+
+		it('rejects invalid configuration without calling the provider or exposing its value', async () => {
+			const logger = vi.spyOn(console, 'error');
+			const configured = withKey();
+			configured.env.RENDER_TIMEOUT_MS = 'private-invalid-value';
+			await expect(operation.call(configured)).rejects.toThrow(/failed/i);
+			expect(operation.provider).not.toHaveBeenCalled();
+			const detail = logger.mock.calls[0][1];
+			expect(detail).toBeInstanceOf(Error);
+			expect((detail as Error).message).toBe('RENDER_TIMEOUT_MS is invalid');
+		});
+	});
+}

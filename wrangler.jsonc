@@ -53,6 +53,10 @@
 	// MEDIA_CACHE_TTL_SECONDS (optional, default 31536000)
 	// RENDER_MEDIA_TTL_SECONDS (optional, default 10800)
 	// S3_UPLOADS_BUCKET_NAME (optional, default cadbos-uploads)
+	// COMFYUI_JOB_TIMEOUT_MS (optional, default 600000)
+	// COMFYUI_REQUEST_TIMEOUT_MS (optional, default 120000)
+	// RENDER_TIMEOUT_MS (optional, default 120000)
+	// Timeout values are integer milliseconds from 1 through 2147483647.
 	// ComfyUI runs on a private VPS, reachable only through this VPC Service
 	// (Cloudflare Tunnel `comfyui-equuleus` -> localhost:8188), never over the
 	// public internet — it has no built-in auth. `remote: true` routes local

@@ -606,6 +606,23 @@ describe('GET /api/edit/[id]', () => {
 		expect(credit?.balance).toBe(12);
 	});
 
+	it.each([
+		{ age: 19_999, status: 'processing' },
+		{ age: 20_000, status: 'failed' }
+	])('uses the configured deadline at job age $age', async ({ age, status }) => {
+		const db = makeD1();
+		await seedUser(db, 12);
+		const now = Date.now();
+		vi.spyOn(Date, 'now').mockReturnValue(now);
+		await seedJob(db, now - age);
+		const configured = platform(db);
+		configured.env.COMFYUI_JOB_TIMEOUT_MS = '20000';
+		const response = await callGet({ pubkey: 'pubkey-1' }, configured, 'job-1');
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({ id: 'job-1', status });
+		expect(integration.poll).toHaveBeenCalledOnce();
+	});
+
 	it('times out only after checking ComfyUI for a completed result', async () => {
 		const db = makeD1();
 		await seedUser(db, 12);
