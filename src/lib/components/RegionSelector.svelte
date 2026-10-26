@@ -199,8 +199,7 @@ before the Change Date. See LICENSE for complete terms.
 		{#if shown}
 			<button
 				type="button"
-				class="box"
-				class:drafting={draft !== null}
+				class={['box', { drafting: draft !== null }]}
 				style:left="{shown.x * 100}%"
 				style:top="{shown.y * 100}%"
 				style:width="{shown.width * 100}%"

@@ -49,13 +49,15 @@ before the Change Date. See LICENSE for complete terms.
 	let settledThumbUrl = $state<string | null>(null);
 	const cardReady = $derived(!latest || settledThumbUrl === latest.image.url);
 
-	$effect(() => {
+	function revealThumbnailOnTimeout(): (() => void) | undefined {
 		const url = latest?.image.url;
 		if (!url || settledThumbUrl === url) return;
 		return revealOnTimeout(() => {
 			settledThumbUrl = url;
 		});
-	});
+	}
+
+	$effect(revealThumbnailOnTimeout);
 
 	function openModal(dialog: HTMLDialogElement): () => void {
 		dialog.showModal();

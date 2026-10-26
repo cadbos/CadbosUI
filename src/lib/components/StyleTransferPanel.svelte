@@ -222,7 +222,7 @@ before the Change Date. See LICENSE for complete terms.
 					aria-selected={request.sceneType === sceneTypeOption.id}
 					aria-controls="style-reference-panel"
 					tabindex={request.sceneType === sceneTypeOption.id ? 0 : -1}
-					class:active={request.sceneType === sceneTypeOption.id}
+					class={{ active: request.sceneType === sceneTypeOption.id }}
 					onclick={() => sceneTypeTabs.activate(index)}
 					onkeydown={sceneTypeTabs.onKeydown}
 				>
@@ -243,7 +243,7 @@ before the Change Date. See LICENSE for complete terms.
 					aria-selected={referenceTab === tab.id}
 					aria-controls="style-reference-panel"
 					tabindex={referenceTab === tab.id ? 0 : -1}
-					class:active={referenceTab === tab.id}
+					class={{ active: referenceTab === tab.id }}
 					onclick={() => referenceTabs.activate(index)}
 					onkeydown={referenceTabs.onKeydown}
 				>
@@ -272,8 +272,7 @@ before the Change Date. See LICENSE for complete terms.
 							}}
 							type="button"
 							role="radio"
-							class="preset"
-							class:selected={selectedPresetId === preset.id}
+							class={['preset', { selected: selectedPresetId === preset.id }]}
 							aria-checked={selectedPresetId === preset.id}
 							tabindex={index === activePresetIndex ? 0 : -1}
 							title={t(preset.label)}

@@ -48,7 +48,7 @@ before the Change Date. See LICENSE for complete terms.
 		};
 	}
 
-	$effect(() => {
+	function syncDialogVisibility(): void {
 		if (!dialogEl) return;
 		if (open) {
 			if (!dialogEl.open) dialogEl.showModal();
@@ -61,7 +61,9 @@ before the Change Date. See LICENSE for complete terms.
 			dialogEl.close();
 		}
 		wasOpen = open;
-	});
+	}
+
+	$effect(syncDialogVisibility);
 
 	function closeDialog(): void {
 		onClose();

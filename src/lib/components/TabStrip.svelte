@@ -244,11 +244,13 @@ before the Change Date. See LICENSE for complete terms.
 	// interaction.
 	let lastScrolledActiveId: string | null = null;
 
-	$effect(() => {
+	function scrollNewlyActiveTabIntoView(): void {
 		if (activeId === lastScrolledActiveId) return;
 		lastScrolledActiveId = activeId;
 		scrollActiveTabIntoView();
-	});
+	}
+
+	$effect(scrollNewlyActiveTabIntoView);
 
 	function close(tab: TabStripItem): void {
 		onClose(tab.id);
@@ -367,22 +369,19 @@ before the Change Date. See LICENSE for complete terms.
 		</button>
 	{/if}
 	<div
-		class="tabs-viewport"
-		class:fade-start={canScrollPrev}
-		class:fade-end={canScrollNext}
+		class={['tabs-viewport', { 'fade-start': canScrollPrev, 'fade-end': canScrollNext }]}
 		{@attach registerViewport}
 	>
 		<div class="tabs" role="tablist" aria-label={ariaLabel} {@attach observeContent}>
 			{#each tabs as tab, index (tab.id)}
 				{@const active = tab.id === activeId}
-				<div class="tab" class:active>
+				<div class={['tab', { active }]}>
 					{#if editingId === tab.id}
 						{@const renameErrorId = `${tab.id}-rename-error`}
 						<div class="tab-rename">
 							<input
 								type="text"
-								class="tab-select"
-								class:error={renameError}
+								class={['tab-select', { error: renameError }]}
 								maxlength="200"
 								disabled={renamePending}
 								role="tab"

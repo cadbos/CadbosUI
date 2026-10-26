@@ -56,10 +56,12 @@ before the Change Date. See LICENSE for complete terms.
 	let revokeConfirmOpen = $state(false);
 	let revokeError = $state<string | null>(null);
 
-	$effect(() => {
+	function loadProject(): () => void {
 		void projectDetail.load(projectId);
 		return () => projectDetail.clear();
-	});
+	}
+
+	$effect(loadProject);
 
 	function sessionTitle(session: ProjectSessionRecord): string {
 		return session.title.trim() !== '' ? session.title : t('projects.detail.sessionUntitled');

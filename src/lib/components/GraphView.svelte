@@ -146,7 +146,7 @@ before the Change Date. See LICENSE for complete terms.
 	let nodes = $state.raw<FlowNode[]>(initialFlowGraph.nodes);
 	let edges = $state.raw<Edge[]>(initialFlowGraph.edges);
 
-	$effect(() => {
+	function synchronizeFlowGraph(): void {
 		const next = toFlowGraph(
 			request.promptFragments,
 			untrack(() => nodes),
@@ -154,7 +154,9 @@ before the Change Date. See LICENSE for complete terms.
 		);
 		nodes = next.nodes;
 		edges = next.edges;
-	});
+	}
+
+	$effect(synchronizeFlowGraph);
 
 	function toPromptGraphNodes(list: FlowNode[]): PromptGraphNode[] {
 		return list.map((node): PromptGraphNode => {
@@ -201,7 +203,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	// The store write below is the genuine side effect (see the comment on the
 	// `nodes`/`edges` sync above) — `localGraphResult` itself stays a pure $derived.
-	$effect(() => {
+	function persistFragmentOrder(): void {
 		if (!localGraphResult.valid) return;
 
 		const nextOrder = orderedFragmentIds({
@@ -215,7 +217,9 @@ before the Change Date. See LICENSE for complete terms.
 			nextOrder.length !== currentOrder.length ||
 			nextOrder.some((id, index) => id !== currentOrder[index]);
 		if (changed) request.reorder(nextOrder);
-	});
+	}
+
+	$effect(persistFragmentOrder);
 
 	function addFragment(): void {
 		request.addFragment({ text: '', order: request.promptFragments.length });

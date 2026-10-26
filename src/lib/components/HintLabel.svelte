@@ -60,8 +60,7 @@ its hint, with no separate info icon next to it. The bubble stays in the DOM
 (hidden) so aria-describedby always resolves. -->
 <button
 	type="button"
-	class="hint-label"
-	class:active={visible}
+	class={['hint-label', { active: visible }]}
 	aria-describedby={id}
 	onmouseenter={show}
 	onmouseleave={hide}

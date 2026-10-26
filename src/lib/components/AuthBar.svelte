@@ -176,8 +176,7 @@ before the Change Date. See LICENSE for complete terms.
 					{/if}
 					<button
 						type="button"
-						class="chip-action"
-						class:chip-action-error={npubCopyError !== null}
+						class={['chip-action', { 'chip-action-error': npubCopyError !== null }]}
 						title={npubCopyError ??
 							(npubCopied ? t('auth.profile.npubCopied') : t('auth.profile.npubCopy'))}
 						onclick={() => npub && copyNpub(npub)}

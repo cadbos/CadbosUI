@@ -50,18 +50,22 @@ before the Change Date. See LICENSE for complete terms.
 	let settledGenerationIds = $state<string[]>([]);
 	const summarySettled = $derived(settledSummaryKey === key);
 
-	$effect(() => {
+	function loadResource(): () => void {
 		void resourceDetail.load(key);
 		return () => resourceDetail.clear();
-	});
+	}
 
-	$effect(() => {
+	$effect(loadResource);
+
+	function revealSummaryOnTimeout(): (() => void) | undefined {
 		const current = key;
 		if (current === '' || settledSummaryKey === current) return;
 		return revealOnTimeout(() => {
 			settledSummaryKey = current;
 		});
-	});
+	}
+
+	$effect(revealSummaryOnTimeout);
 
 	function observeLoadMore(sentinel: HTMLElement): () => void {
 		const observer = new IntersectionObserver(

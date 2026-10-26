@@ -46,13 +46,12 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
-<span class="blur-fill" class:ready>
+<span class={['blur-fill', { ready }]}>
 	{#if !ready}
 		<ImageSkeleton quiet={failed} />
 	{/if}
 	<img
-		class="backdrop"
-		class:failed
+		class={['backdrop', { failed }]}
 		{src}
 		alt=""
 		{loading}
@@ -61,8 +60,7 @@ before the Change Date. See LICENSE for complete terms.
 		aria-hidden="true"
 	/>
 	<img
-		class="photo"
-		class:failed
+		class={['photo', { failed }]}
 		{src}
 		{alt}
 		{loading}

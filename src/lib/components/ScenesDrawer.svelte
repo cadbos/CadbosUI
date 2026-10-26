@@ -197,28 +197,32 @@ before the Change Date. See LICENSE for complete terms.
 		};
 	}
 
-	$effect(() => {
+	function syncDrawerVisibility(): void {
 		if (!drawerEl) return;
 		if (open) {
 			if (!drawerEl.open) drawerEl.showModal();
 		} else if (drawerEl.open) {
 			drawerEl.close();
 		}
-	});
+	}
+
+	$effect(syncDrawerVisibility);
 
 	// Skips persisting while a resize drag is in progress — width changes on
 	// every pointermove, and writing to localStorage that often would be pure
 	// overhead. Reading `resizing` here (rather than only in the pointerup
 	// handler) means this same effect fires once more the moment the drag
 	// ends, persisting the final width without a separate explicit call.
-	$effect(() => {
+	function persistDrawerWidth(): void {
 		if (!browser || width === null || resizing) return;
 		try {
 			localStorage.setItem(WIDTH_STORAGE_KEY, String(width));
 		} catch (error) {
 			logBoundaryError('scenesDrawer.persistWidth', error);
 		}
-	});
+	}
+
+	$effect(persistDrawerWidth);
 
 	function onResizeHandlePointerDown(event: PointerEvent): void {
 		if (!drawerEl) return;
@@ -292,10 +296,12 @@ before the Change Date. See LICENSE for complete terms.
 		measuredWidth = clamped;
 	}
 
-	$effect(() => {
+	function listenForWindowResize(): () => void {
 		window.addEventListener('resize', onWindowResize);
 		return () => window.removeEventListener('resize', onWindowResize);
-	});
+	}
+
+	$effect(listenForWindowResize);
 
 	function observeLoadMore(sentinel: HTMLElement): () => void {
 		const root = sentinel.closest<HTMLElement>('.drawer-content');

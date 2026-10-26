@@ -52,7 +52,7 @@ before the Change Date. See LICENSE for complete terms.
 		{#each locales as code (code)}
 			<button
 				type="button"
-				class:active={getLocale() === code}
+				class={{ active: getLocale() === code }}
 				aria-current={getLocale() === code}
 				onclick={(event) => choose(code, event.currentTarget)}
 			>

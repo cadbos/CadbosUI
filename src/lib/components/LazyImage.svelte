@@ -76,7 +76,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
-<span class="frame {className}" class:ready class:bleed {@attach reveal}>
+<span class={['frame', className, { ready, bleed }]} {@attach reveal}>
 	{#if !ready}
 		<ImageSkeleton quiet={failed} />
 	{/if}
@@ -89,8 +89,7 @@ before the Change Date. See LICENSE for complete terms.
 			fetchpriority={fetchPriority}
 			draggable={draggable ? 'true' : 'false'}
 			aria-hidden={decorative ? 'true' : undefined}
-			class={imgClass}
-			class:failed
+			class={[imgClass, { failed }]}
 			{@attach watch}
 		/>
 	{/if}

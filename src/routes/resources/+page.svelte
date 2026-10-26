@@ -196,7 +196,7 @@ before the Change Date. See LICENSE for complete terms.
 					aria-selected={filter === option}
 					aria-controls="resources-panel"
 					tabindex={filter === option ? 0 : -1}
-					class:active={filter === option}
+					class={{ active: filter === option }}
 					onclick={() => filterTabController.activate(index)}
 					onkeydown={filterTabController.onKeydown}
 				>

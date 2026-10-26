@@ -62,7 +62,7 @@ before the Change Date. See LICENSE for complete terms.
 			{@const Icon = icons[mode]}
 			<button
 				type="button"
-				class:active={theme.mode === mode}
+				class={{ active: theme.mode === mode }}
 				aria-current={theme.mode === mode}
 				onclick={(event) => choose(mode, event.currentTarget)}
 			>

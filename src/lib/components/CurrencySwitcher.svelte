@@ -54,7 +54,7 @@ before the Change Date. See LICENSE for complete terms.
 		{#each codes as code (code)}
 			<button
 				type="button"
-				class:active={currency.code === code}
+				class={{ active: currency.code === code }}
 				aria-current={currency.code === code}
 				onclick={(event) => choose(code, event.currentTarget)}
 			>

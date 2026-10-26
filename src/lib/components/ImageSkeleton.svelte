@@ -20,7 +20,7 @@ before the Change Date. See LICENSE for complete terms.
 	let { quiet = false }: Props = $props();
 </script>
 
-<span class="image-skeleton" class:quiet aria-hidden="true"></span>
+<span class={['image-skeleton', { quiet }]} aria-hidden="true"></span>
 
 <style>
 	.image-skeleton {
