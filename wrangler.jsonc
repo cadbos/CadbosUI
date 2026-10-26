@@ -55,6 +55,7 @@
 	// S3_UPLOADS_BUCKET_NAME (optional, default cadbos-uploads)
 	// COMFYUI_JOB_TIMEOUT_MS (optional, default 600000)
 	// COMFYUI_REQUEST_TIMEOUT_MS (optional, default 120000)
+	// COMFYUI_POLL_INTERVAL_SECONDS (optional, default 2; integers 1 through 2147483)
 	// RENDER_TIMEOUT_MS (optional, default 120000)
 	// Timeout values are integer milliseconds from 1 through 2147483647.
 	// ComfyUI runs on a private VPS, reachable only through this VPC Service

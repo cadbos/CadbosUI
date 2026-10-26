@@ -28,6 +28,7 @@ before the Change Date. See LICENSE for complete terms.
 	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import ModeHint from '$lib/components/ModeHint.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { parseRetryAfter } from '$lib/job-polling';
 	import { REPAINT_COLOR_PATTERN, REPAINT_COLOR_PRESETS } from '$lib/repaint-colors';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
@@ -165,15 +166,6 @@ before the Change Date. See LICENSE for complete terms.
 		if (REPAINT_COLOR_PATTERN.test(hex) && hex !== request.repaintColor) {
 			request.setRepaintColor(hex);
 		}
-	}
-
-	function parseRetryAfter(response: Response): number {
-		const value = response.headers.get('retry-after');
-		if (value === null) return DEFAULT_POLL_DELAY_MS;
-		const seconds = Number(value);
-		const delay = Number.isFinite(seconds) ? seconds * 1_000 : Date.parse(value) - Date.now();
-		if (!Number.isFinite(delay)) return DEFAULT_POLL_DELAY_MS;
-		return Math.min(Math.max(delay, 1_000), MAX_POLL_DELAY_MS);
 	}
 
 	function transientDelay(failures: number): number {
@@ -314,7 +306,7 @@ before the Change Date. See LICENSE for complete terms.
 			if (signal.aborted || run !== pollRun) return;
 			if (result.status === 'processing') {
 				jobProgress = trackJobProgress(jobProgress, id, result, Date.now());
-				await waitFor(parseRetryAfter(response), signal);
+				await waitFor(parseRetryAfter(response.headers), signal);
 				continue;
 			}
 			if (result.status === 'failed') {
