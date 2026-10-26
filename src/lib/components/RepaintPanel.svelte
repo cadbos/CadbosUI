@@ -34,6 +34,7 @@ before the Change Date. See LICENSE for complete terms.
 	import {
 		generationOverlay,
 		trackJobProgress,
+		type GenerationOverlayFlow,
 		type JobProgressState
 	} from '$lib/state/generation-overlay.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
@@ -83,6 +84,7 @@ before the Change Date. See LICENSE for complete terms.
 	let navigatedAwayWhileSubmitting = false;
 	let pollRun = 0;
 	let jobProgress = $state<JobProgressState | null>(null);
+	let overlayFlow: GenerationOverlayFlow | null = null;
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const jobId = $derived(request.activeRepaintJobId ?? null);
 	const validation = $derived(request.validateRepaint());
@@ -137,7 +139,11 @@ before the Change Date. See LICENSE for complete terms.
 			provider: 'comfyui',
 			job: () => (jobProgress?.jobId === jobId ? jobProgress : null)
 		});
-		return () => generationOverlay.stop(overlayId);
+		overlayFlow = overlayId;
+		return () => {
+			generationOverlay.stop(overlayId);
+			overlayFlow = null;
+		};
 	}
 
 	$effect(overlayEffect);
@@ -198,6 +204,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function applyCompletedJob(result: RepaintCompletedResponse): void {
+		if (overlayFlow !== null) generationOverlay.markSucceeded(overlayFlow);
 		if (request.currentRender?.id === result.id) {
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();

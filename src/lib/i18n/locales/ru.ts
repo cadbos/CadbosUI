@@ -116,6 +116,7 @@ export const ru = {
 	'generationOverlay.progressLabel': 'Ход генерации',
 	'generationOverlay.remaining': 'Осталось примерно {time}',
 	'generationOverlay.overdue': 'Занимает больше обычного, ещё немного…',
+	'generationOverlay.done': 'Готово',
 	'generationOverlay.queueAhead': 'Перед вами в очереди: {count}',
 	'auth.signIn': 'Войти',
 	'auth.guest': 'Гость',

@@ -47,7 +47,7 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 {#if generationOverlay.active}
-	<div class="overlay" role="status" aria-live="polite">
+	<div class={['overlay', { closing: generationOverlay.closing }]} role="status" aria-live="polite">
 		<div class="card">
 			<div class="ribbon-stage" aria-hidden="true">
 				<svg
@@ -115,7 +115,7 @@ before the Change Date. See LICENSE for complete terms.
 			{/if}
 			{#if progress}
 				<!-- Ticks every second, so it stays out of the status announcements. -->
-				<div class="progress" aria-live="off">
+				<div class={['progress', { done: progress.done }]} aria-live="off">
 					<div class="progress-row">
 						<div
 							class="bar"
@@ -130,11 +130,13 @@ before the Change Date. See LICENSE for complete terms.
 						<span class="percent">{progress.percent}%</span>
 					</div>
 					<p class="detail">
-						{progress.remainingSec === null
-							? t('generationOverlay.overdue')
-							: ti('generationOverlay.remaining', {
-									time: formatDuration(progress.remainingSec, getLocale())
-								})}
+						{progress.done
+							? t('generationOverlay.done')
+							: progress.remainingSec === null
+								? t('generationOverlay.overdue')
+								: ti('generationOverlay.remaining', {
+										time: formatDuration(progress.remainingSec, getLocale())
+									})}
 					</p>
 					{#if progress.queueAhead}
 						<p class="detail">
@@ -316,6 +318,16 @@ before the Change Date. See LICENSE for complete terms.
 		transition: width 1s linear;
 	}
 
+	.done .fill {
+		transition: width 0.3s ease-out;
+	}
+
+	/* Fades out over the end of FINISH_HOLD_MS (generation-overlay.svelte.ts). */
+	.overlay.closing {
+		pointer-events: none;
+		animation: overlayOut 0.25s ease 0.4s forwards;
+	}
+
 	.percent {
 		min-width: 2.75rem;
 		font-size: 0.8125rem;
@@ -331,6 +343,12 @@ before the Change Date. See LICENSE for complete terms.
 		}
 		to {
 			opacity: 1;
+		}
+	}
+
+	@keyframes overlayOut {
+		to {
+			opacity: 0;
 		}
 	}
 
@@ -367,8 +385,13 @@ before the Change Date. See LICENSE for complete terms.
 			opacity: 1;
 		}
 
-		.fill {
+		.fill,
+		.done .fill {
 			transition: none;
+		}
+
+		.overlay.closing {
+			animation: none;
 		}
 	}
 </style>

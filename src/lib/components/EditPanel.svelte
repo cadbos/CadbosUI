@@ -38,6 +38,7 @@ before the Change Date. See LICENSE for complete terms.
 	import {
 		generationOverlay,
 		trackJobProgress,
+		type GenerationOverlayFlow,
 		type JobProgressState
 	} from '$lib/state/generation-overlay.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
@@ -135,6 +136,7 @@ before the Change Date. See LICENSE for complete terms.
 	let pollFailure = $state<PollFailure | null>(null);
 	let pollRun = 0;
 	let jobProgress = $state<JobProgressState | null>(null);
+	let overlayFlow: GenerationOverlayFlow | null = null;
 	let objectReplacementOpened = $state(false);
 	let textureReplacementOpened = $state(false);
 	let lightSettingsOpened = $state(false);
@@ -231,7 +233,11 @@ before the Change Date. See LICENSE for complete terms.
 			provider: 'comfyui',
 			job: () => (jobProgress?.jobId === jobId ? jobProgress : null)
 		});
-		return () => generationOverlay.stop(overlayId);
+		overlayFlow = overlayId;
+		return () => {
+			generationOverlay.stop(overlayId);
+			overlayFlow = null;
+		};
 	}
 
 	$effect(overlayEffect);
@@ -272,6 +278,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function applyCompletedJob(result: EditCompletedResponse): void {
+		if (overlayFlow !== null) generationOverlay.markSucceeded(overlayFlow);
 		if (request.currentRender?.id === result.id) {
 			request.setActiveFluxKontextEditJobId(undefined);
 			void auth.refreshCredit();

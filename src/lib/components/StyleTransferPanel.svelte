@@ -183,6 +183,7 @@ before the Change Date. See LICENSE for complete terms.
 			request.setCurrentRender(
 				renderResultFromResponse(result, { sourceMode: 'styleTransfer', formSnapshot })
 			);
+			generationOverlay.markSucceeded(overlayId);
 			request.setStatus('idle');
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();

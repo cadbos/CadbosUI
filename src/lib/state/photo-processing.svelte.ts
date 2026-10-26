@@ -328,6 +328,7 @@ class PhotoProcessingState {
 				},
 				fromPhotoProcessing ? undefined : operation.sourceRender?.sourceMode
 			);
+			generationOverlay.markSucceeded(overlayId);
 			const owner = this.#owner(operation);
 			owner?.resetPhotoAdjustments();
 		} catch (error) {

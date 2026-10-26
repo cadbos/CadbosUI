@@ -34,6 +34,7 @@ before the Change Date. See LICENSE for complete terms.
 	import {
 		generationOverlay,
 		trackJobProgress,
+		type GenerationOverlayFlow,
 		type JobProgressState
 	} from '$lib/state/generation-overlay.svelte';
 	import {
@@ -94,6 +95,7 @@ before the Change Date. See LICENSE for complete terms.
 	let navigatedAwayWhileSubmitting = false;
 	let pollRun = 0;
 	let jobProgress = $state<JobProgressState | null>(null);
+	let overlayFlow: GenerationOverlayFlow | null = null;
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const jobId = $derived(request.activeTextureReplacementJobId ?? null);
 	const validation = $derived(request.validateTextureReplacement());
@@ -167,7 +169,11 @@ before the Change Date. See LICENSE for complete terms.
 			),
 			job: () => (jobProgress?.jobId === jobId ? jobProgress : null)
 		});
-		return () => generationOverlay.stop(overlayId);
+		overlayFlow = overlayId;
+		return () => {
+			generationOverlay.stop(overlayId);
+			overlayFlow = null;
+		};
 	}
 
 	$effect(overlayEffect);
@@ -235,6 +241,7 @@ before the Change Date. See LICENSE for complete terms.
 		result: TextureReplacementCompletedResponse,
 		submittedContext?: Omit<ActiveTextureReplacementJob, 'id'>
 	): void {
+		if (overlayFlow !== null) generationOverlay.markSucceeded(overlayFlow);
 		request.setTextureReplacementResultReady(true);
 		if (request.currentRender?.id === result.id) {
 			void auth.refreshCredit();

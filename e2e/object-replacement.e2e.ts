@@ -558,6 +558,53 @@ test('shows estimated progress and queue position for a restored job', async ({ 
 	await expect(page.getByText(ru['generationOverlay.objectReplacementDetail'])).toHaveCount(0);
 });
 
+test('finishes the progress at 100% when a job completes ahead of its estimate', async ({
+	page
+}) => {
+	await authenticate(page);
+	await page.route('**/api/generation-estimates', async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				estimates: [{ kind: 'object-replacement', provider: 'comfyui', seconds: 600 }]
+			})
+		});
+	});
+	let polls = 0;
+	await page.route(`**/api/object-replacement/${JOB_ID}`, async (route) => {
+		polls += 1;
+		await route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			headers: { 'retry-after': '1' },
+			body: JSON.stringify(
+				polls === 1
+					? { id: JOB_ID, status: 'processing', elapsedMs: 10_000, queueAhead: null }
+					: {
+							id: JOB_ID,
+							status: 'completed',
+							output: media(3, '/api/media/test-media/replaced.webp'),
+							cost: 2,
+							balance: 18
+						}
+			)
+		});
+	});
+
+	await page.goto(`/edit?tool=object-replacement&job=${JOB_ID}`);
+
+	const progress = page.getByRole('progressbar', { name: ru['generationOverlay.progressLabel'] });
+	await expect(progress).toBeVisible();
+	await expect(progress).toHaveAttribute('aria-valuenow', '100');
+	await expect(page.getByText(ru['generationOverlay.done'], { exact: true })).toBeVisible();
+	await expect(progress).toBeHidden();
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
+		'src',
+		'/api/media/test-media/replaced.webp'
+	);
+});
+
 test('surfaces a missing restored job', async ({ page }) => {
 	await authenticate(page);
 	await page.route(`**/api/object-replacement/${JOB_ID}`, async (route) => {

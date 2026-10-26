@@ -26,6 +26,10 @@ export type GenerationOverlayFlow = number;
 
 // Never shows 100% before the result is actually in.
 const MAX_ESTIMATED_PERCENT = 99;
+// How long a successful flow stays on screen at 100% before it goes; the
+// result is already rendered underneath, so this delays nothing. Matches the
+// overlay's closing fade (GenerationOverlay.svelte).
+const FINISH_HOLD_MS = 650;
 
 // What a polled job last reported, kept on the client clock: `origin` is the
 // earliest moment the server's elapsed time places the job's start at.
@@ -51,9 +55,10 @@ export function trackJobProgress(
 
 export interface GenerationProgress {
 	percent: number;
-	// Null once the run outlasts its estimate.
+	// Null once the run outlasts its estimate or has finished.
 	remainingSec: number | null;
 	queueAhead: number | null;
+	done: boolean;
 }
 
 export interface GenerationOverlayOptions {
@@ -70,6 +75,8 @@ interface OverlayFlow {
 	messageKey: TranslationKey;
 	options: GenerationOverlayOptions;
 	startedAt: number;
+	succeeded: boolean;
+	closing: boolean;
 }
 
 class GenerationOverlayState {
@@ -88,18 +95,54 @@ class GenerationOverlayState {
 		return this.#flows.at(-1)?.options.detailKey ?? null;
 	}
 
+	get closing(): boolean {
+		return this.#flows.at(-1)?.closing ?? false;
+	}
+
 	start(
 		messageKey: TranslationKey,
 		options: GenerationOverlayOptions,
 		now = Date.now()
 	): GenerationOverlayFlow {
 		const id = untrack(() => this.#nextId++);
-		const flow: OverlayFlow = { id, messageKey, options, startedAt: now };
+		const flow: OverlayFlow = {
+			id,
+			messageKey,
+			options,
+			startedAt: now,
+			succeeded: false,
+			closing: false
+		};
 		this.#flows = [...untrack(() => this.#flows), flow];
 		return id;
 	}
 
+	// Called once the flow's result is in, before stop(): the flow then ends at
+	// 100% instead of vanishing mid-estimate.
+	markSucceeded(id: GenerationOverlayFlow): void {
+		this.#update(id, { succeeded: true });
+	}
+
 	stop(id: GenerationOverlayFlow): void {
+		const flow = untrack(() => this.#flows).find((candidate) => candidate.id === id);
+		if (!flow || flow.closing) return;
+		const showsProgress =
+			generationEstimates.seconds(flow.options.kind, flow.options.provider) !== null;
+		if (!flow.succeeded || !showsProgress) {
+			this.#remove(id);
+			return;
+		}
+		this.#update(id, { closing: true });
+		setTimeout(() => this.#remove(id), FINISH_HOLD_MS);
+	}
+
+	#update(id: GenerationOverlayFlow, changes: Partial<OverlayFlow>): void {
+		this.#flows = untrack(() => this.#flows).map((flow) =>
+			flow.id === id ? { ...flow, ...changes } : flow
+		);
+	}
+
+	#remove(id: GenerationOverlayFlow): void {
 		this.#flows = untrack(() => this.#flows).filter((flow) => flow.id !== id);
 	}
 
@@ -110,13 +153,15 @@ class GenerationOverlayState {
 		if (!flow) return null;
 		const expectedSec = generationEstimates.seconds(flow.options.kind, flow.options.provider);
 		if (expectedSec === null) return null;
+		if (flow.succeeded) return { percent: 100, remainingSec: null, queueAhead: null, done: true };
 		const job = flow.options.job?.() ?? null;
 		const origin = Math.min(flow.startedAt, job?.origin ?? flow.startedAt);
 		const elapsedSec = Math.max(0, now - origin) / 1000;
 		return {
 			percent: Math.min(MAX_ESTIMATED_PERCENT, Math.floor((elapsedSec / expectedSec) * 100)),
 			remainingSec: elapsedSec < expectedSec ? Math.ceil(expectedSec - elapsedSec) : null,
-			queueAhead: job?.queueAhead ?? null
+			queueAhead: job?.queueAhead ?? null,
+			done: false
 		};
 	}
 }

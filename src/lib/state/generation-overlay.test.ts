@@ -106,12 +106,14 @@ describe('generation progress', () => {
 		expect(generationOverlay.progress(start)).toEqual({
 			percent: 0,
 			remainingSec: 40,
-			queueAhead: null
+			queueAhead: null,
+			done: false
 		});
 		expect(generationOverlay.progress(start + 10_500)).toEqual({
 			percent: 26,
 			remainingSec: 30,
-			queueAhead: null
+			queueAhead: null,
+			done: false
 		});
 
 		generationOverlay.stop(flow);
@@ -130,7 +132,8 @@ describe('generation progress', () => {
 		expect(generationOverlay.progress(start + 60_000)).toEqual({
 			percent: 99,
 			remainingSec: null,
-			queueAhead: null
+			queueAhead: null,
+			done: false
 		});
 
 		generationOverlay.stop(flow);
@@ -165,7 +168,8 @@ describe('generation progress', () => {
 		expect(generationOverlay.progress(start)).toEqual({
 			percent: 50,
 			remainingSec: 100,
-			queueAhead: 2
+			queueAhead: 2,
+			done: false
 		});
 
 		generationOverlay.stop(flow);
@@ -193,6 +197,88 @@ describe('generation progress', () => {
 		await generationEstimates.load(start + 11 * 60_000);
 
 		expect(fetcher).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe('finishing a flow', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	async function startWithEstimate(): Promise<{ flow: number; start: number }> {
+		serveEstimates({ estimates: [{ kind: 'render', provider: 'archai', seconds: 40 }] });
+		const start = nextClock();
+		const flow = generationOverlay.start(
+			'generationOverlay.render',
+			{ kind: 'render', provider: 'archai' },
+			start
+		);
+		await generationEstimates.load(start);
+		return { flow, start };
+	}
+
+	it('jumps to 100% and holds briefly once the result is in', async () => {
+		const { flow, start } = await startWithEstimate();
+		vi.useFakeTimers();
+
+		generationOverlay.markSucceeded(flow);
+		generationOverlay.stop(flow);
+
+		expect(generationOverlay.active).toBe(true);
+		expect(generationOverlay.closing).toBe(true);
+		expect(generationOverlay.progress(start + 5_000)).toEqual({
+			percent: 100,
+			remainingSec: null,
+			queueAhead: null,
+			done: true
+		});
+
+		vi.advanceTimersByTime(650);
+
+		expect(generationOverlay.active).toBe(false);
+		expect(generationOverlay.closing).toBe(false);
+	});
+
+	it('closes at once when the flow did not succeed', async () => {
+		const { flow } = await startWithEstimate();
+
+		generationOverlay.stop(flow);
+
+		expect(generationOverlay.active).toBe(false);
+	});
+
+	it('closes at once when no progress was shown', () => {
+		serveEstimates({ estimates: [] });
+		const flow = generationOverlay.start('generationOverlay.repaint', {
+			kind: 'repaint',
+			provider: 'comfyui'
+		});
+
+		generationOverlay.markSucceeded(flow);
+		generationOverlay.stop(flow);
+
+		expect(generationOverlay.active).toBe(false);
+	});
+
+	it('lets a newly started flow take over while the previous one finishes', async () => {
+		const { flow } = await startWithEstimate();
+		vi.useFakeTimers();
+
+		generationOverlay.markSucceeded(flow);
+		generationOverlay.stop(flow);
+		const next = generationOverlay.start('generationOverlay.upscale', {
+			kind: 'upscale',
+			provider: 'archai'
+		});
+
+		expect(generationOverlay.messageKey).toBe('generationOverlay.upscale');
+		expect(generationOverlay.closing).toBe(false);
+
+		vi.advanceTimersByTime(650);
+
+		expect(generationOverlay.messageKey).toBe('generationOverlay.upscale');
+		generationOverlay.stop(next);
+		expect(generationOverlay.active).toBe(false);
 	});
 });
 
