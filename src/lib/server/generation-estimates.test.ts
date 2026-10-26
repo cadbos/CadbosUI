@@ -12,9 +12,11 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { D1Database } from '@cloudflare/workers-types';
+import { createDb } from '$lib/server/db';
 import { getGenerationEstimates } from '$lib/server/generation-estimates';
-import { makeDb, type TestDatabase } from '$lib/server/testing/d1-shim';
+import { makeD1, makeDb, type TestDatabase } from '$lib/server/testing/d1-shim';
 import { seedGeneration } from '$lib/server/testing/generation-fixtures';
 
 interface Durations {
@@ -119,17 +121,38 @@ describe('getGenerationEstimates', () => {
 
 	it('uses only the most recent runs and skips rows without timings', async () => {
 		const db = makeAccountDb();
-		for (let createdAt = 1; createdAt <= 20; createdAt += 1) {
-			await seedTimedGeneration(db, 'upscale', 100 + createdAt, { archai: [10, 0, 0] });
+		for (let run = 1; run <= 20; run += 1) {
+			await seedTimedGeneration(db, 'upscale', run, { archai: [500, 0, 0] });
 		}
-		for (let createdAt = 1; createdAt <= 20; createdAt += 1) {
-			await seedTimedGeneration(db, 'upscale', createdAt, { archai: [500, 0, 0] });
+		for (let run = 1; run <= 20; run += 1) {
+			await seedTimedGeneration(db, 'upscale', 100 + run, { archai: [10, 0, 0] });
 		}
 		await seedTimedGeneration(db, 'upscale', 1_000, {});
 
 		expect(await getGenerationEstimates(db)).toEqual([
 			{ kind: 'upscale', provider: 'archai', seconds: 10 }
 		]);
+	});
+
+	it('reads a bounded window of the newest generations through the ledger index', async () => {
+		const binding = makeD1();
+		const statements: string[] = [];
+		const prepare = binding.prepare.bind(binding);
+		vi.spyOn(binding, 'prepare').mockImplementation((query: string) => {
+			statements.push(query);
+			return prepare(query);
+		});
+		const db = createDb(binding);
+
+		await getGenerationEstimates(db);
+
+		const [query] = statements;
+		const plan = (binding as D1Database & { prepareSync: TestDatabase['prepare'] })
+			.prepareSync(`EXPLAIN QUERY PLAN ${query}`)
+			.all<{ detail: string }>()
+			.results.map((step) => step.detail);
+		expect(plan).toEqual(['SCAN generations USING INDEX generations_ledger_entry_id']);
+		expect(query).toMatch(/LIMIT \?$/);
 	});
 
 	it('leaves out kinds with too little history', async () => {
