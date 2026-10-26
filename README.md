@@ -116,6 +116,16 @@ Browser status requests retain their 150-second timeout and retries; a longer
 server request timeout can cause browser retries before the server finishes.
 Other image download limits and retry policies are configured separately.
 
+ComfyUI job polling is controlled by the optional runtime variable
+`COMFYUI_POLL_INTERVAL_SECONDS`, configured in Cloudflare or `.dev.vars`. It defaults
+to `2` seconds and applies to repaint, general edit/object removal, lighting, object
+replacement, and texture replacement jobs. Set it to `60` to poll once per minute.
+Valid values are decimal integers from `1` through `2147483`, without whitespace or
+leading zeros. Empty, malformed, or out-of-range values log a warning and use the
+2-second default. Processing jobs receive the current interval in each status
+response; the first status check remains immediate. Transient-error retries retain
+their separate backoff policy.
+
 Never place provider credentials in `.env` variables exposed to the client. Production
 secrets, including the S3 credentials, must be configured through Cloudflare;
 `wrangler.jsonc` documents the expected variable and secret names. Apply the checked-in D1

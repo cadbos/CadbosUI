@@ -64,6 +64,7 @@ declare global {
 				REPAINT_COST?: string;
 				COMFYUI_JOB_TIMEOUT_MS?: string;
 				COMFYUI_REQUEST_TIMEOUT_MS?: string;
+				COMFYUI_POLL_INTERVAL_SECONDS?: string;
 				RENDER_TIMEOUT_MS?: string;
 				S3_ACCESS_KEY_ID: string;
 				S3_SECRET_ACCESS_KEY: string;

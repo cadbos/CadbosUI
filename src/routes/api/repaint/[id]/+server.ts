@@ -25,6 +25,7 @@ import {
 	GenerationTimeoutConfigurationError
 } from '$lib/server/generation-timeouts';
 import { ComfyUiError } from '$lib/server/comfyui';
+import { comfyUiPollIntervalSeconds } from '$lib/server/comfyui-polling';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import { getBucketByName, getOrCreateMediaByKey, uploadsBucketName } from '$lib/server/media';
@@ -38,7 +39,12 @@ import {
 } from '$lib/server/repaint-jobs';
 import { uploadGeneratedImageBytes } from '$lib/server/uploads';
 
-function processingResponse(job: RepaintJob, queueAhead: number | null, now: number): Response {
+function processingResponse(
+	job: RepaintJob,
+	queueAhead: number | null,
+	now: number,
+	platform: App.Platform | undefined
+): Response {
 	return json(
 		{
 			id: job.id,
@@ -46,7 +52,12 @@ function processingResponse(job: RepaintJob, queueAhead: number | null, now: num
 			elapsedMs: Math.max(0, now - job.createdAt),
 			queueAhead
 		} satisfies RepaintJobResponse,
-		{ headers: { 'cache-control': 'no-store', 'retry-after': '2' } }
+		{
+			headers: {
+				'cache-control': 'no-store',
+				'retry-after': String(comfyUiPollIntervalSeconds(platform))
+			}
+		}
 	);
 }
 
@@ -69,9 +80,13 @@ async function promptsAhead(
 	}
 }
 
-async function responseForJob(job: RepaintJob, db: ReturnType<typeof getDb>): Promise<Response> {
+async function responseForJob(
+	job: RepaintJob,
+	db: ReturnType<typeof getDb>,
+	platform: App.Platform | undefined
+): Promise<Response> {
 	const headers = { 'cache-control': 'no-store' };
-	if (job.status === 'processing') return processingResponse(job, null, Date.now());
+	if (job.status === 'processing') return processingResponse(job, null, Date.now(), platform);
 	if (job.status === 'completed' && job.outputMediaId !== null && job.balanceAfter !== null) {
 		const output = await mediaAccessById(db, job.outputMediaId);
 		if (!output) return apiError(404, 'repaint_not_found', 'Repaint job not found');
@@ -113,7 +128,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (!userId) return apiError(500, 'account_error', 'Account record not found');
 	let job = await getRepaintJob(db, userId, params.id);
 	if (!job) return apiError(404, 'repaint_not_found', 'Repaint job not found');
-	if (job.status !== 'processing') return responseForJob(job, db);
+	if (job.status !== 'processing') return responseForJob(job, db, platform);
 
 	let result;
 	let jobTimeoutMs: number;
@@ -141,7 +156,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 				0,
 				Math.round((now - job.createdAt) / 1000)
 			);
-			return responseForJob(job, db);
+			return responseForJob(job, db, platform);
 		}
 		if (error instanceof ComfyUiError) {
 			console.error('ComfyUI repaint poll failed:', {
@@ -161,7 +176,12 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (result === null) {
 		const now = Date.now();
 		if (now - job.createdAt < jobTimeoutMs) {
-			return processingResponse(job, await promptsAhead(platform, job.comfyPromptId), now);
+			return processingResponse(
+				job,
+				await promptsAhead(platform, job.comfyPromptId),
+				now,
+				platform
+			);
 		}
 		job = await failRepaintJob(
 			db,
@@ -172,7 +192,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			0,
 			Math.round((now - job.createdAt) / 1000)
 		);
-		return responseForJob(job, db);
+		return responseForJob(job, db, platform);
 	}
 
 	const queueWaitSec =
@@ -195,7 +215,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			executionSec,
 			result.downloadSec
 		);
-		return responseForJob(job, db);
+		return responseForJob(job, db, platform);
 	}
 
 	try {
@@ -227,7 +247,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			result.downloadSec,
 			reuploadSec
 		);
-		return responseForJob(job, db);
+		return responseForJob(job, db, platform);
 	} catch (error) {
 		console.error('Repaint finalization failed:', error);
 		return apiError(500, 'repaint_finalize_failed', 'Repaint failed');
