@@ -48,11 +48,13 @@ before the Change Date. See LICENSE for complete terms.
 
 	const revealTimers = createRevealTimers();
 
-	$effect(() => {
+	function clearRevealTimers(): () => void {
 		return () => revealTimers.clear();
-	});
+	}
 
-	$effect(() => {
+	$effect(clearRevealTimers);
+
+	function revealPendingThumbs(): void {
 		const sessions = shareViewer.project?.sessions ?? [];
 		const pending = sessions
 			.filter((session) =>
@@ -64,7 +66,9 @@ before the Change Date. See LICENSE for complete terms.
 			if (!session) return;
 			for (const generation of session.generations) settleThumb(generation.id);
 		});
-	});
+	}
+
+	$effect(revealPendingThumbs);
 
 	const OUTPUT_FORMAT_LABELS: Record<PublicFormSnapshot['outputFormat'], string> = {
 		webp: 'WebP',
@@ -195,14 +199,16 @@ before the Change Date. See LICENSE for complete terms.
 		shareViewer.generationDetail ? formatSettingsRows(shareViewer.generationDetail) : []
 	);
 
-	$effect(() => {
+	function loadSharedProject(): () => void {
 		const currentToken = token;
 		void shareViewer.load(currentToken);
 		return () => {
 			shareViewer.clear();
 			shareViewer.clearGenerationDetail();
 		};
-	});
+	}
+
+	$effect(loadSharedProject);
 
 	function formatDate(timestamp: number): string {
 		return new Intl.DateTimeFormat(getLocale(), {
@@ -255,7 +261,7 @@ before the Change Date. See LICENSE for complete terms.
 		}).catch((error: unknown) => logBoundaryError('sharePage.closeGeneration', error));
 	}
 
-	$effect(() => {
+	function redirectUnknownGeneration(): void {
 		const id = generationId;
 		const image = lightboxImage;
 		const currentToken = token;
@@ -264,16 +270,20 @@ before the Change Date. See LICENSE for complete terms.
 			replaceState: true,
 			noScroll: true
 		}).catch((error: unknown) => logBoundaryError('sharePage.unknownGeneration', error));
-	});
+	}
 
-	$effect(() => {
+	$effect(redirectUnknownGeneration);
+
+	function loadGenerationDetail(): (() => void) | undefined {
 		const id = generationId;
 		const image = lightboxImage;
 		const currentToken = token;
 		if (!id || !image) return;
 		void shareViewer.loadGenerationDetail(currentToken, id);
 		return () => shareViewer.clearGenerationDetail();
-	});
+	}
+
+	$effect(loadGenerationDetail);
 </script>
 
 {#snippet shareSessionSkeleton()}

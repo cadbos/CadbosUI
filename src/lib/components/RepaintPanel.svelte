@@ -433,7 +433,7 @@ before the Change Date. See LICENSE for complete terms.
 		{/if}
 	</div>
 
-	<div class="color-section" inert={formLocked} class:locked={formLocked}>
+	<div class={['color-section', { locked: formLocked }]} inert={formLocked}>
 		<div class="selected">
 			<span class="section-label">{t('repaint.colorLabel')}</span>
 			<span class="selected-value">
@@ -453,8 +453,7 @@ before the Change Date. See LICENSE for complete terms.
 				{@const selected = preset.hex === request.repaintColor}
 				<button
 					type="button"
-					class="swatch"
-					class:selected
+					class={['swatch', { selected }]}
 					style:background-color={preset.hex}
 					aria-pressed={selected}
 					aria-label={t(preset.label)}

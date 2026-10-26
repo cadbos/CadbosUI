@@ -54,12 +54,14 @@ before the Change Date. See LICENSE for complete terms.
 		focusTab: (index) => groupButtons[index]?.focus()
 	});
 
-	$effect(() => {
+	function preparePresetPreviews(): (() => void) | undefined {
 		const source = sourceUrl;
 		if (!active || !source) return;
 		photoProcessing.preparePresets(source);
 		return () => photoProcessing.clearPresets();
-	});
+	}
+
+	$effect(preparePresetPreviews);
 
 	function adjustmentLabel(key: PhotoAdjustmentKey): string {
 		return t(`photoProcessing.adjustment.${key}` as TranslationKey);

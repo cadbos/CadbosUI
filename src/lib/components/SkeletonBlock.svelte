@@ -24,8 +24,7 @@ before the Change Date. See LICENSE for complete terms.
 </script>
 
 <span
-	class="skeleton-block"
-	class:grow
+	class={['skeleton-block', { grow }]}
 	style:width={grow ? 'auto' : width}
 	style:height
 	style:border-radius={radius}

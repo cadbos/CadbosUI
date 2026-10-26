@@ -399,8 +399,7 @@ before the Change Date. See LICENSE for complete terms.
 				{@const selected = request.lightSettingsPresetIds.includes(preset.id)}
 				<button
 					type="button"
-					class="preset-card"
-					class:selected
+					class={['preset-card', { selected }]}
 					aria-pressed={selected}
 					title={t(preset.label)}
 					disabled={formLocked}
@@ -425,8 +424,7 @@ before the Change Date. See LICENSE for complete terms.
 					<div class="segmented" role="group" aria-label={t(fixture.name)}>
 						<button
 							type="button"
-							class="segment"
-							class:active={state === 'off'}
+							class={['segment', { active: state === 'off' }]}
 							aria-pressed={state === 'off'}
 							disabled={formLocked}
 							onclick={() =>
@@ -436,8 +434,7 @@ before the Change Date. See LICENSE for complete terms.
 						</button>
 						<button
 							type="button"
-							class="segment"
-							class:active={state === 'on'}
+							class={['segment', { active: state === 'on' }]}
 							aria-pressed={state === 'on'}
 							disabled={formLocked}
 							onclick={() =>
