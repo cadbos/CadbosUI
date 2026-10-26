@@ -17,9 +17,10 @@ before the Change Date. See LICENSE for complete terms.
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { PathnameWithSearchOrHash } from '$app/types';
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { z } from 'zod';
 	import {
+		jobProgressShape,
 		mediaAccessSchema,
 		type TextureReplacementCompletedResponse,
 		type TextureReplacementJobResponse
@@ -30,7 +31,12 @@ before the Change Date. See LICENSE for complete terms.
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
-	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
+	import {
+		generationOverlay,
+		trackJobProgress,
+		type GenerationOverlayFlow,
+		type JobProgressState
+	} from '$lib/state/generation-overlay.svelte';
 	import {
 		extractApiErrorCode,
 		request,
@@ -57,7 +63,7 @@ before the Change Date. See LICENSE for complete terms.
 	const SHOW_MASKED_TOGGLE = false;
 
 	const jobResponseSchema = z.discriminatedUnion('status', [
-		z.object({ id: z.string().uuid(), status: z.literal('processing') }).strict(),
+		z.object({ id: z.uuid(), status: z.literal('processing'), ...jobProgressShape }).strict(),
 		z
 			.object({
 				id: z.string().uuid(),
@@ -88,6 +94,8 @@ before the Change Date. See LICENSE for complete terms.
 	let maskedToggle = $state<HTMLInputElement | null>(null);
 	let navigatedAwayWhileSubmitting = false;
 	let pollRun = 0;
+	let jobProgress = $state<JobProgressState | null>(null);
+	let overlayFlow: GenerationOverlayFlow | null = null;
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const jobId = $derived(request.activeTextureReplacementJobId ?? null);
 	const validation = $derived(request.validateTextureReplacement());
@@ -150,10 +158,22 @@ before the Change Date. See LICENSE for complete terms.
 	// The full-screen overlay tracks this flow's own in-flight state (not just
 	// the button's `submitting`) since the wait spans the async job queue +
 	// poll cycle, not a single fetch.
+	const overlayActive = $derived(submitting || isPolling);
+
 	function overlayEffect(): void | (() => void) {
-		if (!(submitting || isPolling)) return;
-		const overlayId = generationOverlay.start('generationOverlay.textureReplacement');
-		return () => generationOverlay.stop(overlayId);
+		if (!overlayActive) return;
+		const overlayId = generationOverlay.start('generationOverlay.textureReplacement', {
+			kind: 'texture-replacement',
+			provider: untrack(() =>
+				isPolling || !request.textureReplacementMasked ? 'comfyui' : 'archai'
+			),
+			job: () => (jobProgress?.jobId === jobId ? jobProgress : null)
+		});
+		overlayFlow = overlayId;
+		return () => {
+			generationOverlay.stop(overlayId);
+			overlayFlow = null;
+		};
 	}
 
 	$effect(overlayEffect);
@@ -221,6 +241,7 @@ before the Change Date. See LICENSE for complete terms.
 		result: TextureReplacementCompletedResponse,
 		submittedContext?: Omit<ActiveTextureReplacementJob, 'id'>
 	): void {
+		if (overlayFlow !== null) generationOverlay.markSucceeded(overlayFlow);
 		request.setTextureReplacementResultReady(true);
 		if (request.currentRender?.id === result.id) {
 			void auth.refreshCredit();
@@ -341,6 +362,7 @@ before the Change Date. See LICENSE for complete terms.
 			}
 			if (signal.aborted || run !== pollRun) return;
 			if (result.status === 'processing') {
+				jobProgress = trackJobProgress(jobProgress, id, result, Date.now());
 				await waitFor(parseRetryAfter(response), signal);
 				continue;
 			}

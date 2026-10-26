@@ -228,13 +228,16 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			return apiError(500, 'repaint_failed', 'Repaint failed');
 		}
 
-		return json({ id, status: 'processing' } satisfies RepaintJobResponse, {
-			status: 202,
-			headers: {
-				'cache-control': 'no-store',
-				location: `/api/repaint/${id}`
+		return json(
+			{ id, status: 'processing', elapsedMs: 0, queueAhead: null } satisfies RepaintJobResponse,
+			{
+				status: 202,
+				headers: {
+					'cache-control': 'no-store',
+					location: `/api/repaint/${id}`
+				}
 			}
-		});
+		);
 	} finally {
 		repaintInFlight.delete(pubkey);
 	}

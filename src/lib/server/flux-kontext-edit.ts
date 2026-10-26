@@ -19,7 +19,11 @@ import {
 	queueFluxKontextEdit,
 	type ComfyDownloadedImage
 } from '$lib/server/comfyui';
-import { comfyUiJobTimeout, comfyUiRequestTimeout } from '$lib/server/generation-timeouts';
+import {
+	comfyUiJobTimeout,
+	comfyUiQueueLookupTimeout,
+	comfyUiRequestTimeout
+} from '$lib/server/generation-timeouts';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import { downloadRemoteImage } from '$lib/server/remote-image';
 
@@ -67,6 +71,15 @@ export async function cancelFluxKontextEdit(
 ): Promise<void> {
 	await createClient(platform).cancelWorkflow(promptId, {
 		signal: AbortSignal.timeout(comfyUiRequestTimeout(platform))
+	});
+}
+
+export async function countFluxKontextEditPromptsAhead(
+	platform: App.Platform | undefined,
+	promptId: string
+): Promise<number | null> {
+	return createClient(platform).countPromptsAhead(promptId, {
+		signal: AbortSignal.timeout(comfyUiQueueLookupTimeout(platform))
 	});
 }
 

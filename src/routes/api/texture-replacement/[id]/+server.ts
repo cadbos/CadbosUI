@@ -29,7 +29,10 @@ import { DEMO_PUBKEY } from '$lib/server/demo';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import { getBucketByName, getOrCreateMediaByKey, uploadsBucketName } from '$lib/server/media';
 import { mediaAccessById } from '$lib/server/media-access';
-import { pollTextureReplacement } from '$lib/server/texture-replacement';
+import {
+	countTextureReplacementPromptsAhead,
+	pollTextureReplacement
+} from '$lib/server/texture-replacement';
 import {
 	completeTextureReplacementJob,
 	failTextureReplacementJob,
@@ -38,16 +41,47 @@ import {
 } from '$lib/server/texture-replacement-jobs';
 import { uploadGeneratedImageBytes } from '$lib/server/uploads';
 
+function processingResponse(
+	job: TextureReplacementJob,
+	queueAhead: number | null,
+	now: number
+): Response {
+	return json(
+		{
+			id: job.id,
+			status: 'processing',
+			elapsedMs: Math.max(0, now - job.createdAt),
+			queueAhead
+		} satisfies TextureReplacementJobResponse,
+		{ headers: { 'cache-control': 'no-store', 'retry-after': '2' } }
+	);
+}
+
+// The queue position only enriches the progress the client shows, so a
+// failed lookup is logged and reported as unknown instead of failing the poll.
+async function promptsAhead(
+	platform: App.Platform | undefined,
+	promptId: string
+): Promise<number | null> {
+	try {
+		return await countTextureReplacementPromptsAhead(platform, promptId);
+	} catch (error) {
+		console.error(
+			'ComfyUI texture replacement queue lookup failed:',
+			error instanceof ComfyUiError
+				? { code: error.code, operation: error.operation, status: error.status }
+				: error
+		);
+		return null;
+	}
+}
+
 async function responseForJob(
 	job: TextureReplacementJob,
 	db: ReturnType<typeof getDb>
 ): Promise<Response> {
 	const headers = { 'cache-control': 'no-store' };
-	if (job.status === 'processing') {
-		return json({ id: job.id, status: job.status } satisfies TextureReplacementJobResponse, {
-			headers: { ...headers, 'retry-after': '2' }
-		});
-	}
+	if (job.status === 'processing') return processingResponse(job, null, Date.now());
 	if (job.status === 'completed' && job.outputMediaId !== null && job.balanceAfter !== null) {
 		const output = await mediaAccessById(db, job.outputMediaId);
 		if (!output)
@@ -139,17 +173,18 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 
 	if (result === null) {
 		const now = Date.now();
-		if (now - job.createdAt >= jobTimeoutMs) {
-			job = await failTextureReplacementJob(
-				db,
-				userId,
-				job.id,
-				'texture_replacement_timeout',
-				now,
-				0,
-				Math.round((now - job.createdAt) / 1000)
-			);
+		if (now - job.createdAt < jobTimeoutMs) {
+			return processingResponse(job, await promptsAhead(platform, job.comfyPromptId), now);
 		}
+		job = await failTextureReplacementJob(
+			db,
+			userId,
+			job.id,
+			'texture_replacement_timeout',
+			now,
+			0,
+			Math.round((now - job.createdAt) / 1000)
+		);
 		return responseForJob(job, db);
 	}
 

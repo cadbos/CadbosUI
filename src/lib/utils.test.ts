@@ -18,6 +18,7 @@ import {
 	describeCause,
 	formatBytes,
 	formatCredit,
+	formatDuration,
 	issuePaths,
 	logBoundaryError,
 	toBoundaryErrorLog
@@ -46,6 +47,15 @@ it('formats byte sizes in binary steps with a localized unit', () => {
 
 it('formats byte sizes with the locale unit names', () => {
 	expect(formatBytes(2048, 'ru')).toMatch(/^2\s?кБ$/);
+});
+
+it('formats short waits in seconds and longer ones in whole minutes rounded up', () => {
+	expect(formatDuration(37, 'en')).toBe('37 sec');
+	expect(formatDuration(59.2, 'en')).toBe('60 sec');
+	expect(formatDuration(60, 'en')).toBe('1 min');
+	expect(formatDuration(130, 'en')).toBe('3 min');
+	expect(formatDuration(37, 'ru')).toMatch(/^37\sс$/);
+	expect(formatDuration(130, 'ru')).toMatch(/^3\sмин$/);
 });
 
 it('normalizes Error values for component boundary logs', () => {

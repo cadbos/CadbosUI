@@ -19,9 +19,10 @@ before the Change Date. See LICENSE for complete terms.
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { z } from 'zod';
 	import {
-		mediaAccessSchema,
+		jobProgressShape,
 		type LightSettingsCompletedResponse,
-		type LightSettingsJobResponse
+		type LightSettingsJobResponse,
+		mediaAccessSchema
 	} from '$lib/api/contract';
 	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import ModeHint from '$lib/components/ModeHint.svelte';
@@ -29,7 +30,12 @@ before the Change Date. See LICENSE for complete terms.
 	import { LIGHT_SETTINGS_FIXTURES, lightSettingsPresetsFor } from '$lib/light-settings-presets';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
-	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
+	import {
+		generationOverlay,
+		trackJobProgress,
+		type GenerationOverlayFlow,
+		type JobProgressState
+	} from '$lib/state/generation-overlay.svelte';
 	import { extractApiErrorCode, request, RequestImageUploadError } from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, isEditToolRoute } from '$lib/state/url-state';
 	import { logBoundaryError } from '$lib/utils';
@@ -44,7 +50,7 @@ before the Change Date. See LICENSE for complete terms.
 	const POLL_REQUEST_TIMEOUT_MS = 150_000;
 
 	const jobResponseSchema = z.discriminatedUnion('status', [
-		z.object({ id: z.uuid(), status: z.literal('processing') }).strict(),
+		z.object({ id: z.uuid(), status: z.literal('processing'), ...jobProgressShape }).strict(),
 		z
 			.object({
 				id: z.uuid(),
@@ -82,6 +88,8 @@ before the Change Date. See LICENSE for complete terms.
 	let pollFailure = $state<PollFailure | null>(null);
 	let navigatedAwayWhileSubmitting = false;
 	let pollRun = 0;
+	let jobProgress = $state<JobProgressState | null>(null);
+	let overlayFlow: GenerationOverlayFlow | null = null;
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const jobId = $derived(request.activeLightSettingsJobId ?? null);
 	const validation = $derived(request.validateLightSettings());
@@ -121,13 +129,21 @@ before the Change Date. See LICENSE for complete terms.
 	// The full-screen overlay tracks this flow's own in-flight state (not just
 	// the button's `submitting`) since the wait spans the async job queue +
 	// poll cycle, not a single fetch.
+	const overlayActive = $derived(submitting || isPolling);
+
 	function overlayEffect(): void | (() => void) {
-		if (!(submitting || isPolling)) return;
-		const overlayId = generationOverlay.start(
-			'generationOverlay.lightSettings',
-			'generationOverlay.lightSettingsDetail'
-		);
-		return () => generationOverlay.stop(overlayId);
+		if (!overlayActive) return;
+		const overlayId = generationOverlay.start('generationOverlay.lightSettings', {
+			detailKey: 'generationOverlay.lightSettingsDetail',
+			kind: 'light-settings',
+			provider: 'comfyui',
+			job: () => (jobProgress?.jobId === jobId ? jobProgress : null)
+		});
+		overlayFlow = overlayId;
+		return () => {
+			generationOverlay.stop(overlayId);
+			overlayFlow = null;
+		};
 	}
 
 	$effect(overlayEffect);
@@ -180,6 +196,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function applyCompletedJob(result: LightSettingsCompletedResponse): void {
+		if (overlayFlow !== null) generationOverlay.markSucceeded(overlayFlow);
 		if (request.currentRender?.id === result.id) {
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
@@ -291,6 +308,7 @@ before the Change Date. See LICENSE for complete terms.
 			}
 			if (signal.aborted || run !== pollRun) return;
 			if (result.status === 'processing') {
+				jobProgress = trackJobProgress(jobProgress, id, result, Date.now());
 				await waitFor(parseRetryAfter(response), signal);
 				continue;
 			}

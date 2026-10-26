@@ -557,7 +557,10 @@ before the Change Date. See LICENSE for complete terms.
 		// whatever the user has since typed, if they kept editing the form
 		// while this request was still in flight.
 		const formSnapshot = request.captureFormSnapshot();
-		const overlayId = generationOverlay.start('generationOverlay.render');
+		const overlayId = generationOverlay.start('generationOverlay.render', {
+			kind: 'render',
+			provider: 'archai'
+		});
 		try {
 			const body = await request.toRenderRequest();
 			if (!body) {
@@ -577,6 +580,7 @@ before the Change Date. See LICENSE for complete terms.
 			request.setCurrentRender(
 				renderResultFromResponse(result, { sourceMode: 'render', formSnapshot })
 			);
+			generationOverlay.markSucceeded(overlayId);
 			request.setStatus('idle');
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();

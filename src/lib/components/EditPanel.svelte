@@ -21,9 +21,10 @@ before the Change Date. See LICENSE for complete terms.
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { z } from 'zod';
 	import {
-		mediaAccessSchema,
 		type EditCompletedResponse,
-		type EditJobResponse
+		type EditJobResponse,
+		jobProgressShape,
+		mediaAccessSchema
 	} from '$lib/api/contract';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import {
@@ -34,7 +35,12 @@ before the Change Date. See LICENSE for complete terms.
 	} from '$lib/state/request.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
-	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
+	import {
+		generationOverlay,
+		trackJobProgress,
+		type GenerationOverlayFlow,
+		type JobProgressState
+	} from '$lib/state/generation-overlay.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
 	import { buildWorkspaceUrl, slugToTool, type ToolId } from '$lib/state/url-state';
 	import { createTabController, logBoundaryError } from '$lib/utils';
@@ -59,7 +65,7 @@ before the Change Date. See LICENSE for complete terms.
 	const POLL_REQUEST_TIMEOUT_MS = 150_000;
 
 	const jobResponseSchema = z.discriminatedUnion('status', [
-		z.object({ id: z.uuid(), status: z.literal('processing') }).strict(),
+		z.object({ id: z.uuid(), status: z.literal('processing'), ...jobProgressShape }).strict(),
 		z
 			.object({
 				id: z.uuid(),
@@ -129,6 +135,8 @@ before the Change Date. See LICENSE for complete terms.
 	let terminalError = $state<PollFailure | null>(null);
 	let pollFailure = $state<PollFailure | null>(null);
 	let pollRun = 0;
+	let jobProgress = $state<JobProgressState | null>(null);
+	let overlayFlow: GenerationOverlayFlow | null = null;
 	let objectReplacementOpened = $state(false);
 	let textureReplacementOpened = $state(false);
 	let lightSettingsOpened = $state(false);
@@ -215,13 +223,21 @@ before the Change Date. See LICENSE for complete terms.
 
 	$effect(pollingEffect);
 
+	const overlayActive = $derived(submitting || isPolling);
+
 	function overlayEffect(): void | (() => void) {
-		if (!(submitting || isPolling)) return;
-		const overlayId = generationOverlay.start(
-			'generationOverlay.edit',
-			'generationOverlay.editDetail'
-		);
-		return () => generationOverlay.stop(overlayId);
+		if (!overlayActive) return;
+		const overlayId = generationOverlay.start('generationOverlay.edit', {
+			detailKey: 'generationOverlay.editDetail',
+			kind: 'edit',
+			provider: 'comfyui',
+			job: () => (jobProgress?.jobId === jobId ? jobProgress : null)
+		});
+		overlayFlow = overlayId;
+		return () => {
+			generationOverlay.stop(overlayId);
+			overlayFlow = null;
+		};
 	}
 
 	$effect(overlayEffect);
@@ -262,6 +278,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function applyCompletedJob(result: EditCompletedResponse): void {
+		if (overlayFlow !== null) generationOverlay.markSucceeded(overlayFlow);
 		if (request.currentRender?.id === result.id) {
 			request.setActiveFluxKontextEditJobId(undefined);
 			void auth.refreshCredit();
@@ -382,6 +399,7 @@ before the Change Date. See LICENSE for complete terms.
 			failures = 0;
 			if (signal.aborted || run !== pollRun) return;
 			if (result.status === 'processing') {
+				jobProgress = trackJobProgress(jobProgress, id, result, Date.now());
 				await waitFor(parseRetryAfter(response), signal);
 				continue;
 			}

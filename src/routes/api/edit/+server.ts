@@ -234,13 +234,16 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			return apiError(500, 'edit_failed', 'Edit failed');
 		}
 
-		return json({ id, status: 'processing' } satisfies EditJobResponse, {
-			status: 202,
-			headers: {
-				'cache-control': 'no-store',
-				location: `/api/edit/${id}`
+		return json(
+			{ id, status: 'processing', elapsedMs: 0, queueAhead: null } satisfies EditJobResponse,
+			{
+				status: 202,
+				headers: {
+					'cache-control': 'no-store',
+					location: `/api/edit/${id}`
+				}
 			}
-		});
+		);
 	} finally {
 		editInFlight.delete(pubkey);
 	}

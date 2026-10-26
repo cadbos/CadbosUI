@@ -294,13 +294,21 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			return apiError(500, 'texture_replacement_failed', 'Texture replacement failed');
 		}
 
-		return json({ id, status: 'processing' } satisfies TextureReplacementJobResponse, {
-			status: 202,
-			headers: {
-				'cache-control': 'no-store',
-				location: `/api/texture-replacement/${id}`
+		return json(
+			{
+				id,
+				status: 'processing',
+				elapsedMs: 0,
+				queueAhead: null
+			} satisfies TextureReplacementJobResponse,
+			{
+				status: 202,
+				headers: {
+					'cache-control': 'no-store',
+					location: `/api/texture-replacement/${id}`
+				}
 			}
-		});
+		);
 	} finally {
 		textureReplacementInFlight.delete(pubkey);
 	}
