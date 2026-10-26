@@ -1,0 +1,31 @@
+# Copyright (c) 2026 Cadbos company. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-Cadbos-BSL-1.1
+# Cadbos Interior Design AI is licensed under the Business Source License 1.1.
+# Access is limited to automated analysis tools for analysis of this repository.
+# This code is not open for contribution or usage except under a separate
+# written agreement with Cadbos company.
+# Commercial use in Interior Design & AEC Generative AI Services is prohibited
+# before the Change Date. See LICENSE for complete terms.
+
+name: Deploy worker preview
+
+on:
+  push:
+    branches-ignore:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: versions upload
