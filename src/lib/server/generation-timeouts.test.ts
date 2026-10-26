@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	comfyUiJobTimeout,
+	comfyUiQueueLookupTimeout,
 	comfyUiRequestTimeout,
 	renderTimeout,
 	GenerationTimeoutConfigurationError
@@ -66,6 +67,15 @@ for (const { variable, read, fallback } of settings) {
 		});
 	});
 }
+
+it('caps the queue lookup at a few seconds within the request timeout', () => {
+	expect(comfyUiQueueLookupTimeout(undefined)).toBe(5_000);
+	expect(comfyUiQueueLookupTimeout(platform({ COMFYUI_REQUEST_TIMEOUT_MS: '240000' }))).toBe(5_000);
+	expect(comfyUiQueueLookupTimeout(platform({ COMFYUI_REQUEST_TIMEOUT_MS: '2000' }))).toBe(2_000);
+	expect(() => comfyUiQueueLookupTimeout(platform({ COMFYUI_REQUEST_TIMEOUT_MS: 'soon' }))).toThrow(
+		GenerationTimeoutConfigurationError
+	);
+});
 
 it('resolves independent settings from the current request platform', () => {
 	const configured = platform({

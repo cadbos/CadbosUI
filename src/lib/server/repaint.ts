@@ -19,7 +19,11 @@ import {
 	queueRepaint,
 	type ComfyDownloadedImage
 } from '$lib/server/comfyui';
-import { comfyUiJobTimeout, comfyUiRequestTimeout } from '$lib/server/generation-timeouts';
+import {
+	comfyUiJobTimeout,
+	comfyUiQueueLookupTimeout,
+	comfyUiRequestTimeout
+} from '$lib/server/generation-timeouts';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import type { ImageRegion } from '$lib/image-region';
 import { colorSwatchPng } from '$lib/server/color-swatch';
@@ -73,7 +77,7 @@ export async function countRepaintPromptsAhead(
 	promptId: string
 ): Promise<number | null> {
 	return createClient(platform).countPromptsAhead(promptId, {
-		signal: AbortSignal.timeout(comfyUiRequestTimeout(platform))
+		signal: AbortSignal.timeout(comfyUiQueueLookupTimeout(platform))
 	});
 }
 

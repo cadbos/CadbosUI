@@ -13,20 +13,28 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cancelRepaint, pollRepaint, submitRepaint } from './repaint';
+import { cancelRepaint, countRepaintPromptsAhead, pollRepaint, submitRepaint } from './repaint';
 import {
 	cancelFluxKontextEdit,
+	countFluxKontextEditPromptsAhead,
 	pollFluxKontextEdit,
 	submitFluxKontextEdit
 } from './flux-kontext-edit';
-import { cancelLightSettings, pollLightSettings, submitLightSettings } from './light-settings';
+import {
+	cancelLightSettings,
+	countLightSettingsPromptsAhead,
+	pollLightSettings,
+	submitLightSettings
+} from './light-settings';
 import {
 	cancelObjectReplacement,
+	countObjectReplacementPromptsAhead,
 	pollObjectReplacement,
 	submitObjectReplacement
 } from './object-replacement';
 import {
 	cancelTextureReplacement,
+	countTextureReplacementPromptsAhead,
 	pollTextureReplacement,
 	submitTextureReplacement
 } from './texture-replacement';
@@ -44,6 +52,7 @@ const integrations = [
 		submit: (platform: App.Platform) =>
 			submitRepaint(platform, { image, target: 'walls', color: '#a3b19b' }, origin, 'job-1'),
 		poll: pollRepaint,
+		promptsAhead: countRepaintPromptsAhead,
 		cancel: cancelRepaint,
 		output: '100'
 	},
@@ -52,6 +61,7 @@ const integrations = [
 		submit: (platform: App.Platform) =>
 			submitFluxKontextEdit(platform, { image, prompt: 'remove chair' }, origin, 'job-1'),
 		poll: pollFluxKontextEdit,
+		promptsAhead: countFluxKontextEditPromptsAhead,
 		cancel: cancelFluxKontextEdit,
 		output: '17'
 	},
@@ -60,6 +70,7 @@ const integrations = [
 		submit: (platform: App.Platform) =>
 			submitLightSettings(platform, { image, instruction: 'daylight' }, origin, 'job-1'),
 		poll: pollLightSettings,
+		promptsAhead: countLightSettingsPromptsAhead,
 		cancel: cancelLightSettings,
 		output: '17'
 	},
@@ -73,6 +84,7 @@ const integrations = [
 				'job-1'
 			),
 		poll: pollObjectReplacement,
+		promptsAhead: countObjectReplacementPromptsAhead,
 		cancel: cancelObjectReplacement,
 		output: '17'
 	},
@@ -86,6 +98,7 @@ const integrations = [
 				'job-1'
 			),
 		poll: pollTextureReplacement,
+		promptsAhead: countTextureReplacementPromptsAhead,
 		cancel: cancelTextureReplacement,
 		output: '9'
 	}
@@ -124,6 +137,18 @@ for (const integration of integrations) {
 				expect(fetcher).toHaveBeenCalledOnce();
 			}
 		);
+
+		it('bounds the queue lookup by the short queue timeout, not the request timeout', async () => {
+			const fetcher = vi.fn(stalledRequest);
+			const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
+			const configured = platform(fetcher, { COMFYUI_REQUEST_TIMEOUT_MS: '240000' });
+
+			await expect(integration.promptsAhead(configured, 'prompt-1')).rejects.toMatchObject({
+				code: 'aborted'
+			});
+			expect(timeout.mock.calls).toEqual([[5_000]]);
+			expect(new URL(fetcher.mock.calls[0]![0].toString()).pathname).toBe('/queue');
+		});
 
 		it('passes the configured signal through uploads, submission, history, output download and cancellation', async () => {
 			const signal = new AbortController().signal;

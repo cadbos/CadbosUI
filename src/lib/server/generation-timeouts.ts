@@ -46,6 +46,15 @@ export function comfyUiRequestTimeout(platform: App.Platform | undefined): numbe
 	return timeout(platform, 'COMFYUI_REQUEST_TIMEOUT_MS', 120_000);
 }
 
+// The queue position only enriches a job's progress, so its lookup gets a
+// few seconds at most rather than the full request budget: a slow /queue
+// must never hold the status poll past the client's own request timeout.
+const COMFYUI_QUEUE_LOOKUP_TIMEOUT_MS = 5_000;
+
+export function comfyUiQueueLookupTimeout(platform: App.Platform | undefined): number {
+	return Math.min(COMFYUI_QUEUE_LOOKUP_TIMEOUT_MS, comfyUiRequestTimeout(platform));
+}
+
 export function renderTimeout(platform: App.Platform | undefined): number {
 	return timeout(platform, 'RENDER_TIMEOUT_MS', 120_000);
 }

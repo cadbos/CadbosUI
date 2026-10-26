@@ -19,7 +19,11 @@ import {
 	queueLightSettings,
 	type ComfyDownloadedImage
 } from '$lib/server/comfyui';
-import { comfyUiJobTimeout, comfyUiRequestTimeout } from '$lib/server/generation-timeouts';
+import {
+	comfyUiJobTimeout,
+	comfyUiQueueLookupTimeout,
+	comfyUiRequestTimeout
+} from '$lib/server/generation-timeouts';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import { downloadRemoteImage } from '$lib/server/remote-image';
 
@@ -71,7 +75,7 @@ export async function countLightSettingsPromptsAhead(
 	promptId: string
 ): Promise<number | null> {
 	return createClient(platform).countPromptsAhead(promptId, {
-		signal: AbortSignal.timeout(comfyUiRequestTimeout(platform))
+		signal: AbortSignal.timeout(comfyUiQueueLookupTimeout(platform))
 	});
 }
 
