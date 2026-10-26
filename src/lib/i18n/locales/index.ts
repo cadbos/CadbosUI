@@ -165,6 +165,10 @@ export interface Dictionary {
 	'generationOverlay.repaint': string;
 	'generationOverlay.repaintDetail': string;
 	'generationOverlay.upscale': string;
+	'generationOverlay.progressLabel': string;
+	'generationOverlay.remaining': string;
+	'generationOverlay.overdue': string;
+	'generationOverlay.queueAhead': string;
 	'auth.signIn': string;
 	'auth.guest': string;
 	'auth.restoring': string;

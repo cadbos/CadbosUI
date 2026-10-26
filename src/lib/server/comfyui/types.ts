@@ -78,6 +78,7 @@ export type ComfyUiOperation =
 	| 'configuration'
 	| 'download_image'
 	| 'get_history'
+	| 'get_queue'
 	| 'queue_workflow'
 	| 'upload_image'
 	| 'wait_for_completion'
@@ -142,6 +143,9 @@ export interface ComfyUiClient {
 		options?: ComfyRequestOptions
 	): Promise<ComfyDownloadedImage>;
 	getHistory(promptId: string, options?: ComfyRequestOptions): Promise<ComfyHistoryEntry | null>;
+	// How many prompts run or wait before this one; null once it is running
+	// or no longer queued.
+	countPromptsAhead(promptId: string, options?: ComfyRequestOptions): Promise<number | null>;
 	queueWorkflow(workflow: ComfyWorkflow, options?: ComfyQueueOptions): Promise<ComfyQueuedWorkflow>;
 	uploadImage(
 		image: ComfyImageUpload,

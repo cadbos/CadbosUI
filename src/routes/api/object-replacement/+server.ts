@@ -241,13 +241,21 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			return apiError(500, 'object_replacement_failed', 'Object replacement failed');
 		}
 
-		return json({ id, status: 'processing' } satisfies ObjectReplacementJobResponse, {
-			status: 202,
-			headers: {
-				'cache-control': 'no-store',
-				location: `/api/object-replacement/${id}`
+		return json(
+			{
+				id,
+				status: 'processing',
+				elapsedMs: 0,
+				queueAhead: null
+			} satisfies ObjectReplacementJobResponse,
+			{
+				status: 202,
+				headers: {
+					'cache-control': 'no-store',
+					location: `/api/object-replacement/${id}`
+				}
 			}
-		});
+		);
 	} finally {
 		objectReplacementInFlight.delete(pubkey);
 	}

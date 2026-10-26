@@ -108,6 +108,22 @@ function parseHistoryEntry(promptId: string, value: unknown): ComfyHistoryEntry 
 	};
 }
 
+// A /queue entry is a tuple whose first two items are the queue number and
+// the prompt ID; pending entries come in heap order, not sorted.
+function parseQueueEntries(value: unknown): { number: number; promptId: string }[] | null {
+	if (!Array.isArray(value)) return null;
+	const entries: { number: number; promptId: string }[] = [];
+	for (const item of value) {
+		if (!Array.isArray(item)) return null;
+		const [number, promptId] = item;
+		if (typeof number !== 'number' || !Number.isFinite(number) || typeof promptId !== 'string') {
+			return null;
+		}
+		entries.push({ number, promptId });
+	}
+	return entries;
+}
+
 function normalizeBaseUrl(value: string | URL): URL {
 	let url: URL;
 	try {
@@ -370,6 +386,35 @@ export function createComfyUiClient(options: ComfyUiClientOptions): ComfyUiClien
 		return entry;
 	}
 
+	async function countPromptsAhead(
+		promptId: string,
+		requestOptions: ComfyRequestOptions = {}
+	): Promise<number | null> {
+		const normalizedPromptId = validateNonEmpty(promptId, 'get_queue', 'prompt ID');
+		const response = await request('get_queue', endpoint('queue'), {
+			headers: requestHeaders(defaultHeaders, false),
+			method: 'GET',
+			signal: requestOptions.signal
+		});
+		if (!response.ok) {
+			throw new ComfyUiError('http_error', 'get_queue', 'Could not read ComfyUI queue', {
+				status: response.status
+			});
+		}
+		const body = await responseJson(response, 'get_queue');
+		const running = isRecord(body) ? parseQueueEntries(body.queue_running) : null;
+		const pending = isRecord(body) ? parseQueueEntries(body.queue_pending) : null;
+		if (running === null || pending === null) {
+			throw new ComfyUiError('invalid_response', 'get_queue', 'Invalid response from ComfyUI', {
+				status: response.status
+			});
+		}
+		if (running.some((entry) => entry.promptId === normalizedPromptId)) return null;
+		const own = pending.find((entry) => entry.promptId === normalizedPromptId);
+		if (!own) return null;
+		return running.length + pending.filter((entry) => entry.number < own.number).length;
+	}
+
 	async function waitForCompletion(
 		promptId: string,
 		waitOptions: ComfyWaitOptions = {}
@@ -484,6 +529,7 @@ export function createComfyUiClient(options: ComfyUiClientOptions): ComfyUiClien
 
 	return {
 		cancelWorkflow,
+		countPromptsAhead,
 		downloadImage,
 		getHistory,
 		queueWorkflow,

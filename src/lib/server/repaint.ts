@@ -68,6 +68,15 @@ export async function cancelRepaint(
 	});
 }
 
+export async function countRepaintPromptsAhead(
+	platform: App.Platform | undefined,
+	promptId: string
+): Promise<number | null> {
+	return createClient(platform).countPromptsAhead(promptId, {
+		signal: AbortSignal.timeout(comfyUiRequestTimeout(platform))
+	});
+}
+
 export async function submitRepaint(
 	platform: App.Platform | undefined,
 	request: { image: string; target: string; color: string; region?: ImageRegion | undefined },

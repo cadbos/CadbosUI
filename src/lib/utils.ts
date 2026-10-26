@@ -46,6 +46,18 @@ export function formatBytes(bytes: number, locale: string): string {
 	}).format(value);
 }
 
+// A remaining wait for display: whole seconds under a minute, otherwise
+// minutes rounded up so the estimate never undersells the wait.
+export function formatDuration(seconds: number, locale: string): string {
+	const minutes = seconds >= 60;
+	return new Intl.NumberFormat(locale, {
+		style: 'unit',
+		unit: minutes ? 'minute' : 'second',
+		unitDisplay: 'short',
+		maximumFractionDigits: 0
+	}).format(minutes ? Math.ceil(seconds / 60) : Math.ceil(seconds));
+}
+
 export interface BoundaryErrorLog {
 	scope: string;
 	name: string;

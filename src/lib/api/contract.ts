@@ -222,7 +222,17 @@ export interface EditRequest {
 	formSnapshot?: RequestFormSnapshot;
 }
 
-export interface EditProcessingResponse {
+// How far a still-processing ComfyUI job has got: time since the job was
+// queued (relative, so client and server clocks never need to agree) and how
+// many prompts run or wait before it — null once it is running or unknown.
+export const jobProgressShape = {
+	elapsedMs: z.number().int().nonnegative(),
+	queueAhead: z.number().int().nonnegative().nullable()
+};
+
+export type JobProgress = z.infer<z.ZodObject<typeof jobProgressShape>>;
+
+export interface EditProcessingResponse extends JobProgress {
 	id: string;
 	status: 'processing';
 }
@@ -272,7 +282,7 @@ export interface ObjectReplacementRequest {
 	formSnapshot?: RequestFormSnapshot;
 }
 
-export interface ObjectReplacementProcessingResponse {
+export interface ObjectReplacementProcessingResponse extends JobProgress {
 	id: string;
 	status: 'processing';
 }
@@ -303,7 +313,7 @@ export interface LightSettingsRequest {
 	formSnapshot?: RequestFormSnapshot;
 }
 
-export interface LightSettingsProcessingResponse {
+export interface LightSettingsProcessingResponse extends JobProgress {
 	id: string;
 	status: 'processing';
 }
@@ -340,7 +350,7 @@ export interface RepaintRequest {
 	formSnapshot?: RequestFormSnapshot;
 }
 
-export interface RepaintProcessingResponse {
+export interface RepaintProcessingResponse extends JobProgress {
 	id: string;
 	status: 'processing';
 }
@@ -384,7 +394,7 @@ export type TextureReplacementRequest =
 	| AutomaticTextureReplacementRequest
 	| MaskedTextureReplacementRequest;
 
-export interface TextureReplacementProcessingResponse {
+export interface TextureReplacementProcessingResponse extends JobProgress {
 	id: string;
 	status: 'processing';
 }
@@ -434,6 +444,21 @@ export const generationKinds = [
 ] as const;
 
 export type GenerationKind = (typeof generationKinds)[number];
+
+export type GenerationProvider = 'archai' | 'comfyui';
+
+// GET /api/generation-estimates — how long recent successful generations of
+// each kind took end to end on each provider, for the progress shown while
+// one runs. Kinds without enough recent history are left out.
+export interface GenerationEstimate {
+	kind: GenerationKind;
+	provider: GenerationProvider;
+	seconds: number;
+}
+
+export interface GenerationEstimatesResponse {
+	estimates: GenerationEstimate[];
+}
 
 export interface GeneratedImageRecord {
 	id: string;

@@ -70,6 +70,15 @@ export async function cancelTextureReplacement(
 	});
 }
 
+export async function countTextureReplacementPromptsAhead(
+	platform: App.Platform | undefined,
+	promptId: string
+): Promise<number | null> {
+	return createClient(platform).countPromptsAhead(promptId, {
+		signal: AbortSignal.timeout(comfyUiRequestTimeout(platform))
+	});
+}
+
 export async function submitTextureReplacement(
 	platform: App.Platform | undefined,
 	request: { image: string; referenceImage: string; replacementSurface: string },

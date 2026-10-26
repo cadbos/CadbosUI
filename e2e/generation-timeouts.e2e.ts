@@ -77,7 +77,14 @@ for (const instrument of instruments) {
 					.run();
 				const pending = await request.get(`/api/${instrument.route}/${id}`);
 				expect(pending.status()).toBe(200);
-				expect(await pending.json()).toEqual({ id, status: 'processing' });
+				const progress = (await pending.json()) as { elapsedMs: number };
+				expect(progress).toEqual({
+					id,
+					status: 'processing',
+					elapsedMs: expect.any(Number),
+					queueAhead: 1
+				});
+				expect(progress.elapsedMs).toBeGreaterThanOrEqual(11 * 60_000);
 				const before = await db.prepare('SELECT * FROM ledger_entries ORDER BY id').all();
 				await db
 					.prepare(`UPDATE ${instrument.table} SET created_at = ? WHERE id = ?`)

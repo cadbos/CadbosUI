@@ -296,7 +296,10 @@ class PhotoProcessingState {
 		if (!operation) return;
 		this.upscaling = true;
 		this.#clearFeedback();
-		const overlayId = generationOverlay.start('generationOverlay.upscale');
+		const overlayId = generationOverlay.start('generationOverlay.upscale', {
+			kind: 'upscale',
+			provider: 'archai'
+		});
 		try {
 			if (needsSave && !(await this.#save(operation))) return;
 			operation.sourceRender = operation.state.currentRender;

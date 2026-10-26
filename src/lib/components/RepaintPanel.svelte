@@ -20,6 +20,7 @@ before the Change Date. See LICENSE for complete terms.
 	import ColorPicker from 'svelte-awesome-color-picker';
 	import { z } from 'zod';
 	import {
+		jobProgressShape,
 		mediaAccessSchema,
 		type RepaintCompletedResponse,
 		type RepaintJobResponse
@@ -30,7 +31,11 @@ before the Change Date. See LICENSE for complete terms.
 	import { REPAINT_COLOR_PATTERN, REPAINT_COLOR_PRESETS } from '$lib/repaint-colors';
 	import { auth } from '$lib/state/auth.svelte';
 	import { generatedImages } from '$lib/state/generated-images.svelte';
-	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
+	import {
+		generationOverlay,
+		trackJobProgress,
+		type JobProgressState
+	} from '$lib/state/generation-overlay.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
 	import { extractApiErrorCode, request, RequestImageUploadError } from '$lib/state/request.svelte';
 	import { buildWorkspaceUrl, isEditToolRoute } from '$lib/state/url-state';
@@ -47,7 +52,7 @@ before the Change Date. See LICENSE for complete terms.
 	const POLL_REQUEST_TIMEOUT_MS = 150_000;
 
 	const jobResponseSchema = z.discriminatedUnion('status', [
-		z.object({ id: z.uuid(), status: z.literal('processing') }).strict(),
+		z.object({ id: z.uuid(), status: z.literal('processing'), ...jobProgressShape }).strict(),
 		z
 			.object({
 				id: z.uuid(),
@@ -77,6 +82,7 @@ before the Change Date. See LICENSE for complete terms.
 	let pollFailure = $state<PollFailure | null>(null);
 	let navigatedAwayWhileSubmitting = false;
 	let pollRun = 0;
+	let jobProgress = $state<JobProgressState | null>(null);
 	const isAuthenticated = $derived(auth.status === 'authenticated');
 	const jobId = $derived(request.activeRepaintJobId ?? null);
 	const validation = $derived(request.validateRepaint());
@@ -121,12 +127,16 @@ before the Change Date. See LICENSE for complete terms.
 
 	$effect(pollingEffect);
 
+	const overlayActive = $derived(submitting || isPolling);
+
 	function overlayEffect(): void | (() => void) {
-		if (!(submitting || isPolling)) return;
-		const overlayId = generationOverlay.start(
-			'generationOverlay.repaint',
-			'generationOverlay.repaintDetail'
-		);
+		if (!overlayActive) return;
+		const overlayId = generationOverlay.start('generationOverlay.repaint', {
+			detailKey: 'generationOverlay.repaintDetail',
+			kind: 'repaint',
+			provider: 'comfyui',
+			job: () => (jobProgress?.jobId === jobId ? jobProgress : null)
+		});
 		return () => generationOverlay.stop(overlayId);
 	}
 
@@ -296,6 +306,7 @@ before the Change Date. See LICENSE for complete terms.
 			}
 			if (signal.aborted || run !== pollRun) return;
 			if (result.status === 'processing') {
+				jobProgress = trackJobProgress(jobProgress, id, result, Date.now());
 				await waitFor(parseRetryAfter(response), signal);
 				continue;
 			}

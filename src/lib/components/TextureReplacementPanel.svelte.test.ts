@@ -40,10 +40,13 @@ function stalledJsonResponse(signal: AbortSignal): Response {
 }
 
 function processingResponse(jobId: string): Response {
-	return new Response(JSON.stringify({ id: jobId, status: 'processing' }), {
-		status: 200,
-		headers: { 'content-type': 'application/json', 'retry-after': '30' }
-	});
+	return new Response(
+		JSON.stringify({ id: jobId, status: 'processing', elapsedMs: 4_000, queueAhead: null }),
+		{
+			status: 200,
+			headers: { 'content-type': 'application/json', 'retry-after': '30' }
+		}
+	);
 }
 
 beforeEach(() => {

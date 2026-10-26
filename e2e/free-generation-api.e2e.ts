@@ -62,7 +62,12 @@ test('submits and completes a free object replacement with one linked zero-cent 
 
 	const processing = await generationApi.request.get(`/api/object-replacement/${id}`);
 	expect(processing.status()).toBe(200);
-	expect(await processing.json()).toEqual({ id, status: 'processing' });
+	expect(await processing.json()).toEqual({
+		id,
+		status: 'processing',
+		elapsedMs: expect.any(Number),
+		queueAhead: 1
+	});
 	const completed = await generationApi.request.get(`/api/object-replacement/${id}`);
 	expect(completed.status()).toBe(200);
 	const result: unknown = await completed.json();

@@ -66,6 +66,15 @@ export async function cancelLightSettings(
 	});
 }
 
+export async function countLightSettingsPromptsAhead(
+	platform: App.Platform | undefined,
+	promptId: string
+): Promise<number | null> {
+	return createClient(platform).countPromptsAhead(promptId, {
+		signal: AbortSignal.timeout(comfyUiRequestTimeout(platform))
+	});
+}
+
 export async function submitLightSettings(
 	platform: App.Platform | undefined,
 	request: { image: string; instruction: string },

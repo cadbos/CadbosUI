@@ -71,6 +71,15 @@ export async function cancelObjectReplacement(
 	});
 }
 
+export async function countObjectReplacementPromptsAhead(
+	platform: App.Platform | undefined,
+	promptId: string
+): Promise<number | null> {
+	return createClient(platform).countPromptsAhead(promptId, {
+		signal: AbortSignal.timeout(comfyUiRequestTimeout(platform))
+	});
+}
+
 export async function submitObjectReplacement(
 	platform: App.Platform | undefined,
 	request: {

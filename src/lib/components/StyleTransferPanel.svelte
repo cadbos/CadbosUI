@@ -161,7 +161,10 @@ before the Change Date. See LICENSE for complete terms.
 		// not whatever the user has since typed, if they kept editing the form
 		// while this request was still in flight.
 		const formSnapshot = request.captureFormSnapshot();
-		const overlayId = generationOverlay.start('generationOverlay.styleTransfer');
+		const overlayId = generationOverlay.start('generationOverlay.styleTransfer', {
+			kind: 'style-transfer',
+			provider: 'archai'
+		});
 		try {
 			const body = await request.toStyleTransferRequest();
 			if (!body) {

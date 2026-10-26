@@ -218,6 +218,43 @@ describe('createComfyUiClient', () => {
 		expect(fetcher.mock.calls[0]?.[0].toString()).toContain('history/prompt%2F1');
 	});
 
+	it('counts the prompts running or queued before a pending prompt', async () => {
+		const queue = {
+			queue_running: [[4, 'running', {}, {}, []]],
+			queue_pending: [
+				[7, 'later', {}, {}, []],
+				[5, 'earlier', {}, {}, []],
+				[6, 'mine', {}, {}, []]
+			]
+		};
+		const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => jsonResponse(queue));
+		const client = createComfyUiClient({ baseUrl: 'http://localhost:8188', fetch: fetcher });
+
+		await expect(client.countPromptsAhead('mine')).resolves.toBe(2);
+		await expect(client.countPromptsAhead('earlier')).resolves.toBe(1);
+		await expect(client.countPromptsAhead('running')).resolves.toBeNull();
+		await expect(client.countPromptsAhead('finished')).resolves.toBeNull();
+		expect(fetcher.mock.calls[0]?.[0].toString()).toBe('http://localhost:8188/queue');
+	});
+
+	it('rejects a malformed queue response', async () => {
+		const fetcher = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(jsonResponse({ queue_running: [], queue_pending: [['x', 'mine']] }))
+			.mockResolvedValueOnce(jsonResponse({}, 503));
+		const client = createComfyUiClient({ baseUrl: 'http://localhost:8188', fetch: fetcher });
+
+		await expect(client.countPromptsAhead('mine')).rejects.toMatchObject({
+			code: 'invalid_response',
+			operation: 'get_queue'
+		});
+		await expect(client.countPromptsAhead('mine')).rejects.toMatchObject({
+			code: 'http_error',
+			operation: 'get_queue',
+			status: 503
+		});
+	});
+
 	it('keeps what a text output node printed and rejects malformed text', async () => {
 		const entry = (text: unknown) => ({
 			'prompt-1': {

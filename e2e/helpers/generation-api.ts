@@ -107,6 +107,12 @@ export const test = base.extend<{
 									}
 						);
 					}
+					if (request.method === 'GET' && url.pathname === '/queue') {
+						return Response.json({
+							queue_running: [[0, 'other-job', {}, {}, []]],
+							queue_pending: [[1, 'free-job', {}, {}, []]]
+						});
+					}
 					if (request.method === 'GET' && url.pathname === '/view') {
 						return new Response(image, { headers: { 'content-type': 'image/png' } });
 					}

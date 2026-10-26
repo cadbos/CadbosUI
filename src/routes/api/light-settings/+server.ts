@@ -234,13 +234,21 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 			return apiError(500, 'light_settings_failed', 'Light settings failed');
 		}
 
-		return json({ id, status: 'processing' } satisfies LightSettingsJobResponse, {
-			status: 202,
-			headers: {
-				'cache-control': 'no-store',
-				location: `/api/light-settings/${id}`
+		return json(
+			{
+				id,
+				status: 'processing',
+				elapsedMs: 0,
+				queueAhead: null
+			} satisfies LightSettingsJobResponse,
+			{
+				status: 202,
+				headers: {
+					'cache-control': 'no-store',
+					location: `/api/light-settings/${id}`
+				}
 			}
-		});
+		);
 	} finally {
 		lightSettingsInFlight.delete(pubkey);
 	}

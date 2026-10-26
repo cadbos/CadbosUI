@@ -40,6 +40,16 @@ export const test = base.extend({
 			});
 		});
 
+		// Without history every flow keeps its fixed hint; tests that cover the
+		// progress bar route their own estimates.
+		await page.route('**/api/generation-estimates', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ estimates: [] })
+			});
+		});
+
 		await page.route('**/healthz', async (route) => {
 			await route.fulfill({
 				status: 200,

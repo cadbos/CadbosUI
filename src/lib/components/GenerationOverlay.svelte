@@ -13,8 +13,25 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { t } from '$lib/i18n/index.svelte';
+	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
+	import { generationEstimates } from '$lib/state/generation-estimates.svelte';
 	import { generationOverlay } from '$lib/state/generation-overlay.svelte';
+	import { formatDuration } from '$lib/utils';
+
+	let now = $state(Date.now());
+	const progress = $derived(generationOverlay.progress(now));
+
+	function progressEffect(): void | (() => void) {
+		if (!generationOverlay.active) return;
+		now = Date.now();
+		void generationEstimates.load(now);
+		const timer = setInterval(() => {
+			now = Date.now();
+		}, 1_000);
+		return () => clearInterval(timer);
+	}
+
+	$effect(progressEffect);
 
 	// Traces each ribbon along its real outline (mirrors a plain-JS
 	// `getTotalLength()` measurement) instead of a hand-picked dash length, so
@@ -96,7 +113,36 @@ before the Change Date. See LICENSE for complete terms.
 			{#if generationOverlay.messageKey}
 				<p class="message">{t(generationOverlay.messageKey)}</p>
 			{/if}
-			{#if generationOverlay.detailKey}
+			{#if progress}
+				<!-- Ticks every second, so it stays out of the status announcements. -->
+				<div class="progress" aria-live="off">
+					<div class="progress-row">
+						<div
+							class="bar"
+							role="progressbar"
+							aria-label={t('generationOverlay.progressLabel')}
+							aria-valuemin={0}
+							aria-valuemax={100}
+							aria-valuenow={progress.percent}
+						>
+							<div class="fill" style:width="{progress.percent}%"></div>
+						</div>
+						<span class="percent">{progress.percent}%</span>
+					</div>
+					<p class="detail">
+						{progress.remainingSec === null
+							? t('generationOverlay.overdue')
+							: ti('generationOverlay.remaining', {
+									time: formatDuration(progress.remainingSec, getLocale())
+								})}
+					</p>
+					{#if progress.queueAhead}
+						<p class="detail">
+							{ti('generationOverlay.queueAhead', { count: progress.queueAhead })}
+						</p>
+					{/if}
+				</div>
+			{:else if generationOverlay.detailKey}
 				<p class="detail">{t(generationOverlay.detailKey)}</p>
 			{/if}
 		</div>
@@ -240,6 +286,45 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-muted-strong);
 	}
 
+	.progress {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+		width: 100%;
+		min-width: 14rem;
+		margin-top: 0.25rem;
+	}
+
+	.progress-row {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+	}
+
+	.bar {
+		flex: 1;
+		height: 6px;
+		overflow: hidden;
+		background: var(--color-border);
+		border-radius: 999px;
+	}
+
+	.fill {
+		height: 100%;
+		background: var(--color-accent);
+		border-radius: inherit;
+		transition: width 1s linear;
+	}
+
+	.percent {
+		min-width: 2.75rem;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+		text-align: right;
+		color: var(--color-text);
+	}
+
 	@keyframes overlayIn {
 		from {
 			opacity: 0;
@@ -280,6 +365,10 @@ before the Change Date. See LICENSE for complete terms.
 		.fillPath {
 			animation: none;
 			opacity: 1;
+		}
+
+		.fill {
+			transition: none;
 		}
 	}
 </style>
