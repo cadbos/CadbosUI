@@ -866,7 +866,7 @@ export const paymentProcessorsResponseSchema = z.object({
 }) satisfies z.ZodType<PaymentProcessorsResponse>;
 
 export const invoiceResponseSchema = z.object({
-	id: z.string().regex(/^[1-9]\d*$/),
+	id: z.uuid(),
 	paymentProcessor: z.string().min(1),
 	amountMinor: positiveMinorAmountSchema,
 	currency: z.literal('USD'),

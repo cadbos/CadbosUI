@@ -20,6 +20,8 @@ import { ru } from '$lib/i18n/locales/ru';
 
 const PK = 'c'.repeat(64);
 const PAYMENT_URL = 'https://auth.robokassa.ru/Merchant/Index.aspx?InvId=1';
+const INVOICE_ID = 'bf1d4d72-69a8-460c-b18e-a2adbd40151f';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 interface PaymentBackend {
 	invoice: InvoiceResponse | null;
@@ -106,7 +108,7 @@ async function mockPayments(page: Page, approved = true): Promise<PaymentBackend
 		backend.invoice = { ...backend.invoice!, status: 'cancelled', checkout: null };
 		await json(route, 200, backend.invoice);
 	});
-	await page.route(/\/api\/invoices\/\d+$/, async (route) => {
+	await page.route(/\/api\/invoices\/[0-9a-f-]{36}$/, async (route) => {
 		backend.reads++;
 		if (!backend.invoice) {
 			await json(route, 404, { error: { code: 'invoice_not_found', message: 'Not found' } });
@@ -155,7 +157,7 @@ test('prepares a ruble invoice for a chosen dollar amount', async ({ page }) => 
 		amountMinor: 2500,
 		currency: 'USD'
 	});
-	expect(backend.creates[0].id).toMatch(/^[1-9]\d*$/);
+	expect(backend.creates[0].id).toMatch(UUID);
 	expect(backend.checkouts).toBe(1);
 
 	await page.reload();
@@ -169,8 +171,18 @@ test('prepares a ruble invoice for a chosen dollar amount', async ({ page }) => 
 
 test('confirms a returned payment and refreshes the balance', async ({ page }) => {
 	const backend = await mockPayments(page);
+	const terms: CreateInvoiceRequest = {
+		id: INVOICE_ID,
+		paymentProcessor: 'robokassa',
+		amountMinor: 2500,
+		currency: 'USD'
+	};
+	await page.addInitScript(
+		([key, value]) => localStorage.setItem(key, value),
+		[`cadbos.top-up.v1.${PK}`, JSON.stringify(terms)]
+	);
 	backend.invoice = {
-		id: '4242',
+		id: INVOICE_ID,
 		paymentProcessor: 'robokassa',
 		amountMinor: 2500,
 		currency: 'USD',
@@ -182,7 +194,7 @@ test('confirms a returned payment and refreshes the balance', async ({ page }) =
 	};
 	backend.settleOnRead = true;
 
-	await page.goto('/top-up?InvId=4242&OutSum=2250.75&SignatureValue=abc&Culture=ru');
+	await page.goto('/top-up?InvId=7340032&OutSum=2250.75&SignatureValue=abc&Culture=ru');
 
 	await expect(page.getByRole('heading', { name: ru['topUp.paid.title'] })).toBeVisible();
 	await expect(page.getByText('Зачислено $ 25.00.')).toBeVisible();
@@ -193,6 +205,18 @@ test('confirms a returned payment and refreshes the balance', async ({ page }) =
 	await page.getByRole('button', { name: ru['topUp.paid.another'] }).click();
 	await expect(page.getByRole('button', { name: ru['topUp.submit'] })).toBeEnabled();
 	await expect(page.locator('.amount-input')).toHaveValue('25');
+});
+
+test('starts a new top-up when the provider returns without a retained invoice', async ({
+	page
+}) => {
+	const backend = await mockPayments(page);
+	await page.goto('/top-up?InvId=7340032&OutSum=2250.75&SignatureValue=abc&Culture=ru');
+
+	await expect(page.getByRole('button', { name: ru['topUp.submit'] })).toBeEnabled();
+	await expect(page).toHaveURL(/\/top-up$/);
+	expect(backend.reads).toBe(0);
+	expect(backend.creates).toHaveLength(0);
 });
 
 test('checks payment from the invoice card', async ({ page }) => {

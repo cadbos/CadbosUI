@@ -30,13 +30,8 @@ export const AMOUNT_PRESETS_MINOR = [500, 1000, 2500, 5000, 10000] as const;
 const POLL_INTERVAL_MS = 3000;
 const POLL_ATTEMPTS = 20;
 
-const invoiceIdSchema = z
-	.string()
-	.regex(/^[1-9]\d*$/)
-	.refine((value) => BigInt(value) <= BigInt(Number.MAX_SAFE_INTEGER));
-
 const termsSchema = z.object({
-	id: invoiceIdSchema,
+	id: z.uuid(),
 	paymentProcessor: z.string().min(1),
 	amountMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
 	currency: z.literal(INVOICE_CURRENCY)
@@ -56,20 +51,6 @@ export type TopUpError =
 export type TopUpView = 'compose' | 'invoice' | 'confirming' | 'pending' | 'paid' | 'cancelled';
 
 type ApiResult = { ok: true; data: unknown } | { ok: false; status: number; code: string | null };
-
-export function parseInvoiceId(value: string | null): string | null {
-	const parsed = invoiceIdSchema.safeParse(value);
-	return parsed.success ? parsed.data : null;
-}
-
-function createInvoiceId(): string {
-	let id: bigint;
-	do {
-		const words = crypto.getRandomValues(new Uint32Array(2));
-		id = (BigInt(words[0] & 0x1fffff) << 32n) | BigInt(words[1]);
-	} while (id === 0n);
-	return id.toString();
-}
 
 function wait(ms: number, signal: AbortSignal): Promise<void> {
 	return new Promise((resolve) => {
@@ -119,7 +100,7 @@ class TopUpState {
 	#account: string | null = null;
 	#session: AbortController | null = null;
 
-	open(account: string, returnedInvoiceId: string | null): void {
+	open(account: string, returnedFromProvider: boolean): void {
 		this.close();
 		this.#account = account;
 		const session = new AbortController();
@@ -128,8 +109,7 @@ class TopUpState {
 		this.terms = stored;
 		if (stored) this.#applyTerms(stored);
 		void this.#loadProcessors(session.signal);
-		if (returnedInvoiceId) void this.#resumeReturned(returnedInvoiceId, session.signal);
-		else if (stored) void this.#restore(session.signal);
+		if (stored) void this.#restore(returnedFromProvider, session.signal);
 	}
 
 	close(): void {
@@ -161,7 +141,7 @@ class TopUpState {
 			if (!this.terms) {
 				if (this.amountMinor === null || !this.processor) return;
 				this.#setTerms({
-					id: createInvoiceId(),
+					id: crypto.randomUUID(),
 					paymentProcessor: this.processor.id,
 					amountMinor: this.amountMinor,
 					currency: INVOICE_CURRENCY
@@ -169,7 +149,7 @@ class TopUpState {
 			}
 			let created = await this.#invoiceRequest('/api/invoices', 'POST', this.terms, signal);
 			if (created === 'conflict' && this.terms) {
-				this.#setTerms({ ...this.terms, id: createInvoiceId() });
+				this.#setTerms({ ...this.terms, id: crypto.randomUUID() });
 				created = await this.#invoiceRequest('/api/invoices', 'POST', this.terms, signal);
 			}
 			if (created !== 'ok' || this.invoice?.status !== 'open' || this.invoice.checkout) return;
@@ -231,7 +211,7 @@ class TopUpState {
 		this.error = null;
 	}
 
-	async #restore(signal: AbortSignal): Promise<void> {
+	async #restore(returnedFromProvider: boolean, signal: AbortSignal): Promise<void> {
 		const terms = this.terms;
 		if (!terms) return;
 		this.busy = 'restore';
@@ -241,25 +221,13 @@ class TopUpState {
 		} finally {
 			if (!signal.aborted) this.busy = null;
 		}
-		if (outcome === 'conflict') this.startOver();
-		else if (this.invoice?.status === 'open' && !this.invoice.checkout) await this.submit();
-	}
-
-	async #resumeReturned(invoiceId: string, signal: AbortSignal): Promise<void> {
-		if (this.terms?.id !== invoiceId) {
-			this.busy = 'restore';
-			let outcome: 'ok' | 'conflict' | 'failed';
-			try {
-				outcome = await this.#invoiceRequest(`/api/invoices/${invoiceId}`, 'GET', null, signal, {
-					adopt: true
-				});
-			} finally {
-				if (!signal.aborted) this.busy = null;
-			}
-			if (outcome !== 'ok') return;
+		if (outcome === 'conflict') {
+			this.startOver();
+			return;
 		}
-		if (this.invoice?.status === 'paid' || this.invoice?.status === 'cancelled') return;
-		await this.confirm();
+		if (this.invoice?.status !== 'open') return;
+		if (returnedFromProvider) await this.confirm();
+		else if (!this.invoice.checkout) await this.submit();
 	}
 
 	async #loadProcessors(signal: AbortSignal): Promise<void> {
@@ -285,8 +253,7 @@ class TopUpState {
 		path: string,
 		method: 'GET' | 'POST',
 		body: object | null,
-		signal: AbortSignal,
-		{ adopt = false }: { adopt?: boolean } = {}
+		signal: AbortSignal
 	): Promise<'ok' | 'conflict' | 'failed'> {
 		const result = await this.#request(path, method, body, signal);
 		if (signal.aborted) return 'failed';
@@ -301,12 +268,6 @@ class TopUpState {
 			return 'failed';
 		}
 		const parsed = invoiceResponseSchema.safeParse(result.data);
-		if (parsed.success && adopt) {
-			const { id, paymentProcessor, amountMinor, currency } = parsed.data;
-			const terms = { id, paymentProcessor, amountMinor, currency };
-			this.#setTerms(terms);
-			this.#applyTerms(terms);
-		}
 		const terms = this.terms;
 		if (
 			!parsed.success ||

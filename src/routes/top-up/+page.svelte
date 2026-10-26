@@ -22,12 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { formatMinorAmount } from '$lib/payment-amount';
 	import { auth } from '$lib/state/auth.svelte';
-	import {
-		INVOICE_CURRENCY,
-		parseInvoiceId,
-		topUp,
-		type TopUpError
-	} from '$lib/state/top-up.svelte';
+	import { INVOICE_CURRENCY, topUp, type TopUpError } from '$lib/state/top-up.svelte';
 	import InvoiceCard from './InvoiceCard.svelte';
 	import TopUpForm from './TopUpForm.svelte';
 	import TopUpOutcome from './TopUpOutcome.svelte';
@@ -56,9 +51,9 @@ before the Change Date. See LICENSE for complete terms.
 		const pubkey = account;
 		if (!pubkey) return;
 		untrack(() => {
-			const returnedInvoiceId = parseInvoiceId(page.url.searchParams.get('InvId'));
+			const returnedFromProvider = page.url.searchParams.has('InvId');
 			if (page.url.search) replaceState(resolve('/top-up', {}), page.state);
-			topUp.open(pubkey, returnedInvoiceId);
+			topUp.open(pubkey, returnedFromProvider);
 		});
 		return () => topUp.close();
 	}

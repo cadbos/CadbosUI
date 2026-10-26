@@ -387,12 +387,15 @@ USD invoices, shows an approximate payment-currency amount from the USD/RUB feed
 for RUB processors, then creates and checks out the invoice and shows the exact
 locked amount before the provider redirect. Invoice terms are kept per account
 in `localStorage` until the invoice is paid or cancelled, so reloads and returns
-reuse the same invoice ID.
+reuse the same invoice UUID.
 
 Set Robokassa **SuccessURL** and **FailURL** to `https://<application-host>/top-up`
-with method **GET**. The page reads `InvId`, strips the provider query from the
-address bar, and polls `GET /api/invoices/[id]` every 3 seconds for up to one
-minute; the user can check again, resume payment or cancel afterwards. Provider
+with method **GET**. The provider's numeric `InvId` only marks the visit as a
+return: the page strips the provider query from the address bar and polls
+`GET /api/invoices/[uuid]` for the retained invoice every 3 seconds for up to one
+minute; the user can check again, resume payment or cancel afterwards. A return
+without a retained invoice opens a new top-up; verified callbacks still credit
+the payment. Provider
 names and descriptions come from `src/routes/top-up/processor-labels.ts`; a new
 processor appears under its ID until labels are added there.
 
