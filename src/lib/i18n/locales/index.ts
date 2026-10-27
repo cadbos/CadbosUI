@@ -890,6 +890,7 @@ export interface Dictionary {
 	'edit.addObject.customPlaceholder': string;
 	'edit.addObject.previewLabel': string;
 	'edit.addObject.userPromptTemplate': string;
+	'edit.addObject.peopleUserPromptTemplate': string;
 	'edit.addObject.ledStrip.label': string;
 	'edit.addObject.ledStrip.phrase': string;
 	'edit.addObject.recessedLights.label': string;

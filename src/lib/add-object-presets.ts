@@ -140,3 +140,32 @@ export const ADD_OBJECT_PRESETS: AddObjectPreset[] = [
 		Icon: MirrorRectangular
 	}
 ];
+
+const PEOPLE_INSTRUCTION = new RegExp(
+	'(?<![\\p{L}\\p{N}])(?:' +
+		[
+			'люд\\p{L}*',
+			'человек\\p{L}*',
+			'мужчин\\p{L}*',
+			'женщин\\p{L}*',
+			'реб[её]н\\p{L}*',
+			'дет(?:и|ей|ям|ьми|ях)',
+			'семь(?:я|ю|ей|е)',
+			'people',
+			'persons?',
+			'(?:wo)?m[ae]n',
+			'child(?:ren)?',
+			'famil(?:y|ies)'
+		].join('|') +
+		')(?![\\p{L}\\p{N}])',
+	'iu'
+);
+
+// People are not furniture: the object template's "only empty space, never
+// touch existing items, shrink to fit" rules leave figures miniature and in
+// unnatural poses, so an instruction about people gets its own template.
+export function addObjectPromptTemplate(instruction: string): TranslationKey {
+	return PEOPLE_INSTRUCTION.test(instruction)
+		? 'edit.addObject.peopleUserPromptTemplate'
+		: 'edit.addObject.userPromptTemplate';
+}

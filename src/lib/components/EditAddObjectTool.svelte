@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { ADD_OBJECT_PRESETS } from '$lib/add-object-presets';
+	import { ADD_OBJECT_PRESETS, addObjectPromptTemplate } from '$lib/add-object-presets';
 	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
@@ -28,7 +28,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	const promptText = $derived(request.addObjectInstruction.trim());
 	const finalPrompt = $derived(
-		promptText === '' ? '' : ti('edit.addObject.userPromptTemplate', { object: promptText })
+		promptText === '' ? '' : ti(addObjectPromptTemplate(promptText), { object: promptText })
 	);
 
 	function submit(): void {

@@ -897,6 +897,8 @@ export const en = {
 	'edit.addObject.previewLabel': 'Instruction to send',
 	'edit.addObject.userPromptTemplate':
 		'Make an additive local edit only: add the following to the image: {object}. Place it only in an already empty visible floor, wall, ceiling, or surface area; do not create space for it, and reduce its size if available space is limited. Match its style to the interior and accurately match the scale, perspective, lighting, shadows, and contact with the supporting surface. Do not cover windows, doors, switches, sockets, mouldings, or existing decor. Do not remove, replace, move, resize, or redraw anything already present. Every image area except the added object and its natural shadow or light must remain visually identical to the source image.',
+	'edit.addObject.peopleUserPromptTemplate':
+		'Add {object} to the scene, and no one else. Candid interior photography: each added person is absorbed in their own activity, not posing and not looking at the camera. Each is life-size, with scale and perspective matching the camera, sits only on furniture already in the scene, and stands or walks only on open floor; add no chairs or other furniture, and if there is nowhere to sit, the person stands. Lighting and shadows match the scene. Add nothing else, and keep the interior and camera angle unchanged.',
 	'edit.addObject.ledStrip.label': 'LED strip',
 	'edit.addObject.ledStrip.phrase': 'an LED strip along the ceiling edge',
 	'edit.addObject.recessedLights.label': 'Recessed lights',
@@ -904,9 +906,10 @@ export const en = {
 	'edit.addObject.coveLighting.label': 'Cove lighting',
 	'edit.addObject.coveLighting.phrase': 'concealed cove lighting around the ceiling',
 	'edit.addObject.people.label': 'People',
-	'edit.addObject.people.phrase': 'two or three people',
+	'edit.addObject.people.phrase': 'two or three people quietly relaxing or talking',
 	'edit.addObject.peopleMotion.label': 'People in motion',
-	'edit.addObject.peopleMotion.phrase': 'people walking through the room',
+	'edit.addObject.peopleMotion.phrase':
+		'two or three people walking through the room with slight motion blur',
 	'edit.addObject.houseplant.label': 'Houseplant',
 	'edit.addObject.houseplant.phrase': 'a houseplant',
 	'edit.addObject.wallArt.label': 'Wall art',
