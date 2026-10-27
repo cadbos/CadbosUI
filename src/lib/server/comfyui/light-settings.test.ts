@@ -110,6 +110,8 @@ describe('runLightSettings', () => {
 		const expectedWorkflow = structuredClone(workflowTemplate) as ComfyWorkflow;
 		expectedWorkflow['1'].inputs.image = 'cadbos/jobs/scene (1).png';
 		expectedWorkflow['149:150'].inputs.value = 'зажги бра над кроватью';
+		expectedWorkflow['112'].inputs.seed = expect.any(Number);
+		expectedWorkflow['119'].inputs.noise_seed = expect.any(Number);
 		expect(queuedWorkflow).toEqual(expectedWorkflow);
 		expect(workflowTemplate['1'].inputs.image).toBeTypeOf('string');
 		expect(workflowTemplate['149:150'].inputs.value).toBeTypeOf('string');
@@ -145,6 +147,10 @@ describe('runLightSettings', () => {
 		const firstWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
 		const secondWorkflow = vi.mocked(client.queueWorkflow).mock.calls[1]?.[0];
 		expect(firstWorkflow).not.toBe(secondWorkflow);
+		expect(firstWorkflow?.['112'].inputs.seed).not.toBe(secondWorkflow?.['112'].inputs.seed);
+		expect(firstWorkflow?.['119'].inputs.noise_seed).not.toBe(
+			secondWorkflow?.['119'].inputs.noise_seed
+		);
 		expect(firstWorkflow?.['1'].inputs.image).toBe('cadbos/jobs/scene (1).png');
 		expect(firstWorkflow?.['149:150'].inputs.value).toBe('выключи все светильники');
 		expect(secondWorkflow?.['1'].inputs.image).toBe('cadbos/jobs/second-scene.png');

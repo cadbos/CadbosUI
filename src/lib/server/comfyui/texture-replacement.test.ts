@@ -133,6 +133,7 @@ describe('runTextureReplacement', () => {
 		expectedWorkflow['83'].inputs.image = 'reference.png';
 		expectedWorkflow['170:151'].inputs.prompt =
 			'Replace the texture of the диван in image 1 with the material shown in image 2.';
+		expectedWorkflow['170:169'].inputs.seed = expect.any(Number);
 		expect(queuedWorkflow).toEqual(expectedWorkflow);
 		expect(workflowTemplate['41'].inputs.image).toBe('гост3.jpg');
 		expect(workflowTemplate['83'].inputs.image).toBe('istockphoto-538165333-612x612.jpg');
@@ -172,6 +173,9 @@ describe('runTextureReplacement', () => {
 		const firstWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
 		const secondWorkflow = vi.mocked(client.queueWorkflow).mock.calls[1]?.[0];
 		expect(firstWorkflow).not.toBe(secondWorkflow);
+		expect(firstWorkflow?.['170:169'].inputs.seed).not.toBe(
+			secondWorkflow?.['170:169'].inputs.seed
+		);
 		expect(firstWorkflow?.['41'].inputs.image).toBe('cadbos/jobs/scene (1).png');
 		expect(firstWorkflow?.['170:151'].inputs.prompt).toBe(
 			'Replace the texture of the sofa in image 1 with the material shown in image 2.'

@@ -13,6 +13,7 @@
  */
 
 import workflowTemplate from '$lib/server/flux_kontext_edit_single_api.json';
+import { randomSeed } from '$lib/server/comfyui/seed';
 import {
 	ComfyUiError,
 	type ComfyDownloadedImage,
@@ -54,7 +55,7 @@ function setWorkflowInput(
 	nodeId: string,
 	classType: string,
 	input: string,
-	value: string
+	value: string | number
 ): void {
 	const node = workflow[nodeId];
 	if (!node || node.class_type !== classType || !(input in node.inputs)) {
@@ -74,6 +75,7 @@ function fluxKontextEditWorkflow(scene: ComfyImageDescriptor, instruction: strin
 	// scene instruction, concatenated ahead of the GGUF text-generation node
 	// (153:150) that produces the English prompt CLIPTextEncode (154) uses.
 	setWorkflowInput(workflow, '153:152', 'StringConcatenate', 'string_b', instruction);
+	setWorkflowInput(workflow, '15', 'KSampler', 'seed', randomSeed());
 	const outputNode = workflow[FINAL_OUTPUT_NODE_ID];
 	if (!outputNode || outputNode.class_type !== 'SaveImage') {
 		throw new ComfyUiError(

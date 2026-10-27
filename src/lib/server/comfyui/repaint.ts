@@ -14,6 +14,7 @@
 
 import type { ImageRegion } from '$lib/image-region';
 import workflowTemplate from '$lib/server/repaint-workflow-api.json';
+import { randomSeed } from '$lib/server/comfyui/seed';
 import {
 	ComfyUiError,
 	type ComfyDownloadedImage,
@@ -76,6 +77,7 @@ function repaintWorkflow(
 	setWorkflowInput(workflow, '42', 'LoadImage', 'image', uploadedImagePath(scene));
 	setWorkflowInput(workflow, '46', 'LoadImage', 'image', uploadedImagePath(swatch));
 	setWorkflowInput(workflow, '101', 'PrimitiveString', 'value', target);
+	setWorkflowInput(workflow, '62:25', 'RandomNoise', 'noise_seed', randomSeed());
 	if (region) {
 		setWorkflowInput(workflow, '200', 'PrimitiveFloat', 'value', region.x);
 		setWorkflowInput(workflow, '201', 'PrimitiveFloat', 'value', region.y);

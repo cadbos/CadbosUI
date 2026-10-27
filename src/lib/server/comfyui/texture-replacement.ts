@@ -13,6 +13,7 @@
  */
 
 import workflowTemplate from '$lib/server/workflow-api-texture.json';
+import { randomSeed } from '$lib/server/comfyui/seed';
 import {
 	ComfyUiError,
 	type ComfyDownloadedImage,
@@ -55,7 +56,7 @@ function setWorkflowInput(
 	nodeId: string,
 	classType: string,
 	input: string,
-	value: string
+	value: string | number
 ): void {
 	const node = workflow[nodeId];
 	if (!node || node.class_type !== classType || !(input in node.inputs)) {
@@ -87,6 +88,7 @@ function textureReplacementWorkflow(
 		'prompt',
 		`Replace the texture of the ${replacementSurface} in image 1 with the material shown in image 2.`
 	);
+	setWorkflowInput(workflow, '170:169', 'KSampler', 'seed', randomSeed());
 	const outputNode = workflow[FINAL_OUTPUT_NODE_ID];
 	if (!outputNode || outputNode.class_type !== 'SaveImage') {
 		throw new ComfyUiError(

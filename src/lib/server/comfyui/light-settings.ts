@@ -13,6 +13,7 @@
  */
 
 import workflowTemplate from '$lib/server/light-settings-workflow-api.json';
+import { randomSeed } from '$lib/server/comfyui/seed';
 import {
 	ComfyUiError,
 	type ComfyDownloadedImage,
@@ -51,7 +52,7 @@ function setWorkflowInput(
 	nodeId: string,
 	classType: string,
 	input: string,
-	value: string
+	value: string | number
 ): void {
 	const node = workflow[nodeId];
 	if (!node || node.class_type !== classType || !(input in node.inputs)) {
@@ -64,6 +65,8 @@ function lightSettingsWorkflow(scene: ComfyImageDescriptor, instruction: string)
 	const workflow = structuredClone(workflowTemplate) as ComfyWorkflow;
 	setWorkflowInput(workflow, '1', 'LoadImage', 'image', uploadedImagePath(scene));
 	setWorkflowInput(workflow, '149:150', 'PrimitiveStringMultiline', 'value', instruction);
+	setWorkflowInput(workflow, '112', 'KSampler', 'seed', randomSeed());
+	setWorkflowInput(workflow, '119', 'KSamplerAdvanced', 'noise_seed', randomSeed());
 	const outputNode = workflow[FINAL_OUTPUT_NODE_ID];
 	if (!outputNode || outputNode.class_type !== 'SaveImage') {
 		throw new ComfyUiError('invalid_configuration', 'workflow', 'Invalid light settings workflow');
