@@ -79,7 +79,6 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	let submitting = $state(false);
-	let terminalJob = $state<RepaintCompletedResponse | null>(null);
 	let terminalError = $state<PollFailure | null>(null);
 	let pollFailure = $state<PollFailure | null>(null);
 	let navigatedAwayWhileSubmitting = false;
@@ -90,14 +89,9 @@ before the Change Date. See LICENSE for complete terms.
 	const jobId = $derived(request.activeRepaintJobId ?? null);
 	const validation = $derived(request.validateRepaint());
 	const isPolling = $derived(
-		jobId !== null &&
-			terminalJob?.id !== jobId &&
-			terminalError?.jobId !== jobId &&
-			pollFailure?.jobId !== jobId
+		jobId !== null && terminalError?.jobId !== jobId && pollFailure?.jobId !== jobId
 	);
-	// A successfully completed job keeps the form editable for the next
-	// request right away, same as LightSettingsPanel.svelte.
-	const formLocked = $derived(submitting || (jobId !== null && terminalJob?.id !== jobId));
+	const formLocked = $derived(submitting || jobId !== null);
 	const canSubmit = $derived(validation.valid && !formLocked && isAuthenticated);
 	const validationKey = $derived.by((): TranslationKey | null => {
 		const field = validation.missing[0];
@@ -198,6 +192,7 @@ before the Change Date. See LICENSE for complete terms.
 	function applyCompletedJob(result: RepaintCompletedResponse): void {
 		if (overlayFlow !== null) generationOverlay.markSucceeded(overlayFlow);
 		if (request.currentRender?.id === result.id) {
+			request.setActiveRepaintJobId(undefined);
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 			return;
@@ -229,6 +224,7 @@ before the Change Date. See LICENSE for complete terms.
 				ts: Date.now()
 			});
 		}
+		request.setActiveRepaintJobId(undefined);
 		void auth.refreshCredit();
 		if (auth.canLoadGeneratedImages) void generatedImages.load();
 	}
@@ -313,7 +309,6 @@ before the Change Date. See LICENSE for complete terms.
 				terminalError = { jobId: id, key: errorKey(result.error.code) };
 				return;
 			}
-			terminalJob = result;
 			applyCompletedJob(result);
 			return;
 		}
@@ -323,7 +318,6 @@ before the Change Date. See LICENSE for complete terms.
 		if (!canSubmit) return;
 		navigatedAwayWhileSubmitting = false;
 		submitting = true;
-		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
 		try {
@@ -378,11 +372,8 @@ before the Change Date. See LICENSE for complete terms.
 		pollFailure = null;
 	}
 
-	// Clears job tracking only — the target, the color and the current result
-	// stay as they are, so the user can tweak and submit again.
 	async function clearJob(): Promise<void> {
 		request.setActiveRepaintJobId(undefined);
-		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
 		await goto(
@@ -506,16 +497,10 @@ before the Change Date. See LICENSE for complete terms.
 				<span class="spinner" aria-hidden="true"></span>
 				{t('repaint.processing')}
 			</p>
-		{:else if terminalJob?.id === jobId}
-			<p class="job-success">{t('repaint.completed')}</p>
 		{/if}
 	</div>
 
-	{#if terminalJob?.id === jobId}
-		<button type="button" class="secondary-btn" onclick={() => void clearJob()}>
-			{t('repaint.newRequest')}
-		</button>
-	{:else if terminalError?.jobId === jobId || (terminalError?.jobId === '' && jobId === null)}
+	{#if terminalError?.jobId === jobId || (terminalError?.jobId === '' && jobId === null)}
 		<p class="submit-error" role="alert">{t(terminalError.key)}</p>
 		{#if jobId !== null}
 			<button type="button" class="secondary-btn" onclick={() => void clearJob()}>
@@ -705,22 +690,13 @@ before the Change Date. See LICENSE for complete terms.
 		display: none;
 	}
 
-	.job-status,
-	.job-success {
+	.job-status {
 		margin: 0;
 		font-size: 0.875rem;
-	}
-
-	.job-status {
 		display: flex;
 		align-items: center;
 		gap: 0.625rem;
 		color: var(--color-muted-strong);
-	}
-
-	.job-success {
-		font-weight: 600;
-		color: var(--color-accent-text);
 	}
 
 	.secondary-btn {

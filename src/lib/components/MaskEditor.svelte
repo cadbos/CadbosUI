@@ -13,14 +13,18 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { onMount, type Snippet } from 'svelte';
+	import { onMount, untrack, type Snippet } from 'svelte';
 	import { uploadResultSchema } from '$lib/api/contract';
 	import SceneViewport from '$lib/components/SceneViewport.svelte';
 	import ImageUpload from '$lib/components/ImageUpload.svelte';
 	import CompareSlider from '$lib/components/CompareSlider.svelte';
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import { t, type TranslationKey } from '$lib/i18n/index.svelte';
-	import { request } from '$lib/state/request.svelte';
+	import {
+		request,
+		type ImageInput,
+		type TextureMaskUploadOperation
+	} from '$lib/state/request.svelte';
 	import { mediaAccess } from '$lib/state/media-access.svelte';
 	import { sceneView } from '$lib/state/scene-view.svelte';
 
@@ -68,6 +72,11 @@ before the Change Date. See LICENSE for complete terms.
 	let hasMarks = $state(false);
 	let uploading = $state(false);
 	let fallbackUploading = $state(false);
+	let restoring = $state(false);
+	let restoreFailed = $state(false);
+	let restoreRetry = $state(0);
+	let restoredMaskKey: string | undefined;
+	let restoreRun = 0;
 	let errorKey = $state<TranslationKey | null>(null);
 	let brushCursor = $state<BrushCursor | null>(null);
 	let lassoPoints = $state<Point[]>([]);
@@ -80,7 +89,7 @@ before the Change Date. See LICENSE for complete terms.
 	let initializedSource: number | string | undefined;
 	const sourceIdentity = $derived(sourceKey ?? sourceUrl);
 	const maskReady = $derived(request.textureMaskMatchesSource());
-	const editorBusy = $derived(uploading || fallbackUploading);
+	const editorBusy = $derived(uploading || fallbackUploading || restoring);
 	const hasLassoDraft = $derived(lassoPoints.length > 0);
 	const canSave = $derived(canvasReady && hasMarks && !hasLassoDraft && !editorBusy && !disabled);
 	const lassoOutline = $derived(lassoPoints.map((point) => `${point.x},${point.y}`).join(' '));
@@ -96,6 +105,7 @@ before the Change Date. See LICENSE for complete terms.
 	function attachCanvas(node: HTMLCanvasElement): () => void {
 		canvas = node;
 		canvasReady = false;
+		restoredMaskKey = undefined;
 		lassoPoints = [];
 		lassoHover = null;
 		brushCursor = null;
@@ -119,6 +129,7 @@ before the Change Date. See LICENSE for complete terms.
 		drawing = false;
 		previousPoint = null;
 		activePointerId = null;
+		restoreFailed = false;
 		errorKey = null;
 	}
 
@@ -147,7 +158,128 @@ before the Change Date. See LICENSE for complete terms.
 			resetDrawing();
 		}
 		canvasReady = image.naturalWidth > 0 && image.naturalHeight > 0;
+		restoreFailed = false;
 		errorKey = null;
+	}
+
+	function restoreMaskEffect(): (() => void) | undefined {
+		const target = canvas;
+		const mask = request.textureMaskImage;
+		const maskKey = mask && 'mediaKey' in mask ? mask.mediaKey : undefined;
+		const maskUrl = maskKey ? mediaAccess.get(maskKey)?.url : undefined;
+		const source = sourceKey;
+		const requestId = request.id;
+		const retry = restoreRetry;
+		if (
+			!target ||
+			!canvasReady ||
+			initializedSource !== sourceIdentity ||
+			!source ||
+			request.textureMaskSourceKey !== source ||
+			!mask ||
+			!maskKey ||
+			!maskUrl ||
+			restoredMaskKey === `${source}:${maskKey}:${retry}`
+		)
+			return;
+		const controller = new AbortController();
+		untrack(
+			() =>
+				void restoreMask(
+					target,
+					source,
+					requestId,
+					mask,
+					maskKey,
+					maskUrl,
+					retry,
+					controller.signal
+				)
+		);
+		return () => controller.abort();
+	}
+
+	$effect(restoreMaskEffect);
+
+	async function restoreMask(
+		target: HTMLCanvasElement,
+		source: string,
+		requestId: string,
+		mask: ImageInput,
+		maskKey: string,
+		maskUrl: string,
+		retry: number,
+		signal: AbortSignal
+	): Promise<void> {
+		const operation = request.beginTextureMaskUpload();
+		if (!operation) return;
+		const run = ++restoreRun;
+		const finish = (): void => {
+			request.finishTextureMaskUpload(operation);
+			if (run === restoreRun) restoring = false;
+		};
+		signal.addEventListener('abort', finish, { once: true });
+		const current = (): boolean =>
+			!signal.aborted &&
+			canvas === target &&
+			sourceKey === source &&
+			request.id === requestId &&
+			request.textureMaskUploadMatches(operation);
+		restoring = true;
+		restoreFailed = false;
+		errorKey = null;
+		try {
+			const image = new Image();
+			image.crossOrigin = 'anonymous';
+			image.src = maskUrl;
+			await image.decode();
+			if (!current()) return;
+			const drawingContext = target.getContext('2d', { willReadFrequently: true });
+			if (!drawingContext) throw new Error('mask canvas unavailable');
+			drawingContext.clearRect(0, 0, target.width, target.height);
+			drawingContext.imageSmoothingEnabled = false;
+			drawingContext.globalCompositeOperation = 'source-over';
+			drawingContext.drawImage(image, 0, 0, target.width, target.height);
+			const pixels = drawingContext.getImageData(0, 0, target.width, target.height);
+			let selected = false;
+			for (let index = 0; index < pixels.data.length; index += 4) {
+				const included = pixels.data[index] >= 128 && pixels.data[index + 3] >= 128;
+				selected ||= included;
+				pixels.data[index] = included ? 255 : 0;
+				pixels.data[index + 1] = 0;
+				pixels.data[index + 2] = included ? 255 : 0;
+				pixels.data[index + 3] = included ? 255 : 0;
+			}
+			drawingContext.putImageData(pixels, 0, 0);
+			cancelLasso();
+			hasMarks = selected;
+			if (!selected) throw new Error('saved mask has no selected pixels');
+			if (image.naturalWidth === target.width && image.naturalHeight === target.height) {
+				restoredMaskKey = `${source}:${maskKey}:${retry}`;
+				if (!request.commitTextureMaskUpload(mask, operation)) return;
+			} else {
+				const { blob, empty } = await maskBlob();
+				if (!current()) return;
+				if (empty || !blob) throw new Error('mask export failed');
+				const failure = await uploadMaskBlob(blob, operation, signal);
+				if (!current()) return;
+				if (failure) {
+					errorKey = failure;
+					restoreFailed = true;
+					return;
+				}
+				const saved = request.textureMaskImage;
+				if (saved && 'mediaKey' in saved) restoredMaskKey = `${source}:${saved.mediaKey}:${retry}`;
+			}
+		} catch {
+			if (current()) {
+				errorKey = 'textureReplacement.maskEditor.restoreFailed';
+				restoreFailed = true;
+			}
+		} finally {
+			signal.removeEventListener('abort', finish);
+			finish();
+		}
 	}
 
 	function sourceLoadFailed(): void {
@@ -155,6 +287,7 @@ before the Change Date. See LICENSE for complete terms.
 			canvasReady = false;
 			resetDrawing();
 		}
+		restoreFailed = false;
 		errorKey = 'textureReplacement.maskEditor.sourceFailed';
 	}
 
@@ -218,6 +351,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	function invalidateSavedMask(): void {
 		if (request.textureMaskImage) request.setTextureMaskImage(undefined);
+		restoreFailed = false;
 		errorKey = null;
 	}
 
@@ -427,8 +561,39 @@ before the Change Date. See LICENSE for complete terms.
 		return 'textureReplacement.maskEditor.saveFailed';
 	}
 
+	async function uploadMaskBlob(
+		blob: Blob,
+		operation: TextureMaskUploadOperation,
+		signal?: AbortSignal
+	): Promise<TranslationKey | null> {
+		if (blob.size === 0 || blob.size > MAX_UPLOAD_SIZE) {
+			return blob.size > MAX_UPLOAD_SIZE
+				? 'upload.errorSize'
+				: 'textureReplacement.maskEditor.saveFailed';
+		}
+		if (!request.textureMaskUploadMatches(operation) || signal?.aborted) return null;
+		const formData = new FormData();
+		formData.append('file', new File([blob], 'texture-mask.png', { type: 'image/png' }));
+		const response = await fetch('/api/uploads', { method: 'POST', body: formData, signal });
+		if (!response.ok) return responseErrorKey(response);
+		const parsed = uploadResultSchema.safeParse(await response.json());
+		if (!parsed.success) return 'textureReplacement.maskEditor.saveFailed';
+		if (!request.textureMaskUploadMatches(operation) || signal?.aborted) return null;
+		request.commitTextureMaskUpload(
+			{
+				mediaKey: mediaAccess.normalize(parsed.data.image).key,
+				mime: parsed.data.mime,
+				size: parsed.data.size,
+				dimensions: parsed.data.dimensions
+			},
+			operation
+		);
+		return null;
+	}
+
 	async function saveMask(): Promise<void> {
 		if (!canSave || !canvas) return;
+		restoreFailed = false;
 		errorKey = null;
 		request.setTextureMaskImage(undefined);
 		const operation = request.beginTextureMaskUpload();
@@ -451,33 +616,11 @@ before the Change Date. See LICENSE for complete terms.
 						: 'textureReplacement.maskEditor.saveFailed';
 				return;
 			}
-			const formData = new FormData();
-			formData.append('file', new File([blob], 'texture-mask.png', { type: 'image/png' }));
-			const response = await fetch('/api/uploads', { method: 'POST', body: formData });
-			if (!response.ok) {
-				errorKey = await responseErrorKey(response);
-				return;
-			}
-			const parsed = uploadResultSchema.safeParse(await response.json());
-			if (!parsed.success) {
-				errorKey = 'textureReplacement.maskEditor.saveFailed';
-				return;
-			}
-			if (
-				!request.commitTextureMaskUpload(
-					{
-						mediaKey: mediaAccess.normalize(parsed.data.image).key,
-						mime: parsed.data.mime,
-						size: parsed.data.size,
-						dimensions: parsed.data.dimensions
-					},
-					operation
-				)
-			) {
-				errorKey = 'textureReplacement.maskEditor.saveFailed';
-			}
+			const failure = await uploadMaskBlob(blob, operation);
+			if (request.textureMaskUploadMatches(operation)) errorKey = failure;
 		} catch {
-			errorKey = 'textureReplacement.maskEditor.saveFailed';
+			if (request.textureMaskUploadMatches(operation))
+				errorKey = 'textureReplacement.maskEditor.saveFailed';
 		} finally {
 			request.finishTextureMaskUpload(operation);
 			uploading = false;
@@ -610,9 +753,16 @@ before the Change Date. See LICENSE for complete terms.
 
 		{#if errorKey}
 			<p class="editor-error" role="alert">{t(errorKey)}</p>
+			{#if restoreFailed}
+				<button type="button" disabled={editorBusy || disabled} onclick={() => (restoreRetry += 1)}>
+					{t('textureReplacement.maskEditor.retryRestore')}
+				</button>
+			{/if}
 		{/if}
 		<div class="save-status" role="status" aria-live="polite" aria-atomic="true">
-			{#if uploading}
+			{#if restoring}
+				<span>{t('textureReplacement.maskEditor.restoring')}</span>
+			{:else if uploading}
 				<span>{t('textureReplacement.maskEditor.saving')}</span>
 			{:else if hasLassoDraft}
 				<span>{t('textureReplacement.maskEditor.lassoDraft')}</span>
@@ -630,7 +780,7 @@ before the Change Date. See LICENSE for complete terms.
 			<ImageUpload
 				target="textureMask"
 				requiredLabel="textureReplacement.required"
-				disabled={disabled || uploading || !sourceUrl}
+				disabled={disabled || editorBusy || !sourceUrl}
 				onUploadingChange={(value) => (fallbackUploading = value)}
 			/>
 		</details>

@@ -766,10 +766,21 @@ describe('withProjectSession/generationAnchorFromSearch (the address-bar-only ge
 		expect(url).not.toContain('step=');
 	});
 
-	it('no-ops (generation included) when project or session is missing', () => {
-		const url = '/create/interior?view=chat';
-		expect(withProjectSession(url, undefined, SESSION_ID, RESULT)).toBe(url);
-		expect(withProjectSession(url, PROJECT_ID, undefined, RESULT)).toBe(url);
+	it('keeps a generation reloadable without a project/session pair', () => {
+		const url = '/edit?tool=object-replacement';
+		for (const [projectId, sessionId] of [
+			[undefined, SESSION_ID],
+			[PROJECT_ID, undefined]
+		]) {
+			const result = new URL(
+				withProjectSession(url, projectId, sessionId, RESULT),
+				'https://example.test'
+			);
+			expect(result.searchParams.get('generation')).toBe(GENERATION_ID);
+			expect(result.searchParams.has('project')).toBe(false);
+			expect(result.searchParams.has('session')).toBe(false);
+		}
+		expect(withProjectSession(url, undefined, undefined)).toBe(url);
 	});
 
 	it('reads an anchor back off the query string', () => {

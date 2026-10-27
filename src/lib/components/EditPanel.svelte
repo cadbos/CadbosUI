@@ -199,10 +199,6 @@ before the Change Date. See LICENSE for complete terms.
 	// the actual upload is deferred, not skipped, see request.resolveWorkingImageKey().
 	const hasEditTarget = $derived(request.hasWorkingImage());
 	const jobId = $derived(request.activeFluxKontextEditJobId ?? null);
-	// Unlike the other job-backed tools, a completed edit here clears
-	// the job immediately (see applyCompletedJob) rather than staying set
-	// until an explicit "new request" — so isPolling only has to rule out an
-	// already-failed job, never an already-completed one.
 	const isPolling = $derived(
 		jobId !== null && terminalError?.jobId !== jobId && pollFailure?.jobId !== jobId
 	);
@@ -305,16 +301,6 @@ before the Change Date. See LICENSE for complete terms.
 				ts: Date.now()
 			});
 		}
-		// The instruction/preset/object fields deliberately stay filled after a
-		// completed edit — same as every other edit tool (light-settings,
-		// object/texture-replacement) — so the form keeps showing the settings
-		// that produced the current result, and the user can tweak and re-apply
-		// instead of retyping from scratch.
-		// Unlike object-replacement/light-settings (a dedicated tab that locks
-		// until an explicit "new request"), freeform/add-object/remove-object
-		// share this inline panel and always supported applying another edit
-		// right away — clearing the job here keeps that continuous-editing UX
-		// instead of leaving the form locked once the async job completes.
 		request.setActiveFluxKontextEditJobId(undefined);
 		void auth.refreshCredit();
 		if (auth.canLoadGeneratedImages) void generatedImages.load();

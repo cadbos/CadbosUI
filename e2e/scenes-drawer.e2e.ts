@@ -20,6 +20,7 @@ import { media, mediaKey } from './helpers/media';
 import { mockProjectSessionRoutes } from './helpers/project-session-routes';
 import { mockResourceDetail } from './helpers/resource-routes';
 import { mockSceneFilterOptions } from './helpers/scene-routes';
+import { openScenesDrawer } from './helpers/scenes-drawer';
 
 const GENERATION_ID = '00000000-0000-4000-8000-000000000200';
 
@@ -251,7 +252,7 @@ test('restores the generation that produced a scene’s base, not the scene that
 	await mockBaseThatIsAPreviousResult(page);
 
 	await page.goto('/create/interior?view=chat&format=webp');
-	await page.getByRole('button', { name: 'Сцены' }).click();
+	await openScenesDrawer(page);
 	await page.locator('.scene-card').first().locator('.image-frame').first().hover();
 	await page.getByRole('button', { name: 'Восстановить настройки основы сцены 2' }).click();
 
@@ -269,7 +270,7 @@ test('restores a past generation’s exact settings from the scenes drawer', asy
 	await mockSingleStyleTransferScene(page);
 
 	await page.goto('/create/interior?view=chat&format=webp');
-	await page.getByRole('button', { name: 'Сцены' }).click();
+	await openScenesDrawer(page);
 	// The restore button only becomes interactive once its result thumbnail
 	// is hovered (see .actions in ScenesDrawer.svelte's styles).
 	await page.locator('.image-frame.result-frame').hover();
@@ -292,7 +293,7 @@ test('restores an edit-kind generation onto the edit-panel tool that actually pr
 	await mockAddObjectScene(page);
 
 	await page.goto('/create/interior?view=chat&format=webp');
-	await page.getByRole('button', { name: 'Сцены' }).click();
+	await openScenesDrawer(page);
 	await page.locator('.image-frame.result-frame').hover();
 	await page.getByRole('button', { name: /Восстановить настройки сцены/ }).click();
 
@@ -326,7 +327,7 @@ test('asks for confirmation before restoring over unsaved form changes', async (
 	});
 	await expect(renderPanel.locator('.image-wrapper img')).toBeVisible();
 
-	await page.getByRole('button', { name: 'Сцены' }).click();
+	await openScenesDrawer(page);
 	await page.locator('.image-frame.result-frame').hover();
 	await page.getByRole('button', { name: /Восстановить настройки сцены/ }).click();
 
@@ -406,7 +407,7 @@ async function waitForClientReady(page: Page): Promise<void> {
 }
 
 async function restoreFirstScene(page: Page): Promise<void> {
-	await page.getByRole('button', { name: 'Сцены', exact: true }).click();
+	await openScenesDrawer(page);
 	await page.locator('.image-frame.result-frame').hover();
 	await page.getByRole('button', { name: /Восстановить настройки сцены/ }).click();
 }
@@ -476,7 +477,7 @@ test('after opening a scene’s source image, each next generation continues fro
 	});
 
 	await page.goto('/create/interior?view=chat&format=webp');
-	await page.getByRole('button', { name: 'Сцены' }).click();
+	await openScenesDrawer(page);
 	await page.getByRole('img', { name: /Исходное изображение сцены/ }).hover();
 	await page.getByRole('button', { name: 'Обработать исходник сцены 1' }).click();
 	await expect(page).toHaveURL(/\/style-transfer/);
@@ -617,7 +618,7 @@ test('labels only Create generations as Auto-enhance in the prompt dialog', asyn
 	await mockSceneFilterOptions(page);
 
 	await page.goto('/create/interior?view=chat&format=webp');
-	await page.getByRole('button', { name: 'Сцены' }).click();
+	await openScenesDrawer(page);
 	const drawer = page.getByRole('dialog', { name: 'Сцены' });
 
 	await drawer.getByRole('button', { name: 'Показать промпт сцены 2' }).click();
@@ -721,7 +722,7 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 	]);
 
 	await page.goto('/create/interior?view=chat&format=webp');
-	await page.getByRole('button', { name: 'Сцены' }).click();
+	await openScenesDrawer(page);
 	const drawer = page.getByRole('dialog', { name: 'Сцены' });
 	const steps = drawer.getByRole('list', { name: 'Итерации, сначала новые' });
 	await expect(steps.getByRole('listitem')).toHaveCount(2);

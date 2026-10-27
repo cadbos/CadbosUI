@@ -844,12 +844,6 @@ export class RequestState {
 	#repaintRegion = $state.raw<{ region: ImageRegion; sourceKey: string | undefined } | null>(null);
 	activeRepaintJob = $state<ActiveRepaintJob | undefined>(undefined);
 	photoAdjustments = $state<PhotoAdjustments>(defaultPhotoAdjustments());
-	// Whether the currently displayed render is already the resolved result of a
-	// masked texture-replacement submission — Workspace.svelte reads this to know
-	// when to swap the canvas from the mask-drawing surface back to the render
-	// result. Session UI state (not part of toJSON()/fromJSON()), same as
-	// textureMaskUploading above.
-	textureReplacementResultReady = $state(false);
 	promptOverride = $state<string | null>(null);
 	// Create mode's Auto-enhance: the user's prompt stays untouched (so turning
 	// it off brings it back) but is not sent — see renderPrompt.
@@ -1124,14 +1118,16 @@ export class RequestState {
 		return { epoch: this.#textureMaskUploadEpoch, sourceKey };
 	}
 
+	textureMaskUploadMatches(operation: TextureMaskUploadOperation): boolean {
+		return (
+			this.textureReplacementMasked &&
+			operation.epoch === this.#textureMaskUploadEpoch &&
+			operation.sourceKey === this.workingImageKey()
+		);
+	}
+
 	commitTextureMaskUpload(image: ImageInput, operation: TextureMaskUploadOperation): boolean {
-		if (
-			!this.textureReplacementMasked ||
-			operation.epoch !== this.#textureMaskUploadEpoch ||
-			operation.sourceKey !== this.workingImageKey()
-		) {
-			return false;
-		}
+		if (!this.textureMaskUploadMatches(operation)) return false;
 		this.textureMaskImage = cloneImage(optionalImageInputSchema.parse(image));
 		this.textureMaskSourceKey = operation.sourceKey;
 		this.textureMaskUploading = false;
@@ -1372,13 +1368,8 @@ export class RequestState {
 		if (parsed !== this.textureReplacementMasked) {
 			this.#textureMaskUploadEpoch += 1;
 			this.textureMaskUploading = false;
-			if (parsed) this.textureReplacementResultReady = false;
 		}
 		this.textureReplacementMasked = parsed;
-	}
-
-	setTextureReplacementResultReady(ready: boolean): void {
-		this.textureReplacementResultReady = z.boolean().parse(ready);
 	}
 
 	setActiveTextureReplacementJobId(id: string | undefined): void {
@@ -1432,6 +1423,7 @@ export class RequestState {
 		const original = this.#syntheticOriginalStep(render);
 		this.#renderHistory = original ? [original, render] : [render];
 		this.#historyIndex = this.#renderHistory.length - 1;
+		this.#invalidateTextureMaskForSource();
 	}
 
 	// Appends a render onto the history at the given anchor, discarding any
@@ -1497,7 +1489,10 @@ export class RequestState {
 	}
 
 	#applyFormSnapshot(snapshot: RequestFormSnapshot | undefined): void {
-		if (!snapshot) return;
+		if (!snapshot) {
+			this.#invalidateTextureMaskForSource();
+			return;
+		}
 		this.promptFragments = cloneFragments(snapshot.promptFragments);
 		this.promptOverride = snapshot.promptOverride;
 		this.autoEnhance = snapshot.autoEnhance;
@@ -1519,6 +1514,7 @@ export class RequestState {
 		this.textureReferenceImage = cloneImage(snapshot.textureReferenceImage);
 		this.textureMaskImage = cloneImage(snapshot.textureMaskImage);
 		this.textureMaskSourceKey = snapshot.textureMaskSourceKey;
+		this.#invalidateTextureMaskForSource();
 		this.lightSettingsPresetIds = [...snapshot.lightSettingsPresetIds];
 		this.lightSettingsInstruction = snapshot.lightSettingsInstruction;
 		this.repaintTarget = snapshot.repaintTarget;
@@ -1540,6 +1536,15 @@ export class RequestState {
 		this.#applyFormSnapshot(snapshot);
 	}
 
+	#invalidateTextureMaskForSource(): void {
+		this.#textureMaskUploadEpoch += 1;
+		this.textureMaskUploading = false;
+		if (!this.textureMaskMatchesSource()) {
+			this.textureMaskImage = undefined;
+			this.textureMaskSourceKey = undefined;
+		}
+	}
+
 	#pushRender(render: RenderResult, after: RenderResult | undefined): void {
 		const withFormSnapshot: RenderResult = render.formSnapshot
 			? render
@@ -1556,6 +1561,7 @@ export class RequestState {
 				: this.#renderHistory.slice(0, afterIndex + 1);
 		this.#renderHistory = [...base, withFormSnapshot];
 		this.#historyIndex = this.#renderHistory.length - 1;
+		this.#invalidateTextureMaskForSource();
 	}
 
 	// A fresh generation is a new step in the same history as any prior
@@ -1566,6 +1572,7 @@ export class RequestState {
 		if (render === undefined) {
 			this.#renderHistory = [];
 			this.#historyIndex = -1;
+			this.#invalidateTextureMaskForSource();
 			return;
 		}
 		this.#pushRender(cloneRenderResult(render), this.currentRender);
@@ -2020,7 +2027,6 @@ export class RequestState {
 		const parsed = requestJsonSchema.parse(data);
 		this.#textureMaskUploadEpoch += 1;
 		this.textureMaskUploading = false;
-		this.textureReplacementResultReady = false;
 		this.id = parsed.id;
 		this.image = cloneImage(parsed.image);
 		this.pendingImageFile = undefined;
@@ -2109,7 +2115,6 @@ export class RequestState {
 	reset(): void {
 		this.#textureMaskUploadEpoch += 1;
 		this.textureMaskUploading = false;
-		this.textureReplacementResultReady = false;
 		this.id = crypto.randomUUID();
 		this.projectId = undefined;
 		this.sessionId = undefined;
@@ -2220,11 +2225,10 @@ export class RequestState {
 		);
 		this.textureReplacementSurface = source.textureReplacementSurface;
 		this.textureReplacementMasked = source.textureReplacementMasked;
-		this.textureMaskUploading = source.textureMaskUploading;
+		this.textureMaskUploading = false;
 		this.activeTextureReplacementJob = cloneActiveTextureReplacementJob(
 			source.activeTextureReplacementJob
 		);
-		this.textureReplacementResultReady = source.textureReplacementResultReady;
 		this.lightSettingsPresetIds = [...source.lightSettingsPresetIds];
 		this.lightSettingsInstruction = source.lightSettingsInstruction;
 		this.activeLightSettingsJob = cloneActiveLightSettingsJob(source.activeLightSettingsJob);

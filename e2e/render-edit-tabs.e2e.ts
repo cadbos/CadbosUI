@@ -296,6 +296,7 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 }) => {
 	await authenticate(page);
 	let capturedBody: unknown = null;
+	let submissions = 0;
 	await page.route('**/api/uploads', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -313,12 +314,13 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 	});
 	await page.route('**/api/style-transfer', async (route) => {
 		capturedBody = route.request().postDataJSON();
+		submissions += 1;
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				id: '00000000-0000-4000-8000-000000000101',
-				output: media(3, '/api/media/test-media/styled.webp'),
+				id: `00000000-0000-4000-8000-00000000010${submissions}`,
+				output: media(submissions + 2, `/api/media/test-media/styled-${submissions}.webp`),
 				cost: 4,
 				balance: 96
 			})
@@ -380,8 +382,26 @@ test('the Style transfer tab uploads a reference and submits transfer settings',
 	});
 	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
 		'src',
-		'/api/media/test-media/styled.webp'
+		'/api/media/test-media/styled-1.webp'
 	);
+	await expect(
+		panel.getByPlaceholder('Скандинавский стиль, тёплые тона, натуральный свет…')
+	).toHaveValue('keep layout, use warmer materials');
+	await expect(panel.getByRole('slider', { name: 'Сила переноса' })).toHaveValue('0.35');
+	await expect(panel.getByRole('button', { name: 'Перенести стиль' })).toBeEnabled();
+	await panel.getByRole('button', { name: 'Перенести стиль' }).click();
+	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
+		'src',
+		'/api/media/test-media/styled-2.webp'
+	);
+	expect(submissions).toBe(2);
+	expect(capturedBody).toMatchObject({
+		imageKey: mediaKey(3),
+		referenceImageKey: mediaKey(2),
+		prompt: 'keep layout, use warmer materials',
+		negativePrompt: 'people',
+		styleTransferStrength: 0.35
+	});
 });
 
 test('render prompt and style transfer guidance stay isolated across tab switches', async ({
@@ -1857,5 +1877,144 @@ test('the Repaint tool sends the target and a palette or custom color, and shows
 			editOperationType: 'repaint'
 		})
 	});
-	await expect(panel.getByRole('status')).toHaveText('Готово — цвет изменён.');
+	await expect(apply).toBeEnabled();
+	await expect(panel.getByText('Готово — цвет изменён.', { exact: true })).toHaveCount(0);
 });
+
+for (const instrument of [
+	{
+		name: 'Create interior',
+		route: '/create/interior?view=chat&format=webp',
+		endpoint: '/api/render',
+		field: ru['view.chat.prompt'],
+		apply: ru['render.generate'],
+		input: 'keep the layout'
+	},
+	{
+		name: 'Create exterior',
+		route: '/create/exterior?view=chat&format=webp',
+		endpoint: '/api/render/exterior',
+		field: ru['view.chat.prompt'],
+		apply: ru['render.generate'],
+		input: 'keep the facade'
+	},
+	{
+		name: 'Freeform',
+		route: '/edit?tool=freeform',
+		endpoint: '/api/edit',
+		field: ru['edit.instruction'],
+		apply: ru['edit.apply'],
+		input: 'brighten the wall'
+	},
+	{
+		name: 'Add Object',
+		route: '/edit?tool=add-object',
+		endpoint: '/api/edit',
+		field: ru['edit.addObject.customLabel'],
+		apply: ru['edit.addObject.apply'],
+		input: 'кресло у окна'
+	},
+	{
+		name: 'Remove Object',
+		route: '/edit?tool=remove-object',
+		endpoint: '/api/edit',
+		field: ru['edit.removeObject.label'],
+		apply: ru['edit.removeObject.apply'],
+		input: 'старый диван'
+	},
+	{
+		name: 'Repaint',
+		route: '/edit?tool=repaint',
+		endpoint: '/api/repaint',
+		field: ru['repaint.targetLabel'],
+		apply: ru['repaint.apply'],
+		input: 'стены за диваном'
+	},
+	{
+		name: 'Lighting',
+		route: '/edit?tool=light-settings',
+		endpoint: '/api/light-settings',
+		field: ru['lightSettings.customLabel'],
+		apply: ru['lightSettings.apply'],
+		input: 'make it brighter'
+	}
+]) {
+	test(`${instrument.name} runs consecutive generations with the primary action and retained settings`, async ({
+		page
+	}) => {
+		await authenticate(page);
+		await mockUpload(page);
+		const requests: Record<string, unknown>[] = [];
+		const polling = !instrument.name.startsWith('Create');
+		await page.route(`**${instrument.endpoint}`, async (route) => {
+			requests.push(route.request().postDataJSON());
+			const number = requests.length;
+			const id = `00000000-0000-4000-8000-00000000020${number}`;
+			await route.fulfill({
+				status: polling ? 202 : 200,
+				json: polling
+					? { id, status: 'processing', elapsedMs: 0, queue: { status: 'unknown' } }
+					: {
+							id,
+							output: media(number + 1, `/api/media/test-media/repeat-${number}.webp`),
+							cost: 2,
+							balance: 90 - number * 2
+						}
+			});
+		});
+		if (polling) {
+			await page.route(`**${instrument.endpoint}/*`, async (route) => {
+				const id = route.request().url().split('/').at(-1)!;
+				const number = Number(id.at(-1));
+				await route.fulfill({
+					status: 200,
+					json: {
+						id,
+						status: 'completed',
+						output: media(number + 1, `/api/media/test-media/repeat-${number}.webp`),
+						cost: 2,
+						balance: 90 - number * 2
+					}
+				});
+			});
+		}
+		await page.goto(instrument.route);
+		await expect(page.locator('html')).not.toHaveAttribute('data-client-load-state', 'loading');
+		const panel = page.locator(polling ? '#mode-panel-edit' : '#mode-panel-render');
+		await panel
+			.locator('.canvas-col input[type="file"]')
+			.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('room') });
+		const field = panel.getByRole('textbox', { name: instrument.field, exact: true });
+		const apply = panel.getByRole('button', { name: instrument.apply, exact: true });
+		await field.fill(instrument.input);
+		await apply.click();
+		await expect(page.locator('.result:visible img.output')).toHaveAttribute(
+			'src',
+			'/api/media/test-media/repeat-1.webp'
+		);
+		await expect(field).toHaveValue(instrument.input);
+		await expect(field).toBeEnabled();
+		await expect(apply).toBeEnabled();
+		await expect(panel.getByText(/^(Готово — цвет изменён\.|Освещение обновлено\.)$/)).toHaveCount(
+			0
+		);
+		await expect(
+			page.getByRole('button', {
+				name: /^(Новая замена|Новая перекраска|Новое управление освещением)$/
+			})
+		).toHaveCount(0);
+		if (polling) await expect(page).not.toHaveURL(/job=/);
+		await apply.click();
+		await expect(page.locator('.result:visible img.output')).toHaveAttribute(
+			'src',
+			'/api/media/test-media/repeat-2.webp'
+		);
+		await expect(apply).toBeEnabled();
+		await expect(panel.getByText(/^(Готово — цвет изменён\.|Освещение обновлено\.)$/)).toHaveCount(
+			0
+		);
+		expect(requests).toHaveLength(2);
+		expect(requests[0]).toMatchObject({ imageKey: mediaKey(1), sessionId: E2E_SESSION_ID });
+		expect(requests[1]).toMatchObject({ ...requests[0], imageKey: mediaKey(2) });
+	});
+}
