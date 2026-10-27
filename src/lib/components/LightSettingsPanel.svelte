@@ -84,7 +84,6 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	let submitting = $state(false);
-	let terminalJob = $state<LightSettingsCompletedResponse | null>(null);
 	let terminalError = $state<PollFailure | null>(null);
 	let pollFailure = $state<PollFailure | null>(null);
 	let navigatedAwayWhileSubmitting = false;
@@ -95,17 +94,9 @@ before the Change Date. See LICENSE for complete terms.
 	const jobId = $derived(request.activeLightSettingsJobId ?? null);
 	const validation = $derived(request.validateLightSettings());
 	const isPolling = $derived(
-		jobId !== null &&
-			terminalJob?.id !== jobId &&
-			terminalError?.jobId !== jobId &&
-			pollFailure?.jobId !== jobId
+		jobId !== null && terminalError?.jobId !== jobId && pollFailure?.jobId !== jobId
 	);
-	// Locked while genuinely in flight (submitting) or unresolved (processing/
-	// failed) — a *successfully completed* job (terminalJob matching jobId)
-	// deliberately does NOT lock the form, so settings stay editable for
-	// another request right away, same as freeform/add-object/remove-object
-	// (see EditPanel.svelte).
-	const formLocked = $derived(submitting || (jobId !== null && terminalJob?.id !== jobId));
+	const formLocked = $derived(submitting || jobId !== null);
 	const canSubmit = $derived(validation.valid && !formLocked && isAuthenticated);
 	const validationKey = $derived.by((): TranslationKey | null => {
 		const field = validation.missing[0];
@@ -190,6 +181,7 @@ before the Change Date. See LICENSE for complete terms.
 	function applyCompletedJob(result: LightSettingsCompletedResponse): void {
 		if (overlayFlow !== null) generationOverlay.markSucceeded(overlayFlow);
 		if (request.currentRender?.id === result.id) {
+			request.setActiveLightSettingsJobId(undefined);
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 			return;
@@ -224,6 +216,7 @@ before the Change Date. See LICENSE for complete terms.
 				ts: Date.now()
 			});
 		}
+		request.setActiveLightSettingsJobId(undefined);
 		void auth.refreshCredit();
 		if (auth.canLoadGeneratedImages) void generatedImages.load();
 	}
@@ -308,7 +301,6 @@ before the Change Date. See LICENSE for complete terms.
 				terminalError = { jobId: id, key: errorKey(result.error.code) };
 				return;
 			}
-			terminalJob = result;
 			applyCompletedJob(result);
 			return;
 		}
@@ -318,7 +310,6 @@ before the Change Date. See LICENSE for complete terms.
 		if (!canSubmit) return;
 		navigatedAwayWhileSubmitting = false;
 		submitting = true;
-		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
 		try {
@@ -377,13 +368,8 @@ before the Change Date. See LICENSE for complete terms.
 		pollFailure = null;
 	}
 
-	// Clears job tracking only — settings (selected presets, custom
-	// instruction) and the current result stay exactly as they are, so the
-	// user can tweak and submit another request instead of starting over
-	// from a blank form.
 	async function clearJob(): Promise<void> {
 		request.setActiveLightSettingsJobId(undefined);
-		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
 		await goto(
@@ -495,16 +481,10 @@ before the Change Date. See LICENSE for complete terms.
 				<span class="spinner" aria-hidden="true"></span>
 				{t('lightSettings.processing')}
 			</p>
-		{:else if terminalJob?.id === jobId}
-			<p class="job-success">{t('lightSettings.completed')}</p>
 		{/if}
 	</div>
 
-	{#if terminalJob?.id === jobId}
-		<button type="button" class="secondary-btn" onclick={() => void clearJob()}>
-			{t('lightSettings.newRequest')}
-		</button>
-	{:else if terminalError?.jobId === jobId || (terminalError?.jobId === '' && jobId === null)}
+	{#if terminalError?.jobId === jobId || (terminalError?.jobId === '' && jobId === null)}
 		<p class="submit-error" role="alert">{t(terminalError.key)}</p>
 		{#if jobId !== null}
 			<button type="button" class="secondary-btn" onclick={() => void clearJob()}>
@@ -737,22 +717,13 @@ before the Change Date. See LICENSE for complete terms.
 		display: none;
 	}
 
-	.job-status,
-	.job-success {
+	.job-status {
 		margin: 0;
 		font-size: 0.875rem;
-	}
-
-	.job-status {
 		display: flex;
 		align-items: center;
 		gap: 0.625rem;
 		color: var(--color-muted-strong);
-	}
-
-	.job-success {
-		font-weight: 600;
-		color: var(--color-accent-text);
 	}
 
 	.secondary-btn {

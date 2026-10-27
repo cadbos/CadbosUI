@@ -464,22 +464,22 @@ export function buildWorkspaceUrl(mode: Mode, request: RequestState, subTab: Sub
 	);
 }
 
-// Appends the authenticated deep-link pair described above onto an already-
-// built buildShareUrl() result — omitted entirely on the scratch tab (no
-// project/session to point at). Kept as a separate append step, rather than
-// a buildShareUrl parameter, so it can never accidentally leak into the
-// public "copy what's on screen" link this same builder also produces.
 export function withProjectSession(
 	url: string,
 	projectId: string | undefined,
 	sessionId: string | undefined,
 	anchor?: GenerationAnchor
 ): string {
-	if (!projectId || !sessionId) return url;
+	if ((!projectId || !sessionId) && !anchor) return url;
 	const [path, query = ''] = url.split('?');
 	const params = new URLSearchParams(query);
-	params.set('project', projectId);
-	params.set('session', sessionId);
+	if (projectId && sessionId) {
+		params.set('project', projectId);
+		params.set('session', sessionId);
+	} else {
+		params.delete('project');
+		params.delete('session');
+	}
 	if (anchor) params.set('generation', anchor.generationId);
 	else params.delete('generation');
 	if (anchor?.step === 'before') params.set('step', 'before');
@@ -510,12 +510,6 @@ export function projectSessionFromSearch(
 	return { projectId, sessionId };
 }
 
-// Reverse of withProjectSession's generation anchor (see
-// RequestState#generationAnchor) — only meaningful alongside a valid
-// project/session pair, but read independently since a caller may want to
-// resolve it only once it already has both. Same "not a UUID → treat as
-// absent" rule as projectSessionFromSearch; any `step` other than `before`
-// means the generation's own result.
 export function generationAnchorFromSearch(searchParams: URLSearchParams): GenerationAnchor | null {
 	const generationId = searchParams.get('generation');
 	if (!generationId || !projectSessionIdSchema.safeParse(generationId).success) return null;

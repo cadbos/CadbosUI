@@ -75,8 +75,7 @@ before the Change Date. See LICENSE for complete terms.
 		initializeSessionState,
 		restorePersistedTabs,
 		SCRATCH_TAB_ID,
-		workspaceTabs,
-		type OpenProjectParams
+		workspaceTabs
 	} from '$lib/state/workspace-tabs.svelte';
 	import {
 		applyShareParams,
@@ -190,10 +189,7 @@ before the Change Date. See LICENSE for complete terms.
 	// duplicate copy inside the panel. `activeEditTool`/`request.textureReplacementMasked`
 	// are enough to derive this without any prop-drilling through EditPanel.
 	const showMaskOnCanvas = $derived(
-		mode === 'edit' &&
-			activeEditTool === 'texture-replacement' &&
-			request.textureReplacementMasked &&
-			!request.textureReplacementResultReady
+		mode === 'edit' && activeEditTool === 'texture-replacement' && request.textureReplacementMasked
 	);
 	const maskEditorLocked = $derived(
 		request.textureMaskUploading || request.activeTextureReplacementJobId !== undefined
@@ -260,23 +256,17 @@ before the Change Date. See LICENSE for complete terms.
 	// shape as request.svelte.ts's #projectSessionEpoch.
 	let urlTargetEpoch = 0;
 
-	// Resolves a project/session pair carried in the URL (see url-state.ts's
-	// projectSessionFromSearch) into the workspace tab to open for it — the
-	// same fetch-then-initialize continueSession (projects/[id]/+page.svelte)
-	// does on a click, just triggered by a deep link instead. A
-	// `?generation=` anchor reopens that exact result — or, with
-	// `step=before`, the image it was made from, one undo away — form
-	// included, rather than the session's latest state; one that's gone or belongs to another
-	// session degrades to the session itself, and an unowned, archived or
-	// just wrong project/session resolves to null, leaving the workspace on
-	// whatever it already had open. The URL's own form fields (prompt, tool
-	// settings, a still-polling job) are layered on last, so the opened tab
-	// shows exactly what the link describes.
-	async function resolveUrlTarget(
-		searchParams: URLSearchParams
-	): Promise<OpenProjectParams | null> {
-		const target = projectSessionFromSearch(searchParams);
-		if (!target) return null;
+	// Resolves the URL's project/session or generation anchor into a deferred
+	// apply callback, or null when no target can be opened. A generation-only
+	// URL opens the generation's session, or a scratch preview when it has no
+	// session. A matching `?generation=` anchor restores that exact result
+	// and form — or, with `step=before`, the image it was made from, one undo
+	// away. A missing generation or one belonging to another session falls
+	// back to the requested session's latest state. The callback layers the
+	// URL's own form fields (prompt, tool settings, a still-polling job) on
+	// last, so the opened tab shows exactly what the link describes.
+	async function resolveUrlTarget(searchParams: URLSearchParams): Promise<(() => void) | null> {
+		const requestedTarget = projectSessionFromSearch(searchParams);
 		const urlMode = mode;
 		const sceneParam = page.params.scene;
 		const applyUrlFields = (state: RequestState): void => {
@@ -285,54 +275,66 @@ before the Change Date. See LICENSE for complete terms.
 
 		const anchor = generationAnchorFromSearch(searchParams);
 		const generation = anchor ? await fetchGeneratedImageDetail(anchor.generationId) : null;
+		const target = requestedTarget ?? generation?.session;
+		if (!target) {
+			if (!generation) return null;
+			return () => {
+				workspaceTabs.activate(SCRATCH_TAB_ID);
+				initializeGenerationPreview(request, generation);
+				if (anchor?.step === 'before') request.undoLastEdit();
+				applyUrlFields(request);
+			};
+		}
 		if (
 			generation?.session?.projectId === target.projectId &&
 			generation.session.sessionId === target.sessionId
 		) {
 			const { session } = generation;
-			return {
-				projectId: session.projectId,
-				projectTitle: session.projectTitle,
-				sessionId: session.sessionId,
-				sessionTitle: session.sessionTitle.trim() === '' ? null : session.sessionTitle,
-				initialize: (state) => {
-					initializeGenerationPreview(state, generation);
-					// The image this generation was made from is the step right
-					// before it in the history just seeded — one undo away.
-					if (anchor?.step === 'before') state.undoLastEdit();
-					applyUrlFields(state);
-				}
-			};
+			return () =>
+				workspaceTabs.openProject({
+					projectId: session.projectId,
+					projectTitle: session.projectTitle,
+					sessionId: session.sessionId,
+					sessionTitle: session.sessionTitle.trim() === '' ? null : session.sessionTitle,
+					initialize: (state) => {
+						initializeGenerationPreview(state, generation);
+						// The image this generation was made from is the step right
+						// before it in the history just seeded — one undo away.
+						if (anchor?.step === 'before') state.undoLastEdit();
+						applyUrlFields(state);
+					}
+				});
 		}
 
 		const project = await fetchProjectDetail(target.projectId);
 		if (!project) return null;
 		const session = project.sessions.find((candidate) => candidate.id === target.sessionId);
 		if (!session) return null;
-		return {
-			projectId: project.id,
-			projectTitle: project.title,
-			sessionId: session.id,
-			sessionTitle: session.title.trim() === '' ? null : session.title,
-			initialize: (state) => {
-				initializeSessionState(state, project.id, session);
-				applyUrlFields(state);
-			}
-		};
+		return () =>
+			workspaceTabs.openProject({
+				projectId: project.id,
+				projectTitle: project.title,
+				sessionId: session.id,
+				sessionTitle: session.title.trim() === '' ? null : session.title,
+				initialize: (state) => {
+					initializeSessionState(state, project.id, session);
+					applyUrlFields(state);
+				}
+			});
 	}
 
 	// Runs one URL-target resolution under urlTargetStatus, opening its result
 	// only if no later navigation has started a resolution of its own since.
-	async function trackUrlTarget(load: () => Promise<OpenProjectParams | null>): Promise<void> {
+	async function trackUrlTarget(load: () => Promise<(() => void) | null>): Promise<void> {
 		urlTargetEpoch += 1;
 		const epoch = urlTargetEpoch;
 		urlTargetStatus = 'loading';
 		retryUrlTarget = null;
 		try {
-			const params = await load();
+			const applyTarget = await load();
 			if (epoch !== urlTargetEpoch) return;
-			if (params) {
-				workspaceTabs.openProject(params);
+			if (applyTarget) {
+				applyTarget();
 				if (mode === null) openUrlTargetMode();
 			}
 			urlTargetStatus = 'idle';
@@ -374,12 +376,6 @@ before the Change Date. See LICENSE for complete terms.
 		retryUrlTarget = null;
 	}
 
-	// Applies the URL's project/session (if present and not already what's on
-	// screen) on top of whatever's currently open — for every popstate/link
-	// navigation after the initial load, so a pasted/bookmarked link always
-	// wins over whatever was already open. Still re-applies when only the
-	// generation anchor changed (e.g. Back to an earlier result within the
-	// same project/session), not just when the project/session pair did.
 	function sameGenerationAnchor(
 		a: GenerationAnchor | null | undefined,
 		b: GenerationAnchor | null | undefined
@@ -387,6 +383,12 @@ before the Change Date. See LICENSE for complete terms.
 		return a?.generationId === b?.generationId && a?.step === b?.step;
 	}
 
+	// Applies the URL's project/session or generation anchor, including
+	// anchor-only URLs, on top of whatever's currently open — for every
+	// popstate/link navigation after the initial load. Skips a project/session
+	// already on screen with the same anchor, but re-applies when only the
+	// generation anchor changed (e.g. Back to an earlier result within the
+	// same project/session), not just when the project/session pair did.
 	function applyUrlTarget(searchParams: URLSearchParams): Promise<void> {
 		const target = projectSessionFromSearch(searchParams);
 		const alreadyShown =
@@ -394,7 +396,7 @@ before the Change Date. See LICENSE for complete terms.
 			target.projectId === workspaceTabs.activeTabId &&
 			target.sessionId === workspaceTabs.activeTab.activeSessionTabId &&
 			sameGenerationAnchor(generationAnchorFromSearch(searchParams), request.generationAnchor);
-		if (!target || alreadyShown) {
+		if ((!target && !generationAnchorFromSearch(searchParams)) || alreadyShown) {
 			settleUrlTarget();
 			if (alreadyShown && mode === null) openUrlTargetMode();
 			return Promise.resolve();
@@ -414,18 +416,19 @@ before the Change Date. See LICENSE for complete terms.
 	// tab only carries the session's latest state, not the exact result and
 	// form fields the URL describes.
 	function hydrateWorkspaceTabs(searchParams: URLSearchParams): Promise<void> {
-		if (!projectSessionFromSearch(searchParams)) return restorePersistedTabs();
+		if (!projectSessionFromSearch(searchParams) && !generationAnchorFromSearch(searchParams))
+			return restorePersistedTabs();
 		return trackUrlTarget(async () => {
 			// Restoring the other tabs is a side job here: its failure is logged
 			// but must not discard (or, through its cached promise, keep failing
 			// every retry of) the target the address bar actually points at.
-			const [, params] = await Promise.all([
+			const [, applyTarget] = await Promise.all([
 				restorePersistedTabs().catch((error: unknown) =>
 					logBoundaryError('workspace.restorePersistedTabs', error)
 				),
 				resolveUrlTarget(searchParams)
 			]);
-			return params;
+			return applyTarget;
 		});
 	}
 
@@ -463,7 +466,11 @@ before the Change Date. See LICENSE for complete terms.
 		hydrated = true;
 	});
 
-	const serializedRequest = $derived(mode === null ? null : buildShareUrl(mode, request));
+	const serializedRequest = $derived.by(() => {
+		if (mode === null) return null;
+		const { view, tool, reference } = subTabFromSearch(mode, page.url.searchParams);
+		return buildShareUrl(mode, request, { view, tool, reference });
+	});
 	function scheduleUrlSync(): (() => void) | undefined {
 		if (!hydrated || urlTargetStatus !== 'idle' || navigating.to !== null) return;
 		const activeMode = mode;
@@ -473,10 +480,9 @@ before the Change Date. See LICENSE for complete terms.
 			workspaceTabs.activeTabId !== SCRATCH_TAB_ID ? workspaceTabs.activeTabId : undefined;
 		const activeSessionId = workspaceTabs.activeTab.activeSessionTabId ?? undefined;
 		const generationAnchor = request.generationAnchor;
+		const base = serializedRequest;
 		const timer = setTimeout(() => {
 			if (navigating.to !== null) return;
-			const currentSearch = new URLSearchParams(window.location.search);
-			const base = buildShareUrl(activeMode, request, subTabFromSearch(activeMode, currentSearch));
 			const url = withProjectSession(base, activeProjectId, activeSessionId, generationAnchor);
 			if (`${window.location.pathname}${window.location.search}` !== url) {
 				goto(resolve(url as PathnameWithSearchOrHash, {}), {

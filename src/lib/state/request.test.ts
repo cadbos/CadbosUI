@@ -624,21 +624,6 @@ describe('sceneType', () => {
 	});
 });
 
-describe('textureReplacementResultReady (session UI state)', () => {
-	it('reset() clears a result-ready flag left over from a prior masked replacement', () => {
-		request.setTextureReplacementResultReady(true);
-		request.reset();
-		expect(request.textureReplacementResultReady).toBe(false);
-	});
-
-	it('fromJSON() clears a result-ready flag so a loaded request starts on the mask-drawing surface', () => {
-		request.setTextureReplacementResultReady(true);
-		const snapshot = request.toJSON();
-		request.fromJSON(snapshot);
-		expect(request.textureReplacementResultReady).toBe(false);
-	});
-});
-
 describe('toRenderRequest', () => {
 	it('returns the wire body for a valid AC-9 fixture', async () => {
 		applyAc9Fixture();
@@ -1387,6 +1372,108 @@ describe('toTextureReplacementRequest', () => {
 		expect(request.textureMaskImage).toBeUndefined();
 		expect(request.textureMaskSourceKey).toBeUndefined();
 		expect(request.textureReplacementMasked).toBe(false);
+	});
+
+	it('clears the submitted mask for the texture result without changing its snapshot', async () => {
+		request.setImage(AC9_IMAGE);
+		request.setTextureReferenceImage(textureReference);
+		request.setTextureReplacementMasked(true);
+		request.setTextureMaskImage(textureMask);
+		const snapshot = request.captureFormSnapshot('change-surface-color');
+		request.applyEditResult({
+			id: 'texture-result',
+			outputKey: '105',
+			sourceKey: AC9_IMAGE.mediaKey,
+			cost: 0,
+			balance: 20,
+			ts: 1,
+			formSnapshot: snapshot,
+			editOp: { type: 'change-surface-color', instruction: '' }
+		});
+		expect(request.textureMaskImage).toBeUndefined();
+		expect(request.textureMaskSourceKey).toBeUndefined();
+		expect(request.validateTextureReplacement()).toEqual({ valid: false, missing: ['mask'] });
+		expect(request.textureReferenceImage).toEqual(textureReference);
+		expect(request.textureReplacementMasked).toBe(true);
+		expect(await request.toTextureReplacementRequest()).toBeNull();
+		const operation = request.beginTextureMaskUpload();
+		if (!operation) throw new Error('Expected a texture mask upload operation');
+		expect(request.commitTextureMaskUpload(textureMask, operation)).toBe(true);
+		expect(await request.toTextureReplacementRequest()).toMatchObject({
+			imageKey: '105',
+			maskImageKey: textureMask.mediaKey
+		});
+		expect(snapshot.textureMaskImage).toEqual(textureMask);
+		expect(snapshot.textureMaskSourceKey).toBe(AC9_IMAGE.mediaKey);
+		expect(request.currentRender?.formSnapshot?.textureMaskSourceKey).toBe(AC9_IMAGE.mediaKey);
+	});
+
+	it('invalidates a pending mask upload when a different generation becomes current', () => {
+		request.setImage(AC9_IMAGE);
+		request.setTextureReplacementMasked(true);
+		request.setTextureMaskImage(textureMask);
+		const snapshot = request.captureFormSnapshot('change-surface-color');
+		request.applyEditResult({
+			id: 'texture-result',
+			outputKey: '105',
+			sourceKey: AC9_IMAGE.mediaKey,
+			cost: 0,
+			balance: 20,
+			ts: 1,
+			formSnapshot: snapshot
+		});
+		const operation = request.beginTextureMaskUpload();
+		if (!operation) throw new Error('Expected a texture mask upload operation');
+		request.applyEditResult({ id: 'unrelated', outputKey: '106', cost: 0, balance: 20, ts: 2 });
+		expect(request.textureMaskUploadMatches(operation)).toBe(false);
+		expect(request.commitTextureMaskUpload(textureMask, operation)).toBe(false);
+		expect(request.textureMaskMatchesSource()).toBe(false);
+	});
+
+	it.each(['history', 'snapshot', 'json'] as const)(
+		'keeps a completed texture result free of its submitted mask after restoring %s',
+		(method) => {
+			request.setImage(AC9_IMAGE);
+			request.setTextureReferenceImage(textureReference);
+			request.setTextureReplacementMasked(true);
+			request.setTextureMaskImage(textureMask);
+			const snapshot = request.captureFormSnapshot('change-surface-color');
+			request.applyEditResult({
+				id: 'texture-result',
+				outputKey: '105',
+				sourceKey: AC9_IMAGE.mediaKey,
+				cost: 0,
+				balance: 20,
+				ts: 1,
+				formSnapshot: snapshot
+			});
+			if (method === 'history') {
+				request.undoLastEdit();
+				request.redoEdit();
+			} else if (method === 'snapshot') {
+				request.restoreFormSnapshot(snapshot);
+			} else {
+				request.fromJSON({
+					...request.toJSON(),
+					textureMaskImage: snapshot.textureMaskImage,
+					textureMaskSourceKey: snapshot.textureMaskSourceKey
+				});
+			}
+			expect(request.textureMaskImage).toBeUndefined();
+			expect(request.textureMaskSourceKey).toBeUndefined();
+			expect(request.currentRender?.formSnapshot).toEqual(snapshot);
+		}
+	);
+
+	it('preserves a fresh mask drawn on the result through serialization', () => {
+		request.setImage(AC9_IMAGE);
+		request.setTextureReplacementMasked(true);
+		request.applyEditResult({ id: 'result', outputKey: '105', cost: 0, balance: 20, ts: 1 });
+		request.setTextureMaskImage(textureMask);
+		request.fromJSON(request.toJSON());
+		expect(request.textureMaskImage).toEqual(textureMask);
+		expect(request.textureMaskSourceKey).toBe('105');
+		expect(request.textureMaskMatchesSource()).toBe(true);
 	});
 
 	it('rejects a stale mask after the effective source changes', async () => {

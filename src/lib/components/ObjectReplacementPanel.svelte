@@ -77,7 +77,6 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	let submitting = $state(false);
-	let terminalJob = $state<ObjectReplacementCompletedResponse | null>(null);
 	let terminalError = $state<PollFailure | null>(null);
 	let pollFailure = $state<PollFailure | null>(null);
 	let navigatedAwayWhileSubmitting = false;
@@ -88,17 +87,9 @@ before the Change Date. See LICENSE for complete terms.
 	const jobId = $derived(request.activeObjectReplacementJobId ?? null);
 	const validation = $derived(request.validateObjectReplacement());
 	const isPolling = $derived(
-		jobId !== null &&
-			terminalJob?.id !== jobId &&
-			terminalError?.jobId !== jobId &&
-			pollFailure?.jobId !== jobId
+		jobId !== null && terminalError?.jobId !== jobId && pollFailure?.jobId !== jobId
 	);
-	// Locked while genuinely in flight (submitting) or unresolved (processing/
-	// failed) — a *successfully completed* job (terminalJob matching jobId)
-	// deliberately does NOT lock the form, so settings (including the
-	// reference image) stay editable for another replacement right away,
-	// same as freeform/add-object/remove-object (see EditPanel.svelte).
-	const formLocked = $derived(submitting || (jobId !== null && terminalJob?.id !== jobId));
+	const formLocked = $derived(submitting || jobId !== null);
 	const canSubmit = $derived(validation.valid && !formLocked && isAuthenticated);
 	const validationKey = $derived.by((): TranslationKey | null => {
 		const field = validation.missing[0];
@@ -199,6 +190,7 @@ before the Change Date. See LICENSE for complete terms.
 	function applyCompletedJob(result: ObjectReplacementCompletedResponse): void {
 		if (overlayFlow !== null) generationOverlay.markSucceeded(overlayFlow);
 		if (request.currentRender?.id === result.id) {
+			request.setActiveObjectReplacementJobId(undefined);
 			void auth.refreshCredit();
 			if (auth.canLoadGeneratedImages) void generatedImages.load();
 			return;
@@ -239,6 +231,7 @@ before the Change Date. See LICENSE for complete terms.
 				ts: Date.now()
 			});
 		}
+		request.setActiveObjectReplacementJobId(undefined);
 		void auth.refreshCredit();
 		if (auth.canLoadGeneratedImages) void generatedImages.load();
 	}
@@ -323,7 +316,6 @@ before the Change Date. See LICENSE for complete terms.
 				terminalError = { jobId: id, key: errorKey(result.error.code) };
 				return;
 			}
-			terminalJob = result;
 			applyCompletedJob(result);
 			return;
 		}
@@ -333,7 +325,6 @@ before the Change Date. See LICENSE for complete terms.
 		if (!canSubmit) return;
 		navigatedAwayWhileSubmitting = false;
 		submitting = true;
-		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
 		try {
@@ -399,13 +390,8 @@ before the Change Date. See LICENSE for complete terms.
 		pollFailure = null;
 	}
 
-	// Clears job tracking only — settings (reference image, description,
-	// scale) and the current result stay exactly as they are,
-	// so the user can tweak and submit another replacement instead of
-	// starting over from a blank form.
 	async function clearJob(): Promise<void> {
 		request.setActiveObjectReplacementJobId(undefined);
-		terminalJob = null;
 		terminalError = null;
 		pollFailure = null;
 		window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -522,16 +508,10 @@ before the Change Date. See LICENSE for complete terms.
 				<span class="spinner" aria-hidden="true"></span>
 				{t('objectReplacement.processing')}
 			</p>
-		{:else if terminalJob?.id === jobId}
-			<p class="job-success">{t('objectReplacement.completed')}</p>
 		{/if}
 	</div>
 
-	{#if terminalJob?.id === jobId}
-		<button type="button" class="secondary-btn" onclick={() => void clearJob()}>
-			{t('objectReplacement.newReplacement')}
-		</button>
-	{:else if terminalError?.jobId === jobId || (terminalError?.jobId === '' && jobId === null)}
+	{#if terminalError?.jobId === jobId || (terminalError?.jobId === '' && jobId === null)}
 		<p class="submit-error" role="alert">{t(terminalError.key)}</p>
 		{#if jobId !== null}
 			<button type="button" class="secondary-btn" onclick={() => void clearJob()}>
@@ -548,7 +528,6 @@ before the Change Date. See LICENSE for complete terms.
 
 <style>
 	.job-status,
-	.job-success,
 	.validation-hint {
 		margin: 0;
 	}
@@ -654,12 +633,6 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: center;
 		justify-content: center;
 		gap: 0.625rem;
-	}
-
-	.job-success {
-		font-size: 0.9375rem;
-		font-weight: 600;
-		color: var(--color-accent-text);
 	}
 
 	.secondary-btn {

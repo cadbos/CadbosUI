@@ -24,6 +24,7 @@ import {
 	mockProjectSessionRoutes
 } from './helpers/project-session-routes';
 import { mockSceneFilterOptions } from './helpers/scene-routes';
+import { openScenesDrawer } from './helpers/scenes-drawer';
 
 const BEFORE_URL = '/api/media/test-media/room.webp';
 const AFTER_URL = '/api/media/test-media/render.webp';
@@ -267,7 +268,7 @@ test('a scene restored from the scenes drawer survives a duplicated tab, form in
 	await mockSessionData(page);
 
 	await page.goto('/create/interior?view=chat&format=webp');
-	await page.getByRole('button', { name: 'Сцены', exact: true }).click();
+	await openScenesDrawer(page);
 	await page.locator('.image-frame.result-frame').hover();
 	await page.getByRole('button', { name: /Восстановить настройки сцены/ }).click();
 	await expectGenerationOnScreen(page);

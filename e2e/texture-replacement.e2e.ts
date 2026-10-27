@@ -22,12 +22,14 @@ import {
 	E2E_SESSION_ID,
 	mockProjectSessionRoutes
 } from './helpers/project-session-routes';
+import { openScenesDrawer } from './helpers/scenes-drawer';
 
 const JOB_ID = '123e4567-e89b-42d3-a456-426614174000';
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
 interface UploadCapture {
 	maskPng(): Buffer | undefined;
+	maskUploadCount(): number;
 }
 
 function pngFromMultipart(body: Buffer | null): Buffer | undefined {
@@ -98,6 +100,12 @@ function textureUploadFixture(route: Route): { key: string; url: string; mime: s
 
 async function uploadInputs(page: Page, width = 800, height = 600): Promise<UploadCapture> {
 	let maskPng: Buffer | undefined;
+	const masks = new Map<string, Buffer>();
+	await page.route('**/api/media/test-media/texture-mask*.png', async (route) => {
+		const mask = masks.get(new URL(route.request().url()).pathname);
+		if (!mask) throw new Error('The requested mask PNG has not been uploaded');
+		await route.fulfill({ status: 200, contentType: 'image/png', body: mask });
+	});
 	await page.route('**/api/media/test-media/scene.webp', async (route) => {
 		await route.fulfill({
 			status: 200,
@@ -110,7 +118,12 @@ async function uploadInputs(page: Page, width = 800, height = 600): Promise<Uplo
 		if (fixture.mime === 'image/png') {
 			expect(route.request().headers()['content-type']).toContain('multipart/form-data');
 			maskPng = pngFromMultipart(route.request().postDataBuffer());
-			expect(maskPng).toBeDefined();
+			if (!maskPng) throw new Error('The mask PNG upload was not captured');
+			if (masks.size > 0) {
+				fixture.key = String(100 + masks.size);
+				fixture.url = `/api/media/test-media/texture-mask-${masks.size + 1}.png`;
+			}
+			masks.set(fixture.url, maskPng);
 		}
 		await route.fulfill({
 			status: 200,
@@ -119,7 +132,10 @@ async function uploadInputs(page: Page, width = 800, height = 600): Promise<Uplo
 				image: media(fixture.key, fixture.url),
 				mime: fixture.mime,
 				size: 1024,
-				dimensions: [width, height]
+				dimensions:
+					fixture.mime === 'image/png' && maskPng
+						? [maskPng.readUInt32BE(16), maskPng.readUInt32BE(20)]
+						: [width, height]
 			})
 		});
 	});
@@ -159,7 +175,7 @@ async function uploadInputs(page: Page, width = 800, height = 600): Promise<Uplo
 			buffer: Buffer.from('fabric')
 		})
 	]);
-	return { maskPng: () => maskPng };
+	return { maskPng: () => maskPng, maskUploadCount: () => masks.size };
 }
 
 // Draws a small brush stroke on the mask canvas and saves it — the minimum
@@ -194,7 +210,23 @@ async function drawAndSaveMask(page: Page): Promise<void> {
 	await expect(page.getByText('Маска сохранена и готова к замене текстуры.')).toBeVisible();
 }
 
-test('draws a mask and applies the synchronous result without polling', async ({ page }) => {
+async function expectEmptyMask(page: Page): Promise<void> {
+	const canvas = page.locator('#mode-panel-edit .mask-editor canvas');
+	await expect
+		.poll(() =>
+			canvas.evaluate((node: HTMLCanvasElement) => {
+				const context = node.getContext('2d');
+				if (!context) throw new Error('Mask canvas context is unavailable');
+				const pixels = context.getImageData(0, 0, node.width, node.height).data;
+				return pixels.some((value, index) => index % 4 === 3 && value !== 0);
+			})
+		)
+		.toBe(false);
+}
+
+test('clears the mask after success and requires a fresh selection for consecutive replacements', async ({
+	page
+}) => {
 	await authenticate(page);
 	await page.goto('/edit?tool=texture-replacement');
 	const uploads = await uploadInputs(page);
@@ -290,21 +322,24 @@ test('draws a mask and applies the synchronous result without polling', async ({
 	expect(decodedMask.black).toBeGreaterThan(0);
 	expect(decodedMask.white).toBeGreaterThan(0);
 
-	let submittedBody: unknown;
+	const submittedBodies: Record<string, unknown>[] = [];
 	let pollCount = 0;
 	await page.route('**/api/texture-replacement/*', async (route) => {
 		pollCount += 1;
 		await route.abort();
 	});
 	await page.route('**/api/texture-replacement', async (route) => {
-		submittedBody = route.request().postDataJSON();
+		submittedBodies.push(route.request().postDataJSON());
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				id: JOB_ID,
+				id: submittedBodies.length === 1 ? JOB_ID : '123e4567-e89b-42d3-a456-426614174001',
 				status: 'completed',
-				output: media(4, '/api/media/test-media/masked-result.webp'),
+				output:
+					submittedBodies.length === 1
+						? media(4, '/api/media/test-media/masked-result.webp')
+						: media(6, '/api/media/test-media/masked-result-2.webp'),
 				cost: 1.5,
 				balance: 18.5
 			})
@@ -313,12 +348,12 @@ test('draws a mask and applies the synchronous result without polling', async ({
 
 	await panel.getByRole('button', { name: 'Заменить текстуру' }).click();
 
-	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
+	await expect(maskEditor.locator('.drawing-stage img')).toHaveAttribute(
 		'src',
 		'/api/media/test-media/masked-result.webp'
 	);
-	await expect(panel.locator('.job-success')).toHaveText('Замена текстуры завершена.');
-	expect(submittedBody).toEqual({
+	await expect(panel.getByText('Замена текстуры завершена.', { exact: true })).toHaveCount(0);
+	expect(submittedBodies[0]).toEqual({
 		imageKey: mediaKey(1),
 		referenceImageKey: mediaKey(2),
 		maskImageKey: mediaKey(3),
@@ -326,6 +361,55 @@ test('draws a mask and applies the synchronous result without polling', async ({
 		formSnapshot: expect.any(Object)
 	});
 	expect(pollCount).toBe(0);
+	const apply = panel.getByRole('button', { name: 'Заменить текстуру', exact: true });
+	await expect(apply).toBeDisabled();
+	await expectEmptyMask(page);
+	await expect(
+		page.getByText(ru['textureReplacement.maskEditor.saved'], { exact: true })
+	).toHaveCount(0);
+	expect(uploads.maskUploadCount()).toBe(1);
+	await expect(panel.getByRole('button', { name: 'Новая замена' })).toHaveCount(0);
+	await drawAndSaveMask(page);
+	await expect(apply).toBeEnabled();
+	await apply.click();
+	await expect(maskEditor.locator('.drawing-stage img')).toHaveAttribute(
+		'src',
+		'/api/media/test-media/masked-result-2.webp'
+	);
+	await expect(apply).toBeDisabled();
+	await expectEmptyMask(page);
+	await expect(panel.getByText('Замена текстуры завершена.', { exact: true })).toHaveCount(0);
+	expect(submittedBodies).toHaveLength(2);
+	expect(submittedBodies[1]).toMatchObject({
+		imageKey: mediaKey(4),
+		referenceImageKey: mediaKey(2),
+		maskImageKey: mediaKey(101)
+	});
+	expect(uploads.maskUploadCount()).toBe(2);
+	expect(pollCount).toBe(0);
+	await page.getByRole('button', { name: ru['toolbar.previousGeneration'], exact: true }).click();
+	await expect(maskEditor.locator('.drawing-stage img')).toHaveAttribute(
+		'src',
+		'/api/media/test-media/masked-result.webp'
+	);
+	await expect(apply).toBeDisabled();
+	await expectEmptyMask(page);
+	await page.getByRole('button', { name: ru['toolbar.nextGeneration'], exact: true }).click();
+	await expect(maskEditor.locator('.drawing-stage img')).toHaveAttribute(
+		'src',
+		'/api/media/test-media/masked-result-2.webp'
+	);
+	await expect(apply).toBeDisabled();
+	await expectEmptyMask(page);
+	await page.getByRole('tab', { name: ru['mode.styleTransfer'], exact: true }).click();
+	await page.getByRole('tab', { name: ru['mode.edit'], exact: true }).click();
+	await page.getByRole('tab', { name: /Замена текстуры/ }).click();
+	await expect(maskEditor.locator('.drawing-stage img')).toHaveAttribute(
+		'src',
+		'/api/media/test-media/masked-result-2.webp'
+	);
+	await expect(apply).toBeDisabled();
+	await expectEmptyMask(page);
 
 	const editJobId = '00000000-0000-4000-8000-000000000301';
 	await page.route('**/api/edit', async (route) => {
@@ -372,7 +456,7 @@ test('draws a mask and applies the synchronous result without polling', async ({
 	await expect(
 		panel.getByText('Выделите область для замены прямо на изображении выше.')
 	).toBeVisible();
-	await expect(panel.locator('.job-success')).toHaveCount(0);
+	await expect(panel.getByText('Замена текстуры завершена.', { exact: true })).toHaveCount(0);
 	await expect(panel.getByRole('button', { name: 'Новая замена' })).toHaveCount(0);
 });
 
@@ -829,3 +913,220 @@ for (const viewport of [
 		await assertStageFits();
 	});
 }
+
+for (const [width, height] of [
+	[1600, 1200],
+	[3000, 2000]
+]) {
+	test(`shows a clean ${width} by ${height} result without resizing or uploading the old mask`, async ({
+		page
+	}) => {
+		await authenticate(page);
+		await page.goto('/edit?tool=texture-replacement');
+		const uploads = await uploadInputs(page);
+		await drawAndSaveMask(page);
+		await page.route('**/api/media/test-media/resized-result.webp', async (route) => {
+			await route.fulfill({
+				contentType: 'image/svg+xml',
+				body: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#bbb"/></svg>`
+			});
+		});
+		await page.route('**/api/texture-replacement', async (route) => {
+			await route.fulfill({
+				json: {
+					id: JOB_ID,
+					status: 'completed',
+					output: media(4, '/api/media/test-media/resized-result.webp'),
+					cost: 1,
+					balance: 19
+				}
+			});
+		});
+		const apply = page.getByRole('button', { name: ru['textureReplacement.apply'], exact: true });
+		await apply.click();
+		await expect(page.locator('#mode-panel-edit .drawing-stage img')).toHaveAttribute(
+			'src',
+			'/api/media/test-media/resized-result.webp'
+		);
+		const scale = Math.min(1, 2048 / Math.max(width, height));
+		await expect(page.locator('#mode-panel-edit .mask-editor canvas')).toHaveAttribute(
+			'width',
+			String(Math.round(width * scale))
+		);
+		await expectEmptyMask(page);
+		await expect(apply).toBeDisabled();
+		expect(uploads.maskUploadCount()).toBe(1);
+	});
+}
+
+test('restores and reloads a completed generation without overlaying its submitted mask', async ({
+	page
+}) => {
+	await authenticate(page);
+	await page.goto('/edit?tool=texture-replacement');
+	const uploads = await uploadInputs(page);
+	await drawAndSaveMask(page);
+	let formSnapshot: Record<string, unknown> | undefined;
+	const output = media(4, '/api/media/test-media/restored-result.webp');
+	await page.route('**/api/texture-replacement', async (route) => {
+		formSnapshot = route.request().postDataJSON().formSnapshot;
+		await route.fulfill({
+			json: {
+				id: JOB_ID,
+				status: 'completed',
+				output,
+				cost: 1,
+				balance: 19
+			}
+		});
+	});
+	await page.route('**/api/generated-images?**', async (route) => {
+		await route.fulfill({
+			json: {
+				images: formSnapshot
+					? [
+							{
+								id: JOB_ID,
+								image: output,
+								source: media(1, '/api/media/test-media/scene.webp'),
+								kind: 'texture-replacement',
+								createdAt: 1,
+								session: null,
+								iteration: null,
+								number: 1,
+								sourceGeneration: null
+							}
+						]
+					: [],
+				pagination: { offset: 0, size: 100, hasMore: false }
+			}
+		});
+	});
+	await page.route('**/api/generated-images/sessions', async (route) => {
+		await route.fulfill({ json: { projects: [] } });
+	});
+	let detailLoads = 0;
+	await page.route(`**/api/generated-images/${JOB_ID}`, async (route) => {
+		detailLoads += 1;
+		await route.fulfill({
+			json: {
+				id: JOB_ID,
+				prompt: '',
+				kind: 'texture-replacement',
+				createdAt: 1,
+				amount: 1,
+				balanceAfter: 19,
+				image: output,
+				source: media(1, '/api/media/test-media/scene.webp'),
+				formSnapshot,
+				session: {
+					projectId: E2E_PROJECT_ID,
+					projectTitle: 'Living room',
+					sessionId: E2E_SESSION_ID,
+					sessionTitle: 'Main thread'
+				},
+				media: [
+					output,
+					media(1, '/api/media/test-media/scene.webp'),
+					media(2, '/api/media/test-media/reference-fabric.webp'),
+					media(3, '/api/media/test-media/texture-mask.png')
+				]
+			}
+		});
+	});
+	const apply = page.getByRole('button', { name: ru['textureReplacement.apply'], exact: true });
+	await apply.click();
+	await expect(page.locator('#mode-panel-edit .drawing-stage img')).toHaveAttribute(
+		'src',
+		output.url
+	);
+	await expectEmptyMask(page);
+	await expect(apply).toBeDisabled();
+	await openScenesDrawer(page);
+	await page.locator('.image-frame.result-frame').hover();
+	await page
+		.getByRole('button', {
+			name: ru['generatedImages.restore'].replace('{order}', '1'),
+			exact: true
+		})
+		.click();
+	await expect.poll(() => detailLoads).toBe(1);
+	const confirmation = page.getByRole('dialog', {
+		name: ru['generatedImages.confirmRestoreTitle'],
+		exact: true
+	});
+	await expect(confirmation).toBeVisible();
+	await confirmation
+		.getByRole('button', {
+			name: ru['generatedImages.confirmRestoreConfirm'],
+			exact: true
+		})
+		.click();
+	await expect(confirmation).toBeHidden();
+	await expectEmptyMask(page);
+	await expect(apply).toBeDisabled();
+	await page.reload();
+	await expect(page.locator('#mode-panel-edit .drawing-stage img')).toHaveAttribute(
+		'src',
+		output.url
+	);
+	await expectEmptyMask(page);
+	await expect(apply).toBeDisabled();
+	expect(formSnapshot).toMatchObject({
+		textureMaskSourceKey: mediaKey(1),
+		textureMaskImage: { mediaKey: mediaKey(3) }
+	});
+	expect(uploads.maskUploadCount()).toBe(1);
+});
+
+test('keeps the saved mask after generation failure and clears it when retry succeeds', async ({
+	page
+}) => {
+	await authenticate(page);
+	await page.goto('/edit?tool=texture-replacement');
+	const uploads = await uploadInputs(page);
+	await drawAndSaveMask(page);
+	const requests: Record<string, unknown>[] = [];
+	await page.route('**/api/texture-replacement', async (route) => {
+		requests.push(route.request().postDataJSON());
+		if (requests.length === 1) {
+			await route.fulfill({ status: 502, json: { error: { code: 'upstream_error' } } });
+			return;
+		}
+		await route.fulfill({
+			json: {
+				id: JOB_ID,
+				status: 'completed',
+				output: media(4, '/api/media/test-media/retry-result.webp'),
+				cost: 1,
+				balance: 19
+			}
+		});
+	});
+	const apply = page.getByRole('button', { name: ru['textureReplacement.apply'], exact: true });
+	await apply.click();
+	await expect(page.getByRole('alert')).toBeVisible();
+	await expect(apply).toBeEnabled();
+	await expect(
+		page.getByText(ru['textureReplacement.maskEditor.saved'], { exact: true })
+	).toBeVisible();
+	await expect
+		.poll(() =>
+			page
+				.locator('#mode-panel-edit .mask-editor canvas')
+				.evaluate(
+					(node: HTMLCanvasElement) => node.getContext('2d')?.getImageData(400, 330, 1, 1).data[3]
+				)
+		)
+		.toBe(255);
+	await apply.click();
+	await expect(page.locator('#mode-panel-edit .drawing-stage img')).toHaveAttribute(
+		'src',
+		'/api/media/test-media/retry-result.webp'
+	);
+	await expectEmptyMask(page);
+	await expect(apply).toBeDisabled();
+	expect(requests).toHaveLength(2);
+	expect(requests[1]).toEqual(requests[0]);
+	expect(uploads.maskUploadCount()).toBe(1);
+});

@@ -644,8 +644,6 @@ export interface Dictionary {
 	'objectReplacement.signInToApply': string;
 	'objectReplacement.apply': string;
 	'objectReplacement.processing': string;
-	'objectReplacement.completed': string;
-	'objectReplacement.newReplacement': string;
 	'objectReplacement.tryAgain': string;
 	'objectReplacement.retryStatus': string;
 	'objectReplacement.failed': string;
@@ -682,6 +680,9 @@ export interface Dictionary {
 	'textureReplacement.maskEditor.clear': string;
 	'textureReplacement.maskEditor.sourceAlt': string;
 	'textureReplacement.maskEditor.canvasLabel': string;
+	'textureReplacement.maskEditor.restoring': string;
+	'textureReplacement.maskEditor.restoreFailed': string;
+	'textureReplacement.maskEditor.retryRestore': string;
 	'textureReplacement.maskEditor.save': string;
 	'textureReplacement.maskEditor.saving': string;
 	'textureReplacement.maskEditor.saved': string;
@@ -702,8 +703,6 @@ export interface Dictionary {
 	'textureReplacement.signInToApply': string;
 	'textureReplacement.apply': string;
 	'textureReplacement.processing': string;
-	'textureReplacement.completed': string;
-	'textureReplacement.newReplacement': string;
 	'textureReplacement.tryAgain': string;
 	'textureReplacement.retryStatus': string;
 	'textureReplacement.failed': string;
@@ -931,8 +930,6 @@ export interface Dictionary {
 	'lightSettings.signInToApply': string;
 	'lightSettings.apply': string;
 	'lightSettings.processing': string;
-	'lightSettings.completed': string;
-	'lightSettings.newRequest': string;
 	'lightSettings.tryAgain': string;
 	'lightSettings.retryStatus': string;
 	'lightSettings.failed': string;
@@ -1023,8 +1020,6 @@ export interface Dictionary {
 	'repaint.signInToApply': string;
 	'repaint.apply': string;
 	'repaint.processing': string;
-	'repaint.completed': string;
-	'repaint.newRequest': string;
 	'repaint.tryAgain': string;
 	'repaint.retryStatus': string;
 	'repaint.failed': string;

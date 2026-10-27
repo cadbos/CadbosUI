@@ -160,7 +160,7 @@ for (const balance of [18, -1]) {
 			'/api/media/test-media/replaced.webp',
 			{ timeout: 10_000 }
 		);
-		await expect(panel.locator('.job-success')).toHaveText('Замена объекта завершена.');
+		await expect(panel.getByText('Замена объекта завершена.', { exact: true })).toHaveCount(0);
 		await expect(
 			page.locator('.scene-finances .desktop').getByText('Стоимость: 2.00')
 		).toBeVisible();
@@ -177,23 +177,10 @@ for (const balance of [18, -1]) {
 		});
 
 		await page.getByRole('tab', { name: 'Редактирование' }).click();
-		// Compare falls back to the originally uploaded photo as "before" even
-		// without an edit chain, so it's enabled as soon as a result exists.
 		await expect(page.getByRole('button', { name: 'Сравнить до/после' })).toBeEnabled();
 		await page.getByRole('tab', { name: /Замена объекта/ }).click();
-		await expect(page).toHaveURL(new RegExp(`job=${JOB_ID}`));
-
-		// A completed job must not lock the form (the reference-image "change"
-		// control included) — the user should be free to tweak the reference or
-		// the description and submit another replacement right away instead of
-		// being forced through "Новая замена" first.
-		await expect(panel.getByRole('button', { name: 'Выбрать референс объекта' })).toBeEnabled();
-
-		await panel.getByRole('button', { name: 'Новая замена' }).click();
 		await expect(page).not.toHaveURL(/job=/);
-		// "Новая замена" clears job tracking only — the settings that produced the
-		// current result (reference image, description, scale) stay exactly as
-		// they are, so the user can adjust and resubmit instead of starting over.
+		await expect(panel.getByRole('button', { name: 'Новая замена' })).toHaveCount(0);
 		await expect(panel.getByLabel(/Точно опишите существующий объект/)).toHaveValue(
 			'  серый диван у окна  '
 		);
@@ -297,52 +284,111 @@ test('submits an adjusted area and clears it independently', async ({ page }) =>
 	});
 });
 
-test('resumes a stored completed job after reload without submitting again', async ({ page }) => {
-	await authenticate(page);
-	let postCount = 0;
-	let getCount = 0;
-	await page.route('**/api/object-replacement', async (route) => {
-		postCount += 1;
-		await route.abort();
-	});
-	await page.route(`**/api/object-replacement/${JOB_ID}`, async (route) => {
-		getCount += 1;
-		if (getCount === 1) {
+for (const withSession of [true, false]) {
+	test(`restores a completed result after reload without submitting or polling again ${withSession ? 'with a session' : 'from a bare job link'}`, async ({
+		page
+	}) => {
+		await authenticate(page);
+		await page.route(`**/api/projects/${E2E_PROJECT_ID}`, async (route) => {
 			await route.fulfill({
-				status: 502,
+				json: {
+					id: E2E_PROJECT_ID,
+					title: 'Living room',
+					createdAt: 1,
+					updatedAt: 1,
+					shareActive: false,
+					sessions: [
+						{
+							id: E2E_SESSION_ID,
+							title: 'Main thread',
+							parentSessionId: null,
+							forkedFromGenerationId: null,
+							createdAt: 1,
+							updatedAt: 1,
+							generations: []
+						}
+					]
+				}
+			});
+		});
+		let postCount = 0;
+		let getCount = 0;
+		await page.route('**/api/object-replacement', async (route) => {
+			postCount += 1;
+			await route.abort();
+		});
+		await page.route(`**/api/object-replacement/${JOB_ID}`, async (route) => {
+			getCount += 1;
+			if (getCount === 1) {
+				await route.fulfill({
+					status: 502,
+					contentType: 'application/json',
+					body: JSON.stringify({
+						error: { code: 'object_replacement_poll_failed', message: 'Poll failed' }
+					})
+				});
+				return;
+			}
+			await route.fulfill({
+				status: 200,
 				contentType: 'application/json',
 				body: JSON.stringify({
-					error: { code: 'object_replacement_poll_failed', message: 'Poll failed' }
+					id: JOB_ID,
+					status: 'completed',
+					output: media(3, '/api/media/test-media/recovered.webp'),
+					cost: 2,
+					balance: 18
 				})
 			});
-			return;
-		}
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				id: JOB_ID,
-				status: 'completed',
-				output: media(3, '/api/media/test-media/recovered.webp'),
-				cost: 2,
-				balance: 18
-			})
 		});
-	});
 
-	await page.goto(`/edit?tool=object-replacement&object=sofa&job=${JOB_ID}`);
-	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
-		'src',
-		'/api/media/test-media/recovered.webp'
-	);
-	await page.reload();
-	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
-		'src',
-		'/api/media/test-media/recovered.webp'
-	);
-	await expect.poll(() => getCount).toBe(3);
-	expect(postCount).toBe(0);
-});
+		await page.route(`**/api/generated-images/${JOB_ID}`, async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					id: JOB_ID,
+					prompt: 'sofa',
+					kind: 'object-replacement',
+					createdAt: 1,
+					amount: 2,
+					balanceAfter: 18,
+					image: media(3, '/api/media/test-media/recovered.webp'),
+					source: media(1, '/api/media/test-media/scene.webp'),
+					formSnapshot: null,
+					session: withSession
+						? {
+								projectId: E2E_PROJECT_ID,
+								projectTitle: 'Living room',
+								sessionId: E2E_SESSION_ID,
+								sessionTitle: 'Main thread'
+							}
+						: null,
+					media: [
+						media(3, '/api/media/test-media/recovered.webp'),
+						media(1, '/api/media/test-media/scene.webp')
+					]
+				})
+			});
+		});
+		await page.goto(
+			`/edit?tool=object-replacement&object=sofa&job=${JOB_ID}${withSession ? `&project=${E2E_PROJECT_ID}&session=${E2E_SESSION_ID}` : ''}`
+		);
+		await expect(page.locator('.result:visible img.output')).toHaveAttribute(
+			'src',
+			'/api/media/test-media/recovered.webp'
+		);
+		await expect(page).not.toHaveURL(/job=/);
+		await expect(page).toHaveURL(new RegExp(`generation=${JOB_ID}`));
+		await page.reload();
+		await expect(page.locator('.result:visible img.output')).toHaveAttribute(
+			'src',
+			'/api/media/test-media/recovered.webp'
+		);
+		expect(getCount).toBe(2);
+		expect(postCount).toBe(0);
+	});
+}
 
 test('keeps the submitted result’s lineage when another render finishes first', async ({
 	page
@@ -761,4 +807,77 @@ test('surfaces a terminal timeout and unlocks the retained form for retry', asyn
 	await panel.getByRole('button', { name: 'Попробовать снова' }).click();
 	await expect(page).not.toHaveURL(/job=/);
 	await expect(panel.getByLabel(/Точно опишите существующий объект/)).toBeEnabled();
+});
+
+test('repeats object replacement directly and retries a failed second submission without reviving its completed job', async ({
+	page
+}) => {
+	await authenticate(page);
+	await page.goto('/edit?tool=object-replacement');
+	await uploadInputs(page);
+	const requests: { imageKey: string; referenceImageKey: string; replacementObject: string }[] = [];
+	const polls: string[] = [];
+	const secondJobId = '123e4567-e89b-42d3-a456-426614174001';
+	await page.route('**/api/object-replacement', async (route) => {
+		requests.push(route.request().postDataJSON());
+		if (requests.length === 2) {
+			await route.fulfill({ status: 503, json: { error: { code: 'object_replacement_failed' } } });
+			return;
+		}
+		const id = requests.length === 1 ? JOB_ID : secondJobId;
+		await route.fulfill({
+			status: 202,
+			json: { id, status: 'processing', elapsedMs: 0, queue: { status: 'unknown' } }
+		});
+	});
+	await page.route('**/api/object-replacement/*', async (route) => {
+		const id = route.request().url().split('/').at(-1)!;
+		polls.push(id);
+		await route.fulfill({
+			status: 200,
+			json: {
+				id,
+				status: 'completed',
+				output: media(id === JOB_ID ? 3 : 4, `/api/media/test-media/${id}.webp`),
+				cost: 2,
+				balance: 16
+			}
+		});
+	});
+	const panel = page.locator('#edit-tool-panel-object-replacement');
+	const description = panel.getByLabel(/Точно опишите существующий объект/);
+	const apply = panel.getByRole('button', { name: ru['objectReplacement.apply'], exact: true });
+	await description.fill('серый диван');
+	await apply.click();
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
+		'src',
+		`/api/media/test-media/${JOB_ID}.webp`
+	);
+	await expect(page).not.toHaveURL(/job=/);
+	await expect(description).toHaveValue('серый диван');
+	await expect(panel.getByRole('button', { name: 'Новая замена' })).toHaveCount(0);
+	await expect(apply).toBeEnabled();
+	await expect(panel.getByText('Замена объекта завершена.', { exact: true })).toHaveCount(0);
+	await description.fill('кресло у окна');
+	await apply.click();
+	await expect(panel.getByRole('alert')).toBeVisible();
+	await expect(apply).toBeEnabled();
+	await expect(page).not.toHaveURL(/job=/);
+	expect(requests).toHaveLength(2);
+	expect(polls).toEqual([JOB_ID]);
+	await apply.click();
+	await expect(page.locator('.result:visible img.output')).toHaveAttribute(
+		'src',
+		`/api/media/test-media/${secondJobId}.webp`
+	);
+	await expect(apply).toBeEnabled();
+	await expect(panel.getByText('Замена объекта завершена.', { exact: true })).toHaveCount(0);
+	expect(requests).toHaveLength(3);
+	expect(requests[1]).toMatchObject({
+		imageKey: mediaKey(3),
+		referenceImageKey: mediaKey(2),
+		replacementObject: 'кресло у окна'
+	});
+	expect(requests[2]).toMatchObject(requests[1]);
+	expect(polls).toEqual([JOB_ID, secondJobId]);
 });
