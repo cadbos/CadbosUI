@@ -13,7 +13,8 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { ADD_OBJECT_PRESETS, addObjectPromptTemplate } from '$lib/add-object-presets';
+	import { ADD_OBJECT_PRESETS, mentionsPeople } from '$lib/add-object-presets';
+	import type { EditWorkflow } from '$lib/api/contract';
 	import GenerateButton from '$lib/components/GenerateButton.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
@@ -22,18 +23,21 @@ before the Change Date. See LICENSE for complete terms.
 	interface Props {
 		disabled: boolean;
 		applying: boolean;
-		onApply: (prompt: string) => void;
+		onApply: (prompt: string, workflow: EditWorkflow) => void;
 	}
 	let { disabled, applying, onApply }: Props = $props();
 
 	const promptText = $derived(request.addObjectInstruction.trim());
+	const people = $derived(mentionsPeople(promptText));
 	const finalPrompt = $derived(
-		promptText === '' ? '' : ti(addObjectPromptTemplate(promptText), { object: promptText })
+		promptText === '' || people
+			? promptText
+			: ti('edit.addObject.userPromptTemplate', { object: promptText })
 	);
 
 	function submit(): void {
 		if (finalPrompt === '') return;
-		onApply(finalPrompt);
+		onApply(finalPrompt, people ? 'people' : 'default');
 	}
 </script>
 

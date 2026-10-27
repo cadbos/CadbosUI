@@ -1267,19 +1267,26 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 	await expect(redoButton).toBeDisabled();
 });
 
-for (const { preset, template } of [
-	{ preset: 'mirror', template: 'edit.addObject.userPromptTemplate' },
-	{ preset: 'people', template: 'edit.addObject.peopleUserPromptTemplate' }
+for (const { preset, prompt, workflow } of [
+	{
+		preset: 'mirror',
+		prompt: ru['edit.addObject.userPromptTemplate'].replace(
+			'{object}',
+			ru['edit.addObject.mirror.phrase']
+		),
+		workflow: 'default'
+	},
+	{ preset: 'people', prompt: ru['edit.addObject.people.phrase'], workflow: 'people' }
 ] as const) {
-	test(`the Add Object tool applies the clicked ${preset} template to the current image`, async ({
+	test(`the Add Object tool sends the clicked ${preset} template to the ${workflow} workflow`, async ({
 		page
 	}) => {
 		const jobId = '00000000-0000-4000-8000-000000000114';
 		await authenticate(page);
 		await mockUpload(page);
-		let capturedPrompt: string | undefined;
+		let captured: { prompt: string; workflow: string } | undefined;
 		await page.route('**/api/edit', async (route) => {
-			capturedPrompt = (route.request().postDataJSON() as { prompt: string }).prompt;
+			captured = route.request().postDataJSON() as { prompt: string; workflow: string };
 			await route.fulfill({
 				status: 202,
 				contentType: 'application/json',
@@ -1328,9 +1335,7 @@ for (const { preset, template } of [
 			'/api/media/test-media/added-mirror.webp',
 			{ timeout: 10_000 }
 		);
-		expect(capturedPrompt).toBe(
-			ru[template].replace('{object}', ru[`edit.addObject.${preset}.phrase`])
-		);
+		expect(captured).toMatchObject({ prompt, workflow });
 	});
 }
 

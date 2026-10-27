@@ -303,7 +303,30 @@ describe('POST /api/edit', () => {
 		await seedUser(db, 12);
 		const invalid = await callPost({ pubkey: 'pubkey-1' }, platform(db), { prompt: '' });
 		expect(invalid.status).toBe(400);
+		const unknownWorkflow = await callPost({ pubkey: 'pubkey-1' }, platform(db), {
+			workflow: 'pets'
+		});
+		expect(unknownWorkflow.status).toBe(400);
 		expect(integration.submit).not.toHaveBeenCalled();
+	});
+
+	it('passes the people workflow through to ComfyUI', async () => {
+		const db = makeD1();
+		await seedUser(db, 12);
+		integration.cost = 3.5;
+
+		const response = await callPost({ pubkey: 'pubkey-1' }, platform(db), {
+			prompt: 'двух-трёх человек',
+			workflow: 'people'
+		});
+
+		expect(response.status).toBe(202);
+		expect(integration.submit).toHaveBeenCalledWith(
+			expect.anything(),
+			{ image: expect.any(String), prompt: 'двух-трёх человек', workflow: 'people' },
+			'https://cadbos.example',
+			expect.any(String)
+		);
 	});
 
 	it('rejects a sessionId the caller does not own (IDOR guard)', async () => {
@@ -369,7 +392,11 @@ describe('POST /api/edit', () => {
 		});
 		expect(integration.submit).toHaveBeenCalledWith(
 			expect.anything(),
-			{ image: expect.stringContaining('/scene.jpg?'), prompt: requestBody.prompt },
+			{
+				image: expect.stringContaining('/scene.jpg?'),
+				prompt: requestBody.prompt,
+				workflow: 'default'
+			},
 			'https://cadbos.example',
 			id
 		);

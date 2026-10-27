@@ -169,7 +169,11 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		try {
 			comfyPromptId = await submitFluxKontextEdit(
 				platform,
-				{ image: media.get(parsed.data.imageKey)!.url, prompt: parsed.data.prompt },
+				{
+					image: media.get(parsed.data.imageKey)!.url,
+					prompt: parsed.data.prompt,
+					workflow: parsed.data.workflow
+				},
 				url.origin,
 				id
 			);

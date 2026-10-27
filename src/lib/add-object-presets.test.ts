@@ -14,18 +14,18 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { addObjectPromptTemplate } from '$lib/add-object-presets';
+import { mentionsPeople } from '$lib/add-object-presets';
 import { en } from '$lib/i18n/locales/en';
 import { ru } from '$lib/i18n/locales/ru';
 
-describe('addObjectPromptTemplate', () => {
-	it('uses the people template for both people presets in every locale', () => {
+describe('mentionsPeople', () => {
+	it('recognises both people presets in every locale', () => {
 		for (const locale of [ru, en]) {
 			for (const phrase of [
 				locale['edit.addObject.people.phrase'],
 				locale['edit.addObject.peopleMotion.phrase']
 			]) {
-				expect(addObjectPromptTemplate(phrase)).toBe('edit.addObject.peopleUserPromptTemplate');
+				expect(mentionsPeople(phrase)).toBe(true);
 			}
 		}
 	});
@@ -37,14 +37,14 @@ describe('addObjectPromptTemplate', () => {
 		'семью за обеденным столом',
 		'a woman sitting by the window',
 		'children playing on the rug'
-	])('uses the people template for a typed instruction: %s', (instruction) => {
-		expect(addObjectPromptTemplate(instruction)).toBe('edit.addObject.peopleUserPromptTemplate');
+	])('recognises people in a typed instruction: %s', (instruction) => {
+		expect(mentionsPeople(instruction)).toBe(true);
 	});
 
 	it.each(['серое кресло у окна', 'детскую кроватку у стены', 'a mirror above the console'])(
-		'keeps the object template for an instruction without people: %s',
+		'finds no people in an object instruction: %s',
 		(instruction) => {
-			expect(addObjectPromptTemplate(instruction)).toBe('edit.addObject.userPromptTemplate');
+			expect(mentionsPeople(instruction)).toBe(false);
 		}
 	);
 });

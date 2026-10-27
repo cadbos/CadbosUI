@@ -163,9 +163,8 @@ const PEOPLE_INSTRUCTION = new RegExp(
 
 // People are not furniture: the object template's "only empty space, never
 // touch existing items, shrink to fit" rules leave figures miniature and in
-// unnatural poses, so an instruction about people gets its own template.
-export function addObjectPromptTemplate(instruction: string): TranslationKey {
-	return PEOPLE_INSTRUCTION.test(instruction)
-		? 'edit.addObject.peopleUserPromptTemplate'
-		: 'edit.addObject.userPromptTemplate';
+// unnatural poses, so a request for people goes to the people workflow, which
+// writes its own instruction from a caption of the scene.
+export function mentionsPeople(instruction: string): boolean {
+	return PEOPLE_INSTRUCTION.test(instruction);
 }

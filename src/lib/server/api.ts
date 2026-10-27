@@ -17,6 +17,7 @@ import { z } from 'zod';
 import { photoAdjustmentsSchema } from '$lib/photo-adjustments';
 import {
 	EDIT_OPERATION_TYPES,
+	EDIT_WORKFLOWS,
 	SCENE_TYPES,
 	type ApiError,
 	type RequestFormSnapshot
@@ -128,6 +129,7 @@ export const remoteImageUploadRequestSchema = z.object({
 export const editRequestSchema = z.object({
 	imageKey: mediaKey,
 	prompt: z.string().trim().min(1),
+	workflow: z.enum(EDIT_WORKFLOWS).default('default'),
 	sessionId,
 	formSnapshot
 });
