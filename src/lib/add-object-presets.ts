@@ -151,11 +151,19 @@ const PEOPLE_INSTRUCTION = new RegExp(
 			'реб[её]н\\p{L}*',
 			'дет(?:и|ей|ям|ьми|ях)',
 			'семь(?:я|ю|ей|е)',
+			'парн(?:ь|я|ю|ем|е|и|ей|ям|ями|ях)',
+			'девушк\\p{L}*',
+			'девоч(?:к\\p{L}*|ек)',
+			'мальчик\\p{L}*',
 			'people',
 			'persons?',
-			'(?:wo)?m[ae]n',
+			'(?:wo)?m[ae]n(?!-made)',
 			'child(?:ren)?',
-			'famil(?:y|ies)'
+			'famil(?:y|ies)(?![\\s-]+rooms?)',
+			'girls?',
+			'boys?',
+			'guys?',
+			'kids?'
 		].join('|') +
 		')(?![\\p{L}\\p{N}])',
 	'iu'

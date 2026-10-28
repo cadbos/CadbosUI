@@ -35,16 +35,30 @@ describe('mentionsPeople', () => {
 		'женщину у кухонного острова',
 		'ребёнка, играющего на ковре',
 		'семью за обеденным столом',
+		'парня у окна',
+		'девушку на диване',
+		'девочку с куклой',
+		'мальчика с книгой',
 		'a woman sitting by the window',
-		'children playing on the rug'
+		'children playing on the rug',
+		'a girl reading',
+		'two guys talking',
+		'kids playing on the floor',
+		'a family having dinner'
 	])('recognises people in a typed instruction: %s', (instruction) => {
 		expect(mentionsPeople(instruction)).toBe(true);
 	});
 
-	it.each(['серое кресло у окна', 'детскую кроватку у стены', 'a mirror above the console'])(
-		'finds no people in an object instruction: %s',
-		(instruction) => {
-			expect(mentionsPeople(instruction)).toBe(false);
-		}
-	);
+	it.each([
+		'серое кресло у окна',
+		'детскую кроватку у стены',
+		'a mirror above the console',
+		'a family room sofa',
+		'a family-room rug',
+		'a man-made pond',
+		'пару стульев у стола',
+		'a couple of chairs'
+	])('finds no people in an object instruction: %s', (instruction) => {
+		expect(mentionsPeople(instruction)).toBe(false);
+	});
 });
