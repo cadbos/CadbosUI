@@ -232,6 +232,29 @@ export async function recordPhotoProcessing(
 	return { id, ...toBalance(row) };
 }
 
+export async function storeGenerationFeedback(
+	db: Database,
+	userId: string,
+	generationId: string,
+	rating: 'like' | 'dislike',
+	comment: string | null
+): Promise<'saved' | 'not_found' | 'conflict'> {
+	const [, rows] = await db.batch([
+		db.run(sql`INSERT INTO generations_feedback (generation_id, rating, comment)
+			SELECT id, ${rating}, ${comment} FROM generations WHERE id = ${generationId} AND user_id = ${userId}
+			ON CONFLICT(generation_id) DO NOTHING`),
+		db.all<{
+			rating: 'like' | 'dislike';
+			comment: string | null;
+		}>(sql`SELECT f.rating, f.comment FROM generations_feedback f
+			JOIN generations g ON g.id = f.generation_id
+			WHERE g.id = ${generationId} AND g.user_id = ${userId}`)
+	]);
+	const feedback = rows[0];
+	if (!feedback) return 'not_found';
+	return feedback.rating === rating && feedback.comment === comment ? 'saved' : 'conflict';
+}
+
 export async function getGeneratedImageForUser(
 	db: Database,
 	userId: string,
