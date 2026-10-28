@@ -35,6 +35,7 @@ for (const instrument of instruments) {
 			await route.fulfill({
 				json: {
 					user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+					featurebaseJwt: null,
 					credit: { balance: 20, updatedAt: 0, history: [] }
 				}
 			});

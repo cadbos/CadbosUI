@@ -52,7 +52,7 @@ for (const approved of [false, true]) {
 		await page.route('**/auth/me', async (route) => {
 			await route.fulfill({
 				status: verified ? 200 : 401,
-				json: verified ? { user: { pubkey }, credit } : {}
+				json: verified ? { user: { pubkey }, featurebaseJwt: null, credit } : {}
 			});
 		});
 		await page.route('**/auth/challenge', async (route) => {
@@ -71,7 +71,7 @@ for (const approved of [false, true]) {
 			expect(event.pubkey).toBe(pubkey);
 			expect(event.kind).toBe(27235);
 			verified = true;
-			await route.fulfill({ json: { user: { pubkey } } });
+			await route.fulfill({ json: { user: { pubkey }, featurebaseJwt: null } });
 		});
 		await page.route('**/auth/nostr-profile', async (route) => {
 			await route.fulfill({ json: { profile: { relays: [] } } });

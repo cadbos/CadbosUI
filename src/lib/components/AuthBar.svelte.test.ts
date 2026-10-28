@@ -505,7 +505,7 @@ it('creates an account only after the secret key is saved', async () => {
 		);
 		const event = JSON.parse(new TextDecoder().decode(bytes)) as { pubkey?: string };
 		signedPubkey = event.pubkey ?? '';
-		return Response.json({ user: { pubkey: signedPubkey } });
+		return Response.json({ featurebaseJwt: null, user: { pubkey: signedPubkey } });
 	});
 
 	const screen = render(AuthBar);

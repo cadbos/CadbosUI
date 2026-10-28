@@ -27,7 +27,8 @@ async function openScene(page: Page, width = 1600, height = 900): Promise<void> 
 	await page.route('**/auth/me', (route) =>
 		route.fulfill({
 			json: {
-				user: { pubkey: 'a'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+				user: { pubkey: 'a'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null
 			}
 		})
 	);

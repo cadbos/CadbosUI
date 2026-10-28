@@ -340,6 +340,7 @@ test('retains deleted generation charges without an open action and shows a nega
 			contentType: 'application/json',
 			body: JSON.stringify({
 				user: { pubkey: PK, firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null,
 				credit: {
 					balance: -1.5,
 					updatedAt: Date.UTC(2026, 0, 1),
