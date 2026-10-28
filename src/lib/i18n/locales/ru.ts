@@ -434,6 +434,7 @@ export const ru = {
 	'status.service.assets': 'Статические ресурсы',
 	'status.service.comfyui': 'ComfyUI',
 	'status.service.d1': 'База данных D1',
+	'status.service.featurebase': 'Featurebase',
 	'status.service.nostr': 'Ретрансляторы Nostr',
 	'status.service.s3': 'Хранилище S3',
 	'status.service.workersAi': 'Workers AI',
@@ -444,6 +445,8 @@ export const ru = {
 		'Обеспечивает «Изменение с объектами», «Замену объекта», «Замену текстуры», «Перекраску» и «Управление освещением».',
 	'status.hint.d1':
 		'Хранит аккаунты, историю расходов, баланс и «Сцены» (историю ваших генераций).',
+	'status.hint.featurebase':
+		'Обеспечивает обратную связь, поддержку и запросы на пополнение баланса в бета-версии.',
 	'status.hint.nostr':
 		'Отвечает за вход («Войти») через расширение Nostr или Nostr Connect. Не связано с числом релеев в вашем профиле (см. «Релеев» в шапке).',
 	'status.hint.s3': 'Хранит загруженное вами фото комнаты и сгенерированные изображения.',

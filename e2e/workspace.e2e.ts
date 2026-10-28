@@ -20,6 +20,12 @@ import { media, mediaKey } from './helpers/media';
 import { mockProjectSessionRoutes } from './helpers/project-session-routes';
 import { mockSceneFilterOptions } from './helpers/scene-routes';
 
+import { mockFeaturebase } from './featurebase';
+
+test.beforeEach(async ({ page }) => {
+	await mockFeaturebase(page);
+});
+
 function promptPreview(page: Page): Locator {
 	return page.getByLabel('Итоговый промпт').filter({ visible: true });
 }
@@ -56,7 +62,8 @@ async function mockSignedInGeneration(page: Page): Promise<void> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null
 			})
 		});
 	});
@@ -97,6 +104,144 @@ test('renders the workspace and switches views', async ({ page }) => {
 	await expect(page.getByRole('tab', { name: 'Чат' })).toHaveAttribute('aria-selected', 'true');
 });
 
+test('opens the localized Featurebase feedback widget', async ({ page }) => {
+	await page.goto('/');
+
+	const trigger = page.locator('.fb-feedback-widget-feedback-button');
+	await expect(trigger).toBeVisible();
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (
+					window as Window & { __featurebaseCalls?: [string, Record<string, unknown>][] }
+				).__featurebaseCalls;
+				const config = calls?.find(([action]) => action === 'initialize_feedback_widget')?.[1];
+				if (!config) return null;
+				return {
+					locale: config.locale,
+					organization: config.organization,
+					placement: config.placement ?? null,
+					theme: config.theme
+				};
+			})
+		)
+		.toEqual({
+			locale: 'ru',
+			organization: 'cadbos-test',
+			placement: null,
+			theme: 'light'
+		});
+
+	await trigger.click();
+	await expect(page.locator('html')).toHaveAttribute('data-featurebase-feedback-opened', 'true');
+});
+
+test('updates Featurebase identity when the user signs in and out', async ({ page }) => {
+	const featurebaseJwt = 'signed-featurebase-jwt';
+	await page.route('**/auth/me', (route) =>
+		route.fulfill({
+			contentType: 'application/json',
+			body: JSON.stringify({
+				user: { pubkey: 'a'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt
+			})
+		})
+	);
+	await page.goto('/');
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (
+					window as Window & { __featurebaseCalls?: [string, Record<string, unknown>?][] }
+				).__featurebaseCalls;
+				return calls?.filter(([action]) => action === 'initialize_feedback_widget').at(-1)?.[1]
+					?.featurebaseJwt;
+			})
+		)
+		.toBe(featurebaseJwt);
+
+	await page.locator('.auth-trigger').click();
+	await page.getByTestId('logout-button').click();
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (
+					window as Window & { __featurebaseCalls?: [string, Record<string, unknown>?][] }
+				).__featurebaseCalls;
+				const feedbackCalls = calls?.filter(([action]) => action === 'initialize_feedback_widget');
+				return {
+					destroyed: calls?.some(([action]) => action === 'destroy_feedback_widget'),
+					featurebaseJwt: feedbackCalls?.at(-1)?.[1]?.featurebaseJwt ?? null
+				};
+			})
+		)
+		.toEqual({ destroyed: true, featurebaseJwt: null });
+});
+
+test('shows the Featurebase feedback widget while the session lookup retries', async ({ page }) => {
+	let sessionLookups = 0;
+	await page.route('**/auth/me', (route) => {
+		sessionLookups += 1;
+		return route.fulfill({ status: 503, headers: { 'retry-after': '60' } });
+	});
+	await page.goto('/');
+
+	await expect(page.locator('.fb-feedback-widget-feedback-button')).toBeVisible();
+	expect(sessionLookups).toBe(1);
+});
+
+test('switches the Featurebase widgets to the chosen language', async ({ page }) => {
+	await mockFeaturebase(page, { support: true });
+	await page.route('**/auth/me', (route) =>
+		route.fulfill({
+			contentType: 'application/json',
+			body: JSON.stringify({
+				user: { pubkey: 'a'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null
+			})
+		})
+	);
+	await page.route('**/auth/nostr-profile', (route) =>
+		route.fulfill({ json: { profile: { relays: [] } } })
+	);
+	const featurebaseLanguages = (): Promise<{
+		messenger: unknown;
+		feedback: unknown;
+	}> =>
+		page.evaluate(() => {
+			const calls = (window as Window & { __featurebaseCalls?: [string, unknown?][] })
+				.__featurebaseCalls;
+			const messengerCall = calls?.findLast(([action]) =>
+				['boot', 'identify', 'setLanguage'].includes(action)
+			);
+			const messengerData = messengerCall?.[1];
+			const feedbackData = calls
+				?.filter(([action]) => action === 'initialize_feedback_widget')
+				.at(-1)?.[1] as Record<string, unknown> | undefined;
+			return {
+				messenger:
+					messengerCall?.[0] === 'setLanguage'
+						? messengerData
+						: (messengerData as Record<string, unknown> | undefined)?.language,
+				feedback: feedbackData?.locale
+			};
+		});
+	await page.goto('/');
+
+	await expect.poll(featurebaseLanguages).toEqual({ messenger: 'ru', feedback: 'ru' });
+
+	await page.locator('.auth-trigger').click();
+	const profile = page.locator('#auth-panel');
+	await profile.locator('.language-trigger').click();
+	await profile.getByRole('button', { name: 'English' }).click();
+
+	await expect.poll(featurebaseLanguages).toEqual({ messenger: 'en', feedback: 'en' });
+	await expect(page.locator('.fb-feedback-widget-feedback-button')).toBeVisible();
+});
+
 test('hides scenes for anonymous users', async ({ page }) => {
 	await openCreate(page);
 
@@ -114,7 +259,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null
 			})
 		});
 	});
@@ -530,10 +676,22 @@ test('Auto-enhance locks the prompt and generates without it', async ({ page }) 
 test('serves security headers and a content security policy', async ({ request }) => {
 	const response = await request.get('/');
 	const headers = response.headers();
+	const contentSecurityPolicy = headers['content-security-policy'] ?? '';
 
 	expect(headers['x-content-type-options']).toBe('nosniff');
 	expect(headers['x-frame-options']).toBe('DENY');
 	expect(headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
 	expect(headers['permissions-policy']).toContain('geolocation=()');
-	expect(headers['content-security-policy']).toContain("default-src 'self'");
+	expect(contentSecurityPolicy).toContain("default-src 'self'");
+	expect(contentSecurityPolicy).toContain('https://do.featurebase.app');
+	expect(contentSecurityPolicy).toContain('https://*.featurebase.app');
+	expect(contentSecurityPolicy).toContain('wss://*.featurebase.app');
+	expect(contentSecurityPolicy).toContain('https://fonts.googleapis.com');
+	expect(contentSecurityPolicy).toContain('https://fonts.gstatic.com');
+	expect(contentSecurityPolicy).toContain('https://*.featurebase-attachments.com');
+	// The Featurebase SDK injects <style> elements with per-session computed
+	// CSS it can't hash-pin — without this, the widget renders unstyled in
+	// production (regression: https://do.featurebase.app/js/sdk.js style-src
+	// violations reported against a build missing style-src-elem).
+	expect(contentSecurityPolicy).toMatch(/style-src-elem[^;]*'unsafe-inline'/);
 });

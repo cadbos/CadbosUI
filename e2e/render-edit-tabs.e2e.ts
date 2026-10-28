@@ -24,13 +24,20 @@ import {
 	mockProjectSessionRoutes
 } from './helpers/project-session-routes';
 
+import { mockFeaturebase } from './featurebase';
+
+test.beforeEach(async ({ page }) => {
+	await mockFeaturebase(page);
+});
+
 async function authenticate(page: Page): Promise<void> {
 	await page.route('**/auth/me', async (route) => {
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
+				user: { pubkey: '0'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null
 			})
 		});
 	});

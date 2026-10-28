@@ -27,6 +27,7 @@ before the Change Date. See LICENSE for complete terms.
 		'assets',
 		'comfyui',
 		'd1',
+		'featurebase',
 		'nostr',
 		's3',
 		'workersAi'

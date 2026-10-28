@@ -74,7 +74,8 @@ async function mockPhotoWorkspace(page: Page, authenticated = true): Promise<voi
 			body: JSON.stringify({
 				user: authenticated
 					? { pubkey: 'a'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' }
-					: null
+					: null,
+				featurebaseJwt: null
 			})
 		});
 	});
