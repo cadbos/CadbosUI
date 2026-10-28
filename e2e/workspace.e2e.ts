@@ -181,6 +181,52 @@ test('updates Featurebase identity when the user signs in and out', async ({ pag
 		.toEqual({ destroyed: true, featurebaseJwt: null });
 });
 
+test('shows the Featurebase feedback widget while the session lookup retries', async ({ page }) => {
+	let sessionLookups = 0;
+	await page.route('**/auth/me', (route) => {
+		sessionLookups += 1;
+		return route.fulfill({ status: 503, headers: { 'retry-after': '60' } });
+	});
+	await page.goto('/');
+
+	await expect(page.locator('.fb-feedback-widget-feedback-button')).toBeVisible();
+	expect(sessionLookups).toBe(1);
+});
+
+test('switches the Featurebase feedback widget to the chosen language', async ({ page }) => {
+	await page.route('**/auth/me', (route) =>
+		route.fulfill({
+			contentType: 'application/json',
+			body: JSON.stringify({
+				user: { pubkey: 'a'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
+				featurebaseJwt: null
+			})
+		})
+	);
+	await page.route('**/auth/nostr-profile', (route) =>
+		route.fulfill({ json: { profile: { relays: [] } } })
+	);
+	await page.goto('/');
+
+	await page.locator('.auth-trigger').click();
+	const profile = page.locator('#auth-panel');
+	await profile.locator('.language-trigger').click();
+	await profile.getByRole('button', { name: 'English' }).click();
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (
+					window as Window & { __featurebaseCalls?: [string, Record<string, unknown>?][] }
+				).__featurebaseCalls;
+				return calls?.filter(([action]) => action === 'initialize_feedback_widget').at(-1)?.[1]
+					?.locale;
+			})
+		)
+		.toBe('en');
+	await expect(page.locator('.fb-feedback-widget-feedback-button')).toBeVisible();
+});
+
 test('hides scenes for anonymous users', async ({ page }) => {
 	await openCreate(page);
 

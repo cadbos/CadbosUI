@@ -30,7 +30,7 @@ before the Change Date. See LICENSE for complete terms.
 	import GenerationOverlay from '$lib/components/GenerationOverlay.svelte';
 	import { sceneView } from '$lib/state/scene-view.svelte';
 	import Workspace from '$lib/components/Workspace.svelte';
-	import { getLocale, hydrateLocale, t } from '$lib/i18n/index.svelte';
+	import { getLocale, hydrateLocale, t, type Locale } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { status } from '$lib/state/status.svelte';
@@ -48,6 +48,7 @@ before the Change Date. See LICENSE for complete terms.
 	let { children, data }: LayoutProps = $props();
 	let featurebaseReady = $state(false);
 	let configuredJwt: string | null = null;
+	let configuredLocale: Locale | null = null;
 
 	// Standalone pages outside the workspace (e.g. '/usage') must not mount it.
 	// The root route is the landing, with no mode selected; a mode route is
@@ -98,24 +99,30 @@ before the Change Date. See LICENSE for complete terms.
 		});
 		initFeedback({ theme: 'light', locale: getLocale() });
 		configuredJwt = featurebaseJwt;
+		configuredLocale = getLocale();
 	}
 
 	$effect(() => {
 		const featurebaseJwt = auth.featurebaseJwt;
-		if (!featurebaseReady || featurebaseJwt === configuredJwt) return;
-		initializeFeaturebase(featurebaseJwt, featurebaseJwt === null);
+		const locale = getLocale();
+		if (!featurebaseReady) return;
+		if (featurebaseJwt !== configuredJwt) {
+			initializeFeaturebase(featurebaseJwt, featurebaseJwt === null);
+		} else if (locale !== configuredLocale) {
+			destroyFeedback();
+			initFeedback({ theme: 'light', locale });
+			configuredLocale = locale;
+		}
 	});
 
 	onMount(() => {
-		let disposed = false;
-
-		void auth.loadSession().then(() => {
-			if (disposed || !data.featurebaseAppId) return;
-			initializeFeaturebase(auth.featurebaseJwt);
-			featurebaseReady = true;
-		});
+		void auth.loadSession();
 		void status.checkOnce();
 		hydrateLocale();
+		if (data.featurebaseAppId) {
+			initializeFeaturebase(auth.featurebaseJwt);
+			featurebaseReady = true;
+		}
 		theme.hydrate();
 		currency.hydrate();
 		// Started here, not in Workspace.svelte, so a reload on any route (not
@@ -128,7 +135,6 @@ before the Change Date. See LICENSE for complete terms.
 		window.dispatchEvent(new CustomEvent('cadbos:client-ready'));
 
 		return () => {
-			disposed = true;
 			featurebaseReady = false;
 			if (!data.featurebaseAppId) return;
 			destroyFeedback();
