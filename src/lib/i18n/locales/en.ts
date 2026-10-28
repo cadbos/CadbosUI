@@ -904,9 +904,10 @@ export const en = {
 	'edit.addObject.coveLighting.label': 'Cove lighting',
 	'edit.addObject.coveLighting.phrase': 'concealed cove lighting around the ceiling',
 	'edit.addObject.people.label': 'People',
-	'edit.addObject.people.phrase': 'two or three people',
+	'edit.addObject.people.phrase': 'two or three people quietly relaxing or talking',
 	'edit.addObject.peopleMotion.label': 'People in motion',
-	'edit.addObject.peopleMotion.phrase': 'people walking through the room',
+	'edit.addObject.peopleMotion.phrase':
+		'two or three people walking through the room with slight motion blur',
 	'edit.addObject.houseplant.label': 'Houseplant',
 	'edit.addObject.houseplant.phrase': 'a houseplant',
 	'edit.addObject.wallArt.label': 'Wall art',

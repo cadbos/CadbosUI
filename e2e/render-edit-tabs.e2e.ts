@@ -1267,61 +1267,77 @@ test('undo/redo navigate back and forth across multiple plain generations, not j
 	await expect(redoButton).toBeDisabled();
 });
 
-test('the Add Object tool applies a clicked template to the current image', async ({ page }) => {
-	const jobId = '00000000-0000-4000-8000-000000000114';
-	await authenticate(page);
-	await mockUpload(page);
-	let capturedPrompt: string | undefined;
-	await page.route('**/api/edit', async (route) => {
-		capturedPrompt = (route.request().postDataJSON() as { prompt: string }).prompt;
-		await route.fulfill({
-			status: 202,
-			contentType: 'application/json',
-			headers: { location: `/api/edit/${jobId}` },
-			body: JSON.stringify({
-				id: jobId,
-				status: 'processing',
-				elapsedMs: 0,
-				queue: { status: 'unknown' }
-			})
+for (const { preset, prompt, workflow } of [
+	{
+		preset: 'mirror',
+		prompt: ru['edit.addObject.userPromptTemplate'].replace(
+			'{object}',
+			ru['edit.addObject.mirror.phrase']
+		),
+		workflow: 'default'
+	},
+	{ preset: 'people', prompt: ru['edit.addObject.people.phrase'], workflow: 'people' }
+] as const) {
+	test(`the Add Object tool sends the clicked ${preset} template to the ${workflow} workflow`, async ({
+		page
+	}) => {
+		const jobId = '00000000-0000-4000-8000-000000000114';
+		await authenticate(page);
+		await mockUpload(page);
+		let captured: { prompt: string; workflow: string } | undefined;
+		await page.route('**/api/edit', async (route) => {
+			captured = route.request().postDataJSON() as { prompt: string; workflow: string };
+			await route.fulfill({
+				status: 202,
+				contentType: 'application/json',
+				headers: { location: `/api/edit/${jobId}` },
+				body: JSON.stringify({
+					id: jobId,
+					status: 'processing',
+					elapsedMs: 0,
+					queue: { status: 'unknown' }
+				})
+			});
 		});
-	});
-	await page.route(`**/api/edit/${jobId}`, async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				id: jobId,
-				status: 'completed',
-				output: media(2, '/api/media/test-media/added-mirror.webp'),
-				cost: 2,
-				balance: 90
-			})
+		await page.route(`**/api/edit/${jobId}`, async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					id: jobId,
+					status: 'completed',
+					output: media(2, '/api/media/test-media/added-mirror.webp'),
+					cost: 2,
+					balance: 90
+				})
+			});
 		});
+
+		await openCreate(page);
+		await page.getByRole('tab', { name: 'Редактирование' }).click();
+		await page.locator('#mode-panel-edit input[type="file"]').setInputFiles({
+			name: 'room.png',
+			mimeType: 'image/png',
+			buffer: Buffer.from('fake-image')
+		});
+
+		await page.getByRole('tab', { name: 'Добавление объекта' }).click();
+		await page
+			.getByRole('button', { name: ru[`edit.addObject.${preset}.label`], exact: true })
+			.click();
+		await expect(page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] })).toHaveValue(
+			ru[`edit.addObject.${preset}.phrase`]
+		);
+		await page.getByRole('button', { name: 'Добавить объект' }).click();
+
+		await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
+			'src',
+			'/api/media/test-media/added-mirror.webp',
+			{ timeout: 10_000 }
+		);
+		expect(captured).toMatchObject({ prompt, workflow });
 	});
-
-	await openCreate(page);
-	await page.getByRole('tab', { name: 'Редактирование' }).click();
-	await page
-		.locator('#mode-panel-edit input[type="file"]')
-		.setInputFiles({ name: 'room.png', mimeType: 'image/png', buffer: Buffer.from('fake-image') });
-
-	await page.getByRole('tab', { name: 'Добавление объекта' }).click();
-	await page.getByRole('button', { name: ru['edit.addObject.mirror.label'] }).click();
-	await expect(page.getByRole('textbox', { name: ru['edit.addObject.customLabel'] })).toHaveValue(
-		ru['edit.addObject.mirror.phrase']
-	);
-	await page.getByRole('button', { name: 'Добавить объект' }).click();
-
-	await expect(page.getByRole('img', { name: 'Сгенерировать' })).toHaveAttribute(
-		'src',
-		'/api/media/test-media/added-mirror.webp',
-		{ timeout: 10_000 }
-	);
-	expect(capturedPrompt).toBe(
-		ru['edit.addObject.userPromptTemplate'].replace('{object}', ru['edit.addObject.mirror.phrase'])
-	);
-});
+}
 
 test('the Add Object tool replaces the prompt with a clicked template and wraps the text', async ({
 	page

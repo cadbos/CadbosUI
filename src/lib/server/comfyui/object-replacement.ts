@@ -14,6 +14,7 @@
 
 import workflowTemplate from '$lib/server/object-replacement-workflow.json';
 import type { ImageRegion } from '$lib/image-region';
+import { randomSeed } from '$lib/server/comfyui/seed';
 import {
 	ComfyUiError,
 	type ComfyDownloadedImage,
@@ -80,6 +81,7 @@ function objectReplacementWorkflow(
 	setWorkflowInput(workflow, '1', 'LoadImage', 'image', uploadedImagePath(scene));
 	setWorkflowInput(workflow, '2', 'LoadImage', 'image', uploadedImagePath(reference));
 	setWorkflowInput(workflow, '19', 'PrimitiveString', 'value', replacementObject);
+	setWorkflowInput(workflow, '51', 'KSamplerAdvanced', 'noise_seed', randomSeed());
 	if (region) {
 		setWorkflowInput(workflow, '200', 'PrimitiveFloat', 'value', region.x);
 		setWorkflowInput(workflow, '201', 'PrimitiveFloat', 'value', region.y);

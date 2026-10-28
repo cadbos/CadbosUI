@@ -23,6 +23,7 @@ before the Change Date. See LICENSE for complete terms.
 	import {
 		type EditCompletedResponse,
 		type EditJobResponse,
+		type EditWorkflow,
 		jobProgressShape,
 		mediaAccessSchema
 	} from '$lib/api/contract';
@@ -456,7 +457,11 @@ before the Change Date. See LICENSE for complete terms.
 		};
 	}
 
-	async function submit(prompt: string, type: EditOperationType): Promise<void> {
+	async function submit(
+		prompt: string,
+		type: EditOperationType,
+		workflow: EditWorkflow = 'default'
+	): Promise<void> {
 		const trimmed = prompt.trim();
 		if (!hasEditTarget || !trimmed || formLocked || !isAuthenticated) return;
 		submitting = true;
@@ -473,7 +478,13 @@ before the Change Date. See LICENSE for complete terms.
 			const response = await fetch('/api/edit', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ imageKey: source, prompt: trimmed, sessionId, formSnapshot })
+				body: JSON.stringify({
+					imageKey: source,
+					prompt: trimmed,
+					workflow,
+					sessionId,
+					formSnapshot
+				})
 			});
 			if (!response.ok) {
 				const code = await extractApiErrorCode(response, 'edit_failed');
@@ -624,7 +635,7 @@ before the Change Date. See LICENSE for complete terms.
 							<EditAddObjectTool
 								disabled={formLocked || !hasEditTarget}
 								applying={submitting || isPolling}
-								onApply={(prompt) => void submit(prompt, 'add-object')}
+								onApply={(prompt, workflow) => void submit(prompt, 'add-object', workflow)}
 							/>
 						{:else if activeTool === 'remove-object'}
 							<EditRemoveObjectTool

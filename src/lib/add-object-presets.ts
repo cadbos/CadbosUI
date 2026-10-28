@@ -140,3 +140,39 @@ export const ADD_OBJECT_PRESETS: AddObjectPreset[] = [
 		Icon: MirrorRectangular
 	}
 ];
+
+const PEOPLE_INSTRUCTION = new RegExp(
+	'(?<![\\p{L}\\p{N}])(?:' +
+		[
+			'люд\\p{L}*',
+			'человек\\p{L}*',
+			'мужчин\\p{L}*',
+			'женщин\\p{L}*',
+			'реб[её]н\\p{L}*',
+			'дет(?:и|ей|ям|ьми|ях)',
+			'семь(?:я|ю|ей|е)',
+			'парн(?:ь|я|ю|ем|е|и|ей|ям|ями|ях)',
+			'девушк\\p{L}*',
+			'девоч(?:к\\p{L}*|ек)',
+			'мальчик\\p{L}*',
+			'people',
+			'persons?',
+			'(?:wo)?m[ae]n(?!-made)',
+			'child(?:ren)?',
+			'famil(?:y|ies)(?![\\s-]+rooms?)',
+			'girls?',
+			'boys?',
+			'guys?',
+			'kids?'
+		].join('|') +
+		')(?![\\p{L}\\p{N}])',
+	'iu'
+);
+
+// People are not furniture: the object template's "only empty space, never
+// touch existing items, shrink to fit" rules leave figures miniature and in
+// unnatural poses, so a request for people goes to the people workflow, which
+// writes its own instruction from a caption of the scene.
+export function mentionsPeople(instruction: string): boolean {
+	return PEOPLE_INSTRUCTION.test(instruction);
+}

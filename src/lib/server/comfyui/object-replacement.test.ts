@@ -133,6 +133,7 @@ describe('runObjectReplacement', () => {
 		expectedWorkflow['1'].inputs.image = 'cadbos/jobs/scene (1).png';
 		expectedWorkflow['2'].inputs.image = 'reference.png';
 		expectedWorkflow['19'].inputs.value = 'компьютерный стул';
+		expectedWorkflow['51'].inputs.noise_seed = expect.any(Number);
 		expect(queuedWorkflow).toEqual(expectedWorkflow);
 		expect(workflowTemplate['1'].inputs.image).toBe('timofeeva14_3.jpg');
 		expect(workflowTemplate['2'].inputs.image).toBe('6961927465.jpg');
@@ -237,6 +238,9 @@ describe('runObjectReplacement', () => {
 		const firstWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
 		const secondWorkflow = vi.mocked(client.queueWorkflow).mock.calls[1]?.[0];
 		expect(firstWorkflow).not.toBe(secondWorkflow);
+		expect(firstWorkflow?.['51'].inputs.noise_seed).not.toBe(
+			secondWorkflow?.['51'].inputs.noise_seed
+		);
 		expect(firstWorkflow?.['1'].inputs.image).toBe('cadbos/jobs/scene (1).png');
 		expect(firstWorkflow?.['19'].inputs.value).toBe('sofa');
 		expect(secondWorkflow?.['1'].inputs.image).toBe('cadbos/jobs/second-scene.png');

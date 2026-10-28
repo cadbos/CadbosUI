@@ -25,6 +25,7 @@ import {
 	comfyUiQueueLookupTimeout,
 	comfyUiRequestTimeout
 } from '$lib/server/generation-timeouts';
+import type { EditWorkflow } from '$lib/api/contract';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import { downloadRemoteImage } from '$lib/server/remote-image';
 
@@ -86,7 +87,7 @@ export async function getFluxKontextEditQueueStatus(
 
 export async function submitFluxKontextEdit(
 	platform: App.Platform | undefined,
-	request: { image: string; prompt: string },
+	request: { image: string; prompt: string; workflow: EditWorkflow },
 	applicationOrigin: string,
 	jobId: string
 ): Promise<string> {
@@ -98,6 +99,7 @@ export async function submitFluxKontextEdit(
 	const queued = await queueFluxKontextEdit(client, {
 		clientId: jobId,
 		instruction: request.prompt,
+		workflow: request.workflow,
 		scene: {
 			data: new Blob([scene.bytes], { type: scene.mime }),
 			filename: `${jobId}-scene.${imageExtensionFromMime(scene.mime)}`

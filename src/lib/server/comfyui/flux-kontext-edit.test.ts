@@ -14,6 +14,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import workflowTemplate from '$lib/server/flux_kontext_edit_single_api.json';
+import peopleWorkflowTemplate from '$lib/server/flux-kontext-people-workflow-api.json';
 import type {
 	ComfyDownloadedImage,
 	ComfyHistoryEntry,
@@ -109,6 +110,7 @@ describe('runFluxKontextEdit', () => {
 		const expectedWorkflow = structuredClone(workflowTemplate) as ComfyWorkflow;
 		expectedWorkflow['4'].inputs.image = 'cadbos/jobs/scene (1).png';
 		expectedWorkflow['153:152'].inputs.string_b = 'сделай стены белыми';
+		expectedWorkflow['15'].inputs.seed = expect.any(Number);
 		expect(queuedWorkflow).toEqual(expectedWorkflow);
 		expect(workflowTemplate['4'].inputs.image).toBe(
 			'1236ded5-d9e7-4d88-b4ae-95de3cf74d68-scene.png'
@@ -129,6 +131,31 @@ describe('runFluxKontextEdit', () => {
 		});
 		expect(client.downloadImage).toHaveBeenCalledTimes(1);
 		expect(client.downloadImage).toHaveBeenCalledWith(finalOutput, { signal: undefined });
+	});
+
+	it('queues the people workflow, which writes the instruction from a scene caption', async () => {
+		const client = mockClient();
+		vi.mocked(client.uploadImage).mockResolvedValueOnce(sceneUpload);
+		vi.mocked(client.queueWorkflow).mockResolvedValue({ promptId: 'prompt-1', queueNumber: 0 });
+
+		await queueFluxKontextEdit(client, {
+			...request('  двух-трёх человек  '),
+			workflow: 'people'
+		});
+
+		const queuedWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
+		const expectedWorkflow = structuredClone(peopleWorkflowTemplate) as ComfyWorkflow;
+		expectedWorkflow['4'].inputs.image = 'cadbos/jobs/scene (1).png';
+		expectedWorkflow['153:152'].inputs.string_b = 'двух-трёх человек';
+		expectedWorkflow['15'].inputs.seed = expect.any(Number);
+		expect(queuedWorkflow).toEqual(expectedWorkflow);
+		expect(queuedWorkflow?.['142']).toMatchObject({
+			class_type: 'Florence2Run',
+			inputs: { task: 'more_detailed_caption', image: ['6', 0] }
+		});
+		expect(queuedWorkflow?.['160'].inputs.string_b).toEqual(['142', 2]);
+		expect(queuedWorkflow?.['153:152'].inputs.string_a).toEqual(['160', 0]);
+		expect(queuedWorkflow?.['154'].inputs.text).toEqual(['153:150', 0]);
 	});
 
 	it('resizes the full scene without cropping before encoding', async () => {
@@ -229,6 +256,7 @@ describe('runFluxKontextEdit', () => {
 		const firstWorkflow = vi.mocked(client.queueWorkflow).mock.calls[0]?.[0];
 		const secondWorkflow = vi.mocked(client.queueWorkflow).mock.calls[1]?.[0];
 		expect(firstWorkflow).not.toBe(secondWorkflow);
+		expect(firstWorkflow?.['15'].inputs.seed).not.toBe(secondWorkflow?.['15'].inputs.seed);
 		expect(firstWorkflow?.['4'].inputs.image).toBe('cadbos/jobs/scene (1).png');
 		expect(firstWorkflow?.['153:152'].inputs.string_b).toBe('make the walls white');
 		expect(secondWorkflow?.['4'].inputs.image).toBe('cadbos/jobs/second-scene.png');

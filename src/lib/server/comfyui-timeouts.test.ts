@@ -59,7 +59,12 @@ const integrations = [
 	{
 		name: 'edit',
 		submit: (platform: App.Platform) =>
-			submitFluxKontextEdit(platform, { image, prompt: 'remove chair' }, origin, 'job-1'),
+			submitFluxKontextEdit(
+				platform,
+				{ image, prompt: 'remove chair', workflow: 'default' },
+				origin,
+				'job-1'
+			),
 		poll: pollFluxKontextEdit,
 		queueStatus: getFluxKontextEditQueueStatus,
 		cancel: cancelFluxKontextEdit,

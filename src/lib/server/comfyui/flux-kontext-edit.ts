@@ -13,6 +13,9 @@
  */
 
 import workflowTemplate from '$lib/server/flux_kontext_edit_single_api.json';
+import peopleWorkflowTemplate from '$lib/server/flux-kontext-people-workflow-api.json';
+import type { EditWorkflow } from '$lib/api/contract';
+import { randomSeed } from '$lib/server/comfyui/seed';
 import {
 	ComfyUiError,
 	type ComfyDownloadedImage,
@@ -31,6 +34,7 @@ export interface FluxKontextEditImage {
 export interface FluxKontextEditRequest {
 	clientId?: string | undefined;
 	instruction: string;
+	workflow?: EditWorkflow | undefined;
 	scene: FluxKontextEditImage;
 	signal?: AbortSignal | undefined;
 	pollIntervalMs?: number | undefined;
@@ -54,7 +58,7 @@ function setWorkflowInput(
 	nodeId: string,
 	classType: string,
 	input: string,
-	value: string
+	value: string | number
 ): void {
 	const node = workflow[nodeId];
 	if (!node || node.class_type !== classType || !(input in node.inputs)) {
@@ -67,13 +71,21 @@ function setWorkflowInput(
 	node.inputs[input] = value;
 }
 
-function fluxKontextEditWorkflow(scene: ComfyImageDescriptor, instruction: string): ComfyWorkflow {
-	const workflow = structuredClone(workflowTemplate) as ComfyWorkflow;
+function fluxKontextEditWorkflow(
+	scene: ComfyImageDescriptor,
+	instruction: string,
+	kind: EditWorkflow
+): ComfyWorkflow {
+	const workflow = structuredClone(
+		kind === 'people' ? peopleWorkflowTemplate : workflowTemplate
+	) as ComfyWorkflow;
 	setWorkflowInput(workflow, '4', 'LoadImage', 'image', uploadedImagePath(scene));
-	// The translation preamble lives in `string_a`; `string_b` is the actual
-	// scene instruction, concatenated ahead of the GGUF text-generation node
-	// (153:150) that produces the English prompt CLIPTextEncode (154) uses.
+	// `string_a` holds the preamble (a translation request, or for people the
+	// prompt-writing rules plus a Florence-2 caption of the scene); `string_b`
+	// is the user's instruction, concatenated ahead of the GGUF text-generation
+	// node (153:150) that produces the English prompt CLIPTextEncode (154) uses.
 	setWorkflowInput(workflow, '153:152', 'StringConcatenate', 'string_b', instruction);
+	setWorkflowInput(workflow, '15', 'KSampler', 'seed', randomSeed());
 	const outputNode = workflow[FINAL_OUTPUT_NODE_ID];
 	if (!outputNode || outputNode.class_type !== 'SaveImage') {
 		throw new ComfyUiError(
@@ -131,7 +143,7 @@ export async function queueFluxKontextEdit(
 		},
 		{ signal: request.signal }
 	);
-	const workflow = fluxKontextEditWorkflow(scene, instruction);
+	const workflow = fluxKontextEditWorkflow(scene, instruction, request.workflow ?? 'default');
 	return client.queueWorkflow(workflow, { clientId: request.clientId, signal: request.signal });
 }
 

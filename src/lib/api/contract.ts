@@ -212,12 +212,20 @@ export interface RenderRequest {
 	formSnapshot?: RequestFormSnapshot;
 }
 
+// Which Flux Kontext graph runs an edit: 'default' takes the prompt as the
+// full instruction; 'people' takes only the user's request for people and
+// lets the graph write the instruction from a caption of the scene.
+export const EDIT_WORKFLOWS = ['default', 'people'] as const;
+
+export type EditWorkflow = (typeof EDIT_WORKFLOWS)[number];
+
 // POST /api/edit — edit by prompt via the Flux Kontext ComfyUI workflow
 // (freeform / add-object / remove-object tools), async job — see
 // EditJobResponse.
 export interface EditRequest {
 	imageKey: string;
 	prompt: string;
+	workflow?: EditWorkflow;
 	sessionId: string;
 	formSnapshot?: RequestFormSnapshot;
 }

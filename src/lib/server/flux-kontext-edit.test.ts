@@ -48,7 +48,11 @@ describe('flux kontext edit integration', () => {
 		await expect(
 			submitFluxKontextEdit(
 				platform({}),
-				{ image: 'https://images.example.test/scene.png', prompt: 'make the walls white' },
+				{
+					image: 'https://images.example.test/scene.png',
+					prompt: 'make the walls white',
+					workflow: 'default'
+				},
 				'https://cadbos.example',
 				'job-1'
 			)
@@ -81,7 +85,11 @@ describe('flux kontext edit integration', () => {
 		await expect(
 			submitFluxKontextEdit(
 				platform({ COMFYUI_BASE_URL: vpcService(vpcFetch) }),
-				{ image: 'https://images.example.test/scene.png', prompt: 'make the walls white' },
+				{
+					image: 'https://images.example.test/scene.png',
+					prompt: 'make the walls white',
+					workflow: 'default'
+				},
 				'https://cadbos.example',
 				'job-1'
 			)

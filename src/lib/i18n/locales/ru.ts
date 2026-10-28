@@ -920,9 +920,10 @@ export const ru = {
 	'edit.addObject.coveLighting.label': 'Подсветка потолка',
 	'edit.addObject.coveLighting.phrase': 'скрытую подсветку по периметру потолка',
 	'edit.addObject.people.label': 'Люди',
-	'edit.addObject.people.phrase': 'двух-трёх человек',
+	'edit.addObject.people.phrase': 'двух-трёх человек, которые спокойно отдыхают или разговаривают',
 	'edit.addObject.peopleMotion.label': 'Люди в движении',
-	'edit.addObject.peopleMotion.phrase': 'идущих по комнате людей',
+	'edit.addObject.peopleMotion.phrase':
+		'двух-трёх людей, идущих по комнате, с лёгким размытием движения',
 	'edit.addObject.houseplant.label': 'Комнатное растение',
 	'edit.addObject.houseplant.phrase': 'комнатное растение',
 	'edit.addObject.wallArt.label': 'Картина на стене',

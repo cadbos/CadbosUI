@@ -112,9 +112,24 @@ describe('queueRepaint', () => {
 		expectedWorkflow['42'].inputs.image = 'cadbos/jobs/scene (1).png';
 		expectedWorkflow['46'].inputs.image = 'swatch.png';
 		expectedWorkflow['101'].inputs.value = 'стены за диваном';
+		expectedWorkflow['62:25'].inputs.noise_seed = expect.any(Number);
 		expect(queuedWorkflow).toEqual(expectedWorkflow);
 		expect(workflowTemplate['101'].inputs.value).toBe('');
 		expect(client.waitForCompletion).not.toHaveBeenCalled();
+	});
+
+	it('queues every repaint with a new noise seed', async () => {
+		const client = mockClient();
+		vi.mocked(client.uploadImage).mockResolvedValue(sceneUpload);
+		vi.mocked(client.queueWorkflow).mockResolvedValue({ promptId: 'prompt-1', queueNumber: 0 });
+
+		await queueRepaint(client, request());
+		await queueRepaint(client, request());
+
+		const [first, second] = vi
+			.mocked(client.queueWorkflow)
+			.mock.calls.map(([workflow]) => workflow);
+		expect(first?.['62:25'].inputs.noise_seed).not.toBe(second?.['62:25'].inputs.noise_seed);
 	});
 
 	it('wires the scene as picture 1 and the swatch as picture 2', () => {
