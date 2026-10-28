@@ -60,9 +60,15 @@ test('adds integrity metadata to the production page resources', async ({ reques
 });
 
 test('blocks interaction until the initial client assets have loaded', async ({ page }) => {
+	await page.clock.install({ time: 0 });
+	await page.clock.pauseAt(1);
 	await holdClientReady(page);
 	await page.goto(pagePath, { waitUntil: 'domcontentloaded' });
 	await expect(page.locator('#cadbos-client-loading')).toBeVisible();
+	await expect(page.locator('#cadbos-client-load-pending')).toBeHidden();
+	await expect(page.locator('#cadbos-client-app')).toHaveAttribute('inert', '');
+
+	await page.clock.runFor(1_000);
 	await expect(page.locator('#cadbos-client-loading > #cadbos-client-load-pending')).toBeVisible();
 	await expect(page.locator('#cadbos-client-load-ribbon')).toBeVisible();
 	await expect(page.locator('#cadbos-client-load-pending')).toHaveText('');
@@ -86,6 +92,24 @@ test('blocks interaction until the initial client assets have loaded', async ({ 
 	await expect(page.locator('#cadbos-client-load-error')).toBeHidden();
 	await expect(page.locator('#cadbos-client-app')).toHaveAttribute('inert', '');
 
+	await releaseClientReady(page);
+	await expect(page.locator('#cadbos-client-loading')).toHaveCount(0);
+	await expect(page.locator('#cadbos-client-app')).not.toHaveAttribute('inert', '');
+});
+
+// Regression test for issue #275: the ribbon is the same animation as
+// GenerationOverlay, so flashing it on every reload looked like a generation
+// starting over the previous result.
+test('never shows the loading ribbon when the client is ready quickly', async ({ page }) => {
+	await page.clock.install({ time: 0 });
+	await page.clock.pauseAt(1);
+	await holdClientReady(page);
+	await page.goto(pagePath, { waitUntil: 'domcontentloaded' });
+	await expect(page.locator('#cadbos-client-loading')).toBeVisible();
+	await expect(page.locator('#cadbos-client-load-error')).toBeHidden();
+
+	await page.clock.runFor(900);
+	await expect(page.locator('#cadbos-client-load-pending')).toBeHidden();
 	await releaseClientReady(page);
 	await expect(page.locator('#cadbos-client-loading')).toHaveCount(0);
 	await expect(page.locator('#cadbos-client-app')).not.toHaveAttribute('inert', '');
@@ -175,8 +199,9 @@ test('shows the integrity error after the loading watchdog expires', async ({ pa
 	await page.clock.install();
 	await holdClientReady(page);
 	await page.goto(pagePath, { waitUntil: 'domcontentloaded' });
+	await page.clock.runFor(1_000);
 	await expect(page.locator('#cadbos-client-load-ribbon')).toBeVisible();
 
-	await page.clock.runFor(30_001);
+	await page.clock.runFor(29_001);
 	await expect(page.locator('#cadbos-client-load-error')).toBeVisible();
 });
