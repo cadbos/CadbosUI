@@ -13,28 +13,28 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cancelRepaint, countRepaintPromptsAhead, pollRepaint, submitRepaint } from './repaint';
+import { cancelRepaint, getRepaintQueueStatus, pollRepaint, submitRepaint } from './repaint';
 import {
 	cancelFluxKontextEdit,
-	countFluxKontextEditPromptsAhead,
+	getFluxKontextEditQueueStatus,
 	pollFluxKontextEdit,
 	submitFluxKontextEdit
 } from './flux-kontext-edit';
 import {
 	cancelLightSettings,
-	countLightSettingsPromptsAhead,
+	getLightSettingsQueueStatus,
 	pollLightSettings,
 	submitLightSettings
 } from './light-settings';
 import {
 	cancelObjectReplacement,
-	countObjectReplacementPromptsAhead,
+	getObjectReplacementQueueStatus,
 	pollObjectReplacement,
 	submitObjectReplacement
 } from './object-replacement';
 import {
 	cancelTextureReplacement,
-	countTextureReplacementPromptsAhead,
+	getTextureReplacementQueueStatus,
 	pollTextureReplacement,
 	submitTextureReplacement
 } from './texture-replacement';
@@ -52,7 +52,7 @@ const integrations = [
 		submit: (platform: App.Platform) =>
 			submitRepaint(platform, { image, target: 'walls', color: '#a3b19b' }, origin, 'job-1'),
 		poll: pollRepaint,
-		promptsAhead: countRepaintPromptsAhead,
+		queueStatus: getRepaintQueueStatus,
 		cancel: cancelRepaint,
 		output: '100'
 	},
@@ -61,7 +61,7 @@ const integrations = [
 		submit: (platform: App.Platform) =>
 			submitFluxKontextEdit(platform, { image, prompt: 'remove chair' }, origin, 'job-1'),
 		poll: pollFluxKontextEdit,
-		promptsAhead: countFluxKontextEditPromptsAhead,
+		queueStatus: getFluxKontextEditQueueStatus,
 		cancel: cancelFluxKontextEdit,
 		output: '17'
 	},
@@ -70,7 +70,7 @@ const integrations = [
 		submit: (platform: App.Platform) =>
 			submitLightSettings(platform, { image, instruction: 'daylight' }, origin, 'job-1'),
 		poll: pollLightSettings,
-		promptsAhead: countLightSettingsPromptsAhead,
+		queueStatus: getLightSettingsQueueStatus,
 		cancel: cancelLightSettings,
 		output: '17'
 	},
@@ -84,7 +84,7 @@ const integrations = [
 				'job-1'
 			),
 		poll: pollObjectReplacement,
-		promptsAhead: countObjectReplacementPromptsAhead,
+		queueStatus: getObjectReplacementQueueStatus,
 		cancel: cancelObjectReplacement,
 		output: '17'
 	},
@@ -98,7 +98,7 @@ const integrations = [
 				'job-1'
 			),
 		poll: pollTextureReplacement,
-		promptsAhead: countTextureReplacementPromptsAhead,
+		queueStatus: getTextureReplacementQueueStatus,
 		cancel: cancelTextureReplacement,
 		output: '9'
 	}
@@ -143,7 +143,7 @@ for (const integration of integrations) {
 			const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
 			const configured = platform(fetcher, { COMFYUI_REQUEST_TIMEOUT_MS: '240000' });
 
-			await expect(integration.promptsAhead(configured, 'prompt-1')).rejects.toMatchObject({
+			await expect(integration.queueStatus(configured, 'prompt-1')).rejects.toMatchObject({
 				code: 'aborted'
 			});
 			expect(timeout.mock.calls).toEqual([[5_000]]);

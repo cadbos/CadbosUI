@@ -58,7 +58,7 @@ for (const instrument of instruments) {
 						id,
 						status: 'processing',
 						elapsedMs: expect.any(Number),
-						queueAhead: 1
+						queue: { status: 'waiting', ahead: 1 }
 					});
 				}
 				expect(generationApi.submissions).toHaveLength(1);
@@ -84,7 +84,7 @@ for (const instrument of instruments) {
 					id,
 					status: 'processing',
 					elapsedMs: expect.any(Number),
-					queueAhead: 1
+					queue: { status: 'waiting', ahead: 1 }
 				});
 				const completed = await request.get(`/api/${instrument.route}/${id}`);
 				expect(completed.status()).toBe(200);

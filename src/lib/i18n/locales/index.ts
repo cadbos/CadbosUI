@@ -170,6 +170,7 @@ export interface Dictionary {
 	'generationOverlay.overdue': string;
 	'generationOverlay.done': string;
 	'generationOverlay.queueAhead': string;
+	'generationOverlay.queueNext': string;
 	'auth.signIn': string;
 	'auth.guest': string;
 	'auth.restoring': string;

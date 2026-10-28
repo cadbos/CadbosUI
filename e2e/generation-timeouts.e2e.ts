@@ -82,7 +82,7 @@ for (const instrument of instruments) {
 					id,
 					status: 'processing',
 					elapsedMs: expect.any(Number),
-					queueAhead: 1
+					queue: { status: 'waiting', ahead: 1 }
 				});
 				expect(progress.elapsedMs).toBeGreaterThanOrEqual(11 * 60_000);
 				const before = await db.prepare('SELECT * FROM ledger_entries ORDER BY id').all();

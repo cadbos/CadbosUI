@@ -118,6 +118,7 @@ export const ru = {
 	'generationOverlay.overdue': 'Занимает больше обычного, ещё немного…',
 	'generationOverlay.done': 'Готово',
 	'generationOverlay.queueAhead': 'Перед вами в очереди: {count}',
+	'generationOverlay.queueNext': 'Ваша генерация следующая в очереди',
 	'auth.signIn': 'Войти',
 	'auth.guest': 'Гость',
 	'auth.restoring': 'Восстанавливаем сессию…',

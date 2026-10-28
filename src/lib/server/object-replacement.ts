@@ -18,7 +18,8 @@ import {
 	createComfyUiClient,
 	getObjectReplacementResult,
 	queueObjectReplacement,
-	type ComfyDownloadedImage
+	type ComfyDownloadedImage,
+	type ComfyQueueStatus
 } from '$lib/server/comfyui';
 import {
 	comfyUiJobTimeout,
@@ -75,11 +76,11 @@ export async function cancelObjectReplacement(
 	});
 }
 
-export async function countObjectReplacementPromptsAhead(
+export async function getObjectReplacementQueueStatus(
 	platform: App.Platform | undefined,
 	promptId: string
-): Promise<number | null> {
-	return createClient(platform).countPromptsAhead(promptId, {
+): Promise<ComfyQueueStatus | null> {
+	return createClient(platform).getQueueStatus(promptId, {
 		signal: AbortSignal.timeout(comfyUiQueueLookupTimeout(platform))
 	});
 }

@@ -22,6 +22,7 @@ import {
 	type ComfyImageUpload,
 	type ComfyQueueOptions,
 	type ComfyQueuedWorkflow,
+	type ComfyQueueStatus,
 	type ComfyRequestOptions,
 	type ComfyUiClient,
 	type ComfyUiClientOptions,
@@ -386,10 +387,10 @@ export function createComfyUiClient(options: ComfyUiClientOptions): ComfyUiClien
 		return entry;
 	}
 
-	async function countPromptsAhead(
+	async function getQueueStatus(
 		promptId: string,
 		requestOptions: ComfyRequestOptions = {}
-	): Promise<number | null> {
+	): Promise<ComfyQueueStatus | null> {
 		const normalizedPromptId = validateNonEmpty(promptId, 'get_queue', 'prompt ID');
 		const response = await request('get_queue', endpoint('queue'), {
 			headers: requestHeaders(defaultHeaders, false),
@@ -409,10 +410,15 @@ export function createComfyUiClient(options: ComfyUiClientOptions): ComfyUiClien
 				status: response.status
 			});
 		}
-		if (running.some((entry) => entry.promptId === normalizedPromptId)) return null;
+		if (running.some((entry) => entry.promptId === normalizedPromptId)) {
+			return { status: 'running' };
+		}
 		const own = pending.find((entry) => entry.promptId === normalizedPromptId);
 		if (!own) return null;
-		return running.length + pending.filter((entry) => entry.number < own.number).length;
+		return {
+			status: 'waiting',
+			ahead: running.length + pending.filter((entry) => entry.number < own.number).length
+		};
 	}
 
 	async function waitForCompletion(
@@ -529,9 +535,9 @@ export function createComfyUiClient(options: ComfyUiClientOptions): ComfyUiClien
 
 	return {
 		cancelWorkflow,
-		countPromptsAhead,
 		downloadImage,
 		getHistory,
+		getQueueStatus,
 		queueWorkflow,
 		uploadImage,
 		waitForCompletion

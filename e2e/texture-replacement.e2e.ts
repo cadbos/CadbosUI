@@ -333,7 +333,12 @@ test('draws a mask and applies the synchronous result without polling', async ({
 			status: 202,
 			contentType: 'application/json',
 			headers: { location: `/api/edit/${editJobId}` },
-			body: JSON.stringify({ id: editJobId, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: editJobId,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/edit/${editJobId}`, async (route) => {
@@ -388,7 +393,12 @@ test('does not navigate back after switching tools during submission', async ({ 
 		await route.fulfill({
 			status: 202,
 			contentType: 'application/json',
-			body: JSON.stringify({ id: JOB_ID, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: JOB_ID,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/texture-replacement/${JOB_ID}`, async (route) => {
@@ -396,7 +406,12 @@ test('does not navigate back after switching tools during submission', async ({ 
 			status: 200,
 			contentType: 'application/json',
 			headers: { 'retry-after': '30' },
-			body: JSON.stringify({ id: JOB_ID, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: JOB_ID,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 

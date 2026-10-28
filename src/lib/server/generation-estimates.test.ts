@@ -79,7 +79,7 @@ function makeAccountDb(): TestDatabase {
 }
 
 describe('getGenerationEstimates', () => {
-	it('takes the median end-to-end duration per kind and provider', async () => {
+	it('takes the median duration per kind and provider, leaving out the ComfyUI queue', async () => {
 		const db = makeAccountDb();
 		await seedTimedGeneration(db, 'render', 1, { archai: [20, 2, 1] });
 		await seedTimedGeneration(db, 'render', 2, { archai: [30, 3, 2] });
@@ -93,7 +93,7 @@ describe('getGenerationEstimates', () => {
 
 		expect(estimates).toHaveLength(2);
 		expect(estimates).toContainEqual({ kind: 'render', provider: 'archai', seconds: 35 });
-		expect(estimates).toContainEqual({ kind: 'repaint', provider: 'comfyui', seconds: 206 });
+		expect(estimates).toContainEqual({ kind: 'repaint', provider: 'comfyui', seconds: 198 });
 	});
 
 	it('keeps providers of one kind apart', async () => {

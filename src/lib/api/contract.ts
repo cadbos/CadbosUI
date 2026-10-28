@@ -222,12 +222,21 @@ export interface EditRequest {
 	formSnapshot?: RequestFormSnapshot;
 }
 
-// How far a still-processing ComfyUI job has got: time since the job was
-// queued (relative, so client and server clocks never need to agree) and how
-// many prompts run or wait before it — null once it is running or unknown.
+// Where a still-processing ComfyUI job stands: waiting with `ahead` prompts
+// running or queued before it, running, or unknown (the queue could not be
+// read, or the job has just left it). `elapsedMs` is the time since the job
+// was queued — relative, so client and server clocks never need to agree.
+export const jobQueueSchema = z.discriminatedUnion('status', [
+	z.object({ status: z.literal('waiting'), ahead: z.number().int().nonnegative() }).strict(),
+	z.object({ status: z.literal('running') }).strict(),
+	z.object({ status: z.literal('unknown') }).strict()
+]);
+
+export type JobQueue = z.infer<typeof jobQueueSchema>;
+
 export const jobProgressShape = {
 	elapsedMs: z.number().int().nonnegative(),
-	queueAhead: z.number().int().nonnegative().nullable()
+	queue: jobQueueSchema
 };
 
 export type JobProgress = z.infer<z.ZodObject<typeof jobProgressShape>>;

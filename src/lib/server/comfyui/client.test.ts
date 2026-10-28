@@ -218,7 +218,7 @@ describe('createComfyUiClient', () => {
 		expect(fetcher.mock.calls[0]?.[0].toString()).toContain('history/prompt%2F1');
 	});
 
-	it('counts the prompts running or queued before a pending prompt', async () => {
+	it('reports whether a prompt waits, and behind how many, or already runs', async () => {
 		const queue = {
 			queue_running: [[4, 'running', {}, {}, []]],
 			queue_pending: [
@@ -230,10 +230,13 @@ describe('createComfyUiClient', () => {
 		const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => jsonResponse(queue));
 		const client = createComfyUiClient({ baseUrl: 'http://localhost:8188', fetch: fetcher });
 
-		await expect(client.countPromptsAhead('mine')).resolves.toBe(2);
-		await expect(client.countPromptsAhead('earlier')).resolves.toBe(1);
-		await expect(client.countPromptsAhead('running')).resolves.toBeNull();
-		await expect(client.countPromptsAhead('finished')).resolves.toBeNull();
+		await expect(client.getQueueStatus('mine')).resolves.toEqual({ status: 'waiting', ahead: 2 });
+		await expect(client.getQueueStatus('earlier')).resolves.toEqual({
+			status: 'waiting',
+			ahead: 1
+		});
+		await expect(client.getQueueStatus('running')).resolves.toEqual({ status: 'running' });
+		await expect(client.getQueueStatus('finished')).resolves.toBeNull();
 		expect(fetcher.mock.calls[0]?.[0].toString()).toBe('http://localhost:8188/queue');
 	});
 
@@ -244,11 +247,11 @@ describe('createComfyUiClient', () => {
 			.mockResolvedValueOnce(jsonResponse({}, 503));
 		const client = createComfyUiClient({ baseUrl: 'http://localhost:8188', fetch: fetcher });
 
-		await expect(client.countPromptsAhead('mine')).rejects.toMatchObject({
+		await expect(client.getQueueStatus('mine')).rejects.toMatchObject({
 			code: 'invalid_response',
 			operation: 'get_queue'
 		});
-		await expect(client.countPromptsAhead('mine')).rejects.toMatchObject({
+		await expect(client.getQueueStatus('mine')).rejects.toMatchObject({
 			code: 'http_error',
 			operation: 'get_queue',
 			status: 503

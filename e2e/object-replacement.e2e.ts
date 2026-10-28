@@ -112,7 +112,12 @@ for (const balance of [18, -1]) {
 				status: 202,
 				contentType: 'application/json',
 				headers: { location: `/api/object-replacement/${JOB_ID}` },
-				body: JSON.stringify({ id: JOB_ID, status: 'processing', elapsedMs: 0, queueAhead: null })
+				body: JSON.stringify({
+					id: JOB_ID,
+					status: 'processing',
+					elapsedMs: 0,
+					queue: { status: 'unknown' }
+				})
 			});
 		});
 		await page.route(`**/api/object-replacement/${JOB_ID}`, async (route) => {
@@ -122,7 +127,12 @@ for (const balance of [18, -1]) {
 					status: 200,
 					contentType: 'application/json',
 					headers: { 'retry-after': '0' },
-					body: JSON.stringify({ id: JOB_ID, status: 'processing', elapsedMs: 0, queueAhead: null })
+					body: JSON.stringify({
+						id: JOB_ID,
+						status: 'processing',
+						elapsedMs: 0,
+						queue: { status: 'unknown' }
+					})
 				});
 				return;
 			}
@@ -251,7 +261,12 @@ test('submits an adjusted area and clears it independently', async ({ page }) =>
 			status: 202,
 			contentType: 'application/json',
 			headers: { location: `/api/object-replacement/${JOB_ID}` },
-			body: JSON.stringify({ id: JOB_ID, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: JOB_ID,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/object-replacement/${JOB_ID}`, async (route) => {
@@ -259,7 +274,12 @@ test('submits an adjusted area and clears it independently', async ({ page }) =>
 			status: 200,
 			contentType: 'application/json',
 			headers: { 'retry-after': '30' },
-			body: JSON.stringify({ id: JOB_ID, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: JOB_ID,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await panel.getByLabel(/Точно опишите существующий объект/).fill('серый диван');
@@ -371,7 +391,12 @@ test('keeps the submitted result’s lineage when another render finishes first'
 		await route.fulfill({
 			status: 202,
 			contentType: 'application/json',
-			body: JSON.stringify({ id: JOB_ID, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: JOB_ID,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/object-replacement/${JOB_ID}`, async (route) => {
@@ -382,7 +407,7 @@ test('keeps the submitted result’s lineage when another render finishes first'
 			headers: polls === 1 ? { 'retry-after': '2' } : undefined,
 			body: JSON.stringify(
 				polls === 1
-					? { id: JOB_ID, status: 'processing', elapsedMs: 0, queueAhead: null }
+					? { id: JOB_ID, status: 'processing', elapsedMs: 0, queue: { status: 'unknown' } }
 					: {
 							id: JOB_ID,
 							status: 'completed',
@@ -526,7 +551,9 @@ for (const responseCase of [
 	});
 }
 
-test('shows estimated progress and queue position for a restored job', async ({ page }) => {
+test('shows only the queue position while a restored job waits, then its progress once it runs', async ({
+	page
+}) => {
 	await authenticate(page);
 	await page.route('**/api/generation-estimates', async (route) => {
 		await route.fulfill({
@@ -537,24 +564,33 @@ test('shows estimated progress and queue position for a restored job', async ({ 
 			})
 		});
 	});
+	let polls = 0;
 	await page.route(`**/api/object-replacement/${JOB_ID}`, async (route) => {
+		polls += 1;
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
-			headers: { 'retry-after': '30' },
-			body: JSON.stringify({ id: JOB_ID, status: 'processing', elapsedMs: 30_000, queueAhead: 2 })
+			headers: { 'retry-after': polls === 1 ? '1' : '30' },
+			body: JSON.stringify({
+				id: JOB_ID,
+				status: 'processing',
+				elapsedMs: 30_000,
+				queue: polls === 1 ? { status: 'waiting', ahead: 2 } : { status: 'running' }
+			})
 		});
 	});
 
 	await page.goto(`/edit?tool=object-replacement&job=${JOB_ID}`);
 
 	const progress = page.getByRole('progressbar', { name: ru['generationOverlay.progressLabel'] });
-	await expect(progress).toBeVisible();
-	await expect
-		.poll(async () => Number(await progress.getAttribute('aria-valuenow')))
-		.toBeGreaterThanOrEqual(50);
-	await expect(page.getByText(/^Осталось примерно \d+\sс$/)).toBeVisible();
 	await expect(page.getByText('Перед вами в очереди: 2')).toBeVisible();
+	await expect(progress).toHaveCount(0);
+	await expect(page.getByText(/^Осталось примерно/)).toHaveCount(0);
+
+	await expect(progress).toBeVisible();
+	await expect(page.getByText('Перед вами в очереди: 2')).toHaveCount(0);
+	expect(Number(await progress.getAttribute('aria-valuenow'))).toBeLessThan(10);
+	await expect(page.getByText(/^Осталось примерно \d+\sс$/)).toBeVisible();
 	await expect(page.getByText(ru['generationOverlay.objectReplacementDetail'])).toHaveCount(0);
 });
 
@@ -580,7 +616,7 @@ test('finishes the progress at 100% when a job completes ahead of its estimate',
 			headers: { 'retry-after': '1' },
 			body: JSON.stringify(
 				polls === 1
-					? { id: JOB_ID, status: 'processing', elapsedMs: 10_000, queueAhead: null }
+					? { id: JOB_ID, status: 'processing', elapsedMs: 10_000, queue: { status: 'unknown' } }
 					: {
 							id: JOB_ID,
 							status: 'completed',
@@ -660,7 +696,12 @@ test('does not navigate back when an accepted submission finishes after a mode s
 		await route.fulfill({
 			status: 202,
 			contentType: 'application/json',
-			body: JSON.stringify({ id: JOB_ID, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: JOB_ID,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/object-replacement/${JOB_ID}`, async (route) => {
@@ -668,7 +709,12 @@ test('does not navigate back when an accepted submission finishes after a mode s
 			status: 200,
 			contentType: 'application/json',
 			headers: { 'retry-after': '30' },
-			body: JSON.stringify({ id: JOB_ID, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: JOB_ID,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 

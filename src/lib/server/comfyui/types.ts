@@ -54,6 +54,10 @@ export interface ComfyQueuedWorkflow {
 	queueNumber: number;
 }
 
+export type ComfyQueueStatus =
+	// `ahead`: prompts running or waiting before this one.
+	{ status: 'waiting'; ahead: number } | { status: 'running' };
+
 export interface ComfyHistoryStatus {
 	completed: boolean;
 	status: string;
@@ -143,9 +147,9 @@ export interface ComfyUiClient {
 		options?: ComfyRequestOptions
 	): Promise<ComfyDownloadedImage>;
 	getHistory(promptId: string, options?: ComfyRequestOptions): Promise<ComfyHistoryEntry | null>;
-	// How many prompts run or wait before this one; null once it is running
-	// or no longer queued.
-	countPromptsAhead(promptId: string, options?: ComfyRequestOptions): Promise<number | null>;
+	// Where the prompt stands in ComfyUI's queue; null once it has left it
+	// (finished, failed or never queued).
+	getQueueStatus(promptId: string, options?: ComfyRequestOptions): Promise<ComfyQueueStatus | null>;
 	queueWorkflow(workflow: ComfyWorkflow, options?: ComfyQueueOptions): Promise<ComfyQueuedWorkflow>;
 	uploadImage(
 		image: ComfyImageUpload,

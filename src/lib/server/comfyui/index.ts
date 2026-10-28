@@ -24,6 +24,7 @@ export {
 	type ComfyImageUpload,
 	type ComfyJsonValue,
 	type ComfyQueuedWorkflow,
+	type ComfyQueueStatus,
 	type ComfyQueueOptions,
 	type ComfyRequestOptions,
 	type ComfyUiClient,

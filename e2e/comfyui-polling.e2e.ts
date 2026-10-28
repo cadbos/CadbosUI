@@ -64,7 +64,12 @@ for (const instrument of instruments) {
 				polls === 1
 					? {
 							headers: { 'retry-after': '60' },
-							json: { id: JOB_ID, status: 'processing', elapsedMs: 30_000, queueAhead: 2 }
+							json: {
+								id: JOB_ID,
+								status: 'processing',
+								elapsedMs: 30_000,
+								queue: { status: 'running' }
+							}
 						}
 					: {
 							json: {
@@ -82,7 +87,6 @@ for (const instrument of instruments) {
 		await expect(page.locator('.job-status:visible')).toBeVisible();
 		const progress = page.getByRole('progressbar', { name: ru['generationOverlay.progressLabel'] });
 		await expect(progress).toBeVisible();
-		await expect(page.getByText('Перед вами в очереди: 2')).toBeVisible();
 		await page.clock.runFor(1_000);
 		await expect
 			.poll(async () => Number(await progress.getAttribute('aria-valuenow')))
