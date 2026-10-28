@@ -38,7 +38,7 @@ const integration = vi.hoisted(() => ({
 	cost: 2,
 	costError: null as Error | null,
 	poll: vi.fn(),
-	promptsAhead: vi.fn(),
+	queueStatus: vi.fn(),
 	submit: vi.fn()
 }));
 const jobStore = vi.hoisted(() => ({ failNextCreate: false }));
@@ -65,7 +65,7 @@ vi.mock('$lib/server/flux-kontext-edit', async (importOriginal) => {
 			return integration.cost;
 		}),
 		pollFluxKontextEdit: integration.poll,
-		countFluxKontextEditPromptsAhead: integration.promptsAhead,
+		getFluxKontextEditQueueStatus: integration.queueStatus,
 		submitFluxKontextEdit: integration.submit
 	};
 });
@@ -272,7 +272,7 @@ beforeEach(() => {
 	integration.cost = 2;
 	integration.costError = null;
 	integration.poll.mockReset().mockResolvedValue(null);
-	integration.promptsAhead.mockReset().mockResolvedValue(null);
+	integration.queueStatus.mockReset().mockResolvedValue(null);
 	integration.submit.mockReset().mockResolvedValue('prompt-1');
 	jobStore.failNextCreate = false;
 });
@@ -361,7 +361,12 @@ describe('POST /api/edit', () => {
 		expect(response.status).toBe(202);
 		expect(response.headers.get('location')).toBe(`/api/edit/${id}`);
 		expect(response.headers.get('cache-control')).toBe('no-store');
-		expect(result).toEqual({ id, status: 'processing', elapsedMs: 0, queueAhead: null });
+		expect(result).toEqual({
+			id,
+			status: 'processing',
+			elapsedMs: 0,
+			queue: { status: 'unknown' }
+		});
 		expect(integration.submit).toHaveBeenCalledWith(
 			expect.anything(),
 			{ image: expect.stringContaining('/scene.jpg?'), prompt: requestBody.prompt },
@@ -508,7 +513,7 @@ describe('GET /api/edit/[id]', () => {
 		const db = makeD1();
 		await seedUser(db, 12);
 		await seedJob(db, Date.now() - 30_000);
-		integration.promptsAhead.mockResolvedValue(2);
+		integration.queueStatus.mockResolvedValue({ status: 'waiting', ahead: 2 });
 
 		const response = await callGet({ pubkey: 'pubkey-1' }, platform(db), 'job-1');
 		const result = (await response.json()) as EditJobResponse;
@@ -519,24 +524,24 @@ describe('GET /api/edit/[id]', () => {
 			id: 'job-1',
 			status: 'processing',
 			elapsedMs: expect.any(Number),
-			queueAhead: 2
+			queue: { status: 'waiting', ahead: 2 }
 		});
 		expect(result.status === 'processing' && result.elapsedMs).toBeGreaterThanOrEqual(30_000);
-		expect(integration.promptsAhead).toHaveBeenCalledWith(expect.anything(), 'prompt-1');
+		expect(integration.queueStatus).toHaveBeenCalledWith(expect.anything(), 'prompt-1');
 	});
 
 	it('reports an unknown queue position when the queue lookup fails', async () => {
 		const db = makeD1();
 		await seedUser(db, 12);
 		await seedJob(db);
-		integration.promptsAhead.mockRejectedValue(new ComfyUiError('http_error', 'get_queue', 'down'));
+		integration.queueStatus.mockRejectedValue(new ComfyUiError('http_error', 'get_queue', 'down'));
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const response = await callGet({ pubkey: 'pubkey-1' }, platform(db), 'job-1');
 		const result = (await response.json()) as EditJobResponse;
 
 		expect(response.status).toBe(200);
-		expect(result).toMatchObject({ status: 'processing', queueAhead: null });
+		expect(result).toMatchObject({ status: 'processing', queue: { status: 'unknown' } });
 		expect(consoleError).toHaveBeenCalled();
 		consoleError.mockRestore();
 	});

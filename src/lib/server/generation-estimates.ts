@@ -46,6 +46,10 @@ function median(values: number[]): number {
 // Each row carries the stage durations of the provider that made it
 // (migrations/0017); the other provider's columns stay 0, and rows that
 // predate duration tracking are all 0 and therefore skipped.
+// An archAI estimate covers the whole request, as its queue is invisible. A
+// ComfyUI estimate covers only the run once the job leaves the queue — the
+// client counts from that moment and shows the queue position until then —
+// so it leaves out the upload before queueing and the wait in the queue.
 export async function getGenerationEstimates(db: Database): Promise<GenerationEstimate[]> {
 	const rows = await db.all<DurationRow>(sql`
 		SELECT id, kind,
@@ -53,9 +57,11 @@ export async function getGenerationEstimates(db: Database): Promise<GenerationEs
 				WHEN archai_render_sec + archai_download_sec + archai_reupload_sec > 0 THEN 'archai'
 				ELSE 'comfyui'
 			END AS provider,
-			comfyui_upload_queue_sec + comfyui_queue_wait_sec + comfyui_execution_sec +
-				comfyui_download_sec + comfyui_reupload_sec +
-				archai_render_sec + archai_download_sec + archai_reupload_sec AS total_sec
+			CASE
+				WHEN archai_render_sec + archai_download_sec + archai_reupload_sec > 0
+					THEN archai_render_sec + archai_download_sec + archai_reupload_sec
+				ELSE comfyui_execution_sec + comfyui_download_sec + comfyui_reupload_sec
+			END AS total_sec
 		FROM generations
 		ORDER BY ledger_entry_id DESC
 		LIMIT ${ESTIMATE_WINDOW}`);

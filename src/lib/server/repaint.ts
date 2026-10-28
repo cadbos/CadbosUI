@@ -17,7 +17,8 @@ import {
 	createComfyUiClient,
 	getRepaintResult,
 	queueRepaint,
-	type ComfyDownloadedImage
+	type ComfyDownloadedImage,
+	type ComfyQueueStatus
 } from '$lib/server/comfyui';
 import {
 	comfyUiJobTimeout,
@@ -72,11 +73,11 @@ export async function cancelRepaint(
 	});
 }
 
-export async function countRepaintPromptsAhead(
+export async function getRepaintQueueStatus(
 	platform: App.Platform | undefined,
 	promptId: string
-): Promise<number | null> {
-	return createClient(platform).countPromptsAhead(promptId, {
+): Promise<ComfyQueueStatus | null> {
+	return createClient(platform).getQueueStatus(promptId, {
 		signal: AbortSignal.timeout(comfyUiQueueLookupTimeout(platform))
 	});
 }

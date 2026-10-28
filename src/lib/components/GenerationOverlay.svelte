@@ -113,7 +113,13 @@ before the Change Date. See LICENSE for complete terms.
 			{#if generationOverlay.messageKey}
 				<p class="message">{t(generationOverlay.messageKey)}</p>
 			{/if}
-			{#if progress}
+			{#if progress?.phase === 'queued'}
+				<p class="detail">
+					{progress.ahead > 0
+						? ti('generationOverlay.queueAhead', { count: progress.ahead })
+						: t('generationOverlay.queueNext')}
+				</p>
+			{:else if progress?.phase === 'running'}
 				<!-- Ticks every second, so it stays out of the status announcements. -->
 				<div class={['progress', { done: progress.done }]} aria-live="off">
 					<div class="progress-row">
@@ -138,11 +144,6 @@ before the Change Date. See LICENSE for complete terms.
 										time: formatDuration(progress.remainingSec, getLocale())
 									})}
 					</p>
-					{#if progress.queueAhead}
-						<p class="detail">
-							{ti('generationOverlay.queueAhead', { count: progress.queueAhead })}
-						</p>
-					{/if}
 				</div>
 			{:else if generationOverlay.detailKey}
 				<p class="detail">{t(generationOverlay.detailKey)}</p>

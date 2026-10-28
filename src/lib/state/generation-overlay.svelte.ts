@@ -31,11 +31,12 @@ const MAX_ESTIMATED_PERCENT = 99;
 // overlay's closing fade (GenerationOverlay.svelte).
 const FINISH_HOLD_MS = 650;
 
-// What a polled job last reported, kept on the client clock: `origin` is the
-// earliest moment the server's elapsed time places the job's start at.
+// What a polled ComfyUI job last reported, on the client clock.
 export interface JobProgressState {
 	jobId: string;
-	origin: number;
+	// When the job left the queue; null while it still waits.
+	runningSince: number | null;
+	// Prompts running or waiting before it; null once it runs.
 	queueAhead: number | null;
 }
 
@@ -45,28 +46,36 @@ export function trackJobProgress(
 	progress: JobProgress,
 	now: number
 ): JobProgressState {
-	const origin = now - progress.elapsedMs;
-	return {
-		jobId,
-		origin: previous?.jobId === jobId ? Math.min(previous.origin, origin) : origin,
-		queueAhead: progress.queueAhead
-	};
+	const known = previous?.jobId === jobId ? previous : null;
+	const { queue } = progress;
+	if (queue.status === 'waiting') {
+		return { jobId, runningSince: null, queueAhead: queue.ahead };
+	}
+	if (known && (queue.status === 'unknown' || known.runningSince !== null)) return known;
+	// Seen waiting before, the job started between two polls. Otherwise this
+	// is the first report (a fresh job or a reload), and counting from when it
+	// was queued is the best available guess.
+	const runningSince = known ? now : now - progress.elapsedMs;
+	return { jobId, runningSince, queueAhead: null };
 }
 
-export interface GenerationProgress {
-	percent: number;
-	// Null once the run outlasts its estimate or has finished.
-	remainingSec: number | null;
-	queueAhead: number | null;
-	done: boolean;
-}
+export type GenerationProgress =
+	// Still waiting for ComfyUI: nothing runs yet, so there is no bar.
+	| { phase: 'queued'; ahead: number }
+	| {
+			phase: 'running';
+			percent: number;
+			// Null once the run outlasts its estimate or has finished.
+			remainingSec: number | null;
+			done: boolean;
+	  };
 
 export interface GenerationOverlayOptions {
 	detailKey?: TranslationKey;
 	kind: GenerationKind;
 	provider: GenerationProvider;
-	// A polled job's latest report — it moves the start back to when the job
-	// really began (e.g. after a reload) and carries its queue position.
+	// A polled ComfyUI job's latest report: its queue position while it
+	// waits, and the moment it started running, which its progress counts from.
 	job?: () => JobProgressState | null;
 }
 
@@ -146,21 +155,25 @@ class GenerationOverlayState {
 		this.#flows = untrack(() => this.#flows).filter((flow) => flow.id !== id);
 	}
 
-	// Null while no estimate exists for the flow on screen; the overlay then
-	// keeps the flow's fixed hint instead.
+	// Null while nothing can be shown beyond the flow's fixed hint: no estimate
+	// for it, or a ComfyUI job that hasn't reported back yet.
 	progress(now: number): GenerationProgress | null {
 		const flow = this.#flows.at(-1);
 		if (!flow) return null;
 		const expectedSec = generationEstimates.seconds(flow.options.kind, flow.options.provider);
-		if (expectedSec === null) return null;
-		if (flow.succeeded) return { percent: 100, remainingSec: null, queueAhead: null, done: true };
+		if (flow.succeeded && expectedSec !== null) {
+			return { phase: 'running', percent: 100, remainingSec: null, done: true };
+		}
 		const job = flow.options.job?.() ?? null;
-		const origin = Math.min(flow.startedAt, job?.origin ?? flow.startedAt);
+		if (job?.runningSince === null) return { phase: 'queued', ahead: job.queueAhead ?? 0 };
+		if (expectedSec === null) return null;
+		const origin = flow.options.provider === 'comfyui' ? job?.runningSince : flow.startedAt;
+		if (origin === undefined) return null;
 		const elapsedSec = Math.max(0, now - origin) / 1000;
 		return {
+			phase: 'running',
 			percent: Math.min(MAX_ESTIMATED_PERCENT, Math.floor((elapsedSec / expectedSec) * 100)),
 			remainingSec: elapsedSec < expectedSec ? Math.ceil(expectedSec - elapsedSec) : null,
-			queueAhead: job?.queueAhead ?? null,
 			done: false
 		};
 	}

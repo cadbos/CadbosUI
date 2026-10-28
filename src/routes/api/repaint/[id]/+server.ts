@@ -15,7 +15,7 @@
 import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { RepaintJobResponse } from '$lib/api/contract';
+import type { JobQueue, RepaintJobResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/db';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
@@ -30,7 +30,7 @@ import { DEMO_PUBKEY } from '$lib/server/demo';
 import { imageExtensionFromMime } from '$lib/image-mime';
 import { getBucketByName, getOrCreateMediaByKey, uploadsBucketName } from '$lib/server/media';
 import { mediaAccessById } from '$lib/server/media-access';
-import { countRepaintPromptsAhead, pollRepaint } from '$lib/server/repaint';
+import { getRepaintQueueStatus, pollRepaint } from '$lib/server/repaint';
 import {
 	completeRepaintJob,
 	failRepaintJob,
@@ -41,7 +41,7 @@ import { uploadGeneratedImageBytes } from '$lib/server/uploads';
 
 function processingResponse(
 	job: RepaintJob,
-	queueAhead: number | null,
+	queue: JobQueue,
 	now: number,
 	platform: App.Platform | undefined
 ): Response {
@@ -50,7 +50,7 @@ function processingResponse(
 			id: job.id,
 			status: 'processing',
 			elapsedMs: Math.max(0, now - job.createdAt),
-			queueAhead
+			queue
 		} satisfies RepaintJobResponse,
 		{
 			headers: {
@@ -61,14 +61,14 @@ function processingResponse(
 	);
 }
 
-// The queue position only enriches the progress the client shows, so a
-// failed lookup is logged and reported as unknown instead of failing the poll.
-async function promptsAhead(
+// The queue state only shapes the progress the client shows, so a failed
+// lookup is logged and reported as unknown instead of failing the poll.
+async function queueStatus(
 	platform: App.Platform | undefined,
 	promptId: string
-): Promise<number | null> {
+): Promise<JobQueue> {
 	try {
-		return await countRepaintPromptsAhead(platform, promptId);
+		return (await getRepaintQueueStatus(platform, promptId)) ?? { status: 'unknown' };
 	} catch (error) {
 		console.error(
 			'ComfyUI repaint queue lookup failed:',
@@ -76,7 +76,7 @@ async function promptsAhead(
 				? { code: error.code, operation: error.operation, status: error.status }
 				: error
 		);
-		return null;
+		return { status: 'unknown' };
 	}
 }
 
@@ -86,7 +86,8 @@ async function responseForJob(
 	platform: App.Platform | undefined
 ): Promise<Response> {
 	const headers = { 'cache-control': 'no-store' };
-	if (job.status === 'processing') return processingResponse(job, null, Date.now(), platform);
+	if (job.status === 'processing')
+		return processingResponse(job, { status: 'unknown' }, Date.now(), platform);
 	if (job.status === 'completed' && job.outputMediaId !== null && job.balanceAfter !== null) {
 		const output = await mediaAccessById(db, job.outputMediaId);
 		if (!output) return apiError(404, 'repaint_not_found', 'Repaint job not found');
@@ -176,12 +177,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (result === null) {
 		const now = Date.now();
 		if (now - job.createdAt < jobTimeoutMs) {
-			return processingResponse(
-				job,
-				await promptsAhead(platform, job.comfyPromptId),
-				now,
-				platform
-			);
+			return processingResponse(job, await queueStatus(platform, job.comfyPromptId), now, platform);
 		}
 		job = await failRepaintJob(
 			db,

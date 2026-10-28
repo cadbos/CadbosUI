@@ -299,7 +299,7 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 				id,
 				status: 'processing',
 				elapsedMs: 0,
-				queueAhead: null
+				queue: { status: 'unknown' }
 			} satisfies TextureReplacementJobResponse,
 			{
 				status: 202,

@@ -667,7 +667,12 @@ test('applying an edit directly from an uploaded image (no prior render) produce
 			status: 202,
 			contentType: 'application/json',
 			headers: { location: `/api/edit/${jobId}` },
-			body: JSON.stringify({ id: jobId, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: jobId,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/edit/${jobId}`, async (route) => {
@@ -728,7 +733,12 @@ test('a completed freeform edit unlocks the form for the next edit on the same r
 			status: 202,
 			contentType: 'application/json',
 			headers: { location: `/api/edit/${jobId}` },
-			body: JSON.stringify({ id: jobId, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: jobId,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/edit/${firstJobId}`, async (route) => {
@@ -1056,7 +1066,7 @@ test('the result toolbar supports undo/redo, comparing before/after, and upscali
 				id: '00000000-0000-4000-8000-000000000110',
 				status: 'processing',
 				elapsedMs: 0,
-				queueAhead: null
+				queue: { status: 'unknown' }
 			})
 		});
 	});
@@ -1268,7 +1278,12 @@ test('the Add Object tool applies a clicked template to the current image', asyn
 			status: 202,
 			contentType: 'application/json',
 			headers: { location: `/api/edit/${jobId}` },
-			body: JSON.stringify({ id: jobId, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: jobId,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/edit/${jobId}`, async (route) => {
@@ -1327,7 +1342,12 @@ test('the Add Object tool replaces the prompt with a clicked template and wraps 
 			status: 202,
 			contentType: 'application/json',
 			headers: { location: `/api/edit/${jobId}` },
-			body: JSON.stringify({ id: jobId, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: jobId,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/edit/${jobId}`, async (route) => {
@@ -1407,7 +1427,12 @@ test('undo/redo across different edit tools restores both the settings and the a
 			status: 202,
 			contentType: 'application/json',
 			headers: { location: `/api/edit/${jobId}` },
-			body: JSON.stringify({ id: jobId, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: jobId,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/edit/${freeformJobId}`, async (route) => {
@@ -1519,7 +1544,7 @@ test('undo restores the object-replacement tool tab and its settings after switc
 				id: objectReplacementJobId,
 				status: 'processing',
 				elapsedMs: 0,
-				queueAhead: null
+				queue: { status: 'unknown' }
 			})
 		});
 	});
@@ -1546,7 +1571,7 @@ test('undo restores the object-replacement tool tab and its settings after switc
 				id: freeformJobId,
 				status: 'processing',
 				elapsedMs: 0,
-				queueAhead: null
+				queue: { status: 'unknown' }
 			})
 		});
 	});
@@ -1629,7 +1654,12 @@ test('the Remove Object tool builds a removal prompt from the described object',
 			status: 202,
 			contentType: 'application/json',
 			headers: { location: `/api/edit/${jobId}` },
-			body: JSON.stringify({ id: jobId, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: jobId,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/edit/${jobId}`, async (route) => {
@@ -1679,7 +1709,12 @@ test('the Light settings tool composes an instruction from selected presets and 
 			status: 202,
 			contentType: 'application/json',
 			headers: { location: `/api/light-settings/${jobId}` },
-			body: JSON.stringify({ id: jobId, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: jobId,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/light-settings/${jobId}`, async (route) => {
@@ -1740,7 +1775,12 @@ test('the Repaint tool sends the target and a palette or custom color, and shows
 			status: 202,
 			contentType: 'application/json',
 			headers: { location: `/api/repaint/${jobId}` },
-			body: JSON.stringify({ id: jobId, status: 'processing', elapsedMs: 0, queueAhead: null })
+			body: JSON.stringify({
+				id: jobId,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			})
 		});
 	});
 	await page.route(`**/api/repaint/${jobId}`, async (route) => {

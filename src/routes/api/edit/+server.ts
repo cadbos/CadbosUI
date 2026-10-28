@@ -235,7 +235,12 @@ export const POST: RequestHandler = async ({ request, platform, locals, url }) =
 		}
 
 		return json(
-			{ id, status: 'processing', elapsedMs: 0, queueAhead: null } satisfies EditJobResponse,
+			{
+				id,
+				status: 'processing',
+				elapsedMs: 0,
+				queue: { status: 'unknown' }
+			} satisfies EditJobResponse,
 			{
 				status: 202,
 				headers: {

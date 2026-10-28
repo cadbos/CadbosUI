@@ -17,7 +17,8 @@ import {
 	createComfyUiClient,
 	getLightSettingsResult,
 	queueLightSettings,
-	type ComfyDownloadedImage
+	type ComfyDownloadedImage,
+	type ComfyQueueStatus
 } from '$lib/server/comfyui';
 import {
 	comfyUiJobTimeout,
@@ -70,11 +71,11 @@ export async function cancelLightSettings(
 	});
 }
 
-export async function countLightSettingsPromptsAhead(
+export async function getLightSettingsQueueStatus(
 	platform: App.Platform | undefined,
 	promptId: string
-): Promise<number | null> {
-	return createClient(platform).countPromptsAhead(promptId, {
+): Promise<ComfyQueueStatus | null> {
+	return createClient(platform).getQueueStatus(promptId, {
 		signal: AbortSignal.timeout(comfyUiQueueLookupTimeout(platform))
 	});
 }

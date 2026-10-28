@@ -116,6 +116,7 @@ export const en = {
 	'generationOverlay.overdue': 'Taking longer than usual, almost there…',
 	'generationOverlay.done': 'Done',
 	'generationOverlay.queueAhead': 'Ahead of you in the queue: {count}',
+	'generationOverlay.queueNext': 'Your generation is next in the queue',
 	'auth.signIn': 'Sign in',
 	'auth.guest': 'Guest',
 	'auth.restoring': 'Restoring session…',

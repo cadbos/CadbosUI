@@ -17,7 +17,8 @@ import {
 	createComfyUiClient,
 	getTextureReplacementResult,
 	queueTextureReplacement,
-	type ComfyDownloadedImage
+	type ComfyDownloadedImage,
+	type ComfyQueueStatus
 } from '$lib/server/comfyui';
 import {
 	comfyUiJobTimeout,
@@ -74,11 +75,11 @@ export async function cancelTextureReplacement(
 	});
 }
 
-export async function countTextureReplacementPromptsAhead(
+export async function getTextureReplacementQueueStatus(
 	platform: App.Platform | undefined,
 	promptId: string
-): Promise<number | null> {
-	return createClient(platform).countPromptsAhead(promptId, {
+): Promise<ComfyQueueStatus | null> {
+	return createClient(platform).getQueueStatus(promptId, {
 		signal: AbortSignal.timeout(comfyUiQueueLookupTimeout(platform))
 	});
 }

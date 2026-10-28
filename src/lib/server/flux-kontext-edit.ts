@@ -17,7 +17,8 @@ import {
 	createComfyUiClient,
 	getFluxKontextEditResult,
 	queueFluxKontextEdit,
-	type ComfyDownloadedImage
+	type ComfyDownloadedImage,
+	type ComfyQueueStatus
 } from '$lib/server/comfyui';
 import {
 	comfyUiJobTimeout,
@@ -74,11 +75,11 @@ export async function cancelFluxKontextEdit(
 	});
 }
 
-export async function countFluxKontextEditPromptsAhead(
+export async function getFluxKontextEditQueueStatus(
 	platform: App.Platform | undefined,
 	promptId: string
-): Promise<number | null> {
-	return createClient(platform).countPromptsAhead(promptId, {
+): Promise<ComfyQueueStatus | null> {
+	return createClient(platform).getQueueStatus(promptId, {
 		signal: AbortSignal.timeout(comfyUiQueueLookupTimeout(platform))
 	});
 }
