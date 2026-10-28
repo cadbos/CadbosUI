@@ -20,6 +20,7 @@ before the Change Date. See LICENSE for complete terms.
 		clearConfig,
 		destroyFeedback,
 		initFeedback,
+		setLanguage,
 		shutdown
 	} from 'featurebase-js';
 	import '../app.css';
@@ -95,6 +96,7 @@ before the Change Date. See LICENSE for complete terms.
 
 		Featurebase({
 			appId: data.featurebaseAppId,
+			language: getLocale(),
 			...(featurebaseJwt === null ? {} : { featurebaseJwt })
 		});
 		initFeedback({ theme: 'light', locale: getLocale() });
@@ -109,6 +111,7 @@ before the Change Date. See LICENSE for complete terms.
 		if (featurebaseJwt !== configuredJwt) {
 			initializeFeaturebase(featurebaseJwt, featurebaseJwt === null);
 		} else if (locale !== configuredLocale) {
+			setLanguage(locale);
 			destroyFeedback();
 			initFeedback({ theme: 'light', locale });
 			configuredLocale = locale;

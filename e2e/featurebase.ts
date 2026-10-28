@@ -14,7 +14,7 @@
 
 import type { Page } from '@playwright/test';
 
-export async function mockFeaturebase(page: Page): Promise<void> {
+export async function mockFeaturebase(page: Page, { support = false } = {}): Promise<void> {
 	await page.route(
 		'https://do.featurebase.app/v1/organization/by-id/test-featurebase-app-id',
 		(route) =>
@@ -23,7 +23,7 @@ export async function mockFeaturebase(page: Page): Promise<void> {
 				body: JSON.stringify({
 					success: true,
 					slug: 'cadbos-test',
-					modules: { support: false }
+					modules: { support }
 				})
 			})
 	);

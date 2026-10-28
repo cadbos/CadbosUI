@@ -193,7 +193,8 @@ test('shows the Featurebase feedback widget while the session lookup retries', a
 	expect(sessionLookups).toBe(1);
 });
 
-test('switches the Featurebase feedback widget to the chosen language', async ({ page }) => {
+test('switches the Featurebase widgets to the chosen language', async ({ page }) => {
+	await mockFeaturebase(page, { support: true });
 	await page.route('**/auth/me', (route) =>
 		route.fulfill({
 			contentType: 'application/json',
@@ -206,24 +207,38 @@ test('switches the Featurebase feedback widget to the chosen language', async ({
 	await page.route('**/auth/nostr-profile', (route) =>
 		route.fulfill({ json: { profile: { relays: [] } } })
 	);
+	const featurebaseLanguages = (): Promise<{
+		messenger: unknown;
+		feedback: unknown;
+	}> =>
+		page.evaluate(() => {
+			const calls = (window as Window & { __featurebaseCalls?: [string, unknown?][] })
+				.__featurebaseCalls;
+			const messengerCall = calls?.findLast(([action]) =>
+				['boot', 'identify', 'setLanguage'].includes(action)
+			);
+			const messengerData = messengerCall?.[1];
+			const feedbackData = calls
+				?.filter(([action]) => action === 'initialize_feedback_widget')
+				.at(-1)?.[1] as Record<string, unknown> | undefined;
+			return {
+				messenger:
+					messengerCall?.[0] === 'setLanguage'
+						? messengerData
+						: (messengerData as Record<string, unknown> | undefined)?.language,
+				feedback: feedbackData?.locale
+			};
+		});
 	await page.goto('/');
+
+	await expect.poll(featurebaseLanguages).toEqual({ messenger: 'ru', feedback: 'ru' });
 
 	await page.locator('.auth-trigger').click();
 	const profile = page.locator('#auth-panel');
 	await profile.locator('.language-trigger').click();
 	await profile.getByRole('button', { name: 'English' }).click();
 
-	await expect
-		.poll(() =>
-			page.evaluate(() => {
-				const calls = (
-					window as Window & { __featurebaseCalls?: [string, Record<string, unknown>?][] }
-				).__featurebaseCalls;
-				return calls?.filter(([action]) => action === 'initialize_feedback_widget').at(-1)?.[1]
-					?.locale;
-			})
-		)
-		.toBe('en');
+	await expect.poll(featurebaseLanguages).toEqual({ messenger: 'en', feedback: 'en' });
 	await expect(page.locator('.fb-feedback-widget-feedback-button')).toBeVisible();
 });
 
