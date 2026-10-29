@@ -64,3 +64,10 @@ jobs:
           PLAYWRIGHT_BUILD_MODE: preview
           PLAYWRIGHT_TEST: '1'
         run: pnpm exec playwright test e2e/version.e2e.ts
+
+      - name: Test custom Nostr relays
+        env:
+          NOSTR_CONNECT_RELAYS: wss://login.example,wss://backup.example/nostr
+          NOSTR_PROFILE_BOOTSTRAP_RELAYS: wss://profile.example
+          PLAYWRIGHT_TEST: '1'
+        run: pnpm exec playwright test e2e/nostr-relays.e2e.ts

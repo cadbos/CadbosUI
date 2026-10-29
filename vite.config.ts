@@ -19,13 +19,14 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
+import type { KitConfig } from '@sveltejs/kit';
 import { loadEnv } from 'vite';
 
 import { clientIntegrityPlugin } from './config/client-integrity-plugin';
+import { resolveNostrRelays } from './config/nostr-relays';
 // Relative import: the `$lib` alias is not resolved while Vite evaluates this config.
 import { heyApiOpenApiConfig } from './openapi-ts.config';
 import packageMetadata from './package.json';
-import { NOSTR_CONNECT_RELAYS } from './src/lib/nostr/connect';
 
 const commitSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 const buildTimestamp = new Date().toISOString();
@@ -58,7 +59,8 @@ function resolveGitUrl(
 }
 
 export default defineConfig(({ mode }) => {
-	const env = loadEnv(mode, process.cwd(), 'GIT_');
+	const env = loadEnv(mode, process.cwd(), ['GIT_', 'NOSTR_']);
+	const nostrRelays = resolveNostrRelays(env);
 	const isPreview = mode === 'preview';
 	const commitUrl = resolveGitUrl(
 		env.GIT_COMMIT_URL_TEMPLATE ?? defaultCommitUrlTemplate,
@@ -81,7 +83,9 @@ export default defineConfig(({ mode }) => {
 			__APP_IS_PREVIEW__: JSON.stringify(isPreview),
 			__APP_NAME__: JSON.stringify(packageMetadata.name),
 			__APP_RELEASE_URL__: JSON.stringify(releaseUrl),
-			__APP_VERSION__: JSON.stringify(packageMetadata.version)
+			__APP_VERSION__: JSON.stringify(packageMetadata.version),
+			__NOSTR_CONNECT_RELAYS__: JSON.stringify(nostrRelays.connectRelays),
+			__NOSTR_PROFILE_BOOTSTRAP_RELAYS__: JSON.stringify(nostrRelays.profileBootstrapRelays)
 		},
 		plugins: [
 			clientIntegrityPlugin(),
@@ -129,7 +133,9 @@ export default defineConfig(({ mode }) => {
 						'connect-src': [
 							'self',
 							'blob:',
-							...NOSTR_CONNECT_RELAYS,
+							...(nostrRelays.connectRelays.map((relay) => new URL(relay).origin) as NonNullable<
+								NonNullable<NonNullable<KitConfig['csp']>['directives']>['connect-src']
+							>),
 							'https://*.featurebase.app',
 							'wss://*.featurebase.app'
 						],

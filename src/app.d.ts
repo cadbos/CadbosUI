@@ -25,6 +25,8 @@ declare global {
 	const __APP_NAME__: string;
 	const __APP_RELEASE_URL__: string;
 	const __APP_VERSION__: string;
+	const __NOSTR_CONNECT_RELAYS__: readonly string[];
+	const __NOSTR_PROFILE_BOOTSTRAP_RELAYS__: readonly string[];
 
 	namespace App {
 		// interface Error {}
