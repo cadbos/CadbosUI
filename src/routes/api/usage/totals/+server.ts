@@ -13,19 +13,29 @@
  */
 
 import { json } from '@sveltejs/kit';
+import { z } from 'zod';
 import type { RequestHandler } from './$types';
 import type { UsageTotals } from '$lib/api/contract';
+import { apiError } from '$lib/server/api';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUsageTotals } from '$lib/server/generations';
 import { getDb } from '$lib/server/db';
-import { authorizeUsageViewer } from '$lib/server/usage';
+import { authorizeUsageViewer, isOrderedRange, usageRangeShape } from '$lib/server/usage';
 
-export const GET: RequestHandler = async ({ platform, locals }) => {
+const totalsSearchParamsSchema = z.union([
+	z.strictObject(usageRangeShape).refine(isOrderedRange),
+	z.strictObject({}).transform(() => undefined)
+]);
+
+export const GET: RequestHandler = async ({ url, platform, locals }) => {
 	const user = locals.user;
 	if (!user) return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 
 	const authorization = await authorizeUsageViewer(platform, user);
 	if (authorization) return authorization;
 
-	return json((await getUsageTotals(getDb(platform))) satisfies UsageTotals);
+	const parsed = totalsSearchParamsSchema.safeParse(Object.fromEntries(url.searchParams));
+	if (!parsed.success) return apiError(400, 'invalid_request', 'Invalid search params');
+
+	return json((await getUsageTotals(getDb(platform), parsed.data)) satisfies UsageTotals);
 };

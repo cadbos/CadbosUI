@@ -685,6 +685,39 @@ export interface UserUsageResponse {
 	};
 }
 
+// GET /api/usage/users/[pubkey] — one user's usage row, over all time or over
+// the [from, to) window given as epoch-millisecond search params.
+export interface GenerationKindCount {
+	kind: GenerationKind;
+	count: number;
+}
+
+export interface UserUsageDetailResponse {
+	user: UserUsageRecord;
+	generationKinds: GenerationKindCount[];
+}
+
+// GET /api/usage/users/[pubkey]/generations — that user's generations in the
+// [from, to) window, newest first.
+export interface UsageGenerationRecord {
+	id: string;
+	kind: GenerationKind;
+	createdAt: number;
+	prompt: string;
+	source: MediaAccess;
+	result: MediaAccess;
+	reference: MediaAccess | null;
+}
+
+export interface UsageGenerationsResponse {
+	generations: UsageGenerationRecord[];
+	pagination: {
+		offset: number;
+		size: number;
+		hasMore: boolean;
+	};
+}
+
 export interface UsageTotals {
 	userCount: number;
 	projectCount: number;

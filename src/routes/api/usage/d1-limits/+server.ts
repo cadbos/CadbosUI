@@ -17,16 +17,19 @@ import type { RequestHandler } from './$types';
 import { apiError } from '$lib/server/api';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getD1DailyLimits } from '$lib/server/d1-limits';
-import { authorizeUsageViewer } from '$lib/server/usage';
+import { analyticsDateParamsSchema, authorizeUsageViewer } from '$lib/server/usage';
 
-export const GET: RequestHandler = async ({ platform, locals, fetch }) => {
+export const GET: RequestHandler = async ({ url, platform, locals, fetch }) => {
 	const user = locals.user;
 	if (!user) return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 
 	const authorization = await authorizeUsageViewer(platform, user);
 	if (authorization) return authorization;
 
-	const limits = await getD1DailyLimits(platform?.env, fetch);
+	const parsed = analyticsDateParamsSchema.safeParse(Object.fromEntries(url.searchParams));
+	if (!parsed.success) return apiError(400, 'invalid_request', 'Invalid search params');
+
+	const limits = await getD1DailyLimits(platform?.env, fetch, parsed.data.date);
 	if (!limits) {
 		const response = apiError(503, 'd1_limits_unavailable', 'Could not retrieve D1 limits');
 		response.headers.set('cache-control', 'private, no-store');

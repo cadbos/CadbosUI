@@ -36,9 +36,11 @@ function platform(db: D1Database): App.Platform {
 function call(
 	user: SessionUser | null,
 	app: App.Platform,
-	fetcher: typeof fetch
+	fetcher: typeof fetch,
+	search = ''
 ): ReturnType<typeof GET> {
 	return GET({
+		url: new URL(`https://cadbos.example/api/usage/workers-ai${search}`),
 		platform: app,
 		locals: { sessionLookupUnavailable: false, user },
 		fetch: fetcher
@@ -136,4 +138,35 @@ it('reports unavailable usage when the analytics credentials are missing', async
 	expect(warning).toHaveBeenCalledWith(
 		JSON.stringify({ event: 'workers_ai_quota_configuration_invalid' })
 	);
+});
+
+it('queries the requested UTC day', async () => {
+	const fetcher = analytics([{ count: 4, sum: { totalNeurons: 2 } }]);
+
+	const response = await call(
+		{ pubkey: 'admin-pubkey' },
+		platform(await adminDb()),
+		fetcher,
+		'?date=2026-01-03'
+	);
+
+	expect(await response.json()).toMatchObject({ date: '2026-01-03', requests: 4, neurons: 2 });
+	const [, init] = vi.mocked(fetcher).mock.calls[0];
+	expect(JSON.parse(String(init?.body))).toMatchObject({
+		variables: { accountTag: 'account-id', date: '2026-01-03' }
+	});
+});
+
+it('rejects an invalid date before querying Cloudflare', async () => {
+	const fetcher = vi.fn<typeof fetch>();
+
+	const response = await call(
+		{ pubkey: 'admin-pubkey' },
+		platform(await adminDb()),
+		fetcher,
+		'?date=2026-02-30'
+	);
+
+	expect(response.status).toBe(400);
+	expect(fetcher).not.toHaveBeenCalled();
 });

@@ -89,13 +89,14 @@ function parseUsage(
 
 export async function getD1DailyLimits(
 	env: App.Platform['env'] | undefined,
-	fetcher: typeof fetch
+	fetcher: typeof fetch,
+	// A UTC calendar date (YYYY-MM-DD); today when omitted.
+	date = new Date().toISOString().slice(0, 10)
 ): Promise<D1DailyLimits | null> {
 	const configured = config(env);
 	if (!configured) return null;
 
 	try {
-		const date = new Date().toISOString().slice(0, 10);
 		const usage = parseUsage(
 			await queryAccountAnalytics(configured, fetcher, DAILY_USAGE_QUERY, date)
 		);

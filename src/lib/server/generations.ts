@@ -17,24 +17,27 @@
 // for that call — all written atomically, so there's no way for the image
 // record and the deduction to fall out of sync with each other.
 
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import {
 	generationKinds,
 	resourceRoles,
 	type Balance,
 	type CreditTransaction,
 	type GenerationKind,
+	type GenerationKindCount,
 	type GenerationSessionRef,
 	type RequestFormSnapshot,
 	type ResourceFilter,
 	type ResourceRole,
 	type SceneFilterProject,
 	type SceneView,
+	type UsageGenerationRecord,
 	type UsageTotals,
 	type UserUsageRecord
 } from '$lib/api/contract';
 import { formSnapshotSchema } from '$lib/server/api';
 import type { Database } from '$lib/server/db';
+import { mediaLink } from '$lib/server/media-access';
 import { ledgerAmountSql, ledgerBalanceSql } from '$lib/server/ledger';
 
 function isGenerationKind(kind: string): kind is GenerationKind {
@@ -601,22 +604,43 @@ interface ResourceImageRow {
 	roles: string;
 }
 
-function sourceUses(userId?: string): ReturnType<typeof sql> {
+// Which generations a usage figure counts: one user's (or everyone's) and,
+// for a day's usage, only those created in [from, to).
+export interface UsageRange {
+	from: number;
+	to: number;
+}
+
+interface UsageScope {
+	userId?: string;
+	range?: UsageRange;
+}
+
+function rangeCondition(range: UsageRange | undefined, column: SQL): SQL {
+	return range ? sql`${column} >= ${range.from} AND ${column} < ${range.to}` : sql`1 = 1`;
+}
+
+function scopeCondition(scope: UsageScope, userColumn: SQL, createdColumn: SQL): SQL {
+	const user = scope.userId === undefined ? sql`1 = 1` : sql`${userColumn} = ${scope.userId}`;
+	return sql`${user} AND ${rangeCondition(scope.range, createdColumn)}`;
+}
+
+function sourceUses(scope: UsageScope = {}): SQL {
 	return sql`SELECT used.user_id, used.media_id, used.created_at, 'source' AS role FROM (
 		SELECT g.user_id, g.source_media_id AS media_id, MAX(g.created_at) AS created_at FROM generations g
-		WHERE ${userId === undefined ? sql`1 = 1` : sql`g.user_id = ${userId}`}
+		WHERE ${scopeCondition(scope, sql`g.user_id`, sql`g.created_at`)}
 		GROUP BY g.user_id, g.source_media_id) used
 		JOIN media source_media ON source_media.id = used.media_id
 		WHERE source_media.checksum != ''
 		AND NOT EXISTS (SELECT 1 FROM generations produced WHERE produced.result_media_id = used.media_id)`;
 }
 
-function referenceUses(userId?: string): ReturnType<typeof sql> {
+function referenceUses(scope: UsageScope = {}): SQL {
 	return sql`SELECT g.user_id, g.reference_media_id AS media_id, g.created_at,
 		CASE g.kind WHEN 'style-transfer' THEN 'style-reference'
 		WHEN 'object-replacement' THEN 'object-reference'
 		ELSE 'texture-reference' END AS role FROM generations g
-		WHERE ${userId === undefined ? sql`1 = 1` : sql`g.user_id = ${userId}`}
+		WHERE ${scopeCondition(scope, sql`g.user_id`, sql`g.created_at`)}
 		AND g.reference_media_id IS NOT NULL
 		AND g.kind IN ('style-transfer', 'object-replacement', 'texture-replacement')`;
 }
@@ -634,10 +658,10 @@ export async function listResourceImages(
 ): Promise<ResourceImagesPage> {
 	const uses =
 		filter === 'sources'
-			? sourceUses(userId)
+			? sourceUses({ userId })
 			: filter === 'references'
-				? referenceUses(userId)
-				: sql`${sourceUses(userId)} UNION ALL ${referenceUses(userId)}`;
+				? referenceUses({ userId })
+				: sql`${sourceUses({ userId })} UNION ALL ${referenceUses({ userId })}`;
 	const rows = await db.all<ResourceImageRow>(
 		sql`SELECT media_id, MAX(created_at) AS created_at, group_concat(DISTINCT role) AS roles
 			FROM (${uses}) GROUP BY media_id ORDER BY created_at DESC, media_id DESC
@@ -663,7 +687,7 @@ export async function getResourceRoles(
 ): Promise<ResourceRole[]> {
 	const row = await db.get<{ roles: string | null }>(
 		sql`SELECT group_concat(DISTINCT role) AS roles
-			FROM (${sourceUses(userId)} UNION ALL ${referenceUses(userId)})
+			FROM (${sourceUses({ userId })} UNION ALL ${referenceUses({ userId })})
 			WHERE media_id = ${mediaId}`
 	);
 	return row?.roles ? row.roles.split(',').filter(isResourceRole) : [];
@@ -806,11 +830,54 @@ function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
 	};
 }
 
-const RESOURCE_PAIRS_SQL = sql`source_resources AS (
-	SELECT DISTINCT user_id, media_id FROM (${sourceUses()})
-), reference_resources AS (
-	SELECT DISTINCT user_id, media_id FROM (${referenceUses()})
-)`;
+function resourcePairs(scope: UsageScope = {}): SQL {
+	return sql`source_resources AS (
+		SELECT DISTINCT user_id, media_id FROM (${sourceUses(scope)})
+	), reference_resources AS (
+		SELECT DISTINCT user_id, media_id FROM (${referenceUses(scope)})
+	)`;
+}
+
+// One row per user of `scope`. With a range, every figure covers only that
+// window, except the balance — that stays the running balance as of its end.
+function userUsageQuery(scope: UsageScope): SQL {
+	const ledgerScope = scopeCondition({ userId: scope.userId }, sql`user_id`, sql`created_at`);
+	const ledgerUntil = scope.range ? sql`AND created_at < ${scope.range.to}` : sql``;
+	const ledgerSince = scope.range ? sql`AND created_at >= ${scope.range.from}` : sql``;
+	return sql`WITH ${resourcePairs(scope)}
+		SELECT u.pubkey, COALESCE(l.balance, 0) AS balance, COALESCE(l.total_deposit, 0) AS total_deposit, l.last_deposit_at,
+		COALESCE(pr.project_count, 0) AS project_count,
+		COALESCE(ps.session_count, 0) AS session_count,
+		COALESCE(g.generation_count, 0) AS generation_count,
+		COALESCE(sources.source_count, 0) AS source_count, sources.source_bytes,
+		COALESCE(refs.reference_count, 0) AS reference_count, refs.reference_bytes,
+		COALESCE(l.total_spend, 0) AS total_spend, l.latest_spend_at
+		FROM users u
+		LEFT JOIN (SELECT user_id,
+			SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END) / 100.0 AS balance,
+			SUM(CASE WHEN entry_side = 'credit' AND reason IS NOT 'historical-reconciliation' ${ledgerSince} THEN amount ELSE 0 END) / 100.0 AS total_deposit,
+			MAX(CASE WHEN entry_side = 'credit' AND reason IS NOT 'historical-reconciliation' ${ledgerSince} THEN created_at END) AS last_deposit_at,
+			SUM(CASE WHEN entry_side = 'debit' AND reason = 'generation-charge' ${ledgerSince} THEN amount ELSE 0 END) / 100.0 AS total_spend,
+			MAX(CASE WHEN entry_side = 'debit' AND reason = 'generation-charge' ${ledgerSince} THEN created_at END) AS latest_spend_at
+			FROM ledger_entries WHERE ${ledgerScope} ${ledgerUntil} GROUP BY user_id) l ON l.user_id = u.id
+		LEFT JOIN (SELECT user_id, COUNT(*) AS project_count FROM projects
+		WHERE ${scopeCondition(scope, sql`user_id`, sql`created_at`)} GROUP BY user_id) pr
+		ON pr.user_id = u.id
+		LEFT JOIN (SELECT p.user_id, COUNT(*) AS session_count FROM project_sessions s
+		JOIN projects p ON p.id = s.project_id
+		WHERE ${scopeCondition(scope, sql`p.user_id`, sql`s.created_at`)} GROUP BY p.user_id) ps
+		ON ps.user_id = u.id
+		LEFT JOIN (SELECT user_id, COUNT(*) AS generation_count FROM generations
+		WHERE ${scopeCondition(scope, sql`user_id`, sql`created_at`)} GROUP BY user_id) g
+		ON g.user_id = u.id
+		LEFT JOIN (SELECT s.user_id, COUNT(*) AS source_count, SUM(m.size) AS source_bytes
+		FROM source_resources s JOIN media m ON m.id = s.media_id
+		GROUP BY s.user_id) sources ON sources.user_id = u.id
+		LEFT JOIN (SELECT r.user_id, COUNT(*) AS reference_count, SUM(m.size) AS reference_bytes
+		FROM reference_resources r JOIN media m ON m.id = r.media_id GROUP BY r.user_id) refs
+		ON refs.user_id = u.id
+		WHERE ${scopeCondition({ userId: scope.userId }, sql`u.id`, sql`u.created_at`)}`;
+}
 
 export async function listUserUsage(
 	db: Database,
@@ -818,39 +885,102 @@ export async function listUserUsage(
 	size: number
 ): Promise<UserUsagePage> {
 	const rows = await db.all<UserUsageRow>(
-		sql`WITH ${RESOURCE_PAIRS_SQL}
-			SELECT u.pubkey, COALESCE(l.balance, 0) AS balance, COALESCE(l.total_deposit, 0) AS total_deposit, l.last_deposit_at,
-			COALESCE(pr.project_count, 0) AS project_count,
-			COALESCE(ps.session_count, 0) AS session_count,
-			COALESCE(g.generation_count, 0) AS generation_count,
-			COALESCE(sources.source_count, 0) AS source_count, sources.source_bytes,
-			COALESCE(refs.reference_count, 0) AS reference_count, refs.reference_bytes,
-			COALESCE(l.total_spend, 0) AS total_spend, l.latest_spend_at
-			FROM users u
-			LEFT JOIN (SELECT user_id,
-				SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END) / 100.0 AS balance,
-				SUM(CASE WHEN entry_side = 'credit' AND reason IS NOT 'historical-reconciliation' THEN amount ELSE 0 END) / 100.0 AS total_deposit,
-				MAX(CASE WHEN entry_side = 'credit' AND reason IS NOT 'historical-reconciliation' THEN created_at END) AS last_deposit_at,
-				SUM(CASE WHEN entry_side = 'debit' AND reason = 'generation-charge' THEN amount ELSE 0 END) / 100.0 AS total_spend,
-				MAX(CASE WHEN entry_side = 'debit' AND reason = 'generation-charge' THEN created_at END) AS latest_spend_at
-				FROM ledger_entries GROUP BY user_id) l ON l.user_id = u.id
-			LEFT JOIN (SELECT user_id, COUNT(*) AS project_count FROM projects GROUP BY user_id) pr
-			ON pr.user_id = u.id
-			LEFT JOIN (SELECT p.user_id, COUNT(*) AS session_count FROM project_sessions s
-			JOIN projects p ON p.id = s.project_id GROUP BY p.user_id) ps ON ps.user_id = u.id
-			LEFT JOIN (SELECT user_id, COUNT(*) AS generation_count FROM generations GROUP BY user_id) g
-			ON g.user_id = u.id
-			LEFT JOIN (SELECT s.user_id, COUNT(*) AS source_count, SUM(m.size) AS source_bytes
-			FROM source_resources s JOIN media m ON m.id = s.media_id
-			GROUP BY s.user_id) sources ON sources.user_id = u.id
-			LEFT JOIN (SELECT r.user_id, COUNT(*) AS reference_count, SUM(m.size) AS reference_bytes
-			FROM reference_resources r JOIN media m ON m.id = r.media_id GROUP BY r.user_id) refs
-			ON refs.user_id = u.id
-			ORDER BY u.created_at DESC, u.id DESC LIMIT ${size + 1} OFFSET ${offset}`
+		sql`${userUsageQuery({})} ORDER BY u.created_at DESC, u.id DESC LIMIT ${size + 1} OFFSET ${offset}`
 	);
 	return {
 		users: rows.slice(0, size).map(toUserUsageRecord),
 		hasMore: rows.length > size
+	};
+}
+
+export async function getUserUsage(
+	db: Database,
+	userId: string,
+	range?: UsageRange
+): Promise<UserUsageRecord | null> {
+	const row = await db.get<UserUsageRow>(userUsageQuery({ userId, range }));
+	return row ? toUserUsageRecord(row) : null;
+}
+
+// Unrecognized kinds are left out, as everywhere else generations are listed.
+export async function listUserGenerationKinds(
+	db: Database,
+	userId: string,
+	range?: UsageRange
+): Promise<GenerationKindCount[]> {
+	const rows = await db.all<{ kind: GenerationKind; count: number }>(
+		sql`SELECT g.kind, COUNT(*) AS count FROM generations g
+			WHERE ${scopeCondition({ userId, range }, sql`g.user_id`, sql`g.created_at`)}
+			AND g.kind IN (${sql.join(
+				generationKinds.map((kind) => sql`${kind}`),
+				sql`, `
+			)})
+			GROUP BY g.kind ORDER BY count DESC, g.kind`
+	);
+	return rows.map((row) => ({ kind: row.kind, count: row.count }));
+}
+
+interface UsageGenerationRow {
+	id: string;
+	kind: string;
+	created_at: number;
+	prompt: string;
+	source_bucket_name: string;
+	source_filename: string;
+	result_bucket_name: string;
+	result_filename: string;
+	reference_bucket_name: string | null;
+	reference_filename: string | null;
+}
+
+function toUsageGeneration(row: UsageGenerationRow): UsageGenerationRecord | null {
+	const kind = generationKindForRow(row.id, row.kind);
+	if (kind === null) return null;
+	return {
+		id: row.id,
+		kind,
+		createdAt: row.created_at,
+		prompt: row.prompt,
+		source: mediaLink(row.source_bucket_name, row.source_filename),
+		result: mediaLink(row.result_bucket_name, row.result_filename),
+		reference:
+			row.reference_bucket_name !== null && row.reference_filename !== null
+				? mediaLink(row.reference_bucket_name, row.reference_filename)
+				: null
+	};
+}
+
+export async function listUserGenerations(
+	db: Database,
+	userId: string,
+	range: UsageRange,
+	offset: number,
+	size: number
+): Promise<{ generations: UsageGenerationRecord[]; hasMore: boolean }> {
+	const { items } = await collectValidRows(
+		(limit, rawOffset) =>
+			db.all<UsageGenerationRow>(
+				sql`SELECT g.id, g.kind, g.created_at, g.prompt,
+					source_bucket.name AS source_bucket_name, source_media.filename AS source_filename,
+					result_bucket.name AS result_bucket_name, result_media.filename AS result_filename,
+					reference_bucket.name AS reference_bucket_name,
+					reference_media.filename AS reference_filename
+					FROM generations g
+					JOIN media source_media ON source_media.id = g.source_media_id
+					JOIN buckets source_bucket ON source_bucket.id = source_media.bucket
+					JOIN media result_media ON result_media.id = g.result_media_id
+					JOIN buckets result_bucket ON result_bucket.id = result_media.bucket
+					LEFT JOIN media reference_media ON reference_media.id = g.reference_media_id
+					LEFT JOIN buckets reference_bucket ON reference_bucket.id = reference_media.bucket
+					WHERE ${scopeCondition({ userId, range }, sql`g.user_id`, sql`g.created_at`)}
+					ORDER BY g.created_at DESC, g.id DESC LIMIT ${limit} OFFSET ${rawOffset}`
+			),
+		toUsageGeneration,
+		offset + size + 1
+	);
+	return {
+		generations: items.slice(offset, offset + size),
+		hasMore: items.length > offset + size
 	};
 }
 
@@ -869,21 +999,23 @@ interface UsageTotalsRow {
 
 // Platform-wide counterpart of listUserUsage: every figure follows the same
 // per-user rules, so each total equals the sum of its column in the table.
-export async function getUsageTotals(db: Database): Promise<UsageTotals> {
+// With a range, users count those who registered in it.
+export async function getUsageTotals(db: Database, range?: UsageRange): Promise<UsageTotals> {
+	const within = (column: SQL): SQL => rangeCondition(range, column);
 	const row = await db.get<UsageTotalsRow>(
-		sql`WITH ${RESOURCE_PAIRS_SQL}
-			SELECT (SELECT COUNT(*) FROM users) AS user_count,
-			(SELECT COUNT(*) FROM projects) AS project_count,
-			(SELECT COUNT(*) FROM project_sessions) AS session_count,
-			(SELECT COUNT(*) FROM generations) AS generation_count,
+		sql`WITH ${resourcePairs({ range })}
+			SELECT (SELECT COUNT(*) FROM users WHERE ${within(sql`created_at`)}) AS user_count,
+			(SELECT COUNT(*) FROM projects WHERE ${within(sql`created_at`)}) AS project_count,
+			(SELECT COUNT(*) FROM project_sessions WHERE ${within(sql`created_at`)}) AS session_count,
+			(SELECT COUNT(*) FROM generations WHERE ${within(sql`created_at`)}) AS generation_count,
 			(SELECT COUNT(*) FROM source_resources) AS source_count,
 			(SELECT SUM(m.size) FROM source_resources s
 			JOIN media m ON m.id = s.media_id) AS source_bytes,
 			(SELECT COUNT(*) FROM reference_resources) AS reference_count,
 			(SELECT SUM(m.size) FROM reference_resources r
 			JOIN media m ON m.id = r.media_id) AS reference_bytes,
-			(SELECT COALESCE(SUM(amount), 0) / 100.0 FROM ledger_entries WHERE entry_side = 'debit' AND reason = 'generation-charge') AS total_spend,
-			(SELECT COALESCE(SUM(amount), 0) / 100.0 FROM ledger_entries WHERE entry_side = 'credit' AND reason IS NOT 'historical-reconciliation') AS total_deposit`
+			(SELECT COALESCE(SUM(amount), 0) / 100.0 FROM ledger_entries WHERE entry_side = 'debit' AND reason = 'generation-charge' AND ${within(sql`created_at`)}) AS total_spend,
+			(SELECT COALESCE(SUM(amount), 0) / 100.0 FROM ledger_entries WHERE entry_side = 'credit' AND reason IS NOT 'historical-reconciliation' AND ${within(sql`created_at`)}) AS total_deposit`
 	);
 	if (!row) throw new Error('usage totals query returned no row');
 	return {
