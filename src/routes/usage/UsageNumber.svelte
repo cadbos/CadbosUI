@@ -13,73 +13,12 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { getLocale, t, ti } from '$lib/i18n/index.svelte';
-	import { currency } from '$lib/state/currency.svelte';
-	import { formatCredit } from '$lib/utils';
+	import { formatUsageValue, type UsageValue } from './usage-format';
 
-	type Props =
-		| { kind: 'count'; value: number | null }
-		| { kind: 'currency' | 'size'; value: number | null; showUnit?: boolean }
-		| { kind: 'countWithSize'; value: number; bytes: number | null };
-
-	let props: Props = $props();
-
-	const numericPartTypes = new Set(['integer', 'group', 'decimal', 'fraction', 'minusSign']);
-
-	function formatNumber(value: number, maximumFractionDigits: number): string {
-		const parts = new Intl.NumberFormat('en-US', { maximumFractionDigits }).formatToParts(value);
-		const groupSeparator = parts.some((part) => part.type === 'decimal') ? ',' : ' ';
-		return parts.map((part) => (part.type === 'group' ? groupSeparator : part.value)).join('');
-	}
-
-	function formatSize(bytes: number | null, showUnit = true): string {
-		if (bytes === null) return t('usage.emptyValue');
-
-		const value = bytes / 1024 ** 2;
-		const maximumFractionDigits = 1;
-		const number = formatNumber(value, maximumFractionDigits);
-		if (!showUnit) return number;
-
-		const parts = new Intl.NumberFormat(getLocale(), {
-			style: 'unit',
-			unit: 'megabyte',
-			unitDisplay: 'short',
-			maximumFractionDigits
-		}).formatToParts(value);
-		const firstNumberPart = parts.findIndex((part) => numericPartTypes.has(part.type));
-		const lastNumberPart = parts.findLastIndex((part) => numericPartTypes.has(part.type));
-		return (
-			parts
-				.slice(0, firstNumberPart)
-				.map((part) => part.value)
-				.join('') +
-			number +
-			parts
-				.slice(lastNumberPart + 1)
-				.map((part) => part.value)
-				.join('')
-		);
-	}
-
-	function formatValue(): string {
-		if (props.kind === 'countWithSize') {
-			return ti('usage.totals.countWithSize', {
-				count: formatNumber(props.value, 0),
-				size: formatSize(props.bytes)
-			});
-		}
-		if (props.value === null) return t('usage.emptyValue');
-		if (props.kind === 'currency') {
-			const amount = formatCredit(currency.convert(props.value));
-			const formattedAmount = amount.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-			return props.showUnit === false ? formattedAmount : `${currency.symbol} ${formattedAmount}`;
-		}
-		if (props.kind === 'size') return formatSize(props.value, props.showUnit);
-		return formatNumber(props.value, 0);
-	}
+	let props: UsageValue = $props();
 </script>
 
-<span class="number">{formatValue()}</span>
+<span class="number">{formatUsageValue(props)}</span>
 
 <style>
 	.number {

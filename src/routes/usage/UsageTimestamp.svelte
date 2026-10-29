@@ -13,8 +13,9 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { getLocale, t } from '$lib/i18n/index.svelte';
+	import { t } from '$lib/i18n/index.svelte';
 	import { localDateKey, userUsageHref } from './usage-day';
+	import { formatUsageTimestamp, formatUsageTimestampDate } from './usage-format';
 
 	interface Props {
 		timestamp: number | null;
@@ -28,19 +29,8 @@ before the Change Date. See LICENSE for complete terms.
 	// locales, so the link covers exactly the date as it reads in the cell.
 	const formatted = $derived.by(() => {
 		if (timestamp === null) return null;
-		const date = new Date(timestamp);
-		const dateOptions: Intl.DateTimeFormatOptions = {
-			day: 'numeric',
-			month: 'short',
-			year: 'numeric'
-		};
-		const full = new Intl.DateTimeFormat(getLocale(), {
-			...dateOptions,
-			hour: '2-digit',
-			minute: '2-digit',
-			hourCycle: 'h23'
-		}).format(date);
-		const day = new Intl.DateTimeFormat(getLocale(), dateOptions).format(date);
+		const full = formatUsageTimestamp(timestamp);
+		const day = formatUsageTimestampDate(timestamp);
 		const dateText = full.startsWith(day) ? day : full;
 		return {
 			date: dateText,

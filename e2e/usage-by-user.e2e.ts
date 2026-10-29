@@ -12,7 +12,8 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { Locator, Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+import type { Download, Locator, Page } from '@playwright/test';
 import { npubEncode } from 'nostr-tools/nip19';
 import type { UsageGenerationsResponse, UserUsageDetailResponse } from '$lib/api/contract';
 import { ru } from '$lib/i18n/locales/ru';
@@ -125,6 +126,11 @@ async function box(
 	const result = await locator.boundingBox();
 	if (!result) throw new Error('element is not rendered');
 	return result;
+}
+
+async function readDownload(download: Download): Promise<string> {
+	const path = await download.path();
+	return readFile(path, 'utf8');
 }
 
 test.beforeEach(async ({ page }) => {
@@ -251,6 +257,45 @@ test("shows the day's figures and generations and reloads when the query changes
 		`${ru['usage.totals.generations']} 5`
 	);
 	expect(requested(requests, `/api/usage/users/${PUBKEY}`).at(-1)).toBe('');
+});
+
+test('exports the user to Markdown, with every generation of the day only in day mode', async ({
+	page
+}) => {
+	await mockUsage(page);
+	await page.route(`**/api/usage/users/${PUBKEY}/generations?*`, async (route) => {
+		const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
+		const [first, second] = GENERATIONS.generations;
+		await route.fulfill({
+			json:
+				offset === 0
+					? { generations: [first], pagination: { offset: 0, size: 20, hasMore: true } }
+					: { generations: [second], pagination: { offset: 1, size: 20, hasMore: false } }
+		});
+	});
+	const exportButton = page.getByRole('button', { name: ru['usage.export.button'] });
+
+	await page.goto(`/usage/by-user?npub=${NPUB}`);
+	const [allTime] = await Promise.all([page.waitForEvent('download'), exportButton.click()]);
+	expect(allTime.suggestedFilename()).toBe(`cadbos-usage-${NPUB}.md`);
+	const allTimeMarkdown = await readDownload(allTime);
+	expect(allTimeMarkdown).toContain(`# ${ru['usage.byUser.heading'].replace('{user}', NPUB)}`);
+	expect(allTimeMarkdown).toContain(`| ${ru['usage.column.balance']} | $ 42.50 |`);
+	expect(allTimeMarkdown).toContain(`| ${ru['generatedImages.kind.render']} | 4 |`);
+	expect(allTimeMarkdown).not.toContain(ru['usage.generations.title']);
+
+	await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
+	await expect(page.getByRole('row', { name: /generation-2/ })).toBeVisible();
+	const [dayExport] = await Promise.all([page.waitForEvent('download'), exportButton.click()]);
+	expect(dayExport.suggestedFilename()).toBe(`cadbos-usage-${NPUB}-2026-01-03.md`);
+	const dayMarkdown = await readDownload(dayExport);
+	expect(dayMarkdown).toContain(`## ${ru['usage.generations.title']}`);
+	expect(dayMarkdown).toContain(`| generation-2 | 13:00:00 |`);
+	expect(dayMarkdown).toContain(`| generation-1 | 12:00:00 |`);
+	expect(dayMarkdown).toContain(LONG_PROMPT);
+	expect(dayMarkdown).toContain(
+		`![${ru['usage.generations.resultAlt'].replace('{id}', 'generation-2')}](${new URL('/api/media/uploads/result-2.webp', page.url()).href})`
+	);
 });
 
 test('opens the user and their spend day from the usage table', async ({ page }) => {

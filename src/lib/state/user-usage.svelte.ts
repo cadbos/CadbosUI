@@ -75,6 +75,9 @@ class UserUsageState {
 	#pubkey: string | null = null;
 	#range: UsageDay | null = null;
 	#nextOffset: number | null = null;
+	// The generations page in flight, so a caller that needs every page can
+	// wait for it instead of starting a duplicate request.
+	#pendingGenerations: Promise<void> | null = null;
 
 	load(pubkey: string, range: UsageDay | null): void {
 		this.clear();
@@ -87,24 +90,49 @@ class UserUsageState {
 		void this.#loadDetail(pubkey, range, controller.signal);
 		if (range !== null) {
 			this.generationsStatus = 'loading';
-			void this.#loadGenerations(pubkey, range, 0, controller.signal);
+			void this.#trackGenerations(this.#loadGenerations(pubkey, range, 0, controller.signal));
 		}
 	}
 
-	async loadMoreGenerations(): Promise<void> {
+	loadMoreGenerations(): Promise<void> {
+		if (this.#pendingGenerations !== null) return this.#pendingGenerations;
 		const controller = this.#abort;
 		if (
 			controller === null ||
 			this.#pubkey === null ||
 			this.#range === null ||
-			this.#nextOffset === null ||
-			this.loadingMoreGenerations
+			this.#nextOffset === null
 		) {
-			return;
+			return Promise.resolve();
 		}
 		this.loadingMoreGenerations = true;
-		await this.#loadGenerations(this.#pubkey, this.#range, this.#nextOffset, controller.signal);
-		if (!controller.signal.aborted) this.loadingMoreGenerations = false;
+		return this.#trackGenerations(
+			this.#loadGenerations(this.#pubkey, this.#range, this.#nextOffset, controller.signal).then(
+				() => {
+					if (!controller.signal.aborted) this.loadingMoreGenerations = false;
+				}
+			)
+		);
+	}
+
+	// Every generation of the loaded day, fetching the pages not shown yet.
+	async loadAllGenerations(): Promise<UsageGenerationRecord[]> {
+		const controller = this.#abort;
+		if (controller === null || this.#range === null) {
+			throw new UsageLoadError('no day of user generations is loaded');
+		}
+		while (
+			!controller.signal.aborted &&
+			(this.#pendingGenerations !== null || this.hasMoreGenerations) &&
+			this.generationsStatus !== 'error'
+		) {
+			await this.loadMoreGenerations();
+		}
+		if (controller.signal.aborted) throw new UsageLoadError('user usage changed during export');
+		if (this.generationsStatus !== 'ready') {
+			throw new UsageLoadError('user generations unavailable');
+		}
+		return this.generations;
 	}
 
 	clear(): void {
@@ -113,6 +141,7 @@ class UserUsageState {
 		this.#pubkey = null;
 		this.#range = null;
 		this.#nextOffset = null;
+		this.#pendingGenerations = null;
 		this.record = null;
 		this.generationKinds = [];
 		this.status = 'idle';
@@ -120,6 +149,14 @@ class UserUsageState {
 		this.generationsStatus = 'idle';
 		this.hasMoreGenerations = false;
 		this.loadingMoreGenerations = false;
+	}
+
+	#trackGenerations(request: Promise<void>): Promise<void> {
+		const tracked = request.finally(() => {
+			if (this.#pendingGenerations === tracked) this.#pendingGenerations = null;
+		});
+		this.#pendingGenerations = tracked;
+		return tracked;
 	}
 
 	async #loadDetail(pubkey: string, range: UsageDay | null, signal: AbortSignal): Promise<void> {

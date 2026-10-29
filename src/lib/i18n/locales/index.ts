@@ -433,6 +433,11 @@ export interface Dictionary {
 	'usage.generations.promptCopy': string;
 	'usage.generations.promptCopied': string;
 	'usage.generations.promptCopyFailed': string;
+	'usage.export.button': string;
+	'usage.export.exporting': string;
+	'usage.export.failed': string;
+	'usage.export.metric': string;
+	'usage.export.value': string;
 	'resources.title': string;
 	'resources.subtitle': string;
 	'resources.loading': string;

@@ -17,34 +17,28 @@ before the Change Date. See LICENSE for complete terms.
 	import { decode } from 'nostr-tools/nip19';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import type { GenerationKind } from '$lib/api/contract';
+	import { FileDown } from '@lucide/svelte';
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
-	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
+	import { t, ti } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
-	import { userUsage, type UsageDay } from '$lib/state/user-usage.svelte';
+	import { logBoundaryError } from '$lib/utils';
+	import { userUsage } from '$lib/state/user-usage.svelte';
 	import { localDay, userUsageHref } from '../usage-day';
+	import { formatGenerationKind, formatUsageDay, formatUsageTime } from '../usage-format';
 	import UsageNumber from '../UsageNumber.svelte';
 	import UsageTimestamp from '../UsageTimestamp.svelte';
 	import UsagePrompt from './UsagePrompt.svelte';
-
-	const generationKindKeys: Record<GenerationKind, TranslationKey> = {
-		render: 'generatedImages.kind.render',
-		edit: 'generatedImages.kind.edit',
-		'style-transfer': 'generatedImages.kind.styleTransfer',
-		upscale: 'generatedImages.kind.upscale',
-		'photo-processing': 'generatedImages.kind.photo-processing',
-		'object-replacement': 'generatedImages.kind.objectReplacement',
-		'texture-replacement': 'generatedImages.kind.textureReplacement',
-		'light-settings': 'generatedImages.kind.lightSettings',
-		repaint: 'generatedImages.kind.repaint'
-	};
+	import { buildUserUsageMarkdown } from './user-usage-markdown';
 
 	// The URL is the source of truth: changing either param reloads the page's data.
 	const npub = $derived(page.url.searchParams.get('npub') ?? '');
 	const dateKey = $derived(page.url.searchParams.get('date'));
 	const pubkey = $derived(decodeNpub(npub));
 	const day = $derived(dateKey === null ? null : localDay(dateKey));
+
+	let exporting = $state(false);
+	let exportFailed = $state(false);
 
 	function decodeNpub(value: string): string | null {
 		if (!value.startsWith('npub1')) return null;
@@ -62,11 +56,46 @@ before the Change Date. See LICENSE for complete terms.
 		const target = pubkey;
 		const selectedDay = day;
 		if (target === null || (dateKey !== null && selectedDay === null)) return;
-		untrack(() => userUsage.load(target, selectedDay));
+		untrack(() => {
+			exportFailed = false;
+			userUsage.load(target, selectedDay);
+		});
 		return () => userUsage.clear();
 	}
 
 	$effect(loadUserUsage);
+
+	async function exportMarkdown(): Promise<void> {
+		const record = userUsage.record;
+		if (record === null) return;
+		exporting = true;
+		exportFailed = false;
+		try {
+			const markdown = buildUserUsageMarkdown({
+				npub,
+				dayStart: day?.from ?? null,
+				record,
+				generationKinds: userUsage.generationKinds,
+				generations: day === null ? null : await userUsage.loadAllGenerations(),
+				origin: page.url.origin
+			});
+			const url = URL.createObjectURL(
+				new Blob([markdown], { type: 'text/markdown;charset=utf-8' })
+			);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `cadbos-usage-${npub}${dateKey === null ? '' : `-${dateKey}`}.md`;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			URL.revokeObjectURL(url);
+		} catch (error) {
+			exportFailed = true;
+			logBoundaryError('usageByUser.exportMarkdown', error);
+		} finally {
+			exporting = false;
+		}
+	}
 
 	function observeLoadMore(sentinel: HTMLElement): () => void {
 		const observer = new IntersectionObserver(
@@ -78,23 +107,6 @@ before the Change Date. See LICENSE for complete terms.
 		observer.observe(sentinel);
 
 		return () => observer.disconnect();
-	}
-
-	function formatDay(selectedDay: UsageDay): string {
-		return new Intl.DateTimeFormat(getLocale(), {
-			day: 'numeric',
-			month: 'long',
-			year: 'numeric'
-		}).format(new Date(selectedDay.from));
-	}
-
-	function formatTime(timestamp: number): string {
-		return new Intl.DateTimeFormat(getLocale(), {
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit',
-			hourCycle: 'h23'
-		}).format(new Date(timestamp));
 	}
 </script>
 
@@ -110,14 +122,32 @@ before the Change Date. See LICENSE for complete terms.
 
 <header class="usage-header">
 	<a class="back-link" href={resolve('/usage', {})}>{t('usage.byUser.back')}</a>
-	<h1>{pubkey === null ? t('usage.byUser.title') : ti('usage.byUser.heading', { user: npub })}</h1>
+	<div class="heading-row">
+		<h1>
+			{pubkey === null ? t('usage.byUser.title') : ti('usage.byUser.heading', { user: npub })}
+		</h1>
+		{#if auth.status === 'authenticated' && pubkey !== null && (dateKey === null || day !== null)}
+			<button
+				type="button"
+				class="export-button"
+				disabled={userUsage.status !== 'ready' || exporting}
+				onclick={exportMarkdown}
+			>
+				<FileDown size={16} strokeWidth={1.8} aria-hidden="true" />
+				{exporting ? t('usage.export.exporting') : t('usage.export.button')}
+			</button>
+		{/if}
+	</div>
 	{#if day === null}
 		<p>{t('usage.byUser.subtitle')}</p>
 	{:else}
 		<p>
-			{ti('usage.byUser.daySubtitle', { date: formatDay(day) })}
+			{ti('usage.byUser.daySubtitle', { date: formatUsageDay(day.from) })}
 			<a href={userUsageHref(npub)}>{t('usage.byUser.allTime')}</a>
 		</p>
+	{/if}
+	{#if exportFailed}
+		<p class="error" role="alert">{t('usage.export.failed')}</p>
 	{/if}
 </header>
 
@@ -219,7 +249,7 @@ before the Change Date. See LICENSE for complete terms.
 						<tbody>
 							{#each userUsage.generationKinds as entry (entry.kind)}
 								<tr>
-									<th scope="row">{t(generationKindKeys[entry.kind])}</th>
+									<th scope="row">{formatGenerationKind(entry.kind)}</th>
 									<td class="numeric-column"><UsageNumber kind="count" value={entry.count} /></td>
 								</tr>
 							{/each}
@@ -256,8 +286,8 @@ before the Change Date. See LICENSE for complete terms.
 								{#each userUsage.generations as generation (generation.id)}
 									<tr>
 										<th scope="row" class="generation-id">{generation.id}</th>
-										<td>{formatTime(generation.createdAt)}</td>
-										<td>{t(generationKindKeys[generation.kind])}</td>
+										<td>{formatUsageTime(generation.createdAt)}</td>
+										<td>{formatGenerationKind(generation.kind)}</td>
 										<td class="prompt">
 											{#if generation.prompt === ''}
 												{t('usage.emptyValue')}
@@ -326,8 +356,48 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-accent-hover);
 	}
 
+	.heading-row {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
 	h1 {
+		min-width: 0;
 		overflow-wrap: anywhere;
+	}
+
+	.export-button {
+		display: inline-flex;
+		flex: 0 0 auto;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.875rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font: inherit;
+		font-size: 0.875rem;
+		font-weight: 600;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+
+	.export-button:hover:not(:disabled) {
+		background: var(--color-surface-hover);
+	}
+
+	.export-button:disabled {
+		cursor: default;
+		opacity: 0.6;
+	}
+
+	@media (max-width: 720px) {
+		.heading-row {
+			flex-direction: column;
+		}
 	}
 
 	.totals .tile-time {
