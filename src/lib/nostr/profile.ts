@@ -29,7 +29,7 @@ interface ProfilePool {
 interface FetchNostrProfileOptions {
 	pool?: ProfilePool;
 	relays?: readonly string[];
-	allowedReadRelays?: readonly string[];
+	allowedProfileRelays?: readonly string[];
 	maxWait?: number;
 }
 
@@ -44,13 +44,30 @@ export async function fetchNostrProfile(
 ): Promise<NostrProfile> {
 	if (!PUBKEY_HEX.test(pubkey)) return { relays: [] };
 
-	const pool = options.pool ?? new SimplePool();
-	const bootstrapRelays = unique([...NOSTR_PROFILE_BOOTSTRAP_RELAYS, ...(options.relays ?? [])]);
-	const allowedReadRelays = new Set(
-		unique([...NOSTR_PROFILE_BOOTSTRAP_RELAYS, ...(options.allowedReadRelays ?? [])])
+	let pool = options.pool;
+	if (!pool) {
+		const simplePool = new SimplePool();
+		simplePool.onRelayConnectionFailure = (relay) => {
+			console.warn(
+				JSON.stringify({
+					event: 'nostr_profile_relay_connection_failed',
+					relayOrigin: new URL(relay).origin
+				})
+			);
+		};
+		pool = simplePool;
+	}
+	const bootstrapRelays = normalizedRelayUrls([
+		...NOSTR_PROFILE_BOOTSTRAP_RELAYS,
+		...(options.relays ?? [])
+	]);
+	const allowedProfileRelays = new Set(
+		normalizedRelayUrls([...bootstrapRelays, ...(options.allowedProfileRelays ?? [])])
 	);
 	const maxWait = options.maxWait ?? DEFAULT_MAX_WAIT;
 	const closeRelays = new Set(bootstrapRelays);
+	let bootstrapProfile: NostrProfile = { relays: [] };
+	let stage: 'bootstrap' | 'profile' = 'bootstrap';
 
 	try {
 		const bootstrapEvents = await pool.querySync(
@@ -60,33 +77,36 @@ export async function fetchNostrProfile(
 		);
 		const relayEvent = latestEvent(bootstrapEvents, RELAY_LIST_KIND);
 		const relays = relayEvent ? parseRelayList(relayEvent) : [];
-		const readRelays = relays
-			.filter((relay) => relay.read && allowedReadRelays.has(relay.url))
+		const writeRelays = relays
+			.filter((relay) => relay.write && allowedProfileRelays.has(relay.url))
 			.map((relay) => relay.url);
-		const profileRelays = unique([...readRelays, ...bootstrapRelays]);
+		const profileRelays = normalizedRelayUrls([...writeRelays, ...bootstrapRelays]);
 		profileRelays.forEach((relay) => closeRelays.add(relay));
-		const bootstrapProfile = {
+		bootstrapProfile = {
 			...parseMetadata(latestEvent(bootstrapEvents, PROFILE_KIND)),
 			relays
 		};
 
-		let profileEvents: Event[] = [];
-		if (readRelays.length > 0) {
-			try {
-				profileEvents = await pool.querySync(
-					profileRelays,
-					{ kinds: [PROFILE_KIND], authors: [pubkey] },
-					{ maxWait }
-				);
-			} catch {
-				return bootstrapProfile;
-			}
-		}
+		if (writeRelays.length === 0) return bootstrapProfile;
+
+		stage = 'profile';
+		const profileEvents = await pool.querySync(
+			profileRelays,
+			{ kinds: [PROFILE_KIND], authors: [pubkey] },
+			{ maxWait }
+		);
 		const profileEvent = latestEvent([...bootstrapEvents, ...profileEvents], PROFILE_KIND);
 
 		return { ...parseMetadata(profileEvent), relays };
-	} catch {
-		return { relays: [] };
+	} catch (error) {
+		console.error(
+			JSON.stringify({
+				event: 'nostr_profile_query_failed',
+				stage,
+				error: error instanceof Error ? error.name : typeof error
+			})
+		);
+		return bootstrapProfile;
 	} finally {
 		pool.close?.([...closeRelays]);
 	}
@@ -138,15 +158,14 @@ function normalizedRelayUrl(value: string): string | null {
 		if (url.protocol !== 'wss:' && url.protocol !== 'ws:') return null;
 		url.hash = '';
 		url.search = '';
-		if (url.pathname === '/') url.pathname = '';
 		return url.toString();
 	} catch {
 		return null;
 	}
 }
 
-function unique(values: string[]): string[] {
-	return [...new Set(values)];
+function normalizedRelayUrls(values: readonly string[]): string[] {
+	return [...new Set(values.map(normalizedRelayUrl).filter((url) => url !== null))];
 }
 
 function safeHttpUrl(value: unknown): string | undefined {
