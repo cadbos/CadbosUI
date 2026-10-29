@@ -15,7 +15,7 @@
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
-import type { UsageGenerationsResponse } from '$lib/api/contract';
+import { generationKinds, type UsageGenerationsResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
@@ -36,7 +36,8 @@ const generationsSearchParamsSchema = z
 			.int()
 			.min(1)
 			.max(MAX_GENERATIONS_PAGE_SIZE)
-			.default(DEFAULT_GENERATIONS_PAGE_SIZE)
+			.default(DEFAULT_GENERATIONS_PAGE_SIZE),
+		kind: z.enum(generationKinds).optional()
 	})
 	.refine(isOrderedRange);
 
@@ -49,13 +50,13 @@ export const GET: RequestHandler = async ({ params, url, platform, locals }) => 
 
 	const parsed = generationsSearchParamsSchema.safeParse(Object.fromEntries(url.searchParams));
 	if (!parsed.success) return apiError(400, 'invalid_request', 'Invalid search params');
-	const { from, to, offset, size } = parsed.data;
+	const { from, to, offset, size, kind } = parsed.data;
 
 	const db = getDb(platform);
 	const userId = await getUserIdByPubkey(db, params.pubkey);
 	if (userId === null) return apiError(404, 'user_not_found', 'User not found');
 
-	const page = await listUserGenerations(db, userId, { from, to }, offset, size);
+	const page = await listUserGenerations(db, userId, { from, to }, offset, size, kind);
 	return json({
 		generations: page.generations,
 		pagination: { offset, size, hasMore: page.hasMore }

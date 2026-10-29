@@ -30,20 +30,26 @@ before the Change Date. See LICENSE for complete terms.
 			? null
 			: {
 					date: localDateKey(timestamp),
-					time: `${TIMESTAMP_SEPARATOR}${formatUsageTimeOfDay(timestamp)}`
+					time: formatUsageTimeOfDay(timestamp)
 				}
 	);
 </script>
 
 {#if formatted === null}
 	{t('usage.emptyValue')}
-{:else if npub !== undefined}
-	<a href={userUsageHref(npub, formatted.date)}>{formatted.date}</a>{formatted.time}
 {:else}
-	{formatted.date}{formatted.time}
+	<span class="part"
+		>{#if npub !== undefined}<a href={userUsageHref(npub, formatted.date)}>{formatted.date}</a
+			>{:else}{formatted.date}{/if}</span
+	>{TIMESTAMP_SEPARATOR}<span class="part">{formatted.time}</span>
 {/if}
 
 <style>
+	/* A narrow cell wraps between the date and the time, never inside either. */
+	.part {
+		white-space: nowrap;
+	}
+
 	a {
 		color: var(--color-accent-text);
 		text-decoration: underline;

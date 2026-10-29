@@ -22,6 +22,7 @@ before the Change Date. See LICENSE for complete terms.
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { formatShortNpub } from '$lib/nostr/short-npub';
+	import { generationKinds } from '$lib/api/contract';
 	import { auth } from '$lib/state/auth.svelte';
 	import { logBoundaryError } from '$lib/utils';
 	import { userUsage } from '$lib/state/user-usage.svelte';
@@ -36,11 +37,18 @@ before the Change Date. See LICENSE for complete terms.
 
 	let { data }: PageProps = $props();
 
-	// The URL is the source of truth: changing either param reloads the page's data.
+	// The URL is the source of truth: changing `npub` or `date` reloads the
+	// page's data, changing `kind` only the day's generations.
 	const npub = $derived(page.url.searchParams.get('npub') ?? '');
 	const dateKey = $derived(page.url.searchParams.get('date'));
+	const kindParam = $derived(page.url.searchParams.get('kind'));
 	const pubkey = $derived(decodeNpub(npub));
 	const day = $derived(dateKey === null ? null : localDay(dateKey));
+	// A kind narrows only a day's generations, so without a day it is ignored.
+	const kind = $derived(
+		day === null ? null : (generationKinds.find((candidate) => candidate === kindParam) ?? null)
+	);
+	const invalidKind = $derived(day !== null && kindParam !== null && kind === null);
 
 	let exporting = $state(false);
 	let exportFailed = $state(false);
@@ -63,16 +71,23 @@ before the Change Date. See LICENSE for complete terms.
 		if (auth.status !== 'authenticated') return;
 		const target = pubkey;
 		const selectedDay = day;
-		if (target === null || (dateKey !== null && selectedDay === null)) return;
+		if (target === null || (dateKey !== null && selectedDay === null) || invalidKind) return;
 		untrack(() => {
 			loadVersion += 1;
 			exportFailed = false;
-			userUsage.load(target, selectedDay);
+			userUsage.load(target, selectedDay, kind);
 		});
 		return () => userUsage.clear();
 	}
 
 	$effect(loadUserUsage);
+
+	function showSelectedKind(): void {
+		const selected = kind;
+		untrack(() => userUsage.selectKind(selected));
+	}
+
+	$effect(showSelectedKind);
 
 	async function exportMarkdown(): Promise<void> {
 		const record = userUsage.record;
@@ -86,6 +101,7 @@ before the Change Date. See LICENSE for complete terms.
 				dayStart: day?.from ?? null,
 				record,
 				generationKinds: userUsage.generationKinds,
+				generationKind: kind,
 				generations: day === null ? null : await userUsage.loadAllGenerations(),
 				origin: page.url.origin
 			});
@@ -94,7 +110,7 @@ before the Change Date. See LICENSE for complete terms.
 			);
 			const link = document.createElement('a');
 			link.href = url;
-			link.download = `cadbos-usage-${npub}${dateKey === null ? '' : `-${dateKey}`}.md`;
+			link.download = `cadbos-usage-${npub}${dateKey === null ? '' : `-${dateKey}`}${kind === null ? '' : `-${kind}`}.md`;
 			document.body.appendChild(link);
 			link.click();
 			link.remove();
@@ -193,6 +209,8 @@ before the Change Date. See LICENSE for complete terms.
 	<p class="status error" role="alert">{t('usage.byUser.invalidNpub')}</p>
 {:else if dateKey !== null && day === null}
 	<p class="status error" role="alert">{t('usage.byUser.invalidDate')}</p>
+{:else if invalidKind}
+	<p class="status error" role="alert">{t('usage.byUser.invalidKind')}</p>
 {:else if userUsage.status === 'not-found'}
 	<p class="status error" role="alert">{t('usage.byUser.notFound')}</p>
 {:else if userUsage.status === 'error'}
@@ -270,7 +288,12 @@ before the Change Date. See LICENSE for complete terms.
 
 	{#if record !== null}
 		<section class="usage-section" aria-labelledby="usage-kinds-title">
-			<h2 id="usage-kinds-title">{t('usage.kinds.title')}</h2>
+			<div class="section-heading">
+				<h2 id="usage-kinds-title">{t('usage.kinds.title')}</h2>
+				{#if dateKey !== null && kind !== null}
+					<a href={userUsageHref(npub, dateKey)} data-sveltekit-noscroll>{t('usage.kinds.all')}</a>
+				{/if}
+			</div>
 			{#if userUsage.generationKinds.length === 0}
 				<p class="status">{t('usage.kinds.empty')}</p>
 			{:else}
@@ -284,8 +307,18 @@ before the Change Date. See LICENSE for complete terms.
 						</thead>
 						<tbody>
 							{#each userUsage.generationKinds as entry (entry.kind)}
-								<tr>
-									<th scope="row">{formatGenerationKind(entry.kind)}</th>
+								<tr class={{ selected: entry.kind === kind }}>
+									<th scope="row">
+										{#if dateKey === null}
+											{formatGenerationKind(entry.kind)}
+										{:else}
+											<a
+												href={userUsageHref(npub, dateKey, entry.kind)}
+												aria-current={entry.kind === kind ? 'true' : undefined}
+												data-sveltekit-noscroll>{formatGenerationKind(entry.kind)}</a
+											>
+										{/if}
+									</th>
 									<td class="numeric-column"><UsageNumber kind="count" value={entry.count} /></td>
 								</tr>
 							{/each}
@@ -297,7 +330,11 @@ before the Change Date. See LICENSE for complete terms.
 
 		{#if day !== null}
 			<section class="usage-section" aria-labelledby="usage-generations-title">
-				<h2 id="usage-generations-title">{t('usage.generations.title')}</h2>
+				<h2 id="usage-generations-title">
+					{kind === null
+						? t('usage.generations.title')
+						: ti('usage.generations.kindTitle', { kind: formatGenerationKind(kind) })}
+				</h2>
 				{#if userUsage.generationsStatus === 'loading'}
 					<p class="status">{t('usage.generations.loading')}</p>
 				{:else if userUsage.generationsStatus === 'error' && userUsage.generations.length === 0}
@@ -311,7 +348,9 @@ before the Change Date. See LICENSE for complete terms.
 								<tr>
 									<th scope="col">{t('usage.generations.column.id')}</th>
 									<th scope="col">{t('usage.generations.column.time')}</th>
-									<th scope="col">{t('usage.generations.column.kind')}</th>
+									{#if kind === null}
+										<th scope="col">{t('usage.generations.column.kind')}</th>
+									{/if}
 									<th scope="col">{t('usage.generations.column.prompt')}</th>
 									<th scope="col">{t('usage.generations.column.source')}</th>
 									<th scope="col">{t('usage.generations.column.result')}</th>
@@ -323,7 +362,9 @@ before the Change Date. See LICENSE for complete terms.
 									<tr>
 										<th scope="row" class="generation-id">{generation.id}</th>
 										<td>{formatUsageTimestamp(generation.createdAt)}</td>
-										<td>{formatGenerationKind(generation.kind)}</td>
+										{#if kind === null}
+											<td>{formatGenerationKind(generation.kind)}</td>
+										{/if}
 										<td class="prompt">
 											{#if generation.prompt === ''}
 												{t('usage.emptyValue')}
@@ -459,16 +500,39 @@ before the Change Date. See LICENSE for complete terms.
 		}
 	}
 
-	.totals .tile-time {
-		font-size: 0.9375rem;
-		text-align: right;
-	}
-
 	.usage-section {
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
 		min-width: 0;
+	}
+
+	.section-heading {
+		display: flex;
+		align-items: baseline;
+		gap: 0.75rem;
+	}
+
+	.section-heading a,
+	.usage-section th a {
+		color: var(--color-accent-text);
+		text-decoration: underline;
+		text-underline-offset: 0.15em;
+	}
+
+	.section-heading a:hover,
+	.usage-section th a:hover {
+		color: var(--color-accent-hover);
+	}
+
+	.usage-section tr.selected {
+		background: var(--color-surface-hover);
+	}
+
+	.usage-section tr.selected th a {
+		color: var(--color-text);
+		font-weight: 700;
+		text-decoration: none;
 	}
 
 	.usage-section h2 {

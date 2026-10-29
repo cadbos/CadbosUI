@@ -296,4 +296,19 @@ describe('GET /api/usage/users/[pubkey]/generations', () => {
 		expect(result.generations.map((generation) => generation.id)).toEqual(['generation-2']);
 		expect(result.pagination).toEqual({ offset: 1, size: 1, hasMore: true });
 	});
+
+	it('narrows the list to one kind and rejects an unknown one', async () => {
+		const db = await seedPlatform();
+
+		const response = await callGenerations(ADMIN, db, USER_PUBKEY, '?from=0&to=10000&kind=render');
+		const result = (await response.json()) as UsageGenerationsResponse;
+
+		expect(result.generations.map((generation) => generation.id)).toEqual([
+			'generation-3',
+			'generation-1'
+		]);
+		expect(
+			(await callGenerations(ADMIN, db, USER_PUBKEY, '?from=0&to=10000&kind=legacy-kind')).status
+		).toBe(400);
+	});
 });

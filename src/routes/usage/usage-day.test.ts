@@ -66,5 +66,8 @@ describe('userUsageHref', () => {
 		expect(userUsageHref('npub1abc', '2026-01-02')).toBe(
 			'/usage/by-user?npub=npub1abc&date=2026-01-02'
 		);
+		expect(userUsageHref('npub1abc', '2026-01-02', 'render')).toBe(
+			'/usage/by-user?npub=npub1abc&date=2026-01-02&kind=render'
+		);
 	});
 });

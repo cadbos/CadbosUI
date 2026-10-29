@@ -128,6 +128,11 @@ before the Change Date. See LICENSE for complete terms.
 		font-weight: 500;
 	}
 
+	.usage-shell :global(.totals dd.tile-time) {
+		font-size: 0.875rem;
+		text-align: right;
+	}
+
 	.usage-shell :global(.totals .quota-quotient) {
 		display: grid;
 		grid-template-columns: auto 1fr;

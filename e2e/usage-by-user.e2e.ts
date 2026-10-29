@@ -278,6 +278,62 @@ test("shows the day's figures and generations and reloads when the query changes
 	expect(requested(requests, `/api/usage/users/${PUBKEY}`).at(-1)).toBe('');
 });
 
+test("narrows the day's generations to a kind picked in generation types", async ({ page }) => {
+	const requests = await mockUsage(page);
+	await page.route(`**/api/usage/users/${PUBKEY}/generations?*`, async (route) => {
+		const url = new URL(route.request().url());
+		requests.push(url);
+		const kind = url.searchParams.get('kind');
+		await route.fulfill({
+			json: {
+				...GENERATIONS,
+				generations: GENERATIONS.generations.filter(
+					(generation) => kind === null || generation.kind === kind
+				)
+			}
+		});
+	});
+	const kinds = page.getByRole('region', { name: ru['usage.kinds.title'] });
+	const generationsTitle = ru['usage.generations.kindTitle'].replace(
+		'{kind}',
+		ru['generatedImages.kind.render']
+	);
+
+	await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
+	await expect(page.getByRole('row', { name: /generation-2/ })).toBeVisible();
+	await kinds.getByRole('link', { name: ru['generatedImages.kind.render'], exact: true }).click();
+
+	await expect(page).toHaveURL(`/usage/by-user?npub=${NPUB}&date=2026-01-03&kind=render`);
+	const generations = page.getByRole('region', { name: generationsTitle });
+	await expect(generations.getByRole('row', { name: /generation-1/ })).toBeVisible();
+	await expect(generations.getByRole('row', { name: /generation-2/ })).toHaveCount(0);
+	await expect(
+		generations.getByRole('columnheader', { name: ru['usage.generations.column.kind'] })
+	).toHaveCount(0);
+	await expect(
+		kinds.getByRole('link', { name: ru['generatedImages.kind.render'], exact: true })
+	).toHaveAttribute('aria-current', 'true');
+	expect(requested(requests, `/api/usage/users/${PUBKEY}`)).toHaveLength(1);
+	expect(
+		requested(requests, `/api/usage/users/${PUBKEY}/generations`).map((search) =>
+			new URLSearchParams(search).get('kind')
+		)
+	).toEqual([null, 'render']);
+
+	await kinds.getByRole('link', { name: ru['usage.kinds.all'] }).click();
+
+	await expect(page).toHaveURL(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
+	const allGenerations = page.getByRole('region', { name: ru['usage.generations.title'] });
+	await expect(allGenerations.getByRole('row', { name: /generation-2/ })).toBeVisible();
+	await expect(
+		allGenerations.getByRole('columnheader', { name: ru['usage.generations.column.kind'] })
+	).toBeVisible();
+	expect(requested(requests, `/api/usage/users/${PUBKEY}`)).toHaveLength(1);
+
+	await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03&kind=legacy`);
+	await expect(page.getByRole('alert')).toHaveText(ru['usage.byUser.invalidKind']);
+});
+
 test('loads the next page of generations when scrolled to the end of the table', async ({
 	page
 }) => {

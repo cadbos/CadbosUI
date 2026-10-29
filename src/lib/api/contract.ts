@@ -698,7 +698,7 @@ export interface UserUsageDetailResponse {
 }
 
 // GET /api/usage/users/[pubkey]/generations — that user's generations in the
-// [from, to) window, newest first.
+// [from, to) window, newest first; `kind` narrows them to one generation kind.
 export interface UsageGenerationRecord {
 	id: string;
 	kind: GenerationKind;

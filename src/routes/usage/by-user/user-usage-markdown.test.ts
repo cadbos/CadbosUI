@@ -46,6 +46,7 @@ function input(overrides: Partial<UserUsageMarkdownInput> = {}): UserUsageMarkdo
 			{ kind: 'style-transfer', count: 1 }
 		],
 		generations: null,
+		generationKind: null,
 		origin: 'https://cadbos.example',
 		...overrides
 	};
@@ -148,5 +149,29 @@ describe('buildUserUsageMarkdown', () => {
 
 		expect(markdown).toContain('## Типы генераций\n\nГенераций нет.');
 		expect(markdown).toContain('## Генерации за день\n\nЗа этот день генераций нет.\n');
+	});
+
+	it('drops the kind column for generations narrowed to one kind', () => {
+		const markdown = buildUserUsageMarkdown(
+			input({
+				dayStart: DAY_START,
+				generationKind: 'render',
+				generations: [
+					{
+						id: 'generation-1',
+						kind: 'render',
+						createdAt: AT_NOON,
+						prompt: 'cozy',
+						source: { key: 'uploads/source.webp', url: '/api/media/uploads/source.webp' },
+						result: { key: 'uploads/result.webp', url: '/api/media/uploads/result.webp' },
+						reference: null
+					}
+				]
+			})
+		);
+
+		expect(markdown).toContain('## Генерации за день: Создание');
+		expect(markdown).toContain('| ID | Время | Промпт | Исходное | Результат | Референс |');
+		expect(markdown).toContain('| generation-1 | 2026-01-03 \\| 12:00 05s | cozy |');
 	});
 });

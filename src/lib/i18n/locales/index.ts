@@ -409,6 +409,7 @@ export interface Dictionary {
 	'usage.byUser.summary': string;
 	'usage.byUser.invalidNpub': string;
 	'usage.byUser.invalidDate': string;
+	'usage.byUser.invalidKind': string;
 	'usage.byUser.notFound': string;
 	'usage.byUser.loading': string;
 	'usage.byUser.failed': string;
@@ -416,7 +417,9 @@ export interface Dictionary {
 	'usage.kinds.column.kind': string;
 	'usage.kinds.column.count': string;
 	'usage.kinds.empty': string;
+	'usage.kinds.all': string;
 	'usage.generations.title': string;
+	'usage.generations.kindTitle': string;
 	'usage.generations.column.id': string;
 	'usage.generations.column.time': string;
 	'usage.generations.column.kind': string;

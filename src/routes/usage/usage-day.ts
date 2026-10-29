@@ -14,6 +14,7 @@
 
 import { resolve } from '$app/paths';
 import type { PathnameWithSearchOrHash } from '$app/types';
+import type { GenerationKind } from '$lib/api/contract';
 import type { UsageDay } from '$lib/state/user-usage.svelte';
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -43,7 +44,12 @@ export function localDay(dateKey: string): UsageDay | null {
 	return { from: start.getTime(), to: new Date(year, month, day + 1).getTime() };
 }
 
-export function userUsageHref(npub: string, dateKey?: string): string {
-	const search = new URLSearchParams({ npub, ...(dateKey === undefined ? {} : { date: dateKey }) });
+// A generation kind narrows only a day's generations, so it needs a day.
+export function userUsageHref(npub: string, dateKey?: string, kind?: GenerationKind): string {
+	const search = new URLSearchParams({ npub });
+	if (dateKey !== undefined) {
+		search.set('date', dateKey);
+		if (kind !== undefined) search.set('kind', kind);
+	}
 	return resolve(`/usage/by-user?${search}` as PathnameWithSearchOrHash, {});
 }

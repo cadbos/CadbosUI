@@ -954,10 +954,13 @@ export async function listUserGenerations(
 	userId: string,
 	range: UsageRange,
 	offset: number,
-	size: number
+	size: number,
+	// Only generations of this kind; every recognized kind when omitted.
+	kind?: GenerationKind
 ): Promise<{ generations: UsageGenerationRecord[]; hasMore: boolean }> {
 	// Unrecognized kinds are left out in SQL, as in listUserGenerationKinds, so
 	// the page comes straight from LIMIT/OFFSET without scanning earlier rows.
+	const kinds = kind === undefined ? generationKinds : [kind];
 	const rows = await db.all<UsageGenerationRow>(
 		sql`SELECT g.id, g.kind, g.created_at, g.prompt,
 			source_bucket.name AS source_bucket_name, source_media.filename AS source_filename,
@@ -973,7 +976,7 @@ export async function listUserGenerations(
 			LEFT JOIN buckets reference_bucket ON reference_bucket.id = reference_media.bucket
 			WHERE ${scopeCondition({ userId, range }, sql`g.user_id`, sql`g.created_at`)}
 			AND g.kind IN (${sql.join(
-				generationKinds.map((kind) => sql`${kind}`),
+				kinds.map((candidate) => sql`${candidate}`),
 				sql`, `
 			)})
 			ORDER BY g.created_at DESC, g.id DESC LIMIT ${size + 1} OFFSET ${offset}`

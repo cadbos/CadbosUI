@@ -131,4 +131,28 @@ describe('userUsage.loadAllGenerations', () => {
 
 		await expect(exported).rejects.toThrow('user usage changed during export');
 	});
+
+	it("reloads only the day's generations when another kind is picked", async () => {
+		const fetcher = mockApi([
+			{ generations: [generation(1)], pagination: { offset: 0, size: 20, hasMore: false } },
+			{ generations: [generation(2)], pagination: { offset: 0, size: 20, hasMore: false } }
+		]);
+
+		userUsage.load(PUBKEY, DAY);
+		await userUsage.loadAllGenerations();
+		userUsage.selectKind('render');
+		userUsage.selectKind('render');
+		const generations = await userUsage.loadAllGenerations();
+
+		expect(generations.map((entry) => entry.id)).toEqual(['generation-2']);
+		const requests = fetcher.mock.calls.map(
+			([input]) => new URL(String(input), 'https://cadbos.example')
+		);
+		expect(requests.filter((url) => !url.pathname.endsWith('/generations'))).toHaveLength(1);
+		expect(
+			requests
+				.filter((url) => url.pathname.endsWith('/generations'))
+				.map((url) => url.searchParams.get('kind'))
+		).toEqual([null, 'render']);
+	});
 });

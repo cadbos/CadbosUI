@@ -16,6 +16,7 @@ import { z } from 'zod';
 import {
 	generationKinds,
 	mediaAccessSchema,
+	type GenerationKind,
 	type GenerationKindCount,
 	type UsageGenerationRecord,
 	type UserUsageRecord
@@ -63,6 +64,9 @@ function rangeSearch(range: UsageDay): URLSearchParams {
 	return new URLSearchParams({ from: String(range.from), to: String(range.to) });
 }
 
+// The generations a day shows: all of them, or only one kind.
+export type GenerationKindFilter = GenerationKind | null;
+
 class UserUsageState {
 	record = $state.raw<UserUsageRecord | null>(null);
 	generationKinds = $state.raw<GenerationKindCount[]>([]);
@@ -72,31 +76,40 @@ class UserUsageState {
 	hasMoreGenerations = $state(false);
 	loadingMoreGenerations = $state(false);
 	#abort: AbortController | null = null;
+	// Generations have their own controller, so picking another kind cancels
+	// only their requests and leaves the user's figures in place.
+	#generationsAbort: AbortController | null = null;
 	#pubkey: string | null = null;
 	#range: UsageDay | null = null;
+	#kind: GenerationKindFilter = null;
 	#nextOffset: number | null = null;
 	// The generations page in flight, so a caller that needs every page can
 	// wait for it instead of starting a duplicate request.
 	#pendingGenerations: Promise<void> | null = null;
 
-	load(pubkey: string, range: UsageDay | null): void {
+	load(pubkey: string, range: UsageDay | null, kind: GenerationKindFilter = null): void {
 		this.clear();
 		const controller = new AbortController();
 		this.#abort = controller;
 		this.#pubkey = pubkey;
 		this.#range = range;
+		this.#kind = kind;
 		this.status = 'loading';
 
 		void this.#loadDetail(pubkey, range, controller.signal);
-		if (range !== null) {
-			this.generationsStatus = 'loading';
-			void this.#trackGenerations(this.#loadGenerations(pubkey, range, 0, controller.signal));
-		}
+		if (range !== null) this.#restartGenerations();
+	}
+
+	// Shows only generations of `kind` (all when null), reloading just the list.
+	selectKind(kind: GenerationKindFilter): void {
+		if (this.#range === null || kind === this.#kind) return;
+		this.#kind = kind;
+		this.#restartGenerations();
 	}
 
 	loadMoreGenerations(): Promise<void> {
 		if (this.#pendingGenerations !== null) return this.#pendingGenerations;
-		const controller = this.#abort;
+		const controller = this.#generationsAbort;
 		if (
 			controller === null ||
 			this.#pubkey === null ||
@@ -107,17 +120,21 @@ class UserUsageState {
 		}
 		this.loadingMoreGenerations = true;
 		return this.#trackGenerations(
-			this.#loadGenerations(this.#pubkey, this.#range, this.#nextOffset, controller.signal).then(
-				() => {
-					if (!controller.signal.aborted) this.loadingMoreGenerations = false;
-				}
-			)
+			this.#loadGenerations(
+				this.#pubkey,
+				this.#range,
+				this.#kind,
+				this.#nextOffset,
+				controller.signal
+			).then(() => {
+				if (!controller.signal.aborted) this.loadingMoreGenerations = false;
+			})
 		);
 	}
 
 	// Every generation of the loaded day, fetching the pages not shown yet.
 	async loadAllGenerations(): Promise<UsageGenerationRecord[]> {
-		const controller = this.#abort;
+		const controller = this.#generationsAbort;
 		if (controller === null || this.#range === null) {
 			throw new UsageLoadError('no day of user generations is loaded');
 		}
@@ -136,9 +153,12 @@ class UserUsageState {
 
 	clear(): void {
 		this.#abort?.abort();
+		this.#generationsAbort?.abort();
 		this.#abort = null;
+		this.#generationsAbort = null;
 		this.#pubkey = null;
 		this.#range = null;
+		this.#kind = null;
 		this.#nextOffset = null;
 		this.#pendingGenerations = null;
 		this.record = null;
@@ -148,6 +168,22 @@ class UserUsageState {
 		this.generationsStatus = 'idle';
 		this.hasMoreGenerations = false;
 		this.loadingMoreGenerations = false;
+	}
+
+	#restartGenerations(): void {
+		if (this.#pubkey === null || this.#range === null) return;
+		this.#generationsAbort?.abort();
+		const controller = new AbortController();
+		this.#generationsAbort = controller;
+		this.#pendingGenerations = null;
+		this.#nextOffset = null;
+		this.generations = [];
+		this.generationsStatus = 'loading';
+		this.hasMoreGenerations = false;
+		this.loadingMoreGenerations = false;
+		void this.#trackGenerations(
+			this.#loadGenerations(this.#pubkey, this.#range, this.#kind, 0, controller.signal)
+		);
 	}
 
 	#trackGenerations(request: Promise<void>): Promise<void> {
@@ -183,11 +219,13 @@ class UserUsageState {
 	async #loadGenerations(
 		pubkey: string,
 		range: UsageDay,
+		kind: GenerationKindFilter,
 		offset: number,
 		signal: AbortSignal
 	): Promise<void> {
 		try {
 			const search = rangeSearch(range);
+			if (kind !== null) search.set('kind', kind);
 			search.set('offset', String(offset));
 			search.set('size', String(PAGE_SIZE));
 			const response = await fetch(`/api/usage/users/${pubkey}/generations?${search}`, {

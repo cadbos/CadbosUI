@@ -13,6 +13,7 @@
  */
 
 import type {
+	GenerationKind,
 	GenerationKindCount,
 	UsageGenerationRecord,
 	UserUsageRecord
@@ -33,6 +34,8 @@ export interface UserUsageMarkdownInput {
 	generationKinds: GenerationKindCount[];
 	// Only a day's export lists generations.
 	generations: UsageGenerationRecord[] | null;
+	// The one kind those generations were narrowed to; all kinds when null.
+	generationKind: GenerationKind | null;
 	// Image links are made absolute so the file renders them outside the app.
 	origin: string;
 }
@@ -128,44 +131,69 @@ export function buildUserUsageMarkdown(input: UserUsageMarkdownInput): string {
 	];
 
 	if (input.generations !== null) {
+		const { generations, generationKind } = input;
+		// The kind column repeats the chosen kind on every row, so it is dropped.
+		const columns: { header: string; value: (generation: UsageGenerationRecord) => string }[] = [
+			{ header: t('usage.generations.column.id'), value: (generation) => cell(generation.id) },
+			{
+				header: t('usage.generations.column.time'),
+				value: (generation) => cell(formatUsageTimestamp(generation.createdAt))
+			},
+			...(generationKind === null
+				? [
+						{
+							header: t('usage.generations.column.kind'),
+							value: (generation: UsageGenerationRecord) =>
+								cell(formatGenerationKind(generation.kind))
+						}
+					]
+				: []),
+			{
+				header: t('usage.generations.column.prompt'),
+				value: (generation) => cell(generation.prompt || t('usage.emptyValue'))
+			},
+			{
+				header: t('usage.generations.column.source'),
+				value: (generation) =>
+					image(
+						input.origin,
+						generation.source.url,
+						ti('usage.generations.sourceAlt', { id: generation.id })
+					)
+			},
+			{
+				header: t('usage.generations.column.result'),
+				value: (generation) =>
+					image(
+						input.origin,
+						generation.result.url,
+						ti('usage.generations.resultAlt', { id: generation.id })
+					)
+			},
+			{
+				header: t('usage.generations.column.reference'),
+				value: (generation) =>
+					generation.reference === null
+						? t('usage.emptyValue')
+						: image(
+								input.origin,
+								generation.reference.url,
+								ti('usage.generations.referenceAlt', { id: generation.id })
+							)
+			}
+		];
 		sections.push(
-			`## ${t('usage.generations.title')}`,
-			input.generations.length === 0
+			`## ${
+				generationKind === null
+					? t('usage.generations.title')
+					: ti('usage.generations.kindTitle', { kind: formatGenerationKind(generationKind) })
+			}`,
+			generations.length === 0
 				? t('usage.generations.empty')
 				: table(
-						[
-							t('usage.generations.column.id'),
-							t('usage.generations.column.time'),
-							t('usage.generations.column.kind'),
-							t('usage.generations.column.prompt'),
-							t('usage.generations.column.source'),
-							t('usage.generations.column.result'),
-							t('usage.generations.column.reference')
-						],
-						['left', 'left', 'left', 'left', 'left', 'left', 'left'],
-						input.generations.map((generation) => [
-							cell(generation.id),
-							cell(formatUsageTimestamp(generation.createdAt)),
-							cell(formatGenerationKind(generation.kind)),
-							cell(generation.prompt || t('usage.emptyValue')),
-							image(
-								input.origin,
-								generation.source.url,
-								ti('usage.generations.sourceAlt', { id: generation.id })
-							),
-							image(
-								input.origin,
-								generation.result.url,
-								ti('usage.generations.resultAlt', { id: generation.id })
-							),
-							generation.reference === null
-								? t('usage.emptyValue')
-								: image(
-										input.origin,
-										generation.reference.url,
-										ti('usage.generations.referenceAlt', { id: generation.id })
-									)
-						])
+						columns.map((column) => column.header),
+						columns.map(() => 'left'),
+						generations.map((generation) => columns.map((column) => column.value(generation)))
 					)
 		);
 	}
