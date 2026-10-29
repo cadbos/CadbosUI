@@ -750,6 +750,40 @@ for (const viewport of [
 	{ width: 1280, height: 650 },
 	{ width: 390, height: 844 }
 ]) {
+	for (const [width, height] of [
+		[800, 600],
+		[600, 1000]
+	]) {
+		test(`keeps ${width} by ${height} image corners square across tool switches at ${viewport.width}px`, async ({
+			page
+		}) => {
+			await page.setViewportSize(viewport);
+			await authenticate(page);
+			await page.goto('/edit?tool=texture-replacement');
+			await uploadInputs(page, width, height);
+			const editor = page.locator('#mode-panel-edit .canvas-col');
+			const stage = editor.locator('.drawing-stage');
+			await expect(stage.locator('canvas')).toHaveJSProperty('width', width);
+			await expect(stage).toHaveCSS('border-radius', '0px');
+
+			await page.getByRole('tab', { name: ru['edit.tool.repaint'], exact: true }).click();
+			await expect(stage).toHaveCount(0);
+			const preview = editor.locator('.scene-viewport .frame');
+			await expect(preview.locator('img')).toBeVisible();
+			await expect(preview).toHaveCSS('border-radius', '0px');
+			const viewportRadius = await editor
+				.locator('.scene-viewport')
+				.evaluate((node) => getComputedStyle(node).borderRadius);
+			expect(parseFloat(viewportRadius)).toBeGreaterThan(0);
+
+			await page.getByRole('tab', { name: ru['mode.textureReplacement'], exact: true }).click();
+			await expect(stage.locator('canvas')).toHaveJSProperty('width', width);
+			await expect(stage).toHaveCSS('border-radius', '0px');
+			await expect(stage).toHaveCSS('overflow', 'hidden');
+			await expect(editor.locator('.scene-viewport')).toHaveCSS('border-radius', viewportRadius);
+		});
+	}
+
 	test(`portrait mask stage fits ${viewport.width}px and preserves natural drawing coordinates after resize`, async ({
 		page
 	}, testInfo) => {
@@ -763,6 +797,7 @@ for (const viewport of [
 		);
 		await expect(drawing).toHaveJSProperty('width', 600);
 		async function assertStageFits(): Promise<void> {
+			await expect(editor.locator('.drawing-stage')).toHaveCSS('border-radius', '0px');
 			await expect
 				.poll(async () => {
 					const current = await drawing.boundingBox();
