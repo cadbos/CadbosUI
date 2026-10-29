@@ -105,7 +105,9 @@ export function buildUserUsageMarkdown(input: UserUsageMarkdownInput): string {
 		`# ${ti('usage.byUser.heading', { user: input.npub })}`,
 		dayStart === null
 			? t('usage.byUser.subtitle')
-			: ti('usage.byUser.daySubtitle', { date: formatUsageDay(dayStart) }),
+			: ti('usage.byUser.daySubtitle', {
+					period: `**${ti('usage.byUser.dayPeriod', { date: formatUsageDay(dayStart) })}**`
+				}),
 		`## ${t('usage.byUser.summary')}`,
 		table(
 			[t('usage.export.metric'), t('usage.export.value')],

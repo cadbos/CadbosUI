@@ -403,6 +403,7 @@ export interface Dictionary {
 	'usage.byUser.heading': string;
 	'usage.byUser.subtitle': string;
 	'usage.byUser.daySubtitle': string;
+	'usage.byUser.dayPeriod': string;
 	'usage.byUser.back': string;
 	'usage.byUser.allTime': string;
 	'usage.byUser.summary': string;

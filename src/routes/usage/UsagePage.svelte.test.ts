@@ -125,7 +125,7 @@ function pageProps(pubkeyViewer = PUBKEY_VIEWER): PageProps {
 	return { data: { featurebaseAppId: null, pubkeyViewer }, params: {} };
 }
 
-// The ISO 8601 local date and the local time of day: "2026-01-03 | 12:34".
+// The ISO 8601 local date and the local time of day: "2026-01-03 | 12:34 00s".
 function localDateTimeLabel(locale: Locale, timestamp: number): string {
 	const date = new Date(timestamp);
 	const day = [date.getFullYear(), date.getMonth() + 1, date.getDate()]
@@ -136,7 +136,7 @@ function localDateTimeLabel(locale: Locale, timestamp: number): string {
 		minute: '2-digit',
 		hourCycle: 'h23'
 	}).format(date);
-	return `${day} | ${time}`;
+	return `${day} | ${time} ${String(date.getSeconds()).padStart(2, '0')}s`;
 }
 
 function localSizeLabel(locale: Locale, value: number): string {

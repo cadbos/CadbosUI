@@ -74,7 +74,7 @@ describe('buildUserUsageMarkdown', () => {
 				'| Загруженные исходники | 1 \\| 3 МБ |',
 				'| Загруженные референсы | 0 \\| — |',
 				'| Последнее пополнение | — |',
-				'| Последняя трата | 2026-01-03 \\| 12:00 |',
+				'| Последняя трата | 2026-01-03 \\| 12:00 05s |',
 				'',
 				'## Типы генераций',
 				'',
@@ -105,12 +105,12 @@ describe('buildUserUsageMarkdown', () => {
 			})
 		);
 
-		expect(markdown).toContain('Статистика пользователя за 3 января 2026 г.');
+		expect(markdown).toContain('Статистика пользователя **за 3 января 2026 г.**');
 		expect(markdown).toContain(
 			'| ID | Время | Тип генерации | Промпт | Исходное | Результат | Референс |'
 		);
 		expect(markdown).toContain(
-			'| generation-1 | 2026-01-03 \\| 12:00 | Миграция стиля | a \\| b<br>with &lt;b>bold&lt;/b> | ' +
+			'| generation-1 | 2026-01-03 \\| 12:00 05s | Миграция стиля | a \\| b<br>with &lt;b>bold&lt;/b> | ' +
 				'![Исходное изображение генерации generation-1](<https://cadbos.example/api/media/uploads/source.webp>) | ' +
 				'![Результат генерации generation-1](<https://cadbos.example/api/media/uploads/result.webp>) | — |'
 		);

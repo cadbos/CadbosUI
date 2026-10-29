@@ -120,6 +120,11 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
+{#snippet daySubtitle(date: string)}
+	{@const [before, after = ''] = t('usage.byUser.daySubtitle').split('{period}')}
+	{before}<strong class="day-period">{ti('usage.byUser.dayPeriod', { date })}</strong>{after}
+{/snippet}
+
 {#snippet generationsFailed()}
 	<div class="generations-failed">
 		<p class="status error" role="alert">{t('usage.generations.failed')}</p>
@@ -173,7 +178,7 @@ before the Change Date. See LICENSE for complete terms.
 		<p>{t('usage.byUser.subtitle')}</p>
 	{:else}
 		<p>
-			{ti('usage.byUser.daySubtitle', { date: formatUsageDay(day.from) })}
+			{@render daySubtitle(formatUsageDay(day.from))}
 			<a href={userUsageHref(npub)}>{t('usage.byUser.allTime')}</a>
 		</p>
 	{/if}
@@ -385,6 +390,11 @@ before the Change Date. See LICENSE for complete terms.
 	.back-link:hover,
 	.usage-header p a:hover {
 		color: var(--color-accent-hover);
+	}
+
+	.day-period {
+		color: var(--color-text);
+		font-weight: 700;
 	}
 
 	.heading-row {

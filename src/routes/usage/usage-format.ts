@@ -91,16 +91,19 @@ export function formatUsageValue(usageValue: UsageValue): string {
 	return formatNumber(usageValue.value, 0);
 }
 
-// The local time of day a usage timestamp shows, e.g. "18:35".
+// The local time of day a usage timestamp shows, with its seconds set
+// apart after the minutes: "18:35 07s".
 export function formatUsageTimeOfDay(timestamp: number): string {
-	return new Intl.DateTimeFormat(getLocale(), {
+	const date = new Date(timestamp);
+	const minutes = new Intl.DateTimeFormat(getLocale(), {
 		hour: '2-digit',
 		minute: '2-digit',
 		hourCycle: 'h23'
-	}).format(new Date(timestamp));
+	}).format(date);
+	return `${minutes} ${String(date.getSeconds()).padStart(2, '0')}s`;
 }
 
-// Joins the ISO 8601 local date and the time of day: "2026-09-12 | 18:35".
+// Joins the ISO 8601 local date and the time of day: "2026-09-12 | 18:35 07s".
 export const TIMESTAMP_SEPARATOR = ' | ';
 
 export function formatUsageTimestamp(timestamp: number): string {

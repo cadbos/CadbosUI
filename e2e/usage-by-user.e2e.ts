@@ -170,7 +170,7 @@ test("shows the user's figures as tiles above full-width generation types", asyn
 	await expect(tiles).toContainText(
 		`${ru['usage.column.lastDepositAt']} ${ru['usage.emptyValue']}`
 	);
-	await expect(tiles).toContainText(`${ru['usage.column.latestSpendAt']} 2026-01-03 | 12:00`);
+	await expect(tiles).toContainText(`${ru['usage.column.latestSpendAt']} 2026-01-03 | 12:00 00s`);
 	await expect(tiles.getByRole('link', { name: '2026-01-03', exact: true })).toHaveAttribute(
 		'href',
 		`/usage/by-user?npub=${NPUB}&date=2026-01-03`
@@ -206,6 +206,11 @@ test("shows the day's figures and generations and reloads when the query changes
 
 	await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
 
+	const period = page.locator('.usage-header strong');
+	await expect(period).toHaveText(
+		ru['usage.byUser.dayPeriod'].replace('{date}', '3 января 2026 г.')
+	);
+	await expect(period).toHaveCSS('font-weight', '700');
 	const dayTotals = page.getByRole('region', { name: ru['usage.byUser.summary'] });
 	await expect(dayTotals).toContainText(`${ru['usage.totals.generations']} 2`);
 	const range = `?from=${DAY_FROM}&to=${DAY_TO}`;
@@ -224,7 +229,7 @@ test("shows the day's figures and generations and reloads when the query changes
 	expect((await box(generations)).width - (await box(table)).width).toBeLessThanOrEqual(2);
 	const longRow = table.getByRole('row', { name: /generation-2/ });
 	const shortRow = table.getByRole('row', { name: /generation-1/ });
-	await expect(longRow).toContainText('2026-01-03 | 13:00');
+	await expect(longRow).toContainText('2026-01-03 | 13:00 00s');
 	// The last row drops its bottom border, half a pixel under border-collapse.
 	expect(Math.abs((await box(longRow)).height - (await box(shortRow)).height)).toBeLessThanOrEqual(
 		0.5
@@ -345,8 +350,8 @@ test('exports the user to Markdown, with every generation of the day only in day
 	expect(dayExport.suggestedFilename()).toBe(`cadbos-usage-${NPUB}-2026-01-03.md`);
 	const dayMarkdown = await readDownload(dayExport);
 	expect(dayMarkdown).toContain(`## ${ru['usage.generations.title']}`);
-	expect(dayMarkdown).toContain(`| generation-2 | 2026-01-03 \\| 13:00 |`);
-	expect(dayMarkdown).toContain(`| generation-1 | 2026-01-03 \\| 12:00 |`);
+	expect(dayMarkdown).toContain(`| generation-2 | 2026-01-03 \\| 13:00 00s |`);
+	expect(dayMarkdown).toContain(`| generation-1 | 2026-01-03 \\| 12:00 00s |`);
 	expect(dayMarkdown).toContain(LONG_PROMPT);
 	expect(dayMarkdown).toContain(
 		`![${ru['usage.generations.resultAlt'].replace('{id}', 'generation-2')}](<${new URL('/api/media/uploads/result-2.webp', page.url()).href}>)`
