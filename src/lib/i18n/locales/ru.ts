@@ -649,7 +649,7 @@ export const ru = {
 	'textureReplacement.maskEditor.canvasHint':
 		'Выделите область для замены прямо на изображении выше.',
 	'textureReplacement.maskEditor.hint':
-		'Закрасьте поверхности, на которых нужно заменить текстуру. Белая область изменится, остальная сцена сохранится.',
+		'Закрасьте поверхности, на которых нужно заменить текстуру. Фиолетовая область изменится, остальная сцена сохранится.',
 	'textureReplacement.maskEditor.toolbar': 'Инструменты рисования маски',
 	'textureReplacement.maskEditor.brush': 'Кисть',
 	'textureReplacement.maskEditor.eraser': 'Ластик',
