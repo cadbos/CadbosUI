@@ -16,20 +16,17 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { apiError } from '$lib/server/api';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
-import { analyticsDateParamsSchema, authorizeUsageViewer } from '$lib/server/usage';
+import { authorizeUsageViewer } from '$lib/server/usage';
 import { getWorkersAiDailyUsage } from '$lib/server/workers-ai-limits';
 
-export const GET: RequestHandler = async ({ url, platform, locals, fetch }) => {
+export const GET: RequestHandler = async ({ platform, locals, fetch }) => {
 	const user = locals.user;
 	if (!user) return authenticationRequiredResponse(locals.sessionLookupUnavailable);
 
 	const authorization = await authorizeUsageViewer(platform, user);
 	if (authorization) return authorization;
 
-	const parsed = analyticsDateParamsSchema.safeParse(Object.fromEntries(url.searchParams));
-	if (!parsed.success) return apiError(400, 'invalid_request', 'Invalid search params');
-
-	const usage = await getWorkersAiDailyUsage(platform?.env, fetch, parsed.data.date);
+	const usage = await getWorkersAiDailyUsage(platform?.env, fetch);
 	if (!usage) {
 		const response = apiError(
 			503,

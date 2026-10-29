@@ -34,11 +34,9 @@ function platform(db: D1Database): App.Platform {
 function call(
 	user: SessionUser | null,
 	app: App.Platform,
-	fetcher: typeof fetch,
-	search = ''
+	fetcher: typeof fetch
 ): ReturnType<typeof GET> {
 	return GET({
-		url: new URL(`https://cadbos.example/api/usage/d1-limits${search}`),
 		platform: app,
 		locals: { sessionLookupUnavailable: false, user },
 		fetch: fetcher
@@ -111,37 +109,4 @@ it('surfaces analytics failure without exposing provider details', async () => {
 	expect(await response.json()).toEqual({
 		error: { code: 'd1_limits_unavailable', message: 'Could not retrieve D1 limits' }
 	});
-});
-
-it('queries the requested UTC day and rejects an invalid one', async () => {
-	const db = makeD1();
-	await db
-		.prepare('INSERT INTO users (id, pubkey, created_at) VALUES (?, ?, ?)')
-		.bind('admin', 'admin-pubkey', 1000)
-		.run();
-	await seedAdmin(db, 'admin');
-	const fetcher = vi.fn<typeof fetch>(async () =>
-		Response.json({
-			data: {
-				viewer: {
-					accounts: [{ d1AnalyticsAdaptiveGroups: [{ sum: { rowsRead: 7, rowsWritten: 1 } }] }]
-				}
-			}
-		})
-	);
-
-	const response = await call(
-		{ pubkey: 'admin-pubkey' },
-		platform(db),
-		fetcher,
-		'?date=2026-01-03'
-	);
-
-	expect(await response.json()).toMatchObject({ date: '2026-01-03', rowsRead: 7, rowsWritten: 1 });
-	const [, init] = vi.mocked(fetcher).mock.calls[0];
-	expect(JSON.parse(String(init?.body))).toMatchObject({ variables: { date: '2026-01-03' } });
-	expect(
-		(await call({ pubkey: 'admin-pubkey' }, platform(db), fetcher, '?date=tomorrow')).status
-	).toBe(400);
-	expect(fetcher).toHaveBeenCalledOnce();
 });

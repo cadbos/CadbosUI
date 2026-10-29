@@ -22,15 +22,13 @@ before the Change Date. See LICENSE for complete terms.
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
-	import { currency } from '$lib/state/currency.svelte';
-	import { usage, type UsageDay } from '$lib/state/usage.svelte';
-	import { userUsage } from '$lib/state/user-usage.svelte';
+	import { userUsage, type UsageDay } from '$lib/state/user-usage.svelte';
 	import type { PageProps } from './$types';
-	import PlatformTotals from '../PlatformTotals.svelte';
 	import { localDay, userUsageHref } from '../usage-day';
 	import UsageNumber from '../UsageNumber.svelte';
 	import UsageTimestamp from '../UsageTimestamp.svelte';
 	import UsageUser from '../UsageUser.svelte';
+	import UsagePrompt from './UsagePrompt.svelte';
 
 	let { data }: PageProps = $props();
 
@@ -68,14 +66,8 @@ before the Change Date. See LICENSE for complete terms.
 		const target = pubkey;
 		const selectedDay = day;
 		if (target === null || (dateKey !== null && selectedDay === null)) return;
-		untrack(() => {
-			usage.loadTotals(selectedDay);
-			userUsage.load(target, selectedDay);
-		});
-		return () => {
-			userUsage.clear();
-			usage.clear();
-		};
+		untrack(() => userUsage.load(target, selectedDay));
+		return () => userUsage.clear();
 	}
 
 	$effect(loadUserUsage);
@@ -108,15 +100,6 @@ before the Change Date. See LICENSE for complete terms.
 			hourCycle: 'h23'
 		}).format(new Date(timestamp));
 	}
-
-	function formatSizeUnit(): string {
-		const parts = new Intl.NumberFormat(getLocale(), {
-			style: 'unit',
-			unit: 'megabyte',
-			unitDisplay: 'short'
-		}).formatToParts(1);
-		return parts.find((part) => part.type === 'unit')!.value;
-	}
 </script>
 
 {#snippet thumbnail(url: string, alt: string)}
@@ -142,205 +125,217 @@ before the Change Date. See LICENSE for complete terms.
 	{/if}
 </header>
 
-<PlatformTotals dayLabel={day === null ? undefined : formatDay(day)} />
-
 {#if auth.status !== 'authenticated'}
 	<p class="status">{t('usage.signInRequired')}</p>
 {:else if pubkey === null}
 	<p class="status error" role="alert">{t('usage.byUser.invalidNpub')}</p>
 {:else if dateKey !== null && day === null}
 	<p class="status error" role="alert">{t('usage.byUser.invalidDate')}</p>
-{:else if userUsage.status === 'loading'}
-	<div class="table-wrap" aria-busy="true" aria-label={t('usage.byUser.loading')}>
-		<table>
-			<tbody>
-				{#each [0, 1, 2, 3, 4, 5] as slot (slot)}
-					<tr aria-hidden="true">
-						<td><SkeletonBlock width="9rem" height="0.75rem" /></td>
-						<td><SkeletonBlock width="6rem" height="0.75rem" /></td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
 {:else if userUsage.status === 'not-found'}
 	<p class="status error" role="alert">{t('usage.byUser.notFound')}</p>
 {:else if userUsage.status === 'error'}
 	<p class="status error" role="alert">{t('usage.byUser.failed')}</p>
-{:else if userUsage.record !== null}
+{:else}
 	{@const record = userUsage.record}
-	<div class="table-wrap">
-		<table class="key-value">
-			<caption class="visually-hidden">{t('usage.byUser.summary')}</caption>
-			<tbody>
-				<tr>
-					<th scope="row">{t('usage.column.user')}</th>
-					<td>
-						<UsageUser
-							pubkey={record.pubkey}
-							profile={userUsage.profile}
-							pubkeyViewer={data.pubkeyViewer}
-						/>
-					</td>
-				</tr>
-				<tr>
-					<th scope="row">{t('usage.column.balance')}, {currency.symbol}</th>
-					<td class="numeric-column"
-						><UsageNumber kind="currency" value={record.balance} showUnit={false} /></td
-					>
-				</tr>
-				<tr>
-					<th scope="row">{t('usage.column.totalDeposit')}, {currency.symbol}</th>
-					<td class="numeric-column"
-						><UsageNumber kind="currency" value={record.totalDeposit} showUnit={false} /></td
-					>
-				</tr>
-				<tr>
-					<th scope="row">{t('usage.column.lastDepositAt')}</th>
-					<td><UsageTimestamp timestamp={record.lastDepositAt} /></td>
-				</tr>
-				<tr>
-					<th scope="row">{t('usage.column.projectCount')}</th>
-					<td class="numeric-column"><UsageNumber kind="count" value={record.projectCount} /></td>
-				</tr>
-				<tr>
-					<th scope="row">{t('usage.column.sessionCount')}</th>
-					<td class="numeric-column"><UsageNumber kind="count" value={record.sessionCount} /></td>
-				</tr>
-				<tr>
-					<th scope="row">{t('usage.column.generationCount')}</th>
-					<td class="numeric-column"><UsageNumber kind="count" value={record.generationCount} /></td
-					>
-				</tr>
-				<tr>
-					<th scope="row">{t('usage.column.sourceCount')}</th>
-					<td class="numeric-column"><UsageNumber kind="count" value={record.sourceCount} /></td>
-				</tr>
-				<tr>
-					<th scope="row">{t('usage.column.sourceBytes')}, {formatSizeUnit()}</th>
-					<td class="numeric-column"
-						><UsageNumber kind="size" value={record.sourceBytes} showUnit={false} /></td
-					>
-				</tr>
-				<tr>
-					<th scope="row">{t('usage.column.referenceCount')}</th>
-					<td class="numeric-column"><UsageNumber kind="count" value={record.referenceCount} /></td>
-				</tr>
-				<tr>
-					<th scope="row">{t('usage.column.referenceBytes')}, {formatSizeUnit()}</th>
-					<td class="numeric-column"
-						><UsageNumber kind="size" value={record.referenceBytes} showUnit={false} /></td
-					>
-				</tr>
-				<tr>
-					<th scope="row">{t('usage.column.totalSpend')}, {currency.symbol}</th>
-					<td class="numeric-column"
-						><UsageNumber kind="currency" value={record.totalSpend} showUnit={false} /></td
-					>
-				</tr>
-				<tr>
-					<th scope="row">{t('usage.column.latestSpendAt')}</th>
-					<td><UsageTimestamp timestamp={record.latestSpendAt} {npub} /></td>
-				</tr>
-			</tbody>
-		</table>
-	</div>
-
-	<section class="usage-section" aria-labelledby="usage-kinds-title">
-		<h2 id="usage-kinds-title">{t('usage.kinds.title')}</h2>
-		{#if userUsage.generationKinds.length === 0}
-			<p class="status">{t('usage.kinds.empty')}</p>
+	<section class="totals" aria-labelledby="user-totals-title" aria-busy={record === null}>
+		<h2 id="user-totals-title" class="totals-title">
+			{day === null
+				? ti('usage.byUser.totalsTitle', { user: npub })
+				: ti('usage.byUser.dayTotalsTitle', { user: npub, date: formatDay(day) })}
+		</h2>
+		{#if record === null}
+			<dl aria-hidden="true">
+				{#each [0, 1, 2, 3, 4, 5, 6, 7] as slot (slot)}
+					<div>
+						<dt><SkeletonBlock width="70%" height="0.7rem" /></dt>
+						<dd><SkeletonBlock width="4.5rem" height="1rem" /></dd>
+					</div>
+				{/each}
+			</dl>
+			<p class="visually-hidden">{t('usage.byUser.loading')}</p>
 		{:else}
-			<div class="table-wrap">
-				<table>
-					<thead>
-						<tr>
-							<th scope="col">{t('usage.kinds.column.kind')}</th>
-							<th scope="col" class="numeric-column">{t('usage.kinds.column.count')}</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each userUsage.generationKinds as entry (entry.kind)}
-							<tr>
-								<th scope="row">{t(generationKindKeys[entry.kind])}</th>
-								<td class="numeric-column"><UsageNumber kind="count" value={entry.count} /></td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
+			<dl>
+				<div>
+					<dt>{t('usage.column.balance')}</dt>
+					<dd><UsageNumber kind="currency" value={record.balance} /></dd>
+				</div>
+				<div>
+					<dt>{t('usage.totals.deposits')}</dt>
+					<dd><UsageNumber kind="currency" value={record.totalDeposit} /></dd>
+				</div>
+				<div>
+					<dt>{t('usage.totals.spend')}</dt>
+					<dd><UsageNumber kind="currency" value={record.totalSpend} /></dd>
+				</div>
+				<div>
+					<dt>{t('usage.totals.projects')}</dt>
+					<dd><UsageNumber kind="count" value={record.projectCount} /></dd>
+				</div>
+				<div>
+					<dt>{t('usage.totals.sessions')}</dt>
+					<dd><UsageNumber kind="count" value={record.sessionCount} /></dd>
+				</div>
+				<div>
+					<dt>{t('usage.totals.generations')}</dt>
+					<dd><UsageNumber kind="count" value={record.generationCount} /></dd>
+				</div>
+				<div>
+					<dt>{t('usage.totals.sources')}</dt>
+					<dd>
+						<UsageNumber
+							kind="countWithSize"
+							value={record.sourceCount}
+							bytes={record.sourceBytes}
+						/>
+					</dd>
+				</div>
+				<div>
+					<dt>{t('usage.totals.references')}</dt>
+					<dd>
+						<UsageNumber
+							kind="countWithSize"
+							value={record.referenceCount}
+							bytes={record.referenceBytes}
+						/>
+					</dd>
+				</div>
+			</dl>
 		{/if}
 	</section>
 
-	{#if day !== null}
-		<section class="usage-section" aria-labelledby="usage-generations-title">
-			<h2 id="usage-generations-title">{t('usage.generations.title')}</h2>
-			{#if userUsage.generationsStatus === 'loading'}
-				<p class="status">{t('usage.generations.loading')}</p>
-			{:else if userUsage.generationsStatus === 'error' && userUsage.generations.length === 0}
-				<p class="status error" role="alert">{t('usage.generations.failed')}</p>
-			{:else if userUsage.generations.length === 0}
-				<p class="status">{t('usage.generations.empty')}</p>
-			{:else}
+	{#if record !== null}
+		<div class="usage-columns">
+			<section class="usage-section" aria-labelledby="usage-summary-title">
+				<h2 id="usage-summary-title">{t('usage.byUser.summary')}</h2>
 				<div class="table-wrap">
-					<table class="generations">
-						<thead>
-							<tr>
-								<th scope="col">{t('usage.generations.column.id')}</th>
-								<th scope="col">{t('usage.generations.column.time')}</th>
-								<th scope="col">{t('usage.generations.column.kind')}</th>
-								<th scope="col">{t('usage.generations.column.prompt')}</th>
-								<th scope="col">{t('usage.generations.column.source')}</th>
-								<th scope="col">{t('usage.generations.column.result')}</th>
-								<th scope="col">{t('usage.generations.column.reference')}</th>
-							</tr>
-						</thead>
+					<table class="key-value" aria-labelledby="usage-summary-title">
 						<tbody>
-							{#each userUsage.generations as generation (generation.id)}
-								<tr>
-									<th scope="row" class="generation-id">{generation.id}</th>
-									<td>{formatTime(generation.createdAt)}</td>
-									<td>{t(generationKindKeys[generation.kind])}</td>
-									<td class="prompt">{generation.prompt || t('usage.emptyValue')}</td>
-									<td>
-										{@render thumbnail(
-											generation.source.url,
-											ti('usage.generations.sourceAlt', { id: generation.id })
-										)}
-									</td>
-									<td>
-										{@render thumbnail(
-											generation.result.url,
-											ti('usage.generations.resultAlt', { id: generation.id })
-										)}
-									</td>
-									<td>
-										{#if generation.reference === null}
-											{t('usage.emptyValue')}
-										{:else}
-											{@render thumbnail(
-												generation.reference.url,
-												ti('usage.generations.referenceAlt', { id: generation.id })
-											)}
-										{/if}
-									</td>
-								</tr>
-							{/each}
+							<tr>
+								<th scope="row">{t('usage.column.user')}</th>
+								<td>
+									<UsageUser
+										pubkey={record.pubkey}
+										profile={userUsage.profile}
+										pubkeyViewer={data.pubkeyViewer}
+									/>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row">{t('usage.column.lastDepositAt')}</th>
+								<td><UsageTimestamp timestamp={record.lastDepositAt} /></td>
+							</tr>
+							<tr>
+								<th scope="row">{t('usage.column.latestSpendAt')}</th>
+								<td><UsageTimestamp timestamp={record.latestSpendAt} {npub} /></td>
+							</tr>
 						</tbody>
 					</table>
 				</div>
-				{#if userUsage.hasMoreGenerations}
-					<div {@attach observeLoadMore} class="load-more-sentinel">
-						{#if userUsage.loadingMoreGenerations}
-							<p class="visually-hidden" aria-live="polite">{t('usage.loadingMore')}</p>
-						{/if}
+			</section>
+
+			<section class="usage-section" aria-labelledby="usage-kinds-title">
+				<h2 id="usage-kinds-title">{t('usage.kinds.title')}</h2>
+				{#if userUsage.generationKinds.length === 0}
+					<p class="status">{t('usage.kinds.empty')}</p>
+				{:else}
+					<div class="table-wrap">
+						<table>
+							<thead>
+								<tr>
+									<th scope="col">{t('usage.kinds.column.kind')}</th>
+									<th scope="col" class="numeric-column">{t('usage.kinds.column.count')}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each userUsage.generationKinds as entry (entry.kind)}
+									<tr>
+										<th scope="row">{t(generationKindKeys[entry.kind])}</th>
+										<td class="numeric-column"><UsageNumber kind="count" value={entry.count} /></td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
 					</div>
 				{/if}
-				{#if userUsage.generationsStatus === 'error'}
+			</section>
+		</div>
+
+		{#if day !== null}
+			<section class="usage-section" aria-labelledby="usage-generations-title">
+				<h2 id="usage-generations-title">{t('usage.generations.title')}</h2>
+				{#if userUsage.generationsStatus === 'loading'}
+					<p class="status">{t('usage.generations.loading')}</p>
+				{:else if userUsage.generationsStatus === 'error' && userUsage.generations.length === 0}
 					<p class="status error" role="alert">{t('usage.generations.failed')}</p>
+				{:else if userUsage.generations.length === 0}
+					<p class="status">{t('usage.generations.empty')}</p>
+				{:else}
+					<div class="table-wrap">
+						<table class="generations">
+							<thead>
+								<tr>
+									<th scope="col">{t('usage.generations.column.id')}</th>
+									<th scope="col">{t('usage.generations.column.time')}</th>
+									<th scope="col">{t('usage.generations.column.kind')}</th>
+									<th scope="col">{t('usage.generations.column.prompt')}</th>
+									<th scope="col">{t('usage.generations.column.source')}</th>
+									<th scope="col">{t('usage.generations.column.result')}</th>
+									<th scope="col">{t('usage.generations.column.reference')}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each userUsage.generations as generation (generation.id)}
+									<tr>
+										<th scope="row" class="generation-id">{generation.id}</th>
+										<td>{formatTime(generation.createdAt)}</td>
+										<td>{t(generationKindKeys[generation.kind])}</td>
+										<td class="prompt">
+											{#if generation.prompt === ''}
+												{t('usage.emptyValue')}
+											{:else}
+												<UsagePrompt id={generation.id} prompt={generation.prompt} />
+											{/if}
+										</td>
+										<td>
+											{@render thumbnail(
+												generation.source.url,
+												ti('usage.generations.sourceAlt', { id: generation.id })
+											)}
+										</td>
+										<td>
+											{@render thumbnail(
+												generation.result.url,
+												ti('usage.generations.resultAlt', { id: generation.id })
+											)}
+										</td>
+										<td>
+											{#if generation.reference === null}
+												{t('usage.emptyValue')}
+											{:else}
+												{@render thumbnail(
+													generation.reference.url,
+													ti('usage.generations.referenceAlt', { id: generation.id })
+												)}
+											{/if}
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+					{#if userUsage.hasMoreGenerations}
+						<div {@attach observeLoadMore} class="load-more-sentinel">
+							{#if userUsage.loadingMoreGenerations}
+								<p class="visually-hidden" aria-live="polite">{t('usage.loadingMore')}</p>
+							{/if}
+						</div>
+					{/if}
+					{#if userUsage.generationsStatus === 'error'}
+						<p class="status error" role="alert">{t('usage.generations.failed')}</p>
+					{/if}
 				{/if}
-			{/if}
-		</section>
+			</section>
+		{/if}
 	{/if}
 {/if}
 
@@ -362,17 +357,22 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-accent-hover);
 	}
 
-	.key-value tbody th {
-		color: var(--color-muted);
-		font-size: 0.75rem;
-		font-weight: 700;
-		text-transform: uppercase;
+	.totals-title {
+		overflow-wrap: anywhere;
+	}
+
+	.usage-columns {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 1rem;
+		align-items: start;
 	}
 
 	.usage-section {
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+		min-width: 0;
 	}
 
 	.usage-section h2 {
@@ -382,15 +382,25 @@ before the Change Date. See LICENSE for complete terms.
 		font-weight: 700;
 	}
 
+	.key-value tbody th {
+		color: var(--color-muted);
+		font-size: 0.75rem;
+		font-weight: 700;
+		text-transform: uppercase;
+	}
+
+	.key-value td {
+		text-align: right;
+	}
+
 	.generation-id {
 		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 	}
 
 	.generations .prompt {
-		min-width: 16rem;
-		max-width: 32rem;
-		white-space: normal;
-		line-height: 1.4;
+		width: 100%;
+		max-width: 0;
+		min-width: 12rem;
 	}
 
 	.thumbnail {
@@ -398,6 +408,13 @@ before the Change Date. See LICENSE for complete terms.
 		--image-height: 3rem;
 		--image-radius: var(--radius-sm);
 		--image-fit: cover;
-		display: inline-flex;
+		display: flex;
+		width: fit-content;
+	}
+
+	@media (max-width: 720px) {
+		.usage-columns {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 </style>

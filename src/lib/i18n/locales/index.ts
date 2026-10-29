@@ -359,7 +359,6 @@ export interface Dictionary {
 	'usage.walletBalanceFailed': string;
 	'usage.totals.walletBalance': string;
 	'usage.totals.title': string;
-	'usage.totals.dayTitle': string;
 	'usage.totals.loading': string;
 	'usage.totals.failed': string;
 	'usage.totals.deposits': string;
@@ -429,6 +428,12 @@ export interface Dictionary {
 	'usage.generations.loading': string;
 	'usage.generations.empty': string;
 	'usage.generations.failed': string;
+	'usage.byUser.totalsTitle': string;
+	'usage.byUser.dayTotalsTitle': string;
+	'usage.generations.promptShow': string;
+	'usage.generations.promptCopy': string;
+	'usage.generations.promptCopied': string;
+	'usage.generations.promptCopyFailed': string;
 	'resources.title': string;
 	'resources.subtitle': string;
 	'resources.loading': string;

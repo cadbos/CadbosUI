@@ -24,7 +24,6 @@ describe('localDateKey', () => {
 describe('localDay', () => {
 	it('spans the local day', () => {
 		expect(localDay('2026-03-09')).toEqual({
-			date: '2026-03-09',
 			from: new Date(2026, 2, 9).getTime(),
 			to: new Date(2026, 2, 10).getTime()
 		});

@@ -43,6 +43,3 @@ export const usageRangeShape = {
 export function isOrderedRange(range: { from: number; to: number }): boolean {
 	return range.to > range.from;
 }
-
-// The UTC day that Cloudflare's analytics counters are queried for; today when omitted.
-export const analyticsDateParamsSchema = z.strictObject({ date: z.iso.date().optional() });

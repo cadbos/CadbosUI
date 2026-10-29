@@ -67,9 +67,7 @@ function parseUsage(
 
 export async function getWorkersAiDailyUsage(
 	env: App.Platform['env'] | undefined,
-	fetcher: typeof fetch,
-	// A UTC calendar date (YYYY-MM-DD); today when omitted.
-	date = new Date().toISOString().slice(0, 10)
+	fetcher: typeof fetch
 ): Promise<WorkersAiDailyUsage | null> {
 	const access = analyticsAccess(env);
 	if (!access) {
@@ -78,6 +76,7 @@ export async function getWorkersAiDailyUsage(
 	}
 
 	try {
+		const date = new Date().toISOString().slice(0, 10);
 		const usage = parseUsage(await queryAccountAnalytics(access, fetcher, DAILY_USAGE_QUERY, date));
 		if (!usage) throw new AnalyticsError('response');
 		return { date, ...usage, neuronLimit: WORKERS_AI_DAILY_NEURON_LIMIT };

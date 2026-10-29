@@ -91,13 +91,6 @@ const workersAiDailyUsageSchema = z.object({
 	neuronLimit: z.number().positive()
 });
 
-// One local calendar day: its ISO date and its [from, to) epoch-millisecond bounds.
-export interface UsageDay {
-	date: string;
-	from: number;
-	to: number;
-}
-
 export type WalletBalanceStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type UsageTotalsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -151,13 +144,21 @@ class UsageState {
 	#workersAiUsageAbort: AbortController | null = null;
 	#nextOffset: number | null = null;
 
-	// With a day, every tile covers that day; the wallet balance has no history
-	// to look it up in, so it is left out instead of showing today's.
-	loadTotals(day: UsageDay | null = null): void {
+	async load(): Promise<void> {
+		this.#abort?.abort();
+		this.#abortProfiles();
 		this.#walletBalanceAbort?.abort();
 		this.#totalsAbort?.abort();
 		this.#d1LimitsAbort?.abort();
 		this.#workersAiUsageAbort?.abort();
+		const controller = new AbortController();
+		this.#abort = controller;
+		this.status = 'loading';
+		this.error = null;
+		this.hasMore = false;
+		this.loadingMore = false;
+		this.#nextOffset = null;
+		this.profiles = {};
 		this.walletBalance = null;
 		this.walletBalanceStatus = 'idle';
 		this.totals = null;
@@ -167,28 +168,10 @@ class UsageState {
 		this.workersAiUsage = null;
 		this.workersAiUsageStatus = 'idle';
 
-		if (day === null) void this.#loadWalletBalance();
-		void this.#loadTotals(
-			day === null ? '' : `?${new URLSearchParams({ from: String(day.from), to: String(day.to) })}`
-		);
-		void this.#loadD1Limits(day === null ? '' : `?${new URLSearchParams({ date: day.date })}`);
-		void this.#loadWorkersAiUsage(
-			day === null ? '' : `?${new URLSearchParams({ date: day.date })}`
-		);
-	}
-
-	async load(): Promise<void> {
-		this.#abort?.abort();
-		this.#abortProfiles();
-		const controller = new AbortController();
-		this.#abort = controller;
-		this.status = 'loading';
-		this.error = null;
-		this.hasMore = false;
-		this.loadingMore = false;
-		this.#nextOffset = null;
-		this.profiles = {};
-		this.loadTotals();
+		void this.#loadWalletBalance();
+		void this.#loadTotals();
+		void this.#loadD1Limits();
+		void this.#loadWorkersAiUsage();
 
 		try {
 			const page = await this.#fetchPage(0, controller.signal);
@@ -327,13 +310,13 @@ class UsageState {
 		}
 	}
 
-	async #loadTotals(search: string): Promise<void> {
+	async #loadTotals(): Promise<void> {
 		const controller = new AbortController();
 		this.#totalsAbort = controller;
 		this.totalsStatus = 'loading';
 
 		try {
-			const response = await fetch(`/api/usage/totals${search}`, { signal: controller.signal });
+			const response = await fetch('/api/usage/totals', { signal: controller.signal });
 			if (!response.ok) throw new UsageLoadError('usage totals request failed', response.status);
 
 			const parsed = usageTotalsSchema.safeParse(await response.json().catch(() => null));
@@ -358,13 +341,13 @@ class UsageState {
 		}
 	}
 
-	async #loadD1Limits(search: string): Promise<void> {
+	async #loadD1Limits(): Promise<void> {
 		const controller = new AbortController();
 		this.#d1LimitsAbort = controller;
 		this.d1LimitsStatus = 'loading';
 
 		try {
-			const response = await fetch(`/api/usage/d1-limits${search}`, {
+			const response = await fetch('/api/usage/d1-limits', {
 				signal: controller.signal,
 				cache: 'no-store'
 			});
@@ -392,13 +375,13 @@ class UsageState {
 		}
 	}
 
-	async #loadWorkersAiUsage(search: string): Promise<void> {
+	async #loadWorkersAiUsage(): Promise<void> {
 		const controller = new AbortController();
 		this.#workersAiUsageAbort = controller;
 		this.workersAiUsageStatus = 'loading';
 
 		try {
-			const response = await fetch(`/api/usage/workers-ai${search}`, {
+			const response = await fetch('/api/usage/workers-ai', {
 				signal: controller.signal,
 				cache: 'no-store'
 			});

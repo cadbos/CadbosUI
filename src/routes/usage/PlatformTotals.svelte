@@ -17,22 +17,11 @@ before the Change Date. See LICENSE for complete terms.
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { usage } from '$lib/state/usage.svelte';
 	import UsageNumber from './UsageNumber.svelte';
-
-	interface Props {
-		// The day every tile covers; platform-wide over all time when omitted.
-		dayLabel?: string;
-	}
-
-	let { dayLabel }: Props = $props();
 </script>
 
 {#if usage.totalsStatus !== 'idle' || usage.walletBalanceStatus !== 'idle' || usage.d1LimitsStatus !== 'idle' || usage.workersAiUsageStatus !== 'idle'}
 	<section class="totals" aria-labelledby="usage-totals-title">
-		<h2 id="usage-totals-title">
-			{dayLabel === undefined
-				? t('usage.totals.title')
-				: ti('usage.totals.dayTitle', { date: dayLabel })}
-		</h2>
+		<h2 id="usage-totals-title">{t('usage.totals.title')}</h2>
 		<dl>
 			{#if usage.walletBalanceStatus !== 'idle'}
 				<div>
@@ -194,89 +183,3 @@ before the Change Date. See LICENSE for complete terms.
 		{/if}
 	</section>
 {/if}
-
-<style>
-	.totals {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.totals h2 {
-		margin: 0;
-		color: var(--color-text);
-		font-size: 1rem;
-		font-weight: 700;
-	}
-
-	.totals dl {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-		gap: 0.75rem;
-		margin: 0;
-	}
-
-	.totals dl > div {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		padding: 0.75rem;
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
-		background: var(--color-background);
-	}
-
-	.totals dt {
-		min-height: 2lh;
-		color: var(--color-muted);
-		font-size: 0.75rem;
-		font-weight: 700;
-		text-transform: uppercase;
-	}
-
-	.totals dd {
-		margin: auto 0 0;
-		color: var(--color-text);
-		font-size: 1.125rem;
-		font-weight: 700;
-	}
-
-	.totals dd.tile-status {
-		text-align: left;
-		font-size: 0.9375rem;
-		font-weight: 500;
-	}
-
-	.totals .quota-quotient {
-		display: grid;
-		grid-template-columns: auto 1fr;
-		column-gap: 0.375rem;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.totals .quota-used,
-	.totals .quota-limit {
-		grid-column: 2;
-		text-align: right;
-	}
-
-	.totals .quota-used {
-		grid-row: 1;
-	}
-
-	.totals .quota-limit {
-		grid-row: 2;
-	}
-
-	.totals .quota-divider {
-		grid-column: 1;
-		grid-row: 1 / 3;
-		align-self: center;
-	}
-
-	.totals .limit-reached {
-		display: block;
-		color: var(--color-danger);
-		font-size: 0.8125rem;
-	}
-</style>

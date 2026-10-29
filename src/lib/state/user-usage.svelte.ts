@@ -21,15 +21,16 @@ import {
 	type UsageProfile,
 	type UserUsageRecord
 } from '$lib/api/contract';
-import {
-	fetchUsageProfiles,
-	UsageLoadError,
-	userUsageRecordSchema,
-	type UsageDay
-} from '$lib/state/usage.svelte';
+import { fetchUsageProfiles, UsageLoadError, userUsageRecordSchema } from '$lib/state/usage.svelte';
 
 export type UserUsageStatus = 'idle' | 'loading' | 'ready' | 'not-found' | 'error';
 export type UserGenerationsStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+// One local calendar day as [from, to) epoch-millisecond bounds.
+export interface UsageDay {
+	from: number;
+	to: number;
+}
 
 const PAGE_SIZE = 20;
 

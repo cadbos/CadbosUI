@@ -14,7 +14,7 @@
 
 import { resolve } from '$app/paths';
 import type { PathnameWithSearchOrHash } from '$app/types';
-import type { UsageDay } from '$lib/state/usage.svelte';
+import type { UsageDay } from '$lib/state/user-usage.svelte';
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -38,7 +38,7 @@ export function localDay(dateKey: string): UsageDay | null {
 	if (start.getFullYear() !== year || start.getMonth() !== month || start.getDate() !== day) {
 		return null;
 	}
-	return { date: dateKey, from: start.getTime(), to: new Date(year, month, day + 1).getTime() };
+	return { from: start.getTime(), to: new Date(year, month, day + 1).getTime() };
 }
 
 export function userUsageHref(npub: string, dateKey?: string): string {

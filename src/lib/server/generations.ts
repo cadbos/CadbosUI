@@ -616,13 +616,12 @@ interface UsageScope {
 	range?: UsageRange;
 }
 
-function rangeCondition(range: UsageRange | undefined, column: SQL): SQL {
-	return range ? sql`${column} >= ${range.from} AND ${column} < ${range.to}` : sql`1 = 1`;
-}
-
 function scopeCondition(scope: UsageScope, userColumn: SQL, createdColumn: SQL): SQL {
 	const user = scope.userId === undefined ? sql`1 = 1` : sql`${userColumn} = ${scope.userId}`;
-	return sql`${user} AND ${rangeCondition(scope.range, createdColumn)}`;
+	const range = scope.range
+		? sql`${createdColumn} >= ${scope.range.from} AND ${createdColumn} < ${scope.range.to}`
+		: sql`1 = 1`;
+	return sql`${user} AND ${range}`;
 }
 
 function sourceUses(scope: UsageScope = {}): SQL {
@@ -999,23 +998,21 @@ interface UsageTotalsRow {
 
 // Platform-wide counterpart of listUserUsage: every figure follows the same
 // per-user rules, so each total equals the sum of its column in the table.
-// With a range, users count those who registered in it.
-export async function getUsageTotals(db: Database, range?: UsageRange): Promise<UsageTotals> {
-	const within = (column: SQL): SQL => rangeCondition(range, column);
+export async function getUsageTotals(db: Database): Promise<UsageTotals> {
 	const row = await db.get<UsageTotalsRow>(
-		sql`WITH ${resourcePairs({ range })}
-			SELECT (SELECT COUNT(*) FROM users WHERE ${within(sql`created_at`)}) AS user_count,
-			(SELECT COUNT(*) FROM projects WHERE ${within(sql`created_at`)}) AS project_count,
-			(SELECT COUNT(*) FROM project_sessions WHERE ${within(sql`created_at`)}) AS session_count,
-			(SELECT COUNT(*) FROM generations WHERE ${within(sql`created_at`)}) AS generation_count,
+		sql`WITH ${resourcePairs()}
+			SELECT (SELECT COUNT(*) FROM users) AS user_count,
+			(SELECT COUNT(*) FROM projects) AS project_count,
+			(SELECT COUNT(*) FROM project_sessions) AS session_count,
+			(SELECT COUNT(*) FROM generations) AS generation_count,
 			(SELECT COUNT(*) FROM source_resources) AS source_count,
 			(SELECT SUM(m.size) FROM source_resources s
 			JOIN media m ON m.id = s.media_id) AS source_bytes,
 			(SELECT COUNT(*) FROM reference_resources) AS reference_count,
 			(SELECT SUM(m.size) FROM reference_resources r
 			JOIN media m ON m.id = r.media_id) AS reference_bytes,
-			(SELECT COALESCE(SUM(amount), 0) / 100.0 FROM ledger_entries WHERE entry_side = 'debit' AND reason = 'generation-charge' AND ${within(sql`created_at`)}) AS total_spend,
-			(SELECT COALESCE(SUM(amount), 0) / 100.0 FROM ledger_entries WHERE entry_side = 'credit' AND reason IS NOT 'historical-reconciliation' AND ${within(sql`created_at`)}) AS total_deposit`
+			(SELECT COALESCE(SUM(amount), 0) / 100.0 FROM ledger_entries WHERE entry_side = 'debit' AND reason = 'generation-charge') AS total_spend,
+			(SELECT COALESCE(SUM(amount), 0) / 100.0 FROM ledger_entries WHERE entry_side = 'credit' AND reason IS NOT 'historical-reconciliation') AS total_deposit`
 	);
 	if (!row) throw new Error('usage totals query returned no row');
 	return {

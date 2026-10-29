@@ -77,6 +77,90 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-danger);
 	}
 
+	.usage-shell :global(.totals) {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.usage-shell :global(.totals h2) {
+		margin: 0;
+		color: var(--color-text);
+		font-size: 1rem;
+		font-weight: 700;
+	}
+
+	.usage-shell :global(.totals dl) {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+		gap: 0.75rem;
+		margin: 0;
+	}
+
+	.usage-shell :global(.totals dl > div) {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding: 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-background);
+	}
+
+	.usage-shell :global(.totals dt) {
+		min-height: 2lh;
+		color: var(--color-muted);
+		font-size: 0.75rem;
+		font-weight: 700;
+		text-transform: uppercase;
+	}
+
+	.usage-shell :global(.totals dd) {
+		margin: auto 0 0;
+		color: var(--color-text);
+		font-size: 1.125rem;
+		font-weight: 700;
+	}
+
+	.usage-shell :global(.totals dd.tile-status) {
+		text-align: left;
+		font-size: 0.9375rem;
+		font-weight: 500;
+	}
+
+	.usage-shell :global(.totals .quota-quotient) {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		column-gap: 0.375rem;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.usage-shell :global(.totals .quota-used),
+	.usage-shell :global(.totals .quota-limit) {
+		grid-column: 2;
+		text-align: right;
+	}
+
+	.usage-shell :global(.totals .quota-used) {
+		grid-row: 1;
+	}
+
+	.usage-shell :global(.totals .quota-limit) {
+		grid-row: 2;
+	}
+
+	.usage-shell :global(.totals .quota-divider) {
+		grid-column: 1;
+		grid-row: 1 / 3;
+		align-self: center;
+	}
+
+	.usage-shell :global(.totals .limit-reached) {
+		display: block;
+		color: var(--color-danger);
+		font-size: 0.8125rem;
+	}
+
 	.usage-shell :global(.table-wrap) {
 		width: 100%;
 		overflow-x: auto;
@@ -86,6 +170,7 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.usage-shell :global(table) {
+		width: 100%;
 		border-collapse: collapse;
 		font-size: 0.875rem;
 	}
