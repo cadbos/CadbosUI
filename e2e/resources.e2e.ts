@@ -349,6 +349,8 @@ test('using a resource photo while a project tab is open starts project-less wor
 						updatedAt: Date.UTC(2026, 0, 1),
 						generations: [
 							{
+								rating: null,
+								comment: null,
 								id: '00000000-0000-4000-8000-000000000100',
 								image: media(3, '/api/media/test-media/living-room.webp'),
 								source: media(2, '/api/media/test-media/room.jpg'),

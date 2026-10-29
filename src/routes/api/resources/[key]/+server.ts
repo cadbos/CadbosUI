@@ -81,6 +81,8 @@ export const GET: RequestHandler = async ({ params, url, platform, locals }) => 
 			roles,
 			generations: page.generations.map((generation) => ({
 				id: generation.id,
+				rating: generation.rating,
+				comment: generation.comment,
 				kind: generation.kind,
 				createdAt: generation.createdAt,
 				image: access.get(generation.resultMediaId)!,

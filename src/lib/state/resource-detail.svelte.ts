@@ -35,6 +35,8 @@ const resourceDetailResponseSchema = z.object({
 	generations: z.array(
 		z.object({
 			id: z.string().min(1),
+			rating: z.enum(['like', 'dislike']).nullable(),
+			comment: z.string().nullable(),
 			kind: z.enum(generationKinds),
 			createdAt: z.number().int().min(0),
 			image: mediaAccessSchema,

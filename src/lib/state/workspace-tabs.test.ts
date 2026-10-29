@@ -17,6 +17,7 @@ import { mediaKey } from '$lib/server/media';
 import { TEST_S3_BUCKET } from '$lib/server/testing/generation-fixtures';
 import { request } from '$lib/state/request.svelte';
 import { mediaAccess } from '$lib/state/media-access.svelte';
+import { fetchGeneratedImageDetail } from '$lib/state/generation-restore';
 import {
 	initializeGenerationPreview,
 	SCRATCH_TAB_ID,
@@ -169,6 +170,8 @@ describe('workspaceTabs.openProject', () => {
 
 describe('initializeGenerationPreview', () => {
 	const generation = {
+		rating: null,
+		comment: null,
 		id: '00000000-0000-4000-8000-000000000501',
 		prompt: 'warm light',
 		kind: 'edit' as const,
@@ -201,6 +204,26 @@ describe('initializeGenerationPreview', () => {
 			}
 		]
 	};
+
+	it.each([
+		[null, null],
+		['like', '  Отлично 😀\nMore light  '],
+		['dislike', ''],
+		['like', null]
+	] as const)(
+		'retains rating %s and comment %s when loading a generation preview',
+		async (rating, comment) => {
+			vi.stubGlobal(
+				'fetch',
+				vi.fn<typeof fetch>().mockResolvedValue(Response.json({ ...generation, rating, comment }))
+			);
+
+			const detail = await fetchGeneratedImageDetail(generation.id);
+
+			expect(detail?.rating).toBe(rating);
+			expect(detail?.comment).toBe(comment);
+		}
+	);
 
 	it('seeds the generation as the after step and its source as the synthetic before', () => {
 		initializeGenerationPreview(request, generation);

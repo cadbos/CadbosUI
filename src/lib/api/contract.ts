@@ -463,6 +463,8 @@ export const generationKinds = [
 
 export type GenerationKind = (typeof generationKinds)[number];
 
+export type GenerationRating = 'like' | 'dislike';
+
 export type GenerationProvider = 'archai' | 'comfyui';
 
 // GET /api/generation-estimates — how long recent successful generations of
@@ -503,6 +505,8 @@ export type SceneView = (typeof sceneViews)[number];
 // filtered list (oldest is 1), so it stays put as pages load and new scenes
 // arrive.
 export interface SceneRecord extends GeneratedImageRecord {
+	rating: GenerationRating | null;
+	comment: string | null;
 	session: GenerationSessionRef | null;
 	iteration: number | null;
 	number: number;
@@ -556,6 +560,8 @@ export interface SceneFilterOptionsResponse {
 
 export interface GeneratedImageDetailResponse {
 	id: string;
+	rating: GenerationRating | null;
+	comment: string | null;
 	prompt: string;
 	kind: GenerationKind;
 	createdAt: number;
@@ -632,6 +638,8 @@ export interface ResourceImageRecord {
 // (migrations/0018): reopening one couldn't bring those settings back.
 export interface ResourceGenerationRecord {
 	id: string;
+	rating: GenerationRating | null;
+	comment: string | null;
 	kind: GenerationKind;
 	createdAt: number;
 	image: MediaAccess;
@@ -898,6 +906,8 @@ export interface RenameProjectRequest {
 // which strips both fields (see that route's own explicit field whitelist);
 // only the authenticated GET /api/projects/[id] response ever populates them.
 export interface SessionGenerationRecord extends GeneratedImageRecord {
+	rating?: GenerationRating | null;
+	comment?: string | null;
 	amount?: number;
 	balanceAfter?: number;
 }

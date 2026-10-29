@@ -74,6 +74,8 @@ export const GET: RequestHandler = async ({ url, platform, locals }) => {
 		{
 			images: page.images.map((image) => ({
 				id: image.id,
+				rating: image.rating,
+				comment: image.comment,
 				image: access.get(image.mediaId)!,
 				source: access.get(image.sourceMediaId)!,
 				kind: image.kind,

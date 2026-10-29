@@ -80,6 +80,8 @@ async function mockChairResource(page: Page): Promise<void> {
 		roles: ['object-reference'],
 		generations: [
 			{
+				rating: null,
+				comment: null,
 				id: OPENABLE_ID,
 				kind: 'object-replacement',
 				createdAt: 2000,
@@ -89,6 +91,8 @@ async function mockChairResource(page: Page): Promise<void> {
 				settingsSaved: true
 			},
 			{
+				rating: null,
+				comment: null,
 				id: LEGACY_ID,
 				kind: 'object-replacement',
 				createdAt: 1500,
@@ -98,6 +102,8 @@ async function mockChairResource(page: Page): Promise<void> {
 				settingsSaved: false
 			},
 			{
+				rating: null,
+				comment: null,
 				id: ARCHIVED_ID,
 				kind: 'object-replacement',
 				createdAt: 1000,
@@ -116,6 +122,8 @@ async function mockGenerationDetail(page: Page): Promise<void> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
+				rating: null,
+				comment: null,
 				id: OPENABLE_ID,
 				prompt: 'серый диван',
 				kind: 'object-replacement',

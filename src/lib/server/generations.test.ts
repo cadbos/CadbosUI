@@ -363,6 +363,8 @@ describe('getGenerationDetailForUser', () => {
 
 		expect(detail).toEqual({
 			id,
+			rating: null,
+			comment: null,
 			sourceMediaId,
 			resultMediaId,
 			prompt: 'cozy',
@@ -641,6 +643,8 @@ describe('listGeneratedImages', () => {
 			images: [
 				{
 					id: 'newest',
+					rating: null,
+					comment: null,
 					userId: 'user-1',
 					mediaId: expect.any(Number),
 					sourceMediaId: expect.any(Number),
@@ -655,6 +659,8 @@ describe('listGeneratedImages', () => {
 				},
 				{
 					id: 'middle',
+					rating: null,
+					comment: null,
 					userId: 'user-1',
 					mediaId: expect.any(Number),
 					sourceMediaId: expect.any(Number),

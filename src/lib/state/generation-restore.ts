@@ -22,6 +22,8 @@ import { describeCause, issuePaths } from '$lib/utils';
 // initializeGenerationPreview), so they all validate it the same way.
 export const generatedImageDetailResponseSchema = z.object({
 	id: z.string().min(1),
+	rating: z.enum(['like', 'dislike']).nullable(),
+	comment: z.string().nullable(),
 	prompt: z.string(),
 	kind: z.enum(generationKinds),
 	createdAt: z.number(),

@@ -100,6 +100,8 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	return json(
 		{
 			id: detail.id,
+			rating: detail.rating,
+			comment: detail.comment,
 			prompt: detail.prompt,
 			kind: detail.kind,
 			createdAt: detail.createdAt,

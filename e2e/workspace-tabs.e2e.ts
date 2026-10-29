@@ -101,6 +101,8 @@ async function mockProjectDetail(
 						updatedAt: Date.UTC(2026, 0, 1),
 						generations: [
 							{
+								rating: null,
+								comment: null,
 								id: generationId,
 								image: media(projectId === PROJECT_A ? 2 : 4, renderUrl),
 								source: media(projectId === PROJECT_A ? 1 : 3, '/api/media/test-media/room.jpg'),
@@ -396,6 +398,8 @@ test('a root link to a generation opens it in its mode instead of the landing', 
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
+				rating: null,
+				comment: null,
 				id: GENERATION_A,
 				prompt: 'scandinavian living room',
 				kind: 'render',

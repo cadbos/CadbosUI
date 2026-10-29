@@ -67,6 +67,8 @@ async function openScene(page: Page, width = 1600, height = 900): Promise<void> 
 						updatedAt: 1,
 						generations: [
 							{
+								rating: null,
+								comment: null,
 								id: E2E_GENERATION_ID,
 								image: media('result', '/api/media/test-media/result.svg'),
 								source: media('source', '/api/media/test-media/source.svg'),
@@ -84,6 +86,8 @@ async function openScene(page: Page, width = 1600, height = 900): Promise<void> 
 	await page.route(`**/api/generated-images/${E2E_GENERATION_ID}`, (route) =>
 		route.fulfill({
 			json: {
+				rating: null,
+				comment: null,
 				id: E2E_GENERATION_ID,
 				prompt: '',
 				kind: 'render',

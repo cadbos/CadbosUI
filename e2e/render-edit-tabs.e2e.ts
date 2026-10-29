@@ -151,6 +151,8 @@ async function mockProjectWithGeneration(
 						updatedAt: Date.UTC(2026, 0, 1),
 						generations: [
 							{
+								rating: null,
+								comment: null,
 								id: E2E_GENERATION_ID,
 								image: media(2, '/api/media/test-media/after.webp'),
 								source: media(sourceKey, '/api/media/test-media/before.webp'),
@@ -172,6 +174,8 @@ async function mockProjectWithGeneration(
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
+				rating: null,
+				comment: null,
 				id: E2E_GENERATION_ID,
 				prompt: '',
 				kind: 'render',

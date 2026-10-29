@@ -50,6 +50,45 @@ afterEach(() => {
 describe('fetchProjectDetail', () => {
 	const id = '00000000-0000-4000-8000-000000000001';
 
+	it.each([
+		[null, null],
+		['like', '  Отлично 😀\nMore light  '],
+		['dislike', ''],
+		['like', null]
+	] as const)('preserves a generation rating of %s and comment %s', async (rating, comment) => {
+		const body = detail({
+			sessions: [
+				{
+					id: '00000000-0000-4000-8000-000000000002',
+					title: 'Main thread',
+					parentSessionId: null,
+					forkedFromGenerationId: null,
+					createdAt: 1,
+					updatedAt: 1,
+					generations: [
+						{
+							id: '00000000-0000-4000-8000-000000000003',
+							rating,
+							comment,
+							kind: 'render',
+							createdAt: 1,
+							amount: 1,
+							balanceAfter: 9,
+							image: { key: 'test-media/result.png', url: '/api/media/test-media/result.png' },
+							source: { key: 'test-media/source.png', url: '/api/media/test-media/source.png' }
+						}
+					]
+				}
+			]
+		});
+		vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(body)));
+
+		const project = await fetchProjectDetail(id);
+
+		expect(project?.sessions[0].generations[0].rating).toBe(rating);
+		expect(project?.sessions[0].generations[0].comment).toBe(comment);
+	});
+
 	it('resolves to null only for a 404', async () => {
 		vi.stubGlobal(
 			'fetch',

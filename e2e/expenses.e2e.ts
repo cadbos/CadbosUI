@@ -100,6 +100,8 @@ async function mockGenerationDetail(page: Page, amount = 1.5): Promise<void> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
+				rating: null,
+				comment: null,
 				id: GENERATION_ID,
 				prompt: '',
 				kind: 'render',
