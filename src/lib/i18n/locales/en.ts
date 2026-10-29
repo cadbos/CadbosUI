@@ -648,7 +648,7 @@ export const en = {
 	'textureReplacement.maskEditor.canvasHint':
 		'Select the area to replace directly on the image above.',
 	'textureReplacement.maskEditor.hint':
-		'Paint the surfaces whose texture should change. The white area will change and the rest of the scene will stay intact.',
+		'Paint the surfaces whose texture should change. The purple area will change and the rest of the scene will stay intact.',
 	'textureReplacement.maskEditor.toolbar': 'Mask drawing tools',
 	'textureReplacement.maskEditor.brush': 'Brush',
 	'textureReplacement.maskEditor.eraser': 'Eraser',
