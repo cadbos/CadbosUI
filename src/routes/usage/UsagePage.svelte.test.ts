@@ -122,18 +122,21 @@ function mockUsageFetch(
 }
 
 function pageProps(pubkeyViewer = PUBKEY_VIEWER): PageProps {
-	return { data: { featurebaseAppId: null, pubkeyViewer }, form: undefined, params: {} };
+	return { data: { featurebaseAppId: null, pubkeyViewer }, params: {} };
 }
 
+// The ISO 8601 local date and the local time of day: "2026-01-03 | 12:34".
 function localDateTimeLabel(locale: Locale, timestamp: number): string {
-	return new Intl.DateTimeFormat(locale, {
-		day: 'numeric',
-		month: 'short',
-		year: 'numeric',
+	const date = new Date(timestamp);
+	const day = [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+		.map((part) => String(part).padStart(2, '0'))
+		.join('-');
+	const time = new Intl.DateTimeFormat(locale, {
 		hour: '2-digit',
 		minute: '2-digit',
 		hourCycle: 'h23'
-	}).format(new Date(timestamp));
+	}).format(date);
+	return `${day} | ${time}`;
 }
 
 function localSizeLabel(locale: Locale, value: number): string {
@@ -586,12 +589,7 @@ it('links the avatar to the pubkey viewer, the key to the user and the spend dat
 	await expect.element(avatar).toHaveAttribute('target', '_blank');
 	const key = screen.getByRole('link', { name: `…${npub.slice(-5)}`, exact: true });
 	await expect.element(key).toHaveAttribute('href', `/usage/by-user?npub=${npub}`);
-	const day = new Intl.DateTimeFormat('en', {
-		day: 'numeric',
-		month: 'short',
-		year: 'numeric'
-	}).format(latestSpendAt);
 	await expect
-		.element(screen.getByRole('link', { name: day, exact: true }))
+		.element(screen.getByRole('link', { name: '2026-01-03', exact: true }))
 		.toHaveAttribute('href', `/usage/by-user?npub=${npub}&date=2026-01-03`);
 });

@@ -15,7 +15,7 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { t } from '$lib/i18n/index.svelte';
 	import { localDateKey, userUsageHref } from './usage-day';
-	import { formatUsageTimestamp, formatUsageTimestampDate } from './usage-format';
+	import { formatUsageTimeOfDay, TIMESTAMP_SEPARATOR } from './usage-format';
 
 	interface Props {
 		timestamp: number | null;
@@ -25,25 +25,20 @@ before the Change Date. See LICENSE for complete terms.
 
 	let { timestamp, npub }: Props = $props();
 
-	// The date-only rendering is a prefix of the full one in the supported
-	// locales, so the link covers exactly the date as it reads in the cell.
-	const formatted = $derived.by(() => {
-		if (timestamp === null) return null;
-		const full = formatUsageTimestamp(timestamp);
-		const day = formatUsageTimestampDate(timestamp);
-		const dateText = full.startsWith(day) ? day : full;
-		return {
-			date: dateText,
-			time: full.slice(dateText.length),
-			dateKey: localDateKey(timestamp)
-		};
-	});
+	const formatted = $derived(
+		timestamp === null
+			? null
+			: {
+					date: localDateKey(timestamp),
+					time: `${TIMESTAMP_SEPARATOR}${formatUsageTimeOfDay(timestamp)}`
+				}
+	);
 </script>
 
 {#if formatted === null}
 	{t('usage.emptyValue')}
 {:else if npub !== undefined}
-	<a href={userUsageHref(npub, formatted.dateKey)}>{formatted.date}</a>{formatted.time}
+	<a href={userUsageHref(npub, formatted.date)}>{formatted.date}</a>{formatted.time}
 {:else}
 	{formatted.date}{formatted.time}
 {/if}

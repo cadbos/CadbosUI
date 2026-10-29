@@ -12,13 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { PageServerLoad } from './$types';
-
-const DEFAULT_PUBKEY_VIEWER = 'https://primal.net/profile/{}';
-
-export const load: PageServerLoad = ({ platform }) => {
-	const pubkeyViewer = platform?.env?.PUBKEY_VIEWER;
-	return {
-		pubkeyViewer: pubkeyViewer?.includes('{}') ? pubkeyViewer : DEFAULT_PUBKEY_VIEWER
-	};
-};
+// Enough of both ends of an npub to tell keys apart at a glance: "npub14v26svt…mwpfxe".
+export function formatShortNpub(npub: string): string {
+	return `${npub.slice(0, 12)}…${npub.slice(-6)}`;
+}

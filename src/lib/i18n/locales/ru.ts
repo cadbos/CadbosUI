@@ -312,7 +312,7 @@ export const ru = {
 	'generatedImages.promptAutoEnhance': 'Создано в режиме «Автоулучшение», без промпта.',
 	'generatedImages.promptClose': 'Закрыть промпт',
 	'usage.title': 'Использование',
-	'usage.subtitle': 'Балансы аккаунтов и траты на генерации по пользователям ИИ дизайн.',
+	'usage.subtitle': 'Балансы аккаунтов и траты на генерации по пользователям.',
 	'usage.signInRequired':
 		'Для доступа к данным вы должны быть авторизованы с аккаунтом, имеющим доступ.',
 	'usage.walletBalanceLoading': 'Загрузка баланса кошелька…',
@@ -361,7 +361,7 @@ export const ru = {
 	'usage.user.profileLink': 'Открыть профиль {user} в Nostr',
 	'usage.byUser.title': 'Использование пользователя',
 	'usage.byUser.heading': 'Использование пользователя {user}',
-	'usage.byUser.subtitle': 'Статистика одного пользователя Cadbos за всё время.',
+	'usage.byUser.subtitle': 'Статистика одного пользователя за всё время.',
 	'usage.byUser.daySubtitle': 'Статистика пользователя за {date}',
 	'usage.byUser.back': 'Все пользователи',
 	'usage.byUser.allTime': 'За всё время',

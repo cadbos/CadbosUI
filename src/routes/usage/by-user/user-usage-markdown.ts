@@ -21,7 +21,6 @@ import { t, ti } from '$lib/i18n/index.svelte';
 import {
 	formatGenerationKind,
 	formatUsageDay,
-	formatUsageTime,
 	formatUsageTimestamp,
 	formatUsageValue
 } from '../usage-format';
@@ -144,7 +143,7 @@ export function buildUserUsageMarkdown(input: UserUsageMarkdownInput): string {
 						['left', 'left', 'left', 'left', 'left', 'left', 'left'],
 						input.generations.map((generation) => [
 							cell(generation.id),
-							cell(formatUsageTime(generation.createdAt)),
+							cell(formatUsageTimestamp(generation.createdAt)),
 							cell(formatGenerationKind(generation.kind)),
 							cell(generation.prompt || t('usage.emptyValue')),
 							image(

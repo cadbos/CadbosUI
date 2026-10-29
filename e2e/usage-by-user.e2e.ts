@@ -137,17 +137,31 @@ test.beforeEach(async ({ page }) => {
 	await mockFeaturebase(page);
 });
 
-test("shows the user's figures as tiles above full-width generation types", async ({ page }) => {
+test("shows the user's figures as tiles above full-width generation types", async ({
+	page,
+	context
+}) => {
+	await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 	const requests = await mockUsage(page);
 
 	await page.goto(`/usage/by-user?npub=${NPUB}`);
 
+	const shortNpub = `${NPUB.slice(0, 12)}…${NPUB.slice(-6)}`;
 	await expect(
 		page.getByRole('heading', {
 			level: 1,
-			name: ru['usage.byUser.heading'].replace('{user}', NPUB)
+			name: ru['usage.byUser.heading'].replace('{user}', shortNpub),
+			exact: true
 		})
 	).toBeVisible();
+	const keyActions = page.locator('.key-actions');
+	await expect(
+		keyActions.getByRole('link', { name: ru['auth.profile.viewOnPrimal'] })
+	).toHaveAttribute('href', `https://primal.net/profile/${NPUB}`);
+	const copyKey = keyActions.getByRole('button');
+	await copyKey.click();
+	await expect(copyKey).toHaveAttribute('title', ru['auth.profile.npubCopied']);
+	expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(NPUB);
 	const tiles = page.getByRole('region', { name: ru['usage.byUser.summary'] });
 	await expect(tiles).toContainText(`${ru['usage.column.balance']} $ 42.50`);
 	await expect(tiles).toContainText(`${ru['usage.totals.deposits']} $ 100.00`);
@@ -156,8 +170,8 @@ test("shows the user's figures as tiles above full-width generation types", asyn
 	await expect(tiles).toContainText(
 		`${ru['usage.column.lastDepositAt']} ${ru['usage.emptyValue']}`
 	);
-	await expect(tiles).toContainText(`${ru['usage.column.latestSpendAt']} 3 янв. 2026 г., 12:00`);
-	await expect(tiles.getByRole('link', { name: '3 янв. 2026 г.', exact: true })).toHaveAttribute(
+	await expect(tiles).toContainText(`${ru['usage.column.latestSpendAt']} 2026-01-03 | 12:00`);
+	await expect(tiles.getByRole('link', { name: '2026-01-03', exact: true })).toHaveAttribute(
 		'href',
 		`/usage/by-user?npub=${NPUB}&date=2026-01-03`
 	);
@@ -210,7 +224,7 @@ test("shows the day's figures and generations and reloads when the query changes
 	expect((await box(generations)).width - (await box(table)).width).toBeLessThanOrEqual(2);
 	const longRow = table.getByRole('row', { name: /generation-2/ });
 	const shortRow = table.getByRole('row', { name: /generation-1/ });
-	await expect(longRow).toContainText('13:00:00');
+	await expect(longRow).toContainText('2026-01-03 | 13:00');
 	// The last row drops its bottom border, half a pixel under border-collapse.
 	expect(Math.abs((await box(longRow)).height - (await box(shortRow)).height)).toBeLessThanOrEqual(
 		0.5
@@ -331,8 +345,8 @@ test('exports the user to Markdown, with every generation of the day only in day
 	expect(dayExport.suggestedFilename()).toBe(`cadbos-usage-${NPUB}-2026-01-03.md`);
 	const dayMarkdown = await readDownload(dayExport);
 	expect(dayMarkdown).toContain(`## ${ru['usage.generations.title']}`);
-	expect(dayMarkdown).toContain(`| generation-2 | 13:00:00 |`);
-	expect(dayMarkdown).toContain(`| generation-1 | 12:00:00 |`);
+	expect(dayMarkdown).toContain(`| generation-2 | 2026-01-03 \\| 13:00 |`);
+	expect(dayMarkdown).toContain(`| generation-1 | 2026-01-03 \\| 12:00 |`);
 	expect(dayMarkdown).toContain(LONG_PROMPT);
 	expect(dayMarkdown).toContain(
 		`![${ru['usage.generations.resultAlt'].replace('{id}', 'generation-2')}](<${new URL('/api/media/uploads/result-2.webp', page.url()).href}>)`
@@ -406,7 +420,7 @@ test('opens the user and their spend day from the usage table', async ({ page })
 	await expect(page).toHaveURL(`/usage/by-user?npub=${NPUB}`);
 
 	await page.goBack();
-	await page.getByRole('link', { name: '3 янв. 2026 г.', exact: true }).click();
+	await page.getByRole('link', { name: '2026-01-03', exact: true }).click();
 	await expect(page).toHaveURL(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
 	await expect(page.getByRole('region', { name: ru['usage.generations.title'] })).toBeVisible();
 });

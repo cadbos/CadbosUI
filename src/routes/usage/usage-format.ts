@@ -16,6 +16,7 @@ import type { GenerationKind } from '$lib/api/contract';
 import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 import { currency } from '$lib/state/currency.svelte';
 import { formatCredit } from '$lib/utils';
+import { localDateKey } from './usage-day';
 
 export type UsageValue =
 	| { kind: 'count'; value: number | null }
@@ -35,12 +36,6 @@ const generationKindKeys: Record<GenerationKind, TranslationKey> = {
 };
 
 const numericPartTypes = new Set(['integer', 'group', 'decimal', 'fraction', 'minusSign']);
-
-const TIMESTAMP_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
-	day: 'numeric',
-	month: 'short',
-	year: 'numeric'
-};
 
 function formatNumber(value: number, maximumFractionDigits: number): string {
 	const parts = new Intl.NumberFormat('en-US', { maximumFractionDigits }).formatToParts(value);
@@ -96,27 +91,20 @@ export function formatUsageValue(usageValue: UsageValue): string {
 	return formatNumber(usageValue.value, 0);
 }
 
+// The local time of day a usage timestamp shows, e.g. "18:35".
+export function formatUsageTimeOfDay(timestamp: number): string {
+	return new Intl.DateTimeFormat(getLocale(), {
+		hour: '2-digit',
+		minute: '2-digit',
+		hourCycle: 'h23'
+	}).format(new Date(timestamp));
+}
+
+// Joins the ISO 8601 local date and the time of day: "2026-09-12 | 18:35".
+export const TIMESTAMP_SEPARATOR = ' | ';
+
 export function formatUsageTimestamp(timestamp: number): string {
-	return new Intl.DateTimeFormat(getLocale(), {
-		...TIMESTAMP_DATE_OPTIONS,
-		hour: '2-digit',
-		minute: '2-digit',
-		hourCycle: 'h23'
-	}).format(new Date(timestamp));
-}
-
-export function formatUsageTimestampDate(timestamp: number): string {
-	return new Intl.DateTimeFormat(getLocale(), TIMESTAMP_DATE_OPTIONS).format(new Date(timestamp));
-}
-
-// A generation's time of day, to the second.
-export function formatUsageTime(timestamp: number): string {
-	return new Intl.DateTimeFormat(getLocale(), {
-		hour: '2-digit',
-		minute: '2-digit',
-		second: '2-digit',
-		hourCycle: 'h23'
-	}).format(new Date(timestamp));
+	return `${localDateKey(timestamp)}${TIMESTAMP_SEPARATOR}${formatUsageTimeOfDay(timestamp)}`;
 }
 
 // A whole calendar day, from its local start.

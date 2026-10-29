@@ -121,7 +121,9 @@ before the Change Date. See LICENSE for complete terms.
 					<th scope="col" class="numeric-column"
 						>{t('usage.column.totalDeposit')}, {currency.symbol}</th
 					>
-					<th scope="col">{t('usage.column.lastDepositAt')}</th>
+					<th scope="col" title={timeZoneFullName}
+						>{t('usage.column.lastDepositAt')}, {timeZoneAbbreviation}</th
+					>
 					<th scope="col" class="numeric-column">{t('usage.column.projectCount')}</th>
 					<th scope="col" class="numeric-column">{t('usage.column.sessionCount')}</th>
 					<th scope="col" class="numeric-column">{t('usage.column.generationCount')}</th>

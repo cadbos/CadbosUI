@@ -21,15 +21,20 @@ before the Change Date. See LICENSE for complete terms.
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
+	import { formatShortNpub } from '$lib/nostr/short-npub';
 	import { auth } from '$lib/state/auth.svelte';
 	import { logBoundaryError } from '$lib/utils';
 	import { userUsage } from '$lib/state/user-usage.svelte';
 	import { localDay, userUsageHref } from '../usage-day';
-	import { formatGenerationKind, formatUsageDay, formatUsageTime } from '../usage-format';
+	import { formatGenerationKind, formatUsageDay, formatUsageTimestamp } from '../usage-format';
 	import UsageNumber from '../UsageNumber.svelte';
 	import UsageTimestamp from '../UsageTimestamp.svelte';
+	import UsageKeyActions from './UsageKeyActions.svelte';
 	import UsagePrompt from './UsagePrompt.svelte';
 	import { buildUserUsageMarkdown } from './user-usage-markdown';
+	import type { PageProps } from './$types';
+
+	let { data }: PageProps = $props();
 
 	// The URL is the source of truth: changing either param reloads the page's data.
 	const npub = $derived(page.url.searchParams.get('npub') ?? '');
@@ -142,9 +147,16 @@ before the Change Date. See LICENSE for complete terms.
 <header class="usage-header">
 	<a class="back-link" href={resolve('/usage', {})}>{t('usage.byUser.back')}</a>
 	<div class="heading-row">
-		<h1>
-			{pubkey === null ? t('usage.byUser.title') : ti('usage.byUser.heading', { user: npub })}
-		</h1>
+		<div class="heading-key">
+			<h1>
+				{pubkey === null
+					? t('usage.byUser.title')
+					: ti('usage.byUser.heading', { user: formatShortNpub(npub) })}
+			</h1>
+			{#if pubkey !== null}
+				<UsageKeyActions {npub} pubkeyViewer={data.pubkeyViewer} />
+			{/if}
+		</div>
 		{#if auth.status === 'authenticated' && pubkey !== null && (dateKey === null || day !== null)}
 			<button
 				type="button"
@@ -305,7 +317,7 @@ before the Change Date. See LICENSE for complete terms.
 								{#each userUsage.generations as generation (generation.id)}
 									<tr>
 										<th scope="row" class="generation-id">{generation.id}</th>
-										<td>{formatUsageTime(generation.createdAt)}</td>
+										<td>{formatUsageTimestamp(generation.createdAt)}</td>
 										<td>{formatGenerationKind(generation.kind)}</td>
 										<td class="prompt">
 											{#if generation.prompt === ''}
@@ -380,6 +392,14 @@ before the Change Date. See LICENSE for complete terms.
 		align-items: flex-start;
 		justify-content: space-between;
 		gap: 1rem;
+	}
+
+	.heading-key {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
 	}
 
 	h1 {

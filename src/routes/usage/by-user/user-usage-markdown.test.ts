@@ -59,7 +59,7 @@ describe('buildUserUsageMarkdown', () => {
 			[
 				'# Использование пользователя npub1example',
 				'',
-				'Статистика одного пользователя Cadbos за всё время.',
+				'Статистика одного пользователя за всё время.',
 				'',
 				'## Сводка',
 				'',
@@ -74,7 +74,7 @@ describe('buildUserUsageMarkdown', () => {
 				'| Загруженные исходники | 1 \\| 3 МБ |',
 				'| Загруженные референсы | 0 \\| — |',
 				'| Последнее пополнение | — |',
-				'| Последняя трата | 3 янв. 2026 г., 12:00 |',
+				'| Последняя трата | 2026-01-03 \\| 12:00 |',
 				'',
 				'## Типы генераций',
 				'',
@@ -110,7 +110,7 @@ describe('buildUserUsageMarkdown', () => {
 			'| ID | Время | Тип генерации | Промпт | Исходное | Результат | Референс |'
 		);
 		expect(markdown).toContain(
-			'| generation-1 | 12:00:05 | Миграция стиля | a \\| b<br>with &lt;b>bold&lt;/b> | ' +
+			'| generation-1 | 2026-01-03 \\| 12:00 | Миграция стиля | a \\| b<br>with &lt;b>bold&lt;/b> | ' +
 				'![Исходное изображение генерации generation-1](<https://cadbos.example/api/media/uploads/source.webp>) | ' +
 				'![Результат генерации generation-1](<https://cadbos.example/api/media/uploads/result.webp>) | — |'
 		);

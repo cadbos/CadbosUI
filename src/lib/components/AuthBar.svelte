@@ -17,6 +17,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { dev } from '$app/environment';
 	import { resolve } from '$app/paths';
 	import { npubEncode } from 'nostr-tools/nip19';
+	import { formatShortNpub } from '$lib/nostr/short-npub';
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
@@ -37,7 +38,7 @@ before the Change Date. See LICENSE for complete terms.
 	};
 
 	const npub = $derived(auth.pubkey ? npubEncode(auth.pubkey) : null);
-	const shortNpub = $derived(npub ? `${npub.slice(0, 12)}…${npub.slice(-6)}` : '');
+	const shortNpub = $derived(npub ? formatShortNpub(npub) : '');
 	const primalUrl = $derived(npub ? `https://primal.net/profile/${npub}` : null);
 
 	// 'auto' = open iff missingCadbosName; 'open'/'closed' = user overrode.
