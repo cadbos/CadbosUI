@@ -956,30 +956,34 @@ export async function listUserGenerations(
 	offset: number,
 	size: number
 ): Promise<{ generations: UsageGenerationRecord[]; hasMore: boolean }> {
-	const { items } = await collectValidRows(
-		(limit, rawOffset) =>
-			db.all<UsageGenerationRow>(
-				sql`SELECT g.id, g.kind, g.created_at, g.prompt,
-					source_bucket.name AS source_bucket_name, source_media.filename AS source_filename,
-					result_bucket.name AS result_bucket_name, result_media.filename AS result_filename,
-					reference_bucket.name AS reference_bucket_name,
-					reference_media.filename AS reference_filename
-					FROM generations g
-					JOIN media source_media ON source_media.id = g.source_media_id
-					JOIN buckets source_bucket ON source_bucket.id = source_media.bucket
-					JOIN media result_media ON result_media.id = g.result_media_id
-					JOIN buckets result_bucket ON result_bucket.id = result_media.bucket
-					LEFT JOIN media reference_media ON reference_media.id = g.reference_media_id
-					LEFT JOIN buckets reference_bucket ON reference_bucket.id = reference_media.bucket
-					WHERE ${scopeCondition({ userId, range }, sql`g.user_id`, sql`g.created_at`)}
-					ORDER BY g.created_at DESC, g.id DESC LIMIT ${limit} OFFSET ${rawOffset}`
-			),
-		toUsageGeneration,
-		offset + size + 1
+	// Unrecognized kinds are left out in SQL, as in listUserGenerationKinds, so
+	// the page comes straight from LIMIT/OFFSET without scanning earlier rows.
+	const rows = await db.all<UsageGenerationRow>(
+		sql`SELECT g.id, g.kind, g.created_at, g.prompt,
+			source_bucket.name AS source_bucket_name, source_media.filename AS source_filename,
+			result_bucket.name AS result_bucket_name, result_media.filename AS result_filename,
+			reference_bucket.name AS reference_bucket_name,
+			reference_media.filename AS reference_filename
+			FROM generations g
+			JOIN media source_media ON source_media.id = g.source_media_id
+			JOIN buckets source_bucket ON source_bucket.id = source_media.bucket
+			JOIN media result_media ON result_media.id = g.result_media_id
+			JOIN buckets result_bucket ON result_bucket.id = result_media.bucket
+			LEFT JOIN media reference_media ON reference_media.id = g.reference_media_id
+			LEFT JOIN buckets reference_bucket ON reference_bucket.id = reference_media.bucket
+			WHERE ${scopeCondition({ userId, range }, sql`g.user_id`, sql`g.created_at`)}
+			AND g.kind IN (${sql.join(
+				generationKinds.map((kind) => sql`${kind}`),
+				sql`, `
+			)})
+			ORDER BY g.created_at DESC, g.id DESC LIMIT ${size + 1} OFFSET ${offset}`
 	);
 	return {
-		generations: items.slice(offset, offset + size),
-		hasMore: items.length > offset + size
+		generations: rows
+			.slice(0, size)
+			.map(toUsageGeneration)
+			.filter((generation) => generation !== null),
+		hasMore: rows.length > size
 	};
 }
 

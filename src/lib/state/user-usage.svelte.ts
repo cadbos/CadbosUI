@@ -121,12 +121,11 @@ class UserUsageState {
 		if (controller === null || this.#range === null) {
 			throw new UsageLoadError('no day of user generations is loaded');
 		}
-		while (
-			!controller.signal.aborted &&
-			(this.#pendingGenerations !== null || this.hasMoreGenerations) &&
-			this.generationsStatus !== 'error'
-		) {
+		if (this.#pendingGenerations !== null) await this.#pendingGenerations;
+		// A page that failed before is requested again; one failing now stops the export.
+		while (!controller.signal.aborted && this.hasMoreGenerations) {
 			await this.loadMoreGenerations();
+			if (this.generationsStatus === 'error') break;
 		}
 		if (controller.signal.aborted) throw new UsageLoadError('user usage changed during export');
 		if (this.generationsStatus !== 'ready') {
@@ -208,15 +207,22 @@ class UserUsageState {
 			}
 
 			if (signal.aborted) return;
-			this.generations = [...this.generations, ...page.generations];
+			// A generation made while paging today shifts every row down, so a
+			// page can repeat the last one already shown.
+			const shown = new Set(this.generations.map((generation) => generation.id));
+			this.generations = [
+				...this.generations,
+				...page.generations.filter((generation) => !shown.has(generation.id))
+			];
 			this.#nextOffset = page.pagination.hasMore ? offset + page.generations.length : null;
 			this.hasMoreGenerations = this.#nextOffset !== null;
 			this.generationsStatus = 'ready';
 		} catch (error) {
 			if (signal.aborted) return;
+			// Keeps the failed page as the next one, so it can be requested again.
 			this.generationsStatus = 'error';
-			this.hasMoreGenerations = false;
-			this.#nextOffset = null;
+			this.#nextOffset = offset;
+			this.hasMoreGenerations = true;
 			console.error('User generations load failed:', error);
 		}
 	}

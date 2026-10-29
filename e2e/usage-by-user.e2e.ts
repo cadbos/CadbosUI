@@ -259,6 +259,47 @@ test("shows the day's figures and generations and reloads when the query changes
 	expect(requested(requests, `/api/usage/users/${PUBKEY}`).at(-1)).toBe('');
 });
 
+test('loads the next page of generations when scrolled to the end of the table', async ({
+	page
+}) => {
+	const requests = await mockUsage(page);
+	const [template] = GENERATIONS.generations;
+	const rows = Array.from({ length: 22 }, (_, index) => ({
+		...template,
+		id: `generation-page-${index + 1}`,
+		prompt: 'cozy bedroom',
+		createdAt: DAY_FROM + 20 * HOUR - index * 60_000
+	}));
+	await page.route(`**/api/usage/users/${PUBKEY}/generations?*`, async (route) => {
+		const url = new URL(route.request().url());
+		requests.push(url);
+		const offset = Number(url.searchParams.get('offset'));
+		await route.fulfill({
+			json: {
+				generations: rows.slice(offset, offset + 20),
+				pagination: { offset, size: 20, hasMore: offset + 20 < rows.length }
+			}
+		});
+	});
+
+	await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
+	const table = page
+		.getByRole('region', { name: ru['usage.generations.title'] })
+		.getByRole('table');
+	await expect(table.getByRole('row', { name: /generation-page-20\b/ })).toBeVisible();
+	await expect(table.getByRole('row', { name: /generation-page-21\b/ })).toHaveCount(0);
+
+	await page.locator('.load-more-sentinel').scrollIntoViewIfNeeded();
+
+	await expect(table.getByRole('row', { name: /generation-page-22\b/ })).toBeVisible();
+	await expect(table.getByRole('row', { name: /generation-page-/ })).toHaveCount(22);
+	const range = `from=${DAY_FROM}&to=${DAY_TO}`;
+	expect(requested(requests, `/api/usage/users/${PUBKEY}/generations`)).toEqual([
+		`?${range}&offset=0&size=20`,
+		`?${range}&offset=20&size=20`
+	]);
+});
+
 test('exports the user to Markdown, with every generation of the day only in day mode', async ({
 	page
 }) => {

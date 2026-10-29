@@ -31,19 +31,27 @@ function generation(index: number): UsageGenerationRecord {
 	};
 }
 
-function mockApi(pages: UsageGenerationsResponse[]): ReturnType<typeof vi.fn<typeof fetch>> {
+function mockApi(
+	pages: (UsageGenerationsResponse | null)[]
+): ReturnType<typeof vi.fn<typeof fetch>> {
+	// Each request takes the next response in order; null answers with a 500.
+	let next = 0;
 	const fetcher = vi.fn<typeof fetch>(async (input) => {
 		const url = new URL(String(input), 'https://cadbos.example');
-		if (url.pathname.endsWith('/generations')) {
-			const offset = Number(url.searchParams.get('offset'));
-			const page = pages.find((candidate) => candidate.pagination.offset === offset);
-			return page ? Response.json(page) : new Response(null, { status: 404 });
-		}
-		return new Response(null, { status: 500 });
+		if (!url.pathname.endsWith('/generations')) return new Response(null, { status: 500 });
+		const page = pages[next++];
+		return page ? Response.json(page) : new Response(null, { status: 500 });
 	});
 	vi.stubGlobal('fetch', fetcher);
 	vi.spyOn(console, 'error').mockImplementation(() => undefined);
 	return fetcher;
+}
+
+function generationOffsets(fetcher: ReturnType<typeof vi.fn<typeof fetch>>): string[] {
+	return fetcher.mock.calls
+		.map(([input]) => new URL(String(input), 'https://cadbos.example'))
+		.filter((url) => url.pathname.endsWith('/generations'))
+		.map((url) => url.searchParams.get('offset') ?? '');
 }
 
 afterEach(() => {
@@ -71,18 +79,45 @@ describe('userUsage.loadAllGenerations', () => {
 			'generation-3'
 		]);
 		expect(userUsage.hasMoreGenerations).toBe(false);
-		const pageRequests = fetcher.mock.calls
-			.map(([input]) => String(input))
-			.filter((url) => url.includes('/generations'));
-		expect(pageRequests).toHaveLength(2);
+		expect(generationOffsets(fetcher)).toEqual(['0', '2']);
 	});
 
-	it('fails when a page cannot be loaded', async () => {
-		mockApi([{ generations: [generation(1)], pagination: { offset: 0, size: 20, hasMore: true } }]);
+	it('fails when a page cannot be loaded and requests that page again next time', async () => {
+		const fetcher = mockApi([
+			{ generations: [generation(1)], pagination: { offset: 0, size: 20, hasMore: true } },
+			null,
+			{ generations: [generation(2)], pagination: { offset: 1, size: 20, hasMore: false } }
+		]);
 
 		userUsage.load(PUBKEY, DAY);
 
 		await expect(userUsage.loadAllGenerations()).rejects.toThrow('user generations unavailable');
+		expect(userUsage.hasMoreGenerations).toBe(true);
+		const generations = await userUsage.loadAllGenerations();
+		expect(generations.map((entry) => entry.id)).toEqual(['generation-1', 'generation-2']);
+		expect(generationOffsets(fetcher)).toEqual(['0', '1', '1']);
+	});
+
+	it('drops a generation a shifted page repeats', async () => {
+		mockApi([
+			{
+				generations: [generation(1), generation(2)],
+				pagination: { offset: 0, size: 20, hasMore: true }
+			},
+			{
+				generations: [generation(2), generation(3)],
+				pagination: { offset: 2, size: 20, hasMore: false }
+			}
+		]);
+
+		userUsage.load(PUBKEY, DAY);
+		const generations = await userUsage.loadAllGenerations();
+
+		expect(generations.map((entry) => entry.id)).toEqual([
+			'generation-1',
+			'generation-2',
+			'generation-3'
+		]);
 	});
 
 	it('fails when the page moves to another user meanwhile', async () => {

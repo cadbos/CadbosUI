@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { localDateKey, localDay, userUsageHref } from './usage-day';
 
 describe('localDateKey', () => {
@@ -26,6 +26,29 @@ describe('localDay', () => {
 		expect(localDay('2026-03-09')).toEqual({
 			from: new Date(2026, 2, 9).getTime(),
 			to: new Date(2026, 2, 10).getTime()
+		});
+	});
+
+	describe('across a DST switch', () => {
+		const runnerTimeZone = process.env.TZ;
+
+		beforeAll(() => {
+			process.env.TZ = 'America/New_York';
+		});
+
+		afterAll(() => {
+			if (runnerTimeZone === undefined) delete process.env.TZ;
+			else process.env.TZ = runnerTimeZone;
+		});
+
+		it('keeps the shortened day whole', () => {
+			const day = localDay('2026-03-08');
+
+			expect(day).toEqual({
+				from: Date.UTC(2026, 2, 8, 5),
+				to: Date.UTC(2026, 2, 9, 4)
+			});
+			expect(day && day.to - day.from).toBe(23 * 60 * 60 * 1000);
 		});
 	});
 

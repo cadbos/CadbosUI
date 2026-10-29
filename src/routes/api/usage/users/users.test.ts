@@ -12,7 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type {
 	SessionUser,
@@ -246,5 +246,31 @@ describe('GET /api/usage/users/[pubkey]/generations', () => {
 			],
 			pagination: { offset: 0, size: 2, hasMore: true }
 		});
+	});
+
+	it('pages by offset past unrecognized kinds', async () => {
+		const db = await seedPlatform();
+		await seedGeneration(createDb(db), {
+			id: 'generation-legacy',
+			userId: 'user-1',
+			url: `${CDN}/generation-legacy.webp`,
+			sourceUrl: `${CDN}/source.jpg`,
+			sourceChecksum: '1'.repeat(64),
+			kind: 'legacy-kind',
+			balanceAfter: 6,
+			createdAt: 6700
+		});
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+		const response = await callGenerations(
+			ADMIN,
+			db,
+			USER_PUBKEY,
+			'?from=0&to=10000&offset=1&size=1'
+		);
+		const result = (await response.json()) as UsageGenerationsResponse;
+
+		expect(result.generations.map((generation) => generation.id)).toEqual(['generation-2']);
+		expect(result.pagination).toEqual({ offset: 1, size: 1, hasMore: true });
 	});
 });
