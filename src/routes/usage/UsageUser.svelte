@@ -21,12 +21,11 @@ before the Change Date. See LICENSE for complete terms.
 
 	interface Props {
 		pubkey: string;
-		profile: UsageProfile | null | undefined;
+		profile: UsageProfile | undefined;
 		pubkeyViewer: string;
-		linkKey?: boolean;
 	}
 
-	let { pubkey, profile, pubkeyViewer, linkKey = false }: Props = $props();
+	let { pubkey, profile, pubkeyViewer }: Props = $props();
 
 	let failedPicture = $state<string | null>(null);
 	const npub = $derived(npubEncode(pubkey));
@@ -55,11 +54,7 @@ before the Change Date. See LICENSE for complete terms.
 			<span class="avatar" aria-hidden="true">{[...label][0]?.toUpperCase()}</span>
 		{/if}
 	</a>
-	{#if linkKey}
-		<a class="key" href={userUsageHref(npub)}>{shortKey}</a>
-	{:else}
-		<span class="key">{shortKey}</span>
-	{/if}
+	<a class="key" href={userUsageHref(npub)}>{shortKey}</a>
 </span>
 
 <style>

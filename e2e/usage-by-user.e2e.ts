@@ -131,51 +131,50 @@ test.beforeEach(async ({ page }) => {
 	await mockFeaturebase(page);
 });
 
-test("shows the user's figures as tiles and the rest side by side", async ({ page }) => {
+test("shows the user's figures as tiles above full-width generation types", async ({ page }) => {
 	const requests = await mockUsage(page);
 
 	await page.goto(`/usage/by-user?npub=${NPUB}`);
 
-	const totals = page.getByRole('region', {
-		name: ru['usage.byUser.totalsTitle'].replace('{user}', NPUB)
-	});
-	await expect(totals).toContainText(`${ru['usage.column.balance']} $ 42.50`);
-	await expect(totals).toContainText(`${ru['usage.totals.deposits']} $ 100.00`);
-	await expect(totals).toContainText(`${ru['usage.totals.spend']} $ 57.50`);
-	await expect(totals).toContainText(`${ru['usage.totals.generations']} 5`);
-	for (const platformOnly of [
+	await expect(
+		page.getByRole('heading', {
+			level: 1,
+			name: ru['usage.byUser.heading'].replace('{user}', NPUB)
+		})
+	).toBeVisible();
+	const tiles = page.getByRole('region', { name: ru['usage.byUser.summary'] });
+	await expect(tiles).toContainText(`${ru['usage.column.balance']} $ 42.50`);
+	await expect(tiles).toContainText(`${ru['usage.totals.deposits']} $ 100.00`);
+	await expect(tiles).toContainText(`${ru['usage.totals.spend']} $ 57.50`);
+	await expect(tiles).toContainText(`${ru['usage.totals.generations']} 5`);
+	await expect(tiles).toContainText(
+		`${ru['usage.column.lastDepositAt']} ${ru['usage.emptyValue']}`
+	);
+	await expect(tiles).toContainText(`${ru['usage.column.latestSpendAt']} 3 янв. 2026 г., 12:00`);
+	await expect(tiles.getByRole('link', { name: '3 янв. 2026 г.', exact: true })).toHaveAttribute(
+		'href',
+		`/usage/by-user?npub=${NPUB}&date=2026-01-03`
+	);
+	for (const absent of [
 		ru['usage.totals.users'],
 		ru['usage.totals.walletBalance'],
-		ru['usage.totals.title']
+		ru['usage.totals.title'],
+		ru['usage.column.user']
 	]) {
-		await expect(page.getByText(platformOnly)).toHaveCount(0);
+		await expect(page.getByText(absent)).toHaveCount(0);
 	}
-
-	const summary = page.getByRole('table', { name: ru['usage.byUser.summary'] });
-	await expect(summary.getByRole('row')).toHaveCount(3);
-	await expect(
-		summary.getByRole('link', { name: ru['usage.user.profileLink'].replace('{user}', 'Carol') })
-	).toHaveAttribute('href', `https://primal.net/profile/${NPUB}`);
-	const userRow = summary.getByRole('row', { name: new RegExp(ru['usage.column.user']) });
-	const userCell = await box(userRow.getByRole('cell'));
-	const identity = await box(userRow.getByRole('cell').locator('.user-identity'));
-	expect(Math.abs(userCell.x + userCell.width - (identity.x + identity.width))).toBeLessThan(16);
+	await expect(page.getByRole('table')).toHaveCount(1);
 
 	const kinds = page.getByRole('region', { name: ru['usage.kinds.title'] });
 	await expect(
 		kinds.getByRole('row', { name: `${ru['generatedImages.kind.render']} 4` })
 	).toBeVisible();
-	const summarySection = await box(page.getByRole('region', { name: ru['usage.byUser.summary'] }));
-	const kindsSection = await box(kinds);
-	expect(Math.abs(summarySection.y - kindsSection.y)).toBeLessThan(1);
-	expect(Math.abs(summarySection.width - kindsSection.width)).toBeLessThan(1);
-	expect(kindsSection.x).toBeGreaterThan(summarySection.x + summarySection.width);
-	// The table spans its column, inside the wrapper's 1px borders.
-	expect(summarySection.width - (await box(summary)).width).toBeLessThanOrEqual(2);
+	expect(Math.abs((await box(kinds)).width - (await box(tiles)).width)).toBeLessThan(1);
 
 	await expect(page.getByRole('region', { name: ru['usage.generations.title'] })).toHaveCount(0);
 	expect(requested(requests, `/api/usage/users/${PUBKEY}`)).toEqual(['']);
 	expect(requests.map((url) => url.pathname)).not.toContain('/api/usage/totals');
+	expect(requests.map((url) => url.pathname)).not.toContain('/api/usage/profiles');
 });
 
 test("shows the day's figures and generations and reloads when the query changes", async ({
@@ -187,11 +186,7 @@ test("shows the day's figures and generations and reloads when the query changes
 
 	await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
 
-	const dayTotals = page.getByRole('region', {
-		name: ru['usage.byUser.dayTotalsTitle']
-			.replace('{user}', NPUB)
-			.replace('{date}', '3 января 2026 г.')
-	});
+	const dayTotals = page.getByRole('region', { name: ru['usage.byUser.summary'] });
 	await expect(dayTotals).toContainText(`${ru['usage.totals.generations']} 2`);
 	const range = `?from=${DAY_FROM}&to=${DAY_TO}`;
 	expect(requested(requests, `/api/usage/users/${PUBKEY}`)).toEqual([range]);
@@ -252,9 +247,9 @@ test("shows the day's figures and generations and reloads when the query changes
 
 	await expect(page).toHaveURL(`/usage/by-user?npub=${NPUB}`);
 	await expect(generations).toHaveCount(0);
-	await expect(
-		page.getByRole('region', { name: ru['usage.byUser.totalsTitle'].replace('{user}', NPUB) })
-	).toContainText(`${ru['usage.totals.generations']} 5`);
+	await expect(page.getByRole('region', { name: ru['usage.byUser.summary'] })).toContainText(
+		`${ru['usage.totals.generations']} 5`
+	);
 	expect(requested(requests, `/api/usage/users/${PUBKEY}`).at(-1)).toBe('');
 });
 

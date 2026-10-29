@@ -400,6 +400,7 @@ export interface Dictionary {
 	'usage.column.latestSpendAt': string;
 	'usage.user.profileLink': string;
 	'usage.byUser.title': string;
+	'usage.byUser.heading': string;
 	'usage.byUser.subtitle': string;
 	'usage.byUser.daySubtitle': string;
 	'usage.byUser.back': string;
@@ -428,8 +429,6 @@ export interface Dictionary {
 	'usage.generations.loading': string;
 	'usage.generations.empty': string;
 	'usage.generations.failed': string;
-	'usage.byUser.totalsTitle': string;
-	'usage.byUser.dayTotalsTitle': string;
 	'usage.generations.promptShow': string;
 	'usage.generations.promptCopy': string;
 	'usage.generations.promptCopied': string;

@@ -13,7 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { load } from './+layout.server';
+import { load } from './+page.server';
 
 type LoadEvent = Parameters<typeof load>[0];
 

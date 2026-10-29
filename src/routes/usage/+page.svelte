@@ -149,7 +149,6 @@ before the Change Date. See LICENSE for complete terms.
 								pubkey={user.pubkey}
 								profile={usage.profiles[user.pubkey]}
 								pubkeyViewer={data.pubkeyViewer}
-								linkKey
 							/>
 						</th>
 						<td class="numeric-column"

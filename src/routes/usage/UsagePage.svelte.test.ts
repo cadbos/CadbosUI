@@ -122,7 +122,7 @@ function mockUsageFetch(
 }
 
 function pageProps(pubkeyViewer = PUBKEY_VIEWER): PageProps {
-	return { data: { featurebaseAppId: null, pubkeyViewer }, params: {} };
+	return { data: { featurebaseAppId: null, pubkeyViewer }, form: undefined, params: {} };
 }
 
 function localDateTimeLabel(locale: Locale, timestamp: number): string {

@@ -23,14 +23,10 @@ before the Change Date. See LICENSE for complete terms.
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { auth } from '$lib/state/auth.svelte';
 	import { userUsage, type UsageDay } from '$lib/state/user-usage.svelte';
-	import type { PageProps } from './$types';
 	import { localDay, userUsageHref } from '../usage-day';
 	import UsageNumber from '../UsageNumber.svelte';
 	import UsageTimestamp from '../UsageTimestamp.svelte';
-	import UsageUser from '../UsageUser.svelte';
 	import UsagePrompt from './UsagePrompt.svelte';
-
-	let { data }: PageProps = $props();
 
 	const generationKindKeys: Record<GenerationKind, TranslationKey> = {
 		render: 'generatedImages.kind.render',
@@ -114,7 +110,7 @@ before the Change Date. See LICENSE for complete terms.
 
 <header class="usage-header">
 	<a class="back-link" href={resolve('/usage', {})}>{t('usage.byUser.back')}</a>
-	<h1>{t('usage.byUser.title')}</h1>
+	<h1>{pubkey === null ? t('usage.byUser.title') : ti('usage.byUser.heading', { user: npub })}</h1>
 	{#if day === null}
 		<p>{t('usage.byUser.subtitle')}</p>
 	{:else}
@@ -137,15 +133,10 @@ before the Change Date. See LICENSE for complete terms.
 	<p class="status error" role="alert">{t('usage.byUser.failed')}</p>
 {:else}
 	{@const record = userUsage.record}
-	<section class="totals" aria-labelledby="user-totals-title" aria-busy={record === null}>
-		<h2 id="user-totals-title" class="totals-title">
-			{day === null
-				? ti('usage.byUser.totalsTitle', { user: npub })
-				: ti('usage.byUser.dayTotalsTitle', { user: npub, date: formatDay(day) })}
-		</h2>
+	<section class="totals" aria-label={t('usage.byUser.summary')} aria-busy={record === null}>
 		{#if record === null}
 			<dl aria-hidden="true">
-				{#each [0, 1, 2, 3, 4, 5, 6, 7] as slot (slot)}
+				{#each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as slot (slot)}
 					<div>
 						<dt><SkeletonBlock width="70%" height="0.7rem" /></dt>
 						<dd><SkeletonBlock width="4.5rem" height="1rem" /></dd>
@@ -199,66 +190,44 @@ before the Change Date. See LICENSE for complete terms.
 						/>
 					</dd>
 				</div>
+				<div>
+					<dt>{t('usage.column.lastDepositAt')}</dt>
+					<dd class="tile-time"><UsageTimestamp timestamp={record.lastDepositAt} /></dd>
+				</div>
+				<div>
+					<dt>{t('usage.column.latestSpendAt')}</dt>
+					<dd class="tile-time"><UsageTimestamp timestamp={record.latestSpendAt} {npub} /></dd>
+				</div>
 			</dl>
 		{/if}
 	</section>
 
 	{#if record !== null}
-		<div class="usage-columns">
-			<section class="usage-section" aria-labelledby="usage-summary-title">
-				<h2 id="usage-summary-title">{t('usage.byUser.summary')}</h2>
+		<section class="usage-section" aria-labelledby="usage-kinds-title">
+			<h2 id="usage-kinds-title">{t('usage.kinds.title')}</h2>
+			{#if userUsage.generationKinds.length === 0}
+				<p class="status">{t('usage.kinds.empty')}</p>
+			{:else}
 				<div class="table-wrap">
-					<table class="key-value" aria-labelledby="usage-summary-title">
+					<table>
+						<thead>
+							<tr>
+								<th scope="col">{t('usage.kinds.column.kind')}</th>
+								<th scope="col" class="numeric-column">{t('usage.kinds.column.count')}</th>
+							</tr>
+						</thead>
 						<tbody>
-							<tr>
-								<th scope="row">{t('usage.column.user')}</th>
-								<td>
-									<UsageUser
-										pubkey={record.pubkey}
-										profile={userUsage.profile}
-										pubkeyViewer={data.pubkeyViewer}
-									/>
-								</td>
-							</tr>
-							<tr>
-								<th scope="row">{t('usage.column.lastDepositAt')}</th>
-								<td><UsageTimestamp timestamp={record.lastDepositAt} /></td>
-							</tr>
-							<tr>
-								<th scope="row">{t('usage.column.latestSpendAt')}</th>
-								<td><UsageTimestamp timestamp={record.latestSpendAt} {npub} /></td>
-							</tr>
+							{#each userUsage.generationKinds as entry (entry.kind)}
+								<tr>
+									<th scope="row">{t(generationKindKeys[entry.kind])}</th>
+									<td class="numeric-column"><UsageNumber kind="count" value={entry.count} /></td>
+								</tr>
+							{/each}
 						</tbody>
 					</table>
 				</div>
-			</section>
-
-			<section class="usage-section" aria-labelledby="usage-kinds-title">
-				<h2 id="usage-kinds-title">{t('usage.kinds.title')}</h2>
-				{#if userUsage.generationKinds.length === 0}
-					<p class="status">{t('usage.kinds.empty')}</p>
-				{:else}
-					<div class="table-wrap">
-						<table>
-							<thead>
-								<tr>
-									<th scope="col">{t('usage.kinds.column.kind')}</th>
-									<th scope="col" class="numeric-column">{t('usage.kinds.column.count')}</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each userUsage.generationKinds as entry (entry.kind)}
-									<tr>
-										<th scope="row">{t(generationKindKeys[entry.kind])}</th>
-										<td class="numeric-column"><UsageNumber kind="count" value={entry.count} /></td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				{/if}
-			</section>
-		</div>
+			{/if}
+		</section>
 
 		{#if day !== null}
 			<section class="usage-section" aria-labelledby="usage-generations-title">
@@ -357,15 +326,13 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-accent-hover);
 	}
 
-	.totals-title {
+	h1 {
 		overflow-wrap: anywhere;
 	}
 
-	.usage-columns {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 1rem;
-		align-items: start;
+	.totals .tile-time {
+		font-size: 0.9375rem;
+		text-align: right;
 	}
 
 	.usage-section {
@@ -380,17 +347,6 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-text);
 		font-size: 1rem;
 		font-weight: 700;
-	}
-
-	.key-value tbody th {
-		color: var(--color-muted);
-		font-size: 0.75rem;
-		font-weight: 700;
-		text-transform: uppercase;
-	}
-
-	.key-value td {
-		text-align: right;
 	}
 
 	.generation-id {
@@ -410,11 +366,5 @@ before the Change Date. See LICENSE for complete terms.
 		--image-fit: cover;
 		display: flex;
 		width: fit-content;
-	}
-
-	@media (max-width: 720px) {
-		.usage-columns {
-			grid-template-columns: minmax(0, 1fr);
-		}
 	}
 </style>
