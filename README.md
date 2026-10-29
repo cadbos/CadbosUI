@@ -66,12 +66,29 @@ pnpm exec playwright install chromium
 
 ## Configuration
 
-Copy `.env.example` to `.env` only when you need to override the optional commit and
-release URL templates used by the version page:
+Copy `.env.example` to `.env` when you need to override the optional commit and
+release URL templates used by the version page or the Nostr relay lists:
 
 ```sh
 cp .env.example .env
 ```
+
+Nostr relays are configured at build time through `.env` or the build environment:
+
+| Variable                         | Default                                          | Purpose                                           |
+| -------------------------------- | ------------------------------------------------ | ------------------------------------------------- |
+| `NOSTR_CONNECT_RELAYS`           | `wss://relay.damus.io,wss://nos.lol`             | Nostr Connect login relays                        |
+| `NOSTR_PROFILE_BOOTSTRAP_RELAYS` | `wss://nostr.band,wss://nostr-pub.wellorder.net` | Additional profile lookup and health-check relays |
+
+Both settings accept comma-separated WebSocket URLs (`ws://` or `wss://`). The
+effective profile lookup and health-check list always includes the login relays,
+followed by the additional profile relays. Each setting replaces its own defaults;
+omit it to retain them. Entries are trimmed, normalized, and deduplicated in order.
+Empty settings or entries, malformed URLs, credentials, query strings, and fragments
+cause configuration errors. These URLs are public configuration and must not contain
+secrets. Login relay origins are also included in the browser's Content Security
+Policy. Restart the development server after changes; production changes require
+rebuilding. Cloudflare runtime variables do not change the compiled relay lists.
 
 Runtime integrations use Cloudflare bindings and variables rather than client-side Vite
 environment variables. Their authoritative definitions are in
