@@ -1011,7 +1011,6 @@ before the Change Date. See LICENSE for complete terms.
 		width: 100%;
 		outline: 1.5px solid var(--color-muted-strong);
 		outline-offset: -1.5px;
-		border-radius: var(--radius-lg);
 		overflow: hidden;
 		background:
 			linear-gradient(
