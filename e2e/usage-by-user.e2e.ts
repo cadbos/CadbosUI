@@ -207,9 +207,7 @@ test("shows the day's figures and generations and reloads when the query changes
 	await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
 
 	const period = page.locator('.usage-header strong');
-	await expect(period).toHaveText(
-		ru['usage.byUser.dayPeriod'].replace('{date}', '3 января 2026 г.')
-	);
+	await expect(period).toHaveText(ru['usage.byUser.dayPeriod'].replace('{date}', '2026-01-03'));
 	await expect(period).toHaveCSS('font-weight', '700');
 	const dayTotals = page.getByRole('region', { name: ru['usage.byUser.summary'] });
 	await expect(dayTotals).toContainText(`${ru['usage.totals.generations']} 2`);

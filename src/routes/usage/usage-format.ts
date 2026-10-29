@@ -110,15 +110,6 @@ export function formatUsageTimestamp(timestamp: number): string {
 	return `${localDateKey(timestamp)}${TIMESTAMP_SEPARATOR}${formatUsageTimeOfDay(timestamp)}`;
 }
 
-// A whole calendar day, from its local start.
-export function formatUsageDay(dayStart: number): string {
-	return new Intl.DateTimeFormat(getLocale(), {
-		day: 'numeric',
-		month: 'long',
-		year: 'numeric'
-	}).format(new Date(dayStart));
-}
-
 export function formatGenerationKind(kind: GenerationKind): string {
 	return t(generationKindKeys[kind]);
 }

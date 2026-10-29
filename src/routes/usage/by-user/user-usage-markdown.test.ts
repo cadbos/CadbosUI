@@ -106,7 +106,7 @@ describe('buildUserUsageMarkdown', () => {
 			})
 		);
 
-		expect(markdown).toContain('Статистика пользователя **за 3 января 2026 г.**');
+		expect(markdown).toContain('Статистика пользователя **за 2026-01-03**');
 		expect(markdown).toContain(
 			'| ID | Время | Тип генерации | Промпт | Исходное | Результат | Референс |'
 		);

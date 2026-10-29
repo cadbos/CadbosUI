@@ -26,8 +26,8 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth } from '$lib/state/auth.svelte';
 	import { logBoundaryError } from '$lib/utils';
 	import { userUsage } from '$lib/state/user-usage.svelte';
-	import { localDay, userUsageHref } from '../usage-day';
-	import { formatGenerationKind, formatUsageDay, formatUsageTimestamp } from '../usage-format';
+	import { localDateKey, localDay, userUsageHref } from '../usage-day';
+	import { formatGenerationKind, formatUsageTimestamp } from '../usage-format';
 	import UsageNumber from '../UsageNumber.svelte';
 	import UsageTimestamp from '../UsageTimestamp.svelte';
 	import UsageKeyActions from './UsageKeyActions.svelte';
@@ -194,7 +194,7 @@ before the Change Date. See LICENSE for complete terms.
 		<p>{t('usage.byUser.subtitle')}</p>
 	{:else}
 		<p>
-			{@render daySubtitle(formatUsageDay(day.from))}
+			{@render daySubtitle(localDateKey(day.from))}
 			<a href={userUsageHref(npub)}>{t('usage.byUser.allTime')}</a>
 		</p>
 	{/if}

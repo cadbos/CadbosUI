@@ -19,12 +19,8 @@ import type {
 	UserUsageRecord
 } from '$lib/api/contract';
 import { t, ti } from '$lib/i18n/index.svelte';
-import {
-	formatGenerationKind,
-	formatUsageDay,
-	formatUsageTimestamp,
-	formatUsageValue
-} from '../usage-format';
+import { formatGenerationKind, formatUsageTimestamp, formatUsageValue } from '../usage-format';
+import { localDateKey } from '../usage-day';
 
 export interface UserUsageMarkdownInput {
 	npub: string;
@@ -109,7 +105,7 @@ export function buildUserUsageMarkdown(input: UserUsageMarkdownInput): string {
 		dayStart === null
 			? t('usage.byUser.subtitle')
 			: ti('usage.byUser.daySubtitle', {
-					period: `**${ti('usage.byUser.dayPeriod', { date: formatUsageDay(dayStart) })}**`
+					period: `**${ti('usage.byUser.dayPeriod', { date: localDateKey(dayStart) })}**`
 				}),
 		`## ${t('usage.byUser.summary')}`,
 		table(
