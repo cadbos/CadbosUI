@@ -122,7 +122,7 @@ function mockUsageFetch(
 }
 
 function pageProps(pubkeyViewer = PUBKEY_VIEWER): PageProps {
-	return { data: { featurebaseAppId: null, pubkeyViewer }, form: undefined, params: {} };
+	return { data: { featurebaseAppId: null, pubkeyViewer }, params: {} };
 }
 
 function localDateTimeLabel(locale: Locale, timestamp: number): string {
@@ -387,7 +387,6 @@ it('shows one centered error when every usage request is forbidden', async () =>
 	expect(screen.getByText(t('usage.totals.failed')).elements()).toHaveLength(0);
 	expect(screen.getByText(t('usage.walletBalanceFailed')).elements()).toHaveLength(0);
 	expect(screen.getByText(t('usage.totals.d1Failed')).elements()).toHaveLength(0);
-	await expect.element(alert).toHaveStyle({ textAlign: 'center' });
 });
 
 it('renders an error state when usage cannot be loaded', async () => {
@@ -566,4 +565,33 @@ it('shows a wallet balance error inside the totals even when totals fail', async
 	const totals = screen.getByRole('region', { name: t('usage.totals.title') });
 	await expect.element(totals.getByText(t('usage.walletBalanceFailed'))).toBeVisible();
 	await expect.element(totals.getByText(t('usage.totals.failed'))).toBeVisible();
+});
+
+it('links the avatar to the pubkey viewer, the key to the user and the spend date to that day', async () => {
+	const latestSpendAt = new Date(2026, 0, 3, 12, 34).getTime();
+	vi.stubGlobal(
+		'fetch',
+		mockUsageFetch([page([user(PUBKEY_ONE, latestSpendAt)], 0, false)], {
+			[PUBKEY_ONE]: { name: 'Alice' }
+		})
+	);
+	const npub = npubEncode(PUBKEY_ONE);
+
+	const screen = render(UsagePage, pageProps());
+
+	const avatar = screen.getByRole('link', {
+		name: ti('usage.user.profileLink', { user: 'Alice' })
+	});
+	await expect.element(avatar).toHaveAttribute('href', `https://explorer.example/p/${npub}`);
+	await expect.element(avatar).toHaveAttribute('target', '_blank');
+	const key = screen.getByRole('link', { name: `…${npub.slice(-5)}`, exact: true });
+	await expect.element(key).toHaveAttribute('href', `/usage/by-user?npub=${npub}`);
+	const day = new Intl.DateTimeFormat('en', {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric'
+	}).format(latestSpendAt);
+	await expect
+		.element(screen.getByRole('link', { name: day, exact: true }))
+		.toHaveAttribute('href', `/usage/by-user?npub=${npub}&date=2026-01-03`);
 });

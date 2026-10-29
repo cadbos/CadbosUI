@@ -185,9 +185,13 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 
 	await page.goto('/usage');
 
-	const link = page.getByRole('link', { name: npub });
-	const user = page.getByRole('rowheader', { name: npub });
-	const userWithoutPicture = page.getByRole('rowheader', { name: npubWithoutPicture });
+	const link = page.getByRole('link', {
+		name: ru['usage.user.profileLink'].replace('{user}', 'Alice')
+	});
+	const user = page.getByRole('rowheader', { name: `…${npub.slice(-5)}` });
+	const userWithoutPicture = page.getByRole('rowheader', {
+		name: `…${npubWithoutPicture.slice(-5)}`
+	});
 
 	await expect(page.getByRole('columnheader', { name: ru['usage.column.user'] })).toBeVisible();
 	for (const key of ['balance', 'totalDeposit', 'totalSpend'] as const) {

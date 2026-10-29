@@ -25,7 +25,7 @@ export type UsageStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 const PAGE_SIZE = 20;
 
-const userUsageRecordSchema = z.object({
+export const userUsageRecordSchema = z.object({
 	pubkey: z.string().regex(/^[0-9a-f]{64}$/),
 	balance: z.number(),
 	totalDeposit: z.number(),
@@ -91,10 +91,17 @@ const workersAiDailyUsageSchema = z.object({
 	neuronLimit: z.number().positive()
 });
 
+// One local calendar day: its ISO date and its [from, to) epoch-millisecond bounds.
+export interface UsageDay {
+	date: string;
+	from: number;
+	to: number;
+}
+
 export type WalletBalanceStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type UsageTotalsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
-class UsageLoadError extends Error {
+export class UsageLoadError extends Error {
 	readonly status: number | null;
 
 	constructor(message: string, status: number | null = null) {
@@ -102,6 +109,23 @@ class UsageLoadError extends Error {
 		this.name = 'UsageLoadError';
 		this.status = status;
 	}
+}
+
+export async function fetchUsageProfiles(
+	pubkeys: string[],
+	signal: AbortSignal
+): Promise<Record<string, UsageProfile>> {
+	const response = await fetch('/api/usage/profiles', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ pubkeys }),
+		signal
+	});
+	if (!response.ok) throw new UsageLoadError('usage profile request failed', response.status);
+
+	const parsed = usageProfilesResponseSchema.safeParse(await response.json().catch(() => null));
+	if (!parsed.success) throw new UsageLoadError('usage profile response invalid');
+	return parsed.data.profiles;
 }
 
 class UsageState {
@@ -127,21 +151,13 @@ class UsageState {
 	#workersAiUsageAbort: AbortController | null = null;
 	#nextOffset: number | null = null;
 
-	async load(): Promise<void> {
-		this.#abort?.abort();
-		this.#abortProfiles();
+	// With a day, every tile covers that day; the wallet balance has no history
+	// to look it up in, so it is left out instead of showing today's.
+	loadTotals(day: UsageDay | null = null): void {
 		this.#walletBalanceAbort?.abort();
 		this.#totalsAbort?.abort();
 		this.#d1LimitsAbort?.abort();
 		this.#workersAiUsageAbort?.abort();
-		const controller = new AbortController();
-		this.#abort = controller;
-		this.status = 'loading';
-		this.error = null;
-		this.hasMore = false;
-		this.loadingMore = false;
-		this.#nextOffset = null;
-		this.profiles = {};
 		this.walletBalance = null;
 		this.walletBalanceStatus = 'idle';
 		this.totals = null;
@@ -151,10 +167,28 @@ class UsageState {
 		this.workersAiUsage = null;
 		this.workersAiUsageStatus = 'idle';
 
-		void this.#loadWalletBalance();
-		void this.#loadTotals();
-		void this.#loadD1Limits();
-		void this.#loadWorkersAiUsage();
+		if (day === null) void this.#loadWalletBalance();
+		void this.#loadTotals(
+			day === null ? '' : `?${new URLSearchParams({ from: String(day.from), to: String(day.to) })}`
+		);
+		void this.#loadD1Limits(day === null ? '' : `?${new URLSearchParams({ date: day.date })}`);
+		void this.#loadWorkersAiUsage(
+			day === null ? '' : `?${new URLSearchParams({ date: day.date })}`
+		);
+	}
+
+	async load(): Promise<void> {
+		this.#abort?.abort();
+		this.#abortProfiles();
+		const controller = new AbortController();
+		this.#abort = controller;
+		this.status = 'loading';
+		this.error = null;
+		this.hasMore = false;
+		this.loadingMore = false;
+		this.#nextOffset = null;
+		this.profiles = {};
+		this.loadTotals();
 
 		try {
 			const page = await this.#fetchPage(0, controller.signal);
@@ -250,7 +284,7 @@ class UsageState {
 		const controller = new AbortController();
 		this.#profileAborts.add(controller);
 		try {
-			const profiles = await this.#fetchProfiles(
+			const profiles = await fetchUsageProfiles(
 				users.map((user) => user.pubkey),
 				controller.signal
 			);
@@ -260,23 +294,6 @@ class UsageState {
 		} finally {
 			this.#profileAborts.delete(controller);
 		}
-	}
-
-	async #fetchProfiles(
-		pubkeys: string[],
-		signal: AbortSignal
-	): Promise<Record<string, UsageProfile>> {
-		const response = await fetch('/api/usage/profiles', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ pubkeys }),
-			signal
-		});
-		if (!response.ok) throw new UsageLoadError('usage profile request failed', response.status);
-
-		const parsed = usageProfilesResponseSchema.safeParse(await response.json().catch(() => null));
-		if (!parsed.success) throw new UsageLoadError('usage profile response invalid');
-		return parsed.data.profiles;
 	}
 
 	async #loadWalletBalance(): Promise<void> {
@@ -310,13 +327,13 @@ class UsageState {
 		}
 	}
 
-	async #loadTotals(): Promise<void> {
+	async #loadTotals(search: string): Promise<void> {
 		const controller = new AbortController();
 		this.#totalsAbort = controller;
 		this.totalsStatus = 'loading';
 
 		try {
-			const response = await fetch('/api/usage/totals', { signal: controller.signal });
+			const response = await fetch(`/api/usage/totals${search}`, { signal: controller.signal });
 			if (!response.ok) throw new UsageLoadError('usage totals request failed', response.status);
 
 			const parsed = usageTotalsSchema.safeParse(await response.json().catch(() => null));
@@ -341,13 +358,13 @@ class UsageState {
 		}
 	}
 
-	async #loadD1Limits(): Promise<void> {
+	async #loadD1Limits(search: string): Promise<void> {
 		const controller = new AbortController();
 		this.#d1LimitsAbort = controller;
 		this.d1LimitsStatus = 'loading';
 
 		try {
-			const response = await fetch('/api/usage/d1-limits', {
+			const response = await fetch(`/api/usage/d1-limits${search}`, {
 				signal: controller.signal,
 				cache: 'no-store'
 			});
@@ -375,13 +392,13 @@ class UsageState {
 		}
 	}
 
-	async #loadWorkersAiUsage(): Promise<void> {
+	async #loadWorkersAiUsage(search: string): Promise<void> {
 		const controller = new AbortController();
 		this.#workersAiUsageAbort = controller;
 		this.workersAiUsageStatus = 'loading';
 
 		try {
-			const response = await fetch('/api/usage/workers-ai', {
+			const response = await fetch(`/api/usage/workers-ai${search}`, {
 				signal: controller.signal,
 				cache: 'no-store'
 			});
