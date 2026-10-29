@@ -335,8 +335,62 @@ test('exports the user to Markdown, with every generation of the day only in day
 	expect(dayMarkdown).toContain(`| generation-1 | 12:00:00 |`);
 	expect(dayMarkdown).toContain(LONG_PROMPT);
 	expect(dayMarkdown).toContain(
-		`![${ru['usage.generations.resultAlt'].replace('{id}', 'generation-2')}](${new URL('/api/media/uploads/result-2.webp', page.url()).href})`
+		`![${ru['usage.generations.resultAlt'].replace('{id}', 'generation-2')}](<${new URL('/api/media/uploads/result-2.webp', page.url()).href}>)`
 	);
+});
+
+test('retries a page of generations that failed to load', async ({ page }) => {
+	await mockUsage(page);
+	let failNext = true;
+	await page.route(`**/api/usage/users/${PUBKEY}/generations?*`, async (route) => {
+		if (failNext) {
+			failNext = false;
+			await route.fulfill({ status: 500 });
+			return;
+		}
+		await route.fulfill({ json: GENERATIONS });
+	});
+	const generations = page.getByRole('region', { name: ru['usage.generations.title'] });
+
+	await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
+	await expect(generations.getByRole('alert')).toHaveText(ru['usage.generations.failed']);
+	await generations.getByRole('button', { name: ru['usage.generations.retry'] }).click();
+
+	await expect(generations.getByRole('row', { name: /generation-2/ })).toBeVisible();
+	await expect(generations.getByRole('alert')).toHaveCount(0);
+});
+
+test('drops the error of an export the page moved away from', async ({ page }) => {
+	await mockUsage(page);
+	let releaseSecondPage: () => void = () => undefined;
+	const secondPageHeld = new Promise<void>((release) => {
+		releaseSecondPage = release;
+	});
+	await page.route(`**/api/usage/users/${PUBKEY}/generations?*`, async (route) => {
+		const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
+		const [first, second] = GENERATIONS.generations;
+		if (offset === 0) {
+			await route.fulfill({
+				json: { generations: [first], pagination: { offset: 0, size: 20, hasMore: true } }
+			});
+			return;
+		}
+		await secondPageHeld;
+		await route.fulfill({
+			json: { generations: [second], pagination: { offset: 1, size: 20, hasMore: false } }
+		});
+	});
+
+	await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
+	await expect(page.getByRole('row', { name: /generation-2/ })).toBeVisible();
+	await page.getByRole('button', { name: ru['usage.export.button'] }).click();
+	await expect(page.getByRole('button', { name: ru['usage.export.exporting'] })).toBeVisible();
+	await page.getByRole('link', { name: ru['usage.byUser.allTime'] }).click();
+	await expect(page).toHaveURL(`/usage/by-user?npub=${NPUB}`);
+	releaseSecondPage();
+
+	await expect(page.getByRole('button', { name: ru['usage.export.button'] })).toBeEnabled();
+	await expect(page.getByText(ru['usage.export.failed'])).toHaveCount(0);
 });
 
 test('opens the user and their spend day from the usage table', async ({ page }) => {

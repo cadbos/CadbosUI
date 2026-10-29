@@ -389,6 +389,7 @@ export const ru = {
 	'usage.generations.loading': 'Загрузка генераций…',
 	'usage.generations.empty': 'За этот день генераций нет.',
 	'usage.generations.failed': 'Не удалось загрузить генерации.',
+	'usage.generations.retry': 'Повторить',
 	'usage.generations.promptShow': 'Показать промпт генерации {id} целиком',
 	'usage.generations.promptCopy': 'Копировать',
 	'usage.generations.promptCopied': 'Скопировано',

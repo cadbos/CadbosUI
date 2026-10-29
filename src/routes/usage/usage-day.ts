@@ -38,6 +38,8 @@ export function localDay(dateKey: string): UsageDay | null {
 	if (start.getFullYear() !== year || start.getMonth() !== month || start.getDate() !== day) {
 		return null;
 	}
+	// The usage API takes nonnegative epoch bounds; no usage predates 1970.
+	if (start.getTime() < 0) return null;
 	return { from: start.getTime(), to: new Date(year, month, day + 1).getTime() };
 }
 

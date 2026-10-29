@@ -39,6 +39,9 @@ before the Change Date. See LICENSE for complete terms.
 
 	let exporting = $state(false);
 	let exportFailed = $state(false);
+	// Bumped on every reload, so an export the reload cut short reports nothing
+	// on the view that replaced it.
+	let loadVersion = 0;
 
 	function decodeNpub(value: string): string | null {
 		if (!value.startsWith('npub1')) return null;
@@ -57,6 +60,7 @@ before the Change Date. See LICENSE for complete terms.
 		const selectedDay = day;
 		if (target === null || (dateKey !== null && selectedDay === null)) return;
 		untrack(() => {
+			loadVersion += 1;
 			exportFailed = false;
 			userUsage.load(target, selectedDay);
 		});
@@ -68,6 +72,7 @@ before the Change Date. See LICENSE for complete terms.
 	async function exportMarkdown(): Promise<void> {
 		const record = userUsage.record;
 		if (record === null) return;
+		const version = loadVersion;
 		exporting = true;
 		exportFailed = false;
 		try {
@@ -90,8 +95,8 @@ before the Change Date. See LICENSE for complete terms.
 			link.remove();
 			URL.revokeObjectURL(url);
 		} catch (error) {
-			exportFailed = true;
 			logBoundaryError('usageByUser.exportMarkdown', error);
+			if (version === loadVersion) exportFailed = true;
 		} finally {
 			exporting = false;
 		}
@@ -109,6 +114,20 @@ before the Change Date. See LICENSE for complete terms.
 		return () => observer.disconnect();
 	}
 </script>
+
+{#snippet generationsFailed()}
+	<div class="generations-failed">
+		<p class="status error" role="alert">{t('usage.generations.failed')}</p>
+		<button
+			type="button"
+			class="retry-button"
+			disabled={userUsage.loadingMoreGenerations}
+			onclick={() => void userUsage.loadMoreGenerations()}
+		>
+			{t('usage.generations.retry')}
+		</button>
+	</div>
+{/snippet}
 
 {#snippet thumbnail(url: string, alt: string)}
 	<a class="thumbnail" href={url} target="_blank" rel="noopener noreferrer">
@@ -265,7 +284,7 @@ before the Change Date. See LICENSE for complete terms.
 				{#if userUsage.generationsStatus === 'loading'}
 					<p class="status">{t('usage.generations.loading')}</p>
 				{:else if userUsage.generationsStatus === 'error' && userUsage.generations.length === 0}
-					<p class="status error" role="alert">{t('usage.generations.failed')}</p>
+					{@render generationsFailed()}
 				{:else if userUsage.generations.length === 0}
 					<p class="status">{t('usage.generations.empty')}</p>
 				{:else}
@@ -330,7 +349,7 @@ before the Change Date. See LICENSE for complete terms.
 						</div>
 					{/if}
 					{#if userUsage.generationsStatus === 'error'}
-						<p class="status error" role="alert">{t('usage.generations.failed')}</p>
+						{@render generationsFailed()}
 					{/if}
 				{/if}
 			</section>
@@ -368,7 +387,15 @@ before the Change Date. See LICENSE for complete terms.
 		overflow-wrap: anywhere;
 	}
 
-	.export-button {
+	.generations-failed {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.export-button,
+	.retry-button {
 		display: inline-flex;
 		flex: 0 0 auto;
 		align-items: center;
@@ -385,11 +412,13 @@ before the Change Date. See LICENSE for complete terms.
 		cursor: pointer;
 	}
 
-	.export-button:hover:not(:disabled) {
+	.export-button:hover:not(:disabled),
+	.retry-button:hover:not(:disabled) {
 		background: var(--color-surface-hover);
 	}
 
-	.export-button:disabled {
+	.export-button:disabled,
+	.retry-button:disabled {
 		cursor: default;
 		opacity: 0.6;
 	}

@@ -181,6 +181,29 @@ describe('GET /api/usage/users/[pubkey]', () => {
 			generationKinds: [{ kind: 'edit', count: 1 }]
 		});
 	});
+
+	it('counts an unrecognized kind among generations but not among their kinds', async () => {
+		const db = await seedPlatform();
+		await seedGeneration(createDb(db), {
+			id: 'generation-legacy',
+			userId: 'user-1',
+			url: `${CDN}/generation-legacy.webp`,
+			sourceUrl: `${CDN}/source.jpg`,
+			sourceChecksum: '1'.repeat(64),
+			kind: 'legacy-kind',
+			balanceAfter: 6,
+			createdAt: 6700
+		});
+
+		const response = await callUser(ADMIN, db, USER_PUBKEY, '?from=6000&to=7000');
+		const result = (await response.json()) as UserUsageDetailResponse;
+
+		expect(result.user.generationCount).toBe(3);
+		expect(result.generationKinds).toEqual([
+			{ kind: 'edit', count: 1 },
+			{ kind: 'render', count: 1 }
+		]);
+	});
 });
 
 describe('GET /api/usage/users/[pubkey]/generations', () => {

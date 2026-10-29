@@ -52,9 +52,12 @@ describe('localDay', () => {
 		});
 	});
 
-	it.each(['2026-02-30', '2026-13-01', '2026-1-1', 'yesterday', ''])('rejects %s', (value) => {
-		expect(localDay(value)).toBeNull();
-	});
+	it.each(['2026-02-30', '2026-13-01', '2026-1-1', 'yesterday', '', '1960-01-01'])(
+		'rejects %s',
+		(value) => {
+			expect(localDay(value)).toBeNull();
+		}
+	);
 });
 
 describe('userUsageHref', () => {

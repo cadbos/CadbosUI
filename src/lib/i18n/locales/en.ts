@@ -388,6 +388,7 @@ export const en = {
 	'usage.generations.loading': 'Loading generations…',
 	'usage.generations.empty': 'No generations on this day.',
 	'usage.generations.failed': 'Could not load generations.',
+	'usage.generations.retry': 'Retry',
 	'usage.generations.promptShow': 'Show the full prompt of generation {id}',
 	'usage.generations.promptCopy': 'Copy',
 	'usage.generations.promptCopied': 'Copied',

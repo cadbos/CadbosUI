@@ -39,11 +39,12 @@ export interface UserUsageMarkdownInput {
 }
 
 // Keeps free text such as prompts inside its table cell and never lets it
-// render as HTML in a Markdown preview.
+// render as HTML, a link or a remote image in a Markdown preview.
 function cell(value: string): string {
 	return value
 		.replaceAll('\\', '\\\\')
 		.replaceAll('|', '\\|')
+		.replace(/[[\]]/g, '\\$&')
 		.replaceAll('<', '&lt;')
 		.replace(/\r?\n/g, '<br>');
 }
@@ -56,8 +57,10 @@ function table(headers: string[], alignments: ('left' | 'right')[], rows: string
 	].join('\n');
 }
 
+// The angle-bracketed destination keeps a parenthesis in a filename from
+// ending the link; `href` already encodes `<` and `>`.
 function image(origin: string, url: string, alt: string): string {
-	return `![${alt.replace(/[[\]]/g, '\\$&')}](${new URL(url, origin).href})`;
+	return `![${alt.replace(/[[\]]/g, '\\$&')}](<${new URL(url, origin).href}>)`;
 }
 
 function timestamp(value: number | null): string {

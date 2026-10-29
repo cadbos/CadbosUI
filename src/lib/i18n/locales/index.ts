@@ -429,6 +429,7 @@ export interface Dictionary {
 	'usage.generations.loading': string;
 	'usage.generations.empty': string;
 	'usage.generations.failed': string;
+	'usage.generations.retry': string;
 	'usage.generations.promptShow': string;
 	'usage.generations.promptCopy': string;
 	'usage.generations.promptCopied': string;

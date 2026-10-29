@@ -111,9 +111,34 @@ describe('buildUserUsageMarkdown', () => {
 		);
 		expect(markdown).toContain(
 			'| generation-1 | 12:00:05 | Миграция стиля | a \\| b<br>with &lt;b>bold&lt;/b> | ' +
-				'![Исходное изображение генерации generation-1](https://cadbos.example/api/media/uploads/source.webp) | ' +
-				'![Результат генерации generation-1](https://cadbos.example/api/media/uploads/result.webp) | — |'
+				'![Исходное изображение генерации generation-1](<https://cadbos.example/api/media/uploads/source.webp>) | ' +
+				'![Результат генерации generation-1](<https://cadbos.example/api/media/uploads/result.webp>) | — |'
 		);
+	});
+
+	it('keeps image and link syntax in a prompt from rendering', () => {
+		const markdown = buildUserUsageMarkdown(
+			input({
+				dayStart: DAY_START,
+				generations: [
+					{
+						id: 'generation-1',
+						kind: 'render',
+						createdAt: AT_NOON,
+						prompt: '![pixel](https://tracker.example/p.png) and [link](https://tracker.example)',
+						source: { key: 'uploads/source.webp', url: '/api/media/uploads/source.webp' },
+						result: { key: 'uploads/result.webp', url: '/api/media/uploads/result (1).webp' },
+						reference: null
+					}
+				]
+			})
+		);
+
+		expect(markdown).toContain(
+			'| !\\[pixel\\](https://tracker.example/p.png) and \\[link\\](https://tracker.example) |'
+		);
+		expect(markdown).not.toContain('![pixel]');
+		expect(markdown).toContain('(<https://cadbos.example/api/media/uploads/result%20(1).webp>)');
 	});
 
 	it('says so when the day had no generations or no kinds', () => {
