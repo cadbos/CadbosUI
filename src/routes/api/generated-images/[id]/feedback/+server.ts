@@ -12,6 +12,7 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
+import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 
 import type { RequestHandler } from './$types';
@@ -19,12 +20,37 @@ import { apiError, parseBody } from '$lib/server/api';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { getDb } from '$lib/server/db';
-import { storeGenerationFeedback } from '$lib/server/generations';
+import { getGenerationFeedbackForUser, storeGenerationFeedback } from '$lib/server/generations';
 
 const feedbackRequestSchema = z.strictObject({
 	rating: z.enum(['like', 'dislike']),
 	comment: z.string().max(3000).nullable().optional()
 });
+
+export const GET: RequestHandler = async ({ params, platform, locals }) => {
+	if (!locals.user) return authenticationRequiredResponse(locals.sessionLookupUnavailable);
+
+	try {
+		const db = getDb(platform);
+		const userId = await getUserIdByPubkey(db, locals.user.pubkey);
+		if (!userId) return apiError(500, 'account_error', 'Account record not found');
+
+		const feedback = await getGenerationFeedbackForUser(db, userId, params.id);
+		if (!feedback) return apiError(404, 'generation_not_found', 'Generation not found');
+
+		return json(feedback, { headers: { 'cache-control': 'private, no-store' } });
+	} catch (error) {
+		console.error(
+			JSON.stringify({
+				level: 'error',
+				area: 'generation_feedback',
+				event: 'read_failed',
+				errorType: error instanceof Error ? error.name : typeof error
+			})
+		);
+		return apiError(500, 'feedback_error', 'Unable to retrieve generation feedback');
+	}
+};
 
 export const POST: RequestHandler = async ({ request, params, platform, locals }) => {
 	if (!locals.user) return authenticationRequiredResponse(locals.sessionLookupUnavailable);

@@ -33,6 +33,16 @@ test.beforeEach(async ({ generationApi }) => {
 	});
 });
 
+test('returns null rating and comment without creating feedback for an unrated generation', async ({
+	generationApi: { db, request }
+}) => {
+	const response = await request.get(endpoint);
+	expect(response.status()).toBe(200);
+	expect(await response.json()).toEqual({ rating: null, comment: null });
+	expect(response.headers()['cache-control']).toBe('private, no-store');
+	expect((await db.prepare(feedbackQuery).all()).results).toEqual([]);
+});
+
 for (const rating of ['like', 'dislike'] as const) {
 	test(`stores ${rating} feedback for the creator and preserves it on identical retries`, async ({
 		generationApi: { db, request }
@@ -50,11 +60,19 @@ for (const rating of ['like', 'dislike'] as const) {
 				created_at: expect.any(Number)
 			}
 		]);
+		const feedback = await request.get(endpoint);
+		expect(feedback.status()).toBe(200);
+		expect(await feedback.json()).toEqual({ rating, comment: null });
+		expect(feedback.headers()['cache-control']).toBe('private, no-store');
+		expect((await db.prepare(feedbackQuery).all()).results).toEqual(original);
 
 		await db.prepare('UPDATE generations_feedback SET created_at = 1').run();
 		const retry = await request.post(endpoint, { data: { rating } });
 		expect(retry.status()).toBe(204);
 		expect(await retry.text()).toBe('');
+		const retriedFeedback = await request.get(endpoint);
+		expect(retriedFeedback.status()).toBe(200);
+		expect(await retriedFeedback.json()).toEqual({ rating, comment: null });
 		expect((await db.prepare(feedbackQuery).all()).results).toEqual([
 			{ ...original[0], created_at: 1 }
 		]);
@@ -69,6 +87,9 @@ for (const rating of ['like', 'dislike'] as const) {
 				message: 'Generation already has different feedback'
 			}
 		});
+		const preservedFeedback = await request.get(endpoint);
+		expect(preservedFeedback.status()).toBe(200);
+		expect(await preservedFeedback.json()).toEqual({ rating, comment: null });
 		expect((await db.prepare(feedbackQuery).all()).results).toEqual([
 			{ ...original[0], created_at: 1 }
 		]);
@@ -94,6 +115,10 @@ for (const [name, comment] of [
 		expect(original).toEqual([
 			expect.objectContaining({ rating: 'like', comment: comment ?? null, created_at: 1 })
 		]);
+		const feedback = await request.get(endpoint);
+		expect(feedback.status()).toBe(200);
+		expect(await feedback.json()).toEqual({ rating: 'like', comment: comment ?? null });
+		expect(feedback.headers()['cache-control']).toBe('private, no-store');
 		const retry = await request.post(endpoint, {
 			data: { rating: 'like', comment: comment === null ? undefined : (comment ?? null) }
 		});
@@ -130,6 +155,9 @@ for (const [name, originalComment, nextComment] of [
 		expect(await response.json()).toEqual({
 			error: { code: 'feedback_conflict', message: 'Generation already has different feedback' }
 		});
+		const feedback = await request.get(endpoint);
+		expect(feedback.status()).toBe(200);
+		expect(await feedback.json()).toEqual({ rating: 'like', comment: originalComment });
 		expect((await db.prepare(feedbackQuery).all()).results).toEqual(original);
 	});
 }
@@ -178,6 +206,11 @@ for (const cookie of ['', `${SESSION_COOKIE}=invalid`, `${SESSION_COOKIE}=expire
 		const response = await request.post(endpoint, { headers: { cookie }, data: '{' });
 		expect(response.status()).toBe(401);
 		expect(await response.json()).toEqual({
+			error: { code: 'unauthorized', message: 'Authentication required' }
+		});
+		const feedback = await request.get(endpoint, { headers: { cookie } });
+		expect(feedback.status()).toBe(401);
+		expect(await feedback.json()).toEqual({
 			error: { code: 'unauthorized', message: 'Authentication required' }
 		});
 		expect((await db.prepare(feedbackQuery).all()).results).toEqual([]);
@@ -231,6 +264,14 @@ for (const hasFeedback of [false, true]) {
 			).toBe(204);
 		}
 		const before = (await db.prepare(feedbackQuery).all()).results;
+		const feedback = await request.get(endpoint, {
+			headers: { cookie: `${SESSION_COOKIE}=other-auth` }
+		});
+		expect(feedback.status()).toBe(404);
+		expect(await feedback.json()).toEqual({
+			error: { code: 'generation_not_found', message: 'Generation not found' }
+		});
+		expect((await db.prepare(feedbackQuery).all()).results).toEqual(before);
 		for (const rating of ['like', 'dislike']) {
 			const response = await request.post(endpoint, {
 				data: { rating, comment: 'Original feedback' },
@@ -251,6 +292,11 @@ test('rejects a missing generation', async ({ generationApi: { db, request } }) 
 	});
 	expect(response.status()).toBe(404);
 	expect(await response.json()).toEqual({
+		error: { code: 'generation_not_found', message: 'Generation not found' }
+	});
+	const feedback = await request.get('/api/generated-images/missing/feedback');
+	expect(feedback.status()).toBe(404);
+	expect(await feedback.json()).toEqual({
 		error: { code: 'generation_not_found', message: 'Generation not found' }
 	});
 	expect((await db.prepare(feedbackQuery).all()).results).toEqual([]);
@@ -311,10 +357,52 @@ test('reports an authentication outage without writing feedback', async ({
 				message: 'Authentication service temporarily unavailable'
 			}
 		});
+		const feedback = await request.get(endpoint);
+		expect(feedback.status()).toBe(503);
+		expect(feedback.headers()['retry-after']).toBe('5');
+		expect(await feedback.json()).toEqual({
+			error: {
+				code: 'authentication_unavailable',
+				message: 'Authentication service temporarily unavailable'
+			}
+		});
 	} finally {
 		db.prepare = originalPrepare;
 	}
 	expect((await db.prepare(feedbackQuery).all()).results).toEqual([]);
+});
+
+test('surfaces feedback read failures without changing feedback and allows a later retry', async ({
+	generationApi: { db, request }
+}) => {
+	expect(
+		(
+			await request.post(endpoint, {
+				data: { rating: 'like', comment: '  Original feedback\n😀  ' }
+			})
+		).status()
+	).toBe(204);
+	const before = (await db.prepare(feedbackQuery).all()).results;
+	const originalPrepare = db.prepare;
+	try {
+		db.prepare = (query) => {
+			if (query.includes('generations_feedback')) {
+				throw new Error('Feedback lookup unavailable');
+			}
+			return originalPrepare.call(db, query);
+		};
+		const response = await request.get(endpoint);
+		expect(response.status()).toBe(500);
+		expect(await response.json()).toEqual({
+			error: { code: 'feedback_error', message: 'Unable to retrieve generation feedback' }
+		});
+	} finally {
+		db.prepare = originalPrepare;
+	}
+	const response = await request.get(endpoint);
+	expect(response.status()).toBe(200);
+	expect(await response.json()).toEqual({ rating: 'like', comment: '  Original feedback\n😀  ' });
+	expect((await db.prepare(feedbackQuery).all()).results).toEqual(before);
 });
 
 test('surfaces storage failures without writing feedback and allows a later retry', async ({

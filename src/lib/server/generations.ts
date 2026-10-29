@@ -232,6 +232,20 @@ export async function recordPhotoProcessing(
 	return { id, ...toBalance(row) };
 }
 
+export async function getGenerationFeedbackForUser(
+	db: Database,
+	userId: string,
+	generationId: string
+): Promise<{ rating: 'like' | 'dislike' | null; comment: string | null } | null> {
+	const row = await db.get<{
+		rating: 'like' | 'dislike' | null;
+		comment: string | null;
+	}>(sql`SELECT f.rating, f.comment
+		FROM generations g LEFT JOIN generations_feedback f ON f.generation_id = g.id
+		WHERE g.id = ${generationId} AND g.user_id = ${userId}`);
+	return row ?? null;
+}
+
 export async function storeGenerationFeedback(
 	db: Database,
 	userId: string,
