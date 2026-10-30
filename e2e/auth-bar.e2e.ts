@@ -97,8 +97,9 @@ for (const locale of ['ru', 'en'] as const) {
 				exact: true
 			});
 			await expect(finish).toBeDisabled();
-			await dialog.getByRole('checkbox').check();
-			await expect(finish).toBeDisabled();
+			const checkboxes = dialog.getByRole('checkbox');
+			for (const checkbox of await checkboxes.all()) await checkbox.check();
+			await expect(finish).toBeEnabled();
 			expect(verified).toBe(false);
 			const downloadPromise = page.waitForEvent('download');
 			await dialog
@@ -111,7 +112,6 @@ for (const locale of ['ru', 'en'] as const) {
 			const keyFile = await readFile(await download.path(), 'utf8');
 			expect(keyFile.split('\n')[0]).toBe(dictionary['auth.setup.fileTitle']);
 			expect(keyFile.trimEnd().split('\n').at(-1)).toBe(dictionary['auth.setup.fileWarning']);
-			await expect(finish).toBeEnabled();
 			await finish.click();
 			await expect(dialog).not.toBeVisible();
 			await expect(page.locator('#auth-panel .balance-link')).toContainText(

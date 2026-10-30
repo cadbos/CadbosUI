@@ -512,6 +512,7 @@ it('creates an account only after the secret key is saved', async () => {
 		return Response.json({ featurebaseJwt: null, user: { pubkey: signedPubkey } });
 	});
 
+	const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
 	const screen = render(AuthBar);
 	await screen.getByRole('button', { name: 'Гость' }).click();
 	await screen.getByRole('button', { name: 'Создать аккаунт' }).click();
@@ -527,11 +528,24 @@ it('creates an account only after the secret key is saved', async () => {
 
 	const finish = screen.getByRole('button', { name: 'Войти с этим ключом' });
 	await expect.element(finish).toBeDisabled();
-	await userEvent.click(screen.getByRole('button', { name: 'Скачать файл' }));
+	await expect
+		.element(screen.getByRole('button', { name: 'Скачать файл' }))
+		.toHaveAttribute('title', 'Будет скачан файл с парой ключей: публичным и секретным');
+	await userEvent.click(screen.getByRole('button', { name: 'Скопировать публичный ключ' }));
+	await userEvent.click(screen.getByRole('button', { name: 'Скопировать секретный ключ' }));
+	expect(writeText).toHaveBeenNthCalledWith(1, expect.stringMatching(/^npub1/));
+	expect(writeText).toHaveBeenNthCalledWith(2, nsec);
 	await expect.element(finish).toBeDisabled();
-	await userEvent.click(
-		screen.getByRole('checkbox', { name: 'Я сохранил секретный ключ вне этого браузера' })
-	);
+	const acknowledgements = [
+		'Я скачал файл с парой ключей и убрал его в секретное место',
+		'Я сохранил секретный ключ вне этого браузера',
+		'Я принял все меры для защиты нового аккаунта'
+	];
+	for (const name of acknowledgements.slice(0, -1)) {
+		await userEvent.click(screen.getByRole('checkbox', { name }));
+		await expect.element(finish).toBeDisabled();
+	}
+	await userEvent.click(screen.getByRole('checkbox', { name: acknowledgements.at(-1) ?? '' }));
 	await expect.element(finish).toBeEnabled();
 	await userEvent.click(finish);
 

@@ -130,17 +130,22 @@ export const en = {
 	'auth.setup.intro':
 		'The key pair is created in this browser. The public key is the account. The secret key is the only way in. AI design does not store it and cannot restore it, so the next step is to save it somewhere you control.',
 	'auth.setup.createKeys': 'Create keys',
-	'auth.setup.keysTitle': 'Save the secret key',
+	'auth.setup.keysTitle': 'A new unique key pair has been generated',
 	'auth.setup.publicLabel': 'Public key',
 	'auth.setup.secretLabel': 'Secret key',
-	'auth.setup.secretHint':
-		'You need it to sign in on a new device. Do not send it in a chat or paste it into someone else’s site.',
+	'auth.setup.keysDescription':
+		'The secret key is needed to sign in on a new device. Do not send the secret key in a chat or paste it into someone else’s site.',
+	'auth.setup.copyPublic': 'Copy public key',
+	'auth.setup.copiedPublic': 'Public key copied',
 	'auth.setup.copySecret': 'Copy secret key',
 	'auth.setup.copiedSecret': 'Secret key copied',
 	'auth.setup.copyFailed':
 		'Could not copy. Select the key and copy it yourself, or download the file.',
 	'auth.setup.download': 'Download file',
-	'auth.setup.ack': 'I saved the secret key outside this browser',
+	'auth.setup.downloadHint': 'Downloads a file with the key pair: the public and the secret key',
+	'auth.setup.ackDownloaded': 'I downloaded the key pair file and stored it in a secret place',
+	'auth.setup.ackSecretSaved': 'I saved the secret key outside this browser',
+	'auth.setup.ackProtected': 'I took every step to protect my new account',
 	'auth.setup.finish': 'Sign in with this key',
 	'auth.setup.back': 'Back',
 	'auth.setup.fileName': 'AI design-account-key.txt',

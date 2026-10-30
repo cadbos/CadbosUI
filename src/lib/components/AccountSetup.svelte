@@ -37,48 +37,69 @@ before the Change Date. See LICENSE for complete terms.
 
 	let step = $state<'intro' | 'keys'>('intro');
 	let pair = $state<AccountKeyPair | null>(null);
-	let copied = $state(false);
-	let downloaded = $state(false);
-	let acknowledged = $state(false);
+	let copied = $state<'public' | 'secret' | null>(null);
+	let ackDownloaded = $state(false);
+	let ackSecretSaved = $state(false);
+	let ackProtected = $state(false);
 	let copyError = $state<string | null>(null);
 	let attempted = $state(false);
 
 	const stepNumber = $derived(step === 'intro' ? 1 : 2);
-	const saved = $derived(copied || downloaded);
 	const canFinish = $derived(
-		pair !== null && acknowledged && saved && auth.status !== 'connecting'
+		pair !== null && ackDownloaded && ackSecretSaved && ackProtected && auth.status !== 'connecting'
 	);
+	const keyRows = $derived.by(() => {
+		if (!pair) return [];
+		return [
+			{
+				kind: 'public',
+				label: t('auth.setup.publicLabel'),
+				value: pair.npub,
+				copy: t('auth.setup.copyPublic'),
+				done: t('auth.setup.copiedPublic')
+			},
+			{
+				kind: 'secret',
+				label: t('auth.setup.secretLabel'),
+				value: pair.nsec,
+				copy: t('auth.setup.copySecret'),
+				done: t('auth.setup.copiedSecret')
+			}
+		] as const;
+	});
 	const setupError = $derived(attempted ? auth.error : null);
+
+	function resetAcknowledgements(): void {
+		copied = null;
+		ackDownloaded = false;
+		ackSecretSaved = false;
+		ackProtected = false;
+		copyError = null;
+	}
 
 	function revealKeys(): void {
 		pair = createAccountKey();
-		copied = false;
-		downloaded = false;
-		acknowledged = false;
-		copyError = null;
+		resetAcknowledgements();
 		attempted = false;
 		step = 'keys';
 	}
 
 	function back(): void {
 		pair = null;
-		copied = false;
-		downloaded = false;
-		acknowledged = false;
-		copyError = null;
+		resetAcknowledgements();
 		step = 'intro';
 	}
 
-	async function copySecret(): Promise<void> {
+	async function copyKey(kind: 'public' | 'secret'): Promise<void> {
 		if (!pair) return;
 		copyError = null;
 		try {
-			await navigator.clipboard.writeText(pair.nsec);
-			copied = true;
+			await navigator.clipboard.writeText(kind === 'public' ? pair.npub : pair.nsec);
+			copied = kind;
 		} catch (error) {
-			copied = false;
+			copied = null;
 			copyError = t('auth.setup.copyFailed');
-			logBoundaryError('accountSetup.copySecret', error);
+			logBoundaryError(`accountSetup.copy.${kind}`, error);
 		}
 	}
 
@@ -100,7 +121,6 @@ before the Change Date. See LICENSE for complete terms.
 		link.click();
 		link.remove();
 		URL.revokeObjectURL(url);
-		downloaded = true;
 	}
 
 	async function finish(): Promise<void> {
@@ -142,39 +162,60 @@ before the Change Date. See LICENSE for complete terms.
 	{:else if pair}
 		<section class="step">
 			<h3>{t('auth.setup.keysTitle')}</h3>
+			<p>{t('auth.setup.keysDescription')}</p>
 			<div class="key-slip">
-				<div>
-					<p class="key-label">{t('auth.setup.publicLabel')}</p>
-					<p class="key-value">{pair.npub}</p>
-				</div>
-				<div class="secret">
-					<p class="key-label">{t('auth.setup.secretLabel')}</p>
-					<p class="key-value">{pair.nsec}</p>
-					<p class="secret-hint">{t('auth.setup.secretHint')}</p>
-				</div>
-			</div>
-			<div class="save-actions">
-				<button type="button" class="secondary" onclick={() => void copySecret()}>
-					{#if copied}
-						<Check size={16} strokeWidth={1.8} aria-hidden="true" />
-						{t('auth.setup.copiedSecret')}
-					{:else}
-						<Copy size={16} strokeWidth={1.8} aria-hidden="true" />
-						{t('auth.setup.copySecret')}
-					{/if}
-				</button>
-				<button type="button" class="secondary" onclick={downloadKeyFile}>
-					<Download size={16} strokeWidth={1.8} aria-hidden="true" />
-					{t('auth.setup.download')}
-				</button>
+				{#each keyRows as key (key.kind)}
+					<div class={['key', { secret: key.kind === 'secret' }]}>
+						<div class="key-head">
+							<p class="key-label">{key.label}</p>
+							<button
+								type="button"
+								class="icon-button"
+								title={copied === key.kind ? key.done : key.copy}
+								onclick={() => void copyKey(key.kind)}
+							>
+								{#if copied === key.kind}
+									<Check size={14} strokeWidth={2} aria-hidden="true" />
+								{:else}
+									<Copy size={14} strokeWidth={1.8} aria-hidden="true" />
+								{/if}
+								<span class="visually-hidden" aria-live="polite">
+									{copied === key.kind ? key.done : key.copy}
+								</span>
+							</button>
+						</div>
+						<p class="key-value">{key.value}</p>
+					</div>
+				{/each}
 			</div>
 			{#if copyError}
 				<p class="error" role="alert">{copyError}</p>
 			{/if}
-			<label class="ack">
-				<input type="checkbox" bind:checked={acknowledged} />
-				<span>{t('auth.setup.ack')}</span>
-			</label>
+			<div class="save-actions">
+				<button
+					type="button"
+					class="secondary"
+					title={t('auth.setup.downloadHint')}
+					onclick={downloadKeyFile}
+				>
+					<Download size={16} strokeWidth={1.8} aria-hidden="true" />
+					{t('auth.setup.download')}
+				</button>
+			</div>
+			<div class="acks">
+				<label class="ack">
+					<input type="checkbox" bind:checked={ackDownloaded} />
+					<span>{t('auth.setup.ackDownloaded')}</span>
+				</label>
+				<label class="ack">
+					<input type="checkbox" bind:checked={ackSecretSaved} />
+					<span>{t('auth.setup.ackSecretSaved')}</span>
+				</label>
+				<label class="ack">
+					<input type="checkbox" bind:checked={ackProtected} />
+					<span>{t('auth.setup.ackProtected')}</span>
+				</label>
+			</div>
 			{#if setupError}
 				<p class="error" role="alert">{t(errorKeys[setupError])}</p>
 			{/if}
@@ -296,8 +337,29 @@ before the Change Date. See LICENSE for complete terms.
 		border-top: 1px solid var(--color-border);
 	}
 
-	.key-label {
+	.key-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
 		margin-bottom: 0.35rem;
+	}
+
+	.icon-button {
+		width: 1.75rem;
+		height: 1.75rem;
+		padding: 0;
+		color: var(--color-text);
+		background: var(--color-surface);
+		border-color: var(--color-border);
+	}
+
+	.icon-button:hover {
+		border-color: var(--color-accent);
+		color: var(--color-accent-text);
+	}
+
+	.key-label {
 		color: var(--color-muted);
 		font-size: 0.75rem;
 		font-weight: 700;
@@ -311,13 +373,6 @@ before the Change Date. See LICENSE for complete terms.
 		line-height: 1.45;
 		overflow-wrap: anywhere;
 		user-select: all;
-	}
-
-	.secret-hint {
-		margin-top: 0.5rem;
-		color: var(--color-muted-strong);
-		font-size: 0.8125rem;
-		line-height: 1.4;
 	}
 
 	.save-actions,
@@ -361,6 +416,12 @@ before the Change Date. See LICENSE for complete terms.
 		color: var(--color-text);
 		background: var(--color-surface);
 		border-color: var(--color-border);
+	}
+
+	.acks {
+		display: flex;
+		flex-direction: column;
+		gap: 0.625rem;
 	}
 
 	.ack {
