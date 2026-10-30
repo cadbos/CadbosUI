@@ -15,8 +15,6 @@
 import { nsecEncode, npubEncode } from 'nostr-tools/nip19';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 
-export const ACCOUNT_KEY_FILENAME = 'cadbos-account-key.txt';
-
 export interface AccountKeyPair {
 	secretKey: Uint8Array;
 	npub: string;

@@ -168,14 +168,14 @@ test('presents the initial status load as a separate loader region', async ({ pa
 	await expect(loader).toHaveText('Загрузка состояния сервисов…');
 	await expect(page.locator('.skeleton-block').first()).toBeVisible();
 	await expect(
-		page.getByRole('table', { name: 'Состояние сервисов, используемых Cadbos' })
+		page.getByRole('table', { name: 'Состояние сервисов, используемых ИИ дизайн' })
 	).toHaveCount(0);
 
 	releaseResponse?.();
 
 	await expect(loader).toHaveCount(0);
 	await expect(
-		page.getByRole('table', { name: 'Состояние сервисов, используемых Cadbos' })
+		page.getByRole('table', { name: 'Состояние сервисов, используемых ИИ дизайн' })
 	).toBeVisible();
 });
 
@@ -202,7 +202,7 @@ test('deduplicates the direct status load and preserves cache-driven polling', a
 	await expect(page).toHaveTitle('Состояние сервисов');
 	await expect(page.getByRole('heading', { name: 'Состояние сервисов' })).toBeVisible();
 	await expect(
-		page.getByRole('table', { name: 'Состояние сервисов, используемых Cadbos' })
+		page.getByRole('table', { name: 'Состояние сервисов, используемых ИИ дизайн' })
 	).toBeVisible();
 	await expect(page.getByRole('row', { name: /archAI.*Работает 12 мс/s })).toBeVisible();
 	await expect(
@@ -281,7 +281,7 @@ test('refreshes an expired snapshot as soon as the status page is revisited', as
 	await page.goto('/status');
 	await expect(page.getByRole('row', { name: /archAI.*Работает 12 мс/s })).toBeVisible();
 
-	await page.getByRole('link', { name: /ИИ – дизайн/ }).click();
+	await page.getByRole('link', { name: /ИИ дизайн/ }).click();
 	await expect(page).not.toHaveURL(/\/status$/);
 
 	await pauseClockAfterLoad(page);

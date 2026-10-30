@@ -14,6 +14,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { expect, test } from './fixtures';
+import { en } from '$lib/i18n/locales/en';
 import { ru } from '$lib/i18n/locales/ru';
 
 import packageMetadata from '../package.json' with { type: 'json' };
@@ -25,43 +26,62 @@ const releaseUrl = `https://github.com/cadbos/CadbosUI/releases/tag/v${packageMe
 const isPreview = process.env.PLAYWRIGHT_BUILD_MODE === 'preview';
 const currentVersion = isPreview ? shortCommitSha : packageMetadata.version;
 const currentVersionUrl = isPreview ? commitUrl : releaseUrl;
-const releaseStage = isPreview ? 'Предварительная сборка' : 'Стабильный выпуск';
 
-test('shows localized release and build metadata at /version', async ({ page }) => {
-	const response = await page.goto('/version');
+for (const locale of ['ru', 'en'] as const) {
+	const dictionary = locale === 'ru' ? ru : en;
+	test(`shows localized product naming, release and build metadata in ${locale} at /version`, async ({
+		page
+	}) => {
+		await page.addInitScript((locale) => {
+			localStorage.setItem('cadbos.locale.v1', locale);
+		}, locale);
+		const response = await page.goto('/version');
 
-	expect(response?.status()).toBe(200);
-	await expect(page).toHaveURL(/\/version$/);
-	await expect(page).toHaveTitle('Версия приложения');
+		expect(response?.status()).toBe(200);
+		await expect(page).toHaveURL(/\/version$/);
+		await expect(page).toHaveTitle(dictionary['version.title']);
 
-	const main = page.getByRole('main');
-	const currentVersionPanel = main.locator('.current-version');
-	const versionDetails = main.locator('.version-details');
-	await expect(main.getByRole('heading', { name: 'Версия приложения' })).toBeVisible();
-	await expect(main.getByText(packageMetadata.name, { exact: true })).toBeVisible();
-	await expect(currentVersionPanel.getByText(currentVersion, { exact: true })).toBeVisible();
-	await expect(currentVersionPanel.getByText(releaseStage, { exact: true })).toBeVisible();
-	await expect(versionDetails.getByText(shortCommitSha, { exact: true })).toBeVisible();
-	await expect(main.getByText('Стадия выпуска', { exact: true })).toHaveCount(0);
+		const main = page.getByRole('main');
+		const currentVersionPanel = main.locator('.current-version');
+		const versionDetails = main.locator('.version-details');
+		await expect(main.getByRole('heading', { name: dictionary['version.title'] })).toBeVisible();
+		await expect(page.locator('.brand-title')).toHaveText(
+			locale === 'ru' ? 'ИИ дизайн' : 'AI design'
+		);
+		await expect(main.getByText(dictionary['version.subtitle'], { exact: true })).toBeVisible();
+		await expect(main.getByText(dictionary['app.title'], { exact: true })).toBeVisible();
+		await expect(main).not.toContainText(/cadbos/i);
+		await expect(currentVersionPanel.getByText(currentVersion, { exact: true })).toBeVisible();
+		await expect(
+			currentVersionPanel.getByText(dictionary[isPreview ? 'version.preview' : 'version.stable'], {
+				exact: true
+			})
+		).toBeVisible();
+		await expect(versionDetails.getByText(shortCommitSha, { exact: true })).toBeVisible();
+		await expect(main.getByText('Стадия выпуска', { exact: true })).toHaveCount(0);
 
-	const versionLink = currentVersionPanel.getByRole('link', { name: currentVersion, exact: true });
-	const shortCommitLink = versionDetails.getByRole('link', { name: shortCommitSha, exact: true });
+		const versionLink = currentVersionPanel.getByRole('link', {
+			name: currentVersion,
+			exact: true
+		});
+		const shortCommitLink = versionDetails.getByRole('link', { name: shortCommitSha, exact: true });
 
-	await expect(versionLink).toHaveAttribute('href', currentVersionUrl);
-	await expect(versionLink).toHaveAttribute('title', currentVersionUrl);
-	await expect(versionLink).toHaveAttribute('target', '_blank');
-	await expect(versionLink).toHaveAttribute('rel', 'external noopener noreferrer');
-	await expect(shortCommitLink).toHaveAttribute('href', commitUrl);
-	await expect(shortCommitLink).toHaveAttribute('title', commitUrl);
-	await expect(shortCommitLink).toHaveAttribute('target', '_blank');
-	await expect(shortCommitLink).toHaveAttribute('rel', 'external noopener noreferrer');
+		await expect(versionLink).toHaveAttribute('href', currentVersionUrl);
+		await expect(versionLink).toHaveAttribute('title', currentVersionUrl);
+		await expect(versionLink).toHaveAttribute('target', '_blank');
+		await expect(versionLink).toHaveAttribute('rel', 'external noopener noreferrer');
+		await expect(shortCommitLink).toHaveAttribute('href', commitUrl);
+		await expect(shortCommitLink).toHaveAttribute('title', commitUrl);
+		await expect(shortCommitLink).toHaveAttribute('target', '_blank');
+		await expect(shortCommitLink).toHaveAttribute('rel', 'external noopener noreferrer');
 
-	const buildTime = main.locator('time');
-	await expect(buildTime).toHaveAttribute(
-		'datetime',
-		/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
-	);
-});
+		const buildTime = main.locator('time');
+		await expect(buildTime).toHaveAttribute(
+			'datetime',
+			/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+		);
+	});
+}
 
 test('/version remains outside the workspace', async ({ page }) => {
 	await page.goto('/version');

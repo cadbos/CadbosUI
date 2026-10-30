@@ -22,7 +22,6 @@ declare global {
 	const __APP_COMMIT_URL__: string;
 	const __APP_COMMIT_SHA__: string;
 	const __APP_IS_PREVIEW__: boolean;
-	const __APP_NAME__: string;
 	const __APP_RELEASE_URL__: string;
 	const __APP_VERSION__: string;
 	const __NOSTR_CONNECT_RELAYS__: readonly string[];
