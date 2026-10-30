@@ -13,6 +13,31 @@
  */
 
 export interface Dictionary {
+	'adminGeneration.title': string;
+	'adminGeneration.loading': string;
+	'adminGeneration.forbidden': string;
+	'adminGeneration.notFound': string;
+	'adminGeneration.failed': string;
+	'adminGeneration.unavailable': string;
+	'adminGeneration.imageUnavailable': string;
+	'adminGeneration.settingsUnavailable': string;
+	'adminGeneration.project': string;
+	'adminGeneration.session': string;
+	'adminGeneration.settings': string;
+	'adminGeneration.prompt': string;
+	'adminGeneration.translatedPrompt': string;
+	'adminGeneration.promptOverride': string;
+	'adminGeneration.promptFragments': string;
+	'adminGeneration.inputs': string;
+	'adminGeneration.reference': string;
+	'adminGeneration.region': string;
+	'adminGeneration.regionCoordinates': string;
+	'adminGeneration.none': string;
+	'adminGeneration.yes': string;
+	'adminGeneration.no': string;
+	'adminGeneration.back': string;
+	'adminGeneration.operation': string;
+	'adminGeneration.open': string;
 	'scene.panMode': string;
 	'scene.zoomIn': string;
 	'scene.zoomOut': string;

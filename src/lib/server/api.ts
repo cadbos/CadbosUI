@@ -15,15 +15,10 @@
 import { json } from '@sveltejs/kit';
 import { z } from 'zod';
 import { photoAdjustmentsSchema } from '$lib/photo-adjustments';
-import {
-	EDIT_OPERATION_TYPES,
-	EDIT_WORKFLOWS,
-	SCENE_TYPES,
-	type ApiError,
-	type RequestFormSnapshot
-} from '$lib/api/contract';
-import { DEFAULT_REPAINT_COLOR, REPAINT_COLOR_PATTERN } from '$lib/repaint-colors';
+import { EDIT_WORKFLOWS, type ApiError } from '$lib/api/contract';
+import { REPAINT_COLOR_PATTERN } from '$lib/repaint-colors';
 import { imageRegionSchema } from '$lib/image-region';
+import { formSnapshotSchema } from '$lib/api/form-snapshot';
 import { parseMediaKey } from '$lib/server/media';
 
 export function apiError(status: number, code: string, message: string): Response {
@@ -54,72 +49,6 @@ const mediaKey = z.string().refine((value) => parseMediaKey(value) !== null);
 // verified server-side (projects.ts' assertSessionOwnedByUser) before any paid
 // call, never trusted from the shape of the id alone.
 const sessionId = z.uuid();
-
-const sceneType = z.enum(SCENE_TYPES);
-
-const formSnapshotPromptFragment = z.object({
-	id: z.string().min(1),
-	label: z.string().optional(),
-	text: z.string(),
-	order: z.number().int().nonnegative()
-});
-
-const formSnapshotImage = z.union([
-	z.object({
-		mediaKey: z.string().min(1),
-		mime: z.string().min(1).optional(),
-		size: z.number().nonnegative().optional(),
-		dimensions: z.tuple([z.number().positive(), z.number().positive()]).optional()
-	}),
-	z.object({
-		stylePresetId: z.string().min(1),
-		url: z.string().trim().url(),
-		mime: z.string().min(1).optional()
-	})
-]);
-
-// Structural validation only (shape + bounds) — not the client's own
-// requestFormSnapshotSchema (request.svelte.ts), which also enforces catalog
-// membership (e.g. a light-settings preset id must exist in
-// LIGHT_SETTINGS_PRESETS). That check depends on Svelte-only client modules
-// and isn't needed here: this snapshot is opaque storage for later display
-// back to the same user, not an input the server acts on. The `satisfies`
-// below keeps this shape honest against RequestFormSnapshot as that type
-// evolves.
-export const formSnapshotSchema = z.object({
-	photoAdjustments: photoAdjustmentsSchema.optional(),
-	promptFragments: z.array(formSnapshotPromptFragment).max(200),
-	promptOverride: z.string().nullable(),
-	// Absent from a snapshot recorded before Auto-enhance existed.
-	autoEnhance: z.boolean().default(false),
-	editPrompt: z.string(),
-	// Absent from a snapshot recorded before the Add object user prompt existed.
-	addObjectInstruction: z.string().max(500).default(''),
-	removeObjectText: z.string(),
-	// Absent/null for a snapshot recorded before this field existed.
-	editOperationType: z.enum(EDIT_OPERATION_TYPES).nullable().default(null),
-	outputFormat,
-	sceneType,
-	styleTransferPrompt: z.string(),
-	styleTransferStrength: z.number().min(0).max(1),
-	styleNegativePrompt: z.string(),
-	styleReferenceImage: formSnapshotImage.optional(),
-	objectReplacementObject: z.string().max(200),
-	objectReplacementScale: z.number().min(0.5).max(2),
-	objectReplacementRegion: imageRegionSchema.nullable().default(null),
-	objectReferenceImage: formSnapshotImage.optional(),
-	textureReplacementSurface: z.string().max(200),
-	textureReplacementMasked: z.boolean(),
-	textureReferenceImage: formSnapshotImage.optional(),
-	textureMaskImage: formSnapshotImage.optional(),
-	textureMaskSourceKey: z.string().min(1).optional(),
-	lightSettingsPresetIds: z.array(z.string()).max(50),
-	lightSettingsInstruction: z.string().max(500),
-	// Absent from a snapshot recorded before the repaint tool existed.
-	repaintTarget: z.string().max(200).default(''),
-	repaintColor: z.string().regex(REPAINT_COLOR_PATTERN).default(DEFAULT_REPAINT_COLOR),
-	repaintRegion: imageRegionSchema.nullable().default(null)
-}) satisfies z.ZodType<RequestFormSnapshot>;
 
 const formSnapshot = formSnapshotSchema.optional();
 

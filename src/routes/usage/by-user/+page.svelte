@@ -16,6 +16,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { untrack } from 'svelte';
 	import { decode } from 'nostr-tools/nip19';
 	import { resolve } from '$app/paths';
+	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { page } from '$app/state';
 	import { FileDown } from '@lucide/svelte';
 	import LazyImage from '$lib/components/LazyImage.svelte';
@@ -155,7 +156,12 @@ before the Change Date. See LICENSE for complete terms.
 {/snippet}
 
 {#snippet thumbnail(url: string, alt: string)}
-	<a class="thumbnail" href={url} target="_blank" rel="noopener noreferrer">
+	<a
+		class="thumbnail"
+		href={resolve(url as PathnameWithSearchOrHash, {})}
+		target="_blank"
+		rel="noopener noreferrer"
+	>
 		<LazyImage src={url} {alt} fetchPriority="low" />
 	</a>
 {/snippet}
@@ -200,7 +206,12 @@ before the Change Date. See LICENSE for complete terms.
 					{#if day === null}
 						<strong>{t('usage.byUser.allTime')}</strong>
 					{:else}
-						<a href={userUsageHref(npub)}>{t('usage.byUser.allTime')}</a>
+						<a
+							href={resolve(
+								`/usage/by-user?${new URLSearchParams({ npub })}` as PathnameWithSearchOrHash,
+								{}
+							)}>{t('usage.byUser.allTime')}</a
+						>
 					{/if}
 				</dd>
 			</div>
@@ -364,8 +375,12 @@ before the Change Date. See LICENSE for complete terms.
 											{#if dateKey === null}
 												{formatGenerationKind(entry.kind)}
 											{:else}
-												<a href={userUsageHref(npub, dateKey, entry.kind)} data-sveltekit-noscroll
-													>{formatGenerationKind(entry.kind)}</a
+												<a
+													href={resolve(
+														`/usage/by-user?${new URLSearchParams({ npub, date: dateKey, kind: entry.kind })}` as PathnameWithSearchOrHash,
+														{}
+													)}
+													data-sveltekit-noscroll>{formatGenerationKind(entry.kind)}</a
 												>
 											{/if}
 										</th>
@@ -411,7 +426,13 @@ before the Change Date. See LICENSE for complete terms.
 							<tbody>
 								{#each userUsage.generations as generation (generation.id)}
 									<tr>
-										<th scope="row" class="generation-id">{generation.id}</th>
+										<th scope="row" class="generation-id">
+											<a
+												href={resolve('/usage/generations/[id]', { id: generation.id })}
+												aria-label={ti('adminGeneration.open', { id: generation.id })}
+												>{generation.id}</a
+											>
+										</th>
 										<td>{formatUsageTimeOfDay(generation.createdAt)}</td>
 										{#if kind === null}
 											<td>{formatGenerationKind(generation.kind)}</td>

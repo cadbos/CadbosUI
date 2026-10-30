@@ -568,6 +568,22 @@ export interface GeneratedImageDetailResponse {
 	media: MediaAccess[];
 }
 
+export interface AdminGenerationDetailResponse {
+	id: string;
+	prompt: string;
+	translatedPrompt: string | null;
+	kind: GenerationKind;
+	createdAt: number;
+	image: MediaAccess | null;
+	source: MediaAccess | null;
+	reference: MediaAccess | null;
+	hasReference: boolean;
+	formSnapshot: RequestFormSnapshot | null;
+	media: MediaAccess[];
+	project: { title: string } | null;
+	session: { title: string } | null;
+}
+
 // The subset of RequestFormSnapshot safe to hand to an unauthenticated viewer
 // of a public /share/[token] link — every image-shaped field is stripped
 // (mediaKey values aren't meant for public exposure, and the share viewer

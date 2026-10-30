@@ -23,7 +23,7 @@ before the Change Date. See LICENSE for complete terms.
 		Share2,
 		Sparkles
 	} from '@lucide/svelte';
-	import { afterNavigate, goto } from '$app/navigation';
+	import { afterNavigate, beforeNavigate, goto, replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { navigating, page } from '$app/state';
@@ -82,6 +82,7 @@ before the Change Date. See LICENSE for complete terms.
 		buildShareUrl,
 		buildWorkspaceUrl,
 		generationAnchorFromSearch,
+		isWorkspaceRoute,
 		projectSessionFromSearch,
 		renderOrigin,
 		routeIdToMode,
@@ -447,19 +448,50 @@ before the Change Date. See LICENSE for complete terms.
 	// the type of the navigations *we* trigger below and in the tab controllers,
 	// where `request` is already the source of truth and re-parsing the URL
 	// would be redundant.
+	beforeNavigate(({ to, type }) => {
+		if (
+			!hydrated ||
+			mode === null ||
+			urlTargetStatus !== 'idle' ||
+			type === 'popstate' ||
+			isWorkspaceRoute(to?.route.id ?? null)
+		)
+			return;
+		const url = resolve(
+			buildWorkspaceUrl(
+				mode,
+				request,
+				subTabFromSearch(mode, page.url.searchParams)
+			) as PathnameWithSearchOrHash,
+			{}
+		);
+		if (`${page.url.pathname}${page.url.search}` === url) return;
+		replaceState(url, { ...page.state, workspaceReturnUrl: url });
+	});
+
 	afterNavigate(({ type }) => {
+		const savedUrl = page.state.workspaceReturnUrl
+			? new URL(page.state.workspaceReturnUrl, page.url)
+			: null;
+		const searchParams = savedUrl?.searchParams ?? page.url.searchParams;
+		if (savedUrl) {
+			const state = { ...page.state };
+			delete state.workspaceReturnUrl;
+			replaceState('', state);
+		}
 		if ((type === 'enter' || type === 'popstate' || type === 'link') && mode !== null) {
-			applyShareParams(mode, page.params.scene, page.url.searchParams, request);
+			const scene = savedUrl ? savedUrl.pathname.split('/').at(-1) : page.params.scene;
+			applyShareParams(mode, scene, searchParams, request);
 		}
 		if (type === 'enter') {
 			// Only a genuine hard load restores the full tab set — an in-app
 			// 'popstate'/'link' navigation means workspaceTabs already has
 			// everything it should (see hydrateWorkspaceTabs's own comment).
-			hydrateWorkspaceTabs(page.url.searchParams).catch((error: unknown) =>
+			hydrateWorkspaceTabs(searchParams).catch((error: unknown) =>
 				logBoundaryError('workspace.hydrateWorkspaceTabs', error)
 			);
 		} else if (type === 'popstate' || type === 'link') {
-			applyUrlTarget(page.url.searchParams).catch((error: unknown) =>
+			applyUrlTarget(searchParams).catch((error: unknown) =>
 				logBoundaryError('workspace.applyUrlTarget', error)
 			);
 		}
@@ -484,8 +516,9 @@ before the Change Date. See LICENSE for complete terms.
 		const timer = setTimeout(() => {
 			if (navigating.to !== null) return;
 			const url = withProjectSession(base, activeProjectId, activeSessionId, generationAnchor);
-			if (`${window.location.pathname}${window.location.search}` !== url) {
-				goto(resolve(url as PathnameWithSearchOrHash, {}), {
+			const destination = resolve(url as PathnameWithSearchOrHash, {});
+			if (`${page.url.pathname}${page.url.search}` !== destination) {
+				goto(destination, {
 					replaceState: true,
 					keepFocus: true,
 					noScroll: true

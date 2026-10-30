@@ -22,6 +22,7 @@ import {
 	generationKinds,
 	resourceRoles,
 	type Balance,
+	type AdminGenerationDetailResponse,
 	type CreditTransaction,
 	type GenerationKind,
 	type GenerationKindCount,
@@ -35,7 +36,7 @@ import {
 	type UsageTotals,
 	type UserUsageRecord
 } from '$lib/api/contract';
-import { formSnapshotSchema } from '$lib/server/api';
+import { formSnapshotSchema } from '$lib/api/form-snapshot';
 import type { Database } from '$lib/server/db';
 import { mediaLink } from '$lib/server/media-access';
 import { ledgerAmountSql, ledgerBalanceSql } from '$lib/server/ledger';
@@ -286,20 +287,23 @@ function sessionRefForRow(row: SessionRefColumns): GenerationSessionRef | null {
 		: null;
 }
 
-interface GenerationDetailRow extends SessionRefColumns {
+interface GenerationSettingsRow {
 	id: string;
-	source_media_id: number;
-	result_media_id: number;
 	prompt: string;
 	kind: string;
 	created_at: number;
-	amount: number;
-	balance_after: number;
 	form_snapshot: string | null;
 }
 
+interface GenerationDetailRow extends SessionRefColumns, GenerationSettingsRow {
+	source_media_id: number;
+	result_media_id: number;
+	amount: number;
+	balance_after: number;
+}
+
 // Re-validates the stored JSON against the same shape schema the write path
-// enforces (formSnapshotSchema, $lib/server/api) rather than trusting it
+// enforces (formSnapshotSchema, $lib/api/form-snapshot) rather than trusting it
 // blindly — a row could in principle predate a later, stricter version of
 // that shape. A row that fails degrades to `formSnapshot: null` (prompt-only
 // restore) instead of failing the whole read.
@@ -338,6 +342,76 @@ export function parseStoredFormSnapshot(
 	return result.data;
 }
 
+function generationSettingsForRow(
+	row: GenerationSettingsRow
+): Pick<GenerationDetail, 'id' | 'prompt' | 'kind' | 'createdAt' | 'formSnapshot'> | null {
+	const kind = generationKindForRow(row.id, row.kind);
+	if (kind === null) return null;
+	return {
+		id: row.id,
+		prompt: row.prompt,
+		kind,
+		createdAt: row.created_at,
+		formSnapshot: parseStoredFormSnapshot(row.id, row.form_snapshot)
+	};
+}
+
+export interface AdminGenerationDetail extends Pick<
+	AdminGenerationDetailResponse,
+	| 'id'
+	| 'prompt'
+	| 'translatedPrompt'
+	| 'kind'
+	| 'createdAt'
+	| 'formSnapshot'
+	| 'project'
+	| 'session'
+> {
+	sourceMediaId: number;
+	resultMediaId: number;
+	referenceMediaId: number | null;
+}
+
+interface AdminGenerationDetailRow extends GenerationSettingsRow {
+	source_media_id: number;
+	result_media_id: number;
+	reference_media_id: number | null;
+	translated_prompt: string | null;
+	project_title: string | null;
+	session_title: string | null;
+}
+
+export async function getGenerationDetailForAdmin(
+	db: Database,
+	viewerPubkey: string,
+	id: string
+): Promise<AdminGenerationDetail | null> {
+	const row = await db.get<AdminGenerationDetailRow>(
+		sql`SELECT g.id, g.source_media_id, g.result_media_id, g.reference_media_id,
+			g.prompt, g.translated_prompt, g.kind, g.created_at, g.form_snapshot,
+			p.title AS project_title, ps.title AS session_title
+			FROM generations g
+			LEFT JOIN project_sessions ps ON ps.id = g.session_id
+			LEFT JOIN projects p ON p.id = ps.project_id AND p.user_id = g.user_id
+			WHERE g.id = ${id} AND EXISTS (
+				SELECT 1 FROM admins a JOIN users u ON u.id = a.user_id
+				WHERE u.pubkey = ${viewerPubkey}
+			)`
+	);
+	if (!row) return null;
+	const settings = generationSettingsForRow(row);
+	if (!settings) return null;
+	return {
+		...settings,
+		sourceMediaId: row.source_media_id,
+		resultMediaId: row.result_media_id,
+		referenceMediaId: row.reference_media_id,
+		translatedPrompt: row.translated_prompt,
+		project: row.project_title === null ? null : { title: row.project_title },
+		session: row.session_title === null ? null : { title: row.session_title }
+	};
+}
+
 // For the "restore this generation's settings" feature (migrations/0018) —
 // unlike getGeneratedImageForUser (used for the history gallery/delete), this
 // carries the full form snapshot, so it's only queried when a specific
@@ -359,18 +433,14 @@ export async function getGenerationDetailForUser(
 			WHERE g.id = ${id} AND g.user_id = ${userId}`
 	);
 	if (!row) return null;
-	const kind = generationKindForRow(row.id, row.kind);
-	if (kind === null) return null;
+	const settings = generationSettingsForRow(row);
+	if (!settings) return null;
 	return {
-		id: row.id,
+		...settings,
 		sourceMediaId: row.source_media_id,
 		resultMediaId: row.result_media_id,
-		prompt: row.prompt,
-		kind,
-		createdAt: row.created_at,
 		amount: row.amount,
 		balanceAfter: row.balance_after,
-		formSnapshot: parseStoredFormSnapshot(row.id, row.form_snapshot),
 		session: sessionRefForRow(row)
 	};
 }
