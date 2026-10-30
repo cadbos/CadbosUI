@@ -156,13 +156,15 @@ before the Change Date. See LICENSE for complete terms.
 	{#if step === 'intro'}
 		<section class="step">
 			<h3>{t('auth.setup.introTitle')}</h3>
-			<p>{t('auth.setup.intro')}</p>
+			<p>{t('auth.setup.introPublic')}</p>
+			<p>{t('auth.setup.introSecret')}</p>
 			<button type="button" onclick={revealKeys}>{t('auth.setup.createKeys')}</button>
 		</section>
 	{:else if pair}
 		<section class="step">
 			<h3>{t('auth.setup.keysTitle')}</h3>
 			<p>{t('auth.setup.keysDescription')}</p>
+			<p>{t('auth.setup.keysWarning')}</p>
 			<div class="key-slip">
 				{#each keyRows as key (key.kind)}
 					<div class={['key', { secret: key.kind === 'secret' }]}>

@@ -126,15 +126,18 @@ export const en = {
 	'auth.setup.close': 'Close',
 	'auth.setup.title': 'New account',
 	'auth.setup.progress': 'Step {current} of {total}',
-	'auth.setup.introTitle': 'Keys are created here',
-	'auth.setup.intro':
-		'The key pair is created in this browser. The public key is the account. The secret key is the only way in. AI design does not store it and cannot restore it, so the next step is to save it somewhere you control.',
-	'auth.setup.createKeys': 'Create keys',
-	'auth.setup.keysTitle': 'A new unique key pair has been generated',
+	'auth.setup.introTitle': 'Creating a key pair',
+	'auth.setup.introPublic':
+		'The public key is your login (a unique identifier) for interacting with other users.',
+	'auth.setup.introSecret':
+		'The secret key is your password. It cannot be changed or restored if lost.',
+	'auth.setup.createKeys': 'Generate keys',
+	'auth.setup.keysTitle': 'A key pair has been generated. Saving:',
 	'auth.setup.publicLabel': 'Public key',
 	'auth.setup.secretLabel': 'Secret key',
-	'auth.setup.keysDescription':
-		'The secret key is needed to sign in on a new device. Do not send the secret key in a chat or paste it into someone else’s site.',
+	'auth.setup.keysDescription': 'The public and secret keys now exist only in your browser.',
+	'auth.setup.keysWarning':
+		'The system has no access to the secret key. Do not send your secret key in a chat or paste it into someone else’s site.',
 	'auth.setup.copyPublic': 'Copy public key',
 	'auth.setup.copiedPublic': 'Public key copied',
 	'auth.setup.copySecret': 'Copy secret key',

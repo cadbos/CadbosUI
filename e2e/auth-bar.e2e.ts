@@ -88,7 +88,7 @@ for (const locale of ['ru', 'en'] as const) {
 			await page.locator('.auth-trigger').click();
 			await page.getByRole('button', { name: dictionary['auth.setup.open'], exact: true }).click();
 			const dialog = page.getByRole('dialog');
-			await expect(dialog).toContainText(dictionary['auth.setup.intro']);
+			await expect(dialog).toContainText(dictionary['auth.setup.introPublic']);
 			await dialog
 				.getByRole('button', { name: dictionary['auth.setup.createKeys'], exact: true })
 				.click();
