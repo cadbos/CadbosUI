@@ -144,26 +144,6 @@ test('shows a free generation with an unchanged balance and restores its result'
 	await expect(page.getByAltText('До', { exact: true })).toHaveAttribute('src', BEFORE_URL);
 });
 
-test('opens a beta balance top-up request from the expenses page', async ({ page }) => {
-	await mockFeaturebase(page);
-	await page.goto('/expenses');
-	await expect(page.getByRole('button', { name: ru['auth.credit.requestTopUp'] })).toHaveCount(0);
-
-	await authenticateWithExpenseHistory(page);
-	await page.reload();
-	await page.getByRole('button', { name: ru['auth.credit.requestTopUp'] }).click();
-
-	await expect
-		.poll(() =>
-			page.evaluate(() => {
-				const calls = (window as Window & { __featurebaseCalls?: [string, string?][] })
-					.__featurebaseCalls;
-				return calls?.find(([action]) => action === 'showNewMessage')?.[1] ?? null;
-			})
-		)
-		.toBe(ru['auth.credit.requestTopUpDraft']);
-});
-
 test('offers the welcome bonus request only until it is granted', async ({ page }) => {
 	await mockFeaturebase(page);
 	await authenticateWithExpenseHistory(page);

@@ -173,8 +173,6 @@ export const en = {
 	'auth.demo.login': 'Enter demo mode',
 	'auth.demo.badge': 'DEMO',
 	'auth.credit.balance': 'Balance: {balance}',
-	'auth.credit.requestTopUp': 'Top up',
-	'auth.credit.requestTopUpDraft': '[beta] Balance top-up request',
 	'auth.credit.requestWelcomeBonus': 'Request bonus',
 	'auth.credit.requestWelcomeBonusDraft': 'I would like to receive the welcome bonus',
 	'auth.credit.history': 'Spending history',

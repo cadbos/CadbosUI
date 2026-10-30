@@ -137,34 +137,6 @@ test('opens the localized Featurebase feedback widget', async ({ page }) => {
 	await expect(page.locator('html')).toHaveAttribute('data-featurebase-feedback-opened', 'true');
 });
 
-test('opens a beta balance top-up request in Featurebase', async ({ page }) => {
-	await page.goto('/');
-	await expect(page.getByRole('button', { name: 'Пополнить' })).toHaveCount(0);
-
-	await page.route('**/auth/me', (route) =>
-		route.fulfill({
-			contentType: 'application/json',
-			body: JSON.stringify({
-				user: { pubkey: 'a'.repeat(64), firstName: 'Ada', lastName: 'Lovelace' },
-				featurebaseJwt: 'signed-featurebase-jwt'
-			})
-		})
-	);
-	await page.reload();
-	await page.locator('.auth-trigger').click();
-	await page.getByRole('button', { name: 'Пополнить' }).click();
-
-	await expect
-		.poll(() =>
-			page.evaluate(() => {
-				const calls = (window as Window & { __featurebaseCalls?: [string, string?][] })
-					.__featurebaseCalls;
-				return calls?.find(([action]) => action === 'showNewMessage')?.[1] ?? null;
-			})
-		)
-		.toBe('[beta] Заявка на пополнение баланса');
-});
-
 test('updates Featurebase identity when the user signs in and out', async ({ page }) => {
 	const featurebaseJwt = 'signed-featurebase-jwt';
 	await page.route('**/auth/me', (route) =>

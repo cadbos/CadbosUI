@@ -222,8 +222,6 @@ export interface Dictionary {
 	'auth.demo.login': string;
 	'auth.demo.badge': string;
 	'auth.credit.balance': string;
-	'auth.credit.requestTopUp': string;
-	'auth.credit.requestTopUpDraft': string;
 	'auth.credit.requestWelcomeBonus': string;
 	'auth.credit.requestWelcomeBonusDraft': string;
 	'auth.credit.history': string;

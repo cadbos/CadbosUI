@@ -20,7 +20,6 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
-	import { requestBalanceTopUp } from '$lib/request-balance-top-up';
 	import { requestWelcomeBonus } from '$lib/request-welcome-bonus';
 	import { dismissable, logBoundaryError } from '$lib/utils';
 	import AccountSetup from './AccountSetup.svelte';
@@ -117,11 +116,6 @@ before the Change Date. See LICENSE for complete terms.
 	// fires the native 'change' event, which is what triggers the autosave below.
 	function commitOnEnter(event: KeyboardEvent): void {
 		if (event.key === 'Enter') (event.currentTarget as HTMLInputElement).blur();
-	}
-
-	function requestTopUp(): void {
-		requestBalanceTopUp();
-		profileState = 'closed';
 	}
 
 	function claimWelcomeBonus(): void {
@@ -317,9 +311,10 @@ before the Change Date. See LICENSE for complete terms.
 					>
 					<ChevronRight size={14} strokeWidth={1.8} aria-hidden="true" />
 				</a>
-				{#if auth.status === 'authenticated' && featurebaseAppId}
-					<button type="button" class="top-up" onclick={requestTopUp}>
-						{t('auth.credit.requestTopUp')}
+				{#if auth.status === 'authenticated' && featurebaseAppId && auth.welcomeBonusAvailable}
+					<button type="button" class="welcome-bonus" onclick={claimWelcomeBonus}>
+						<Gift size={14} strokeWidth={1.8} aria-hidden="true" />
+						{t('auth.credit.requestWelcomeBonus')}
 					</button>
 				{/if}
 				{#if auth.status === 'authenticated'}
@@ -335,13 +330,6 @@ before the Change Date. See LICENSE for complete terms.
 					</button>
 				{/if}
 			</div>
-
-			{#if auth.status === 'authenticated' && featurebaseAppId && auth.welcomeBonusAvailable}
-				<button type="button" class="top-up welcome-bonus" onclick={claimWelcomeBonus}>
-					<Gift size={14} strokeWidth={1.8} aria-hidden="true" />
-					{t('auth.credit.requestWelcomeBonus')}
-				</button>
-			{/if}
 
 			<p class="relay-count">
 				{ti('auth.profile.relayCount', { count: relayCount })}
@@ -645,8 +633,9 @@ before the Change Date. See LICENSE for complete terms.
 		background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
 	}
 
-	.top-up {
+	.welcome-bonus {
 		display: inline-flex;
+		gap: var(--space-1);
 		flex: 0 0 auto;
 		align-items: center;
 		justify-content: center;
@@ -660,13 +649,8 @@ before the Change Date. See LICENSE for complete terms.
 		white-space: nowrap;
 	}
 
-	.welcome-bonus {
-		gap: var(--space-1);
-		padding: 0.4rem 0.7rem;
-	}
-
-	.top-up:hover,
-	.top-up:focus-visible {
+	.welcome-bonus:hover,
+	.welcome-bonus:focus-visible {
 		color: var(--color-text);
 		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
 		border-color: var(--color-accent);

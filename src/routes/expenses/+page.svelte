@@ -14,11 +14,9 @@ before the Change Date. See LICENSE for complete terms.
 
 <script lang="ts">
 	import { ArrowDown, ArrowUp, Clock } from '@lucide/svelte';
-	import { page } from '$app/state';
 	import type { CreditTransaction } from '$lib/api/contract';
 	import HintIcon from '$lib/components/HintIcon.svelte';
 	import { getLocale, t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
-	import { requestBalanceTopUp } from '$lib/request-balance-top-up';
 	import { auth } from '$lib/state/auth.svelte';
 	import { currency } from '$lib/state/currency.svelte';
 	import { openGenerationInWorkspace } from '$lib/state/open-generation';
@@ -83,14 +81,7 @@ before the Change Date. See LICENSE for complete terms.
 <main class="expenses-page" aria-labelledby="expenses-title">
 	<section class="expenses-shell">
 		<header class="expenses-header">
-			<div class="expenses-heading">
-				<h1 id="expenses-title">{t('expenses.title')}</h1>
-				{#if auth.status === 'authenticated' && page.data.featurebaseAppId}
-					<button type="button" class="top-up" onclick={requestBalanceTopUp}>
-						{t('auth.credit.requestTopUp')}
-					</button>
-				{/if}
-			</div>
+			<h1 id="expenses-title">{t('expenses.title')}</h1>
 			<p>{t('expenses.subtitle')}</p>
 			{#if openError}
 				<p class="status error" role="alert">{openError}</p>
@@ -215,33 +206,6 @@ before the Change Date. See LICENSE for complete terms.
 		display: flex;
 		flex-direction: column;
 		gap: 0.375rem;
-	}
-
-	.expenses-heading {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
-	}
-
-	.top-up {
-		flex: 0 0 auto;
-		padding: 0.4rem 0.75rem;
-		color: var(--color-text);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
-		font: inherit;
-		font-size: 0.8125rem;
-		font-weight: 600;
-		white-space: nowrap;
-		cursor: pointer;
-	}
-
-	.top-up:hover,
-	.top-up:focus-visible {
-		background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
-		border-color: var(--color-accent);
 	}
 
 	h1,
