@@ -564,6 +564,7 @@ export interface Dictionary {
 	'topUp.cancelled.text': string;
 	'topUp.cancelled.newInvoice': string;
 	'topUp.error.fundingRestricted': string;
+	'topUp.error.testDepositLimit': string;
 	'topUp.error.rateLimited': string;
 	'topUp.error.unavailable': string;
 	'topUp.error.amountOutOfRange': string;

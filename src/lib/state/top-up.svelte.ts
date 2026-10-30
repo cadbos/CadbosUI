@@ -41,6 +41,7 @@ const apiErrorSchema = z.object({ error: z.object({ code: z.string(), message: z
 
 export type TopUpError =
 	| 'fundingRestricted'
+	| 'testDepositLimit'
 	| 'rateLimited'
 	| 'unavailable'
 	| 'amountOutOfRange'
@@ -329,6 +330,7 @@ class TopUpState {
 	#errorFor(result: { status: number; code: string | null }): TopUpError {
 		if (result.status === 0 && result.code === null) return 'network';
 		if (result.code === 'funding_restricted') return 'fundingRestricted';
+		if (result.code === 'test_deposit_limit_exceeded') return 'testDepositLimit';
 		if (result.code === 'amount_out_of_range') return 'amountOutOfRange';
 		if (result.status === 404) return 'notFound';
 		if (result.status === 429) return 'rateLimited';

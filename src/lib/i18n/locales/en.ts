@@ -530,6 +530,8 @@ export const en = {
 		'This invoice can no longer be paid. Create a new one to top up your balance.',
 	'topUp.cancelled.newInvoice': 'Create a new invoice',
 	'topUp.error.fundingRestricted': 'Top-ups are unavailable: your account is not enabled.',
+	'topUp.error.testDepositLimit':
+		'Your account has reached its test top-up limit. Cancel the invoice or choose a smaller amount.',
 	'topUp.error.rateLimited': 'Too many attempts. Wait a minute and try again.',
 	'topUp.error.unavailable':
 		'The payment provider is temporarily unavailable. Please try again shortly.',

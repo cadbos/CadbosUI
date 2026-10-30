@@ -32,6 +32,7 @@ interface PaymentBackend {
 	meRequests: number;
 	balance: number;
 	createFailure: { status: number; code: string } | 'network' | null;
+	checkoutFailure: { status: number; code: string } | null;
 	settleOnRead: boolean;
 }
 
@@ -53,6 +54,7 @@ async function mockPayments(page: Page, approved = true): Promise<PaymentBackend
 		meRequests: 0,
 		balance: 4.5,
 		createFailure: null,
+		checkoutFailure: null,
 		settleOnRead: false
 	};
 	await page.route('**/auth/me', async (route) => {
@@ -100,6 +102,11 @@ async function mockPayments(page: Page, approved = true): Promise<PaymentBackend
 	});
 	await page.route('**/api/invoices/*/checkout', async (route) => {
 		backend.checkouts++;
+		if (backend.checkoutFailure) {
+			const { status, code } = backend.checkoutFailure;
+			await json(route, status, { error: { code, message: code } });
+			return;
+		}
 		backend.invoice = { ...backend.invoice!, checkout: checkout(225075) };
 		await json(route, 200, backend.invoice);
 	});
@@ -288,6 +295,18 @@ test('explains a funding restriction', async ({ page }) => {
 
 	await expect(page.getByRole('alert')).toHaveText(ru['topUp.error.fundingRestricted']);
 	expect(backend.checkouts).toBe(0);
+});
+
+test('explains the test deposit limit at checkout', async ({ page }) => {
+	const backend = await mockPayments(page);
+	backend.checkoutFailure = { status: 403, code: 'test_deposit_limit_exceeded' };
+	await page.goto('/top-up');
+	await page.getByRole('button', { name: ru['topUp.submit'] }).click();
+
+	await expect(page.getByRole('alert')).toHaveText(ru['topUp.error.testDepositLimit']);
+	await page.getByRole('button', { name: ru['topUp.invoice.cancel'] }).click();
+	await expect(page.locator('.amount-input')).toBeEnabled();
+	expect(backend.cancels).toBe(1);
 });
 
 test('hides top-up for accounts awaiting approval', async ({ page }) => {

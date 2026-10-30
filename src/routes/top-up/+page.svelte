@@ -29,6 +29,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	const errorKeys: Record<TopUpError, TranslationKey> = {
 		fundingRestricted: 'topUp.error.fundingRestricted',
+		testDepositLimit: 'topUp.error.testDepositLimit',
 		rateLimited: 'topUp.error.rateLimited',
 		unavailable: 'topUp.error.unavailable',
 		amountOutOfRange: 'topUp.error.amountOutOfRange',
