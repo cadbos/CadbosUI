@@ -311,12 +311,6 @@ before the Change Date. See LICENSE for complete terms.
 					>
 					<ChevronRight size={14} strokeWidth={1.8} aria-hidden="true" />
 				</a>
-				{#if auth.status === 'authenticated' && featurebaseAppId && auth.welcomeBonusAvailable}
-					<button type="button" class="welcome-bonus" onclick={claimWelcomeBonus}>
-						<Gift size={14} strokeWidth={1.8} aria-hidden="true" />
-						{t('auth.credit.requestWelcomeBonus')}
-					</button>
-				{/if}
 				{#if auth.status === 'authenticated'}
 					<button
 						type="button"
@@ -330,6 +324,13 @@ before the Change Date. See LICENSE for complete terms.
 					</button>
 				{/if}
 			</div>
+
+			{#if auth.status === 'authenticated' && featurebaseAppId && auth.welcomeBonusAvailable}
+				<button type="button" class="welcome-bonus" onclick={claimWelcomeBonus}>
+					<Gift size={14} strokeWidth={1.8} aria-hidden="true" />
+					{t('auth.credit.requestWelcomeBonus')}
+				</button>
+			{/if}
 
 			<p class="relay-count">
 				{ti('auth.profile.relayCount', { count: relayCount })}
@@ -634,12 +635,12 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	.welcome-bonus {
-		display: inline-flex;
+		display: flex;
 		gap: var(--space-1);
-		flex: 0 0 auto;
 		align-items: center;
 		justify-content: center;
-		padding: 0 0.7rem;
+		width: 100%;
+		padding: 0.4rem 0.7rem;
 		color: var(--color-text);
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
