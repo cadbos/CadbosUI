@@ -19,7 +19,7 @@ import type { MeResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/db';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
-import { getCredit, getUserIdByPubkey } from '$lib/server/billing';
+import { getCredit, getUserIdByPubkey, hasWelcomeBonus } from '$lib/server/billing';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { createFeaturebaseJwt } from '$lib/server/featurebase';
 import { listCreditHistory } from '$lib/server/generations';
@@ -41,10 +41,12 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 	// the only balance ever sent to the client — archAI's own (shared) account
 	// balance is mirrored server-side (billing.ts) but never exposed here.
 	let credit: MeResponse['credit'];
+	let welcomeBonusGranted = false;
 	try {
 		const db = getDb(platform);
 		const userId = await getUserIdByPubkey(db, locals.user.pubkey);
 		if (userId) {
+			welcomeBonusGranted = await hasWelcomeBonus(db, userId);
 			const approved = await getCredit(db, userId);
 			if (approved) {
 				const history = await listCreditHistory(db, userId);
@@ -70,7 +72,12 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
 		return accountLookupUnavailableResponse();
 	}
 
-	return json({ user: locals.user, featurebaseJwt, credit } satisfies MeResponse);
+	return json({
+		user: locals.user,
+		featurebaseJwt,
+		credit,
+		welcomeBonusGranted
+	} satisfies MeResponse);
 };
 
 function accountLookupUnavailableResponse(): Response {

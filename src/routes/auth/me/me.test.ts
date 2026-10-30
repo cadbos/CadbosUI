@@ -93,6 +93,42 @@ describe('GET /auth/me — generation access control', () => {
 		expect(result.credit).toBeUndefined();
 	});
 
+	it('reports the welcome bonus as not granted until an operator credits it', async () => {
+		const db = makeD1();
+		await seedUser(db, 'user-1', pubkey);
+
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
+		expect(((await response.json()) as MeResponse).welcomeBonusGranted).toBe(false);
+	});
+
+	it('reports the welcome bonus as granted once its ledger credit exists, even without approval', async () => {
+		const db = makeD1();
+		await seedUser(db, 'user-1', pubkey);
+		await db
+			.prepare(
+				"INSERT INTO ledger_entries (user_id, amount, entry_side, reason) VALUES (?, 30, 'credit', 'welcome-bonus')"
+			)
+			.bind('user-1')
+			.run();
+
+		const response = await call({ pubkey }, { env: { DB: db } } as App.Platform);
+		const result = (await response.json()) as MeResponse;
+		expect(result.welcomeBonusGranted).toBe(true);
+		expect(result.credit).toBeUndefined();
+	});
+
+	it('rejects a second welcome bonus credit for the same account', async () => {
+		const db = makeD1();
+		await seedUser(db, 'user-1', pubkey);
+		const insert = db
+			.prepare(
+				"INSERT INTO ledger_entries (user_id, amount, entry_side, reason) VALUES (?, 30, 'credit', 'welcome-bonus')"
+			)
+			.bind('user-1');
+		await insert.run();
+		await expect(insert.run()).rejects.toThrow();
+	});
+
 	it('returns a Featurebase JWT for the authenticated account', async () => {
 		const db = makeD1();
 		seedUser(db, 'user-1', pubkey);

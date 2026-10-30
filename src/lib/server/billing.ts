@@ -26,7 +26,7 @@
 import { sql } from 'drizzle-orm';
 import type { Balance } from '$lib/api/contract';
 import type { Database } from '$lib/server/db';
-import { ledgerBalanceSql } from '$lib/server/ledger';
+import { ledgerBalanceSql, WELCOME_BONUS_REASON } from '$lib/server/ledger';
 
 export async function getUserIdByPubkey(db: Database, pubkey: string): Promise<string | null> {
 	const row = await db.get<{ id: string }>(sql`SELECT id FROM users WHERE pubkey = ${pubkey}`);
@@ -83,6 +83,18 @@ export async function getCredit(db: Database, userId: string): Promise<CreditAcc
 			enabled FROM credits WHERE user_id = ${userId}`
 	);
 	return row ? toCreditAccess(row) : null;
+}
+
+// Independent of `credits`: a user can be given the bonus before or after an
+// admin approves the account, and the ledger is append-only, so the entry is
+// the permanent record that it was granted.
+export async function hasWelcomeBonus(db: Database, userId: string): Promise<boolean> {
+	const row = await db.get<{ found: number }>(
+		sql`SELECT 1 AS found FROM ledger_entries
+			WHERE user_id = ${userId} AND entry_side = 'credit' AND reason = ${WELCOME_BONUS_REASON}
+			LIMIT 1`
+	);
+	return Boolean(row);
 }
 
 // Whether the account is allowed to attempt generation at all, independent of

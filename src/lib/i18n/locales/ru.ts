@@ -174,6 +174,8 @@ export const ru = {
 	'auth.demo.login': 'Войти в демо-режиме',
 	'auth.demo.badge': 'DEMO',
 	'auth.credit.balance': 'Баланс: {balance}',
+	'auth.credit.requestWelcomeBonus': 'Запросить бонус',
+	'auth.credit.requestWelcomeBonusDraft': 'Хочу получить приветственный бонус',
 	'auth.credit.history': 'История трат',
 	'auth.credit.historyEmpty': 'Пока нет операций',
 	'upload.label': 'Фото комнаты',

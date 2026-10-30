@@ -173,6 +173,8 @@ export const en = {
 	'auth.demo.login': 'Enter demo mode',
 	'auth.demo.badge': 'DEMO',
 	'auth.credit.balance': 'Balance: {balance}',
+	'auth.credit.requestWelcomeBonus': 'Request bonus',
+	'auth.credit.requestWelcomeBonusDraft': 'I would like to receive the welcome bonus',
 	'auth.credit.history': 'Spending history',
 	'auth.credit.historyEmpty': 'No transactions yet',
 	'upload.label': 'Room photo',

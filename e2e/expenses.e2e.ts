@@ -16,6 +16,7 @@ import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
 import { ru } from '$lib/i18n/locales/ru';
+import { mockFeaturebase } from './featurebase';
 import { media } from './helpers/media';
 
 const PK = '0'.repeat(64);
@@ -141,6 +142,43 @@ test('shows a free generation with an unchanged balance and restores its result'
 	await compareButton.click();
 	await expect(page.getByAltText('После', { exact: true })).toHaveAttribute('src', AFTER_URL);
 	await expect(page.getByAltText('До', { exact: true })).toHaveAttribute('src', BEFORE_URL);
+});
+
+test('offers the welcome bonus request only until it is granted', async ({ page }) => {
+	await mockFeaturebase(page);
+	await authenticateWithExpenseHistory(page);
+	const respondWith = (welcomeBonusGranted: boolean) =>
+		page.route('**/auth/me', (route) =>
+			route.fulfill({
+				contentType: 'application/json',
+				body: JSON.stringify({
+					user: { pubkey: PK, firstName: 'Ada', lastName: 'Lovelace' },
+					featurebaseJwt: null,
+					welcomeBonusGranted
+				})
+			})
+		);
+	const bonusButton = page.getByRole('button', { name: ru['auth.credit.requestWelcomeBonus'] });
+
+	await respondWith(false);
+	await page.goto('/expenses');
+	await page.locator('.auth-trigger').click();
+	await bonusButton.click();
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (window as Window & { __featurebaseCalls?: [string, string?][] })
+					.__featurebaseCalls;
+				return calls?.find(([action]) => action === 'showNewMessage')?.[1] ?? null;
+			})
+		)
+		.toBe(ru['auth.credit.requestWelcomeBonusDraft']);
+
+	await respondWith(true);
+	await page.reload();
+	await page.locator('.auth-trigger').click();
+	await expect(bonusButton).toHaveCount(0);
 });
 
 test('groups generation durations and describes each duration column', async ({ page }) => {
