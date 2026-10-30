@@ -84,6 +84,7 @@
 	//
 	// Optional Worker variables configured per environment in Cloudflare:
 	// ROBOKASSA_IS_TEST (defaults to true; set false for live mode)
+	// ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS (nonnegative USD cents; unset disables the limit)
 	// ROBOKASSA_HASH_ALGORITHM (md5, sha256, or sha512; defaults to md5)
 	//
 	// Generation access itself is controlled in D1, not an env var: an account

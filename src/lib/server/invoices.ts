@@ -15,6 +15,7 @@
 import { DrizzleQueryError, sql } from 'drizzle-orm';
 import type { CreateInvoiceRequest, InvoiceResponse } from '$lib/api/contract';
 import type { Database } from '$lib/server/db';
+import { TestDepositLimitError } from '$lib/server/payment-processors/robokassa/test-deposit-limit';
 import {
 	paymentProcessors,
 	type PaymentProcessorRegistration
@@ -208,6 +209,9 @@ export async function checkoutInvoice(
 				'Payment amount is outside payable limits',
 				{ cause: error }
 			);
+		}
+		if (error instanceof TestDepositLimitError) {
+			throw new InvoiceError(403, 'test_deposit_limit_exceeded', error.message);
 		}
 		throw new InvoiceError(503, 'payment_unavailable', 'Checkout unavailable', { cause: error });
 	}

@@ -22,6 +22,12 @@ import { sql } from 'drizzle-orm';
 
 import { getDb } from '$lib/server/db';
 import { resolveSdk } from './sdk';
+import {
+	getTestDepositLimit,
+	requireTestDepositAllowed,
+	testDepositAllowed,
+	TestDepositLimitError
+} from './test-deposit-limit';
 
 const MAX_WEBHOOK_QUERY_LENGTH = 16_384;
 
@@ -110,6 +116,9 @@ export async function handleRobokassaResult(
 				return invalidNotification();
 			throw error;
 		}
+		const limit = quote.is_test === 1 ? getTestDepositLimit(platform) : null;
+		const allowance =
+			limit === null ? sql`1` : testDepositAllowed(row.user_id, row.amount_minor, limit);
 		const now = Date.now();
 		const [, , , latest] = await db.batch([
 			db.run(sql`INSERT INTO ledger_entries (user_id, amount, entry_side, reason, created_at)
@@ -119,7 +128,8 @@ export async function handleRobokassaResult(
 				AND i.amount_minor = ${row.amount_minor} AND i.currency = 'USD'
 				AND i.status IN ('open', 'cancelled') AND i.ledger_entry_id IS NULL
 				AND d.inv_id = ${Number(id)} AND d.rub_amount_minor = ${quote.rub_amount_minor} AND d.is_test = ${quote.is_test}
-				AND d.hash_algorithm = ${quote.hash_algorithm} AND d.result_out_sum IS NULL`),
+				AND d.hash_algorithm = ${quote.hash_algorithm} AND d.result_out_sum IS NULL
+				AND ${allowance}`),
 			db.run(sql`UPDATE invoices SET ledger_entry_id = last_insert_rowid(), status = 'paid',
 				paid_at = ${now}, updated_at = MAX(updated_at, ${now})
 				WHERE changes() = 1 AND id = ${row.id} AND payment_processor = 'robokassa'
@@ -143,10 +153,13 @@ export async function handleRobokassaResult(
 				AND l.entry_side = 'credit' AND l.reason = 'top-up' AND d.inv_id = ${Number(id)} AND d.rub_amount_minor = ${quote.rub_amount_minor}
 				AND d.result_out_sum IS NOT NULL`)
 		]);
-		if (!latest || amountInKopecks(latest.result_out_sum) !== amount)
+		if (!latest || amountInKopecks(latest.result_out_sum) !== amount) {
+			if (limit !== null) await requireTestDepositAllowed(db, row.user_id, row.amount_minor, limit);
 			throw new Error('Robokassa settlement was not recorded');
+		}
 		return response(client.notification.resultResponse(notification));
 	} catch (error) {
+		if (error instanceof TestDepositLimitError) return response(error.message, 403);
 		console.error('Robokassa webhook processing failed', {
 			invId,
 			errorType: error instanceof Error ? error.name : typeof error

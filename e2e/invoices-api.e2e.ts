@@ -13,6 +13,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import type { D1Database } from '@cloudflare/workers-types';
 import type { APIResponse } from '@playwright/test';
 import type { CreateInvoiceRequest, InvoiceResponse } from '$lib/api/contract';
 import { SESSION_COOKIE } from '$lib/server/auth/config';
@@ -868,6 +869,330 @@ test('validates processor inputs and reuses a stored quote without rates or cred
 	});
 	expect(await api.db.prepare('SELECT * FROM robokassa_invoice_details').first()).toEqual(before);
 	expect(api.rate.requests).toBe(1);
+});
+
+async function fundingSnapshot(db: D1Database): Promise<unknown[]> {
+	return Promise.all([
+		db.prepare('SELECT * FROM invoices ORDER BY id').all(),
+		db.prepare('SELECT * FROM ledger_entries ORDER BY id').all(),
+		db.prepare('SELECT * FROM robokassa_invoice_details ORDER BY invoice_id').all()
+	]);
+}
+
+async function seedFundingCredit(
+	db: D1Database,
+	userId: string,
+	amount: number,
+	processor = 'robokassa'
+): Promise<void> {
+	await db.batch([
+		db
+			.prepare(
+				`INSERT INTO ledger_entries (user_id, amount, entry_side, reason, created_at)
+			VALUES (?, ?, 'credit', 'top-up', 1)`
+			)
+			.bind(userId, amount),
+		db
+			.prepare(
+				`INSERT INTO invoices
+			(id, payment_processor, user_id, ledger_entry_id, amount_minor, currency, status, created_at, updated_at, paid_at)
+			VALUES (?, ?, ?, last_insert_rowid(), ?, 'USD', 'paid', 1, 1, 1)`
+			)
+			.bind(crypto.randomUUID(), processor, userId, amount)
+	]);
+}
+
+test.describe('Robokassa test deposit limit', () => {
+	test('unsetting the limit permits saved and new test payments after prior deposits', async ({
+		invoiceApi: api
+	}) => {
+		api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS = '50';
+		const data = { ...input, amountMinor: 20 };
+		await invoice(await api.request.post('/api/invoices', { data }), 201);
+		const saved = await invoice(
+			await api.request.post(`/api/invoices/${data.id}/checkout`, { data: {} })
+		);
+		await seedFundingCredit(api.db, 'owner', 1000);
+		expect(
+			(await api.request.post(`/api/invoices/${data.id}/checkout`, { data: {} })).status()
+		).toBe(403);
+		delete api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS;
+		expect(
+			await invoice(await api.request.post(`/api/invoices/${data.id}/checkout`, { data: {} }))
+		).toEqual(saved);
+		const savedUrl = new URL(saved.checkout!.paymentUrl);
+		expect(
+			(
+				await api.request.get(
+					notification(savedUrl.searchParams.get('InvId')!, savedUrl.searchParams.get('OutSum')!)
+				)
+			).status()
+		).toBe(200);
+		const next = { ...input, id: crypto.randomUUID() };
+		await invoice(await api.request.post('/api/invoices', { data: next }), 201);
+		const checkout = await invoice(
+			await api.request.post(`/api/invoices/${next.id}/checkout`, { data: {} })
+		);
+		const url = new URL(checkout.checkout!.paymentUrl);
+		expect(
+			(
+				await api.request.get(
+					notification(url.searchParams.get('InvId')!, url.searchParams.get('OutSum')!)
+				)
+			).status()
+		).toBe(200);
+		expect(
+			await api.db.prepare('SELECT SUM(amount) AS total FROM ledger_entries').first('total')
+		).toBe(2020);
+	});
+
+	for (const [limit, amountMinor, expected] of [
+		[undefined, 50, 200],
+		[undefined, 1000, 200],
+		['50', 50, 200],
+		['50', 51, 403],
+		['75', 75, 200],
+		['75', 76, 403],
+		['0', 1, 403],
+		[String(Number.MAX_SAFE_INTEGER), 1, 200]
+	] as const) {
+		test(`checks out ${amountMinor} cents with limit ${limit ?? 'disabled'}: ${expected}`, async ({
+			invoiceApi: api
+		}) => {
+			api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS = limit;
+			await invoice(
+				await api.request.post('/api/invoices', { data: { ...input, amountMinor } }),
+				201
+			);
+			const before = await fundingSnapshot(api.db);
+			const response = await api.request.post(`/api/invoices/${input.id}/checkout`, { data: {} });
+			expect(response.status()).toBe(expected);
+			expect(response.headers()['cache-control']).toBe('no-store');
+			if (expected === 403) {
+				expect(await response.json()).toEqual({
+					error: {
+						code: 'test_deposit_limit_exceeded',
+						message: 'Test deposit limit exceeded'
+					}
+				});
+				expect(await fundingSnapshot(api.db)).toEqual(before);
+				expect(api.rate.requests).toBe(0);
+			} else {
+				const checkout = (await invoice(response)).checkout!;
+				const url = new URL(checkout.paymentUrl);
+				const settled = await api.request.get(
+					notification(url.searchParams.get('InvId')!, url.searchParams.get('OutSum')!)
+				);
+				expect(settled.status()).toBe(200);
+				expect(await api.db.prepare('SELECT amount FROM ledger_entries').first('amount')).toBe(
+					amountMinor
+				);
+			}
+		});
+	}
+
+	for (const value of [
+		'',
+		'-1',
+		'1.5',
+		'1e2',
+		' 50 ',
+		'50\n',
+		'Infinity',
+		'invalid',
+		'9007199254740992'
+	]) {
+		test(`rejects invalid test limit ${JSON.stringify(value)} without fetching rates`, async ({
+			invoiceApi: api
+		}) => {
+			api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS = value;
+			await invoice(await api.request.post('/api/invoices', { data: input }), 201);
+			const before = await fundingSnapshot(api.db);
+			const response = await api.request.post(`/api/invoices/${input.id}/checkout`, { data: {} });
+			expect(response.status()).toBe(503);
+			expect(await response.json()).toEqual({
+				error: { code: 'payment_unavailable', message: 'Checkout unavailable' }
+			});
+			expect(await fundingSnapshot(api.db)).toEqual(before);
+			expect(api.rate.requests).toBe(0);
+		});
+	}
+
+	for (const [previous, amountMinor, allowed] of [
+		[40, 10, true],
+		[40, 20, false],
+		[50, 1, false],
+		[75, 1, false]
+	] as const) {
+		test(`counts only the user's Robokassa credits for ${previous} + ${amountMinor} cents`, async ({
+			invoiceApi: api
+		}) => {
+			api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS = '50';
+			await seedFundingCredit(api.db, 'owner', previous);
+			await seedFundingCredit(api.db, 'owner', 1000, 'other');
+			await seedFundingCredit(api.db, 'foreign', 1000);
+			await api.db
+				.prepare(
+					`INSERT INTO ledger_entries (user_id, amount, entry_side, reason, created_at)
+				VALUES ('owner', 1000, 'credit', 'top-up', 1), ('owner', 40, 'debit', 'adjustment', 1)`
+				)
+				.run();
+			await invoice(
+				await api.request.post('/api/invoices', { data: { ...input, amountMinor } }),
+				201
+			);
+			const before = await fundingSnapshot(api.db);
+			const response = await api.request.post(`/api/invoices/${input.id}/checkout`, { data: {} });
+			expect(response.status()).toBe(allowed ? 200 : 403);
+			if (!allowed) {
+				expect(await response.json()).toMatchObject({
+					error: { code: 'test_deposit_limit_exceeded' }
+				});
+				expect(await fundingSnapshot(api.db)).toEqual(before);
+				expect(api.rate.requests).toBe(0);
+			} else {
+				const url = new URL((await invoice(response)).checkout!.paymentUrl);
+				expect(
+					(
+						await api.request.get(
+							notification(url.searchParams.get('InvId')!, url.searchParams.get('OutSum')!)
+						)
+					).status()
+				).toBe(200);
+			}
+		});
+	}
+
+	for (const mode of ['true', 'false']) {
+		test(`rejects a saved test checkout after production credits consume its allowance with current mode ${mode}`, async ({
+			invoiceApi: api
+		}) => {
+			api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS = '50';
+			await invoice(
+				await api.request.post('/api/invoices', { data: { ...input, amountMinor: 20 } }),
+				201
+			);
+			await invoice(await api.request.post(`/api/invoices/${input.id}/checkout`, { data: {} }));
+			await seedFundingCredit(api.db, 'owner', 40);
+			api.platform.env.ROBOKASSA_IS_TEST = mode;
+			const before = await fundingSnapshot(api.db);
+			const response = await api.request.post(`/api/invoices/${input.id}/checkout`, { data: {} });
+			expect(response.status()).toBe(403);
+			expect(await response.json()).toMatchObject({
+				error: { code: 'test_deposit_limit_exceeded' }
+			});
+			expect(await fundingSnapshot(api.db)).toEqual(before);
+			expect(api.rate.requests).toBe(1);
+		});
+	}
+
+	for (const limit of ['0', 'invalid']) {
+		test(`production checkout and settlement bypass test limit ${limit}`, async ({
+			invoiceApi: api
+		}) => {
+			api.platform.env.ROBOKASSA_IS_TEST = 'false';
+			api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS = limit;
+			await seedFundingCredit(api.db, 'owner', 1000);
+			await invoice(await api.request.post('/api/invoices', { data: input }), 201);
+			const checkout = await invoice(
+				await api.request.post(`/api/invoices/${input.id}/checkout`, { data: {} })
+			);
+			api.platform.env.ROBOKASSA_IS_TEST = 'true';
+			expect(
+				await invoice(await api.request.post(`/api/invoices/${input.id}/checkout`, { data: {} }))
+			).toEqual(checkout);
+			const url = new URL(checkout.checkout!.paymentUrl);
+			const response = await api.request.get(
+				notification(
+					url.searchParams.get('InvId')!,
+					url.searchParams.get('OutSum')!,
+					'production-two'
+				)
+			);
+			expect(response.status()).toBe(200);
+			expect(
+				await api.db.prepare('SELECT SUM(amount) AS total FROM ledger_entries').first('total')
+			).toBe(2000);
+		});
+	}
+
+	for (const limit of ['0', '30', 'invalid']) {
+		test(`rechecks an issued test link at settlement with limit ${limit}`, async ({
+			invoiceApi: api
+		}) => {
+			api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS = '50';
+			await invoice(
+				await api.request.post('/api/invoices', { data: { ...input, amountMinor: 20 } }),
+				201
+			);
+			const checkout = await invoice(
+				await api.request.post(`/api/invoices/${input.id}/checkout`, { data: {} })
+			);
+			await seedFundingCredit(api.db, 'owner', 20);
+			api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS = limit;
+			const before = await fundingSnapshot(api.db);
+			const url = new URL(checkout.checkout!.paymentUrl);
+			const response = await api.request.get(
+				notification(url.searchParams.get('InvId')!, url.searchParams.get('OutSum')!)
+			);
+			expect(response.status()).toBe(limit === 'invalid' ? 500 : 403);
+			expect(response.headers()['cache-control']).toBe('no-store');
+			expect(await response.text()).toBe(
+				limit === 'invalid' ? 'Payment notification unavailable' : 'Test deposit limit exceeded'
+			);
+			expect(await fundingSnapshot(api.db)).toEqual(before);
+		});
+	}
+
+	test('settles concurrent test payments within the cap and acknowledges duplicates after lowering it', async ({
+		invoiceApi: api
+	}) => {
+		api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS = '50';
+		const links: string[] = [];
+		for (const amountMinor of [20, 30, 30]) {
+			const id = crypto.randomUUID();
+			await invoice(
+				await api.request.post('/api/invoices', { data: { ...input, id, amountMinor } }),
+				201
+			);
+			const result = await invoice(
+				await api.request.post(`/api/invoices/${id}/checkout`, { data: {} })
+			);
+			const url = new URL(result.checkout!.paymentUrl);
+			links.push(notification(url.searchParams.get('InvId')!, url.searchParams.get('OutSum')!));
+		}
+		expect((await api.request.get(links[0])).status()).toBe(200);
+		const responses = await Promise.all([api.request.get(links[1]), api.request.get(links[2])]);
+		expect(responses.map((response) => response.status()).sort()).toEqual([200, 403]);
+		expect(
+			await api.db.prepare('SELECT SUM(amount) AS total FROM ledger_entries').first('total')
+		).toBe(50);
+		expect(
+			await api.db
+				.prepare("SELECT COUNT(*) AS count FROM invoices WHERE status = 'paid'")
+				.first('count')
+		).toBe(2);
+		expect(
+			await api.db
+				.prepare(
+					'SELECT COUNT(*) AS count FROM robokassa_invoice_details WHERE result_out_sum IS NOT NULL'
+				)
+				.first('count')
+		).toBe(2);
+		const before = await fundingSnapshot(api.db);
+		const winner = responses.findIndex((response) => response.status() === 200) + 1;
+		for (const limit of ['50', '0', undefined]) {
+			api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS = limit;
+			for (const link of [links[0], links[winner]]) {
+				const duplicate = await api.request.get(link);
+				expect(duplicate.status()).toBe(200);
+				expect(await duplicate.text()).toBe(
+					`OK${new URL(link, 'https://example.test').searchParams.get('InvId')}`
+				);
+			}
+		}
+		expect(await fundingSnapshot(api.db)).toEqual(before);
+	});
 });
 
 for (const settings of [{ ROBOKASSA_IS_TEST: '1' }, { ROBOKASSA_HASH_ALGORITHM: 'sha1' }]) {

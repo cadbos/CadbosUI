@@ -107,6 +107,15 @@ environment variables. Their authoritative definitions are in
   credentials; all five are configured as Worker secrets in each deployment
 - `ROBOKASSA_IS_TEST` — optional Robokassa mode switch; defaults to `true` and accepts
   only `true` or `false`. Set `false` explicitly for production payments
+- `ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS` — optional lifetime test-deposit cap per user
+  in USD cents; unset disables the limit. When set, it accepts nonnegative safe
+  integers; `0` blocks all test deposits. Test checkout and settlement reject
+  deposits that would bring the user's total Robokassa credits above the cap;
+  exactly the cap is allowed.
+  All credits linked to Robokassa invoices count, including production deposits;
+  spending does not restore the allowance. Open invoices do not reserve it.
+  Production payments bypass this setting. Existing credited payments remain
+  credited, and duplicate notifications are acknowledged after lowering the cap
 - `ROBOKASSA_HASH_ALGORITHM` — optional signature algorithm (`md5`, `sha256`, or
   `sha512`); defaults to `md5` and must match the merchant's Robokassa setting
 - `COMFYUI_BASE_URL` — private VPC service binding for ComfyUI
@@ -306,7 +315,8 @@ Retain that UUID and its creation terms until the result is known. Reuse them af
 network failures or lost responses; do not generate another ID on every retry.
 Invoice API IDs must be valid UUID strings. Numeric Robokassa IDs are server-owned
 and never accepted as Cadbos invoice IDs. Amounts are positive safe integers in USD
-cents. No additional business funding cap is imposed.
+cents. When configured, Robokassa test payments are subject to the per-user
+`ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS` cap described above.
 
 The `invoices.id` primary key provides creation deduplication. Creation returns `201`; matching
 retries return `200` with the current invoice, including after cancellation or
@@ -354,6 +364,12 @@ rejected. New invoices and checkout require an approved, enabled account, even
 when its balance is zero. Owners retain read, cancellation, and matching creation
 retry access after disablement. Missing and foreign invoices return `404` on
 read, checkout, and cancellation.
+
+Test checkout returns `403 test_deposit_limit_exceeded` when previous Robokassa
+credits plus the invoice amount exceed the configured cap. The same check applies
+when reusing a stored test checkout. Settlement enforces the cap atomically;
+over-limit test callbacks return `403` with `Test deposit limit exceeded` without
+crediting the account or marking the invoice paid.
 
 The client flow is discovery, processor selection, creation, checkout, navigation
 to `checkout.paymentUrl`, and local status polling on return. Use bounded polling
