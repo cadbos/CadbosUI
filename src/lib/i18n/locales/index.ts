@@ -181,12 +181,14 @@ export interface Dictionary {
 	'auth.setup.title': string;
 	'auth.setup.progress': string;
 	'auth.setup.introTitle': string;
-	'auth.setup.intro': string;
+	'auth.setup.introPublic': string;
+	'auth.setup.introSecret': string;
 	'auth.setup.createKeys': string;
 	'auth.setup.keysTitle': string;
 	'auth.setup.publicLabel': string;
 	'auth.setup.secretLabel': string;
 	'auth.setup.keysDescription': string;
+	'auth.setup.keysWarning': string;
 	'auth.setup.copyPublic': string;
 	'auth.setup.copiedPublic': string;
 	'auth.setup.copySecret': string;

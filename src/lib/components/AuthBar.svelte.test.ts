@@ -518,7 +518,7 @@ it('creates an account only after the secret key is saved', async () => {
 	await screen.getByRole('button', { name: 'Создать аккаунт' }).click();
 
 	expect(document.querySelector('dialog')).not.toBeNull();
-	await userEvent.click(screen.getByRole('button', { name: 'Создать ключи' }));
+	await userEvent.click(screen.getByRole('button', { name: 'Сгенерировать ключи' }));
 
 	const nsec = screen.getByText(/^nsec1/).element().textContent ?? '';
 	const decoded = decode(nsec);
