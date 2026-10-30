@@ -194,6 +194,7 @@ export interface Dictionary {
 	'auth.setup.ack': string;
 	'auth.setup.finish': string;
 	'auth.setup.back': string;
+	'auth.setup.fileName': string;
 	'auth.setup.fileTitle': string;
 	'auth.setup.fileWarning': string;
 	'auth.connect.scan': string;
@@ -487,7 +488,7 @@ export interface Dictionary {
 	'version.title': string;
 	'version.subtitle': string;
 	'version.current': string;
-	'version.package': string;
+	'version.product': string;
 	'version.stable': string;
 	'version.preview': string;
 	'version.buildRevision': string;

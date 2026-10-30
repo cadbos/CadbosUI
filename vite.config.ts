@@ -81,7 +81,6 @@ export default defineConfig(({ mode }) => {
 			__APP_COMMIT_SHA__: JSON.stringify(commitSha),
 			__APP_COMMIT_URL__: JSON.stringify(commitUrl),
 			__APP_IS_PREVIEW__: JSON.stringify(isPreview),
-			__APP_NAME__: JSON.stringify(packageMetadata.name),
 			__APP_RELEASE_URL__: JSON.stringify(releaseUrl),
 			__APP_VERSION__: JSON.stringify(packageMetadata.version),
 			__NOSTR_CONNECT_RELAYS__: JSON.stringify(nostrRelays.connectRelays),

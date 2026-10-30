@@ -54,8 +54,8 @@ before the Change Date. See LICENSE for complete terms.
 
 		<dl class="version-details">
 			<div>
-				<dt>{t('version.package')}</dt>
-				<dd><code>{__APP_NAME__}</code></dd>
+				<dt>{t('version.product')}</dt>
+				<dd>{t('app.title')}</dd>
 			</div>
 			<div>
 				<dt>{t('version.buildRevision')}</dt>

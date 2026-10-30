@@ -32,15 +32,15 @@ describe('local account key', () => {
 
 	it('writes a file that contains both keys and the warning', () => {
 		const text = formatAccountKeyFile({
-			title: 'Ключ аккаунта Cadbos',
+			title: 'Ключ аккаунта ИИ дизайн',
 			publicLabel: 'Публичный ключ',
 			publicKey: 'npub1example',
 			secretLabel: 'Секретный ключ',
 			secretKey: 'nsec1example',
-			warning: 'Cadbos не может его восстановить.'
+			warning: 'ИИ дизайн не может его восстановить.'
 		});
 		expect(text).toContain('npub1example');
 		expect(text).toContain('nsec1example');
-		expect(text).toContain('Cadbos не может его восстановить.');
+		expect(text).toContain('ИИ дизайн не может его восстановить.');
 	});
 });

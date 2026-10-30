@@ -17,7 +17,6 @@ before the Change Date. See LICENSE for complete terms.
 	import { auth, type AuthError } from '$lib/state/auth.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import {
-		ACCOUNT_KEY_FILENAME,
 		createAccountKey,
 		formatAccountKeyFile,
 		type AccountKeyPair
@@ -96,7 +95,7 @@ before the Change Date. See LICENSE for complete terms.
 		const url = URL.createObjectURL(new Blob([contents], { type: 'text/plain;charset=utf-8' }));
 		const link = document.createElement('a');
 		link.href = url;
-		link.download = ACCOUNT_KEY_FILENAME;
+		link.download = t('auth.setup.fileName');
 		document.body.appendChild(link);
 		link.click();
 		link.remove();
