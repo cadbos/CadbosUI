@@ -853,6 +853,9 @@ export interface CreditInfo {
 // GET /auth/me → 401 when no session; 503 with Retry-After when session storage is unavailable.
 export interface MeResponse extends AuthResponse {
 	credit?: CreditInfo;
+	// True once an operator has credited the one-time welcome bonus. Absent for
+	// the dev demo session, which has no ledger.
+	welcomeBonusGranted?: boolean;
 }
 
 // Module 11 — Projects: a project groups a user's source photos/rooms; a

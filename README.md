@@ -229,6 +229,16 @@ VALUES ('<user_id>', 1200, 'credit', 'top-up');
 ```
 
 Each funding insert is a separate top-up; repeat it only when another top-up is intended.
+The welcome bonus (30 cents) is requested from the profile panel through the Featurebase
+messenger. Fulfil it with the same insert using the reason `welcome-bonus`; the button
+disappears once the entry exists, and migration `0027` rejects a second one for the same
+account. Run the approval statement above first if the account is not approved yet.
+
+```sql
+INSERT INTO ledger_entries (user_id, amount, entry_side, reason)
+VALUES ('<user_id>', 30, 'credit', 'welcome-bonus');
+```
+
 Revoke access with `UPDATE credits SET enabled = 0 WHERE user_id = '<user_id>'`.
 For a balance correction, append a positive integer amount with side `credit` or `debit`
 and reason `balance-correction`; never update or delete ledger entries. A credit correction
