@@ -22,6 +22,7 @@ import { getUsdRubRate } from '$lib/server/exchange-rate';
 import { quoteRubAmount } from './quote';
 import { resolveSdk, type RobokassaSettings } from './sdk';
 import { getOperationDetails, type RobokassaOperation } from './operation';
+import { getTestDepositLimit, requireTestDepositAllowed } from './test-deposit-limit';
 import type {
 	CancellationOutcome,
 	InvoiceDetails,
@@ -37,6 +38,7 @@ interface InvoiceRow {
 	currency: string;
 	status: 'open' | 'paid' | 'cancelled';
 	payment_url?: string | null;
+	is_test?: number | null;
 }
 
 function validateInvoiceId(invoiceId: string): void {
@@ -115,7 +117,7 @@ class RobokassaPaymentProcessor implements PaymentProcessor<RobokassaProcessorDa
 		validateInvoice(invoice);
 		const db = getDb(this.platform);
 		const row = await db.get<InvoiceRow>(
-			sql`SELECT i.id, i.user_id, i.amount_minor, i.currency, i.status, d.payment_url FROM invoices i
+			sql`SELECT i.id, i.user_id, i.amount_minor, i.currency, i.status, d.payment_url, d.is_test FROM invoices i
     LEFT JOIN robokassa_invoice_details d ON d.invoice_id = i.id
     WHERE i.id = ${invoice.id} AND i.payment_processor = ${this.id}`
 		);
@@ -123,8 +125,26 @@ class RobokassaPaymentProcessor implements PaymentProcessor<RobokassaProcessorDa
 			throw new Error('Robokassa invoice is missing, changed, or no longer open');
 		}
 
-		if (row.payment_url) return { url: row.payment_url };
+		if (row.payment_url) {
+			if (row.is_test === 1) {
+				await requireTestDepositAllowed(
+					db,
+					row.user_id,
+					invoice.amountMinor,
+					getTestDepositLimit(this.platform)
+				);
+			}
+			return { url: row.payment_url };
+		}
 		const { client, settings } = resolveSdk(this.platform, undefined, this.fetcher);
+		if (settings.is_test === 1) {
+			await requireTestDepositAllowed(
+				db,
+				row.user_id,
+				invoice.amountMinor,
+				getTestDepositLimit(this.platform)
+			);
+		}
 		const rate = await getUsdRubRate(this.fetcher);
 		const quote = quoteRubAmount(invoice.amountMinor, rate.rubPerUsd);
 		const kopecks = BigInt(quote.amountMinor);
@@ -152,7 +172,7 @@ class RobokassaPaymentProcessor implements PaymentProcessor<RobokassaProcessorDa
 			if (inserted) return { url: inserted.payment_url };
 
 			const latest = await db.get<InvoiceRow>(
-				sql`SELECT i.id, i.user_id, i.amount_minor, i.currency, i.status, d.payment_url
+				sql`SELECT i.id, i.user_id, i.amount_minor, i.currency, i.status, d.payment_url, d.is_test
 					FROM invoices i LEFT JOIN robokassa_invoice_details d ON d.invoice_id = i.id
 					WHERE i.id = ${invoice.id} AND i.payment_processor = ${this.id}`
 			);
@@ -163,7 +183,17 @@ class RobokassaPaymentProcessor implements PaymentProcessor<RobokassaProcessorDa
 			) {
 				throw new Error('Robokassa invoice is missing, changed, or no longer open');
 			}
-			if (latest.payment_url) return { url: latest.payment_url };
+			if (latest.payment_url) {
+				if (latest.is_test === 1) {
+					await requireTestDepositAllowed(
+						db,
+						latest.user_id,
+						invoice.amountMinor,
+						getTestDepositLimit(this.platform)
+					);
+				}
+				return { url: latest.payment_url };
+			}
 		}
 		throw new Error('Robokassa invoice ID allocation failed after three attempts');
 	}

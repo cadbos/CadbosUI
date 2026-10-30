@@ -75,6 +75,7 @@ declare global {
 				ROBOKASSA_TEST_PASSWORD1: string;
 				ROBOKASSA_TEST_PASSWORD2: string;
 				ROBOKASSA_IS_TEST?: string;
+				ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS?: string;
 				ROBOKASSA_HASH_ALGORITHM?: string;
 				S3_ACCESS_KEY_ID: string;
 				S3_SECRET_ACCESS_KEY: string;
