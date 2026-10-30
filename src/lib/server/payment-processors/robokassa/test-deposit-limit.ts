@@ -31,11 +31,28 @@ export function getTestDepositLimit(platform: App.Platform | undefined): number 
 	return Number(value);
 }
 
-export function testDepositAllowed(userId: string, amountMinor: number, limit: number): SQL {
+function robokassaDeposits(userId: string): SQL {
 	return sql`(SELECT COALESCE(SUM(l.amount), 0) FROM ledger_entries l
 		JOIN invoices funded ON funded.ledger_entry_id = l.id
 		WHERE l.user_id = ${userId} AND l.entry_side = 'credit'
-		AND funded.payment_processor = 'robokassa') <= ${limit - amountMinor}`;
+		AND funded.payment_processor = 'robokassa')`;
+}
+
+export function testDepositAllowed(userId: string, amountMinor: number, limit: number): SQL {
+	return sql`${robokassaDeposits(userId)} <= ${limit - amountMinor}`;
+}
+
+export async function getRemainingTestDeposit(
+	db: Database,
+	userId: string,
+	limit: number | null
+): Promise<number | null> {
+	if (limit === null) return null;
+	const result = await db.get<{ deposited: number }>(
+		sql`SELECT ${robokassaDeposits(userId)} AS deposited`
+	);
+	if (!result) throw new Error('Robokassa test deposits could not be read');
+	return Math.max(0, limit - result.deposited);
 }
 
 export async function requireTestDepositAllowed(

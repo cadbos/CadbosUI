@@ -825,6 +825,7 @@ export interface PaymentProcessorRecord {
 	id: string;
 	invoiceCurrencies: string[];
 	paymentCurrencies: string[];
+	maxAmountMinor: number | null;
 }
 
 export interface PaymentProcessorsResponse {
@@ -852,6 +853,38 @@ export interface InvoiceResponse extends CreateInvoiceRequest {
 	paidAt: number | null;
 	checkout: InvoiceCheckout | null;
 }
+
+const positiveMinorAmountSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+
+export const paymentProcessorsResponseSchema = z.object({
+	paymentProcessors: z.array(
+		z.object({
+			id: z.string().min(1),
+			invoiceCurrencies: z.array(z.string()),
+			paymentCurrencies: z.array(z.string()),
+			maxAmountMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable()
+		})
+	)
+}) satisfies z.ZodType<PaymentProcessorsResponse>;
+
+export const invoiceResponseSchema = z.object({
+	id: z.uuid(),
+	paymentProcessor: z.string().min(1),
+	amountMinor: positiveMinorAmountSchema,
+	currency: z.literal('USD'),
+	status: z.enum(['open', 'paid', 'cancelled']),
+	createdAt: z.number(),
+	updatedAt: z.number(),
+	paidAt: z.number().nullable(),
+	checkout: z
+		.object({
+			paymentUrl: z.url({ protocol: /^https$/ }),
+			amountMinor: positiveMinorAmountSchema,
+			currency: z.string().min(1),
+			isTest: z.boolean()
+		})
+		.nullable()
+}) satisfies z.ZodType<InvoiceResponse>;
 
 export interface CreditTransaction {
 	id: string;

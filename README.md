@@ -290,9 +290,13 @@ For transactions created during payment testing, see the
 
 The payment API uses the existing sign-in session cookie. Discover processors with
 `GET /api/payment-processors`; the response is
-`{ paymentProcessors: [{ id, invoiceCurrencies, paymentCurrencies }] }`.
+`{ paymentProcessors: [{ id, invoiceCurrencies, paymentCurrencies, maxAmountMinor }] }`.
 Only processors with valid server configuration are advertised. Currently
 Robokassa supports USD invoices paid in RUB. Discovery never contacts a provider.
+`maxAmountMinor` is the largest invoice amount the signed-in user can currently
+fund through that processor, or `null` when unlimited. For Robokassa in test mode
+it is the remaining `ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS` allowance; the top-up page
+disables larger amounts and blocks the processor once the allowance reaches zero.
 
 Create an invoice with `POST /api/invoices`:
 
@@ -378,6 +382,26 @@ and allow resuming later while the invoice remains open. Refresh `/auth/me` afte
 only resume checking; they never settle invoices or cancel them automatically.
 Configure merchant SuccessURL/FailURL to the client's return page using GET and
 use the retained invoice ID for the authenticated status lookup.
+
+### Top-up page
+
+Approved accounts top up at `/top-up`, linked from the profile panel next to the
+balance and from Expenses. The page lists every advertised processor that accepts
+USD invoices, shows an approximate payment-currency amount from the USD/RUB feed
+for RUB processors, then creates and checks out the invoice and shows the exact
+locked amount before the provider redirect. Invoice terms are kept per account
+in `localStorage` until the invoice is paid or cancelled, so reloads and returns
+reuse the same invoice UUID.
+
+Set Robokassa **SuccessURL** and **FailURL** to `https://<application-host>/top-up`
+with method **GET**. The provider's numeric `InvId` only marks the visit as a
+return: the page strips the provider query from the address bar and polls
+`GET /api/invoices/[uuid]` for the retained invoice every 3 seconds for up to one
+minute; the user can check again, resume payment or cancel afterwards. A return
+without a retained invoice opens a new top-up; verified callbacks still credit
+the payment. Provider
+names and descriptions come from `src/routes/top-up/processor-labels.ts`; a new
+processor appears under its ID until labels are added there.
 
 Creation allows 10 requests per account per minute; checkout and cancellation
 each allow 30; discovery and status share a 60-read limit. All responses are

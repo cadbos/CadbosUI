@@ -15,7 +15,11 @@
 import { createHash } from 'node:crypto';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { APIResponse } from '@playwright/test';
-import type { CreateInvoiceRequest, InvoiceResponse } from '$lib/api/contract';
+import type {
+	CreateInvoiceRequest,
+	InvoiceResponse,
+	PaymentProcessorsResponse
+} from '$lib/api/contract';
 import { SESSION_COOKIE } from '$lib/server/auth/config';
 import { createDb } from '$lib/server/db';
 import { cancelInvoice, checkoutInvoice, createInvoice, getInvoice } from '$lib/server/invoices';
@@ -56,7 +60,14 @@ test('discovers configured processors without external requests or secrets', asy
 	expect(response.status()).toBe(200);
 	expect(response.headers()['cache-control']).toBe('no-store');
 	expect(await response.json()).toEqual({
-		paymentProcessors: [{ id: 'robokassa', invoiceCurrencies: ['USD'], paymentCurrencies: ['RUB'] }]
+		paymentProcessors: [
+			{
+				id: 'robokassa',
+				invoiceCurrencies: ['USD'],
+				paymentCurrencies: ['RUB'],
+				maxAmountMinor: null
+			}
+		]
 	});
 	expect(api.rate.requests).toBe(0);
 	for (const changes of [
@@ -595,6 +606,7 @@ test('dispatches to the stored processor using test factories without live diagn
 			invoiceCurrencies: ['USD'],
 			paymentCurrencies: ['EUR'],
 			validateConfiguration: () => {},
+			getMaxAmountMinor: async () => null,
 			createClient: () => ({
 				id: 'alternative',
 				createInvoice: async (invoice) => {
@@ -903,6 +915,29 @@ async function seedFundingCredit(
 }
 
 test.describe('Robokassa test deposit limit', () => {
+	test('discovery reports the remaining test deposit allowance', async ({ invoiceApi: api }) => {
+		const allowance = async (): Promise<unknown> => {
+			const response = await api.request.get('/api/payment-processors');
+			expect(response.status()).toBe(200);
+			const body = (await response.json()) as PaymentProcessorsResponse;
+			return body.paymentProcessors[0].maxAmountMinor;
+		};
+		api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS = '50';
+		expect(await allowance()).toBe(50);
+		await seedFundingCredit(api.db, 'owner', 20);
+		await seedFundingCredit(api.db, 'owner', 1000, 'alternative');
+		await seedFundingCredit(api.db, 'foreign', 50);
+		expect(await allowance()).toBe(30);
+		await seedFundingCredit(api.db, 'owner', 40);
+		expect(await allowance()).toBe(0);
+		api.platform.env.ROBOKASSA_IS_TEST = 'false';
+		expect(await allowance()).toBeNull();
+		api.platform.env.ROBOKASSA_IS_TEST = 'true';
+		delete api.platform.env.ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS;
+		expect(await allowance()).toBeNull();
+		expect(api.rate.requests).toBe(0);
+	});
+
 	test('unsetting the limit permits saved and new test payments after prior deposits', async ({
 		invoiceApi: api
 	}) => {

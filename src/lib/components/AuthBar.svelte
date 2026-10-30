@@ -13,7 +13,16 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { ArrowUpRight, Check, ChevronRight, Copy, Gift, LogOut, User } from '@lucide/svelte';
+	import {
+		ArrowUpRight,
+		Check,
+		ChevronRight,
+		Copy,
+		Gift,
+		LogOut,
+		Plus,
+		User
+	} from '@lucide/svelte';
 	import { dev } from '$app/environment';
 	import { resolve } from '$app/paths';
 	import { npubEncode } from 'nostr-tools/nip19';
@@ -311,6 +320,16 @@ before the Change Date. See LICENSE for complete terms.
 					>
 					<ChevronRight size={14} strokeWidth={1.8} aria-hidden="true" />
 				</a>
+				{#if auth.status === 'authenticated' && auth.credit}
+					<a
+						class="top-up-link"
+						href={resolve('/top-up', {})}
+						onclick={() => (profileState = 'closed')}
+					>
+						<Plus size={14} strokeWidth={2} aria-hidden="true" />
+						<span>{t('auth.credit.topUp')}</span>
+					</a>
+				{/if}
 				{#if auth.status === 'authenticated'}
 					<button
 						type="button"
@@ -607,6 +626,26 @@ before the Change Date. See LICENSE for complete terms.
 		transition:
 			border-color 0.15s,
 			background 0.15s;
+	}
+
+	.top-up-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.4rem 0.65rem;
+		color: var(--color-accent-contrast);
+		background: var(--color-accent);
+		border: 1px solid var(--color-accent);
+		border-radius: var(--radius-sm);
+		font-size: 0.85rem;
+		font-weight: 600;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+
+	.top-up-link:hover,
+	.top-up-link:focus-visible {
+		background: var(--color-accent-hover);
 	}
 
 	.logout-button {
