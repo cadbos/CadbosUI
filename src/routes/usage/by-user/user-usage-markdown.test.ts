@@ -98,7 +98,7 @@ describe('buildUserUsageMarkdown', () => {
 						id: 'generation-1',
 						kind: 'style-transfer',
 						createdAt: AT_NOON,
-						prompt: 'a | b\nwith <b>bold</b>',
+						prompt: 'a | b\nwith <b>bold</b>\rand\r\nmore',
 						source: { key: 'uploads/source.webp', url: '/api/media/uploads/source.webp' },
 						result: { key: 'uploads/result.webp', url: '/api/media/uploads/result.webp' },
 						reference: null
@@ -112,7 +112,7 @@ describe('buildUserUsageMarkdown', () => {
 			'| ID | Время | Тип генерации | Промпт | Исходное | Результат | Референс |'
 		);
 		expect(markdown).toContain(
-			'| generation-1 | 12:00 05s | Миграция стиля | a \\| b<br>with &lt;b>bold&lt;/b> | ' +
+			'| generation-1 | 12:00 05s | Миграция стиля | a \\| b<br>with &lt;b>bold&lt;/b><br>and<br>more | ' +
 				'![Исходное изображение генерации generation-1](<https://cadbos.example/api/media/uploads/source.webp>) | ' +
 				'![Результат генерации generation-1](<https://cadbos.example/api/media/uploads/result.webp>) | — |'
 		);

@@ -49,7 +49,7 @@ function cell(value: string): string {
 		.replaceAll('|', '\\|')
 		.replace(/[[\]]/g, '\\$&')
 		.replaceAll('<', '&lt;')
-		.replace(/\r?\n/g, '<br>');
+		.replace(/\r\n|\r|\n/g, '<br>');
 }
 
 function table(headers: string[], alignments: ('left' | 'right')[], rows: string[][]): string {
