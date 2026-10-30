@@ -12,6 +12,10 @@ SvelteKit.
 
 ## Absolute rules (no exceptions)
 
+- **Product naming.** `cadbos` is the internal project name only. All user-facing
+  product naming must use **AI design** in English and **ИИ дизайн** in Russian,
+  according to the active locale. Never expose `cadbos` as the product name in
+  user-facing content.
 - **No temporary solutions.** No "temporary", "for now", "quick fix", "workaround",
   or "legacy / deprecated but kept". No bare `TODO`/`FIXME`/`HACK` — reference an
   issue or fix it now. Delete unused code; no `_unused` placeholders.
