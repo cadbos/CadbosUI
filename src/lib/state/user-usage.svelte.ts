@@ -55,9 +55,8 @@ const usageGenerationsResponseSchema = z.object({
 		})
 	),
 	pagination: z.object({
-		offset: z.number().int().min(0),
 		size: z.number().int().min(1),
-		hasMore: z.boolean()
+		nextCursor: z.string().min(1).nullable()
 	})
 });
 
@@ -84,7 +83,8 @@ class UserUsageState {
 	#pubkey: string | null = null;
 	#range: UsageDay | null = null;
 	#kind: GenerationKindFilter = null;
-	#nextOffset: number | null = null;
+	// Where the next page starts; null for the first one.
+	#nextCursor: string | null = null;
 	// The generations page in flight, so a caller that needs every page can
 	// wait for it instead of starting a duplicate request.
 	#pendingGenerations: Promise<void> | null = null;
@@ -117,7 +117,7 @@ class UserUsageState {
 			controller === null ||
 			this.#pubkey === null ||
 			this.#range === null ||
-			this.#nextOffset === null
+			!this.hasMoreGenerations
 		) {
 			return Promise.resolve();
 		}
@@ -127,7 +127,7 @@ class UserUsageState {
 				this.#pubkey,
 				this.#range,
 				this.#kind,
-				this.#nextOffset,
+				this.#nextCursor,
 				controller.signal
 			).then(() => {
 				if (!controller.signal.aborted) this.loadingMoreGenerations = false;
@@ -162,7 +162,7 @@ class UserUsageState {
 		this.#pubkey = null;
 		this.#range = null;
 		this.#kind = null;
-		this.#nextOffset = null;
+		this.#nextCursor = null;
 		this.#pendingGenerations = null;
 		this.record = null;
 		this.generationKinds = [];
@@ -180,13 +180,13 @@ class UserUsageState {
 		const controller = new AbortController();
 		this.#generationsAbort = controller;
 		this.#pendingGenerations = null;
-		this.#nextOffset = null;
+		this.#nextCursor = null;
 		this.generations = [];
 		this.generationsStatus = 'loading';
 		this.hasMoreGenerations = false;
 		this.loadingMoreGenerations = false;
 		void this.#trackGenerations(
-			this.#loadGenerations(this.#pubkey, this.#range, this.#kind, 0, controller.signal)
+			this.#loadGenerations(this.#pubkey, this.#range, this.#kind, null, controller.signal)
 		);
 	}
 
@@ -233,13 +233,13 @@ class UserUsageState {
 		pubkey: string,
 		range: UsageDay,
 		kind: GenerationKindFilter,
-		offset: number,
+		cursor: string | null,
 		signal: AbortSignal
 	): Promise<void> {
 		try {
 			const search = rangeSearch(range);
 			if (kind !== null) search.set('kind', kind);
-			search.set('offset', String(offset));
+			if (cursor !== null) search.set('cursor', cursor);
 			search.set('size', String(PAGE_SIZE));
 			const response = await fetch(`/api/usage/users/${pubkey}/generations?${search}`, {
 				signal
@@ -253,26 +253,20 @@ class UserUsageState {
 			);
 			if (!parsed.success) throw new UsageLoadError('user generations response invalid');
 			const page = parsed.data;
-			if (page.pagination.hasMore && page.generations.length === 0) {
+			if (page.pagination.nextCursor !== null && page.generations.length === 0) {
 				throw new UsageLoadError('user generations pagination did not advance');
 			}
 
 			if (signal.aborted) return;
-			// A generation made while paging today shifts every row down, so a
-			// page can repeat the last one already shown.
-			const shown = new Set(this.generations.map((generation) => generation.id));
-			this.generations = [
-				...this.generations,
-				...page.generations.filter((generation) => !shown.has(generation.id))
-			];
-			this.#nextOffset = page.pagination.hasMore ? offset + page.generations.length : null;
-			this.hasMoreGenerations = this.#nextOffset !== null;
+			this.generations = [...this.generations, ...page.generations];
+			this.#nextCursor = page.pagination.nextCursor;
+			this.hasMoreGenerations = this.#nextCursor !== null;
 			this.generationsStatus = 'ready';
 		} catch (error) {
 			if (signal.aborted) return;
 			// Keeps the failed page as the next one, so it can be requested again.
 			this.generationsStatus = 'error';
-			this.#nextOffset = offset;
+			this.#nextCursor = cursor;
 			this.hasMoreGenerations = true;
 			console.error('User generations load failed:', error);
 		}

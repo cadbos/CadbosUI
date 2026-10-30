@@ -238,12 +238,7 @@ describe('GET /api/usage/users/[pubkey]/generations', () => {
 			createdAt: 6800
 		});
 
-		const response = await callGenerations(
-			ADMIN,
-			db,
-			USER_PUBKEY,
-			'?from=5500&to=7000&offset=0&size=2'
-		);
+		const response = await callGenerations(ADMIN, db, USER_PUBKEY, '?from=5500&to=7000&size=2');
 
 		expect(response.status).toBe(200);
 		expect((await response.json()) as UsageGenerationsResponse).toEqual({
@@ -267,34 +262,62 @@ describe('GET /api/usage/users/[pubkey]/generations', () => {
 					reference: null
 				}
 			],
-			pagination: { offset: 0, size: 2, hasMore: true }
+			pagination: { size: 2, nextCursor: '6500:generation-3' }
 		});
 	});
 
-	it('pages by offset past unrecognized kinds', async () => {
+	it.each(['?from=0&to=1&cursor=abc', '?from=0&to=1&cursor=1:', '?from=0&to=1&offset=1'])(
+		'rejects the invalid page %s',
+		async (search) => {
+			const response = await callGenerations(ADMIN, await seedPlatform(), USER_PUBKEY, search);
+
+			expect(response.status).toBe(400);
+		}
+	);
+
+	it('continues after the last generation shown, past unrecognized kinds and deletions', async () => {
 		const db = await seedPlatform();
-		await seedGeneration(createDb(db), {
-			id: 'generation-legacy',
-			userId: 'user-1',
-			url: `${CDN}/generation-legacy.webp`,
-			sourceUrl: `${CDN}/source.jpg`,
-			sourceChecksum: '1'.repeat(64),
-			kind: 'legacy-kind',
-			balanceAfter: 6,
-			createdAt: 6700
-		});
+		for (const [id, kind, createdAt] of [
+			['generation-legacy', 'legacy-kind', 6700],
+			['generation-2b', 'render', 6000]
+		] as const) {
+			await seedGeneration(createDb(db), {
+				id,
+				userId: 'user-1',
+				url: `${CDN}/${id}.webp`,
+				sourceUrl: `${CDN}/source.jpg`,
+				sourceChecksum: '1'.repeat(64),
+				kind,
+				balanceAfter: 6,
+				createdAt
+			});
+		}
 		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-		const response = await callGenerations(
-			ADMIN,
-			db,
-			USER_PUBKEY,
-			'?from=0&to=10000&offset=1&size=1'
-		);
-		const result = (await response.json()) as UsageGenerationsResponse;
+		const first = (await (
+			await callGenerations(ADMIN, db, USER_PUBKEY, '?from=0&to=10000&size=2')
+		).json()) as UsageGenerationsResponse;
+		expect(first.generations.map((generation) => generation.id)).toEqual([
+			'generation-3',
+			'generation-2b'
+		]);
+		expect(first.pagination).toEqual({ size: 2, nextCursor: '6000:generation-2b' });
 
-		expect(result.generations.map((generation) => generation.id)).toEqual(['generation-2']);
-		expect(result.pagination).toEqual({ offset: 1, size: 1, hasMore: true });
+		await db.prepare('DELETE FROM generations WHERE id = ?').bind('generation-3').run();
+		const second = (await (
+			await callGenerations(
+				ADMIN,
+				db,
+				USER_PUBKEY,
+				`?from=0&to=10000&size=2&cursor=${encodeURIComponent(first.pagination.nextCursor ?? '')}`
+			)
+		).json()) as UsageGenerationsResponse;
+
+		expect(second.generations.map((generation) => generation.id)).toEqual([
+			'generation-2',
+			'generation-1'
+		]);
+		expect(second.pagination).toEqual({ size: 2, nextCursor: null });
 	});
 
 	it('narrows the list to one kind and rejects an unknown one', async () => {

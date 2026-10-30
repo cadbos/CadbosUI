@@ -76,7 +76,7 @@ const GENERATIONS: UsageGenerationsResponse = {
 			reference: null
 		}
 	],
-	pagination: { offset: 0, size: 20, hasMore: false }
+	pagination: { size: 20, nextCursor: null }
 };
 
 // Every /api/usage request the page made, in order.
@@ -246,7 +246,7 @@ test("shows the day's figures and generations and reloads when the query changes
 	).toHaveAttribute('href', '/api/media/uploads/result-2.webp');
 	await expect(shortRow.getByRole('cell').last()).toHaveText(ru['usage.emptyValue']);
 	expect(requested(requests, `/api/usage/users/${PUBKEY}/generations`)).toEqual([
-		`${range}&offset=0&size=20`
+		`${range}&size=20`
 	]);
 
 	await expect(
@@ -392,11 +392,17 @@ test('loads the next page of generations when scrolled to the end of the table',
 	await page.route(`**/api/usage/users/${PUBKEY}/generations?*`, async (route) => {
 		const url = new URL(route.request().url());
 		requests.push(url);
-		const offset = Number(url.searchParams.get('offset'));
+		const cursor = url.searchParams.get('cursor');
+		const start = cursor === null ? 0 : rows.findIndex((row) => cursor.endsWith(`:${row.id}`)) + 1;
+		const pageRows = rows.slice(start, start + 20);
+		const last = pageRows.at(-1);
 		await route.fulfill({
 			json: {
-				generations: rows.slice(offset, offset + 20),
-				pagination: { offset, size: 20, hasMore: offset + 20 < rows.length }
+				generations: pageRows,
+				pagination: {
+					size: 20,
+					nextCursor: start + 20 < rows.length && last ? `${last.createdAt}:${last.id}` : null
+				}
 			}
 		});
 	});
@@ -414,8 +420,8 @@ test('loads the next page of generations when scrolled to the end of the table',
 	await expect(table.getByRole('row', { name: /generation-page-/ })).toHaveCount(22);
 	const range = `from=${DAY_FROM}&to=${DAY_TO}`;
 	expect(requested(requests, `/api/usage/users/${PUBKEY}/generations`)).toEqual([
-		`?${range}&offset=0&size=20`,
-		`?${range}&offset=20&size=20`
+		`?${range}&size=20`,
+		`?${range}&cursor=${encodeURIComponent(`${rows[19].createdAt}:generation-page-20`)}&size=20`
 	]);
 });
 
@@ -424,13 +430,16 @@ test('exports the user to Markdown, with every generation of the day only in day
 }) => {
 	await mockUsage(page);
 	await page.route(`**/api/usage/users/${PUBKEY}/generations?*`, async (route) => {
-		const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
+		const cursor = new URL(route.request().url()).searchParams.get('cursor');
 		const [first, second] = GENERATIONS.generations;
 		await route.fulfill({
 			json:
-				offset === 0
-					? { generations: [first], pagination: { offset: 0, size: 20, hasMore: true } }
-					: { generations: [second], pagination: { offset: 1, size: 20, hasMore: false } }
+				cursor === null
+					? {
+							generations: [first],
+							pagination: { size: 20, nextCursor: `${first.createdAt}:${first.id}` }
+						}
+					: { generations: [second], pagination: { size: 20, nextCursor: null } }
 		});
 	});
 	const exportButton = page.getByRole('button', { name: ru['usage.export.button'] });
@@ -487,17 +496,20 @@ test('drops the error of an export the page moved away from', async ({ page }) =
 		releaseSecondPage = release;
 	});
 	await page.route(`**/api/usage/users/${PUBKEY}/generations?*`, async (route) => {
-		const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
+		const cursor = new URL(route.request().url()).searchParams.get('cursor');
 		const [first, second] = GENERATIONS.generations;
-		if (offset === 0) {
+		if (cursor === null) {
 			await route.fulfill({
-				json: { generations: [first], pagination: { offset: 0, size: 20, hasMore: true } }
+				json: {
+					generations: [first],
+					pagination: { size: 20, nextCursor: `${first.createdAt}:${first.id}` }
+				}
 			});
 			return;
 		}
 		await secondPageHeld;
 		await route.fulfill({
-			json: { generations: [second], pagination: { offset: 1, size: 20, hasMore: false } }
+			json: { generations: [second], pagination: { size: 20, nextCursor: null } }
 		});
 	});
 

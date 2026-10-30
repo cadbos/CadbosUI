@@ -23,14 +23,21 @@ import { getDb } from '$lib/server/db';
 import { listUserGenerations } from '$lib/server/generations';
 import { authorizeUsageViewer, isOrderedRange, usageRangeShape } from '$lib/server/usage';
 
-const DEFAULT_GENERATIONS_PAGE_OFFSET = 0;
 const DEFAULT_GENERATIONS_PAGE_SIZE = 20;
 const MAX_GENERATIONS_PAGE_SIZE = 100;
 
 const generationsSearchParamsSchema = z
 	.strictObject({
 		...usageRangeShape,
-		offset: z.coerce.number().int().min(0).default(DEFAULT_GENERATIONS_PAGE_OFFSET),
+		// `<created_at>:<id>` of the previous page's last generation.
+		cursor: z
+			.string()
+			.regex(/^\d+:.+$/)
+			.transform((value) => {
+				const separator = value.indexOf(':');
+				return { createdAt: Number(value.slice(0, separator)), id: value.slice(separator + 1) };
+			})
+			.optional(),
 		size: z.coerce
 			.number()
 			.int()
@@ -50,15 +57,18 @@ export const GET: RequestHandler = async ({ params, url, platform, locals }) => 
 
 	const parsed = generationsSearchParamsSchema.safeParse(Object.fromEntries(url.searchParams));
 	if (!parsed.success) return apiError(400, 'invalid_request', 'Invalid search params');
-	const { from, to, offset, size, kind } = parsed.data;
+	const { from, to, cursor, size, kind } = parsed.data;
 
 	const db = getDb(platform);
 	const userId = await getUserIdByPubkey(db, params.pubkey);
 	if (userId === null) return apiError(404, 'user_not_found', 'User not found');
 
-	const page = await listUserGenerations(db, userId, { from, to }, offset, size, kind);
+	const page = await listUserGenerations(db, userId, { from, to }, cursor ?? null, size, kind);
 	return json({
 		generations: page.generations,
-		pagination: { offset, size, hasMore: page.hasMore }
+		pagination: {
+			size,
+			nextCursor: page.next === null ? null : `${page.next.createdAt}:${page.next.id}`
+		}
 	} satisfies UsageGenerationsResponse);
 };

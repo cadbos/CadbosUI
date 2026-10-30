@@ -712,9 +712,9 @@ export interface UsageGenerationRecord {
 export interface UsageGenerationsResponse {
 	generations: UsageGenerationRecord[];
 	pagination: {
-		offset: number;
 		size: number;
-		hasMore: boolean;
+		// Passed back as `cursor` for the next page; null on the last one.
+		nextCursor: string | null;
 	};
 }
 

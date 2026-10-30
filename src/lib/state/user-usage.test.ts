@@ -47,11 +47,11 @@ function mockApi(
 	return fetcher;
 }
 
-function generationOffsets(fetcher: ReturnType<typeof vi.fn<typeof fetch>>): string[] {
+function generationCursors(fetcher: ReturnType<typeof vi.fn<typeof fetch>>): (string | null)[] {
 	return fetcher.mock.calls
 		.map(([input]) => new URL(String(input), 'https://cadbos.example'))
 		.filter((url) => url.pathname.endsWith('/generations'))
-		.map((url) => url.searchParams.get('offset') ?? '');
+		.map((url) => url.searchParams.get('cursor'));
 }
 
 afterEach(() => {
@@ -65,9 +65,9 @@ describe('userUsage.loadAllGenerations', () => {
 		const fetcher = mockApi([
 			{
 				generations: [generation(1), generation(2)],
-				pagination: { offset: 0, size: 20, hasMore: true }
+				pagination: { size: 20, nextCursor: '1500:generation-2' }
 			},
-			{ generations: [generation(3)], pagination: { offset: 2, size: 20, hasMore: false } }
+			{ generations: [generation(3)], pagination: { size: 20, nextCursor: null } }
 		]);
 
 		userUsage.load(PUBKEY, DAY);
@@ -79,14 +79,14 @@ describe('userUsage.loadAllGenerations', () => {
 			'generation-3'
 		]);
 		expect(userUsage.hasMoreGenerations).toBe(false);
-		expect(generationOffsets(fetcher)).toEqual(['0', '2']);
+		expect(generationCursors(fetcher)).toEqual([null, '1500:generation-2']);
 	});
 
 	it('fails when a page cannot be loaded and requests that page again next time', async () => {
 		const fetcher = mockApi([
-			{ generations: [generation(1)], pagination: { offset: 0, size: 20, hasMore: true } },
+			{ generations: [generation(1)], pagination: { size: 20, nextCursor: '1500:generation-1' } },
 			null,
-			{ generations: [generation(2)], pagination: { offset: 1, size: 20, hasMore: false } }
+			{ generations: [generation(2)], pagination: { size: 20, nextCursor: null } }
 		]);
 
 		userUsage.load(PUBKEY, DAY);
@@ -95,35 +95,24 @@ describe('userUsage.loadAllGenerations', () => {
 		expect(userUsage.hasMoreGenerations).toBe(true);
 		const generations = await userUsage.loadAllGenerations();
 		expect(generations.map((entry) => entry.id)).toEqual(['generation-1', 'generation-2']);
-		expect(generationOffsets(fetcher)).toEqual(['0', '1', '1']);
+		expect(generationCursors(fetcher)).toEqual([null, '1500:generation-1', '1500:generation-1']);
 	});
 
-	it('drops a generation a shifted page repeats', async () => {
-		mockApi([
-			{
-				generations: [generation(1), generation(2)],
-				pagination: { offset: 0, size: 20, hasMore: true }
-			},
-			{
-				generations: [generation(2), generation(3)],
-				pagination: { offset: 2, size: 20, hasMore: false }
-			}
+	it('requests a first page that failed before the export again', async () => {
+		const fetcher = mockApi([
+			null,
+			{ generations: [generation(1)], pagination: { size: 20, nextCursor: null } }
 		]);
 
 		userUsage.load(PUBKEY, DAY);
 		const generations = await userUsage.loadAllGenerations();
 
-		expect(generations.map((entry) => entry.id)).toEqual([
-			'generation-1',
-			'generation-2',
-			'generation-3'
-		]);
+		expect(generations.map((entry) => entry.id)).toEqual(['generation-1']);
+		expect(generationCursors(fetcher)).toEqual([null, null]);
 	});
 
 	it('fails when the page moves to another user meanwhile', async () => {
-		mockApi([
-			{ generations: [generation(1)], pagination: { offset: 0, size: 20, hasMore: false } }
-		]);
+		mockApi([{ generations: [generation(1)], pagination: { size: 20, nextCursor: null } }]);
 
 		userUsage.load(PUBKEY, DAY);
 		const exported = userUsage.loadAllGenerations();
@@ -134,8 +123,8 @@ describe('userUsage.loadAllGenerations', () => {
 
 	it("reloads only the day's generations when another kind is picked", async () => {
 		const fetcher = mockApi([
-			{ generations: [generation(1)], pagination: { offset: 0, size: 20, hasMore: false } },
-			{ generations: [generation(2)], pagination: { offset: 0, size: 20, hasMore: false } }
+			{ generations: [generation(1)], pagination: { size: 20, nextCursor: null } },
+			{ generations: [generation(2)], pagination: { size: 20, nextCursor: null } }
 		]);
 
 		userUsage.load(PUBKEY, DAY);

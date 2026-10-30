@@ -949,18 +949,30 @@ function toUsageGeneration(row: UsageGenerationRow): UsageGenerationRecord | nul
 	};
 }
 
+// The last generation of a page; the next page starts right after it, so a
+// generation made or deleted meanwhile neither repeats nor skips a row.
+export interface UsageGenerationCursor {
+	createdAt: number;
+	id: string;
+}
+
 export async function listUserGenerations(
 	db: Database,
 	userId: string,
 	range: UsageRange,
-	offset: number,
+	after: UsageGenerationCursor | null,
 	size: number,
 	// Only generations of this kind; every recognized kind when omitted.
 	kind?: GenerationKind
-): Promise<{ generations: UsageGenerationRecord[]; hasMore: boolean }> {
+): Promise<{ generations: UsageGenerationRecord[]; next: UsageGenerationCursor | null }> {
 	// Unrecognized kinds are left out in SQL, as in listUserGenerationKinds, so
-	// the page comes straight from LIMIT/OFFSET without scanning earlier rows.
+	// every row of the page is one the response lists.
 	const kinds = kind === undefined ? generationKinds : [kind];
+	const afterCursor =
+		after === null
+			? sql``
+			: sql`AND (g.created_at < ${after.createdAt}
+				OR (g.created_at = ${after.createdAt} AND g.id < ${after.id}))`;
 	const rows = await db.all<UsageGenerationRow>(
 		sql`SELECT g.id, g.kind, g.created_at, g.prompt,
 			source_bucket.name AS source_bucket_name, source_media.filename AS source_filename,
@@ -979,14 +991,15 @@ export async function listUserGenerations(
 				kinds.map((candidate) => sql`${candidate}`),
 				sql`, `
 			)})
-			ORDER BY g.created_at DESC, g.id DESC LIMIT ${size + 1} OFFSET ${offset}`
+			${afterCursor}
+			ORDER BY g.created_at DESC, g.id DESC LIMIT ${size + 1}`
 	);
+	const page = rows.slice(0, size);
+	const last = page.at(-1);
 	return {
-		generations: rows
-			.slice(0, size)
-			.map(toUsageGeneration)
-			.filter((generation) => generation !== null),
-		hasMore: rows.length > size
+		generations: page.map(toUsageGeneration).filter((generation) => generation !== null),
+		next:
+			rows.length > size && last !== undefined ? { createdAt: last.created_at, id: last.id } : null
 	};
 }
 
