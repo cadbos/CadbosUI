@@ -61,6 +61,7 @@ async function mockPayments(page: Page, approved = true): Promise<PaymentBackend
 		backend.meRequests++;
 		await json(route, 200, {
 			user: { pubkey: PK, firstName: 'Ada', lastName: 'Lovelace' },
+			featurebaseJwt: null,
 			...(approved
 				? { credit: { balance: backend.balance, updatedAt: Date.now(), history: [] } }
 				: {})
