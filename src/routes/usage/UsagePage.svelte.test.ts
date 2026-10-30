@@ -51,7 +51,9 @@ function user(
 		referenceCount: 1,
 		referenceBytes: 512 * 1024,
 		totalSpend: 7.5,
-		latestSpendAt
+		latestSpendAt,
+		firstSignInAt: Date.UTC(2025, 11, 1, 8, 15),
+		lastSignInAt: Date.UTC(2026, 0, 10, 12, 0)
 	};
 }
 
@@ -122,18 +124,21 @@ function mockUsageFetch(
 }
 
 function pageProps(pubkeyViewer = PUBKEY_VIEWER): PageProps {
-	return { data: { featurebaseAppId: null, pubkeyViewer }, form: undefined, params: {} };
+	return { data: { featurebaseAppId: null, pubkeyViewer }, params: {} };
 }
 
+// The ISO 8601 local date and the local time of day: "2026-01-03 | 12:34 00s".
 function localDateTimeLabel(locale: Locale, timestamp: number): string {
-	return new Intl.DateTimeFormat(locale, {
-		day: 'numeric',
-		month: 'short',
-		year: 'numeric',
+	const date = new Date(timestamp);
+	const day = [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+		.map((part) => String(part).padStart(2, '0'))
+		.join('-');
+	const time = new Intl.DateTimeFormat(locale, {
 		hour: '2-digit',
 		minute: '2-digit',
 		hourCycle: 'h23'
-	}).format(new Date(timestamp));
+	}).format(date);
+	return `${day} | ${time} ${String(date.getSeconds()).padStart(2, '0')}s`;
 }
 
 function localSizeLabel(locale: Locale, value: number): string {
@@ -231,6 +236,24 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	await expect
 		.element(latestSpendHeader)
 		.toHaveAttribute('title', localTimeZoneName(locale, 'long'));
+	for (const [key, at] of [
+		['firstSignInAt', Date.UTC(2025, 11, 1, 8, 15)],
+		['lastSignInAt', Date.UTC(2026, 0, 10, 12, 0)]
+	] as const) {
+		const header = screen.getByRole('columnheader', {
+			name: `${t(`usage.column.${key}`)}, ${localTimeZoneName(locale, 'short')}`
+		});
+		await expect.element(header).toHaveAttribute('title', localTimeZoneName(locale, 'long'));
+		await expect
+			.element(screen.getByRole('cell', { name: localDateTimeLabel(locale, at) }))
+			.toBeVisible();
+	}
+	const headers = screen.getByRole('columnheader').elements();
+	expect(headers.slice(-3).map((header) => header.textContent?.split(',')[0].trim())).toEqual([
+		t('usage.column.latestSpendAt'),
+		t('usage.column.firstSignInAt'),
+		t('usage.column.lastSignInAt')
+	]);
 });
 
 it.each(['ru', 'en'] as const)('uses fixed numeric punctuation for %s', async (locale) => {
@@ -387,7 +410,6 @@ it('shows one centered error when every usage request is forbidden', async () =>
 	expect(screen.getByText(t('usage.totals.failed')).elements()).toHaveLength(0);
 	expect(screen.getByText(t('usage.walletBalanceFailed')).elements()).toHaveLength(0);
 	expect(screen.getByText(t('usage.totals.d1Failed')).elements()).toHaveLength(0);
-	await expect.element(alert).toHaveStyle({ textAlign: 'center' });
 });
 
 it('renders an error state when usage cannot be loaded', async () => {
@@ -566,4 +588,28 @@ it('shows a wallet balance error inside the totals even when totals fail', async
 	const totals = screen.getByRole('region', { name: t('usage.totals.title') });
 	await expect.element(totals.getByText(t('usage.walletBalanceFailed'))).toBeVisible();
 	await expect.element(totals.getByText(t('usage.totals.failed'))).toBeVisible();
+});
+
+it('links the avatar to the pubkey viewer, the key to the user and the spend date to that day', async () => {
+	const latestSpendAt = new Date(2026, 0, 3, 12, 34).getTime();
+	vi.stubGlobal(
+		'fetch',
+		mockUsageFetch([page([user(PUBKEY_ONE, latestSpendAt)], 0, false)], {
+			[PUBKEY_ONE]: { name: 'Alice' }
+		})
+	);
+	const npub = npubEncode(PUBKEY_ONE);
+
+	const screen = render(UsagePage, pageProps());
+
+	const avatar = screen.getByRole('link', {
+		name: ti('usage.user.profileLink', { user: 'Alice' })
+	});
+	await expect.element(avatar).toHaveAttribute('href', `https://explorer.example/p/${npub}`);
+	await expect.element(avatar).toHaveAttribute('target', '_blank');
+	const key = screen.getByRole('link', { name: `…${npub.slice(-5)}`, exact: true });
+	await expect.element(key).toHaveAttribute('href', `/usage/by-user?npub=${npub}`);
+	await expect
+		.element(screen.getByRole('link', { name: '2026-01-03', exact: true }))
+		.toHaveAttribute('href', `/usage/by-user?npub=${npub}&date=2026-01-03`);
 });

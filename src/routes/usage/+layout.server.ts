@@ -12,11 +12,11 @@
  * before the Change Date. See LICENSE for complete terms.
  */
 
-import type { PageServerLoad } from './$types';
+import type { LayoutServerLoad } from './$types';
 
 const DEFAULT_PUBKEY_VIEWER = 'https://primal.net/profile/{}';
 
-export const load: PageServerLoad = ({ platform }) => {
+export const load: LayoutServerLoad = ({ platform }) => {
 	const pubkeyViewer = platform?.env?.PUBKEY_VIEWER;
 	return {
 		pubkeyViewer: pubkeyViewer?.includes('{}') ? pubkeyViewer : DEFAULT_PUBKEY_VIEWER

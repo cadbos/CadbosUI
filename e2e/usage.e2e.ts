@@ -153,7 +153,9 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 						referenceCount: 0,
 						referenceBytes: null,
 						totalSpend: 0,
-						latestSpendAt: null
+						latestSpendAt: null,
+						firstSignInAt: null,
+						lastSignInAt: null
 					},
 					{
 						pubkey: pubkeyWithoutPicture,
@@ -168,7 +170,9 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 						referenceCount: 0,
 						referenceBytes: null,
 						totalSpend: 0,
-						latestSpendAt: null
+						latestSpendAt: null,
+						firstSignInAt: null,
+						lastSignInAt: null
 					}
 				],
 				pagination: { offset: 0, size: 20, hasMore: false }
@@ -185,9 +189,13 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 
 	await page.goto('/usage');
 
-	const link = page.getByRole('link', { name: npub });
-	const user = page.getByRole('rowheader', { name: npub });
-	const userWithoutPicture = page.getByRole('rowheader', { name: npubWithoutPicture });
+	const link = page.getByRole('link', {
+		name: ru['usage.user.profileLink'].replace('{user}', 'Alice')
+	});
+	const user = page.getByRole('rowheader', { name: `…${npub.slice(-5)}` });
+	const userWithoutPicture = page.getByRole('rowheader', {
+		name: `…${npubWithoutPicture.slice(-5)}`
+	});
 
 	await expect(page.getByRole('columnheader', { name: ru['usage.column.user'] })).toBeVisible();
 	for (const key of ['balance', 'totalDeposit', 'totalSpend'] as const) {
@@ -285,7 +293,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 		`${ru['usage.totals.references']} ${ru['usage.totals.countWithSize'].replace('{count}', '0').replace('{size}', ru['usage.emptyValue'])}`
 	);
 	await expect(user.locator('img')).toHaveAttribute('src', 'https://avatar.example/alice.svg');
-	await expect(userWithoutPicture.locator('.avatar')).toHaveText('B');
+	await expect(userWithoutPicture.locator('.initial')).toHaveText('B');
 	await expect(link).toHaveAttribute('href', `https://primal.net/profile/${npub}`);
 	await expect(link).toHaveAttribute('target', '_blank');
 	await expect(link).toHaveAttribute('rel', 'external noopener noreferrer');

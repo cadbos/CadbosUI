@@ -14,6 +14,7 @@
 
 import { dev } from '$app/environment';
 import { sql } from 'drizzle-orm';
+import { z } from 'zod';
 import type { SessionUser } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { getDb } from '$lib/server/db';
@@ -30,4 +31,15 @@ export async function authorizeUsageViewer(
 		sql`SELECT 1 AS found FROM admins a JOIN users u ON u.id = a.user_id WHERE u.pubkey = ${user.pubkey}`
 	);
 	return admin ? null : apiError(403, 'forbidden', 'Admin access required');
+}
+
+// A day's usage arrives as the viewer's local-day bounds in epoch milliseconds,
+// so the server never has to guess the viewer's time zone.
+export const usageRangeShape = {
+	from: z.coerce.number().int().min(0),
+	to: z.coerce.number().int().min(1)
+};
+
+export function isOrderedRange(range: { from: number; to: number }): boolean {
+	return range.to > range.from;
 }

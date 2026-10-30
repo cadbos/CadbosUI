@@ -674,6 +674,8 @@ export interface UserUsageRecord {
 	referenceBytes: number | null;
 	totalSpend: number;
 	latestSpendAt: number | null;
+	firstSignInAt: number | null;
+	lastSignInAt: number | null;
 }
 
 export interface UserUsageResponse {
@@ -682,6 +684,39 @@ export interface UserUsageResponse {
 		offset: number;
 		size: number;
 		hasMore: boolean;
+	};
+}
+
+// GET /api/usage/users/[pubkey] — one user's usage row, over all time or over
+// the [from, to) window given as epoch-millisecond search params.
+export interface GenerationKindCount {
+	kind: GenerationKind;
+	count: number;
+}
+
+export interface UserUsageDetailResponse {
+	user: UserUsageRecord;
+	generationKinds: GenerationKindCount[];
+}
+
+// GET /api/usage/users/[pubkey]/generations — that user's generations in the
+// [from, to) window, newest first; `kind` narrows them to one generation kind.
+export interface UsageGenerationRecord {
+	id: string;
+	kind: GenerationKind;
+	createdAt: number;
+	prompt: string;
+	source: MediaAccess;
+	result: MediaAccess;
+	reference: MediaAccess | null;
+}
+
+export interface UsageGenerationsResponse {
+	generations: UsageGenerationRecord[];
+	pagination: {
+		size: number;
+		// Passed back as `cursor` for the next page; null on the last one.
+		nextCursor: string | null;
 	};
 }
 

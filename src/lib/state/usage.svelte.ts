@@ -25,7 +25,7 @@ export type UsageStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 const PAGE_SIZE = 20;
 
-const userUsageRecordSchema = z.object({
+export const userUsageRecordSchema = z.object({
 	pubkey: z.string().regex(/^[0-9a-f]{64}$/),
 	balance: z.number(),
 	totalDeposit: z.number(),
@@ -38,7 +38,9 @@ const userUsageRecordSchema = z.object({
 	referenceCount: z.number().int().min(0),
 	referenceBytes: z.number().int().min(0).nullable(),
 	totalSpend: z.number(),
-	latestSpendAt: z.number().int().min(0).nullable()
+	latestSpendAt: z.number().int().min(0).nullable(),
+	firstSignInAt: z.number().int().min(0).nullable(),
+	lastSignInAt: z.number().int().min(0).nullable()
 });
 
 const userUsageResponseSchema = z.object({
@@ -94,7 +96,7 @@ const workersAiDailyUsageSchema = z.object({
 export type WalletBalanceStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type UsageTotalsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
-class UsageLoadError extends Error {
+export class UsageLoadError extends Error {
 	readonly status: number | null;
 
 	constructor(message: string, status: number | null = null) {
@@ -102,6 +104,23 @@ class UsageLoadError extends Error {
 		this.name = 'UsageLoadError';
 		this.status = status;
 	}
+}
+
+export async function fetchUsageProfiles(
+	pubkeys: string[],
+	signal: AbortSignal
+): Promise<Record<string, UsageProfile>> {
+	const response = await fetch('/api/usage/profiles', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ pubkeys }),
+		signal
+	});
+	if (!response.ok) throw new UsageLoadError('usage profile request failed', response.status);
+
+	const parsed = usageProfilesResponseSchema.safeParse(await response.json().catch(() => null));
+	if (!parsed.success) throw new UsageLoadError('usage profile response invalid');
+	return parsed.data.profiles;
 }
 
 class UsageState {
@@ -250,7 +269,7 @@ class UsageState {
 		const controller = new AbortController();
 		this.#profileAborts.add(controller);
 		try {
-			const profiles = await this.#fetchProfiles(
+			const profiles = await fetchUsageProfiles(
 				users.map((user) => user.pubkey),
 				controller.signal
 			);
@@ -260,23 +279,6 @@ class UsageState {
 		} finally {
 			this.#profileAborts.delete(controller);
 		}
-	}
-
-	async #fetchProfiles(
-		pubkeys: string[],
-		signal: AbortSignal
-	): Promise<Record<string, UsageProfile>> {
-		const response = await fetch('/api/usage/profiles', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ pubkeys }),
-			signal
-		});
-		if (!response.ok) throw new UsageLoadError('usage profile request failed', response.status);
-
-		const parsed = usageProfilesResponseSchema.safeParse(await response.json().catch(() => null));
-		if (!parsed.success) throw new UsageLoadError('usage profile response invalid');
-		return parsed.data.profiles;
 	}
 
 	async #loadWalletBalance(): Promise<void> {
