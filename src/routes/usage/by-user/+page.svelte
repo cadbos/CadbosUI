@@ -55,8 +55,8 @@ before the Change Date. See LICENSE for complete terms.
 
 	let exporting = $state(false);
 	let exportFailed = $state(false);
-	// Bumped on every reload, so an export the reload cut short reports nothing
-	// on the view that replaced it.
+	// Bumped whenever the shown data changes, so an export that change cut short
+	// reports nothing on the view that replaced it.
 	let loadVersion = 0;
 
 	function decodeNpub(value: string): string | null {
@@ -71,12 +71,12 @@ before the Change Date. See LICENSE for complete terms.
 	}
 
 	function loadUserUsage(): (() => void) | undefined {
+		loadVersion += 1;
 		if (auth.status !== 'authenticated') return;
 		const target = pubkey;
 		const selectedDay = day;
 		if (target === null || (dateKey !== null && selectedDay === null) || invalidKind) return;
 		untrack(() => {
-			loadVersion += 1;
 			exportFailed = false;
 			userUsage.load(target, selectedDay, kind);
 		});
@@ -87,6 +87,7 @@ before the Change Date. See LICENSE for complete terms.
 
 	function showSelectedKind(): void {
 		const selected = kind;
+		loadVersion += 1;
 		untrack(() => userUsage.selectKind(selected));
 	}
 

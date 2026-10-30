@@ -489,41 +489,50 @@ test('retries a page of generations that failed to load', async ({ page }) => {
 	await expect(generations.getByRole('alert')).toHaveCount(0);
 });
 
-test('drops the error of an export the page moved away from', async ({ page }) => {
-	await mockUsage(page);
-	let releaseSecondPage: () => void = () => undefined;
-	const secondPageHeld = new Promise<void>((release) => {
-		releaseSecondPage = release;
-	});
-	await page.route(`**/api/usage/users/${PUBKEY}/generations?*`, async (route) => {
-		const cursor = new URL(route.request().url()).searchParams.get('cursor');
-		const [first, second] = GENERATIONS.generations;
-		if (cursor === null) {
-			await route.fulfill({
-				json: {
-					generations: [first],
-					pagination: { size: 20, nextCursor: `${first.createdAt}:${first.id}` }
-				}
-			});
-			return;
-		}
-		await secondPageHeld;
-		await route.fulfill({
-			json: { generations: [second], pagination: { size: 20, nextCursor: null } }
+for (const { view, link, url } of [
+	{ view: 'all time', link: ru['usage.byUser.allTime'], url: `/usage/by-user?npub=${NPUB}` },
+	{
+		view: 'one generation kind',
+		link: ru['generatedImages.kind.render'],
+		url: `/usage/by-user?npub=${NPUB}&date=2026-01-03&kind=render`
+	}
+]) {
+	test(`drops the error of an export the page moved to ${view} from`, async ({ page }) => {
+		await mockUsage(page);
+		let releaseSecondPage: () => void = () => undefined;
+		const secondPageHeld = new Promise<void>((release) => {
+			releaseSecondPage = release;
 		});
+		await page.route(`**/api/usage/users/${PUBKEY}/generations?*`, async (route) => {
+			const cursor = new URL(route.request().url()).searchParams.get('cursor');
+			const [first, second] = GENERATIONS.generations;
+			if (cursor === null) {
+				await route.fulfill({
+					json: {
+						generations: [first],
+						pagination: { size: 20, nextCursor: `${first.createdAt}:${first.id}` }
+					}
+				});
+				return;
+			}
+			await secondPageHeld;
+			await route.fulfill({
+				json: { generations: [second], pagination: { size: 20, nextCursor: null } }
+			});
+		});
+
+		await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
+		await expect(page.getByRole('row', { name: /generation-2/ })).toBeVisible();
+		await page.getByRole('button', { name: ru['usage.export.button'] }).click();
+		await expect(page.getByRole('button', { name: ru['usage.export.exporting'] })).toBeVisible();
+		await page.getByRole('link', { name: link, exact: true }).click();
+		await expect(page).toHaveURL(url);
+		releaseSecondPage();
+
+		await expect(page.getByRole('button', { name: ru['usage.export.button'] })).toBeEnabled();
+		await expect(page.getByText(ru['usage.export.failed'])).toHaveCount(0);
 	});
-
-	await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
-	await expect(page.getByRole('row', { name: /generation-2/ })).toBeVisible();
-	await page.getByRole('button', { name: ru['usage.export.button'] }).click();
-	await expect(page.getByRole('button', { name: ru['usage.export.exporting'] })).toBeVisible();
-	await page.getByRole('link', { name: ru['usage.byUser.allTime'] }).click();
-	await expect(page).toHaveURL(`/usage/by-user?npub=${NPUB}`);
-	releaseSecondPage();
-
-	await expect(page.getByRole('button', { name: ru['usage.export.button'] })).toBeEnabled();
-	await expect(page.getByText(ru['usage.export.failed'])).toHaveCount(0);
-});
+}
 
 test('opens the user and their spend day from the usage table', async ({ page }) => {
 	await mockUsage(page);
