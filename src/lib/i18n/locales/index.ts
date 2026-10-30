@@ -398,6 +398,8 @@ export interface Dictionary {
 	'usage.column.referenceBytes': string;
 	'usage.column.totalSpend': string;
 	'usage.column.latestSpendAt': string;
+	'usage.column.firstSignInAt': string;
+	'usage.column.lastSignInAt': string;
 	'usage.user.profileLink': string;
 	'usage.byUser.title': string;
 	'usage.byUser.userLabel': string;

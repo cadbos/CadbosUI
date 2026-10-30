@@ -809,6 +809,8 @@ interface UserUsageRow {
 	reference_bytes: number | null;
 	total_spend: number;
 	latest_spend_at: number | null;
+	first_sign_in_at: number | null;
+	last_sign_in_at: number | null;
 }
 
 function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
@@ -825,7 +827,9 @@ function toUserUsageRecord(row: UserUsageRow): UserUsageRecord {
 		referenceCount: row.reference_count,
 		referenceBytes: row.reference_bytes,
 		totalSpend: row.total_spend,
-		latestSpendAt: row.latest_spend_at
+		latestSpendAt: row.latest_spend_at,
+		firstSignInAt: row.first_sign_in_at,
+		lastSignInAt: row.last_sign_in_at
 	};
 }
 
@@ -843,6 +847,15 @@ function userUsageQuery(scope: UsageScope): SQL {
 	const ledgerScope = scopeCondition({ userId: scope.userId }, sql`user_id`, sql`created_at`);
 	const ledgerUntil = scope.range ? sql`AND created_at < ${scope.range.to}` : sql``;
 	const ledgerSince = scope.range ? sql`AND created_at >= ${scope.range.from}` : sql``;
+	// Sessions are deleted on sign-out, so sign-ins are read from the login
+	// challenges, each consumed exactly once by a successful verify.
+	const signInUser =
+		scope.userId === undefined
+			? sql``
+			: sql`AND pubkey = (SELECT pubkey FROM users WHERE id = ${scope.userId})`;
+	const signInRange = scope.range
+		? sql`AND used_at >= ${scope.range.from} AND used_at < ${scope.range.to}`
+		: sql``;
 	return sql`WITH ${resourcePairs(scope)}
 		SELECT u.pubkey, COALESCE(l.balance, 0) AS balance, COALESCE(l.total_deposit, 0) AS total_deposit, l.last_deposit_at,
 		COALESCE(pr.project_count, 0) AS project_count,
@@ -850,7 +863,8 @@ function userUsageQuery(scope: UsageScope): SQL {
 		COALESCE(g.generation_count, 0) AS generation_count,
 		COALESCE(sources.source_count, 0) AS source_count, sources.source_bytes,
 		COALESCE(refs.reference_count, 0) AS reference_count, refs.reference_bytes,
-		COALESCE(l.total_spend, 0) AS total_spend, l.latest_spend_at
+		COALESCE(l.total_spend, 0) AS total_spend, l.latest_spend_at,
+		a.first_sign_in_at, a.last_sign_in_at
 		FROM users u
 		LEFT JOIN (SELECT user_id,
 			SUM(CASE WHEN entry_side = 'credit' THEN amount ELSE -amount END) / 100.0 AS balance,
@@ -875,6 +889,9 @@ function userUsageQuery(scope: UsageScope): SQL {
 		LEFT JOIN (SELECT r.user_id, COUNT(*) AS reference_count, SUM(m.size) AS reference_bytes
 		FROM reference_resources r JOIN media m ON m.id = r.media_id GROUP BY r.user_id) refs
 		ON refs.user_id = u.id
+		LEFT JOIN (SELECT pubkey, MIN(used_at) AS first_sign_in_at, MAX(used_at) AS last_sign_in_at
+		FROM auth_challenges WHERE used_at IS NOT NULL ${signInUser} ${signInRange} GROUP BY pubkey) a
+		ON a.pubkey = u.pubkey
 		WHERE ${scopeCondition({ userId: scope.userId }, sql`u.id`, sql`u.created_at`)}`;
 }
 

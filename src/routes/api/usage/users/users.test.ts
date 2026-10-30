@@ -44,6 +44,19 @@ async function seedUser(db: D1Database, id: string, pubkey: string): Promise<voi
 		.run();
 }
 
+// A sign-in consumes its login challenge; an unused one is only an attempt.
+async function seedChallenge(
+	db: D1Database,
+	pubkey: string,
+	createdAt: number,
+	usedAt: number | null
+): Promise<void> {
+	await db
+		.prepare('INSERT INTO auth_challenges (nonce, pubkey, created_at, used_at) VALUES (?, ?, ?, ?)')
+		.bind(`${pubkey}-${createdAt}`, pubkey, createdAt, usedAt)
+		.run();
+}
+
 async function seedPlatform(): Promise<D1Database> {
 	const db = makeD1();
 	await seedUser(db, 'admin', ADMIN_PUBKEY);
@@ -67,6 +80,14 @@ async function seedPlatform(): Promise<D1Database> {
 			balanceAfter,
 			createdAt
 		});
+	}
+	for (const [createdAt, usedAt] of [
+		[3000, 3010],
+		[6100, 6110],
+		[6150, null],
+		[9000, 9010]
+	] as const) {
+		await seedChallenge(db, USER_PUBKEY, createdAt, usedAt);
 	}
 	return db;
 }
@@ -149,7 +170,9 @@ describe('GET /api/usage/users/[pubkey]', () => {
 				referenceCount: 0,
 				referenceBytes: null,
 				totalSpend: 4.5,
-				latestSpendAt: 6500
+				latestSpendAt: 6500,
+				firstSignInAt: 3010,
+				lastSignInAt: 9010
 			},
 			generationKinds: [
 				{ kind: 'render', count: 2 },
@@ -158,7 +181,7 @@ describe('GET /api/usage/users/[pubkey]', () => {
 		});
 	});
 
-	it('limits every figure but the balance to the range', async () => {
+	it('limits every figure but the balance to the range, sign-ins included', async () => {
 		const response = await callUser(ADMIN, await seedPlatform(), USER_PUBKEY, '?from=5500&to=6200');
 
 		expect(response.status).toBe(200);
@@ -176,7 +199,9 @@ describe('GET /api/usage/users/[pubkey]', () => {
 				referenceCount: 0,
 				referenceBytes: null,
 				totalSpend: 2.75,
-				latestSpendAt: 6000
+				latestSpendAt: 6000,
+				firstSignInAt: 6110,
+				lastSignInAt: 6110
 			},
 			generationKinds: [{ kind: 'edit', count: 1 }]
 		});

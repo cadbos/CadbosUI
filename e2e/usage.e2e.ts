@@ -153,7 +153,9 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 						referenceCount: 0,
 						referenceBytes: null,
 						totalSpend: 0,
-						latestSpendAt: null
+						latestSpendAt: null,
+						firstSignInAt: null,
+						lastSignInAt: null
 					},
 					{
 						pubkey: pubkeyWithoutPicture,
@@ -168,7 +170,9 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 						referenceCount: 0,
 						referenceBytes: null,
 						totalSpend: 0,
-						latestSpendAt: null
+						latestSpendAt: null,
+						firstSignInAt: null,
+						lastSignInAt: null
 					}
 				],
 				pagination: { offset: 0, size: 20, hasMore: false }

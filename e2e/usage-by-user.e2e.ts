@@ -46,7 +46,9 @@ function detail(generationCount: number): UserUsageDetailResponse {
 			referenceCount: 1,
 			referenceBytes: null,
 			totalSpend: 57.5,
-			latestSpendAt: DAY_FROM + 12 * HOUR
+			latestSpendAt: DAY_FROM + 12 * HOUR,
+			firstSignInAt: DAY_FROM + 9 * HOUR,
+			lastSignInAt: DAY_FROM + 18 * HOUR
 		},
 		generationKinds: [
 			{ kind: 'render', count: generationCount - 1 },
@@ -176,10 +178,21 @@ test("shows the user's figures as tiles above full-width generation types", asyn
 	const latestSpend = tiles.locator('div').filter({ hasText: ru['usage.column.latestSpendAt'] });
 	await expect(latestSpend.locator('dd')).toHaveText('2026-01-0312:00 00s');
 	expect((await latestSpend.locator('dd').boundingBox())?.height).toBeGreaterThan(30);
-	await expect(tiles.getByRole('link', { name: '2026-01-03', exact: true })).toHaveAttribute(
+	await expect(latestSpend.getByRole('link', { name: '2026-01-03', exact: true })).toHaveAttribute(
 		'href',
 		`/usage/by-user?npub=${NPUB}&date=2026-01-03`
 	);
+	for (const [label, time] of [
+		[ru['usage.column.firstSignInAt'], '09:00 00s'],
+		[ru['usage.column.lastSignInAt'], '18:00 00s']
+	]) {
+		const signIn = tiles.locator('div').filter({ hasText: label });
+		await expect(signIn.locator('dd')).toHaveText(`2026-01-03${time}`);
+		await expect(signIn.getByRole('link', { name: '2026-01-03', exact: true })).toHaveAttribute(
+			'href',
+			`/usage/by-user?npub=${NPUB}&date=2026-01-03`
+		);
+	}
 	for (const absent of [
 		ru['usage.totals.users'],
 		ru['usage.totals.walletBalance'],
@@ -216,6 +229,8 @@ test("shows the day's figures and generations and reloads when the query changes
 	const dayTotals = page.getByRole('region', { name: ru['usage.byUser.summary'] });
 	await expect(dayTotals).toContainText(`${ru['usage.totals.generations']} 2`);
 	await expect(dayTotals).toContainText(`${ru['usage.column.latestSpendAt']} 12:00 00s`);
+	await expect(dayTotals).toContainText(`${ru['usage.column.firstSignInAt']} 09:00 00s`);
+	await expect(dayTotals).toContainText(`${ru['usage.column.lastSignInAt']} 18:00 00s`);
 	await expect(dayTotals.getByRole('link')).toHaveCount(0);
 	const range = `?from=${DAY_FROM}&to=${DAY_TO}`;
 	expect(requested(requests, `/api/usage/users/${PUBKEY}`)).toEqual([range]);
@@ -547,7 +562,10 @@ test('opens the user and their spend day from the usage table', async ({ page })
 	await expect(page).toHaveURL(`/usage/by-user?npub=${NPUB}`);
 
 	await page.goBack();
-	await page.getByRole('link', { name: '2026-01-03', exact: true }).click();
+	// The spend date comes before the sign-in dates of the same day.
+	const dayLinks = page.getByRole('link', { name: '2026-01-03', exact: true });
+	await expect(dayLinks).toHaveCount(3);
+	await dayLinks.first().click();
 	await expect(page).toHaveURL(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
 	await expect(page.getByRole('region', { name: ru['usage.generations.title'] })).toBeVisible();
 });

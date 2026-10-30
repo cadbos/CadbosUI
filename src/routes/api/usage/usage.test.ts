@@ -37,6 +37,19 @@ async function seedUser(
 		.run();
 }
 
+// A sign-in consumes its login challenge; an unused one is only an attempt.
+async function seedChallenge(
+	db: D1Database,
+	pubkey: string,
+	createdAt: number,
+	usedAt: number | null
+): Promise<void> {
+	await db
+		.prepare('INSERT INTO auth_challenges (nonce, pubkey, created_at, used_at) VALUES (?, ?, ?, ?)')
+		.bind(`${pubkey}-${createdAt}`, pubkey, createdAt, usedAt)
+		.run();
+}
+
 async function grantAccess(
 	db: D1Database,
 	userId: string,
@@ -175,6 +188,9 @@ describe('GET /api/usage', () => {
 		await grantAccess(db, 'user-1', 11.5, 4000);
 		await seedGeneration(db, 'generation-1', 'user-1', 1.25, 5000, 10.25);
 		await seedGeneration(db, 'generation-2', 'user-1', 2.75, 6000, 7.5);
+		await seedChallenge(db, 'pubkey-1', 1500, 1510);
+		await seedChallenge(db, 'pubkey-1', 7000, 7010);
+		await seedChallenge(db, 'pubkey-1', 8000, null);
 
 		const response = await call({ pubkey: ADMIN_PUBKEY }, platform(db), '?size=10');
 		const result = (await response.json()) as UserUsageResponse;
@@ -194,7 +210,9 @@ describe('GET /api/usage', () => {
 				referenceCount: 0,
 				referenceBytes: null,
 				totalSpend: 0,
-				latestSpendAt: null
+				latestSpendAt: null,
+				firstSignInAt: null,
+				lastSignInAt: null
 			},
 			{
 				pubkey: 'pubkey-1',
@@ -209,7 +227,9 @@ describe('GET /api/usage', () => {
 				referenceCount: 0,
 				referenceBytes: null,
 				totalSpend: 4,
-				latestSpendAt: 6000
+				latestSpendAt: 6000,
+				firstSignInAt: 1510,
+				lastSignInAt: 7010
 			},
 			{
 				pubkey: 'pubkey-2',
@@ -224,7 +244,9 @@ describe('GET /api/usage', () => {
 				referenceCount: 0,
 				referenceBytes: null,
 				totalSpend: 0,
-				latestSpendAt: null
+				latestSpendAt: null,
+				firstSignInAt: null,
+				lastSignInAt: null
 			}
 		]);
 	});

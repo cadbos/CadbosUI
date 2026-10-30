@@ -240,7 +240,7 @@ before the Change Date. See LICENSE for complete terms.
 	<section class="totals" aria-label={t('usage.byUser.summary')} aria-busy={record === null}>
 		{#if record === null}
 			<dl aria-hidden="true">
-				{#each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as slot (slot)}
+				{#each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as slot (slot)}
 					<div>
 						<dt><SkeletonBlock width="70%" height="0.7rem" /></dt>
 						<dd><SkeletonBlock width="4.5rem" height="1rem" /></dd>
@@ -310,6 +310,28 @@ before the Change Date. See LICENSE for complete terms.
 					<dd class="tile-time">
 						<UsageTimestamp
 							timestamp={record.latestSpendAt}
+							npub={day === null ? npub : undefined}
+							timeOnly={day !== null}
+							stacked
+						/>
+					</dd>
+				</div>
+				<div>
+					<dt>{t('usage.column.firstSignInAt')}</dt>
+					<dd class="tile-time">
+						<UsageTimestamp
+							timestamp={record.firstSignInAt}
+							npub={day === null ? npub : undefined}
+							timeOnly={day !== null}
+							stacked
+						/>
+					</dd>
+				</div>
+				<div>
+					<dt>{t('usage.column.lastSignInAt')}</dt>
+					<dd class="tile-time">
+						<UsageTimestamp
+							timestamp={record.lastSignInAt}
 							npub={day === null ? npub : undefined}
 							timeOnly={day !== null}
 							stacked

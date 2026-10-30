@@ -38,7 +38,9 @@ function user(pubkey: string): UserUsageRecord {
 		referenceCount: 0,
 		referenceBytes: null,
 		totalSpend: 3.5,
-		latestSpendAt: Date.UTC(2026, 0, 2)
+		latestSpendAt: Date.UTC(2026, 0, 2),
+		firstSignInAt: Date.UTC(2026, 0, 1),
+		lastSignInAt: Date.UTC(2026, 0, 2)
 	};
 }
 

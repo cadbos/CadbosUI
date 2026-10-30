@@ -674,6 +674,8 @@ export interface UserUsageRecord {
 	referenceBytes: number | null;
 	totalSpend: number;
 	latestSpendAt: number | null;
+	firstSignInAt: number | null;
+	lastSignInAt: number | null;
 }
 
 export interface UserUsageResponse {

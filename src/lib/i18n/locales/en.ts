@@ -357,6 +357,8 @@ export const en = {
 	'usage.column.referenceBytes': 'References size',
 	'usage.column.totalSpend': 'Total spend',
 	'usage.column.latestSpendAt': 'Latest spend',
+	'usage.column.firstSignInAt': 'First sign-in',
+	'usage.column.lastSignInAt': 'Last sign-in',
 	'usage.user.profileLink': 'Open the Nostr profile of {user}',
 	'usage.byUser.title': 'User statistics',
 	'usage.byUser.userLabel': 'User:',

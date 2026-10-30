@@ -51,7 +51,9 @@ function user(
 		referenceCount: 1,
 		referenceBytes: 512 * 1024,
 		totalSpend: 7.5,
-		latestSpendAt
+		latestSpendAt,
+		firstSignInAt: Date.UTC(2025, 11, 1, 8, 15),
+		lastSignInAt: Date.UTC(2026, 0, 10, 12, 0)
 	};
 }
 
@@ -234,6 +236,24 @@ it.each(['ru', 'en'] as const)('renders localized usage table data for %s', asyn
 	await expect
 		.element(latestSpendHeader)
 		.toHaveAttribute('title', localTimeZoneName(locale, 'long'));
+	for (const [key, at] of [
+		['firstSignInAt', Date.UTC(2025, 11, 1, 8, 15)],
+		['lastSignInAt', Date.UTC(2026, 0, 10, 12, 0)]
+	] as const) {
+		const header = screen.getByRole('columnheader', {
+			name: `${t(`usage.column.${key}`)}, ${localTimeZoneName(locale, 'short')}`
+		});
+		await expect.element(header).toHaveAttribute('title', localTimeZoneName(locale, 'long'));
+		await expect
+			.element(screen.getByRole('cell', { name: localDateTimeLabel(locale, at) }))
+			.toBeVisible();
+	}
+	const headers = screen.getByRole('columnheader').elements();
+	expect(headers.slice(-3).map((header) => header.textContent?.split(',')[0].trim())).toEqual([
+		t('usage.column.latestSpendAt'),
+		t('usage.column.firstSignInAt'),
+		t('usage.column.lastSignInAt')
+	]);
 });
 
 it.each(['ru', 'en'] as const)('uses fixed numeric punctuation for %s', async (locale) => {

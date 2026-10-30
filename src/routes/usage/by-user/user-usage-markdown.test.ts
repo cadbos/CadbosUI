@@ -33,7 +33,9 @@ const RECORD: UserUsageRecord = {
 	referenceCount: 0,
 	referenceBytes: null,
 	totalSpend: 57.5,
-	latestSpendAt: AT_NOON
+	latestSpendAt: AT_NOON,
+	firstSignInAt: null,
+	lastSignInAt: AT_NOON
 };
 
 function input(overrides: Partial<UserUsageMarkdownInput> = {}): UserUsageMarkdownInput {
@@ -77,6 +79,8 @@ describe('buildUserUsageMarkdown', () => {
 				'| Загруженные референсы | 0 \\| — |',
 				'| Последнее пополнение | — |',
 				'| Последняя трата | 2026-01-03 \\| 12:00 05s |',
+				'| Первая авторизация | — |',
+				'| Последняя авторизация | 2026-01-03 \\| 12:00 05s |',
 				'',
 				'## Типы генераций',
 				'',

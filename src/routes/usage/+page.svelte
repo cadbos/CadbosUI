@@ -78,7 +78,7 @@ before the Change Date. See LICENSE for complete terms.
 
 {#snippet usageSkeletonRow(key: string)}
 	<tr aria-hidden="true">
-		{#each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as cell (`${key}-${cell}`)}
+		{#each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] as cell (`${key}-${cell}`)}
 			<td><SkeletonBlock width={cell === 0 ? '8rem' : '3.5rem'} height="0.75rem" /></td>
 		{/each}
 	</tr>
@@ -141,6 +141,12 @@ before the Change Date. See LICENSE for complete terms.
 					<th scope="col" title={timeZoneFullName}
 						>{t('usage.column.latestSpendAt')}, {timeZoneAbbreviation}</th
 					>
+					<th scope="col" title={timeZoneFullName}
+						>{t('usage.column.firstSignInAt')}, {timeZoneAbbreviation}</th
+					>
+					<th scope="col" title={timeZoneFullName}
+						>{t('usage.column.lastSignInAt')}, {timeZoneAbbreviation}</th
+					>
 				</tr>
 			</thead>
 			<tbody>
@@ -179,6 +185,12 @@ before the Change Date. See LICENSE for complete terms.
 						>
 						<td>
 							<UsageTimestamp timestamp={user.latestSpendAt} npub={npubEncode(user.pubkey)} />
+						</td>
+						<td>
+							<UsageTimestamp timestamp={user.firstSignInAt} npub={npubEncode(user.pubkey)} />
+						</td>
+						<td>
+							<UsageTimestamp timestamp={user.lastSignInAt} npub={npubEncode(user.pubkey)} />
 						</td>
 					</tr>
 				{/each}

@@ -38,7 +38,9 @@ export const userUsageRecordSchema = z.object({
 	referenceCount: z.number().int().min(0),
 	referenceBytes: z.number().int().min(0).nullable(),
 	totalSpend: z.number(),
-	latestSpendAt: z.number().int().min(0).nullable()
+	latestSpendAt: z.number().int().min(0).nullable(),
+	firstSignInAt: z.number().int().min(0).nullable(),
+	lastSignInAt: z.number().int().min(0).nullable()
 });
 
 const userUsageResponseSchema = z.object({

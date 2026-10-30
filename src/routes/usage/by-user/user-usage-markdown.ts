@@ -105,7 +105,9 @@ export function buildUserUsageMarkdown(input: UserUsageMarkdownInput): string {
 			})
 		],
 		[t('usage.column.lastDepositAt'), timestamp(record.lastDepositAt)],
-		[t('usage.column.latestSpendAt'), timestamp(record.latestSpendAt)]
+		[t('usage.column.latestSpendAt'), timestamp(record.latestSpendAt)],
+		[t('usage.column.firstSignInAt'), timestamp(record.firstSignInAt)],
+		[t('usage.column.lastSignInAt'), timestamp(record.lastSignInAt)]
 	];
 
 	const sections = [

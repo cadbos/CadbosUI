@@ -358,6 +358,8 @@ export const ru = {
 	'usage.column.referenceBytes': 'Размер референсов',
 	'usage.column.totalSpend': 'Всего потрачено',
 	'usage.column.latestSpendAt': 'Последняя трата',
+	'usage.column.firstSignInAt': 'Первая авторизация',
+	'usage.column.lastSignInAt': 'Последняя авторизация',
 	'usage.user.profileLink': 'Открыть профиль {user} в Nostr',
 	'usage.byUser.title': 'Статистика пользователя',
 	'usage.byUser.userLabel': 'Пользователь:',
