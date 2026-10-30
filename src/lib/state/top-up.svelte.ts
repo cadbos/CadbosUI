@@ -82,10 +82,17 @@ class TopUpState {
 	amountMinor = $derived(parseAmountMinor(this.amountInput));
 	processor = $derived(this.processors.find(({ id }) => id === this.processorId) ?? null);
 	editable = $derived(this.terms === null && this.busy === null);
+	amountLimitMinor = $derived(this.processor?.maxAmountMinor ?? null);
+	amountExceedsLimit = $derived(
+		this.amountMinor !== null &&
+			this.amountLimitMinor !== null &&
+			this.amountMinor > this.amountLimitMinor
+	);
 	canSubmit = $derived(
 		this.busy === null &&
 			(this.terms !== null ||
 				(this.amountMinor !== null &&
+					!this.amountExceedsLimit &&
 					this.processor?.invoiceCurrencies.includes(INVOICE_CURRENCY) === true))
 	);
 	view = $derived.by((): TopUpView => {
@@ -210,6 +217,7 @@ class TopUpState {
 		this.invoice = null;
 		this.awaitingConfirmation = false;
 		this.error = null;
+		if (this.#session) void this.#loadProcessors(this.#session.signal);
 	}
 
 	async #restore(returnedFromProvider: boolean, signal: AbortSignal): Promise<void> {
@@ -246,7 +254,11 @@ class TopUpState {
 		);
 		this.processorsStatus = 'ready';
 		if (!this.processors.some(({ id }) => id === this.processorId)) {
-			this.processorId = this.terms?.paymentProcessor ?? this.processors[0]?.id ?? '';
+			this.processorId =
+				this.terms?.paymentProcessor ??
+				(this.processors.find(({ maxAmountMinor }) => maxAmountMinor !== 0) ?? this.processors[0])
+					?.id ??
+				'';
 		}
 	}
 
@@ -266,6 +278,7 @@ class TopUpState {
 				return 'failed';
 			}
 			this.error = this.#errorFor(result);
+			if (this.error === 'testDepositLimit') void this.#loadProcessors(signal);
 			return 'failed';
 		}
 		const parsed = invoiceResponseSchema.safeParse(result.data);

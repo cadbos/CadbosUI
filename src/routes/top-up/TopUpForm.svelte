@@ -22,6 +22,15 @@ before the Change Date. See LICENSE for complete terms.
 	import { processorLabel } from './processor-labels';
 
 	const amountInvalid = $derived(topUp.amountInput.trim() !== '' && topUp.amountMinor === null);
+	const amountError = $derived(
+		amountInvalid
+			? t('topUp.amount.invalid')
+			: topUp.amountExceedsLimit && topUp.amountLimitMinor !== null
+				? ti('topUp.amount.overLimit', {
+						amount: formatMinorAmount(topUp.amountLimitMinor, INVOICE_CURRENCY)
+					})
+				: null
+	);
 	const estimateMinor = $derived(
 		topUp.amountMinor !== null &&
 			currency.rubPerUsd !== null &&
@@ -43,10 +52,14 @@ before the Change Date. See LICENSE for complete terms.
 			<legend>{t('topUp.amount.title')}</legend>
 			<div class="presets" role="radiogroup" aria-label={t('topUp.amount.presets')}>
 				{#each AMOUNT_PRESETS_MINOR as preset (preset)}
-					<label class={['preset', { selected: topUp.amountMinor === preset }]}>
+					{@const overLimit = topUp.amountLimitMinor !== null && preset > topUp.amountLimitMinor}
+					<label
+						class={['preset', { selected: topUp.amountMinor === preset, unavailable: overLimit }]}
+					>
 						<input
 							type="radio"
 							name="amount-preset"
+							disabled={overLimit}
 							checked={topUp.amountMinor === preset}
 							onchange={() => (topUp.amountInput = formatAmountInput(preset))}
 						/>
@@ -61,13 +74,13 @@ before the Change Date. See LICENSE for complete terms.
 					type="text"
 					inputmode="decimal"
 					autocomplete="off"
-					aria-invalid={amountInvalid}
-					aria-describedby={amountInvalid ? 'top-up-amount-error' : undefined}
+					aria-invalid={amountError !== null}
+					aria-describedby={amountError ? 'top-up-amount-error' : undefined}
 					bind:value={topUp.amountInput}
 				/>
 			</label>
-			{#if amountInvalid}
-				<p id="top-up-amount-error" class="field-error">{t('topUp.amount.invalid')}</p>
+			{#if amountError}
+				<p id="top-up-amount-error" class="field-error">{amountError}</p>
 			{/if}
 		</fieldset>
 
@@ -91,10 +104,17 @@ before the Change Date. See LICENSE for complete terms.
 				<div class="methods">
 					{#each topUp.processors as processor (processor.id)}
 						{@const label = processorLabel(processor.id)}
-						<label class={['method', { selected: topUp.processorId === processor.id }]}>
+						{@const exhausted = processor.maxAmountMinor === 0}
+						<label
+							class={[
+								'method',
+								{ selected: topUp.processorId === processor.id, unavailable: exhausted }
+							]}
+						>
 							<input
 								type="radio"
 								name="payment-processor"
+								disabled={exhausted}
 								value={processor.id}
 								bind:group={topUp.processorId}
 							/>
@@ -105,6 +125,15 @@ before the Change Date. See LICENSE for complete terms.
 								<span class="method-name">{label.name}</span>
 								{#if label.description}
 									<span class="method-description">{label.description}</span>
+								{/if}
+								{#if exhausted}
+									<span class="method-limit exhausted">{t('topUp.method.limitReached')}</span>
+								{:else if processor.maxAmountMinor !== null}
+									<span class="method-limit">
+										{ti('topUp.method.limit', {
+											amount: formatMinorAmount(processor.maxAmountMinor, INVOICE_CURRENCY)
+										})}
+									</span>
 								{/if}
 							</span>
 							<span class="method-currency">
@@ -341,6 +370,27 @@ before the Change Date. See LICENSE for complete terms.
 	.method-currency {
 		color: var(--color-muted);
 		font-size: 0.8125rem;
+	}
+
+	.method-limit {
+		color: var(--color-accent-text);
+		font-size: 0.8125rem;
+		font-weight: 600;
+	}
+
+	.method-limit.exhausted {
+		color: var(--color-danger);
+	}
+
+	.preset.unavailable,
+	.method.unavailable {
+		cursor: not-allowed;
+		opacity: 0.5;
+	}
+
+	.preset.unavailable:hover,
+	.method.unavailable:hover {
+		border-color: var(--color-border);
 	}
 
 	.method-currency {

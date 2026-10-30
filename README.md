@@ -290,9 +290,13 @@ For transactions created during payment testing, see the
 
 The payment API uses the existing sign-in session cookie. Discover processors with
 `GET /api/payment-processors`; the response is
-`{ paymentProcessors: [{ id, invoiceCurrencies, paymentCurrencies }] }`.
+`{ paymentProcessors: [{ id, invoiceCurrencies, paymentCurrencies, maxAmountMinor }] }`.
 Only processors with valid server configuration are advertised. Currently
 Robokassa supports USD invoices paid in RUB. Discovery never contacts a provider.
+`maxAmountMinor` is the largest invoice amount the signed-in user can currently
+fund through that processor, or `null` when unlimited. For Robokassa in test mode
+it is the remaining `ROBOKASSA_TEST_DEPOSIT_LIMIT_CENTS` allowance; the top-up page
+disables larger amounts and blocks the processor once the allowance reaches zero.
 
 Create an invoice with `POST /api/invoices`:
 

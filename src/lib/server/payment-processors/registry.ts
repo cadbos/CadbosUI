@@ -17,9 +17,18 @@ import type { Database } from '$lib/server/db';
 import type { PaymentProcessor } from './interface';
 import { createRobokassaClient, getRobokassaCheckout } from './robokassa/client';
 import { resolveSdk } from './robokassa/sdk';
+import { getRemainingTestDeposit, getTestDepositLimit } from './robokassa/test-deposit-limit';
 
-export interface PaymentProcessorRegistration extends PaymentProcessorRecord {
+export interface PaymentProcessorRegistration extends Omit<
+	PaymentProcessorRecord,
+	'maxAmountMinor'
+> {
 	validateConfiguration: (platform: App.Platform | undefined) => void;
+	getMaxAmountMinor: (
+		db: Database,
+		platform: App.Platform | undefined,
+		userId: string
+	) => Promise<number | null>;
 	createClient: (platform: App.Platform | undefined) => PaymentProcessor<unknown>;
 	getCheckout: (db: Database, invoiceId: string) => Promise<InvoiceCheckout | null>;
 }
@@ -32,31 +41,39 @@ export const paymentProcessors: readonly PaymentProcessorRegistration[] = [
 		validateConfiguration: (platform) => {
 			resolveSdk(platform);
 		},
+		getMaxAmountMinor: async (db, platform, userId) =>
+			resolveSdk(platform).settings.is_test === 1
+				? getRemainingTestDeposit(db, userId, getTestDepositLimit(platform))
+				: null,
 		createClient: createRobokassaClient,
 		getCheckout: getRobokassaCheckout
 	}
 ];
 
-export function listPaymentProcessors(
+export async function listPaymentProcessors(
+	db: Database,
 	platform: App.Platform | undefined,
+	userId: string,
 	registry: readonly PaymentProcessorRegistration[] = paymentProcessors
-): PaymentProcessorRecord[] {
-	return registry
-		.filter((processor) => {
-			try {
-				processor.validateConfiguration(platform);
-				return true;
-			} catch (error) {
-				console.warn('Payment processor configuration unavailable', {
-					processor: processor.id,
-					errorType: error instanceof Error ? error.name : typeof error
-				});
-				return false;
-			}
-		})
-		.map(({ id, invoiceCurrencies, paymentCurrencies }) => ({
-			id,
-			invoiceCurrencies,
-			paymentCurrencies
-		}));
+): Promise<PaymentProcessorRecord[]> {
+	const configured = registry.filter((processor) => {
+		try {
+			processor.validateConfiguration(platform);
+			return true;
+		} catch (error) {
+			console.warn('Payment processor configuration unavailable', {
+				processor: processor.id,
+				errorType: error instanceof Error ? error.name : typeof error
+			});
+			return false;
+		}
+	});
+	return Promise.all(
+		configured.map(async (processor) => ({
+			id: processor.id,
+			invoiceCurrencies: processor.invoiceCurrencies,
+			paymentCurrencies: processor.paymentCurrencies,
+			maxAmountMinor: await processor.getMaxAmountMinor(db, platform, userId)
+		}))
+	);
 }

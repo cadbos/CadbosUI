@@ -33,6 +33,7 @@ interface PaymentBackend {
 	balance: number;
 	createFailure: { status: number; code: string } | 'network' | null;
 	checkoutFailure: { status: number; code: string } | null;
+	maxAmountMinor: number | null;
 	settleOnRead: boolean;
 }
 
@@ -55,6 +56,7 @@ async function mockPayments(page: Page, approved = true): Promise<PaymentBackend
 		balance: 4.5,
 		createFailure: null,
 		checkoutFailure: null,
+		maxAmountMinor: null,
 		settleOnRead: false
 	};
 	await page.route('**/auth/me', async (route) => {
@@ -73,7 +75,12 @@ async function mockPayments(page: Page, approved = true): Promise<PaymentBackend
 	await page.route('**/api/payment-processors', (route) =>
 		json(route, 200, {
 			paymentProcessors: [
-				{ id: 'robokassa', invoiceCurrencies: ['USD'], paymentCurrencies: ['RUB'] }
+				{
+					id: 'robokassa',
+					invoiceCurrencies: ['USD'],
+					paymentCurrencies: ['RUB'],
+					maxAmountMinor: backend.maxAmountMinor
+				}
 			]
 		})
 	);
@@ -308,6 +315,40 @@ test('explains the test deposit limit at checkout', async ({ page }) => {
 	await page.getByRole('button', { name: ru['topUp.invoice.cancel'] }).click();
 	await expect(page.locator('.amount-input')).toBeEnabled();
 	expect(backend.cancels).toBe(1);
+});
+
+test('limits amounts to the remaining test deposit allowance', async ({ page }) => {
+	const backend = await mockPayments(page);
+	backend.maxAmountMinor = 2500;
+	await page.goto('/top-up');
+
+	const method = page.locator('.method', { hasText: 'Robokassa' });
+	await expect(method.locator('.method-limit')).toHaveText('Доступно до $ 25.00');
+	await expect(page.getByRole('radio', { name: '$ 50.00', exact: true })).toBeDisabled();
+	await expect(page.getByRole('radio', { name: '$ 100.00', exact: true })).toBeDisabled();
+	await expect(page.getByRole('radio', { name: '$ 25.00', exact: true })).toBeEnabled();
+
+	await page.locator('.amount-input').fill('30');
+	await expect(page.locator('#top-up-amount-error')).toHaveText(
+		'Этим способом сейчас можно пополнить не более чем на $ 25.00.'
+	);
+	await expect(page.getByRole('button', { name: ru['topUp.submit'] })).toBeDisabled();
+
+	await page.locator('.preset', { hasText: '$ 25.00' }).click();
+	await expect(page.locator('#top-up-amount-error')).toHaveCount(0);
+	await page.getByRole('button', { name: ru['topUp.submit'] }).click();
+	await expect(page.locator('.invoice-card')).toBeVisible();
+	expect(backend.creates[0].amountMinor).toBe(2500);
+});
+
+test('blocks a processor whose deposit allowance is used up', async ({ page }) => {
+	const backend = await mockPayments(page);
+	backend.maxAmountMinor = 0;
+	await page.goto('/top-up');
+
+	await expect(page.locator('.method-limit')).toHaveText(ru['topUp.method.limitReached']);
+	await expect(page.getByRole('radio', { name: /Robokassa/ })).toBeDisabled();
+	await expect(page.getByRole('button', { name: ru['topUp.submit'] })).toBeDisabled();
 });
 
 test('hides top-up for accounts awaiting approval', async ({ page }) => {

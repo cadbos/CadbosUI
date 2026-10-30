@@ -19,8 +19,8 @@ import { invoiceApi } from '$lib/server/invoice-api';
 import { listPaymentProcessors } from '$lib/server/payment-processors/registry';
 
 export const GET: RequestHandler = (event) =>
-	invoiceApi(event, 'read', async () =>
+	invoiceApi(event, 'read', async (db, userId) =>
 		json({
-			paymentProcessors: listPaymentProcessors(event.platform)
+			paymentProcessors: await listPaymentProcessors(db, event.platform, userId)
 		} satisfies PaymentProcessorsResponse)
 	);

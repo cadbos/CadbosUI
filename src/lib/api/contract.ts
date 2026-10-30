@@ -825,6 +825,7 @@ export interface PaymentProcessorRecord {
 	id: string;
 	invoiceCurrencies: string[];
 	paymentCurrencies: string[];
+	maxAmountMinor: number | null;
 }
 
 export interface PaymentProcessorsResponse {
@@ -860,7 +861,8 @@ export const paymentProcessorsResponseSchema = z.object({
 		z.object({
 			id: z.string().min(1),
 			invoiceCurrencies: z.array(z.string()),
-			paymentCurrencies: z.array(z.string())
+			paymentCurrencies: z.array(z.string()),
+			maxAmountMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable()
 		})
 	)
 }) satisfies z.ZodType<PaymentProcessorsResponse>;

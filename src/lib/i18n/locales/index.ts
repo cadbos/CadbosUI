@@ -524,12 +524,15 @@ export interface Dictionary {
 	'topUp.amount.presets': string;
 	'topUp.amount.custom': string;
 	'topUp.amount.invalid': string;
+	'topUp.amount.overLimit': string;
 	'topUp.method.title': string;
 	'topUp.method.loading': string;
 	'topUp.method.failed': string;
 	'topUp.method.retry': string;
 	'topUp.method.empty': string;
 	'topUp.method.paysIn': string;
+	'topUp.method.limit': string;
+	'topUp.method.limitReached': string;
 	'topUp.processor.robokassa.name': string;
 	'topUp.processor.robokassa.description': string;
 	'topUp.summary.title': string;
