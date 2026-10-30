@@ -15,58 +15,14 @@
 import { dev } from '$app/environment';
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type {
-	GeneratedImageDetailResponse,
-	ImageInput,
-	ManagedImageInput,
-	MediaAccess,
-	RequestFormSnapshot
-} from '$lib/api/contract';
+import type { GeneratedImageDetailResponse } from '$lib/api/contract';
 import { apiError } from '$lib/server/api';
 import { authenticationRequiredResponse } from '$lib/server/auth/session';
 import { getUserIdByPubkey } from '$lib/server/billing';
 import { getDb } from '$lib/server/db';
 import { DEMO_PUBKEY } from '$lib/server/demo';
 import { getGenerationDetailForUser } from '$lib/server/generations';
-import { mediaAccessById, mediaAccessByKeyBatch } from '$lib/server/media-access';
-
-// Only the ManagedImageInput variant (a stylePresetId reference has no media
-// of its own to resolve — it's a built-in preset, not an upload).
-function referencedMediaKeys(snapshot: RequestFormSnapshot): string[] {
-	const images: (ImageInput | undefined)[] = [
-		snapshot.styleReferenceImage,
-		snapshot.objectReferenceImage,
-		snapshot.textureReferenceImage,
-		snapshot.textureMaskImage
-	];
-	return images
-		.filter((image): image is ManagedImageInput => image !== undefined && 'mediaKey' in image)
-		.map((image) => image.mediaKey);
-}
-
-// A reference/mask image the snapshot points to may since have been deleted —
-// drop just that field rather than the whole snapshot, so the rest of the
-// restored settings (prompt, sceneType, etc.) still come back.
-function withAvailableReferenceImages(
-	snapshot: RequestFormSnapshot,
-	referencedAccess: Map<string, MediaAccess>
-): RequestFormSnapshot {
-	const isAvailable = (image: ImageInput | undefined): boolean =>
-		image === undefined || !('mediaKey' in image) || referencedAccess.has(image.mediaKey);
-	return {
-		...snapshot,
-		styleReferenceImage: isAvailable(snapshot.styleReferenceImage)
-			? snapshot.styleReferenceImage
-			: undefined,
-		objectReferenceImage: isAvailable(snapshot.objectReferenceImage)
-			? snapshot.objectReferenceImage
-			: undefined,
-		textureReferenceImage: isAvailable(snapshot.textureReferenceImage)
-			? snapshot.textureReferenceImage
-			: undefined,
-		textureMaskImage: isAvailable(snapshot.textureMaskImage) ? snapshot.textureMaskImage : undefined
-	};
-}
+import { resolveGenerationMedia, withAvailableReferenceImages } from '$lib/server/generation-media';
 
 export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	if (!locals.user) {
@@ -83,16 +39,9 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 	const detail = await getGenerationDetailForUser(db, userId, params.id);
 	if (!detail) return apiError(404, 'generation_not_found', 'Generation not found');
 
-	const [image, source] = await Promise.all([
-		mediaAccessById(db, detail.resultMediaId),
-		mediaAccessById(db, detail.sourceMediaId)
-	]);
+	const { image, source, referencedAccess, media } = await resolveGenerationMedia(db, detail);
 	if (!image || !source) return apiError(404, 'image_not_found', 'Image not found');
 
-	const referencedKeys = detail.formSnapshot ? referencedMediaKeys(detail.formSnapshot) : [];
-	const referencedAccess = referencedKeys.length
-		? await mediaAccessByKeyBatch(db, referencedKeys)
-		: new Map<string, MediaAccess>();
 	const formSnapshot = detail.formSnapshot
 		? withAvailableReferenceImages(detail.formSnapshot, referencedAccess)
 		: null;
@@ -109,7 +58,7 @@ export const GET: RequestHandler = async ({ params, platform, locals }) => {
 			source,
 			formSnapshot,
 			session: detail.session,
-			media: [image, source, ...referencedAccess.values()]
+			media
 		} satisfies GeneratedImageDetailResponse,
 		{ headers: { 'cache-control': 'private, no-store' } }
 	);

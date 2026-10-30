@@ -183,6 +183,14 @@ pnpm exec wrangler d1 execute DB --remote --command \
 
 `migrations/0023_admins.sql` documents the revoke and list queries.
 
+Administrators can inspect an individual generation at `/usage/generations/<generation-id>`,
+also linked from generation IDs in the per-user usage table. The read-only inspector shows
+the saved result, source and reference images, submitted settings, prompts, and current
+project/session names, including archived projects and sessions. Older records or missing
+assets are labeled unavailable. Inspection leaves the administrator's editable workspace
+untouched. Generation details are served by the admin-protected
+`GET /api/usage/generations/<generation-id>` endpoint.
+
 Before serving application traffic, provision the uploads bucket in `buckets` under the name
 `cadbos-uploads`. Set `url` to the full bucket-scoped S3 API endpoint and `region` to its
 signing region. Existing object keys remain in `media`; the UI reads images through the

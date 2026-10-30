@@ -248,6 +248,12 @@ test("shows the day's figures and generations and reloads when the query changes
 	expect((await box(generations)).width - (await box(table)).width).toBeLessThanOrEqual(2);
 	const longRow = table.getByRole('row', { name: /generation-2/ });
 	const shortRow = table.getByRole('row', { name: /generation-1/ });
+	await expect(
+		longRow.getByRole('link', {
+			name: ru['adminGeneration.open'].replace('{id}', 'generation-2'),
+			exact: true
+		})
+	).toHaveAttribute('href', '/usage/generations/generation-2');
 	await expect(longRow).toContainText('13:00 00s');
 	await expect(longRow).not.toContainText('2026-01-03');
 	// The last row drops its bottom border, half a pixel under border-collapse.

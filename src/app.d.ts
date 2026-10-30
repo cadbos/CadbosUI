@@ -34,7 +34,9 @@ declare global {
 			user: SessionUser | null;
 		}
 		// interface PageData {}
-		// interface PageState {}
+		interface PageState {
+			workspaceReturnUrl?: string;
+		}
 		// `ctx`/`caches`/`cf` come from adapter-cloudflare's ambient types; `env` is
 		// typed here (the adapter intentionally leaves it to the app).
 		interface Platform {
