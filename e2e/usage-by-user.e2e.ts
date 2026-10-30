@@ -146,14 +146,17 @@ test("shows the user's figures as tiles above full-width generation types", asyn
 
 	await page.goto(`/usage/by-user?npub=${NPUB}`);
 
-	const shortNpub = `${NPUB.slice(0, 12)}…${NPUB.slice(-6)}`;
 	await expect(
-		page.getByRole('heading', {
-			level: 1,
-			name: ru['usage.byUser.heading'].replace('{user}', shortNpub),
-			exact: true
-		})
+		page.getByRole('heading', { level: 1, name: ru['usage.byUser.title'], exact: true })
 	).toBeVisible();
+	const facts = page.locator('.usage-header .facts');
+	const userFact = facts.locator('div').filter({ hasText: ru['usage.byUser.userLabel'] });
+	await expect(userFact).toContainText(`npub1…${NPUB.slice(-5)}`);
+	await expect(userFact.getByText(`npub1…${NPUB.slice(-5)}`)).toHaveAttribute('title', NPUB);
+	await expect(userFact.locator('.initial')).toHaveText('C');
+	const periodFact = facts.locator('div').filter({ hasText: ru['usage.byUser.periodLabel'] });
+	await expect(periodFact.getByRole('button', { name: ru['usage.byUser.pickDay'] })).toBeVisible();
+	await expect(periodFact.locator('strong')).toHaveText(ru['usage.byUser.allTime']);
 	const keyActions = page.locator('.key-actions');
 	await expect(
 		keyActions.getByRole('link', { name: ru['auth.profile.viewOnPrimal'] })
@@ -181,7 +184,7 @@ test("shows the user's figures as tiles above full-width generation types", asyn
 		ru['usage.totals.title'],
 		ru['usage.column.user']
 	]) {
-		await expect(page.getByText(absent)).toHaveCount(0);
+		await expect(page.getByText(absent, { exact: true })).toHaveCount(0);
 	}
 	await expect(page.getByRole('table')).toHaveCount(1);
 
@@ -194,7 +197,6 @@ test("shows the user's figures as tiles above full-width generation types", asyn
 	await expect(page.getByRole('region', { name: ru['usage.generations.title'] })).toHaveCount(0);
 	expect(requested(requests, `/api/usage/users/${PUBKEY}`)).toEqual(['']);
 	expect(requests.map((url) => url.pathname)).not.toContain('/api/usage/totals');
-	expect(requests.map((url) => url.pathname)).not.toContain('/api/usage/profiles');
 });
 
 test("shows the day's figures and generations and reloads when the query changes", async ({
@@ -206,11 +208,13 @@ test("shows the day's figures and generations and reloads when the query changes
 
 	await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
 
-	const period = page.locator('.usage-header strong');
-	await expect(period).toHaveText(ru['usage.byUser.dayPeriod'].replace('{date}', '2026-01-03'));
-	await expect(period).toHaveCSS('font-weight', '700');
+	await expect(
+		page.locator('.usage-header .facts').getByRole('button', { name: '2026-01-03' })
+	).toBeVisible();
 	const dayTotals = page.getByRole('region', { name: ru['usage.byUser.summary'] });
 	await expect(dayTotals).toContainText(`${ru['usage.totals.generations']} 2`);
+	await expect(dayTotals).toContainText(`${ru['usage.column.latestSpendAt']} 12:00 00s`);
+	await expect(dayTotals.getByRole('link')).toHaveCount(0);
 	const range = `?from=${DAY_FROM}&to=${DAY_TO}`;
 	expect(requested(requests, `/api/usage/users/${PUBKEY}`)).toEqual([range]);
 
@@ -227,7 +231,8 @@ test("shows the day's figures and generations and reloads when the query changes
 	expect((await box(generations)).width - (await box(table)).width).toBeLessThanOrEqual(2);
 	const longRow = table.getByRole('row', { name: /generation-2/ });
 	const shortRow = table.getByRole('row', { name: /generation-1/ });
-	await expect(longRow).toContainText('2026-01-03 | 13:00 00s');
+	await expect(longRow).toContainText('13:00 00s');
+	await expect(longRow).not.toContainText('2026-01-03');
 	// The last row drops its bottom border, half a pixel under border-collapse.
 	expect(Math.abs((await box(longRow)).height - (await box(shortRow)).height)).toBeLessThanOrEqual(
 		0.5
@@ -308,9 +313,11 @@ test("narrows the day's generations to a kind picked in generation types", async
 	await expect(
 		generations.getByRole('columnheader', { name: ru['usage.generations.column.kind'] })
 	).toHaveCount(0);
-	await expect(
-		kinds.getByRole('link', { name: ru['generatedImages.kind.render'], exact: true })
-	).toHaveAttribute('aria-current', 'true');
+	await expect(kinds).toHaveCount(0);
+	const kindPicker = page
+		.locator('.usage-header .facts')
+		.getByRole('button', { name: ru['generatedImages.kind.render'] });
+	await expect(kindPicker).toBeVisible();
 	expect(requested(requests, `/api/usage/users/${PUBKEY}`)).toHaveLength(1);
 	expect(
 		requested(requests, `/api/usage/users/${PUBKEY}/generations`).map((search) =>
@@ -318,7 +325,12 @@ test("narrows the day's generations to a kind picked in generation types", async
 		)
 	).toEqual([null, 'render']);
 
-	await kinds.getByRole('link', { name: ru['usage.kinds.all'] }).click();
+	await kindPicker.click();
+	const kindMenu = page.getByRole('navigation', { name: ru['usage.kinds.title'] });
+	await expect(
+		kindMenu.getByRole('link', { name: new RegExp(ru['generatedImages.kind.render']) })
+	).toHaveAttribute('aria-current', 'true');
+	await kindMenu.getByRole('link', { name: ru['usage.kinds.all'] }).click();
 
 	await expect(page).toHaveURL(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
 	const allGenerations = page.getByRole('region', { name: ru['usage.generations.title'] });
@@ -330,6 +342,38 @@ test("narrows the day's generations to a kind picked in generation types", async
 
 	await page.goto(`/usage/by-user?npub=${NPUB}&date=2026-01-03&kind=legacy`);
 	await expect(page.getByRole('alert')).toHaveText(ru['usage.byUser.invalidKind']);
+});
+
+test('picks a day from the calendar with the mouse or the keyboard', async ({ page }) => {
+	await page.clock.setFixedTime(new Date('2026-01-20T12:00:00+03:00'));
+	await mockUsage(page);
+
+	await page.goto(`/usage/by-user?npub=${NPUB}`);
+	await page.getByRole('button', { name: ru['usage.byUser.pickDay'] }).click();
+	const calendar = page.getByRole('dialog', { name: ru['usage.calendar.label'] });
+	await expect(calendar).toBeVisible();
+	await expect(calendar).toContainText('январь 2026');
+	await expect(calendar.getByRole('button', { name: '2026-01-21' })).toBeDisabled();
+	await expect(
+		calendar.getByRole('button', { name: ru['usage.calendar.nextMonth'] })
+	).toBeDisabled();
+	await calendar.getByRole('button', { name: '2026-01-03' }).click();
+
+	await expect(page).toHaveURL(`/usage/by-user?npub=${NPUB}&date=2026-01-03`);
+	await expect(calendar).toBeHidden();
+	await page.getByRole('button', { name: '2026-01-03' }).click();
+	await expect(calendar.getByRole('button', { name: '2026-01-03' })).toHaveAttribute(
+		'aria-current',
+		'date'
+	);
+	await calendar.getByRole('button', { name: ru['usage.calendar.previousMonth'] }).click();
+	await expect(calendar).toContainText('декабрь 2025');
+	await calendar.getByRole('button', { name: '2025-12-03' }).focus();
+	await page.keyboard.press('ArrowLeft');
+	await expect(calendar.getByRole('button', { name: '2025-12-02' })).toBeFocused();
+	await page.keyboard.press('Enter');
+
+	await expect(page).toHaveURL(`/usage/by-user?npub=${NPUB}&date=2025-12-02`);
 });
 
 test('loads the next page of generations when scrolled to the end of the table', async ({
@@ -393,7 +437,8 @@ test('exports the user to Markdown, with every generation of the day only in day
 	const [allTime] = await Promise.all([page.waitForEvent('download'), exportButton.click()]);
 	expect(allTime.suggestedFilename()).toBe(`cadbos-usage-${NPUB}.md`);
 	const allTimeMarkdown = await readDownload(allTime);
-	expect(allTimeMarkdown).toContain(`# ${ru['usage.byUser.heading'].replace('{user}', NPUB)}`);
+	expect(allTimeMarkdown).toContain(`# ${ru['usage.byUser.title']}`);
+	expect(allTimeMarkdown).toContain(`${ru['usage.byUser.userLabel']} ${NPUB}`);
 	expect(allTimeMarkdown).toContain(`| ${ru['usage.column.balance']} | $ 42.50 |`);
 	expect(allTimeMarkdown).toContain(`| ${ru['generatedImages.kind.render']} | 4 |`);
 	expect(allTimeMarkdown).not.toContain(ru['usage.generations.title']);
@@ -404,8 +449,8 @@ test('exports the user to Markdown, with every generation of the day only in day
 	expect(dayExport.suggestedFilename()).toBe(`cadbos-usage-${NPUB}-2026-01-03.md`);
 	const dayMarkdown = await readDownload(dayExport);
 	expect(dayMarkdown).toContain(`## ${ru['usage.generations.title']}`);
-	expect(dayMarkdown).toContain(`| generation-2 | 2026-01-03 \\| 13:00 00s |`);
-	expect(dayMarkdown).toContain(`| generation-1 | 2026-01-03 \\| 12:00 00s |`);
+	expect(dayMarkdown).toContain(`| generation-2 | 13:00 00s |`);
+	expect(dayMarkdown).toContain(`| generation-1 | 12:00 00s |`);
 	expect(dayMarkdown).toContain(LONG_PROMPT);
 	expect(dayMarkdown).toContain(
 		`![${ru['usage.generations.resultAlt'].replace('{id}', 'generation-2')}](<${new URL('/api/media/uploads/result-2.webp', page.url()).href}>)`

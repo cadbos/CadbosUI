@@ -148,7 +148,7 @@ describe('userUsage.loadAllGenerations', () => {
 		const requests = fetcher.mock.calls.map(
 			([input]) => new URL(String(input), 'https://cadbos.example')
 		);
-		expect(requests.filter((url) => !url.pathname.endsWith('/generations'))).toHaveLength(1);
+		expect(requests.filter((url) => url.pathname === `/api/usage/users/${PUBKEY}`)).toHaveLength(1);
 		expect(
 			requests
 				.filter((url) => url.pathname.endsWith('/generations'))

@@ -159,7 +159,9 @@ before the Change Date. See LICENSE for complete terms.
 						<td class="numeric-column"
 							><UsageNumber kind="currency" value={user.totalDeposit} showUnit={false} /></td
 						>
-						<td><UsageTimestamp timestamp={user.lastDepositAt} /></td>
+						<td>
+							<UsageTimestamp timestamp={user.lastDepositAt} npub={npubEncode(user.pubkey)} />
+						</td>
 						<td class="numeric-column"><UsageNumber kind="count" value={user.projectCount} /></td>
 						<td class="numeric-column"><UsageNumber kind="count" value={user.sessionCount} /></td>
 						<td class="numeric-column"><UsageNumber kind="count" value={user.generationCount} /></td

@@ -21,9 +21,11 @@ before the Change Date. See LICENSE for complete terms.
 		timestamp: number | null;
 		// Links the date to this user's usage on that day.
 		npub?: string;
+		// On a page already about one day, the date would repeat it.
+		timeOnly?: boolean;
 	}
 
-	let { timestamp, npub }: Props = $props();
+	let { timestamp, npub, timeOnly = false }: Props = $props();
 
 	const formatted = $derived(
 		timestamp === null
@@ -37,6 +39,8 @@ before the Change Date. See LICENSE for complete terms.
 
 {#if formatted === null}
 	{t('usage.emptyValue')}
+{:else if timeOnly}
+	<span class="part">{formatted.time}</span>
 {:else}
 	<span class="part"
 		>{#if npub !== undefined}<a href={userUsageHref(npub, formatted.date)}>{formatted.date}</a

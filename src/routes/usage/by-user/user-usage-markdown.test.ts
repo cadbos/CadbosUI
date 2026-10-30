@@ -58,9 +58,10 @@ describe('buildUserUsageMarkdown', () => {
 
 		expect(markdown).toBe(
 			[
-				'# Использование пользователя npub1example',
+				'# Статистика пользователя',
 				'',
-				'Статистика одного пользователя за всё время.',
+				'Пользователь: npub1example  ',
+				'За период: **за всё время**',
 				'',
 				'## Сводка',
 				'',
@@ -106,12 +107,12 @@ describe('buildUserUsageMarkdown', () => {
 			})
 		);
 
-		expect(markdown).toContain('Статистика пользователя **за 2026-01-03**');
+		expect(markdown).toContain('За период: **2026-01-03**');
 		expect(markdown).toContain(
 			'| ID | Время | Тип генерации | Промпт | Исходное | Результат | Референс |'
 		);
 		expect(markdown).toContain(
-			'| generation-1 | 2026-01-03 \\| 12:00 05s | Миграция стиля | a \\| b<br>with &lt;b>bold&lt;/b> | ' +
+			'| generation-1 | 12:00 05s | Миграция стиля | a \\| b<br>with &lt;b>bold&lt;/b> | ' +
 				'![Исходное изображение генерации generation-1](<https://cadbos.example/api/media/uploads/source.webp>) | ' +
 				'![Результат генерации generation-1](<https://cadbos.example/api/media/uploads/result.webp>) | — |'
 		);
@@ -170,8 +171,10 @@ describe('buildUserUsageMarkdown', () => {
 			})
 		);
 
+		expect(markdown).toContain('Тип генерации: Создание');
+		expect(markdown).not.toContain('## Типы генераций');
 		expect(markdown).toContain('## Генерации за день: Создание');
 		expect(markdown).toContain('| ID | Время | Промпт | Исходное | Результат | Референс |');
-		expect(markdown).toContain('| generation-1 | 2026-01-03 \\| 12:00 05s | cozy |');
+		expect(markdown).toContain('| generation-1 | 12:00 05s | cozy |');
 	});
 });

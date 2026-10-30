@@ -289,7 +289,7 @@ test('links usage pubkeys to Primal in a new tab by default', async ({ page }) =
 		`${ru['usage.totals.references']} ${ru['usage.totals.countWithSize'].replace('{count}', '0').replace('{size}', ru['usage.emptyValue'])}`
 	);
 	await expect(user.locator('img')).toHaveAttribute('src', 'https://avatar.example/alice.svg');
-	await expect(userWithoutPicture.locator('.avatar')).toHaveText('B');
+	await expect(userWithoutPicture.locator('.initial')).toHaveText('B');
 	await expect(link).toHaveAttribute('href', `https://primal.net/profile/${npub}`);
 	await expect(link).toHaveAttribute('target', '_blank');
 	await expect(link).toHaveAttribute('rel', 'external noopener noreferrer');

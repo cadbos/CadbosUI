@@ -19,7 +19,12 @@ import type {
 	UserUsageRecord
 } from '$lib/api/contract';
 import { t, ti } from '$lib/i18n/index.svelte';
-import { formatGenerationKind, formatUsageTimestamp, formatUsageValue } from '../usage-format';
+import {
+	formatGenerationKind,
+	formatUsageTimeOfDay,
+	formatUsageTimestamp,
+	formatUsageValue
+} from '../usage-format';
 import { localDateKey } from '../usage-day';
 
 export interface UserUsageMarkdownInput {
@@ -61,12 +66,15 @@ function image(origin: string, url: string, alt: string): string {
 	return `![${alt.replace(/[[\]]/g, '\\$&')}](<${new URL(url, origin).href}>)`;
 }
 
-function timestamp(value: number | null): string {
-	return value === null ? t('usage.emptyValue') : formatUsageTimestamp(value);
-}
-
 export function buildUserUsageMarkdown(input: UserUsageMarkdownInput): string {
 	const { record, dayStart } = input;
+	// A day's export is about that day alone, so its times leave the date out.
+	const timestamp = (value: number | null): string =>
+		value === null
+			? t('usage.emptyValue')
+			: dayStart === null
+				? formatUsageTimestamp(value)
+				: formatUsageTimeOfDay(value);
 	const summary: [string, string][] = [
 		[t('usage.column.balance'), formatUsageValue({ kind: 'currency', value: record.balance })],
 		[
@@ -101,30 +109,38 @@ export function buildUserUsageMarkdown(input: UserUsageMarkdownInput): string {
 	];
 
 	const sections = [
-		`# ${ti('usage.byUser.heading', { user: input.npub })}`,
-		dayStart === null
-			? t('usage.byUser.subtitle')
-			: ti('usage.byUser.daySubtitle', {
-					period: `**${ti('usage.byUser.dayPeriod', { date: localDateKey(dayStart) })}**`
-				}),
+		`# ${t('usage.byUser.title')}`,
+		[
+			`${t('usage.byUser.userLabel')} ${input.npub}`,
+			`${t('usage.byUser.periodLabel')} **${dayStart === null ? t('usage.byUser.allTime') : localDateKey(dayStart)}**`,
+			...(input.generationKind === null
+				? []
+				: [`${t('usage.byUser.kindLabel')} ${formatGenerationKind(input.generationKind)}`])
+		].join('  \n'),
 		`## ${t('usage.byUser.summary')}`,
 		table(
 			[t('usage.export.metric'), t('usage.export.value')],
 			['left', 'right'],
 			summary.map(([label, value]) => [cell(label), cell(value)])
-		),
-		`## ${t('usage.kinds.title')}`,
-		input.generationKinds.length === 0
-			? t('usage.kinds.empty')
-			: table(
-					[t('usage.kinds.column.kind'), t('usage.kinds.column.count')],
-					['left', 'right'],
-					input.generationKinds.map((entry) => [
-						cell(formatGenerationKind(entry.kind)),
-						cell(formatUsageValue({ kind: 'count', value: entry.count }))
-					])
-				)
+		)
 	];
+
+	// With one kind chosen, the kind is already named above.
+	if (input.generationKind === null) {
+		sections.push(
+			`## ${t('usage.kinds.title')}`,
+			input.generationKinds.length === 0
+				? t('usage.kinds.empty')
+				: table(
+						[t('usage.kinds.column.kind'), t('usage.kinds.column.count')],
+						['left', 'right'],
+						input.generationKinds.map((entry) => [
+							cell(formatGenerationKind(entry.kind)),
+							cell(formatUsageValue({ kind: 'count', value: entry.count }))
+						])
+					)
+		);
+	}
 
 	if (input.generations !== null) {
 		const { generations, generationKind } = input;
@@ -133,7 +149,7 @@ export function buildUserUsageMarkdown(input: UserUsageMarkdownInput): string {
 			{ header: t('usage.generations.column.id'), value: (generation) => cell(generation.id) },
 			{
 				header: t('usage.generations.column.time'),
-				value: (generation) => cell(formatUsageTimestamp(generation.createdAt))
+				value: (generation) => cell(formatUsageTimeOfDay(generation.createdAt))
 			},
 			...(generationKind === null
 				? [

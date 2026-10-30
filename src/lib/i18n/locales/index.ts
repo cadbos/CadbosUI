@@ -400,10 +400,13 @@ export interface Dictionary {
 	'usage.column.latestSpendAt': string;
 	'usage.user.profileLink': string;
 	'usage.byUser.title': string;
-	'usage.byUser.heading': string;
-	'usage.byUser.subtitle': string;
-	'usage.byUser.daySubtitle': string;
-	'usage.byUser.dayPeriod': string;
+	'usage.byUser.userLabel': string;
+	'usage.byUser.periodLabel': string;
+	'usage.byUser.pickDay': string;
+	'usage.byUser.kindLabel': string;
+	'usage.calendar.label': string;
+	'usage.calendar.previousMonth': string;
+	'usage.calendar.nextMonth': string;
 	'usage.byUser.back': string;
 	'usage.byUser.allTime': string;
 	'usage.byUser.summary': string;

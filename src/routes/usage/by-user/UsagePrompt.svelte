@@ -16,6 +16,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { Check, Copy, MessageSquareText } from '@lucide/svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
 	import { logBoundaryError } from '$lib/utils';
+	import { placeBelow } from '../popover-placement';
 
 	interface Props {
 		id: string;
@@ -25,8 +26,6 @@ before the Change Date. See LICENSE for complete terms.
 	let { id, prompt }: Props = $props();
 
 	const POPOVER_MAX_WIDTH_REM = 28;
-	const VIEWPORT_GUTTER = 16;
-	const GAP = 8;
 
 	let truncated = $state(false);
 	let copied = $state(false);
@@ -62,19 +61,9 @@ before the Change Date. See LICENSE for complete terms.
 	// The popover lives in the top layer, outside the scrolling table, so it is
 	// placed against the trigger in document coordinates just before it opens.
 	function place(event: ToggleEvent): void {
-		if (event.newState !== 'open' || !trigger) return;
-		const rect = trigger.getBoundingClientRect();
-		const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-		const width = Math.min(
-			POPOVER_MAX_WIDTH_REM * rem,
-			document.documentElement.clientWidth - 2 * VIEWPORT_GUTTER
-		);
-		const left = Math.max(VIEWPORT_GUTTER, rect.right - width);
-		placement = {
-			top: rect.bottom + window.scrollY + GAP,
-			left: left + window.scrollX,
-			arrowLeft: rect.left + rect.width / 2 - left
-		};
+		if (event.newState === 'open' && trigger) {
+			placement = placeBelow(trigger, POPOVER_MAX_WIDTH_REM, 'end');
+		}
 	}
 
 	async function copyPrompt(): Promise<void> {

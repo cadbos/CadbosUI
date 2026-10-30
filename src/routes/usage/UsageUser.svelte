@@ -15,8 +15,8 @@ before the Change Date. See LICENSE for complete terms.
 <script lang="ts">
 	import { npubEncode } from 'nostr-tools/nip19';
 	import type { UsageProfile } from '$lib/api/contract';
-	import LazyImage from '$lib/components/LazyImage.svelte';
 	import { ti } from '$lib/i18n/index.svelte';
+	import UsageAvatar from './UsageAvatar.svelte';
 	import { userUsageHref } from './usage-day';
 
 	interface Props {
@@ -27,10 +27,8 @@ before the Change Date. See LICENSE for complete terms.
 
 	let { pubkey, profile, pubkeyViewer }: Props = $props();
 
-	let failedPicture = $state<string | null>(null);
 	const npub = $derived(npubEncode(pubkey));
 	const label = $derived(profile?.name ?? npub);
-	const picture = $derived(profile?.picture === failedPicture ? undefined : profile?.picture);
 	const shortKey = $derived(`…${npub.slice(-5)}`);
 </script>
 
@@ -42,28 +40,13 @@ before the Change Date. See LICENSE for complete terms.
 		rel="external noopener noreferrer"
 		aria-label={ti('usage.user.profileLink', { user: label })}
 	>
-		{#if picture}
-			<LazyImage
-				src={picture}
-				alt=""
-				decorative
-				fetchPriority="low"
-				onError={() => (failedPicture = picture ?? null)}
-			/>
-		{:else}
-			<span class="avatar" aria-hidden="true">{[...label][0]?.toUpperCase()}</span>
-		{/if}
+		<UsageAvatar {profile} {label} />
 	</a>
 	<a class="key" href={userUsageHref(npub)}>{shortKey}</a>
 </span>
 
 <style>
 	.user-identity {
-		--image-width: 2rem;
-		--image-height: 2rem;
-		--image-radius: 50%;
-		--image-fit: cover;
-		--image-flex: 0 0 auto;
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2);
@@ -74,19 +57,6 @@ before the Change Date. See LICENSE for complete terms.
 	.avatar-link {
 		display: inline-flex;
 		border-radius: 50%;
-	}
-
-	.avatar {
-		display: grid;
-		place-items: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: 50%;
-		flex: 0 0 auto;
-		color: var(--color-accent-contrast);
-		background: var(--color-accent);
-		font-family: inherit;
-		font-weight: 700;
 	}
 
 	a.key {

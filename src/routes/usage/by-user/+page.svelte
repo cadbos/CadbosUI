@@ -21,16 +21,18 @@ before the Change Date. See LICENSE for complete terms.
 	import LazyImage from '$lib/components/LazyImage.svelte';
 	import SkeletonBlock from '$lib/components/SkeletonBlock.svelte';
 	import { t, ti } from '$lib/i18n/index.svelte';
-	import { formatShortNpub } from '$lib/nostr/short-npub';
 	import { generationKinds } from '$lib/api/contract';
 	import { auth } from '$lib/state/auth.svelte';
 	import { logBoundaryError } from '$lib/utils';
 	import { userUsage } from '$lib/state/user-usage.svelte';
-	import { localDateKey, localDay, userUsageHref } from '../usage-day';
-	import { formatGenerationKind, formatUsageTimestamp } from '../usage-format';
+	import UsageAvatar from '../UsageAvatar.svelte';
+	import { localDay, userUsageHref } from '../usage-day';
+	import { formatGenerationKind, formatUsageTimeOfDay } from '../usage-format';
 	import UsageNumber from '../UsageNumber.svelte';
 	import UsageTimestamp from '../UsageTimestamp.svelte';
+	import UsageDayPicker from './UsageDayPicker.svelte';
 	import UsageKeyActions from './UsageKeyActions.svelte';
+	import UsageKindPicker from './UsageKindPicker.svelte';
 	import UsagePrompt from './UsagePrompt.svelte';
 	import { buildUserUsageMarkdown } from './user-usage-markdown';
 	import type { PageProps } from './$types';
@@ -49,6 +51,7 @@ before the Change Date. See LICENSE for complete terms.
 		day === null ? null : (generationKinds.find((candidate) => candidate === kindParam) ?? null)
 	);
 	const invalidKind = $derived(day !== null && kindParam !== null && kind === null);
+	const shortKey = $derived(`${npub.slice(0, 5)}…${npub.slice(-5)}`);
 
 	let exporting = $state(false);
 	let exportFailed = $state(false);
@@ -136,11 +139,6 @@ before the Change Date. See LICENSE for complete terms.
 	}
 </script>
 
-{#snippet daySubtitle(date: string)}
-	{@const [before, after = ''] = t('usage.byUser.daySubtitle').split('{period}')}
-	{before}<strong class="day-period">{ti('usage.byUser.dayPeriod', { date })}</strong>{after}
-{/snippet}
-
 {#snippet generationsFailed()}
 	<div class="generations-failed">
 		<p class="status error" role="alert">{t('usage.generations.failed')}</p>
@@ -168,16 +166,7 @@ before the Change Date. See LICENSE for complete terms.
 <header class="usage-header">
 	<a class="back-link" href={resolve('/usage', {})}>{t('usage.byUser.back')}</a>
 	<div class="heading-row">
-		<div class="heading-key">
-			<h1>
-				{pubkey === null
-					? t('usage.byUser.title')
-					: ti('usage.byUser.heading', { user: formatShortNpub(npub) })}
-			</h1>
-			{#if pubkey !== null}
-				<UsageKeyActions {npub} pubkeyViewer={data.pubkeyViewer} />
-			{/if}
-		</div>
+		<h1>{t('usage.byUser.title')}</h1>
 		{#if auth.status === 'authenticated' && pubkey !== null && (dateKey === null || day !== null)}
 			<button
 				type="button"
@@ -190,13 +179,43 @@ before the Change Date. See LICENSE for complete terms.
 			</button>
 		{/if}
 	</div>
-	{#if day === null}
-		<p>{t('usage.byUser.subtitle')}</p>
-	{:else}
-		<p>
-			{@render daySubtitle(localDateKey(day.from))}
-			<a href={userUsageHref(npub)}>{t('usage.byUser.allTime')}</a>
-		</p>
+	{#if pubkey !== null && (dateKey === null || day !== null)}
+		<dl class="facts">
+			<div>
+				<dt>{t('usage.byUser.userLabel')}</dt>
+				<dd>
+					<UsageAvatar profile={userUsage.profile} label={userUsage.profile?.name ?? npub} />
+					<span class="key" title={npub}>{shortKey}</span>
+					<UsageKeyActions {npub} pubkeyViewer={data.pubkeyViewer} />
+				</dd>
+			</div>
+			<div>
+				<dt>{t('usage.byUser.periodLabel')}</dt>
+				<dd>
+					<UsageDayPicker
+						selected={dateKey}
+						dayHref={(dateKey) => userUsageHref(npub, dateKey, kind ?? undefined)}
+					/>
+					{#if day === null}
+						<strong>{t('usage.byUser.allTime')}</strong>
+					{:else}
+						<a href={userUsageHref(npub)}>{t('usage.byUser.allTime')}</a>
+					{/if}
+				</dd>
+			</div>
+			{#if dateKey !== null && kind !== null}
+				<div>
+					<dt>{t('usage.byUser.kindLabel')}</dt>
+					<dd>
+						<UsageKindPicker
+							selected={kind}
+							kinds={userUsage.generationKinds}
+							kindHref={(picked) => userUsageHref(npub, dateKey, picked ?? undefined)}
+						/>
+					</dd>
+				</div>
+			{/if}
+		</dl>
 	{/if}
 	{#if exportFailed}
 		<p class="error" role="alert">{t('usage.export.failed')}</p>
@@ -276,57 +295,64 @@ before the Change Date. See LICENSE for complete terms.
 				</div>
 				<div>
 					<dt>{t('usage.column.lastDepositAt')}</dt>
-					<dd class="tile-time"><UsageTimestamp timestamp={record.lastDepositAt} /></dd>
+					<dd class="tile-time">
+						<UsageTimestamp
+							timestamp={record.lastDepositAt}
+							npub={day === null ? npub : undefined}
+							timeOnly={day !== null}
+						/>
+					</dd>
 				</div>
 				<div>
 					<dt>{t('usage.column.latestSpendAt')}</dt>
-					<dd class="tile-time"><UsageTimestamp timestamp={record.latestSpendAt} {npub} /></dd>
+					<dd class="tile-time">
+						<UsageTimestamp
+							timestamp={record.latestSpendAt}
+							npub={day === null ? npub : undefined}
+							timeOnly={day !== null}
+						/>
+					</dd>
 				</div>
 			</dl>
 		{/if}
 	</section>
 
 	{#if record !== null}
-		<section class="usage-section" aria-labelledby="usage-kinds-title">
-			<div class="section-heading">
+		{#if kind === null}
+			<section class="usage-section" aria-labelledby="usage-kinds-title">
 				<h2 id="usage-kinds-title">{t('usage.kinds.title')}</h2>
-				{#if dateKey !== null && kind !== null}
-					<a href={userUsageHref(npub, dateKey)} data-sveltekit-noscroll>{t('usage.kinds.all')}</a>
-				{/if}
-			</div>
-			{#if userUsage.generationKinds.length === 0}
-				<p class="status">{t('usage.kinds.empty')}</p>
-			{:else}
-				<div class="table-wrap">
-					<table>
-						<thead>
-							<tr>
-								<th scope="col">{t('usage.kinds.column.kind')}</th>
-								<th scope="col" class="numeric-column">{t('usage.kinds.column.count')}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each userUsage.generationKinds as entry (entry.kind)}
-								<tr class={{ selected: entry.kind === kind }}>
-									<th scope="row">
-										{#if dateKey === null}
-											{formatGenerationKind(entry.kind)}
-										{:else}
-											<a
-												href={userUsageHref(npub, dateKey, entry.kind)}
-												aria-current={entry.kind === kind ? 'true' : undefined}
-												data-sveltekit-noscroll>{formatGenerationKind(entry.kind)}</a
-											>
-										{/if}
-									</th>
-									<td class="numeric-column"><UsageNumber kind="count" value={entry.count} /></td>
+				{#if userUsage.generationKinds.length === 0}
+					<p class="status">{t('usage.kinds.empty')}</p>
+				{:else}
+					<div class="table-wrap">
+						<table>
+							<thead>
+								<tr>
+									<th scope="col">{t('usage.kinds.column.kind')}</th>
+									<th scope="col" class="numeric-column">{t('usage.kinds.column.count')}</th>
 								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
-			{/if}
-		</section>
+							</thead>
+							<tbody>
+								{#each userUsage.generationKinds as entry (entry.kind)}
+									<tr>
+										<th scope="row">
+											{#if dateKey === null}
+												{formatGenerationKind(entry.kind)}
+											{:else}
+												<a href={userUsageHref(npub, dateKey, entry.kind)} data-sveltekit-noscroll
+													>{formatGenerationKind(entry.kind)}</a
+												>
+											{/if}
+										</th>
+										<td class="numeric-column"><UsageNumber kind="count" value={entry.count} /></td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+			</section>
+		{/if}
 
 		{#if day !== null}
 			<section class="usage-section" aria-labelledby="usage-generations-title">
@@ -361,7 +387,7 @@ before the Change Date. See LICENSE for complete terms.
 								{#each userUsage.generations as generation (generation.id)}
 									<tr>
 										<th scope="row" class="generation-id">{generation.id}</th>
-										<td>{formatUsageTimestamp(generation.createdAt)}</td>
+										<td>{formatUsageTimeOfDay(generation.createdAt)}</td>
 										{#if kind === null}
 											<td>{formatGenerationKind(generation.kind)}</td>
 										{/if}
@@ -416,8 +442,7 @@ before the Change Date. See LICENSE for complete terms.
 {/if}
 
 <style>
-	.back-link,
-	.usage-header p a {
+	.back-link {
 		color: var(--color-accent-text);
 		text-decoration: underline;
 		text-underline-offset: 0.15em;
@@ -428,14 +453,8 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 0.875rem;
 	}
 
-	.back-link:hover,
-	.usage-header p a:hover {
+	.back-link:hover {
 		color: var(--color-accent-hover);
-	}
-
-	.day-period {
-		color: var(--color-text);
-		font-weight: 700;
 	}
 
 	.heading-row {
@@ -445,17 +464,49 @@ before the Change Date. See LICENSE for complete terms.
 		gap: 1rem;
 	}
 
-	.heading-key {
+	.facts {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin: 0.25rem 0 0;
+	}
+
+	.facts > div {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 0.75rem;
+	}
+
+	.facts dt {
+		min-width: 7.5rem;
+		color: var(--color-muted);
+		font-size: 0.9375rem;
+	}
+
+	.facts dd {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem;
-		min-width: 0;
+		margin: 0;
+		color: var(--color-text);
 	}
 
-	h1 {
-		min-width: 0;
-		overflow-wrap: anywhere;
+	.facts .key {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		font-size: 1rem;
+		font-weight: 600;
+	}
+
+	.facts dd a {
+		color: var(--color-accent-text);
+		text-decoration: underline;
+		text-underline-offset: 0.15em;
+	}
+
+	.facts dd a:hover {
+		color: var(--color-accent-hover);
 	}
 
 	.generations-failed {
@@ -507,32 +558,14 @@ before the Change Date. See LICENSE for complete terms.
 		min-width: 0;
 	}
 
-	.section-heading {
-		display: flex;
-		align-items: baseline;
-		gap: 0.75rem;
-	}
-
-	.section-heading a,
 	.usage-section th a {
 		color: var(--color-accent-text);
 		text-decoration: underline;
 		text-underline-offset: 0.15em;
 	}
 
-	.section-heading a:hover,
 	.usage-section th a:hover {
 		color: var(--color-accent-hover);
-	}
-
-	.usage-section tr.selected {
-		background: var(--color-surface-hover);
-	}
-
-	.usage-section tr.selected th a {
-		color: var(--color-text);
-		font-weight: 700;
-		text-decoration: none;
 	}
 
 	.usage-section h2 {

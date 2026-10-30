@@ -19,9 +19,10 @@ import {
 	type GenerationKind,
 	type GenerationKindCount,
 	type UsageGenerationRecord,
+	type UsageProfile,
 	type UserUsageRecord
 } from '$lib/api/contract';
-import { UsageLoadError, userUsageRecordSchema } from '$lib/state/usage.svelte';
+import { fetchUsageProfiles, UsageLoadError, userUsageRecordSchema } from '$lib/state/usage.svelte';
 
 export type UserUsageStatus = 'idle' | 'loading' | 'ready' | 'not-found' | 'error';
 export type UserGenerationsStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -70,6 +71,7 @@ export type GenerationKindFilter = GenerationKind | null;
 class UserUsageState {
 	record = $state.raw<UserUsageRecord | null>(null);
 	generationKinds = $state.raw<GenerationKindCount[]>([]);
+	profile = $state.raw<UsageProfile | null>(null);
 	status = $state<UserUsageStatus>('idle');
 	generations = $state.raw<UsageGenerationRecord[]>([]);
 	generationsStatus = $state<UserGenerationsStatus>('idle');
@@ -97,6 +99,7 @@ class UserUsageState {
 		this.status = 'loading';
 
 		void this.#loadDetail(pubkey, range, controller.signal);
+		void this.#loadProfile(pubkey, controller.signal);
 		if (range !== null) this.#restartGenerations();
 	}
 
@@ -163,6 +166,7 @@ class UserUsageState {
 		this.#pendingGenerations = null;
 		this.record = null;
 		this.generationKinds = [];
+		this.profile = null;
 		this.status = 'idle';
 		this.generations = [];
 		this.generationsStatus = 'idle';
@@ -213,6 +217,15 @@ class UserUsageState {
 			if (signal.aborted) return;
 			this.status = error instanceof UsageLoadError && error.status === 404 ? 'not-found' : 'error';
 			console.error('User usage load failed:', error);
+		}
+	}
+
+	async #loadProfile(pubkey: string, signal: AbortSignal): Promise<void> {
+		try {
+			const profiles = await fetchUsageProfiles([pubkey], signal);
+			if (!signal.aborted) this.profile = profiles[pubkey] ?? null;
+		} catch (error) {
+			if (!signal.aborted) console.error('User usage profile load failed:', error);
 		}
 	}
 

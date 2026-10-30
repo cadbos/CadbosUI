@@ -104,6 +104,23 @@ export class UsageLoadError extends Error {
 	}
 }
 
+export async function fetchUsageProfiles(
+	pubkeys: string[],
+	signal: AbortSignal
+): Promise<Record<string, UsageProfile>> {
+	const response = await fetch('/api/usage/profiles', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ pubkeys }),
+		signal
+	});
+	if (!response.ok) throw new UsageLoadError('usage profile request failed', response.status);
+
+	const parsed = usageProfilesResponseSchema.safeParse(await response.json().catch(() => null));
+	if (!parsed.success) throw new UsageLoadError('usage profile response invalid');
+	return parsed.data.profiles;
+}
+
 class UsageState {
 	users = $state.raw<UserUsageRecord[]>([]);
 	profiles = $state.raw<Record<string, UsageProfile>>({});
@@ -250,7 +267,7 @@ class UsageState {
 		const controller = new AbortController();
 		this.#profileAborts.add(controller);
 		try {
-			const profiles = await this.#fetchProfiles(
+			const profiles = await fetchUsageProfiles(
 				users.map((user) => user.pubkey),
 				controller.signal
 			);
@@ -260,23 +277,6 @@ class UsageState {
 		} finally {
 			this.#profileAborts.delete(controller);
 		}
-	}
-
-	async #fetchProfiles(
-		pubkeys: string[],
-		signal: AbortSignal
-	): Promise<Record<string, UsageProfile>> {
-		const response = await fetch('/api/usage/profiles', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ pubkeys }),
-			signal
-		});
-		if (!response.ok) throw new UsageLoadError('usage profile request failed', response.status);
-
-		const parsed = usageProfilesResponseSchema.safeParse(await response.json().catch(() => null));
-		if (!parsed.success) throw new UsageLoadError('usage profile response invalid');
-		return parsed.data.profiles;
 	}
 
 	async #loadWalletBalance(): Promise<void> {
