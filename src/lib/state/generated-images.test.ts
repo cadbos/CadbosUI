@@ -23,6 +23,8 @@ import { mediaAccess } from './media-access.svelte';
 
 function image(id: string, createdAt: number): SceneRecord {
 	return {
+		rating: null,
+		comment: null,
 		id,
 		image: {
 			key: `${id}.webp`,
@@ -91,8 +93,18 @@ describe('generated images pagination', () => {
 		const fetchMock = vi.fn<typeof fetch>();
 		vi.stubGlobal('fetch', fetchMock);
 		fetchMock
-			.mockResolvedValueOnce(jsonResponse(page([image('first', 2000)], 0, true)))
-			.mockResolvedValueOnce(jsonResponse(page([image('second', 1000)], 1, false)));
+			.mockResolvedValueOnce(
+				jsonResponse(
+					page(
+						[{ ...image('first', 2000), rating: 'like', comment: '  Отлично 😀\nMore light  ' }],
+						0,
+						true
+					)
+				)
+			)
+			.mockResolvedValueOnce(
+				jsonResponse(page([{ ...image('second', 1000), rating: 'dislike', comment: '' }], 1, false))
+			);
 
 		await generatedImages.load();
 		await generatedImages.loadMore();
@@ -103,6 +115,11 @@ describe('generated images pagination', () => {
 		});
 		expect(generatedImages.status).toBe('ready');
 		expect(generatedImages.images.map((record) => record.id)).toEqual(['first', 'second']);
+		expect(generatedImages.images.map((record) => record.rating)).toEqual(['like', 'dislike']);
+		expect(generatedImages.images.map((record) => record.comment)).toEqual([
+			'  Отлично 😀\nMore light  ',
+			''
+		]);
 		expect(generatedImages.hasMore).toBe(false);
 		expect(generatedImages.loadingMore).toBe(false);
 	});

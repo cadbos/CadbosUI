@@ -51,6 +51,8 @@ const FORM_SNAPSHOT = {
 };
 
 const GENERATION_DETAIL = {
+	rating: null,
+	comment: null,
 	id: E2E_GENERATION_ID,
 	prompt: 'scandinavian living room',
 	kind: 'render',
@@ -85,6 +87,8 @@ const PROJECT_DETAIL = {
 			updatedAt: Date.UTC(2026, 0, 1),
 			generations: [
 				{
+					rating: null,
+					comment: null,
 					id: E2E_GENERATION_ID,
 					image: media(2, AFTER_URL),
 					source: media(1, BEFORE_URL),
@@ -147,6 +151,8 @@ async function mockSessionData(page: Page, options: SessionMockOptions = {}): Pr
 			body: JSON.stringify({
 				images: [
 					{
+						rating: null,
+						comment: null,
 						id: E2E_GENERATION_ID,
 						image: media(2, AFTER_URL),
 						source: media(1, BEFORE_URL),

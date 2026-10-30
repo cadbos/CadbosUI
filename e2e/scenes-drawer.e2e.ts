@@ -88,6 +88,8 @@ async function mockAddObjectScene(page: Page): Promise<void> {
 			body: JSON.stringify({
 				images: [
 					{
+						rating: null,
+						comment: null,
 						id: ADD_OBJECT_GENERATION_ID,
 						image: media(2, '/api/media/test-media/added-plant.webp'),
 						source: media(1, '/api/media/test-media/scene.jpg'),
@@ -108,6 +110,8 @@ async function mockAddObjectScene(page: Page): Promise<void> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
+				rating: null,
+				comment: null,
 				id: ADD_OBJECT_GENERATION_ID,
 				prompt: '',
 				kind: 'edit',
@@ -136,6 +140,8 @@ async function mockSingleStyleTransferScene(page: Page): Promise<void> {
 			body: JSON.stringify({
 				images: [
 					{
+						rating: null,
+						comment: null,
 						id: GENERATION_ID,
 						image: media(2, '/api/media/test-media/result.webp'),
 						source: media(1, '/api/media/test-media/scene.jpg'),
@@ -156,6 +162,8 @@ async function mockSingleStyleTransferScene(page: Page): Promise<void> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
+				rating: null,
+				comment: null,
 				id: GENERATION_ID,
 				prompt: '',
 				kind: 'style-transfer',
@@ -195,6 +203,8 @@ async function mockBaseThatIsAPreviousResult(page: Page): Promise<void> {
 			body: JSON.stringify({
 				images: [
 					{
+						rating: null,
+						comment: null,
 						id: BASE_FOLLOWUP_ID,
 						image: media(3, '/api/media/test-media/styled.webp'),
 						source: media(2, '/api/media/test-media/render.webp'),
@@ -206,6 +216,8 @@ async function mockBaseThatIsAPreviousResult(page: Page): Promise<void> {
 						sourceGeneration: { id: BASE_RENDER_ID, kind: 'render' }
 					},
 					{
+						rating: null,
+						comment: null,
 						id: BASE_RENDER_ID,
 						image: media(2, '/api/media/test-media/render.webp'),
 						source: media(1, '/api/media/test-media/scene.jpg'),
@@ -227,6 +239,8 @@ async function mockBaseThatIsAPreviousResult(page: Page): Promise<void> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
+				rating: null,
+				comment: null,
 				id: BASE_RENDER_ID,
 				prompt: 'тёплый дуб',
 				kind: 'render',
@@ -355,6 +369,8 @@ async function mockSessionScene(page: Page): Promise<void> {
 			body: JSON.stringify({
 				images: [
 					{
+						rating: null,
+						comment: null,
 						id: SESSION_GENERATION_ID,
 						image: media(2, '/api/media/test-media/render.webp'),
 						source: media(1, '/api/media/test-media/scene.jpg'),
@@ -375,6 +391,8 @@ async function mockSessionScene(page: Page): Promise<void> {
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
+				rating: null,
+				comment: null,
 				id: SESSION_GENERATION_ID,
 				prompt: '',
 				kind: 'render',
@@ -584,6 +602,8 @@ test('labels only Create generations as Auto-enhance in the prompt dialog', asyn
 				status: 200,
 				contentType: 'application/json',
 				body: JSON.stringify({
+					rating: null,
+					comment: null,
 					id: detail.id,
 					prompt: detail.prompt,
 					kind: detail.kind,
@@ -603,6 +623,8 @@ test('labels only Create generations as Auto-enhance in the prompt dialog', asyn
 			contentType: 'application/json',
 			body: JSON.stringify({
 				images: generations.map((generation) => ({
+					rating: null,
+					comment: null,
 					id: generation.id,
 					image: media(generation.number + 1, '/api/media/test-media/result.webp'),
 					source: media(1, '/api/media/test-media/scene.jpg'),
@@ -655,6 +677,8 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 				status: 200,
 				contentType: 'application/json',
 				body: JSON.stringify({
+					rating: null,
+					comment: null,
 					id: GENERATION_ID,
 					prompt: 'светлая кухня, дерево и лён',
 					kind: 'render',
@@ -678,6 +702,8 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 				images: milestones
 					? [
 							{
+								rating: null,
+								comment: null,
 								id: GENERATION_ID,
 								image: media(3, '/api/media/test-media/kitchen-2.webp'),
 								source: media(1, '/api/media/test-media/kitchen-source.jpg'),
@@ -690,6 +716,8 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 						]
 					: [
 							{
+								rating: null,
+								comment: null,
 								id: GENERATION_ID,
 								image: media(3, '/api/media/test-media/kitchen-2.webp'),
 								source: media(2, '/api/media/test-media/kitchen-1.webp'),
@@ -700,6 +728,8 @@ test('narrows scenes to a project’s milestones and shows an iteration’s prom
 								number: 2
 							},
 							{
+								rating: null,
+								comment: null,
 								id: ADD_OBJECT_GENERATION_ID,
 								image: media(2, '/api/media/test-media/kitchen-1.webp'),
 								source: media(1, '/api/media/test-media/kitchen-source.jpg'),

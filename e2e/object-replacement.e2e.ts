@@ -348,6 +348,8 @@ for (const withSession of [true, false]) {
 				status: 200,
 				contentType: 'application/json',
 				body: JSON.stringify({
+					rating: null,
+					comment: null,
 					id: JOB_ID,
 					prompt: 'sofa',
 					kind: 'object-replacement',

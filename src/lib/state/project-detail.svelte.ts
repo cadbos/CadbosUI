@@ -23,6 +23,8 @@ export type ProjectDetailStatus = 'idle' | 'loading' | 'ready' | 'error' | 'not-
 
 const sessionGenerationSchema = z.object({
 	id: z.uuid(),
+	rating: z.enum(['like', 'dislike']).nullable(),
+	comment: z.string().nullable(),
 	image: mediaAccessSchema,
 	source: mediaAccessSchema,
 	kind: z.enum(generationKinds),

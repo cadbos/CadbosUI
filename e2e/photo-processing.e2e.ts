@@ -227,6 +227,8 @@ async function openTwoProjects(page: Page): Promise<Locator> {
 							updatedAt: 1,
 							generations: [
 								{
+									rating: null,
+									comment: null,
 									id: project.generationId,
 									image: media(project.filename, `/api/media/test-media/${project.filename}`),
 									source: media(SOURCE_FILENAME, SOURCE_URL),

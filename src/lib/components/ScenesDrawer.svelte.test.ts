@@ -23,6 +23,8 @@ import ScenesDrawer from './ScenesDrawer.svelte';
 
 function image(id: string, createdAt: number, number = 1): SceneRecord {
 	return {
+		rating: null,
+		comment: null,
 		id,
 		image: {
 			key: `${id}.webp`,
@@ -172,6 +174,8 @@ it('shows each iteration’s session, marks the first one’s Base as the Source
 	fetchMock.mockResolvedValueOnce(
 		new Response(
 			JSON.stringify({
+				rating: null,
+				comment: null,
 				id: 'sample',
 				prompt: 'светлая кухня в скандинавском стиле',
 				kind: 'render',

@@ -25,6 +25,7 @@ import {
 	type CreditTransaction,
 	type GenerationKind,
 	type GenerationKindCount,
+	type GenerationRating,
 	type GenerationSessionRef,
 	type RequestFormSnapshot,
 	type ResourceFilter,
@@ -81,6 +82,8 @@ export interface ResourceImagesPage {
 }
 
 export interface Scene extends GeneratedImage {
+	rating: GenerationRating | null;
+	comment: string | null;
 	session: GenerationSessionRef | null;
 	iteration: number | null;
 	number: number;
@@ -232,6 +235,43 @@ export async function recordPhotoProcessing(
 	return { id, ...toBalance(row) };
 }
 
+export async function getGenerationFeedbackForUser(
+	db: Database,
+	userId: string,
+	generationId: string
+): Promise<{ rating: GenerationRating | null; comment: string | null } | null> {
+	const row = await db.get<{
+		rating: GenerationRating | null;
+		comment: string | null;
+	}>(sql`SELECT f.rating, f.comment
+		FROM generations g LEFT JOIN generations_feedback f ON f.generation_id = g.id
+		WHERE g.id = ${generationId} AND g.user_id = ${userId}`);
+	return row ?? null;
+}
+
+export async function storeGenerationFeedback(
+	db: Database,
+	userId: string,
+	generationId: string,
+	rating: GenerationRating,
+	comment: string | null
+): Promise<'saved' | 'not_found' | 'conflict'> {
+	const [, rows] = await db.batch([
+		db.run(sql`INSERT INTO generations_feedback (generation_id, rating, comment)
+			SELECT id, ${rating}, ${comment} FROM generations WHERE id = ${generationId} AND user_id = ${userId}
+			ON CONFLICT(generation_id) DO NOTHING`),
+		db.all<{
+			rating: GenerationRating;
+			comment: string | null;
+		}>(sql`SELECT f.rating, f.comment FROM generations_feedback f
+			JOIN generations g ON g.id = f.generation_id
+			WHERE g.id = ${generationId} AND g.user_id = ${userId}`)
+	]);
+	const feedback = rows[0];
+	if (!feedback) return 'not_found';
+	return feedback.rating === rating && feedback.comment === comment ? 'saved' : 'conflict';
+}
+
 export async function getGeneratedImageForUser(
 	db: Database,
 	userId: string,
@@ -252,6 +292,8 @@ export async function getGeneratedImageForUser(
 
 export interface GenerationDetail {
 	id: string;
+	rating: GenerationRating | null;
+	comment: string | null;
 	sourceMediaId: number;
 	resultMediaId: number;
 	prompt: string;
@@ -288,6 +330,8 @@ function sessionRefForRow(row: SessionRefColumns): GenerationSessionRef | null {
 
 interface GenerationDetailRow extends SessionRefColumns {
 	id: string;
+	rating: GenerationRating | null;
+	comment: string | null;
 	source_media_id: number;
 	result_media_id: number;
 	prompt: string;
@@ -348,11 +392,12 @@ export async function getGenerationDetailForUser(
 	id: string
 ): Promise<GenerationDetail | null> {
 	const row = await db.get<GenerationDetailRow>(
-		sql`SELECT g.id, g.source_media_id, g.result_media_id, g.prompt, g.kind, g.created_at,
+		sql`SELECT g.id, f.rating, f.comment, g.source_media_id, g.result_media_id, g.prompt, g.kind, g.created_at,
 			${ledgerBalanceSql(sql`g.user_id`, sql`l.id`)} AS balance_after, l.amount / 100.0 AS amount, g.form_snapshot, ps.id AS session_id, ps.title AS session_title,
 			p.id AS project_id, p.title AS project_title
 			FROM generations g
 			JOIN ledger_entries l ON l.id = g.ledger_entry_id AND l.user_id = g.user_id
+			LEFT JOIN generations_feedback f ON f.generation_id = g.id
 			LEFT JOIN project_sessions ps ON ps.id = g.session_id AND ps.archived_at IS NULL
 			LEFT JOIN projects p ON p.id = ps.project_id AND p.user_id = g.user_id
 			AND p.archived_at IS NULL
@@ -371,6 +416,8 @@ export async function getGenerationDetailForUser(
 		amount: row.amount,
 		balanceAfter: row.balance_after,
 		formSnapshot: parseStoredFormSnapshot(row.id, row.form_snapshot),
+		rating: row.rating,
+		comment: row.comment,
 		session: sessionRefForRow(row)
 	};
 }
@@ -437,6 +484,8 @@ export interface SceneFilter {
 }
 
 interface SceneRow extends GenerationRow, SessionRefColumns {
+	rating: GenerationRating | null;
+	comment: string | null;
 	iteration: number | null;
 	number: number;
 	source_generation_id: string | null;
@@ -454,6 +503,8 @@ function toScene(row: SceneRow): Scene | null {
 	return image
 		? {
 				...image,
+				rating: row.rating,
+				comment: row.comment,
 				session: sessionRefForRow(row),
 				iteration: row.iteration,
 				number: row.number,
@@ -480,8 +531,9 @@ function sceneQuery(
 	const media = sql`JOIN media result_media ON result_media.id = s.result_media_id
 		JOIN buckets result_bucket ON result_bucket.id = result_media.bucket
 		JOIN media source_media ON source_media.id = s.source_media_id
-		JOIN buckets source_bucket ON source_bucket.id = source_media.bucket`;
-	const columns = sql`s.id, s.user_id, s.result_media_id, s.source_media_id,
+		JOIN buckets source_bucket ON source_bucket.id = source_media.bucket
+		LEFT JOIN generations_feedback f ON f.generation_id = s.id`;
+	const columns = sql`s.id, f.rating, f.comment, s.user_id, s.result_media_id, s.source_media_id,
 		result_media.filename AS result_filename, result_bucket.name AS result_bucket_name,
 		s.kind, s.created_at, s.session_id, s.session_title, s.project_id, s.project_title,
 		s.iteration, s.number, source_generation.id AS source_generation_id,
@@ -694,6 +746,8 @@ export async function getResourceRoles(
 
 export interface ResourceGeneration {
 	id: string;
+	rating: GenerationRating | null;
+	comment: string | null;
 	kind: GenerationKind;
 	createdAt: number;
 	resultMediaId: number;
@@ -711,6 +765,8 @@ export interface ResourceGeneration {
 
 interface ResourceGenerationRow {
 	id: string;
+	rating: GenerationRating | null;
+	comment: string | null;
 	kind: string;
 	created_at: number;
 	result_media_id: number;
@@ -744,6 +800,8 @@ function toResourceGeneration(row: ResourceGenerationRow): ResourceGeneration | 
 		resultMediaId: row.result_media_id,
 		roles,
 		settingsSaved: row.has_snapshot === 1 || kind === 'upscale',
+		rating: row.rating,
+		comment: row.comment,
 		// Same rule as getGenerationDetailForUser: an archived session or
 		// project leaves nothing to continue.
 		session:
@@ -773,13 +831,14 @@ export async function listResourceGenerations(
 	const { items } = await collectValidRows(
 		(limit, rawOffset) =>
 			db.all<ResourceGenerationRow>(
-				sql`SELECT g.id, g.kind, g.created_at, g.result_media_id,
+				sql`SELECT g.id, f.rating, f.comment, g.kind, g.created_at, g.result_media_id,
 					g.source_media_id = ${mediaId} AS as_source,
 					COALESCE(g.reference_media_id = ${mediaId}, 0) AS as_reference,
 					g.form_snapshot IS NOT NULL AS has_snapshot,
 					ps.id AS session_id, ps.title AS session_title,
 					p.id AS project_id, p.title AS project_title
 					FROM generations g
+					LEFT JOIN generations_feedback f ON f.generation_id = g.id
 					LEFT JOIN project_sessions ps ON ps.id = g.session_id AND ps.archived_at IS NULL
 					LEFT JOIN projects p ON p.id = ps.project_id AND p.user_id = g.user_id
 					AND p.archived_at IS NULL

@@ -233,6 +233,7 @@ test('shows a zero balance and links to the expenses page for an unapproved acco
 });
 
 test('restores the existing session after authentication storage recovers', async ({ page }) => {
+	const { promise: responseGate, resolve: releaseResponse } = Promise.withResolvers<void>();
 	let attempts = 0;
 	await page.route('**/auth/me', async (route) => {
 		attempts += 1;
@@ -251,6 +252,7 @@ test('restores the existing session after authentication storage recovers', asyn
 			return;
 		}
 
+		await responseGate;
 		await route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -272,21 +274,24 @@ test('restores the existing session after authentication storage recovers', asyn
 		});
 	});
 
-	await page.goto('/');
+	try {
+		await page.goto('/');
+		await expect.poll(() => attempts).toBe(2);
+		await page.locator('.auth-trigger').click();
+		await expect(page.locator('.auth').getByRole('status')).toHaveText('Восстанавливаем сессию…');
+		await expect(page.getByRole('button', { name: 'Гость' })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Расширение Nostr' })).toHaveCount(0);
+	} finally {
+		releaseResponse();
+	}
 
-	// The trigger is always rendered, so open the panel first — while restoring it
-	// still shows the guest label, not a real user's name.
-	await page.locator('.auth-trigger').click();
-	await expect(page.locator('.auth').getByRole('status')).toHaveText('Восстанавливаем сессию…');
-	await expect(page.getByRole('button', { name: 'Гость' })).toBeVisible();
-
-	await expect.poll(() => attempts).toBe(2);
 	await expect(page.getByRole('button', { name: /Ada/ })).toBeVisible();
 });
 
 test('shows sign-in only after session restoration receives an unauthorized response', async ({
 	page
 }) => {
+	const { promise: responseGate, resolve: releaseResponse } = Promise.withResolvers<void>();
 	let attempts = 0;
 	await page.route('**/auth/me', async (route) => {
 		attempts += 1;
@@ -305,6 +310,7 @@ test('shows sign-in only after session restoration receives an unauthorized resp
 			return;
 		}
 
+		await responseGate;
 		await route.fulfill({
 			status: 401,
 			contentType: 'application/json',
@@ -314,15 +320,17 @@ test('shows sign-in only after session restoration receives an unauthorized resp
 		});
 	});
 
-	await page.goto('/');
+	try {
+		await page.goto('/');
+		await expect.poll(() => attempts).toBe(2);
+		await page.locator('.auth-trigger').click();
+		await expect(page.locator('.auth').getByRole('status')).toHaveText('Восстанавливаем сессию…');
+		await expect(page.getByRole('button', { name: 'Гость' })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Расширение Nostr' })).toHaveCount(0);
+	} finally {
+		releaseResponse();
+	}
 
-	// The trigger is always rendered, so open the panel first — while restoring it
-	// still shows the guest label, not a real user's name.
-	await page.locator('.auth-trigger').click();
-	await expect(page.locator('.auth').getByRole('status')).toHaveText('Восстанавливаем сессию…');
-	await expect(page.getByRole('button', { name: 'Гость' })).toBeVisible();
-
-	await expect.poll(() => attempts).toBe(2);
 	await expect(page.getByRole('button', { name: 'Расширение Nostr' })).toBeVisible();
 });
 

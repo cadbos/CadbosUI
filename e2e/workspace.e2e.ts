@@ -285,6 +285,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 			offset === '0'
 				? [
 						{
+							rating: null,
+							comment: null,
 							id: 'oldest',
 							image: media(2, '/api/media/test-media/oldest.webp'),
 							source: media(1, '/api/media/test-media/oldest-source.jpg'),
@@ -295,6 +297,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 							number: 1
 						},
 						{
+							rating: null,
+							comment: null,
 							id: 'newest',
 							image: media(6, '/api/media/test-media/newest.webp'),
 							source: media(5, '/api/media/test-media/newest-source.jpg'),
@@ -307,6 +311,8 @@ test('shows authenticated scenes newest first', async ({ page }) => {
 					]
 				: [
 						{
+							rating: null,
+							comment: null,
 							id: 'middle',
 							image: media(4, '/api/media/test-media/middle.webp'),
 							source: media(3, '/api/media/test-media/middle-source.jpg'),

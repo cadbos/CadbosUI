@@ -218,6 +218,8 @@ describe('GET /api/generated-images', () => {
 		expect(response.status).toBe(200);
 		expect(result.images).toHaveLength(20);
 		expect(result.images[0]).toEqual({
+			rating: null,
+			comment: null,
 			id: 'user-1-image-20',
 			image: {
 				key: mediaKey(TEST_S3_BUCKET.name, 'user-1-image-20.webp'),

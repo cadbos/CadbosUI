@@ -118,6 +118,8 @@ describe('GET /api/resources/[key]', () => {
 			roles: ['source'],
 			generations: [
 				{
+					rating: null,
+					comment: null,
 					id: 'render-1',
 					kind: 'render',
 					createdAt: 1000,

@@ -24,7 +24,12 @@
 // layer, not the route.
 
 import { sql } from 'drizzle-orm';
-import { generationKinds, type GenerationKind, type PublicFormSnapshot } from '$lib/api/contract';
+import {
+	generationKinds,
+	type GenerationKind,
+	type GenerationRating,
+	type PublicFormSnapshot
+} from '$lib/api/contract';
 import type { Database } from '$lib/server/db';
 import { ledgerBalanceSql } from '$lib/server/ledger';
 import { randomToken } from './auth/session';
@@ -60,6 +65,8 @@ export interface ProjectSession {
 
 export interface SessionGeneration {
 	id: string;
+	rating: GenerationRating | null;
+	comment: string | null;
 	mediaId: number;
 	sourceMediaId: number;
 	kind: GenerationKind;
@@ -123,6 +130,8 @@ function toProjectSession(row: ProjectSessionRow): ProjectSession {
 
 interface SessionGenerationRow {
 	id: string;
+	rating: GenerationRating | null;
+	comment: string | null;
 	result_media_id: number;
 	source_media_id: number;
 	kind: string;
@@ -141,7 +150,9 @@ function toSessionGeneration(row: SessionGenerationRow): SessionGeneration | nul
 		kind,
 		createdAt: row.created_at,
 		amount: row.amount,
-		balanceAfter: row.balance_after
+		balanceAfter: row.balance_after,
+		rating: row.rating,
+		comment: row.comment
 	};
 }
 
@@ -258,9 +269,10 @@ async function loadProjectDetail(db: Database, projectRow: ProjectRow): Promise<
 			sql`, `
 		);
 		const generationRows = await db.all<SessionGenerationRow & { session_id: string }>(
-			sql`SELECT g.id, g.session_id, g.result_media_id, g.source_media_id,
+			sql`SELECT g.id, f.rating, f.comment, g.session_id, g.result_media_id, g.source_media_id,
 				g.kind, g.created_at, l.amount / 100.0 AS amount, ${ledgerBalanceSql(sql`g.user_id`, sql`l.id`)} AS balance_after FROM generations g
 				JOIN ledger_entries l ON l.id = g.ledger_entry_id AND l.user_id = g.user_id
+				LEFT JOIN generations_feedback f ON f.generation_id = g.id
 				WHERE g.session_id IN (${sessionIds}) ORDER BY g.created_at DESC, g.id DESC`
 		);
 		for (const row of generationRows) {

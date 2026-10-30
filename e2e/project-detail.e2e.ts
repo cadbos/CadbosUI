@@ -29,6 +29,8 @@ interface SessionFixture {
 	updatedAt: number;
 	generations: {
 		id: string;
+		rating: null;
+		comment: null;
 		image: ReturnType<typeof media>;
 		source: ReturnType<typeof media>;
 		kind: string;
@@ -116,6 +118,8 @@ test('shows the project’s session and generation counts, and each session’s 
 }) => {
 	await authenticate(page);
 	const generation = (id: string, mediaId: number): SessionFixture['generations'][number] => ({
+		rating: null,
+		comment: null,
 		id,
 		image: media(mediaId, `/api/media/test-media/render-${mediaId}.webp`),
 		source: media(1, '/api/media/test-media/room.jpg'),
@@ -290,6 +294,8 @@ test('continues a session into the render workspace showing its latest render as
 				title: 'Main thread',
 				generations: [
 					{
+						rating: null,
+						comment: null,
 						id: '00000000-0000-4000-8000-000000000100',
 						image: media(2, '/api/media/test-media/latest-render.webp'),
 						source: media(1, '/api/media/test-media/room.jpg'),
@@ -366,6 +372,8 @@ test('continuing a session restores its latest generation’s exact settings, no
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
+				rating: null,
+				comment: null,
 				id: generationId,
 				prompt: '',
 				kind: 'style-transfer',
@@ -413,6 +421,8 @@ test('continuing a session restores its latest generation’s exact settings, no
 				title: 'Main thread',
 				generations: [
 					{
+						rating: null,
+						comment: null,
 						id: generationId,
 						image: media(2, '/api/media/test-media/styled.webp'),
 						source: media(1, '/api/media/test-media/room.jpg'),

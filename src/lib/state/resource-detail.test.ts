@@ -21,6 +21,8 @@ const KEY = 'test-media/room.jpg';
 
 function generation(id: string): ResourceGenerationRecord {
 	return {
+		rating: null,
+		comment: null,
 		id,
 		kind: 'render',
 		createdAt: 1000,
@@ -66,8 +68,18 @@ describe('resourceDetail', () => {
 	it('requests the key as one encoded path segment and pages through its generations', async () => {
 		const fetchMock = vi
 			.fn<typeof fetch>()
-			.mockResolvedValueOnce(jsonResponse(detailPage([generation('a')], 0, true)))
-			.mockResolvedValueOnce(jsonResponse(detailPage([generation('b')], 1, false)));
+			.mockResolvedValueOnce(
+				jsonResponse(
+					detailPage(
+						[{ ...generation('a'), rating: 'like', comment: '  Отлично 😀\nMore light  ' }],
+						0,
+						true
+					)
+				)
+			)
+			.mockResolvedValueOnce(
+				jsonResponse(detailPage([{ ...generation('b'), rating: 'dislike', comment: '' }], 1, false))
+			);
 		vi.stubGlobal('fetch', fetchMock);
 
 		await resourceDetail.load(KEY);
@@ -86,6 +98,11 @@ describe('resourceDetail', () => {
 		expect(resourceDetail.status).toBe('ready');
 		expect(resourceDetail.roles).toEqual(['source']);
 		expect(resourceDetail.generations.map((item) => item.id)).toEqual(['a', 'b']);
+		expect(resourceDetail.generations.map((item) => item.rating)).toEqual(['like', 'dislike']);
+		expect(resourceDetail.generations.map((item) => item.comment)).toEqual([
+			'  Отлично 😀\nMore light  ',
+			''
+		]);
 		expect(resourceDetail.hasMore).toBe(false);
 	});
 

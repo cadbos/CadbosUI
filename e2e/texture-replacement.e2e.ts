@@ -1022,6 +1022,8 @@ test('restores and reloads a completed generation without overlaying its submitt
 				images: formSnapshot
 					? [
 							{
+								rating: null,
+								comment: null,
 								id: JOB_ID,
 								image: output,
 								source: media(1, '/api/media/test-media/scene.webp'),
@@ -1046,6 +1048,8 @@ test('restores and reloads a completed generation without overlaying its submitt
 		detailLoads += 1;
 		await route.fulfill({
 			json: {
+				rating: null,
+				comment: null,
 				id: JOB_ID,
 				prompt: '',
 				kind: 'texture-replacement',

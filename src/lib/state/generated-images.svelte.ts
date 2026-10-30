@@ -37,6 +37,8 @@ const PAGE_SIZE = 100;
 
 const generatedImageRecordSchema = z.object({
 	id: z.string().min(1),
+	rating: z.enum(['like', 'dislike']).nullable(),
+	comment: z.string().nullable(),
 	image: mediaAccessSchema,
 	source: mediaAccessSchema,
 	kind: z.enum(generationKinds),
