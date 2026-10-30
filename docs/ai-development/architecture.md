@@ -1,7 +1,7 @@
 # Context + Prompt Engineering architecture
 
 This document describes the **infrastructure and architecture** of AI-assisted
-development in the Cadbos repository: how an AI agent (Claude Code and compatible
+development in the CadbosUI repository: how an AI agent (Claude Code and compatible
 tools) gets the right context, and how we manage prompt quality. It is the current
 map of the foundation — an entry point for the team and for the agent itself.
 
