@@ -224,6 +224,8 @@ export interface Dictionary {
 	'auth.credit.balance': string;
 	'auth.credit.requestTopUp': string;
 	'auth.credit.requestTopUpDraft': string;
+	'auth.credit.requestWelcomeBonus': string;
+	'auth.credit.requestWelcomeBonusDraft': string;
 	'auth.credit.history': string;
 	'auth.credit.historyEmpty': string;
 	'upload.label': string;

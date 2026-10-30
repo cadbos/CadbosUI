@@ -13,7 +13,7 @@ before the Change Date. See LICENSE for complete terms.
 -->
 
 <script lang="ts">
-	import { ArrowUpRight, Check, ChevronRight, Copy, LogOut, User } from '@lucide/svelte';
+	import { ArrowUpRight, Check, ChevronRight, Copy, Gift, LogOut, User } from '@lucide/svelte';
 	import { dev } from '$app/environment';
 	import { resolve } from '$app/paths';
 	import { npubEncode } from 'nostr-tools/nip19';
@@ -21,6 +21,7 @@ before the Change Date. See LICENSE for complete terms.
 	import { currency } from '$lib/state/currency.svelte';
 	import { t, ti, type TranslationKey } from '$lib/i18n/index.svelte';
 	import { requestBalanceTopUp } from '$lib/request-balance-top-up';
+	import { requestWelcomeBonus } from '$lib/request-welcome-bonus';
 	import { dismissable, logBoundaryError } from '$lib/utils';
 	import AccountSetup from './AccountSetup.svelte';
 	import LazyImage from './LazyImage.svelte';
@@ -120,6 +121,11 @@ before the Change Date. See LICENSE for complete terms.
 
 	function requestTopUp(): void {
 		requestBalanceTopUp();
+		profileState = 'closed';
+	}
+
+	function claimWelcomeBonus(): void {
+		requestWelcomeBonus();
 		profileState = 'closed';
 	}
 </script>
@@ -329,6 +335,13 @@ before the Change Date. See LICENSE for complete terms.
 					</button>
 				{/if}
 			</div>
+
+			{#if auth.status === 'authenticated' && featurebaseAppId && auth.welcomeBonusAvailable}
+				<button type="button" class="top-up welcome-bonus" onclick={claimWelcomeBonus}>
+					<Gift size={14} strokeWidth={1.8} aria-hidden="true" />
+					{t('auth.credit.requestWelcomeBonus')}
+				</button>
+			{/if}
 
 			<p class="relay-count">
 				{ti('auth.profile.relayCount', { count: relayCount })}
@@ -645,6 +658,11 @@ before the Change Date. See LICENSE for complete terms.
 		font-size: 0.8125rem;
 		font-weight: 600;
 		white-space: nowrap;
+	}
+
+	.welcome-bonus {
+		gap: var(--space-1);
+		padding: 0.4rem 0.7rem;
 	}
 
 	.top-up:hover,

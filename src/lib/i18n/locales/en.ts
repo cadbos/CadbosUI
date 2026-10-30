@@ -175,6 +175,8 @@ export const en = {
 	'auth.credit.balance': 'Balance: {balance}',
 	'auth.credit.requestTopUp': 'Top up',
 	'auth.credit.requestTopUpDraft': '[beta] Balance top-up request',
+	'auth.credit.requestWelcomeBonus': 'Request bonus',
+	'auth.credit.requestWelcomeBonusDraft': 'I would like to receive the welcome bonus',
 	'auth.credit.history': 'Spending history',
 	'auth.credit.historyEmpty': 'No transactions yet',
 	'upload.label': 'Room photo',

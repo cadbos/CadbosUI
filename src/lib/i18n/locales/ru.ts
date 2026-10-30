@@ -176,6 +176,8 @@ export const ru = {
 	'auth.credit.balance': 'Баланс: {balance}',
 	'auth.credit.requestTopUp': 'Пополнить',
 	'auth.credit.requestTopUpDraft': '[beta] Заявка на пополнение баланса',
+	'auth.credit.requestWelcomeBonus': 'Запросить бонус',
+	'auth.credit.requestWelcomeBonusDraft': 'Хочу получить приветственный бонус',
 	'auth.credit.history': 'История трат',
 	'auth.credit.historyEmpty': 'Пока нет операций',
 	'upload.label': 'Фото комнаты',

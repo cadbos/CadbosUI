@@ -22,6 +22,7 @@ import {
 	getPublicKey,
 	type EventTemplate
 } from 'nostr-tools/pure';
+import { setLanguage, showNewMessage } from 'featurebase-js';
 import AuthBar from './AuthBar.svelte';
 import { auth } from '$lib/state/auth.svelte';
 
@@ -52,6 +53,8 @@ const nip46 = vi.hoisted(() => {
 		connect: (signer: unknown) => resolveSigner?.(signer)
 	};
 });
+
+vi.mock('featurebase-js', () => ({ setLanguage: vi.fn(), showNewMessage: vi.fn() }));
 
 vi.mock('nostr-tools/nip46', () => ({
 	createNostrConnectURI: nip46.createNostrConnectURI,
@@ -117,6 +120,7 @@ beforeEach(() => {
 	auth.user = null;
 	auth.featurebaseJwt = null;
 	auth.credit = null;
+	auth.welcomeBonusAvailable = false;
 	auth.nostrProfile = null;
 	auth.profileDraft.firstName = '';
 	auth.profileDraft.lastName = '';
@@ -541,4 +545,59 @@ it('creates an account only after the secret key is saved', async () => {
 	await expect
 		.element(screen.getByRole('button', { name: 'Войти ключом этого браузера' }))
 		.not.toBeInTheDocument();
+});
+
+it.each([
+	[false, true],
+	[true, false],
+	[undefined, false]
+])('welcomeBonusGranted %s makes the bonus available: %s', async (granted, available) => {
+	mockFetch(
+		() => Response.json({ featurebaseJwt: null, user: { pubkey: pk } }),
+		undefined,
+		() =>
+			Response.json({ featurebaseJwt: null, user: { pubkey: pk }, welcomeBonusGranted: granted })
+	);
+
+	await auth.loginNip07();
+
+	await expect.poll(() => auth.welcomeBonusAvailable).toBe(available);
+});
+
+it('opens a welcome bonus request in the Featurebase messenger and closes the panel', async () => {
+	mockFetch(
+		() =>
+			Response.json({
+				featurebaseJwt: null,
+				user: { pubkey: pk, firstName: 'Ada', lastName: 'L' }
+			}),
+		undefined,
+		() =>
+			Response.json({
+				featurebaseJwt: null,
+				user: { pubkey: pk, firstName: 'Ada', lastName: 'L' },
+				welcomeBonusGranted: false
+			})
+	);
+	await auth.loginNip07();
+	await expect.poll(() => auth.welcomeBonusAvailable).toBe(true);
+
+	const screen = render(AuthBar, { featurebaseAppId: 'app-id' });
+	screen.container.querySelector<HTMLButtonElement>('.auth-trigger')?.click();
+	await screen.getByRole('button', { name: 'Запросить бонус' }).click();
+
+	expect(setLanguage).toHaveBeenCalledWith('ru');
+	expect(showNewMessage).toHaveBeenCalledWith('Хочу получить приветственный бонус');
+});
+
+it('hides the welcome bonus request once it was granted', async () => {
+	auth.status = 'authenticated';
+	auth.user = { pubkey: pk };
+	auth.welcomeBonusAvailable = false;
+
+	const screen = render(AuthBar, { featurebaseAppId: 'app-id' });
+
+	await expect
+		.poll(() => screen.getByRole('button', { name: 'Запросить бонус' }).elements().length)
+		.toBe(0);
 });

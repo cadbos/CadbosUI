@@ -84,7 +84,8 @@ const authResponseSchema = z.object({
 	featurebaseJwt: z.string().nullable()
 });
 const meResponseSchema = authResponseSchema.extend({
-	credit: creditSchema.optional()
+	credit: creditSchema.optional(),
+	welcomeBonusGranted: z.boolean().optional()
 });
 const challengeResponseSchema = z.object({ challenge: hex32 });
 const profileResponseSchema = z.object({ user: sessionUserSchema });
@@ -137,6 +138,9 @@ class AuthState {
 	user = $state<SessionUser | null>(null);
 	featurebaseJwt = $state<string | null>(null);
 	credit = $state<CreditInfo | null>(null);
+	// Stays false until /auth/me confirms the bonus was not yet granted, so the
+	// request button never flashes for an account that already received it.
+	welcomeBonusAvailable = $state(false);
 	nostrProfile = $state<NostrProfile | null>(null);
 	profileDraft = $state({ firstName: '', lastName: '' });
 	error = $state<AuthError | null>(null);
@@ -189,7 +193,12 @@ class AuthState {
 
 				const data = await parseJsonOrFail(response, meResponseSchema);
 				if (controller.signal.aborted) return;
-				this.#authenticate(data.user, data.featurebaseJwt, data.credit ?? null);
+				this.#authenticate(
+					data.user,
+					data.featurebaseJwt,
+					data.credit ?? null,
+					data.welcomeBonusGranted === false
+				);
 				return;
 			}
 		} catch (error) {
@@ -371,6 +380,7 @@ class AuthState {
 			if (this.user?.pubkey === pubkey) {
 				this.featurebaseJwt = data.featurebaseJwt;
 				this.credit = data.credit ?? null;
+				this.welcomeBonusAvailable = data.welcomeBonusGranted === false;
 			}
 		} catch (err) {
 			// Network hiccup or malformed response — keep the last-known balance/history
@@ -451,6 +461,7 @@ class AuthState {
 		this.user = null;
 		this.featurebaseJwt = null;
 		this.credit = null;
+		this.welcomeBonusAvailable = false;
 		this.nostrProfile = null;
 		this.#resetProfileDraft(null);
 		this.status = 'anonymous';
@@ -461,12 +472,14 @@ class AuthState {
 		this.#sessionLoadAbort = null;
 	}
 
-	// `credit` is passed when the caller already has it from the same response
-	// (loadSession's /auth/me); fresh logins fetch it separately via refreshCredit().
+	// `credit` and `welcomeBonusAvailable` are passed when the caller already has them
+	// from the same response (loadSession's /auth/me); fresh logins fetch them
+	// separately via refreshCredit().
 	#authenticate(
 		user: SessionUser,
 		featurebaseJwt: string | null,
-		credit?: CreditInfo | null
+		credit?: CreditInfo | null,
+		welcomeBonusAvailable?: boolean
 	): void {
 		this.user = user;
 		this.featurebaseJwt = featurebaseJwt;
@@ -474,8 +487,10 @@ class AuthState {
 		this.#resetProfileDraft(user);
 		this.status = 'authenticated';
 		void this.refreshNostrProfile();
-		if (credit !== undefined) this.credit = credit;
-		else void this.refreshCredit();
+		if (credit !== undefined) {
+			this.credit = credit;
+			this.welcomeBonusAvailable = welcomeBonusAvailable ?? false;
+		} else void this.refreshCredit();
 	}
 
 	#resetProfileDraft(user: SessionUser | null): void {

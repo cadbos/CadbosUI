@@ -164,6 +164,43 @@ test('opens a beta balance top-up request from the expenses page', async ({ page
 		.toBe(ru['auth.credit.requestTopUpDraft']);
 });
 
+test('offers the welcome bonus request only until it is granted', async ({ page }) => {
+	await mockFeaturebase(page);
+	await authenticateWithExpenseHistory(page);
+	const respondWith = (welcomeBonusGranted: boolean) =>
+		page.route('**/auth/me', (route) =>
+			route.fulfill({
+				contentType: 'application/json',
+				body: JSON.stringify({
+					user: { pubkey: PK, firstName: 'Ada', lastName: 'Lovelace' },
+					featurebaseJwt: null,
+					welcomeBonusGranted
+				})
+			})
+		);
+	const bonusButton = page.getByRole('button', { name: ru['auth.credit.requestWelcomeBonus'] });
+
+	await respondWith(false);
+	await page.goto('/expenses');
+	await page.locator('.auth-trigger').click();
+	await bonusButton.click();
+
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const calls = (window as Window & { __featurebaseCalls?: [string, string?][] })
+					.__featurebaseCalls;
+				return calls?.find(([action]) => action === 'showNewMessage')?.[1] ?? null;
+			})
+		)
+		.toBe(ru['auth.credit.requestWelcomeBonusDraft']);
+
+	await respondWith(true);
+	await page.reload();
+	await page.locator('.auth-trigger').click();
+	await expect(bonusButton).toHaveCount(0);
+});
+
 test('groups generation durations and describes each duration column', async ({ page }) => {
 	await authenticateWithExpenseHistory(page);
 	await page.goto('/expenses');
