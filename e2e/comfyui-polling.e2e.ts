@@ -30,7 +30,8 @@ for (const instrument of instruments) {
 	test(`${instrument.route} honors a sixty-second polling interval and displays completion`, async ({
 		page
 	}) => {
-		await page.clock.install();
+		await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+		await page.clock.pauseAt(new Date('2026-01-02T00:00:00Z'));
 		await page.route('**/auth/me', async (route) => {
 			await route.fulfill({
 				json: {
@@ -57,10 +58,6 @@ for (const instrument of instruments) {
 		let polls = 0;
 		await page.route(`**/api/${instrument.route}/${JOB_ID}`, async (route) => {
 			polls += 1;
-			if (polls === 1) {
-				const now = await page.evaluate(() => Date.now());
-				await page.clock.pauseAt(now + 100);
-			}
 			await route.fulfill(
 				polls === 1
 					? {
