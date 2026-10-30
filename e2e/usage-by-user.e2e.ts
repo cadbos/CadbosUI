@@ -173,7 +173,9 @@ test("shows the user's figures as tiles above full-width generation types", asyn
 	await expect(tiles).toContainText(
 		`${ru['usage.column.lastDepositAt']} ${ru['usage.emptyValue']}`
 	);
-	await expect(tiles).toContainText(`${ru['usage.column.latestSpendAt']} 2026-01-03 | 12:00 00s`);
+	const latestSpend = tiles.locator('div').filter({ hasText: ru['usage.column.latestSpendAt'] });
+	await expect(latestSpend.locator('dd')).toHaveText('2026-01-0312:00 00s');
+	expect((await latestSpend.locator('dd').boundingBox())?.height).toBeGreaterThan(30);
 	await expect(tiles.getByRole('link', { name: '2026-01-03', exact: true })).toHaveAttribute(
 		'href',
 		`/usage/by-user?npub=${NPUB}&date=2026-01-03`

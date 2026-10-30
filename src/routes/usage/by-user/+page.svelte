@@ -300,6 +300,7 @@ before the Change Date. See LICENSE for complete terms.
 							timestamp={record.lastDepositAt}
 							npub={day === null ? npub : undefined}
 							timeOnly={day !== null}
+							stacked
 						/>
 					</dd>
 				</div>
@@ -310,6 +311,7 @@ before the Change Date. See LICENSE for complete terms.
 							timestamp={record.latestSpendAt}
 							npub={day === null ? npub : undefined}
 							timeOnly={day !== null}
+							stacked
 						/>
 					</dd>
 				</div>

@@ -23,9 +23,11 @@ before the Change Date. See LICENSE for complete terms.
 		npub?: string;
 		// On a page already about one day, the date would repeat it.
 		timeOnly?: boolean;
+		// Date over time, as in a tile, where the separator is not needed.
+		stacked?: boolean;
 	}
 
-	let { timestamp, npub, timeOnly = false }: Props = $props();
+	let { timestamp, npub, timeOnly = false, stacked = false }: Props = $props();
 
 	const formatted = $derived(
 		timestamp === null
@@ -45,7 +47,7 @@ before the Change Date. See LICENSE for complete terms.
 	<span class="part"
 		>{#if npub !== undefined}<a href={userUsageHref(npub, formatted.date)}>{formatted.date}</a
 			>{:else}{formatted.date}{/if}</span
-	>{TIMESTAMP_SEPARATOR}<span class="part">{formatted.time}</span>
+	>{#if stacked}<br />{:else}{TIMESTAMP_SEPARATOR}{/if}<span class="part">{formatted.time}</span>
 {/if}
 
 <style>
